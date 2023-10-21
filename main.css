@@ -1,0 +1,55 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    text-align: center;
+    padding: 50px;
+}
+
+header, footer {
+    background-color: #333;
+    color: #fff;
+    padding: 10px 0;
+}
+
+button {
+    padding: 10px 15px;
+    margin: 10px;
+    background-color: #444;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+}
+
+input {
+    padding: 10px;
+    margin: 10px;
+}
+
+ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+/* Ensure table columns with player names are left-aligned */
+table td:first-child {
+    text-align: left;
+}
+
+#activePlayersTable {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+#activePlayersTable th, #activePlayersTable td {
+    border: 1px solid grey;
+    text-align: center;
+    padding: 5px 10px;
+}
+
+#activePlayersTable th {
+    background-color: #f0f0f0;
+}
+
+#activePlayersTable td {
+    background-color: #fafafa;
+}

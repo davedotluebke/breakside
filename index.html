@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hello World</title>
+    <link rel="stylesheet" href="main.css">
+    <link rel="manifest" href="manifest.json">
+</head>
+<body>
+    <header>
+        <h1>Ultimate Frisbee Tracker</h1>
+    </header>
+
+    <!-- Team Roster Screen -->
+    <section id="teamRosterScreen">
+        <h2>Team Roster</h2>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Total Pts</th>
+                </tr>
+            </thead>
+            <tbody id="rosterList">
+                <!-- Rows for players will be dynamically populated here -->
+            </tbody>
+        </table>
+        
+        <input type="text" id="newPlayerInput" placeholder="Add new player" />
+        <button id="addPlayerBtn">Add Player</button>
+
+        <footer>
+            <input type="text" id="opponentNameInput" placeholder="Opponent Name" />
+            <button id="beginGameBtn">Begin Game</button>
+        </footer>
+    </section>
+
+    <!-- Before Point Screen -->
+    <section id="beforePointScreen" style="display: none;">
+        <h2>Before Point</h2>
+
+        <!-- Select Current Players Section -->
+        <section id="selectCurrentPlayers">
+            <h3>Select Active Players</h3>
+            <table id="activePlayersTable">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th></th>
+                        <!-- Additional <th> elements will be added here dynamically for each point -->
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- The player rows will be dynamically added here -->
+                </tbody>
+            </table>
+        </section>
+        
+
+        <!-- Game Events Section -->
+        <section id="gameEvents">
+            <h3>Game Events</h3>
+            <button id="endGameBtn">End Game</button>
+            <button id="timeOutBtn">Time-out</button>
+            <!-- Other game event buttons can be added here -->
+        </section>
+
+        <footer>
+            <button id="startPointBtn">Start Point</button>
+        </footer>
+    </section>
+
+    <!-- Play-by-Play Screen -->
+    <section id="playByPlayScreen" style="display: none;">
+        <h2>Play-by-Play</h2>
+        <!-- Interactions and events for the current point will be added here -->
+
+        <footer>
+            <button id="weScoreBtn">We Score</button>
+            <button id="theyScoreBtn">They Score</button>
+        </footer>
+    </section>
+
+    <!-- Game Summary Screen -->
+    <section id="gameSummaryScreen" style="display: none;">
+        <h2>Game Summary</h2>
+
+        <div id="finalScore">
+            <h3>Final Score</h3>
+            <div>
+                <span id="teamName">My Team</span>: <span id="teamFinalScore">0</span>
+            </div>
+            <div>
+                <span id="opponentName">Opponent</span>: <span id="opponentFinalScore">0</span>
+            </div>
+        </div>
+
+        <!-- Further statistics can be added here -->
+
+        <footer>
+            <button id="anotherGameBtn">New Game</button>
+        </footer>
+    </section>
+    <script src="main.js"></script>
+</body>
+
+</html>
