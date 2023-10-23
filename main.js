@@ -71,7 +71,7 @@ let teamData = {
 };
 
 // Sample amusing names
-const sampleNames = ["Caeser", "Cleopatra", "Bathsheba", "The Fonz", "Winston"];
+const sampleNames = ["Alice","Bob","Charlie","Dana","Eve","Hank","Iris","Jake","Kris","Mia"];
 
 sampleNames.forEach(name => {
     let newPlayer = new Player(name);
@@ -124,6 +124,24 @@ function updateActivePlayersList() {
         tableHeader.appendChild(headerCell);
     });
 
+    // Determine players from the last point
+    const lastPointPlayers = currentGame.points.length > 0
+        ? currentGame.points[currentGame.points.length - 1].players
+        : [];
+
+    // Sort the roster based on the criteria
+    teamData.teamRoster.sort((a, b) => {
+        if (lastPointPlayers.includes(a.name) && !lastPointPlayers.includes(b.name)) {
+            return -1; // a comes before b
+        } else if (!lastPointPlayers.includes(a.name) && lastPointPlayers.includes(b.name)) {
+            return 1; // b comes before a
+        } else {
+            // Alphabetical order for both groups
+            return a.name.localeCompare(b.name); 
+        }
+    });
+
+
     // Add player rows
     teamData.teamRoster.forEach(player => {
         const row = document.createElement('tr');
@@ -132,6 +150,9 @@ function updateActivePlayersList() {
         let checkboxCell = document.createElement('td');
         let checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
+        if (lastPointPlayers.includes(player.name)) {
+            checkbox.checked = true;
+        }
         checkboxCell.appendChild(checkbox);
         row.appendChild(checkboxCell);
 
