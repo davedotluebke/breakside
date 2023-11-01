@@ -2,7 +2,7 @@ body {
     font-family: Arial, sans-serif;
     background-color: #f4f4f4;
     text-align: center;
-    padding: 50px;
+    padding: 10px;
 }
 
 header, footer {
@@ -20,6 +20,10 @@ button {
     cursor: pointer;
 }
 
+button.warning {
+    background-color: red;
+}
+
 input {
     padding: 10px;
     margin: 10px;
@@ -31,25 +35,52 @@ ul {
 }
 
 /* Ensure table columns with player names are left-aligned */
-table td:first-child {
+table {
     text-align: left;
+}
+
+#tableContainer {
+    overflow-x: auto;
+    max-width: 100%;
+    background-color: aquamarine;
 }
 
 #activePlayersTable {
     border-collapse: collapse;
-    width: 100%;
+    width: max-content;
 }
 
 #activePlayersTable th, #activePlayersTable td {
     border: 1px solid grey;
-    text-align: center;
-    padding: 5px 10px;
+    padding: 5px 5px;
 }
 
-#activePlayersTable th {
-    background-color: #f0f0f0;
+/* Apply position:sticky to the first two columns: checkbox & player name */
+/* fix width of checkbox column */
+#activePlayersTable th:first-child, 
+#activePlayersTable td:first-child {
+    width: 30px; /* Adjust this based on your preference */
+    overflow: hidden;  /* don't widen the column for the header text */
+    background-color: #78a09c;  /* To ensure the columns are not transparent */
+    position: sticky;
+    left: 0px;
 }
 
-#activePlayersTable td {
-    background-color: #fafafa;
+/* specify the left value to determine where the column should "stick" when scrolling: */
+#activePlayersTable th:nth-child(2), 
+#activePlayersTable td:nth-child(2) {
+    background-color: #00aa00;  /* To ensure the columns are not transparent */
+    position: sticky;
+    left: 40px;
+    z-index: 1;         /* This ensures the sticky columns are above the other content */
 }
+
+/* fix width of point columns */
+#activePlayersTable th:not(:first-child):not(:nth-child(2)), 
+#activePlayersTable td:not(:first-child):not(:nth-child(2)) {
+    width: 40px;        /* Or you can adjust this value as per your needs */
+    overflow: hidden;
+    text-align: left;
+    background-color: #fafa00;
+}
+
