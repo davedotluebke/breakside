@@ -197,6 +197,19 @@ function updateActivePlayersList() {
     });
 }
 
+function checkPlayerCount() {
+    const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
+    const selectedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+    const expectedCount = parseInt(document.getElementById('playersOnFieldInput').value, 10);
+
+    const startPointBtn = document.getElementById('startPointBtn');
+    if (selectedCount !== expectedCount) {
+        startPointBtn.classList.add('warning');
+    } else {
+        startPointBtn.classList.remove('warning');
+    }
+}
+
 // Handling player addition to teamRoster
 document.getElementById('addPlayerBtn').addEventListener('click', function() {
     const playerNameInput = document.getElementById('newPlayerInput');
@@ -331,3 +344,7 @@ document.getElementById('anotherGameBtn').addEventListener('click', function() {
     showScreen('teamRosterScreen');
 });
 
+// After DOM objects sufficiently loaded, bind checkPlayerCount to run
+// whenever a player's checkbox is clicked
+document.getElementById('activePlayersTable').addEventListener('change', checkPlayerCount);
+document.getElementById('playersOnFieldInput').addEventListener('input', checkPlayerCount);
