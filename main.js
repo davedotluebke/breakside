@@ -166,16 +166,24 @@ function updateActivePlayersList() {
         ? currentGame.points[currentGame.points.length - 1].players
         : [];
 
-    // Sort the roster based on the criteria
+    // Check if a player has played any points
+    function hasPlayedAnyPoints(playerName) {
+        return currentGame.points.some(point => point.players.includes(playerName));
+    }
+
+    // Sort roster into 3 alphabetical lists: played the last point, played any points, played no points 
     teamData.teamRoster.sort((a, b) => {
-        if (lastPointPlayers.includes(a.name) && !lastPointPlayers.includes(b.name)) {
-            return -1; // a comes before b
-        } else if (!lastPointPlayers.includes(a.name) && lastPointPlayers.includes(b.name)) {
-            return 1; // b comes before a
-        } else {
-            // Alphabetical order for both groups
-            return a.name.localeCompare(b.name); 
-        }
+        const aLastPoint = lastPointPlayers.includes(a.name);
+        const bLastPoint = lastPointPlayers.includes(b.name);
+        const aPlayedAny = hasPlayedAnyPoints(a.name);
+        const bPlayedAny = hasPlayedAnyPoints(b.name);
+
+        if (aLastPoint && !bLastPoint) return -1;
+        if (!aLastPoint && bLastPoint) return 1;
+        if (aPlayedAny && !bPlayedAny) return -1;
+        if (!aPlayedAny && bPlayedAny) return 1;
+
+        return a.name.localeCompare(b.name);
     });
 
 
