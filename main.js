@@ -161,20 +161,6 @@ function updateActivePlayersList() {
     tableHead.appendChild(teamScoreRow);
     tableHead.appendChild(opponentScoreRow);
 
-    
-    // Create the column titles row
-    let titlesRow = document.createElement('tr');
-    titlesRow.innerHTML = '<th>On?</th><th>Player Name</th>';
-    currentGame.points.forEach((_, index) => {
-        let headerCell = document.createElement('th');
-        headerCell.textContent = (index + 1).toString();
-        titlesRow.appendChild(headerCell);
-    });
-
-    // Add titles row to the head
-    tableHead.appendChild(titlesRow);
-    
-   
     // Determine players from the last point
     const lastPointPlayers = currentGame.points.length > 0
         ? currentGame.points[currentGame.points.length - 1].players
