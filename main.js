@@ -70,24 +70,18 @@ let teamData = {
     games: []
 };
 
-// Sample amusing names
+// Sample  names
 const sampleNames = [
-    "Felix",
-    "John",
-    "River",
-    "Edwin",
-    "Devin",
-    "Sam",
-    "Kellen",
-    "Zeke",
-    "Eli",
-    "Graham",
-    "Blake",
-    "Josh",
-    "Jay",
-    "Peter",
-    "Maxi",
-    "Hayden"
+    "Cyrus L",
+    "Leif",
+    "Cesc",
+    "Cyrus J",
+    "Abby",
+    "Avery",
+    "James",
+    "Simeon",
+    "Soren",
+    "Walden"
   ];
 
 sampleNames.forEach(name => {
@@ -126,21 +120,61 @@ updateTeamRosterDisplay();
 
 // Updates the displayed roster on the "Before Point Screen"
 function updateActivePlayersList() {
-    let tableBody = document.getElementById('activePlayersTable').querySelector('tbody');
-    let tableHeader = document.getElementById('activePlayersTable').querySelector('thead tr');
+    let table = document.getElementById('activePlayersTable');
+    let tableBody = table.querySelector('tbody');
+    let tableHead = table.querySelector('thead');
+
     let currentGame = teamData.games[teamData.games.length - 1];
 
-    // Clear existing rows
+    // Clear existing rows in the table body and head
     tableBody.innerHTML = '';
+    tableHead.innerHTML = '';
 
-    // Add headers for each point
-    tableHeader.innerHTML = '<th>On?</th><th>Name</th>';
-    currentGame.points.forEach((_, index) => {
-        const headerCell = document.createElement('th');
-        headerCell.textContent = (index + 1).toString();  // Points are 1-indexed
-        tableHeader.appendChild(headerCell);
+    // Create header rows for scores
+    let teamScoreRow = document.createElement('tr');
+    let opponentScoreRow = document.createElement('tr');
+
+    // Function to add cells to the score rows
+    const addScoreCells = (row, teamName, scores) => {
+        row.appendChild(document.createElement('th')); // empty cell for alignment
+        let nameCell = document.createElement('th');
+        nameCell.textContent = teamName;
+        row.appendChild(nameCell);
+        scores.forEach(score => {
+            let scoreCell = document.createElement('th');
+            scoreCell.textContent = score;
+            row.appendChild(scoreCell);
+        });
+    };
+
+    // Calculate and add score cells
+    let runningScores = { team: [0], opponent: [0] };
+    currentGame.points.forEach(point => {
+        runningScores.team.push(point.winner === 'team' ? runningScores.team.slice(-1)[0] + 1 : runningScores.team.slice(-1)[0]);
+        runningScores.opponent.push(point.winner === 'opponent' ? runningScores.opponent.slice(-1)[0] + 1 : runningScores.opponent.slice(-1)[0]);
     });
 
+    addScoreCells(teamScoreRow, currentGame.team, runningScores.team);
+    addScoreCells(opponentScoreRow, currentGame.opponent, runningScores.opponent);
+
+    // Add score rows to the head
+    tableHead.appendChild(teamScoreRow);
+    tableHead.appendChild(opponentScoreRow);
+
+    
+    // Create the column titles row
+    let titlesRow = document.createElement('tr');
+    titlesRow.innerHTML = '<th>On?</th><th>Player Name</th>';
+    currentGame.points.forEach((_, index) => {
+        let headerCell = document.createElement('th');
+        headerCell.textContent = (index + 1).toString();
+        titlesRow.appendChild(headerCell);
+    });
+
+    // Add titles row to the head
+    tableHead.appendChild(titlesRow);
+    
+   
     // Determine players from the last point
     const lastPointPlayers = currentGame.points.length > 0
         ? currentGame.points[currentGame.points.length - 1].players

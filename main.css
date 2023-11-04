@@ -39,6 +39,7 @@ table {
     text-align: left;
 }
 
+/* create a container for the table to allow horizontal scrolling */
 #tableContainer {
     overflow-x: auto;
     max-width: 100%;
