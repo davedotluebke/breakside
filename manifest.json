@@ -2,7 +2,7 @@
     "name": "Ultimate Frisbee Tracker",
     "short_name": "UFT",
     "description": "A PWA for tracking Ultimate Frisbee games.",
-    "start_url": "/index.html",
+    "start_url": "/ultistats/index.html",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#000000",
