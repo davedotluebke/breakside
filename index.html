@@ -9,7 +9,7 @@
 </head>
 <body>
     <header>
-        <h1>Ultimate Frisbee Tracker</h1>
+        <h4>Ultimate Frisbee Tracker</h4>
     </header>
 
     <!-- Team Roster Screen -->
@@ -35,7 +35,8 @@
             <input type="number" id="playersOnFieldInput" value="5" min="2" max="7" />
             <label for="playersOnFieldInput">Players On Field</label>
             <input type="text" id="opponentNameInput" placeholder="Opponent Name" />
-            <button id="beginGameBtn">Begin Game</button>
+            <br>Start Game on: <button id="startGameOnOBtn">Offense</button>
+            <button id="startGameOnDBtn">Defense</button>
         </footer>
     </section>
 
@@ -72,16 +73,27 @@
         </section>
     </section>
 
-    <!-- Play-by-Play Screen -->
-    <section id="playByPlayScreen" style="display: none;">
-        <h2>Play-by-Play</h2>
+    <!-- Play-by-Play Screen: Offense -->
+    <section id="offensePlayByPlayScreen" style="display: none;">
+        <h2>Offensive Possession</h2>
         <!-- Interactions and events for the current point will be added here -->
 
         <footer>
+            <button id="offenseTurnoverBtn">Turnover</button>
             <button id="weScoreBtn">We Score</button>
-            <button id="theyScoreBtn">They Score</button>
         </footer>
     </section>
+
+    <!-- Play-by-Play Screen: Defense -->
+    <section id="defensePlayByPlayScreen" style="display: none;">
+        <h2>Defensive Possession</h2>
+        <!-- Interactions and events for the current point will be added here -->
+
+        <footer>
+            <button id="defenseTurnoverBtn">Turnover</button>
+            <button id="theyScoreBtn">They Score</button>
+        </footer>
+    </section>    
 
     <!-- Game Summary Screen -->
     <section id="gameSummaryScreen" style="display: none;">

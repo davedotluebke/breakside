@@ -11,7 +11,8 @@ if ('serviceWorker' in navigator) {
 const screens = [
     document.getElementById('teamRosterScreen'),
     document.getElementById('beforePointScreen'),
-    document.getElementById('playByPlayScreen'),
+    document.getElementById('offensePlayByPlayScreen'),
+    document.getElementById('defensePlayByPlayScreen'),
     document.getElementById('gameSummaryScreen')
 ];
 
@@ -43,16 +44,11 @@ function Player(name, nickname = "") {
     this.pointsLost = 0;
 }
 
-// Add Point data structure to track each individual point
-function Point(playingPlayers) {
-    this.players = playingPlayers;  // An array of player names who played the point
-    this.winner = "";  // Either 'team' or 'opponent' 
-}
-
 // Modify the Game structure to include a 'points' property
-function Game(teamName, opponentName) {
+function Game(teamName, opponentName, startOn) {
     this.team = teamName;
     this.opponent = opponentName;
+    this.startingPosition = startOn;
     this.scores = {
         [Role.TEAM]: 0,
         [Role.OPPONENT]: 0,
@@ -69,6 +65,92 @@ let teamData = {
     teamRoster: [],
     games: []
 };
+
+class Event {
+    constructor(type) {
+        this.type = type;
+        // Initialize other properties based on type
+    }
+}
+
+class Throw extends Event {
+    constructor(thrower, receiver, {huck = false, strike = false, dump = false, hammer = false, sky = false, layout = false, score = false}) {
+        super('Throw');
+        this.thrower = thrower;
+        this.receiver = receiver;
+        this.huck = huck;
+        this.strike = strike;
+        this.dump = dump;
+        this.hammer = hammer;
+        this.sky = sky;
+        this.layout = layout;
+        this.score = score;
+    }
+}
+
+class Turnover extends Event {
+    constructor({throwaway = false, receiverError = false, goodDefense = false, stall = false}) {
+        super('Turnover');
+        this.throwaway = throwaway;
+        this.receiverError = receiverError;
+        this.goodDefense = goodDefense;
+        this.stall = stall;
+    }
+}
+
+class FoulViolation extends Event {
+    constructor({offensive = false, strip = false, pick = false, travel = false, contested = false, doubleTeam = false}) {
+        super('Foul/Violation');
+        this.offensive = offensive;
+        this.strip = strip;
+        this.pick = pick;
+        this.travel = travel;
+        this.contested = contested;
+        this.doubleTeam = doubleTeam;
+    }
+}
+
+class Defense extends Event {
+    constructor({interception = false, layout = false, sky = false, Callahan = false, turnover = true}) {
+        super('Defense');
+        this.interception = interception;
+        this.layout = layout;
+        this.sky = sky;
+        this.Callahan = Callahan;
+        this.turnover = turnover;
+    }
+}
+
+class Other extends Event {
+    constructor(type) {
+        super('Other');
+        this.subtype = type; // Time-out, Injury sub, time cap
+    }
+}
+
+class Possession {
+    constructor(offensive) {
+        this.offensive = offensive; // true for offensive, false for defensive
+        this.events = [];
+    }
+
+    addEvent(event) {
+        this.events.push(event);
+    }
+}
+
+class Point {
+    constructor(playingPlayers, startOn) {
+        this.possessions = [];
+        this.players = playingPlayers;  // An array of player names who played the point
+        this.startingPosition = startOn;  // Either 'offense' or 'defense'
+        this.winner = "";  // Either 'team' or 'opponent'     
+    }
+
+    addPossession(possession) {
+        this.possessions.push(possession);
+    }
+}
 
 // Sample  names
 const sampleNames = [
@@ -117,6 +199,26 @@ function updateTeamRosterDisplay() {
     });
 }
 updateTeamRosterDisplay();
+
+// Handling player addition to teamRoster
+document.getElementById('addPlayerBtn').addEventListener('click', function() {
+    const playerNameInput = document.getElementById('newPlayerInput');
+    const playerName = playerNameInput.value.trim();
+
+    if (playerName && !teamData.teamRoster.some(player => player.name === playerName)) {
+        let newPlayer = new Player(playerName);
+        teamData.teamRoster.push(newPlayer);
+        updateTeamRosterDisplay();
+    }
+    playerNameInput.value = '';
+});
+// Also accept an Enter keypress to add a player
+const playerNameInput = document.getElementById('newPlayerInput');
+playerNameInput.addEventListener('keydown', function(event) {
+    if (event.key === "Enter") {
+        document.getElementById('addPlayerBtn').click();
+    }
+});
 
 // Updates the displayed roster on the "Before Point Screen"
 function updateActivePlayersList() {
@@ -225,6 +327,7 @@ function updateActivePlayersList() {
     });
 }
 
+// Show start-next-point button with warning style if wrong # of players selected
 function checkPlayerCount() {
     const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
     const selectedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
@@ -238,55 +341,36 @@ function checkPlayerCount() {
     }
 }
 
-// Handling player addition to teamRoster
-document.getElementById('addPlayerBtn').addEventListener('click', function() {
-    const playerNameInput = document.getElementById('newPlayerInput');
-    const playerName = playerNameInput.value.trim();
-
-    if (playerName && !teamData.teamRoster.some(player => player.name === playerName)) {
-        let newPlayer = new Player(playerName);
-        teamData.teamRoster.push(newPlayer);
-        updateTeamRosterDisplay();
-    }
-    playerNameInput.value = '';
-});
-// Also accept an Enter keypress to add a player
-const playerNameInput = document.getElementById('newPlayerInput');
-playerNameInput.addEventListener('keydown', function(event) {
-    if (event.key === "Enter") {
-        document.getElementById('addPlayerBtn').click();
-    }
-});
-
-// Starting a new game
-function startNewGame(event) {
+// Starting a new game, on O or D
+function startNewGame(startingPosition) {
     const opponentNameInput = document.getElementById('opponentNameInput');
     const opponentName = opponentNameInput.value.trim() || "them";
 
-    let newGame = new Game(teamData.name, opponentName);
+    let newGame = new Game(teamData.name, opponentName, startingPosition);
     teamData.games.push(newGame);
-    console.log("Starting new game: ");
+    console.log("Starting new game on " + startingPosition + ": ");
     console.log(newGame);
     moveToNextPoint();
 }
-document.getElementById('beginGameBtn').addEventListener('click', startNewGame);
-//Also accept an Enter keypress to start a game
-document.getElementById('opponentNameInput').addEventListener('keyup', function(event) {
-    if (event.key === "Enter") {
-        document.getElementById('beginGameBtn').click();
-    }
+document.getElementById('startGameOnOBtn').addEventListener('click', function() {
+    startNewGame('offense');
 });
 
-// Transition from Select Roster to Before Point Screen
-document.getElementById('beginGameBtn').addEventListener('click', function() {
-    showScreen('beforePointScreen');
-    updateActivePlayersList();
+document.getElementById('startGameOnDBtn').addEventListener('click', function() {
+    startNewGame('defense');
 });
+
+// Transition from Play-by-Play to Before Point when either team scores
+function moveToNextPoint() {
+    updateActivePlayersList();
+    showScreen('beforePointScreen');
+}
 
 // Transition from Before Point to Play-by-Play
 let currentPoint = null;  // This will hold the current point being played
 
-document.getElementById('startPointBtn').addEventListener('click', function() {
+function startNextPoint() {
+    let currentGame = teamData.games[teamData.games.length - 1];
     // Get the checkboxes and player names
     let checkboxes = [...document.querySelectorAll('#activePlayersTable input[type="checkbox"]')];
     let playerNames = [...document.querySelectorAll('#activePlayersTable td:nth-child(2)')].map(td => td.textContent);
@@ -300,16 +384,20 @@ document.getElementById('startPointBtn').addEventListener('click', function() {
     });
 
     // Create a new Point with the active players (without setting the winning team yet)
-    currentPoint = new Point(activePlayersForThisPoint);
-    showScreen('playByPlayScreen');
-});
-
-
-// Transition from Play-by-Play to Before Point when either team scores
-function moveToNextPoint() {
-    updateActivePlayersList();
-    showScreen('beforePointScreen');
+    let startPointOn = "";
+    if (currentGame.points.length === 0) {
+        startPointOn = currentGame.startingPosition;
+    } else {
+        startPointOn = currentGame.points[currentGame.points.length - 1].winner === Role.TEAM ? 'defense' : 'offense';
+    } 
+    currentPoint = new Point(activePlayersForThisPoint, startPointOn);
+    if (startPointOn === 'offense') {
+        showScreen('offensePlayByPlayScreen');
+    } else {
+        showScreen('defensePlayByPlayScreen');
+    }
 }
+document.getElementById('startPointBtn').addEventListener('click', startNextPoint);
 
 // Handling scores and game end
 function updateScore(winner) {
@@ -344,11 +432,18 @@ function updateScore(winner) {
     updateActivePlayersList();  // Update the table with the new point data
 }
 
+// Offense play-by-play buttons
 document.getElementById('weScoreBtn').addEventListener('click', function() {
     updateScore(Role.TEAM);
     moveToNextPoint();
 });
 
+document.getElementById('weTurnoverBtn').addEventListener('click', function() {
+    let currentGame = teamData.games[teamData.games.length - 1]; // Latest game
+    let currentPossession = new Possession(true);
+    currentPoint.addPossession(currentPossession);
+
+// Defense play-by-play buttons
 document.getElementById('theyScoreBtn').addEventListener('click', function() {
     updateScore(Role.OPPONENT);
     moveToNextPoint();
