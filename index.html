@@ -9,7 +9,7 @@
 </head>
 <body>
     <header>
-        <h4>Ultimate Frisbee Tracker</h4>
+        <h4>Ultimate Stats Tracker</h4>
     </header>
 
     <!-- Team Roster Screen -->
@@ -43,7 +43,6 @@
     <!-- Before Point Screen -->
     <section id="beforePointScreen" style="display: none;">
         <button id="startPointBtn">Start Point</button>
-        <h2>Before Point</h2>
 
         <!-- Select Current Players Section -->
         <section id="selectCurrentPlayers">
@@ -76,10 +75,11 @@
     <!-- Play-by-Play Screen: Offense -->
     <section id="offensePlayByPlayScreen" style="display: none;">
         <h2>Offensive Possession</h2>
-        <!-- Interactions and events for the current point will be added here -->
-
+        <div id="offensivePlayerButtons"></div> <!-- Placeholder for player buttons -->
+        <div id="offensiveActionButtons"></div> <!-- Placeholder for action buttons -->
+    
         <footer>
-            <button id="offenseTurnoverBtn">Turnover</button>
+            <button id="weTurnoverBtn">Turnover</button>
             <button id="weScoreBtn">We Score</button>
         </footer>
     </section>
@@ -90,7 +90,7 @@
         <!-- Interactions and events for the current point will be added here -->
 
         <footer>
-            <button id="defenseTurnoverBtn">Turnover</button>
+            <button id="theyTurnoverBtn">Turnover</button>
             <button id="theyScoreBtn">They Score</button>
         </footer>
     </section>    

@@ -432,7 +432,10 @@ function updateScore(winner) {
     updateActivePlayersList();  // Update the table with the new point data
 }
 
-// Offense play-by-play buttons
+/******************************************************************************/
+/**************************** Offense play-by-play ****************************/
+/******************************************************************************/
+
 document.getElementById('weScoreBtn').addEventListener('click', function() {
     updateScore(Role.TEAM);
     moveToNextPoint();
@@ -440,13 +443,97 @@ document.getElementById('weScoreBtn').addEventListener('click', function() {
 
 document.getElementById('weTurnoverBtn').addEventListener('click', function() {
     let currentGame = teamData.games[teamData.games.length - 1]; // Latest game
-    let currentPossession = new Possession(true);
+    let currentPossession = new Possession(false);
     currentPoint.addPossession(currentPossession);
+    showScreen('defensePlayByPlayScreen');
+});
+
+function displayOffensivePossessionScreen() {
+    let currentGame = teamData.games[teamData.games.length - 1];
+    let currentPoint = currentGame.points[currentGame.points.length - 1];
+    let activePlayers = currentPoint.players; // Assuming this holds the names of active players
+
+    let playerButtonsContainer = document.getElementById('offensivePlayerButtons');
+    playerButtonsContainer.innerHTML = ''; // Clear existing buttons
+
+    activePlayers.forEach(playerName => {
+        let playerButton = document.createElement('button');
+        playerButton.textContent = playerName;
+        playerButton.addEventListener('click', function() {
+            handlePlayerButton(playerName);
+        });
+        playerButtonsContainer.appendChild(playerButton);
+    });
+
+    // Call a function to display action buttons
+    displayActionButtons();
+}
+
+function handlePlayerButton(playerName) {
+    // Logic to handle when a player button is clicked
+    console.log(playerName + " has the disc");
+    // You will need additional logic here to track the thrower and receiver
+}
+
+function displayActionButtons() {
+    let actionButtonsContainer = document.getElementById('offensiveActionButtons');
+    actionButtonsContainer.innerHTML = ''; // Clear existing buttons
+
+    // Create and add action buttons
+    let throwButton = document.createElement('button');
+    throwButton.textContent = 'Throws to...';
+    let huckButton = document.createElement('button');
+    huckButton.textContent = 'Hucks to...';
+    let throwawayButton = document.createElement('button');
+    throwawayButton.textContent = 'Throws it away';
+    let scoreButton = document.createElement('button');
+    scoreButton.textContent = '..For the score!';
+    let dropButton = document.createElement('button');
+    dropButton.textContent = '..who drops it';
+    // Add event listeners to these buttons
+    throwButton.addEventListener('click', function() {
+        // Logic for 'Throws to...' button
+        console.log('Throw initiated');
+        // Here, you can set a flag or state indicating a throw is in progress
+    });
+    huckButton.addEventListener('click', function() {
+        // Logic for 'Hucks to...' button
+        console.log('Huck initiated');
+    });
+    throwawayButton.addEventListener('click', function() {
+        // Logic for 'Throws it away' button
+        console.log('Throwaway');
+        let currentGame = teamData.games[teamData.games.length - 1]; // Latest game
+        let currentPossession = new Possession(false);
+        currentPoint.addPossession(currentPossession);
+        showScreen('defensePlayByPlayScreen');
+    });
+    scoreButton.addEventListener('click', function() {
+        // Logic for '..For the score!' button
+        console.log('Score!');
+        updateScore(Role.TEAM);
+        moveToNextPoint();
+    });
+
+    actionButtonsContainer.appendChild(throwButton);
+    // Append other action buttons similarly
+}
+
+/******************************************************************************/
+/**************************** Defense play-by-play ****************************/
+/******************************************************************************/
 
 // Defense play-by-play buttons
 document.getElementById('theyScoreBtn').addEventListener('click', function() {
     updateScore(Role.OPPONENT);
     moveToNextPoint();
+});
+
+document.getElementById('theyTurnoverBtn').addEventListener('click', function() {
+    let currentGame = teamData.games[teamData.games.length - 1]; // Latest game
+    let currentPossession = new Possession(true);
+    currentPoint.addPossession(currentPossession);
+    showScreen('offensePlayByPlayScreen');
 });
 
 document.getElementById('endGameBtn').addEventListener('click', function() {
