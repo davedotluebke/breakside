@@ -391,7 +391,9 @@ function startNextPoint() {
         startPointOn = currentGame.points[currentGame.points.length - 1].winner === Role.TEAM ? 'defense' : 'offense';
     } 
     currentPoint = new Point(activePlayersForThisPoint, startPointOn);
+    currentGame.points.push(currentPoint);
     if (startPointOn === 'offense') {
+        displayOffensivePossessionScreen();
         showScreen('offensePlayByPlayScreen');
     } else {
         showScreen('defensePlayByPlayScreen');
@@ -459,6 +461,7 @@ function displayOffensivePossessionScreen() {
     activePlayers.forEach(playerName => {
         let playerButton = document.createElement('button');
         playerButton.textContent = playerName;
+        playerButton.classList.add('player-button'); // Add a class for styling
         playerButton.addEventListener('click', function() {
             handlePlayerButton(playerName);
         });
@@ -516,6 +519,9 @@ function displayActionButtons() {
     });
 
     actionButtonsContainer.appendChild(throwButton);
+    actionButtonsContainer.appendChild(huckButton);
+    actionButtonsContainer.appendChild(throwawayButton);
+    actionButtonsContainer.appendChild(scoreButton);
     // Append other action buttons similarly
 }
 

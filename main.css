@@ -24,6 +24,24 @@ button.warning {
     background-color: red;
 }
 
+.play-container {
+    display: flex;
+    justify-content: space-between;
+}
+
+.player-buttons, .action-buttons {
+    display: flex;
+    flex-direction: column;
+    margin-right: 20px; /* Adjust as needed */
+}
+
+.player-button {
+    display: block; /* Each button takes up the full width */
+    width: 100%; /* Ensures the button stretches to the full width of its container */
+    margin-bottom: 5px; /* Adds a small margin between buttons */
+    /* Add any other desired styles (padding, font size, etc.) */
+}
+
 input {
     padding: 10px;
     margin: 10px;
