@@ -410,7 +410,6 @@ function updateScore(winner) {
 
     if (currentPoint) {
         currentPoint.winner = winner; // Setting the winning team for the current point
-        currentGame.points.push(currentPoint);
         currentGame.scores[winner]++;
 
         // Update player stats for those who played this point
@@ -429,6 +428,8 @@ function updateScore(winner) {
         });
 
         currentPoint = null;  // Reset the temporary point object
+    } else {
+        throw new Error("No current point");
     }
 
     updateActivePlayersList();  // Update the table with the new point data
@@ -438,19 +439,12 @@ function updateScore(winner) {
 /**************************** Offense play-by-play ****************************/
 /******************************************************************************/
 
-document.getElementById('weScoreBtn').addEventListener('click', function() {
-    updateScore(Role.TEAM);
-    moveToNextPoint();
-});
-
-document.getElementById('weTurnoverBtn').addEventListener('click', function() {
-    let currentGame = teamData.games[teamData.games.length - 1]; // Latest game
-    let currentPossession = new Possession(false);
-    currentPoint.addPossession(currentPossession);
-    showScreen('defensePlayByPlayScreen');
-});
-
 function displayOffensivePossessionScreen() {
+    displayPlayerButtons();
+    displayActionButtons();
+}
+
+function displayPlayerButtons() {
     let currentGame = teamData.games[teamData.games.length - 1];
     let currentPoint = currentGame.points[currentGame.points.length - 1];
     let activePlayers = currentPoint.players; // Assuming this holds the names of active players
@@ -467,9 +461,6 @@ function displayOffensivePossessionScreen() {
         });
         playerButtonsContainer.appendChild(playerButton);
     });
-
-    // Call a function to display action buttons
-    displayActionButtons();
 }
 
 function handlePlayerButton(playerName) {
@@ -490,7 +481,7 @@ function displayActionButtons() {
     let throwawayButton = document.createElement('button');
     throwawayButton.textContent = 'Throws it away';
     let scoreButton = document.createElement('button');
-    scoreButton.textContent = '..For the score!';
+    scoreButton.textContent = '..for the score!';
     let dropButton = document.createElement('button');
     dropButton.textContent = '..who drops it';
     // Add event listeners to these buttons
