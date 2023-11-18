@@ -7,6 +7,9 @@ if ('serviceWorker' in navigator) {
     });
 }
 
+/*
+ * Screens & other app-wide HTML elements
+ */
 // A list of all our main screens
 const screens = [
     document.getElementById('teamRosterScreen'),
@@ -26,7 +29,9 @@ function showScreen(screenId) {
     targetScreen.style.display = 'block';
 }
 
-// Set up the basic data structures:
+/*
+ * Data structures for game tracking
+ */
 const Role = {
     TEAM: "team",
     OPPONENT: "opponent",
@@ -44,7 +49,7 @@ function Player(name, nickname = "") {
     this.pointsLost = 0;
 }
 
-// Modify the Game structure to include a 'points' property
+// Game data structure; includes a list of 'points'
 function Game(teamName, opponentName, startOn) {
     this.team = teamName;
     this.opponent = opponentName;
@@ -54,17 +59,17 @@ function Game(teamName, opponentName, startOn) {
         [Role.OPPONENT]: 0,
     };
     this.points = [];  // An array of Point objects
-    this.startTimestamp = new Date();
-    this.endTimestamp = null;
+    this.gameStartTimestamp = new Date();
+    this.gameEndTimestamp = null;
     this.pointsData = [];  // New property: Array of objects. Each object will have player names as keys and true/false as values.
 }
 
 // Team data structure
-let teamData = {
-    name: "My Team",
-    teamRoster: [],
-    games: []
-};
+function Team(name = "My Team") {
+    this.name = name;
+    this.teamRoster = []; // array of Players on the team
+    this.games = [];  // array of Games played by this team
+}
 
 class Event {
     constructor(type) {
@@ -152,6 +157,9 @@ class Point {
     }
 }
 
+// Later, support creating & loading teams from storage/cloud
+let currentTeam = new Team("My Team");
+
 // Sample  names
 const sampleNames = [
     "Cyrus L",
@@ -168,7 +176,7 @@ const sampleNames = [
 
 sampleNames.forEach(name => {
     let newPlayer = new Player(name);
-    teamData.teamRoster.push(newPlayer);
+    currentTeam.teamRoster.push(newPlayer);
 });
 
 // Set up initial screen
@@ -179,7 +187,7 @@ function updateTeamRosterDisplay() {
     const rosterElement = document.getElementById('rosterList');
     rosterElement.innerHTML = '';  // Clear existing rows
 
-    teamData.teamRoster.forEach(player => {
+    currentTeam.teamRoster.forEach(player => {
         let playerRow = document.createElement('tr');
 
         // Player name column
@@ -205,9 +213,9 @@ document.getElementById('addPlayerBtn').addEventListener('click', function() {
     const playerNameInput = document.getElementById('newPlayerInput');
     const playerName = playerNameInput.value.trim();
 
-    if (playerName && !teamData.teamRoster.some(player => player.name === playerName)) {
+    if (playerName && !currentTeam.teamRoster.some(player => player.name === playerName)) {
         let newPlayer = new Player(playerName);
-        teamData.teamRoster.push(newPlayer);
+        currentTeam.teamRoster.push(newPlayer);
         updateTeamRosterDisplay();
     }
     playerNameInput.value = '';
@@ -226,7 +234,7 @@ function updateActivePlayersList() {
     let tableBody = table.querySelector('tbody');
     let tableHead = table.querySelector('thead');
 
-    let currentGame = teamData.games[teamData.games.length - 1];
+    let currentGame = currentTeam.games[currentTeam.games.length - 1];
 
     // Clear existing rows in the table body and head
     tableBody.innerHTML = '';
@@ -274,7 +282,7 @@ function updateActivePlayersList() {
     }
 
     // Sort roster into 3 alphabetical lists: played the last point, played any points, played no points 
-    teamData.teamRoster.sort((a, b) => {
+    currentTeam.teamRoster.sort((a, b) => {
         const aLastPoint = lastPointPlayers.includes(a.name);
         const bLastPoint = lastPointPlayers.includes(b.name);
         const aPlayedAny = hasPlayedAnyPoints(a.name);
@@ -288,9 +296,8 @@ function updateActivePlayersList() {
         return a.name.localeCompare(b.name);
     });
 
-
     // Add player rows
-    teamData.teamRoster.forEach(player => {
+    currentTeam.teamRoster.forEach(player => {
         const row = document.createElement('tr');
 
         // Checkbox cell
@@ -346,8 +353,8 @@ function startNewGame(startingPosition) {
     const opponentNameInput = document.getElementById('opponentNameInput');
     const opponentName = opponentNameInput.value.trim() || "them";
 
-    let newGame = new Game(teamData.name, opponentName, startingPosition);
-    teamData.games.push(newGame);
+    let newGame = new Game(currentTeam.name, opponentName, startingPosition);
+    currentTeam.games.push(newGame);
     console.log("Starting new game on " + startingPosition + ": ");
     console.log(newGame);
     moveToNextPoint();
@@ -370,7 +377,7 @@ function moveToNextPoint() {
 let currentPoint = null;  // This will hold the current point being played
 
 function startNextPoint() {
-    let currentGame = teamData.games[teamData.games.length - 1];
+    let currentGame = currentTeam.games[currentTeam.games.length - 1];
     // Get the checkboxes and player names
     let checkboxes = [...document.querySelectorAll('#activePlayersTable input[type="checkbox"]')];
     let playerNames = [...document.querySelectorAll('#activePlayersTable td:nth-child(2)')].map(td => td.textContent);
@@ -406,14 +413,14 @@ function updateScore(winner) {
     if (winner !== Role.TEAM && winner !== Role.OPPONENT) {
         throw new Error("Invalid role");
     }
-    let currentGame = teamData.games[teamData.games.length - 1];
+    let currentGame = currentTeam.games[currentTeam.games.length - 1];
 
     if (currentPoint) {
         currentPoint.winner = winner; // Setting the winning team for the current point
         currentGame.scores[winner]++;
 
         // Update player stats for those who played this point
-        teamData.teamRoster.forEach(p => {
+        currentTeam.teamRoster.forEach(p => {
             if (currentPoint.players.includes(p.name)) { // the player played this point
                 p.totalPointsPlayed++;
                 p.consecutivePointsPlayed++;
@@ -445,7 +452,7 @@ function displayOffensivePossessionScreen() {
 }
 
 function displayPlayerButtons() {
-    let currentGame = teamData.games[teamData.games.length - 1];
+    let currentGame = currentTeam.games[currentTeam.games.length - 1];
     let currentPoint = currentGame.points[currentGame.points.length - 1];
     let activePlayers = currentPoint.players; // Assuming this holds the names of active players
 
@@ -497,7 +504,7 @@ function displayActionButtons() {
     throwawayButton.addEventListener('click', function() {
         // Logic for 'Throws it away' button
         console.log('Throwaway');
-        let currentGame = teamData.games[teamData.games.length - 1]; // Latest game
+        let currentGame = currentTeam.games[currentTeam.games.length - 1]; // Latest game
         let currentPossession = new Possession(false);
         currentPoint.addPossession(currentPossession);
         showScreen('defensePlayByPlayScreen');
@@ -527,14 +534,14 @@ document.getElementById('theyScoreBtn').addEventListener('click', function() {
 });
 
 document.getElementById('theyTurnoverBtn').addEventListener('click', function() {
-    let currentGame = teamData.games[teamData.games.length - 1]; // Latest game
+    let currentGame = currentTeam.games[currentTeam.games.length - 1]; // Latest game
     let currentPossession = new Possession(true);
     currentPoint.addPossession(currentPossession);
     showScreen('offensePlayByPlayScreen');
 });
 
 document.getElementById('endGameBtn').addEventListener('click', function() {
-    let currentGame = teamData.games[teamData.games.length - 1]; // Latest game
+    let currentGame = currentTeam.games[currentTeam.games.length - 1]; // Latest game
     currentGame.endTimestamp = new Date(); // Set end timestamp
 
     // Populate the gameSummaryScreen with statistics, then show it
