@@ -43,6 +43,7 @@ function Player(name, nickname = "") {
     this.nickname = nickname;
     this.totalPointsPlayed = 0;
     this.consecutivePointsPlayed = 0;
+    this.totalTimePlayed = 0;  // in milliseconds
     this.completedPasses = 0;
     this.turnovers = 0;
     this.pointsWon = 0;
@@ -65,10 +66,14 @@ function Game(teamName, opponentName, startOn) {
 }
 
 // Team data structure
-function Team(name = "My Team") {
+function Team(name = "My Team", initialRoster = []) {
     this.name = name;
-    this.teamRoster = []; // array of Players on the team
     this.games = [];  // array of Games played by this team
+    this.teamRoster = []; // array of Players on the team
+    initialRoster.forEach(name => {
+        let newPlayer = new Player(name);
+        this.teamRoster.push(newPlayer);
+    });
 }
 
 class Event {
@@ -150,6 +155,8 @@ class Point {
         this.players = playingPlayers;  // An array of player names who played the point
         this.startingPosition = startOn;  // Either 'offense' or 'defense'
         this.winner = "";  // Either 'team' or 'opponent'     
+        this.startTimestamp = null;
+        this.endTimestamp = null;
     }
 
     addPossession(possession) {
@@ -157,27 +164,33 @@ class Point {
     }
 }
 
-// Later, support creating & loading teams from storage/cloud
-let currentTeam = new Team("My Team");
+/*
+ * Globals
+ */
+const sampleNames = ["Cyrus L","Leif","Cesc","Cyrus J","Abby","Avery","James","Simeon","Soren","Walden"];
+let currentTeam = new Team("My Team", sampleNames);  // Later, support loading teams from storage/cloud
 
-// Sample  names
-const sampleNames = [
-    "Cyrus L",
-    "Leif",
-    "Cesc",
-    "Cyrus J",
-    "Abby",
-    "Avery",
-    "James",
-    "Simeon",
-    "Soren",
-    "Walden"
-  ];
+/* 
+ * Utility functions
+ */
+// Get the current game
+function currentGame() {
+    if (currentTeam.games.length === 0) {
+        throw new Error("No current game");
+    }
+    return currentTeam.games[currentTeam.games.length - 1];
+}
 
-sampleNames.forEach(name => {
-    let newPlayer = new Player(name);
-    currentTeam.teamRoster.push(newPlayer);
-});
+// print playing time in mm:ss format
+function formatPlayTime(totalTimePlayed) {
+    const timeDifferenceInMilliseconds = totalTimePlayed;
+    const timeDifferenceInSeconds = Math.floor(timeDifferenceInMilliseconds / 1000);
+    const minutes = Math.floor(timeDifferenceInSeconds / 60);
+    const seconds = timeDifferenceInSeconds % 60;
+    // Function to format a number as two digits with leading zeros
+    const formatTwoDigits = (num) => (num < 10 ? `0${num}` : num);
+    return `${formatTwoDigits(minutes)}:${formatTwoDigits(seconds)}`;
+}
 
 // Set up initial screen
 showScreen('teamRosterScreen');
@@ -234,8 +247,6 @@ function updateActivePlayersList() {
     let tableBody = table.querySelector('tbody');
     let tableHead = table.querySelector('thead');
 
-    let currentGame = currentTeam.games[currentTeam.games.length - 1];
-
     // Clear existing rows in the table body and head
     tableBody.innerHTML = '';
     tableHead.innerHTML = '';
@@ -259,26 +270,26 @@ function updateActivePlayersList() {
 
     // Calculate and add score cells
     let runningScores = { team: [0], opponent: [0] };
-    currentGame.points.forEach(point => {
+        currentGame().points.forEach(point => {
         runningScores.team.push(point.winner === 'team' ? runningScores.team.slice(-1)[0] + 1 : runningScores.team.slice(-1)[0]);
         runningScores.opponent.push(point.winner === 'opponent' ? runningScores.opponent.slice(-1)[0] + 1 : runningScores.opponent.slice(-1)[0]);
     });
 
-    addScoreCells(teamScoreRow, currentGame.team, runningScores.team);
-    addScoreCells(opponentScoreRow, currentGame.opponent, runningScores.opponent);
+    addScoreCells(teamScoreRow, currentGame().team, runningScores.team);
+    addScoreCells(opponentScoreRow, currentGame().opponent, runningScores.opponent);
 
     // Add score rows to the head
     tableHead.appendChild(teamScoreRow);
     tableHead.appendChild(opponentScoreRow);
 
     // Determine players from the last point
-    const lastPointPlayers = currentGame.points.length > 0
-        ? currentGame.points[currentGame.points.length - 1].players
+    const lastPointPlayers = currentGame().points.length > 0
+        ? currentGame().points[currentGame().points.length - 1].players
         : [];
 
     // Check if a player has played any points
     function hasPlayedAnyPoints(playerName) {
-        return currentGame.points.some(point => point.players.includes(playerName));
+        return currentGame().points.some(point => point.players.includes(playerName));
     }
 
     // Sort roster into 3 alphabetical lists: played the last point, played any points, played no points 
@@ -312,12 +323,13 @@ function updateActivePlayersList() {
 
         // Player name cell
         let nameCell = document.createElement('td');
-        nameCell.textContent = player.name;
+        nameCell.innerHTML = player.name + ' <i>' + formatPlayTime(player.totalTimePlayed) + '</i>';
+        // nameCell.innerHTML = player.name;
         row.appendChild(nameCell);
 
         // Points data cells
         let runningPointTotal = 0;
-        currentGame.points.forEach(point => {
+        currentGame().points.forEach(point => {
             let pointCell = document.createElement('td');
 
             if (point.players.includes(player.name)) {
@@ -377,32 +389,36 @@ function moveToNextPoint() {
 let currentPoint = null;  // This will hold the current point being played
 
 function startNextPoint() {
-    let currentGame = currentTeam.games[currentTeam.games.length - 1];
     // Get the checkboxes and player names
     let checkboxes = [...document.querySelectorAll('#activePlayersTable input[type="checkbox"]')];
-    let playerNames = [...document.querySelectorAll('#activePlayersTable td:nth-child(2)')].map(td => td.textContent);
 
     let activePlayersForThisPoint = [];
     checkboxes.forEach((checkbox, index) => {
         if (checkbox.checked) {
-            let playerName = playerNames[index];
-            activePlayersForThisPoint.push(playerName);
+            //  this code works because we re-sort the actual team roster after 
+            //  each point in updateActivePlayersList():
+            let player = currentTeam.teamRoster[index];  
+            activePlayersForThisPoint.push(player.name);
         }
     });
+    console.log("Active players for this point: " + activePlayersForThisPoint);
 
-    // Create a new Point with the active players (without setting the winning team yet)
+    // Create a new Point with the active players 
+    // Don't set the winning team yet
+    // Don't set startTimeStamp yet, wait till first player touches the disc
     let startPointOn = "";
-    if (currentGame.points.length === 0) {
-        startPointOn = currentGame.startingPosition;
+    if (currentGame().points.length === 0) {
+        startPointOn = currentGame().startingPosition;
     } else {
-        startPointOn = currentGame.points[currentGame.points.length - 1].winner === Role.TEAM ? 'defense' : 'offense';
+        startPointOn = currentGame().points[currentGame().points.length - 1].winner === Role.TEAM ? 'defense' : 'offense';
     } 
     currentPoint = new Point(activePlayersForThisPoint, startPointOn);
-    currentGame.points.push(currentPoint);
+    currentGame().points.push(currentPoint);
     if (startPointOn === 'offense') {
-        displayOffensivePossessionScreen();
+        updateOffensivePossessionScreen();
         showScreen('offensePlayByPlayScreen');
     } else {
+        updateOffensivePossessionScreen();
         showScreen('defensePlayByPlayScreen');
     }
 }
@@ -413,17 +429,18 @@ function updateScore(winner) {
     if (winner !== Role.TEAM && winner !== Role.OPPONENT) {
         throw new Error("Invalid role");
     }
-    let currentGame = currentTeam.games[currentTeam.games.length - 1];
 
     if (currentPoint) {
+        currentPoint.endTimestamp = new Date();
         currentPoint.winner = winner; // Setting the winning team for the current point
-        currentGame.scores[winner]++;
+        currentGame().scores[winner]++;
 
         // Update player stats for those who played this point
         currentTeam.teamRoster.forEach(p => {
             if (currentPoint.players.includes(p.name)) { // the player played this point
                 p.totalPointsPlayed++;
                 p.consecutivePointsPlayed++;
+                p.totalTimePlayed += currentPoint.endTimestamp - currentPoint.startTimestamp;
                 if (winner === Role.TEAM) {
                     p.pointsWon++;
                 } else {
@@ -446,14 +463,13 @@ function updateScore(winner) {
 /**************************** Offense play-by-play ****************************/
 /******************************************************************************/
 
-function displayOffensivePossessionScreen() {
+function updateOffensivePossessionScreen() {
     displayPlayerButtons();
     displayActionButtons();
 }
 
 function displayPlayerButtons() {
-    let currentGame = currentTeam.games[currentTeam.games.length - 1];
-    let currentPoint = currentGame.points[currentGame.points.length - 1];
+    let currentPoint = currentGame().points[currentGame().points.length - 1];
     let activePlayers = currentPoint.players; // Assuming this holds the names of active players
 
     let playerButtonsContainer = document.getElementById('offensivePlayerButtons');
@@ -473,6 +489,9 @@ function displayPlayerButtons() {
 function handlePlayerButton(playerName) {
     // Logic to handle when a player button is clicked
     console.log(playerName + " has the disc");
+    if (currentPoint.startTimestamp === null) {
+        currentPoint.startTimestamp = new Date();
+    }
     // You will need additional logic here to track the thrower and receiver
 }
 
@@ -495,7 +514,7 @@ function displayActionButtons() {
     throwButton.addEventListener('click', function() {
         // Logic for 'Throws to...' button
         console.log('Throw initiated');
-        // Here, you can set a flag or state indicating a throw is in progress
+        // update player stats for completed throw
     });
     huckButton.addEventListener('click', function() {
         // Logic for 'Hucks to...' button
@@ -504,7 +523,6 @@ function displayActionButtons() {
     throwawayButton.addEventListener('click', function() {
         // Logic for 'Throws it away' button
         console.log('Throwaway');
-        let currentGame = currentTeam.games[currentTeam.games.length - 1]; // Latest game
         let currentPossession = new Possession(false);
         currentPoint.addPossession(currentPossession);
         showScreen('defensePlayByPlayScreen');
@@ -534,21 +552,19 @@ document.getElementById('theyScoreBtn').addEventListener('click', function() {
 });
 
 document.getElementById('theyTurnoverBtn').addEventListener('click', function() {
-    let currentGame = currentTeam.games[currentTeam.games.length - 1]; // Latest game
     let currentPossession = new Possession(true);
     currentPoint.addPossession(currentPossession);
     showScreen('offensePlayByPlayScreen');
 });
 
 document.getElementById('endGameBtn').addEventListener('click', function() {
-    let currentGame = currentTeam.games[currentTeam.games.length - 1]; // Latest game
-    currentGame.endTimestamp = new Date(); // Set end timestamp
+    currentGame().endTimestamp = new Date(); // Set end timestamp
 
     // Populate the gameSummaryScreen with statistics, then show it
-    document.getElementById('teamName').textContent = currentGame.team;
-    document.getElementById('teamFinalScore').textContent = currentGame.scores[Role.TEAM];
-    document.getElementById('opponentName').textContent = currentGame.opponent;
-    document.getElementById('opponentFinalScore').textContent = currentGame.scores[Role.OPPONENT];
+    document.getElementById('teamName').textContent = currentGame().team;
+    document.getElementById('teamFinalScore').textContent = currentGame().scores[Role.TEAM];
+    document.getElementById('opponentName').textContent = currentGame().opponent;
+    document.getElementById('opponentFinalScore').textContent = currentGame().scores[Role.OPPONENT];
     showScreen('gameSummaryScreen');
 });
 
