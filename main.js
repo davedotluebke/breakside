@@ -420,6 +420,10 @@ function startNextPoint() {
     } else {
         updateOffensivePossessionScreen();
         showScreen('defensePlayByPlayScreen');
+        // For now start timing point on defense when the point starts
+        if (currentPoint.startTimestamp === null) {
+            currentPoint.startTimestamp = new Date();
+        }
     }
 }
 document.getElementById('startPointBtn').addEventListener('click', startNextPoint);
