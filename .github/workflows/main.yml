@@ -20,6 +20,12 @@ jobs:
           sudo ./aws/install --update
           aws --version
 
+      - name: List changed files
+        run: |
+          changed_files=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+          echo "Changed files:"
+          echo "$changed_files"
+          
       - name: Determine changed files
         id: changed-files
         run: |
