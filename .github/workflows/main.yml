@@ -25,6 +25,14 @@ jobs:
         run: |
           git fetch
           git diff --name-only origin/main...HEAD > changed-files.txt
+          echo "------------------------------------"
+          echo "The list of changed files:"
+          echo "------------------------------------"
+          cat changed-files.txt  # Print the contents of changed-files.txt
+          echo "------------------------------------"
+          echo "The full git diff output"
+          echo "------------------------------------"
+          git diff origin/main...HEAD  # Display the full git diff output
         shell: bash
 
       - name: Deploy to S3
