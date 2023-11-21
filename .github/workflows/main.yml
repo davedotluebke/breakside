@@ -20,9 +20,16 @@ jobs:
           sudo ./aws/install --update
           aws --version
 
+      - name: Determine changed files
+        id: changed-files
+        run: |
+          git fetch
+          git diff --name-only origin/main...HEAD > changed-files.txt
+        shell: bash
+
       - name: Deploy to S3
         run: |
-          aws s3 sync ./ s3://luebke.us/ultistats/ --region us-west-2
+          cat changed-files.txt | xargs -I {} aws s3 cp {} s3://luebke.us/ultistats/{} --region us-west-2
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
