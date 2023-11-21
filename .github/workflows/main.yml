@@ -34,7 +34,19 @@ jobs:
           echo "------------------------------------"
           git diff origin/main...HEAD  # Display the full git diff output
         shell: bash
-
+      
+      - name: Save git diff output
+        run: |
+          git fetch
+          git diff origin/main...HEAD > git-diff-output.txt
+        shell: bash
+      
+      - name: Upload git diff output
+        uses: actions/upload-artifact@v2
+        with:
+          name: git-diff-output
+          path: git-diff-output.txt
+          
       - name: Deploy to S3
         run: |
           cat changed-files.txt | xargs -I {} aws s3 cp {} s3://luebke.us/ultistats/{} --region us-west-2
