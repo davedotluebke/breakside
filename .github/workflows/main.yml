@@ -38,7 +38,7 @@ jobs:
       - name: Save git diff output
         run: |
           git fetch
-          git diff origin/main...HEAD > git-diff-output.txt
+          git -v diff origin/main...HEAD > git-diff-output.txt  # -v should display ONLY the git version
         shell: bash
       
       - name: Upload git diff output
