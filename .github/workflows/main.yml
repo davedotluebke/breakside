@@ -20,6 +20,12 @@ jobs:
           rm awscliv2.zip
           sudo ./aws/install --update
           aws --version
+      - name: Set AWS CLI Configuration
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # aws configure set aws_session_token ${{ secrets.AWS_SESSION_TOKEN }}
+          aws configure set region us-west-2  # Set your desired AWS region
 
       - name: Deploy to S3
         run: |
