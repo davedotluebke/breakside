@@ -35,5 +35,5 @@ jobs:
         run: |
           # Use the AWS CLI to create a CloudFront invalidation for the ultistats directory
           set -x  # start debugging
-          aws cloudfront create-invalidation --distribution-id E3G1NZWEOD2Y27 --paths "/ultistats/*"
+          aws cloudfront create-invalidation --distribution-id E3G1NZWEOD2Y27 --paths "/ultistats/*" --profile github_actions
           set +x  # stop debugging
