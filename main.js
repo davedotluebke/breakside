@@ -361,6 +361,7 @@ function updateActivePlayersList() {
         let runningPointTotal = 0;
         currentGame().points.forEach(point => {
             let pointCell = document.createElement('td');
+            pointCell.classList.add('active-points-columns');
 
             if (point.players.includes(player.name)) {
                 runningPointTotal++;
