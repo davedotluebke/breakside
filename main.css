@@ -24,6 +24,12 @@ button.warning {
     background-color: red;
 }
 
+/* Ensure table columns with player names are left-aligned */
+table {
+    text-align: left;
+    border: 1px solid grey;
+}
+
 .play-container {
     display: flex;
     justify-content: space-between;
@@ -52,11 +58,6 @@ ul {
     padding: 0;
 }
 
-/* Ensure table columns with player names are left-aligned */
-table {
-    text-align: left;
-}
-
 /* create a container for the table to allow horizontal scrolling */
 #tableContainer {
     overflow-x: auto;
@@ -73,32 +74,68 @@ table {
     padding: 5px 5px;
 }
 
-/* Apply position:sticky to the first two columns: checkbox & player name */
+/* Apply position:sticky to the first THREE columns: checkbox, player name, time played */
+
+/* first column of header spans all 3 sticky columns */
+.active-header-teams {
+    position: sticky;
+    left: 0px;
+    background-color: #fafafa;  /* To ensure the columns are not transparent */
+    z-index: 3;  /* greater than the other sticky columns */
+}
+
 /* fix width of checkbox column */
-#activePlayersTable th:first-child, 
-#activePlayersTable td:first-child {
+.active-checkbox-column {
     width: 30px; /* Adjust this based on your preference */
     overflow: hidden;  /* don't widen the column for the header text */
     background-color: #fafafa;  /* To ensure the columns are not transparent */
     position: sticky;
     left: 0px;
+    z-index: 2;  /* greater than the next sticky column */
 }
 
 /* specify the left value to determine where the column should "stick" when scrolling: */
-#activePlayersTable th:nth-child(2), 
-#activePlayersTable td:nth-child(2) {
-    background-color: #fafafa;  /* To ensure the columns are not transparent */
+.active-name-column {
+    background-color: #e9b7b7;  /* To ensure the columns are not transparent */
     position: sticky;
-    left: 40px;
+    left: 40px;         /* this will be overwritten dynamically to width of checkbox column */
     z-index: 1;         /* This ensures the sticky columns are above the other content */
 }
 
+.active-time-column {
+    background-color: #8491da;  /* To ensure the columns are not transparent */
+    position: sticky;
+    left: 120px;        /* this will be overwritten dynamically to width of name column */
+    z-index: 1;         /* This ensures the sticky columns are above the other content */
+
+    font-style: italic;
+}
+
 /* fix width of point columns */
-#activePlayersTable th:not(:first-child):not(:nth-child(2)), 
-#activePlayersTable td:not(:first-child):not(:nth-child(2)) {
+.active-points-columns {
     width: 20px;        /* Or you can adjust this value as per your needs */
     overflow: hidden;
     text-align: left;
     background-color: #f0f0f0;
+
+    border: 1px solid grey;
 }
 
+/* styles for the names, time, and points-played columns */
+.roster-name-column {
+    text-align: left;
+    /* border: 1px solid grey; */
+    border-right: none;
+}
+
+.roster-points-column {
+    text-align: center;
+    border-right: none;
+    border-left: none;
+}
+
+.roster-time-column {
+    text-align: center;
+    font-style: italic;
+    border-left: none;
+}
