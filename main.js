@@ -192,7 +192,13 @@ function formatPlayTime(totalTimePlayed) {
     return `${formatTwoDigits(minutes)}:${formatTwoDigits(seconds)}`;
 }
 
-// Set up initial screen
+
+/************************************************************************ 
+ *
+ *   BEFORE POINT SCREEN
+ *   TEAM ROSTER TABLE 
+ * 
+ ************************************************************************/
 showScreen('teamRosterScreen');
 
 // Updates the displayed roster on the "Team Roster Screen"
@@ -205,15 +211,22 @@ function updateTeamRosterDisplay() {
 
         // Player name column
         let nameCell = document.createElement('td');
+        nameCell.classList.add('roster-name-column');
         nameCell.textContent = player.name;
 
         // Total points played column
         let totalPointsCell = document.createElement('td');
+        totalPointsCell.classList.add('roster-points-column');
         totalPointsCell.textContent = player.totalPointsPlayed;
+
+        let totalTimeCell = document.createElement('td');
+        totalTimeCell.classList.add('roster-time-column');
+        totalTimeCell.textContent = formatPlayTime(player.totalTimePlayed);
 
         // Append cells to the row
         playerRow.appendChild(nameCell);
         playerRow.appendChild(totalPointsCell);
+        playerRow.appendChild(totalTimeCell);
 
         // Append row to the table body
         rosterElement.appendChild(playerRow);
@@ -241,6 +254,14 @@ playerNameInput.addEventListener('keydown', function(event) {
     }
 });
 
+
+/************************************************************************ 
+ *
+ *   BEFORE POINT SCREEN
+ *   ACTIVE PLAYERS TABLE 
+ * 
+ ************************************************************************/
+
 // Updates the displayed roster on the "Before Point Screen"
 function updateActivePlayersList() {
     let table = document.getElementById('activePlayersTable');
@@ -257,9 +278,11 @@ function updateActivePlayersList() {
 
     // Function to add cells to the score rows
     const addScoreCells = (row, teamName, scores) => {
-        row.appendChild(document.createElement('th')); // empty cell for alignment
         let nameCell = document.createElement('th');
         nameCell.textContent = teamName;
+        nameCell.setAttribute('colspan', '3');  // merge with time column in header row
+        nameCell.setAttribute('text-align', 'center');
+        nameCell.classList.add('active-header-teams');
         row.appendChild(nameCell);
         scores.forEach(score => {
             let scoreCell = document.createElement('th');
@@ -313,6 +336,7 @@ function updateActivePlayersList() {
 
         // Checkbox cell
         let checkboxCell = document.createElement('td');
+        checkboxCell.classList.add('active-checkbox-column');
         let checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         if (lastPointPlayers.includes(player.name)) {
@@ -323,9 +347,15 @@ function updateActivePlayersList() {
 
         // Player name cell
         let nameCell = document.createElement('td');
-        nameCell.innerHTML = player.name + ' <i>' + formatPlayTime(player.totalTimePlayed) + '</i>';
-        // nameCell.innerHTML = player.name;
+        nameCell.classList.add('active-name-column');
+        nameCell.textContent = player.name;
         row.appendChild(nameCell);
+
+        // Player time cell
+        let timeCell = document.createElement('td');
+        timeCell.classList.add('active-time-column');
+        timeCell.textContent = formatPlayTime(player.totalTimePlayed);
+        row.appendChild(timeCell);
 
         // Points data cells
         let runningPointTotal = 0;
@@ -344,7 +374,39 @@ function updateActivePlayersList() {
 
         tableBody.appendChild(row);
     });
+    // After adding all rows to the tableBody, calculate the widths
+    makeColumnsSticky();
 }
+/*
+ * Make left 3 columns "sticky", calculating widths to set left offsets, 
+ * and scroll table all the way right so the latest points are visible.
+ */
+function makeColumnsSticky() {
+    // Below assumes all checkbox & name cells will have the same width
+    const checkboxCells = document.querySelectorAll('.active-checkbox-column');
+    let checkboxCellWidth = checkboxCells[0].getBoundingClientRect().width + 1;  // 1-pixel border each side
+    
+    const nameCells = document.querySelectorAll('.active-name-column');
+    let nameCellWidth = nameCells[0].getBoundingClientRect().width + 1;  // 1-pixel border each side
+    // Update the second sticky colun's left offset
+    nameCells.forEach(cell => {
+        cell.style.position = 'sticky';
+        cell.style.left = `${checkboxCellWidth}px`;
+        cell.style.zIndex = 1; 
+    });
+    
+    const timeCells = document.querySelectorAll('.active-time-column');
+    // Update the third sticky column's left offset
+    timeCells.forEach(cell => {
+        cell.style.position = 'sticky';
+        cell.style.left = `${checkboxCellWidth + nameCellWidth}px`;
+        cell.style.zIndex = 1; 
+    });
+    // Set the scroll position to the maximum scroll width
+    let tableContainer = document.getElementById('tableContainer');
+    tableContainer.scrollLeft = tableContainer.scrollWidth;
+}
+
 
 // Show start-next-point button with warning style if wrong # of players selected
 function checkPlayerCount() {
@@ -383,6 +445,9 @@ document.getElementById('startGameOnDBtn').addEventListener('click', function() 
 function moveToNextPoint() {
     updateActivePlayersList();
     showScreen('beforePointScreen');
+    // once the table is rendered, make the left columns sticky
+    makeColumnsSticky();
+    // (could call window.requestAnimationFrame(makeColumnsSticky) to force a render, shouldn't be needed)
 }
 
 // Transition from Before Point to Play-by-Play
@@ -575,6 +640,7 @@ document.getElementById('endGameBtn').addEventListener('click', function() {
 // Start a new game from the Game Summary screen
 document.getElementById('anotherGameBtn').addEventListener('click', function() {
     // Reset game data if needed here
+    updateTeamRosterDisplay();
     showScreen('teamRosterScreen');
 });
 
