@@ -1,19 +1,24 @@
+html {
+    font-size: 4vw; /* Default font size */
+}
+
 body {
     font-family: Arial, sans-serif;
+    font-size: 1rem;
     background-color: #f4f4f4;
     text-align: center;
-    padding: 10px;
+    padding: 1vw;
 }
 
 header, footer {
     background-color: rgb(8, 91, 49);
     color: #fff;
-    padding: 5px 0;
+    /* padding: 1vw 0; */
 }
 
 button {
-    padding: 10px 15px;
-    margin: 10px;
+    padding: 5vw 8vw;
+    margin: 5vw;
     background-color: #444;
     color: #fff;
     border: none;
@@ -38,19 +43,19 @@ table {
 .player-buttons, .action-buttons {
     display: flex;
     flex-direction: column;
-    margin-right: 20px; /* Adjust as needed */
+    margin-right: 2vw; /* Adjust as needed */
 }
 
 .player-button {
     display: block; /* Each button takes up the full width */
     width: 100%; /* Ensures the button stretches to the full width of its container */
-    margin-bottom: 5px; /* Adds a small margin between buttons */
+    margin-bottom: 2vw; /* Adds a small margin between buttons */
     /* Add any other desired styles (padding, font size, etc.) */
 }
 
 input {
-    padding: 10px;
-    margin: 10px;
+    padding: 1vw;
+    margin: 1vw;
 }
 
 ul {
@@ -71,7 +76,7 @@ ul {
 
 #activePlayersTable th, #activePlayersTable td {
     border: 1px solid grey;
-    padding: 5px 5px;
+    padding: 1vw 1vw;
 }
 
 /* Apply position:sticky to the first THREE columns: checkbox, player name, time played */
@@ -86,7 +91,7 @@ ul {
 
 /* fix width of checkbox column */
 .active-checkbox-column {
-    width: 30px; /* Adjust this based on your preference */
+    width: auto; /* Adjust this based on your preference */
     overflow: hidden;  /* don't widen the column for the header text */
     background-color: #fafafa;  /* To ensure the columns are not transparent */
     position: sticky;
@@ -96,14 +101,16 @@ ul {
 
 /* specify the left value to determine where the column should "stick" when scrolling: */
 .active-name-column {
-    background-color: #e9b7b7;  /* To ensure the columns are not transparent */
+    background-color: #fafafa;  /* To ensure the columns are not transparent */
     position: sticky;
     left: 40px;         /* this will be overwritten dynamically to width of checkbox column */
     z-index: 1;         /* This ensures the sticky columns are above the other content */
+    border-right: 1px grey;
 }
 
 .active-time-column {
-    background-color: #8491da;  /* To ensure the columns are not transparent */
+    width: auto;
+    background-color: #fafafa;  /* To ensure the columns are not transparent */
     position: sticky;
     left: 120px;        /* this will be overwritten dynamically to width of name column */
     z-index: 1;         /* This ensures the sticky columns are above the other content */
@@ -113,10 +120,10 @@ ul {
 
 /* fix width of point columns */
 .active-points-columns {
-    width: 20px;        /* Or you can adjust this value as per your needs */
+    width: 3vw;        /* Or you can adjust this value as per your needs */
     overflow: hidden;
     text-align: left;
-    background-color: #f0f0f0;
+    background-color: #fafafa;
 
     border: 1px solid grey;
 }
