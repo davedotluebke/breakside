@@ -1,38 +1,66 @@
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box; /* Include padding and borders in the element's total width and height */
+}
+
 html {
-    font-size: 4vw; /* Default font size */
+    font-size: 16px; /* Base font size */
 }
 
 body {
-    font-family: Arial, sans-serif;
-    font-size: 1rem;
+    font-family: 'Arial', sans-serif;
     background-color: #f4f4f4;
     text-align: center;
-    padding: 1vw;
+    margin: 0;
+    padding: 5px;
 }
 
 header, footer {
-    background-color: rgb(8, 91, 49);
+    background-color: #c0c0c0;
     color: #fff;
-    /* padding: 1vw 0; */
+    padding: 10px 0;
+    text-align: center;
+}
+
+h2, h3, h4 {
+    color: #333;
+    margin: 10px 0;
 }
 
 button {
-    padding: 5vw 8vw;
-    margin: 5vw;
+    padding: 10px 15px;
+    margin: 10px;
     background-color: #444;
     color: #fff;
     border: none;
+    border-radius: 5px; /* Rounded corners */
     cursor: pointer;
+    font-size: 1rem; /* Larger font size for readability */
 }
 
 button.warning {
-    background-color: red;
+    background-color: #d9534f; /* Bootstrap's button color for warning */
 }
 
-/* Ensure table columns with player names are left-aligned */
 table {
-    text-align: left;
     border: 1px solid grey;
+    margin-left: auto; 
+    margin-right: auto;
+    border-collapse: collapse;
+    width: auto; /* Only as wide as needed */
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+/* Styling for header rows */
+th {
+    background-color: #f2f2f2;
 }
 
 .play-container {
@@ -43,19 +71,22 @@ table {
 .player-buttons, .action-buttons {
     display: flex;
     flex-direction: column;
-    margin-right: 2vw; /* Adjust as needed */
+    /* margin-right: 10px;  Adjust as needed */
 }
 
 .player-button {
     display: block; /* Each button takes up the full width */
-    width: 100%; /* Ensures the button stretches to the full width of its container */
+    width: auto; /* Ensures the button stretches to the full width of its container */
     margin-bottom: 2vw; /* Adds a small margin between buttons */
     /* Add any other desired styles (padding, font size, etc.) */
 }
 
-input {
-    padding: 1vw;
-    margin: 1vw;
+/* Input field styling */
+input[type="text"], input[type="number"] {
+    padding: 8px;
+    margin: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
 }
 
 ul {
@@ -66,7 +97,6 @@ ul {
 /* create a container for the table to allow horizontal scrolling */
 #tableContainer {
     overflow-x: auto;
-    max-width: 100%;
 }
 
 #activePlayersTable {
@@ -80,41 +110,24 @@ ul {
 }
 
 /* Apply position:sticky to the first THREE columns: checkbox, player name, time played */
-
-/* first column of header spans all 3 sticky columns */
-.active-header-teams {
+/* first column of header (.active-header-teams) spans all 3 sticky columns */
+/* Styles for sticky columns */
+.active-header-teams, .active-checkbox-column, .active-name-column, .active-time-column {
+    background-color: #fafafa;
     position: sticky;
-    left: 0px;
-    background-color: #fafafa;  /* To ensure the columns are not transparent */
-    z-index: 3;  /* greater than the other sticky columns */
+    z-index: 1;
 }
 
-/* fix width of checkbox column */
 .active-checkbox-column {
-    width: auto; /* Adjust this based on your preference */
-    overflow: hidden;  /* don't widen the column for the header text */
-    background-color: #fafafa;  /* To ensure the columns are not transparent */
-    position: sticky;
-    left: 0px;
-    z-index: 2;  /* greater than the next sticky column */
+    left: 0;
 }
 
-/* specify the left value to determine where the column should "stick" when scrolling: */
 .active-name-column {
-    background-color: #fafafa;  /* To ensure the columns are not transparent */
-    position: sticky;
-    left: 40px;         /* this will be overwritten dynamically to width of checkbox column */
-    z-index: 1;         /* This ensures the sticky columns are above the other content */
-    border-right: 1px grey;
+    left: 40px; /* this will be overwritten dynamically to width of checkbox column */
 }
 
 .active-time-column {
-    width: auto;
-    background-color: #fafafa;  /* To ensure the columns are not transparent */
-    position: sticky;
-    left: 120px;        /* this will be overwritten dynamically to width of name column */
-    z-index: 1;         /* This ensures the sticky columns are above the other content */
-
+    left: 140px; /* this will be overwritten dynamically to width of left 2 columns */
     font-style: italic;
 }
 
@@ -145,4 +158,17 @@ ul {
     text-align: center;
     font-style: italic;
     border-left: none;
+}
+
+/* Responsive button sizes */
+@media (max-width: 600px) {
+    button {
+        padding: 12px 18px;
+        font-size: 1.2rem;
+    }
+
+    input[type="text"], input[type="number"] {
+        padding: 10px;
+        font-size: 1rem;
+    }
 }
