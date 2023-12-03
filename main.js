@@ -165,6 +165,41 @@ class Point {
 }
 
 /*
+ * Saving and loading team data
+ */
+function serializeTeam(team) {
+    // Simplify the team and game objects into serializable objects
+    const simplifiedGames = team.games.map(game => ({
+        ...game,
+        gameStartTimestamp: game.gameStartTimestamp.toISOString(),
+        gameEndTimestamp: game.gameEndTimestamp ? game.gameEndTimestamp.toISOString() : null,
+        points: game.points.map(point => ({
+            ...point,
+            startTimestamp: point.startTimestamp ? point.startTimestamp.toISOString() : null,
+            endTimestamp: point.endTimestamp ? point.endTimestamp.toISOString() : null,
+            possessions: point.possessions.map(possession => ({
+                ...possession,
+                events: possession.events.map(event => ({
+                    ...event
+                }))
+            }))
+        }))
+    }));
+
+    return JSON.stringify({
+        ...team,
+        games: simplifiedGames
+    }, null, 4);
+}
+
+function saveTeamData(team) {
+    const serializedData = serializeTeam(team);
+    localStorage.setItem('teamData', serializedData);
+    console.log("Saving team data: ");
+    console.log(serializedData);
+}
+
+/*
  * Globals
  */
 const sampleNames = ["Cyrus L","Leif","Cesc","Cyrus J","Abby","Avery","James","Simeon","Soren","Walden"];
@@ -636,6 +671,7 @@ document.getElementById('endGameBtn').addEventListener('click', function() {
     document.getElementById('opponentName').textContent = currentGame().opponent;
     document.getElementById('opponentFinalScore').textContent = currentGame().scores[Role.OPPONENT];
     showScreen('gameSummaryScreen');
+    saveTeamData(currentTeam);
 });
 
 // Start a new game from the Game Summary screen
