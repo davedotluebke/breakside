@@ -46,6 +46,8 @@ function Player(name, nickname = "") {
     this.totalTimePlayed = 0;  // in milliseconds
     this.completedPasses = 0;
     this.turnovers = 0;
+    this.goals = 0;
+    this.assists = 0;
     this.pointsWon = 0;
     this.pointsLost = 0;
 }
@@ -164,9 +166,33 @@ class Point {
     }
 }
 
+// Given a player name, return the corresponding Player object from the team roster
+function getPlayerFromName(playerName) {
+    return currentTeam.teamRoster.find(player => player.name === playerName);
+}
+
 /*
  * Saving and loading team data
  */
+function serializeEvent(event) {
+    const serializedEvent = { type: event.type };
+    // Create a new instance of the event with default values
+    const defaultEvent = new event.constructor();
+
+    // Serialize only the properties that are different from the default instance
+    for (const prop in event) {
+        if (event.hasOwnProperty(prop) && event[prop] !== defaultEvent[prop]) {
+            serializedEvent[prop] = event[prop];
+        }
+    }
+
+    // Serialize player names if available
+    if (event.thrower) serializedEvent.thrower = event.thrower.name;
+    if (event.receiver) serializedEvent.receiver = event.receiver.name;
+
+    return serializedEvent;
+}
+
 function serializeTeam(team) {
     // Simplify the team and game objects into serializable objects
     const simplifiedGames = team.games.map(game => ({
@@ -179,9 +205,19 @@ function serializeTeam(team) {
             endTimestamp: point.endTimestamp ? point.endTimestamp.toISOString() : null,
             possessions: point.possessions.map(possession => ({
                 ...possession,
-                events: possession.events.map(event => ({
-                    ...event
-                }))
+                events: possession.events.map(event => {
+                    // Create a simple object for each event, including only the player names
+                    const eventCopy = event;
+                    if (event instanceof Throw) {
+                        eventCopy.thrower = event.thrower.name;
+                        eventCopy.receiver = event.receiver.name;
+                        // Include other Throw-specific properties
+                        eventCopy.huck = event.huck;
+                        // ... other properties
+                    } 
+                    // ... and so on for each Event subclass
+                    return eventCopy;              
+                 })
             }))
         }))
     }));
@@ -204,6 +240,10 @@ function saveTeamData(team) {
  */
 const sampleNames = ["Cyrus L","Leif","Cesc","Cyrus J","Abby","Avery","James","Simeon","Soren","Walden"];
 let currentTeam = new Team("My Team", sampleNames);  // Later, support loading teams from storage/cloud
+let currentPoint = null;        // This will hold the current point being played
+let currentEvent = null;        // ...the current event taking place in the current possession
+let currentPlayer = null;       // ...the current player with the disc
+
 
 /* 
  * Utility functions
@@ -214,6 +254,17 @@ function currentGame() {
         throw new Error("No current game");
     }
     return currentTeam.games[currentTeam.games.length - 1];
+}
+
+// Get the current possession (the last one in the current point); error if none
+function getActivePossession(activePoint) {
+    if (! activePoint) {
+        throw new Error("No active point");
+    }
+    if (activePoint.possessions.length === 0) {
+        throw new Error("No possessions in active point");
+    }
+    return activePoint.possessions[activePoint.possessions.length - 1];
 }
 
 // print playing time in mm:ss format
@@ -487,8 +538,6 @@ function moveToNextPoint() {
 }
 
 // Transition from Before Point to Play-by-Play
-let currentPoint = null;  // This will hold the current point being played
-
 function startNextPoint() {
     // Get the checkboxes and player names
     let checkboxes = [...document.querySelectorAll('#activePlayersTable input[type="checkbox"]')];
@@ -569,13 +618,16 @@ function updateScore(winner) {
 /******************************************************************************/
 
 function updateOffensivePossessionScreen() {
-    displayPlayerButtons();
-    displayActionButtons();
+    displayOPlayerButtons();
+    displayOActionButtons();
 }
 
-function displayPlayerButtons() {
-    let currentPoint = currentGame().points[currentGame().points.length - 1];
-    let activePlayers = currentPoint.players; // Assuming this holds the names of active players
+function displayOPlayerButtons() {
+    // throw an error if there is no current point
+    if (!currentPoint) {
+        throw new Error("No current point");
+    }
+    let activePlayers = currentPoint.players; // Holds the names of active players
 
     let playerButtonsContainer = document.getElementById('offensivePlayerButtons');
     playerButtonsContainer.innerHTML = ''; // Clear existing buttons
@@ -585,22 +637,35 @@ function displayPlayerButtons() {
         playerButton.textContent = playerName;
         playerButton.classList.add('player-button'); // Add a class for styling
         playerButton.addEventListener('click', function() {
-            handlePlayerButton(playerName);
+            handleOPlayerButton(playerName);
         });
         playerButtonsContainer.appendChild(playerButton);
     });
 }
 
-function handlePlayerButton(playerName) {
+function handleOPlayerButton(playerName) {
     // Logic to handle when a player button is clicked
-    console.log(playerName + " has the disc");
     if (currentPoint.startTimestamp === null) {
         currentPoint.startTimestamp = new Date();
     }
-    // You will need additional logic here to track the thrower and receiver
+    // if no possession exists, create a new one
+    if (currentPoint.possessions.length === 0) {
+        currentPoint.addPossession(new Possession(true));
+        console.log(playerName + " starts a new possession");
+    }
+    // if most recent event is a throw, mark this player as the receiver
+    // (thrower will already be set)
+    if (currentEvent && currentEvent instanceof Throw) {
+        currentEvent.receiver = getPlayerFromName(playerName);
+        console.log(playerName + " catches the disc from " + currentEvent.thrower.name);
+    } else {
+        console.log(playerName + " has the disc");
+    }
+    // set currentPlayer to this player
+    currentPlayer = getPlayerFromName(playerName);
 }
 
-function displayActionButtons() {
+function displayOActionButtons() {
     let actionButtonsContainer = document.getElementById('offensiveActionButtons');
     actionButtonsContainer.innerHTML = ''; // Clear existing buttons
 
@@ -617,24 +682,40 @@ function displayActionButtons() {
     dropButton.textContent = '..who drops it';
     // Add event listeners to these buttons
     throwButton.addEventListener('click', function() {
-        // Logic for 'Throws to...' button
         console.log('Throw initiated');
-        // update player stats for completed throw
+        currentEvent = new Throw(currentPlayer, null, {huck: false, strike: false, dump: false, hammer: false, sky: false, layout: false, score: false});
+        let currentPossession = getActivePossession(currentPoint);
+        currentPossession.addEvent(currentEvent);
+        currentPlayer.completedPasses++;
     });
     huckButton.addEventListener('click', function() {
-        // Logic for 'Hucks to...' button
         console.log('Huck initiated');
+        currentEvent = new Throw(currentPlayer, null, {huck: true, strike: false, dump: false, hammer: false, sky: false, layout: false, score: false});
+        let currentPossession = getActivePossession(currentPoint);
+        currentPossession.addEvent(currentEvent);
+        currentPlayer.completedPasses++;
     });
     throwawayButton.addEventListener('click', function() {
-        // Logic for 'Throws it away' button
+        // Create a new Turnover event and add it to the current possession
         console.log('Throwaway');
-        let currentPossession = new Possession(false);
+        currentEvent = new Turnover({throwaway: true, receiverError: false, goodDefense: false, stall: false});
+        let currentPossession = getActivePossession(currentPoint);
+        currentPossession.addEvent(currentEvent);
+        currentPossession = new Possession(false);
         currentPoint.addPossession(currentPossession);
         showScreen('defensePlayByPlayScreen');
     });
     scoreButton.addEventListener('click', function() {
-        // Logic for '..For the score!' button
+        // Current event should be a throw; tag as score & update player stats
         console.log('Score!');
+        let currentPossession = getActivePossession(currentPoint);
+        if (currentEvent && currentEvent instanceof Throw) {
+            currentEvent.score = true;
+            currentEvent.receiver.goals++;
+            currentEvent.thrower.assists++;
+        } else {
+            console.log("Warning: No current event or event is not a throw");
+        }
         updateScore(Role.TEAM);
         moveToNextPoint();
     });
