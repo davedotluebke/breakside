@@ -86,7 +86,7 @@ class Event {
 }
 
 class Throw extends Event {
-    constructor(thrower, receiver, {huck = false, strike = false, dump = false, hammer = false, sky = false, layout = false, score = false}) {
+    constructor({thrower = "voidthrower", receiver = "voidreceiver", huck = false, strike = false, dump = false, hammer = false, sky = false, layout = false, score = false}) {
         super('Throw');
         this.thrower = thrower;
         this.receiver = receiver;
@@ -177,7 +177,7 @@ function getPlayerFromName(playerName) {
 function serializeEvent(event) {
     const serializedEvent = { type: event.type };
     // Create a new instance of the event with default values
-    const defaultEvent = new event.constructor();
+    const defaultEvent = new event.constructor({});
 
     // Serialize only the properties that are different from the default instance
     for (const prop in event) {
@@ -205,19 +205,7 @@ function serializeTeam(team) {
             endTimestamp: point.endTimestamp ? point.endTimestamp.toISOString() : null,
             possessions: point.possessions.map(possession => ({
                 ...possession,
-                events: possession.events.map(event => {
-                    // Create a simple object for each event, including only the player names
-                    const eventCopy = event;
-                    if (event instanceof Throw) {
-                        eventCopy.thrower = event.thrower.name;
-                        eventCopy.receiver = event.receiver.name;
-                        // Include other Throw-specific properties
-                        eventCopy.huck = event.huck;
-                        // ... other properties
-                    } 
-                    // ... and so on for each Event subclass
-                    return eventCopy;              
-                 })
+                events: possession.events.map(serializeEvent)
             }))
         }))
     }));
@@ -606,6 +594,8 @@ function updateScore(winner) {
         });
 
         currentPoint = null;  // Reset the temporary point object
+        currentEvent = null;  // Reset the temporary event object
+        currentPlayer = null; // Reset the temporary player object
     } else {
         throw new Error("No current point");
     }
@@ -683,14 +673,14 @@ function displayOActionButtons() {
     // Add event listeners to these buttons
     throwButton.addEventListener('click', function() {
         console.log('Throw initiated');
-        currentEvent = new Throw(currentPlayer, null, {huck: false, strike: false, dump: false, hammer: false, sky: false, layout: false, score: false});
+        currentEvent = new Throw({thrower: currentPlayer, receiver: null, huck: false, strike: false, dump: false, hammer: false, sky: false, layout: false, score: false});
         let currentPossession = getActivePossession(currentPoint);
         currentPossession.addEvent(currentEvent);
         currentPlayer.completedPasses++;
     });
     huckButton.addEventListener('click', function() {
         console.log('Huck initiated');
-        currentEvent = new Throw(currentPlayer, null, {huck: true, strike: false, dump: false, hammer: false, sky: false, layout: false, score: false});
+        currentEvent = new Throw({thrower: currentPlayer, receiver: null, huck: true, strike: false, dump: false, hammer: false, sky: false, layout: false, score: false});
         let currentPossession = getActivePossession(currentPoint);
         currentPossession.addEvent(currentEvent);
         currentPlayer.completedPasses++;
