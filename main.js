@@ -101,8 +101,9 @@ class Throw extends Event {
 }
 
 class Turnover extends Event {
-    constructor({throwaway = false, receiverError = false, goodDefense = false, stall = false}) {
+    constructor({receiver = "voidreceiver", throwaway = false, receiverError = false, goodDefense = false, stall = false}) {
         super('Turnover');
+        this.receiver = receiver;
         this.throwaway = throwaway;
         this.receiverError = receiverError;
         this.goodDefense = goodDefense;
@@ -216,11 +217,105 @@ function serializeTeam(team) {
     }, null, 4);
 }
 
+function logTeamData(team) {
+    console.log("Team data: ");
+    console.log(team);
+    console.log("Serialized team data: ");
+    console.log(serializeTeam(team));
+}
+
 function saveTeamData(team) {
     const serializedData = serializeTeam(team);
     localStorage.setItem('teamData', serializedData);
-    console.log("Saving team data: ");
-    console.log(serializedData);
+    logTeamData(team);
+}
+
+/* 
+ * Given eventData created when deserializing an Event from JSON, create an
+ * Event object of the proper subclass and convert any player name strings into
+ * references to Player instances.
+ */
+function deserializeEvent(eventData, playerLookup) {
+    let event;
+
+    switch (eventData.type) {
+        case 'Throw': event = new Throw({ /* default parameters */ }); break;
+        case 'Turnover': event = new Turnover({ /* default parameters */ }); break;
+        case 'Foul/Violation': event = new FoulViolation({ /* default parameters */ }); break;
+        case 'Defense': event = new Defense({ /* default parameters */ }); break;
+        case 'Other': event = new Other(eventData.subtype); break;
+        default:
+            throw new Error(`Unknown event type: ${eventData.type}`);
+    }
+    // Now set any properties that were serialized (because they differed from the default instance)
+    for (const key in eventData) {
+        if (eventData.hasOwnProperty(key) && key !== 'type') {
+            event[key] = eventData[key];
+        }
+    }
+    // Now replace player names with Player instances
+    switch (eventData.type) {
+        case 'Throw':
+            event.thrower = getPlayerFromName(eventData.thrower);
+            event.receiver = getPlayerFromName(eventData.receiver);
+            break;
+        case 'Turnover':
+            if (event.receiverError) {
+                event.receiver = getPlayerFromName(eventData.receiver);
+            }
+            break;
+        // Add other event types here, if they refer to players
+    }
+    return event;
+}
+
+function deserializeTeam(serializedData) {
+    const data = JSON.parse(serializedData);
+
+    // Create a new Team instance
+    const team = new Team(data.name);
+    currentTeam = team;
+
+    // Reconstruct Player instances
+    data.teamRoster.forEach(playerData => {
+        const player = new Player(playerData.name);
+        // Reassign other properties if needed
+        for (const key in playerData) {
+            if (playerData.hasOwnProperty(key) && key !== 'name') {
+                player[key] = playerData[key];
+            }
+        }
+        team.teamRoster.push(player);
+    });
+
+    // Reconstruct Game instances and other nested structures
+    data.games.forEach(gameData => {
+        const game = new Game(gameData.team, gameData.opponent, gameData.startingPosition);
+        // Reassign other properties if needed
+
+        gameData.points.forEach(pointData => {
+            const point = new Point(pointData.players, pointData.startingPosition);
+            // Reassign other properties if needed
+
+            pointData.possessions.forEach(possessionData => {
+                const possession = new Possession(possessionData.offensive);
+
+                possessionData.events.forEach(eventData => {
+                    // Deserialize the event using the deserialization function
+                    const event = deserializeEvent(eventData);
+                    possession.addEvent(event);
+                });
+
+                point.addPossession(possession);
+            });
+
+            game.points.push(point);
+        });
+
+        team.games.push(game);
+    });
+
+    return team;
 }
 
 /*
@@ -325,6 +420,30 @@ const playerNameInput = document.getElementById('newPlayerInput');
 playerNameInput.addEventListener('keydown', function(event) {
     if (event.key === "Enter") {
         document.getElementById('addPlayerBtn').click();
+    }
+});
+
+// Restoring team data from local storage
+document.getElementById('restoreGamesBtn').addEventListener('click', function() {
+    const serializedTeam = localStorage.getItem('teamData');
+    if (serializedTeam) {
+        currentTeam = deserializeTeam(serializedTeam);
+        updateTeamRosterDisplay();
+    } else {
+        console.log("No saved team data found.");
+        alert('No saved team data found.');
+    }
+    logTeamData(currentTeam);
+});
+
+// Clearing games from local storage
+document.getElementById('clearGamesBtn').addEventListener('click', function() {
+    if (confirm('Are you sure you want to clear all saved game data?')) {
+        localStorage.removeItem('teamData');
+        alert('Saved games have been cleared.');
+        // Optionally reset the current team data or refresh the page
+        // currentTeam = new Team(); // Reset the team data
+        // updateTeamRosterDisplay(); // Update the display
     }
 });
 
