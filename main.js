@@ -12,6 +12,7 @@ if ('serviceWorker' in navigator) {
  */
 // A list of all our main screens
 const screens = [
+    document.getElementById('selectTeamScreen'), 
     document.getElementById('teamRosterScreen'),
     document.getElementById('beforePointScreen'),
     document.getElementById('offensePlayByPlayScreen'),
@@ -224,10 +225,15 @@ function logTeamData(team) {
     console.log(serializeTeam(team));
 }
 
-function saveTeamData(team) {
-    const serializedData = serializeTeam(team);
-    localStorage.setItem('teamData', serializedData);
-    logTeamData(team);
+function saveAllTeamsData() {
+    // Serialize each team in the global teams array
+    const serializedTeams = teams.map(team => JSON.parse(serializeTeam(team)));
+
+    // Save the serialized array to local storage
+    localStorage.setItem('teamsData', JSON.stringify(serializedTeams));
+
+    // Log each team's data
+    teams.forEach(team => logTeamData(team));
 }
 
 /* 
@@ -269,9 +275,12 @@ function deserializeEvent(eventData, playerLookup) {
     return event;
 }
 
-function deserializeTeam(serializedData) {
-    const data = JSON.parse(serializedData);
+function deserializeTeams(serializedTeamsData) {
+    const teamsData = JSON.parse(serializedTeamsData);
+    return teamsData.map(deserializeSingleTeam); // Each item is an object, not a string
+}
 
+function deserializeSingleTeam(data) {
     // Create a new Team instance
     const team = new Team(data.name);
     currentTeam = team;
@@ -279,7 +288,7 @@ function deserializeTeam(serializedData) {
     // Reconstruct Player instances
     data.teamRoster.forEach(playerData => {
         const player = new Player(playerData.name);
-        // Reassign other properties if needed
+        // Reassign other properties
         for (const key in playerData) {
             if (playerData.hasOwnProperty(key) && key !== 'name') {
                 player[key] = playerData[key];
@@ -291,17 +300,15 @@ function deserializeTeam(serializedData) {
     // Reconstruct Game instances and other nested structures
     data.games.forEach(gameData => {
         const game = new Game(gameData.team, gameData.opponent, gameData.startingPosition);
-        // Reassign other properties if needed
+        // Reassign other properties
 
         gameData.points.forEach(pointData => {
             const point = new Point(pointData.players, pointData.startingPosition);
-            // Reassign other properties if needed
 
             pointData.possessions.forEach(possessionData => {
                 const possession = new Possession(possessionData.offensive);
 
                 possessionData.events.forEach(eventData => {
-                    // Deserialize the event using the deserialization function
                     const event = deserializeEvent(eventData);
                     possession.addEvent(event);
                 });
@@ -318,11 +325,26 @@ function deserializeTeam(serializedData) {
     return team;
 }
 
+function initializeTeams() {
+    // load teams from local storage or create a sample team
+    const serializedTeamsData = localStorage.getItem('teamsData');
+    if (serializedTeamsData) {
+        teams = deserializeTeams(serializedTeamsData);
+    } 
+    if (teams.length === 0) {
+        const sampleNames = ["Cyrus L","Leif","Cesc","Cyrus J","Abby","Avery","James","Simeon","Soren","Walden"];
+        let sampleTeam = new Team("Sample Team", sampleNames);  // A sample team with 10 players
+        teams.push(sampleTeam);         // Add the sample team to the teams array
+    }
+    currentTeam = teams[0];         // there will be at least one team in the array
+}
 /*
  * Globals
  */
-const sampleNames = ["Cyrus L","Leif","Cesc","Cyrus J","Abby","Avery","James","Simeon","Soren","Walden"];
-let currentTeam = new Team("My Team", sampleNames);  // Later, support loading teams from storage/cloud
+let teams = [];                 // An array of teams
+let currentTeam = null;         // The current team being tracked
+initializeTeams();              // Load teams from local storage or create a sample team
+
 let currentPoint = null;        // This will hold the current point being played
 let currentEvent = null;        // ...the current event taking place in the current possession
 let currentPlayer = null;       // ...the current player with the disc
@@ -361,14 +383,56 @@ function formatPlayTime(totalTimePlayed) {
     return `${formatTwoDigits(minutes)}:${formatTwoDigits(seconds)}`;
 }
 
-
 /************************************************************************ 
  *
  *   BEFORE POINT SCREEN
  *   TEAM ROSTER TABLE 
  * 
  ************************************************************************/
-showScreen('teamRosterScreen');
+// Open up with the "Select Your Team" screen
+showSelectTeamScreen();
+
+function showSelectTeamScreen() {
+    const teamListElement = document.getElementById('teamList');
+    teamListElement.innerHTML = ''; // Clear current list
+
+    loadTeams(); // loads all teams from local storage into global variable `teams`
+    teams.forEach((team, index) => {
+        let teamItem = document.createElement('li');
+        teamItem.textContent = team.name;
+        teamItem.onclick = () => selectTeam(index);
+        teamListElement.appendChild(teamItem);
+    });
+
+    showScreen('selectTeamScreen');
+}
+
+// Handle team selection
+function selectTeam(index) {
+    loadTeams(); // loads all teams from local storage into global variable `teams`
+    currentTeam = teams[index];
+    updateTeamRosterDisplay(); // Update the roster display
+    showScreen('teamRosterScreen'); // Go back to the roster screen
+}
+
+// Event listeners for relevant  buttons
+document.getElementById('switchTeamsBtn').addEventListener('click', showSelectTeamScreen);
+document.getElementById('createNewTeamBtn').addEventListener('click', () => {
+    currentTeam = new Team(); // Create a new empty team
+    teams.push(currentTeam); // Add it to the teams array
+    updateTeamRosterDisplay(); // Update the display
+    showScreen('teamRosterScreen'); // Return to the roster screen
+});
+document.getElementById('backToRosterScreenBtn').addEventListener('click', () => {
+    showScreen('teamRosterScreen'); // Return to the roster screen
+});
+
+/************************************************************************ 
+ *
+ *   BEFORE GAME SCREEN
+ *   TEAM ROSTER TABLE 
+ * 
+ ************************************************************************/
 
 // Updates the displayed roster on the "Team Roster Screen"
 function updateTeamRosterDisplay() {
@@ -425,25 +489,31 @@ playerNameInput.addEventListener('keydown', function(event) {
 
 // Restoring team data from local storage
 document.getElementById('restoreGamesBtn').addEventListener('click', function() {
-    const serializedTeam = localStorage.getItem('teamData');
-    if (serializedTeam) {
-        currentTeam = deserializeTeam(serializedTeam);
+    loadTeams();
+    if (teams.length > 0) {
+        currentTeam = teams[0];
         updateTeamRosterDisplay();
-    } else {
-        console.log("No saved team data found.");
-        alert('No saved team data found.');
     }
     logTeamData(currentTeam);
 });
 
+function loadTeams() {
+    const serializedTeams = localStorage.getItem('teamsData');
+    if (serializedTeams) {
+        teams = deserializeTeams(serializedTeams);
+    } else {
+        console.log("No saved team data found.");
+        alert('No saved team data found.');
+    }
+}
 // Clearing games from local storage
 document.getElementById('clearGamesBtn').addEventListener('click', function() {
     if (confirm('Are you sure you want to clear all saved game data?')) {
-        localStorage.removeItem('teamData');
-        alert('Saved games have been cleared.');
-        // Optionally reset the current team data or refresh the page
-        // currentTeam = new Team(); // Reset the team data
-        // updateTeamRosterDisplay(); // Update the display
+        localStorage.removeItem('teamsData');
+        // Reset the current team data and refresh, so UI doesn't reflect cleared data
+        teams = [];
+        initializeTeams();
+        updateTeamRosterDisplay(); // Update the display
     }
 });
 
@@ -853,15 +923,17 @@ document.getElementById('theyTurnoverBtn').addEventListener('click', function() 
 });
 
 document.getElementById('endGameBtn').addEventListener('click', function() {
-    currentGame().endTimestamp = new Date(); // Set end timestamp
+    if (confirm('Are you sure you want to end the game?')) {
+        currentGame().endTimestamp = new Date(); // Set end timestamp
 
-    // Populate the gameSummaryScreen with statistics, then show it
-    document.getElementById('teamName').textContent = currentGame().team;
-    document.getElementById('teamFinalScore').textContent = currentGame().scores[Role.TEAM];
-    document.getElementById('opponentName').textContent = currentGame().opponent;
-    document.getElementById('opponentFinalScore').textContent = currentGame().scores[Role.OPPONENT];
-    showScreen('gameSummaryScreen');
-    saveTeamData(currentTeam);
+        // Populate the gameSummaryScreen with statistics, then show it
+        document.getElementById('teamName').textContent = currentGame().team;
+        document.getElementById('teamFinalScore').textContent = currentGame().scores[Role.TEAM];
+        document.getElementById('opponentName').textContent = currentGame().opponent;
+        document.getElementById('opponentFinalScore').textContent = currentGame().scores[Role.OPPONENT];
+        showScreen('gameSummaryScreen');
+        saveAllTeamsData();
+    }
 });
 
 // Start a new game from the Game Summary screen

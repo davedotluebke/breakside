@@ -12,6 +12,16 @@
         <h4>Ultimate Stats Tracker</h4>
     </header>
 
+    <!-- Select Your Team Screen -->
+    <section id="selectTeamScreen" style="display: none;">
+        <h2>Select Your Team</h2>
+        <ul id="teamList">
+            <!-- Dynamically populated list of teams -->
+        </ul>
+        <button id="createNewTeamBtn">Create New Team</button>
+        <button id="backToRosterScreenBtn">Back</button>
+    </section>
+
     <!-- Team Roster Screen -->
     <section id="teamRosterScreen">
         <h2>Team Roster</h2>
@@ -38,8 +48,10 @@
             <input type="text" id="opponentNameInput" placeholder="Opponent Name" />
             <br>Start Game on: <button id="startGameOnOBtn">Offense</button>
             <button id="startGameOnDBtn">Defense</button>
-            <br>
-            <button id="restoreGamesBtn">Restore Games</button>
+            <hr>
+            <button id="switchTeamsBtn">Switch Team</button>
+            <hr>
+            <button id="restoreGamesBtn">Restore Saved Games</button>
             <button id="clearGamesBtn">Clear Saved Games</button>            
         </footer>
     </section>
