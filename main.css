@@ -55,7 +55,16 @@ button {
 
 button.warning {
     background-color: #d9534f; /* Bootstrap's button color for warning */
-    background-color: #d9534f; /* Bootstrap's button color for warning */
+}
+
+.warning-box {
+    border: 1px solid #d9534f; /* Bootstrap's warning color */
+    background-color: #f2dede;
+    color: #a94442;
+    padding: 10px;
+    margin-bottom: 10px;
+    text-align: center;
+    border-radius: 5px;
 }
 
 table {
