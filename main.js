@@ -327,13 +327,10 @@ function deserializeSingleTeam(data) {
 
 function initializeTeams() {
     // load teams from local storage or create a sample team
-    const serializedTeamsData = localStorage.getItem('teamsData');
-    if (serializedTeamsData) {
-        teams = deserializeTeams(serializedTeamsData);
-    } 
+    loadTeams({ silent: true })
     if (teams.length === 0) {
         const sampleNames = ["Cyrus L","Leif","Cesc","Cyrus J","Abby","Avery","James","Simeon","Soren","Walden"];
-        let sampleTeam = new Team("Sample Team", sampleNames);  // A sample team with 10 players
+        sampleTeam = new Team("Sample Team", sampleNames);  // A sample team with 10 players
         teams.push(sampleTeam);         // Add the sample team to the teams array
     }
     currentTeam = teams[0];         // there will be at least one team in the array
@@ -343,6 +340,7 @@ function initializeTeams() {
  */
 let teams = [];                 // An array of teams
 let currentTeam = null;         // The current team being tracked
+let sampleTeam = null;          // A sample team with 10 players, used if no teams are found
 initializeTeams();              // Load teams from local storage or create a sample team
 
 let currentPoint = null;        // This will hold the current point being played
@@ -390,13 +388,20 @@ function formatPlayTime(totalTimePlayed) {
  * 
  ************************************************************************/
 // Open up with the "Select Your Team" screen
-showSelectTeamScreen();
+showSelectTeamScreen(true);
 
-function showSelectTeamScreen() {
+function showSelectTeamScreen(firsttime = false) {
     const teamListElement = document.getElementById('teamList');
+    const teamListWarning = document.getElementById('teamListWarning');
     teamListElement.innerHTML = ''; // Clear current list
 
-    loadTeams(); // loads all teams from local storage into global variable `teams`
+    // assume teams global already populated
+    if (teams.length === 0 || teams.length === 1 && teams[0].name === "Sample Team") {
+        teamListWarning.style.display = 'block'; // Show warning if no teams are found
+    } else {
+        teamListWarning.style.display = 'none'; // Hide warning otherwise
+    }
+
     teams.forEach((team, index) => {
         let teamItem = document.createElement('li');
         teamItem.textContent = team.name;
@@ -409,8 +414,7 @@ function showSelectTeamScreen() {
 
 // Handle team selection
 function selectTeam(index) {
-    loadTeams(); // loads all teams from local storage into global variable `teams`
-    currentTeam = teams[index];
+    currentTeam = teams[index]; // assumes teams global already populated
     updateTeamRosterDisplay(); // Update the roster display
     showScreen('teamRosterScreen'); // Go back to the roster screen
 }
@@ -493,17 +497,20 @@ document.getElementById('restoreGamesBtn').addEventListener('click', function() 
     if (teams.length > 0) {
         currentTeam = teams[0];
         updateTeamRosterDisplay();
+        showSelectTeamScreen();
     }
     logTeamData(currentTeam);
 });
 
-function loadTeams() {
+function loadTeams(silent = false) {
     const serializedTeams = localStorage.getItem('teamsData');
     if (serializedTeams) {
         teams = deserializeTeams(serializedTeams);
     } else {
         console.log("No saved team data found.");
-        alert('No saved team data found.');
+        if (!silent) {
+            alert('No saved team data found.');
+        }
     }
 }
 // Clearing games from local storage
@@ -514,6 +521,7 @@ document.getElementById('clearGamesBtn').addEventListener('click', function() {
         teams = [];
         initializeTeams();
         updateTeamRosterDisplay(); // Update the display
+        showSelectTeamScreen();
     }
 });
 
