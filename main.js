@@ -87,51 +87,52 @@ class Event {
 }
 
 class Throw extends Event {
-    constructor({thrower = "voidthrower", receiver = "voidreceiver", huck = false, strike = false, dump = false, hammer = false, sky = false, layout = false, score = false}) {
+    constructor({thrower = "voidthrower", receiver = "voidreceiver", huck = false, breakmark = false, dump = false, hammer = false, sky = false, layout = false, score = false}) {
         super('Throw');
         this.thrower = thrower;
         this.receiver = receiver;
-        this.huck = huck;
-        this.strike = strike;
-        this.dump = dump;
-        this.hammer = hammer;
-        this.sky = sky;
-        this.layout = layout;
-        this.score = score;
+        this.huck_flag = huck;
+        this.breakmark_flag = breakmark;
+        this.dump_flag = dump;
+        this.hammer_flag = hammer;
+        this.sky_flag = sky;
+        this.layout_flag = layout;
+        this.score_flag = score;
     }
 }
 
 class Turnover extends Event {
-    constructor({receiver = "voidreceiver", throwaway = false, receiverError = false, goodDefense = false, stall = false}) {
+    constructor({receiver = "voidreceiver", throwaway = false, huck = false, receiverError = false, goodDefense = false, stall = false}) {
         super('Turnover');
         this.receiver = receiver;
         this.throwaway = throwaway;
-        this.receiverError = receiverError;
-        this.goodDefense = goodDefense;
-        this.stall = stall;
+        this.huck_flag = huck;
+        this.receiverError_flag = receiverError;
+        this.goodDefense_flag = goodDefense;
+        this.stall_flag = stall;
     }
 }
 
 class FoulViolation extends Event {
     constructor({offensive = false, strip = false, pick = false, travel = false, contested = false, doubleTeam = false}) {
         super('Foul/Violation');
-        this.offensive = offensive;
-        this.strip = strip;
-        this.pick = pick;
-        this.travel = travel;
-        this.contested = contested;
-        this.doubleTeam = doubleTeam;
+        this.offensive_flag = offensive;
+        this.strip_flag = strip;
+        this.pick_flag = pick;
+        this.travel_flag = travel;
+        this.contested_flag = contested;
+        this.doubleTeam_flag = doubleTeam;
     }
 }
 
 class Defense extends Event {
     constructor({interception = false, layout = false, sky = false, Callahan = false, turnover = true}) {
         super('Defense');
-        this.interception = interception;
-        this.layout = layout;
-        this.sky = sky;
-        this.Callahan = Callahan;
-        this.turnover = turnover;
+        this.interception_flag = interception;
+        this.layout_flag = layout;
+        this.sky_flag = sky;
+        this.Callahan_flag = Callahan;
+        this.turnover_flag = turnover;
     }
 }
 
@@ -701,8 +702,7 @@ function startNewGame(startingPosition) {
 
     let newGame = new Game(currentTeam.name, opponentName, startingPosition);
     currentTeam.games.push(newGame);
-    console.log("Starting new game on " + startingPosition + ": ");
-    console.log(newGame);
+    logEvent(`Starting new game vs ${opponentName} on ${startingPosition}:`);
     moveToNextPoint();
 }
 document.getElementById('startGameOnOBtn').addEventListener('click', function() {
@@ -736,7 +736,7 @@ function startNextPoint() {
             activePlayersForThisPoint.push(player.name);
         }
     });
-    console.log("Active players for this point: " + activePlayersForThisPoint);
+    logEvent("Active players for this point: " + activePlayersForThisPoint);
 
     // Create a new Point with the active players 
     // Don't set the winning team yet
@@ -803,7 +803,29 @@ function updateScore(winner) {
 /******************************************************************************/
 /**************************** Offense play-by-play ****************************/
 /******************************************************************************/
+function logEvent(description) {
+    const eventLog = document.getElementById('eventLog');
+    eventLog.value += description + '\n'; // Append the description to the log
+    eventLog.scrollTop = eventLog.scrollHeight; // Auto-scroll to the bottom
+}
 
+// remove and return the last line from the log
+function popLogEvent() {  
+    const eventLog = document.getElementById('eventLog');
+    const logLines = eventLog.value.split('\n');
+    lastLine = logLines.pop();  // need to pop twice...last line is always blank
+    lastLine = logLines.pop();  
+    eventLog.value = logLines.join('\n') + '\n';  // re-add the final newline
+    return lastLine;
+}
+/*
+function setLastLogEvent(description) { 
+    const eventLog = document.getElementById('eventLog');
+    const logLines = eventLog.value.split('\n');
+    logLines[logLines.length - 2] = description;
+    eventLog.value = logLines.join('\n');
+}
+*/
 function updateOffensivePossessionScreen() {
     displayOPlayerButtons();
     displayOActionButtons();
@@ -838,15 +860,25 @@ function handleOPlayerButton(playerName) {
     // if no possession exists, create a new one
     if (currentPoint.possessions.length === 0) {
         currentPoint.addPossession(new Possession(true));
-        console.log(playerName + " starts a new possession");
+        logEvent(playerName + " starts a new possession");
     }
     // if most recent event is a throw, mark this player as the receiver
     // (thrower will already be set)
     if (currentEvent && currentEvent instanceof Throw) {
         currentEvent.receiver = getPlayerFromName(playerName);
-        console.log(playerName + " catches the disc from " + currentEvent.thrower.name);
-    } else {
-        console.log(playerName + " has the disc");
+        const lastLog = popLogEvent();
+        if (lastLog.includes("Throw initiated")) {
+            throw_desc = `${currentEvent.thrower.name} throws to ${playerName}. `;
+            if (currentEvent.huck) { throw_desc += "Huck. "; }
+            if (currentEvent.breakmark) { throw_desc += "Breakmark. "; }
+            if (currentEvent.dump) { throw_desc += "Dump. "; }
+            if (currentEvent.hammer) { throw_desc += "Hammer. "; }
+            if (currentEvent.sky) { throw_desc += "Sky. "; }
+            if (currentEvent.layout) { throw_desc += "Layout. "; }
+            logEvent(throw_desc);
+        } else {
+            logEvent(playerName + " has the disc");
+        }
     }
     // set currentPlayer to this player
     currentPlayer = getPlayerFromName(playerName);
@@ -869,8 +901,9 @@ function displayOActionButtons() {
     dropButton.textContent = '..who drops it';
     // Add event listeners to these buttons
     throwButton.addEventListener('click', function() {
-        console.log('Throw initiated');
+        logEvent('Throw initiated');
         currentEvent = new Throw({thrower: currentPlayer, receiver: null, huck: false, strike: false, dump: false, hammer: false, sky: false, layout: false, score: false});
+        showActionFlags('throw');
         let currentPossession = getActivePossession(currentPoint);
         currentPossession.addEvent(currentEvent);
         currentPlayer.completedPasses++;
@@ -878,6 +911,7 @@ function displayOActionButtons() {
     huckButton.addEventListener('click', function() {
         console.log('Huck initiated');
         currentEvent = new Throw({thrower: currentPlayer, receiver: null, huck: true, strike: false, dump: false, hammer: false, sky: false, layout: false, score: false});
+        showActionFlags('huck');
         let currentPossession = getActivePossession(currentPoint);
         currentPossession.addEvent(currentEvent);
         currentPlayer.completedPasses++;
@@ -886,6 +920,7 @@ function displayOActionButtons() {
         // Create a new Turnover event and add it to the current possession
         console.log('Throwaway');
         currentEvent = new Turnover({throwaway: true, receiverError: false, goodDefense: false, stall: false});
+        showActionFlags('throwaway');
         let currentPossession = getActivePossession(currentPoint);
         currentPossession.addEvent(currentEvent);
         currentPossession = new Possession(false);
@@ -895,6 +930,7 @@ function displayOActionButtons() {
     scoreButton.addEventListener('click', function() {
         // Current event should be a throw; tag as score & update player stats
         console.log('Score!');
+        showActionFlags('score'); // none currently
         let currentPossession = getActivePossession(currentPoint);
         if (currentEvent && currentEvent instanceof Throw) {
             currentEvent.score = true;
@@ -912,6 +948,47 @@ function displayOActionButtons() {
     actionButtonsContainer.appendChild(throwawayButton);
     actionButtonsContainer.appendChild(scoreButton);
     // Append other action buttons similarly
+}
+
+// Action Flags are checkboxes that dynamically appear when an action is selected
+function showActionFlags(actionType) {
+    const actionFlagsContainer = document.getElementById('actionFlagsContainer');
+    actionFlagsContainer.innerHTML = ''; // Clear current flags
+
+    // Assuming getFlagsForAction returns an object with flag names and their current values
+    const flags = getFlagsForAction();
+
+    Object.keys(flags).forEach(flag => {
+        const checkboxLabel = document.createElement('label');
+        checkboxLabel.textContent = flag;
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = flag;
+        checkbox.checked = flags[flag]; // Set the checkbox state based on the currentEvent
+
+        // Event listener to update the currentEvent when the checkbox is changed
+        checkbox.addEventListener('change', (e) => {
+            currentEvent[flag] = e.target.checked; // Set the event flag based on the checkbox state
+        });
+
+        checkboxLabel.appendChild(checkbox);
+        actionFlagsContainer.appendChild(checkboxLabel);
+    });
+}
+
+// Assuming 'currentEvent' global is an instance of one of the Event subclasses
+// and has properties like 'huck_flag', 'dump_flag', etc.
+function getFlagsForAction() {
+    const flags = {};
+    for (const key in currentEvent) {
+        if (currentEvent.hasOwnProperty(key) && key.endsWith('_flag')) {
+            // The key is a flag; store its value in the flags object
+            let shortkey = key.slice(0, -5); // remove the '_flag' suffix
+            flags[shortkey] = currentEvent[key]
+        }
+    }
+    return flags;
 }
 
 /******************************************************************************/
