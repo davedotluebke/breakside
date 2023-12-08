@@ -93,16 +93,22 @@
 
     <!-- Play-by-Play Screen: Offense -->
     <section id="offensePlayByPlayScreen" style="display: none;">
-            <h2>Offensive Possession</h2>
-            <div id="offensivePlayContainer" class="play-container">
-                <div id="offensivePlayerButtons" class="player-buttons"></div>
-                <div id="offensiveActionButtons" class="action-buttons"></div>
+        <h2>Offensive Possession</h2>
+        <div id="offensivePlayContainer" class="play-container">
+            <div id="offensivePlayerButtons" class="player-buttons"></div>
+            <div id="offensiveActionButtons" class="action-buttons"></div>
+        </div>
+        <div id="eventDetailsPanel">
+            <div id="actionFlagsContainer">
+                <!-- Checkboxes for action flags will be dynamically populated here -->
             </div>
-        
-        <footer>
-            <button id="undoBtn">Undo</button>
-        </footer>
+            <div id="eventLogContainer">
+                <button id="undoBtn">Undo</button>
+                <textarea id="eventLog" readonly></textarea>
+            </div>
+        </div>
     </section>
+    
 
     <!-- Play-by-Play Screen: Defense -->
     <section id="defensePlayByPlayScreen" style="display: none;">
