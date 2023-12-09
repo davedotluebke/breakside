@@ -82,7 +82,11 @@ function Team(name = "My Team", initialRoster = []) {
 class Event {
     constructor(type) {
         this.type = type;
-        // Initialize other properties based on type
+    }
+
+    // Default summarize method for generic events
+    summarize() {
+        return `Event of type: ${this.type}`;
     }
 }
 
@@ -99,17 +103,48 @@ class Throw extends Event {
         this.layout_flag = layout;
         this.score_flag = score;
     }
+
+    // Override summarize for Throw events
+    summarize() {
+        let verb = `${this.huck_flag ? 'hucks' : 'throws'}`;
+        let summary = `${this.thrower.name} ${verb} `;
+        let throwType = '';
+        let receiver = this.receiver ? this.receiver.name : '';
+        if (this.breakmark_flag)    { throwType += 'breakmark '; }
+        if (this.hammer_flag)       { throwType += 'hammer '; }
+        if (this.dump_flag)         { throwType += 'dump '; }
+        if (throwType)              { summary += `a ${throwType} `; }
+        if (receiver)               { summary += `to ${this.receiver.name} `; }
+        if (this.sky_flag || this.layout_flag) {
+            summary += `for a ${this.sky_flag ? "sky":""} {this.layout_flag ? "layout":""} catch`;
+        }        
+        if (this.score_flag) summary += ' for the score!';
+
+        return summary;
+    }
 }
 
 class Turnover extends Event {
-    constructor({receiver = "voidreceiver", throwaway = false, huck = false, receiverError = false, goodDefense = false, stall = false}) {
+    constructor({thrower = null, receiver = null, throwaway = false, huck = false, receiverError = false, goodDefense = false, stall = false}) {
         super('Turnover');
+        this.thrower = thrower;
         this.receiver = receiver;
-        this.throwaway = throwaway;
+        this.throwaway_flag = throwaway;
         this.huck_flag = huck;
         this.receiverError_flag = receiverError;
         this.goodDefense_flag = goodDefense;
         this.stall_flag = stall;
+    }
+    // Override summarize for Turnover events
+    summarize() {
+        const t = this.thrower ? this.thrower.name : "voidthrower"
+        const r = this.receiver ? this.receiver.name : "voidreceiver"
+        const hucktxt = this.huck_flag ? 'on a huck' : '';
+        const defensetxt = this.goodDefense_flag ? 'due to good defense' : '';
+        if (this.throwaway_flag)    { return `${t} throws it away ${hucktxt} ${defensetxt}`; }
+        if (this.receiverError_flag){ return `${r} misses the catch from ${t} ${hucktxt} ${defensetxt}`; }
+        if (this.goodDefense_flag)  { return `Turnover ${defensetxt}`; }
+        if (this.stall_flag)        { return `${t} gets stalled ${defensetxt}`; }
     }
 }
 
@@ -123,16 +158,40 @@ class FoulViolation extends Event {
         this.contested_flag = contested;
         this.doubleTeam_flag = doubleTeam;
     }
+
+    summarize() {
+        let summary = 'Foul/Violation called: ';
+        if (this.offensive_flag)        { summary += 'Offensive foul '; }
+        if (this.strip_flag)            { summary += 'Strip '; }
+        if (this.pick_flag)             { summary += 'Pick '; }
+        if (this.travel_flag)           { summary += 'Travel '; }
+        if (this.contested_flag)        { summary += 'Contested foul '; }
+        if (this.doubleTeam_flag)       { summary += 'Double team '; }
+        return summary;
+    }
 }
 
 class Defense extends Event {
-    constructor({interception = false, layout = false, sky = false, Callahan = false, turnover = true}) {
+    constructor({defender = null, interception = false, layout = false, sky = false, Callahan = false, turnover = true}) {
         super('Defense');
+        this.defender = defender;
         this.interception_flag = interception;
         this.layout_flag = layout;
         this.sky_flag = sky;
         this.Callahan_flag = Callahan;
         this.turnover_flag = turnover;
+    }
+
+    summarize() {
+        let summary = '';
+        let defender = this.defender ? this.defender.name : '';
+        if (this.interception_flag)     { summary += 'Interception '; }
+        if (this.layout_flag)           { summary += 'Layout D '; }
+        if (this.sky_flag)              { summary += 'Sky D '; }
+        if (this.Callahan_flag)         { summary += 'Callahan'; }
+        if (summary && defender)        { summary += `by ${defender}`; }
+        if (this.turnover_flag)         { summary += `Turnover ${defender ? "caused by " + defender : ""}`; }
+        return summary;
     }
 }
 
@@ -866,19 +925,7 @@ function handleOPlayerButton(playerName) {
     // (thrower will already be set)
     if (currentEvent && currentEvent instanceof Throw) {
         currentEvent.receiver = getPlayerFromName(playerName);
-        const lastLog = popLogEvent();
-        if (lastLog.includes("Throw initiated")) {
-            throw_desc = `${currentEvent.thrower.name} throws to ${playerName}. `;
-            if (currentEvent.huck) { throw_desc += "Huck. "; }
-            if (currentEvent.breakmark) { throw_desc += "Breakmark. "; }
-            if (currentEvent.dump) { throw_desc += "Dump. "; }
-            if (currentEvent.hammer) { throw_desc += "Hammer. "; }
-            if (currentEvent.sky) { throw_desc += "Sky. "; }
-            if (currentEvent.layout) { throw_desc += "Layout. "; }
-            logEvent(throw_desc);
-        } else {
-            logEvent(playerName + " has the disc");
-        }
+        logEvent(currentEvent.summarize());
     }
     // set currentPlayer to this player
     currentPlayer = getPlayerFromName(playerName);
@@ -901,16 +948,16 @@ function displayOActionButtons() {
     dropButton.textContent = '..who drops it';
     // Add event listeners to these buttons
     throwButton.addEventListener('click', function() {
-        logEvent('Throw initiated');
         currentEvent = new Throw({thrower: currentPlayer, receiver: null, huck: false, strike: false, dump: false, hammer: false, sky: false, layout: false, score: false});
+        logEvent(currentEvent.summarize());
         showActionFlags('throw');
         let currentPossession = getActivePossession(currentPoint);
         currentPossession.addEvent(currentEvent);
         currentPlayer.completedPasses++;
     });
     huckButton.addEventListener('click', function() {
-        console.log('Huck initiated');
         currentEvent = new Throw({thrower: currentPlayer, receiver: null, huck: true, strike: false, dump: false, hammer: false, sky: false, layout: false, score: false});
+        logEvent(currentEvent.summarize());
         showActionFlags('huck');
         let currentPossession = getActivePossession(currentPoint);
         currentPossession.addEvent(currentEvent);
@@ -918,8 +965,8 @@ function displayOActionButtons() {
     });
     throwawayButton.addEventListener('click', function() {
         // Create a new Turnover event and add it to the current possession
-        console.log('Throwaway');
-        currentEvent = new Turnover({throwaway: true, receiverError: false, goodDefense: false, stall: false});
+        currentEvent = new Turnover({thrower: currentPlayer, throwaway: true, receiverError: false, goodDefense: false, stall: false});
+        logEvent(currentEvent.summarize());
         showActionFlags('throwaway');
         let currentPossession = getActivePossession(currentPoint);
         currentPossession.addEvent(currentEvent);
@@ -929,9 +976,7 @@ function displayOActionButtons() {
     });
     scoreButton.addEventListener('click', function() {
         // Current event should be a throw; tag as score & update player stats
-        console.log('Score!');
         showActionFlags('score'); // none currently
-        let currentPossession = getActivePossession(currentPoint);
         if (currentEvent && currentEvent instanceof Throw) {
             currentEvent.score = true;
             currentEvent.receiver.goals++;
@@ -939,6 +984,7 @@ function displayOActionButtons() {
         } else {
             console.log("Warning: No current event or event is not a throw");
         }
+        logEvent(currentEvent.summarize());
         updateScore(Role.TEAM);
         moveToNextPoint();
     });
