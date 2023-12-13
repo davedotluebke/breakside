@@ -91,10 +91,9 @@ th {
     justify-content: space-between;
 }
 
-.player-buttons, .action-buttons {
+.player-buttons {
     display: flex;
     flex-direction: column;
-    /* margin-right: 10px;  Adjust as needed */
 }
 
 .player-button {
@@ -104,16 +103,41 @@ th {
     /* Add any other desired styles (padding, font size, etc.) */
 }
 
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    /* align-items: stretch; */
+}
+
+.main-action-btn {
+    /* Styles for main action buttons */
+    margin-bottom: 5px;
+}
+
+.action-panel {
+    display: none; /* Initially hidden */
+    flex-direction: column;
+    align-items: stretch;
+    background-color: #f8f8f8;
+    padding: 10px;
+    border: 1px solid #ccc;
+    margin-bottom: 5px;
+}
+
+.action-panel .sub-action-btn {
+    /* Styles for sub action buttons */
+    margin-bottom: 5px;
+}
+
+.sub-action-btn.selected {
+    background-color: #e0e0e0; /* Or any other style to indicate selection */
+}
+
 #eventDetailsPanel {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 10px;
-}
-
-#actionFlagsContainer {
-    display: flex;
-    flex-direction: column;
 }
 
 #eventLogContainer {

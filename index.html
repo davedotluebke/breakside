@@ -94,21 +94,28 @@
     <!-- Play-by-Play Screen: Offense -->
     <section id="offensePlayByPlayScreen" style="display: none;">
         <h2>Offensive Possession</h2>
-        <div id="offensivePlayContainer" class="play-container">
-            <div id="offensivePlayerButtons" class="player-buttons"></div>
-            <div id="offensiveActionButtons" class="action-buttons"></div>
-        </div>
-        <div id="eventDetailsPanel">
-            <div id="actionFlagsContainer">
-                <!-- Checkboxes for action flags will be dynamically populated here -->
+        <div class="play-container">
+            <div id="offensivePlayerButtons" class="player-buttons">
+                <!-- Player buttons are dynamically generated -->
             </div>
-            <div id="eventLogContainer">
-                <button id="undoBtn">Undo</button>
-                <textarea id="eventLog" readonly></textarea>
+            <div id="offensiveActionButtons" class="action-buttons">
+                <button class="main-action-btn" data-action="Throw">Throw</button>
+                <button class="main-action-btn" data-action="Turnover">Turnover</button>
+                <button class="main-action-btn" data-action="Violation">Violation</button>
+                
+                <!-- Sub-buttons panel, initially hidden -->
+                <div class="action-panel" id="throwPanel" data-action="Throw">
+                    <!-- Dynamically generate sub-buttons here -->
+                </div>
+                <div class="action-panel" id="turnoverPanel" data-action="Turnover">
+                    <!-- Dynamically generate sub-buttons here -->
+                </div>
+                <div class="action-panel" id="violationPanel" data-action="Violation">
+                    <!-- Dynamically generate sub-buttons here -->
+                </div>
             </div>
         </div>
-    </section>
-    
+    </section>  
 
     <!-- Play-by-Play Screen: Defense -->
     <section id="defensePlayByPlayScreen" style="display: none;">
