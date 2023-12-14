@@ -86,9 +86,16 @@ th {
     background-color: #f2f2f2;
 }
 
+/* Make sure the play container fits within the viewport width */
 .play-container {
     display: flex;
-    justify-content: space-between;
+    width: 100%; /* Ensures it doesn't overflow the screen */
+    flex-wrap: wrap; /* Allows items to wrap onto the next line if needed */
+}
+
+/* If you have issues with the play container size, you can remove the justify-content property or set it to 'flex-start' */
+.play-container {
+    justify-content: flex-start; 
 }
 
 .player-buttons {
@@ -106,31 +113,54 @@ th {
 .action-buttons {
     display: flex;
     flex-direction: column;
-    /* align-items: stretch; */
+    align-items: stretch;
 }
 
+/* Ensure that the player buttons and action buttons are not too wide */
+.player-buttons, .action-buttons {
+    flex-basis: 45%; /* Adjust this percentage so that both columns together don't exceed 100% */
+    margin-right: 5%; /* Adds space between the two columns */
+}
+
+/* Adjust the width of the main action buttons to prevent overflow */
 .main-action-btn {
-    /* Styles for main action buttons */
+    width: auto; /* Or specify a fixed width if preferred */
     margin-bottom: 5px;
 }
 
 .action-panel {
-    display: none; /* Initially hidden */
-    flex-direction: column;
-    align-items: stretch;
-    background-color: #f8f8f8;
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Creates two columns */
+    grid-gap: 5px; /* Adjust the gap between grid items */
     padding: 10px;
     border: 1px solid #ccc;
     margin-bottom: 5px;
+    background-color: #f8f8f8;
 }
 
-.action-panel .sub-action-btn {
-    /* Styles for sub action buttons */
-    margin-bottom: 5px;
+.sub-action-btn {
+    padding: 5px;
+    margin-bottom: 0; /* Remove margin between buttons in the same column */
+    font-size: 0.8rem; /* Adjust font size to fit the buttons */
+    background-color: #e0e0e0;
 }
 
 .sub-action-btn.selected {
-    background-color: #e0e0e0; /* Or any other style to indicate selection */
+    background-color: #c0c0c0; /* Or any other style to indicate selection */
+}
+
+/* Optional: You might want to adjust the font-size for smaller buttons */
+.sub-action-btn {
+    font-size: 0.8rem; /* Adjust as needed */
+}
+
+/* Additional media query for very small screens, if necessary */
+@media (max-width: 320px) {
+    .sub-action-btn {
+        font-size: 0.7rem; /* Even smaller font size for very small screens */
+    }
+
+    /* You can also adjust padding and margins for small screens */
 }
 
 #eventDetailsPanel {
