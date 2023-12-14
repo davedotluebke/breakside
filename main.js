@@ -96,7 +96,7 @@ class Throw extends Event {
         this.thrower = thrower;
         this.receiver = receiver;
         this.huck_flag = huck;
-        this.breakmark_flag = breakmark;
+        this.break_flag = breakmark;
         this.dump_flag = dump;
         this.hammer_flag = hammer;
         this.sky_flag = sky;
@@ -110,7 +110,7 @@ class Throw extends Event {
         let summary = `${this.thrower.name} ${verb} `;
         let throwType = '';
         let receiver = this.receiver ? this.receiver.name : '';
-        if (this.breakmark_flag)    { throwType += 'breakmark '; }
+        if (this.breakmark_flag)    { throwType += 'break '; }
         if (this.hammer_flag)       { throwType += 'hammer '; }
         if (this.dump_flag)         { throwType += 'dump '; }
         if (throwType)              { summary += `a ${throwType} `; }
@@ -131,8 +131,8 @@ class Turnover extends Event {
         this.receiver = receiver;
         this.throwaway_flag = throwaway;
         this.huck_flag = huck;
-        this.receiverError_flag = receiverError;
-        this.goodDefense_flag = goodDefense;
+        this.drop_flag = receiverError;
+        this.defense_flag = goodDefense;
         this.stall_flag = stall;
     }
     // Override summarize for Turnover events
@@ -140,10 +140,10 @@ class Turnover extends Event {
         const t = this.thrower ? this.thrower.name : "voidthrower"
         const r = this.receiver ? this.receiver.name : "voidreceiver"
         const hucktxt = this.huck_flag ? 'on a huck' : '';
-        const defensetxt = this.goodDefense_flag ? 'due to good defense' : '';
+        const defensetxt = this.defense_flag ? 'due to good defense' : '';
         if (this.throwaway_flag)    { return `${t} throws it away ${hucktxt} ${defensetxt}`; }
-        if (this.receiverError_flag){ return `${r} misses the catch from ${t} ${hucktxt} ${defensetxt}`; }
-        if (this.goodDefense_flag)  { return `Turnover ${defensetxt}`; }
+        if (this.drop_flag){ return `${r} misses the catch from ${t} ${hucktxt} ${defensetxt}`; }
+        if (this.defense_flag)  { return `Turnover ${defensetxt}`; }
         if (this.stall_flag)        { return `${t} gets stalled ${defensetxt}`; }
     }
 }
@@ -151,12 +151,12 @@ class Turnover extends Event {
 class Violation extends Event {
     constructor({offensive = false, strip = false, pick = false, travel = false, contested = false, doubleTeam = false}) {
         super('Violation');
-        this.offensive_flag = offensive;
+        this.ofoul_flag = offensive;
         this.strip_flag = strip;
         this.pick_flag = pick;
         this.travel_flag = travel;
-        this.contested_flag = contested;
-        this.doubleTeam_flag = doubleTeam;
+        this.contest_flag = contested;
+        this.dblteam_flag = doubleTeam;
     }
 
     summarize() {
@@ -1017,7 +1017,7 @@ function toggleActionPanel(action) {
     });
     
     // Show the selected action panel
-    document.getElementById(`${action.toLowerCase()}Panel`).style.display = 'flex';
+    document.getElementById(`${action.toLowerCase()}Panel`).style.display = 'grid';
 }
 
 // Function to generate sub-buttons
