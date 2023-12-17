@@ -131,27 +131,24 @@ th {
 .action-panel {
     display: grid;
     grid-template-columns: 1fr 1fr; /* Creates two columns */
-    grid-gap: 5px; /* Adjust the gap between grid items */
-    padding: 10px;
+    grid-gap: 2px; /* Smaller gap between grid items */
+    padding: 5px; /* Smaller padding for the panel */
     border: 1px solid #ccc;
     margin-bottom: 5px;
     background-color: #f8f8f8;
 }
 
-.sub-action-btn {
-    padding: 5px;
-    margin-bottom: 0; /* Remove margin between buttons in the same column */
-    font-size: 0.8rem; /* Adjust font size to fit the buttons */
-    background-color: #e0e0e0;
-}
-
 .sub-action-btn.selected {
-    background-color: #c0c0c0; /* Or any other style to indicate selection */
+    background-color: #2669b5; /* Or any other style to indicate selection */
 }
 
 /* Optional: You might want to adjust the font-size for smaller buttons */
 .sub-action-btn {
-    font-size: 0.8rem; /* Adjust as needed */
+    padding: 2px 5px; /* Smaller padding */
+    margin: 2px; /* Smaller margin between buttons */
+    font-size: 0.8rem; /* You can adjust the font size as needed */
+    background-color: #626262;
+    /* Other styles as needed */
 }
 
 /* Additional media query for very small screens, if necessary */
