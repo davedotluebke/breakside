@@ -110,15 +110,15 @@ class Throw extends Event {
         let summary = `${this.thrower.name} ${verb} `;
         let throwType = '';
         let receiver = this.receiver ? this.receiver.name : '';
-        if (this.breakmark_flag)    { throwType += 'break '; }
+        if (this.break_flag)        { throwType += 'break '; }
         if (this.hammer_flag)       { throwType += 'hammer '; }
         if (this.dump_flag)         { throwType += 'dump '; }
-        if (throwType)              { summary += `a ${throwType} `; }
+        if (throwType)              { summary += `a ${throwType}`; }
         if (receiver)               { summary += `to ${this.receiver.name} `; }
         if (this.sky_flag || this.layout_flag) {
-            summary += `for a ${this.sky_flag ? "sky":""} {this.layout_flag ? "layout":""} catch`;
+            summary += `for a ${this.sky_flag ? "sky ":""}${this.layout_flag ? "layout ":""}catch `;
         }        
-        if (this.score_flag) summary += ' for the score!';
+        if (this.score_flag) summary += 'for the score!';
 
         return summary;
     }
@@ -860,9 +860,12 @@ function updateScore(winner) {
 /**************************** Offense play-by-play ****************************/
 /******************************************************************************/
 function logEvent(description) {
+    console.log("Event: " + description);
+/*    
     const eventLog = document.getElementById('eventLog');
     eventLog.value += description + '\n'; // Append the description to the log
     eventLog.scrollTop = eventLog.scrollHeight; // Auto-scroll to the bottom
+*/
 }
 
 // remove and return the last line from the log
@@ -910,11 +913,23 @@ function handleOPlayerButton(playerName) {
     if (currentPoint.possessions.length === 0) {
         currentPoint.addPossession(new Possession(true));
     }
-    // if most recent event is a throw, mark this player as the receiver
-    // (thrower will already be set)
+    // if most recent event is a throw: 
     if (currentEvent && currentEvent instanceof Throw) {
+        // mark this player as the receiver (thrower will already be set)
         currentEvent.receiver = getPlayerFromName(playerName);
-        // logEvent(currentEvent.summarize()); XXX not yet tested
+        if (! currentEvent.receiver) {
+            console.log(`Warning: could not find player for receiver ${playerName}`);
+        }
+        logEvent(currentEvent.summarize()); 
+        // close the Throw panel (maybe just clear sub-btn "selected" status instead?)
+        showActionPanel('none');
+        // Additional logic to handle scores (XXX add Callahan handling under Defense)
+        if (currentEvent.score_flag) {
+            currentEvent.receiver.goals++;
+            currentEvent.thrower.assists++;
+            updateScore(Role.TEAM);
+            moveToNextPoint(); 
+        }
     }
     // set currentPlayer to this player
     currentPlayer = getPlayerFromName(playerName);
@@ -965,9 +980,9 @@ function displayOActionButtons() {
     // Add event listeners to these buttons
     throwButton.addEventListener('click', function() {
         currentEvent = new Throw({thrower: currentPlayer, receiver: null, huck: false, strike: false, dump: false, hammer: false, sky: false, layout: false, score: false});
-        toggleActionPanel('throw');
+        showActionPanel('throw');
         generateSubButtons('throw');
-        // logEvent(currentEvent.summarize());
+        logEvent(currentEvent.summarize());
         let currentPossession = getActivePossession(currentPoint);
         currentPossession.addEvent(currentEvent);
         currentPlayer.completedPasses++;
@@ -975,8 +990,8 @@ function displayOActionButtons() {
     turnoverButton.addEventListener('click', function() {
         // Create a new Turnover event and add it to the current possession
         currentEvent = new Turnover({thrower: currentPlayer, throwaway: true, receiverError: false, goodDefense: false, stall: false});
-        // logEvent(currentEvent.summarize());
-        toggleActionPanel('turnover');
+        logEvent(currentEvent.summarize());
+        showActionPanel('turnover');
         generateSubButtons('turnover');
         let currentPossession = getActivePossession(currentPoint);
         currentPossession.addEvent(currentEvent);
@@ -988,36 +1003,26 @@ function displayOActionButtons() {
     violationButton.addEventListener('click', function() {
         // Create a new Violation event and add it to the current possession
         currentEvent = new Violation({thrower: currentPlayer, receiver: null, strip: false, pick: false, travel: false, contested: false, doubleTeam: false});
-        // logEvent(currentEvent.summarize());
-        toggleActionPanel('violation');
+        logEvent(currentEvent.summarize());
+        showActionPanel('violation');
         generateSubButtons('violation');
         let currentPossession = getActivePossession(currentPoint);
         currentPossession.addEvent(currentEvent);
     });
-        /* XXX Below code is for "score" button, need to move into a sub-button 
-        // Current event should be a throw; tag as score & update player stats
-        toggleActionPanel('score'); 
-        if (currentEvent && currentEvent instanceof Throw) {
-            currentEvent.score = true;
-            currentEvent.receiver.goals++;
-            currentEvent.thrower.assists++;
-        } else {
-            console.log("Warning: No current event or event is not a throw");
-        }
-        // logEvent(currentEvent.summarize());
-        updateScore(Role.TEAM);
-        moveToNextPoint(); */
 }
 
-// Function to toggle action panels
-function toggleActionPanel(action) {
+// Function to show action panels - call with 'none' to close all panels
+function showActionPanel(action) {
     // Hide all action panels
     document.querySelectorAll('.action-panel').forEach(panel => {
         panel.style.display = 'none';
     });
     
-    // Show the selected action panel
-    document.getElementById(`${action.toLowerCase()}Panel`).style.display = 'grid';
+    // Show the selected action panel, if it exists
+    panel = document.getElementById(`${action.toLowerCase()}Panel`)
+    if (panel) {
+        panel.style.display = 'grid';
+    }
 }
 
 // Function to generate sub-buttons
@@ -1053,11 +1058,10 @@ function handleSubAction(flagKey, action) {
     if (subButton) {
         subButton.classList.toggle('selected');
     }
-    
-    // ... Additional logic to handle changes in the event flags
 }
 
-// Ensure your CSS has a rule for the 'selected' class to visually indicate a button is selected
+
+// CSS has a rule for the 'selected' class to visually indicate a button is selected
 
 // Assuming 'currentEvent' global is an instance of one of the Event subclasses
 // and has properties like 'huck_flag', 'dump_flag', etc.
@@ -1077,7 +1081,7 @@ function getFlagsForAction() {
 document.querySelectorAll('.main-action-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
         const action = e.target.dataset.action;
-        toggleActionPanel(action);
+        showActionPanel(action);
         generateSubButtons(action);
     });
 });
