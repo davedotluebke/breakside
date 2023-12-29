@@ -852,13 +852,36 @@ function updateScore(winner) {
     } else {
         throw new Error("No current point");
     }
-
+    summarizeGame();
     updateActivePlayersList();  // Update the table with the new point data
 }
 
 /******************************************************************************/
 /**************************** Offense play-by-play ****************************/
 /******************************************************************************/
+function summarizeGame() {
+    summary = `Game Summary: ${currentGame().team} vs. ${currentGame().opponent}.\n`;
+    summary += `${currentGame().team} roster:`;
+    currentTeam.teamRoster.forEach(player => summary += ` ${player.name}`);
+    numPoints = 0;
+    runningScoreUs = 0;
+    runningScoreThem = 0;
+    currentGame().points.forEach(point => {
+        numPoints += 1;
+        summary += `\nPoint ${numPoints} roster:`;
+        point.players.forEach(player => summary += ` ${player}`);
+        if (point.winner === 'team') {
+            summary += `\n${currentGame().team} scores! `
+            runningScoreUs++;
+        } else {
+            summary += `\n${currentGame().opponent} scores! `
+            runningScoreThem++;
+        }
+        summary += `Current score: ${currentGame().team} ${runningScoreUs}, ${currentGame().opponent} ${runningScoreThem}`; 
+    })
+    console.log(summary); 
+}
+
 function logEvent(description) {
     console.log("Event: " + description);
 /*    
