@@ -158,7 +158,7 @@ class Violation extends Event {
         this.contest_flag = contested;
         this.dblteam_flag = doubleTeam;
     }
-
+    // Override summarize for Violation events  
     summarize() {
         let summary = 'Violation called: ';
         if (this.offensive_flag)        { summary += 'Offensive foul '; }
@@ -181,7 +181,7 @@ class Defense extends Event {
         this.Callahan_flag = Callahan;
         this.turnover_flag = turnover;
     }
-
+    // Override summarize for Defense events
     summarize() {
         let summary = '';
         let defender = this.defender ? this.defender.name : '';
@@ -809,7 +809,7 @@ function startNextPoint() {
         updateOffensivePossessionScreen();
         showScreen('offensePlayByPlayScreen');
     } else {
-        updateOffensivePossessionScreen();
+        updateDefensivePossessionScreen();
         showScreen('defensePlayByPlayScreen');
         // For now start timing point on defense when the point starts
         if (currentPoint.startTimestamp === null) {
@@ -870,6 +870,17 @@ function summarizeGame() {
         numPoints += 1;
         summary += `\nPoint ${numPoints} roster:`;
         point.players.forEach(player => summary += ` ${player}`);
+        // indicate which team pulls and which receives (thus starting on offense)
+        if (point.startingPosition === 'offense') {
+            summary += `\n${currentGame().opponent} pulls to ${currentGame().team}.`;
+        } else {
+            summary += `\n${currentGame().team} pulls to ${currentGame().opponent}.`;
+        }
+        point.possessions.forEach(possession => {
+            possession.events.forEach(event => {
+                summary += `\n${event.summarize()}`;
+            })
+        });
         if (point.winner === 'team') {
             summary += `\n${currentGame().team} scores! `
             runningScoreUs++;
@@ -1050,12 +1061,13 @@ function showActionPanel(action) {
 
 // Function to generate sub-buttons
 function generateSubButtons(action) {
-    const panel = document.getElementById(`${action.toLowerCase()}Panel`);
+    const act = action.toLowerCase();
+    const panel = document.getElementById(`${act}Panel`);
     panel.innerHTML = ''; // Clear current sub-buttons
 
     // Get the list of flags and their values for the action
     const flags = getFlagsForAction(currentEvent);
-
+    // Create subbuttons for every flag
     Object.keys(flags).forEach(flagKey => {
         const subButton = document.createElement('button');
         subButton.textContent = flagKey;
@@ -1068,6 +1080,26 @@ function generateSubButtons(action) {
         subButton.onclick = () => handleSubAction(flagKey, action);
         panel.appendChild(subButton);
     });
+
+    // Special "Defense/Offense picks up" subbuttons for O/D Turnover events to start the new possession
+    if (act === 'turnover' || act === 'theyturnover') { 
+        const subButton = document.createElement('button');
+        subButton.textContent = `${act === 'theyturnover' ? 'Offense' : 'Defense'} picks up`;
+        subButton.classList.add('sub-action-btn');
+        subButton.onclick = () => {
+            showActionPanel('none');  // close the panel
+            let currentPossession = new Possession(act === 'theyturnover'); // D Turnover --> new O possession
+            currentPoint.addPossession(currentPossession);
+            if (act === 'theyturnover') {
+                updateOffensivePossessionScreen();
+                showScreen('offensePlayByPlayScreen');
+            } else {
+                updateDefensivePossessionScreen();
+                showScreen('defensePlayByPlayScreen');
+            }
+        };
+        panel.appendChild(subButton);
+    }
 }
 
 // Function to handle sub action button clicks
@@ -1115,17 +1147,96 @@ document.querySelectorAll('.main-action-btn').forEach(btn => {
 /**************************** Defense play-by-play ****************************/
 /******************************************************************************/
 
-// Defense play-by-play buttons
-document.getElementById('theyScoreBtn').addEventListener('click', function() {
-    updateScore(Role.OPPONENT);
-    moveToNextPoint();
-});
+function updateDefensivePossessionScreen() {
+    displayDPlayerButtons();
+    displayDActionButtons();
+}
 
-document.getElementById('theyTurnoverBtn').addEventListener('click', function() {
-    let currentPossession = new Possession(true);
-    currentPoint.addPossession(currentPossession);
-    showScreen('offensePlayByPlayScreen');
-});
+function displayDPlayerButtons() {
+    // throw an error if there is no current point
+    if (!currentPoint) {
+        throw new Error("No current point");
+    }
+    let activePlayers = currentPoint.players; // Holds the names of active players
+
+    let playerButtonsContainer = document.getElementById('defensivePlayerButtons');
+    playerButtonsContainer.innerHTML = ''; // Clear existing buttons
+
+    activePlayers.forEach(playerName => {
+        let playerButton = document.createElement('button');
+        playerButton.textContent = playerName;
+        playerButton.classList.add('player-button'); // Add a class for styling
+        playerButton.classList.add('invalid'); // Player names can't be clicked at first
+        playerButton.addEventListener('click', function() {
+            handleDPlayerButton(playerName);
+        });
+        playerButtonsContainer.appendChild(playerButton);
+    });
+}
+
+function handleDPlayerButton(playerName) {
+     // Logic to handle click on a defensive player button 
+        // XXX if button is marked invalid, ignore and return 
+     // if most recent event is a defensive turnover:
+     if (currentEvent && currentEvent instanceof Defense) {
+        // mark this player as the defender
+        currentEvent.defender = getPlayerFromName(playerName);
+        if (! currentEvent.defender) {
+            console.log(`Warning: could not find player for defender ${playerName}`);
+        }
+        logEvent(currentEvent.summarize());
+        // XXX get player button, mark as 'selected' and unselect other players
+     }
+}
+
+// XXX add function to mark all buttons as 'invalid' (unclickable)
+// (to be made valid again when a defensive Turnover action is selected)
+
+function displayDActionButtons() {
+    let actionButtonsContainer = document.getElementById('defensiveActionButtons');
+    actionButtonsContainer.innerHTML = ''; // Clear existing buttons
+
+    // Main action buttons
+    const dTurnoverButton = document.createElement('button');
+    dTurnoverButton.textContent = 'They Turnover';
+    dTurnoverButton.classList.add('main-action-btn');
+    dTurnoverButton.dataset.action = 'theyTurnover'; // This will be used to identify which panel to toggle
+
+    const dScoreButton = document.createElement('button');
+    dScoreButton.textContent = 'They Score';
+    dScoreButton.classList.add('main-action-btn');
+    dScoreButton.dataset.action = 'TheyScore'; // This will be used to identify which panel to toggle
+
+    // Action panels for sub-buttons, initially hidden
+    const dTurnoverPanel = document.createElement('div');
+    dTurnoverPanel.classList.add('action-panel');
+    dTurnoverPanel.id = 'theyturnoverPanel';
+
+    const dScorePanel = document.createElement('div');
+    dScorePanel.classList.add('action-panel');
+    dScorePanel.id = 'theyscorePanel';
+
+    // Append main action buttons and panels to the container
+    const defensiveActionButtons = document.getElementById('defensiveActionButtons');
+    defensiveActionButtons.appendChild(dTurnoverButton);
+    defensiveActionButtons.appendChild(dTurnoverPanel); // Panel for D Turnover sub-buttons
+    defensiveActionButtons.appendChild(dScoreButton);
+    defensiveActionButtons.appendChild(dScorePanel); // Panel for D Score sub-buttons
+
+    // Add event listeners to these buttons
+    dTurnoverButton.addEventListener('click', function() {
+        // Create a new Defense event and add it to the current possession
+        currentEvent = new Defense({defender: null, interception: false, layout: false, sky: false, Callahan: false, turnover: true});
+        logEvent(currentEvent.summarize());
+        showActionPanel('theyturnover');
+        generateSubButtons('theyturnover');
+    });
+    dScoreButton.addEventListener('click', function() {
+        updateScore(Role.OPPONENT);
+        moveToNextPoint();
+    });
+}
+
 
 document.getElementById('endGameBtn').addEventListener('click', function() {
     if (confirm('Are you sure you want to end the game?')) {
