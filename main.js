@@ -811,7 +811,8 @@ function startNextPoint() {
     } else {
         updateDefensivePossessionScreen();
         showScreen('defensePlayByPlayScreen');
-        // For now start timing point on defense when the point starts
+        // For now start possession and timing when D points start
+        currentPoint.addPossession(new Possession(false));
         if (currentPoint.startTimestamp === null) {
             currentPoint.startTimestamp = new Date();
         }
@@ -900,16 +901,6 @@ function logEvent(description) {
     eventLog.value += description + '\n'; // Append the description to the log
     eventLog.scrollTop = eventLog.scrollHeight; // Auto-scroll to the bottom
 */
-}
-
-// remove and return the last line from the log
-function popLogEvent() {  
-    const eventLog = document.getElementById('eventLog');
-    const logLines = eventLog.value.split('\n');
-    lastLine = logLines.pop();  // need to pop twice...last line is always blank
-    lastLine = logLines.pop();  
-    eventLog.value = logLines.join('\n') + '\n';  // re-add the final newline
-    return lastLine;
 }
 
 function updateOffensivePossessionScreen() {
@@ -1031,8 +1022,6 @@ function displayOActionButtons() {
         currentPossession.addEvent(currentEvent);
         currentPossession = new Possession(false);
         currentPoint.addPossession(currentPossession);
-        // XXX need to move to a "Defense Takes Over" button:
-        // showScreen('defensePlayByPlayScreen');
     });
     violationButton.addEventListener('click', function() {
         // Create a new Violation event and add it to the current possession
@@ -1088,7 +1077,7 @@ function generateSubButtons(action) {
         subButton.classList.add('sub-action-btn');
         subButton.onclick = () => {
             showActionPanel('none');  // close the panel
-            let currentPossession = new Possession(act === 'theyturnover'); // D Turnover --> new O possession
+            currentPossession = new Possession(act === 'theyturnover'); // D Turnover --> new O possession
             currentPoint.addPossession(currentPossession);
             if (act === 'theyturnover') {
                 updateOffensivePossessionScreen();
@@ -1228,6 +1217,8 @@ function displayDActionButtons() {
         // Create a new Defense event and add it to the current possession
         currentEvent = new Defense({defender: null, interception: false, layout: false, sky: false, Callahan: false, turnover: true});
         logEvent(currentEvent.summarize());
+        let currentPossession = getActivePossession(currentPoint);
+        currentPossession.addEvent(currentEvent);        
         showActionPanel('theyturnover');
         generateSubButtons('theyturnover');
     });
