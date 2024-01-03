@@ -110,6 +110,10 @@ th {
     /* Add any other desired styles (padding, font size, etc.) */
 }
 
+.sub-action-btn.invalid {
+    background-color: #888888; /* Or any other style to indicate selection */
+}
+
 .action-buttons {
     display: flex;
     flex-direction: column;
