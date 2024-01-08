@@ -395,6 +395,7 @@ function initializeTeams() {
     }
     currentTeam = teams[0];         // there will be at least one team in the array
 }
+
 /*
  * Globals
  */
@@ -858,8 +859,9 @@ function updateScore(winner) {
 }
 
 /******************************************************************************/
-/**************************** Offense play-by-play ****************************/
+/************************ Event logging & game summary ************************/
 /******************************************************************************/
+
 function summarizeGame() {
     summary = `Game Summary: ${currentGame().team} vs. ${currentGame().opponent}.\n`;
     summary += `${currentGame().team} roster:`;
@@ -882,26 +884,49 @@ function summarizeGame() {
                 summary += `\n${event.summarize()}`;
             })
         });
+        // if most recent event is a score, indicate which team scored
         if (point.winner === 'team') {
             summary += `\n${currentGame().team} scores! `
             runningScoreUs++;
-        } else {
+        } 
+        if (point.winner === 'opponent') {
             summary += `\n${currentGame().opponent} scores! `
             runningScoreThem++;
         }
-        summary += `Current score: ${currentGame().team} ${runningScoreUs}, ${currentGame().opponent} ${runningScoreThem}`; 
+        if (point.winner) {
+            summary += `Current score: ${currentGame().team} ${runningScoreUs}, ${currentGame().opponent} ${runningScoreThem}`; 
+        }
     })
     console.log(summary); 
+    return summary;
 }
 
 function logEvent(description) {
     console.log("Event: " + description);
-/*    
+    /* update the running event log on the screen */    
     const eventLog = document.getElementById('eventLog');
-    eventLog.value += description + '\n'; // Append the description to the log
+    // eventLog.value += description + '\n'; // Append the description to the log
+    eventLog.value = summarizeGame();           // Replace log with the new game summary
     eventLog.scrollTop = eventLog.scrollHeight; // Auto-scroll to the bottom
-*/
 }
+
+document.getElementById('toggleEventLogBtn').addEventListener('click', function() {
+    var eventLog = document.getElementById('eventLog');
+    var toggleBtn = document.getElementById('toggleEventLogBtn');
+
+    // Check if the event log is currently expanded
+    if (eventLog.classList.contains('expanded')) {
+        eventLog.classList.remove('expanded');
+        toggleBtn.classList.remove('rotated');
+    } else {
+        eventLog.classList.add('expanded');
+        toggleBtn.classList.add('rotated');
+    }
+});
+
+/******************************************************************************/
+/**************************** Offense play-by-play ****************************/
+/******************************************************************************/
 
 function updateOffensivePossessionScreen() {
     displayOPlayerButtons();

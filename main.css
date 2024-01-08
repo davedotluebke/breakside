@@ -164,26 +164,44 @@ th {
     /* You can also adjust padding and margins for small screens */
 }
 
-#eventDetailsPanel {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px;
+#eventLogSection {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: #f0f0f0;
+    border-top: 1px solid #ccc;
+    z-index: 10;
 }
 
-#eventLogContainer {
-    padding: 10px;
+#toggleEventLogBtn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
 }
 
 #eventLog {
     width: 100%;
-    height: 100px; /* Adjust as needed */
-    padding: 10px;
-    margin-top: 10px;
-    border: 1px solid #ddd;
-    background-color: #f9f9f9;
-    overflow-y: auto;
+    height: 0; /* Initially hidden */
+    padding: 0;
+    border: none;
+    resize: none; /* Disable resizing */
+    overflow-y: scroll;
+    display: block; /* Ensures it takes the width */
 }
+
+/* When the event log is expanded */
+#eventLog.expanded {
+    height: 150px; /* Adjust to the desired expanded height */
+}
+
+/* Rotate the button when the event log is expanded */
+#toggleEventLogBtn.rotated {
+    transform: rotate(180deg);
+}
+
 
 /* Input field styling */
 input[type="text"], input[type="number"] {
