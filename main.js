@@ -72,7 +72,7 @@ function Game(teamName, opponentName, startOn) {
     this.points = [];  // An array of Point objects
     this.gameStartTimestamp = new Date();
     this.gameEndTimestamp = null;
-    this.pointsData = [];  // New property: Array of objects. Each object will have player names as keys and true/false as values.
+    this.pointsData = [];  // Array of objects, each object will have player names as keys and true/false as values.
 }
 
 // Team data structure
@@ -1126,6 +1126,7 @@ function generateSubButtons(action) {
 }
 
 // Function to handle sub action button clicks
+// (CSS for the 'selected' class visually indicates a button is selected)
 function handleSubAction(flagKey, action) {
     console.log(`Flag ${flagKey} for action ${action} was toggled`);
     // Toggle the flag value in the currentEvent object
@@ -1139,7 +1140,6 @@ function handleSubAction(flagKey, action) {
 }
 
 
-// CSS has a rule for the 'selected' class to visually indicate a button is selected
 
 // Assuming 'currentEvent' global is an instance of one of the Event subclasses
 // and has properties like 'huck_flag', 'dump_flag', etc.
@@ -1262,6 +1262,66 @@ function displayDActionButtons() {
     });
 }
 
+
+/******************************************************************************/
+/**************************** Undo Event Button *******************************/
+/******************************************************************************/
+function undoEvent() {
+    // XXX add logic to remove the most recent event from the current possession
+    if (currentGame().points.length > 0) {
+        // currentPoint is a global, reset it
+        currentPoint = currentGame().points[currentGame().points.length - 1];
+        if (currentPoint.possessions.length > 0) {
+            let currentPossession = getActivePossession(currentPoint);
+            if (currentPossession.events.length > 0) {
+                let undoneEvent = currentPossession.events.pop();
+                logEvent(`Undid event: ${undoneEvent.summarize()}`);
+                if (undoneEvent instanceof Throw) {
+                    // update player stats for the thrower and receiver
+                    undoneEvent.thrower.completedPasses--;
+                    if (undoneEvent.score_flag) {
+                        undoneEvent.receiver.goals--;
+                        undoneEvent.thrower.assists--;
+                    }
+                }
+                // XXX we allocate but don't currently maintain turnover stats for players 
+                // XXX when we handle Callahans, we will need to decrement player goals
+            } else {
+                // no events in this possession, remove the possession
+                currentPoint.possessions.pop();
+                if (currentPoint.possessions.length === 0) {
+                    // no possessions left in this point, update player stats then remove the point 
+                    currentPoint.players.forEach(playerName => {
+                        let player = getPlayerFromName(playerName);
+                        player.totalPointsPlayed--;
+                        player.consecutivePointsPlayed--;
+                    });
+                    currentGame.scores[currentPoint.winner]--;
+                    currentGame().points.pop();
+                    currentPoint = null;
+                    // display the "before point screen" 
+                    moveToNextPoint();
+                } else {
+                    // update and display screen for the previous possession
+                    currentPossession = getActivePossession(currentPoint);
+                    currentPossession.endTimestamp = null;
+                    currentEvent = currentPossession.events[currentPossession.events.length - 1];
+                    if (currentPossession.offensive) {
+                        updateOffensivePossessionScreen();
+                        showScreen('offensePlayByPlayScreen');
+                    } else {
+                        updateDefensivePossessionScreen();
+                        showScreen('defensePlayByPlayScreen');
+                    }
+                }
+            }
+        }
+    }
+    // XXX update the event log
+    logEvent("Undo button pressed!");  
+}   
+
+document.getElementById('undoBtn').addEventListener('click', undoEvent);
 
 document.getElementById('endGameBtn').addEventListener('click', function() {
     if (confirm('Are you sure you want to end the game?')) {
