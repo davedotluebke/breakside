@@ -26,9 +26,8 @@
     </section>
 
     <!-- Team Roster Screen -->
-    <section id="teamRosterScreen">
+    <section id="teamRosterScreen"> 
         <h2>Team Roster</h2>
-        
         <table>
             <thead>
                 <tr>
@@ -60,7 +59,7 @@
     </section>
 
     <!-- Before Point Screen -->
-    <section id="beforePointScreen" style="display: none;">
+    <section id="beforePointScreen" style="display: none;" class="in-game-content">
         <button id="startPointBtn">Start Point</button>
 
         <!-- Select Current Players Section -->
@@ -92,7 +91,7 @@
     </section>
 
     <!-- Play-by-Play Screen: Offense -->
-    <section id="offensePlayByPlayScreen" style="display: none;">
+    <section id="offensePlayByPlayScreen" style="display: none;" class="in-game-content">
         <h2>Offensive Possession</h2>
         <div class="play-container">
             <div id="offensivePlayerButtons" class="player-buttons">
@@ -105,7 +104,7 @@
     </section>  
 
     <!-- Play-by-Play Screen: Defense -->
-    <section id="defensePlayByPlayScreen" style="display: none;">
+    <section id="defensePlayByPlayScreen" style="display: none;" class="in-game-content">
         <h2>Defensive Possession</h2>
         <div class="play-container">
             <div id="defensivePlayerButtons" class="player-buttons">
@@ -138,11 +137,12 @@
         </footer>
     </section>
 
-    <!-- Event Log Panel, visible on all in-game screens -->
-    <section id="eventLogSection">
-        <button id="toggleEventLogBtn">▼</button>
+    <!-- Undo + Event Log Panel, only visible on in-game screens -->
+    <footer id="bottomPanel">
+        <button id="undoBtn">Undo</button>
+        <span id="toggleEventLogSpan">Play-by-play <span id="toggleEventLogIcon">[+]</span></span>
         <textarea id="eventLog" readonly></textarea>
-    </section>
+    </footer>
 
     <script src="main.js"></script>
 </body>

@@ -28,6 +28,13 @@ function showScreen(screenId) {
     // Display the desired screen
     const targetScreen = document.getElementById(screenId);
     targetScreen.style.display = 'block';
+
+    // In-game screens display a bottom panel with play-by-play textarea
+    if (targetScreen.classList && targetScreen.classList.contains('in-game-content')) {
+        document.getElementById('bottomPanel').style.display = 'flex';
+    } else {
+        document.getElementById('bottomPanel').style.display = 'none';
+    }
 }
 
 /*
@@ -757,10 +764,11 @@ function checkPlayerCount() {
 // Starting a new game, on O or D
 function startNewGame(startingPosition) {
     const opponentNameInput = document.getElementById('opponentNameInput');
-    const opponentName = opponentNameInput.value.trim() || "them";
+    const opponentName = opponentNameInput.value.trim() || "Bad Guys";
 
     let newGame = new Game(currentTeam.name, opponentName, startingPosition);
     currentTeam.games.push(newGame);
+    logEvent(`New game started against ${opponentName}`);
     moveToNextPoint();
 }
 document.getElementById('startGameOnOBtn').addEventListener('click', function() {
@@ -774,6 +782,7 @@ document.getElementById('startGameOnDBtn').addEventListener('click', function() 
 // Transition from Play-by-Play to Before Point when either team scores
 function moveToNextPoint() {
     updateActivePlayersList();
+    logEvent("New point started");
     showScreen('beforePointScreen');
     // once the table is rendered, make the left columns sticky
     makeColumnsSticky();
@@ -894,7 +903,7 @@ function summarizeGame() {
             runningScoreThem++;
         }
         if (point.winner) {
-            summary += `Current score: ${currentGame().team} ${runningScoreUs}, ${currentGame().opponent} ${runningScoreThem}`; 
+            summary += `\nCurrent score: ${currentGame().team} ${runningScoreUs}, ${currentGame().opponent} ${runningScoreThem}`; 
         }
     })
     console.log(summary); 
@@ -905,24 +914,24 @@ function logEvent(description) {
     console.log("Event: " + description);
     /* update the running event log on the screen */    
     const eventLog = document.getElementById('eventLog');
-    // eventLog.value += description + '\n'; // Append the description to the log
     eventLog.value = summarizeGame();           // Replace log with the new game summary
     eventLog.scrollTop = eventLog.scrollHeight; // Auto-scroll to the bottom
 }
 
-document.getElementById('toggleEventLogBtn').addEventListener('click', function() {
+document.getElementById('toggleEventLogSpan').addEventListener('click', function() {
     var eventLog = document.getElementById('eventLog');
-    var toggleBtn = document.getElementById('toggleEventLogBtn');
+    var toggleIcon = document.getElementById('toggleEventLogIcon');
 
-    // Check if the event log is currently expanded
-    if (eventLog.classList.contains('expanded')) {
-        eventLog.classList.remove('expanded');
-        toggleBtn.classList.remove('rotated');
+    // Check if the event log is currently visible
+    if (eventLog.style.display === 'none') {
+        eventLog.style.display = 'block'; // Show the event log
+        toggleIcon.textContent = '[-]'; // Set the icon to 'collapse' indicator
     } else {
-        eventLog.classList.add('expanded');
-        toggleBtn.classList.add('rotated');
+        eventLog.style.display = 'none'; // Hide the event log
+        toggleIcon.textContent = '[+]'; // Set the icon to 'expand' indicator
     }
 });
+
 
 /******************************************************************************/
 /**************************** Offense play-by-play ****************************/
