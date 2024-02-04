@@ -164,42 +164,59 @@ th {
     /* You can also adjust padding and margins for small screens */
 }
 
-#eventLogSection {
-    position: fixed;
+/* In-game screens have a play-by-play textarea at the bottom, and need to leave space for it */
+.in-game-content {
+    padding-bottom: 150px; /* Adjust this value to match the height of the bottomPanel */
+  }
+
+#bottomPanel {
+    position: fixed; 
     bottom: 0;
     left: 0;
     width: 100%;
     background: #f0f0f0;
     border-top: 1px solid #ccc;
+    padding: 5px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     z-index: 10;
 }
 
-#toggleEventLogBtn {
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    line-height: 1;
-    cursor: pointer;
+#toggleEventLogSpan {
+    font-size: 1.2rem; /* Adjust the font size as needed */
+    font-weight: bold; /* Make the text bold */
+    cursor: pointer; /* Change the cursor to indicate it's clickable */
+    display: inline-block; /* To ensure proper spacing and alignment */
+    color: #0011fb; /* Adjust the color as needed */
 }
+
+#toggleEventLogIcon {
+    font-size: 1.4rem; /* Make the icon slightly larger than the text */
+    padding-left: 5px; /* Add some space before the icon */
+}
+
 
 #eventLog {
+    display: none; /* Initially hidden */
     width: 100%;
-    height: 0; /* Initially hidden */
-    padding: 0;
-    border: none;
-    resize: none; /* Disable resizing */
-    overflow-y: scroll;
-    display: block; /* Ensures it takes the width */
+    height: 100px; /* Adjust to the desired expanded height */
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    padding: 5px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    background-color: white;
+    resize: none;
+    overflow-y: auto;
 }
 
-/* When the event log is expanded */
-#eventLog.expanded {
-    height: 150px; /* Adjust to the desired expanded height */
-}
-
-/* Rotate the button when the event log is expanded */
-#toggleEventLogBtn.rotated {
-    transform: rotate(180deg);
+/* Styles for the Undo button */
+#undoBtn {
+    padding: 5px 10px;
+    margin-right: 10px;
 }
 
 
