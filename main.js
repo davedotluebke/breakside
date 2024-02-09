@@ -1316,7 +1316,7 @@ function undoEvent() {
                 }
             }
         }
-    }
+    } 
     // XXX update the event log
     logEvent("Undo button pressed!");  
 }   
@@ -1335,6 +1335,43 @@ document.getElementById('endGameBtn').addEventListener('click', function() {
         showScreen('gameSummaryScreen');
         saveAllTeamsData();
     }
+});
+
+
+/******************************************************************************/
+/**************************** Game summary & stats ****************************/
+/******************************************************************************/
+
+// Download a text file with the game data in JSON format
+document.getElementById('downloadGameBtn').addEventListener('click', function() {
+    const teamData = serializeTeam(currentTeam); // Assuming serializeTeam returns a JSON string
+    downloadJSON(teamData, 'teamData.json');
+});
+
+function downloadJSON(jsonData, filename) {
+    // Create a Blob with the JSON data
+    const blob = new Blob([jsonData], {type: 'application/json'});
+    // Create a URL for the blob
+    const url = URL.createObjectURL(blob);
+    // Create a temporary anchor element and set its href to the blob URL
+    const a = document.createElement('a');
+    a.href = url;
+    // Set the download attribute to suggest a filename for the download based on current teams and date
+    a.download = filename || `${currentGame().team}_${currentGame().opponent}_${new Date().toISOString()}.json`;
+    // Append the anchor to the body, click it, and then remove it
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Revoke the blob URL to free up resources
+    URL.revokeObjectURL(url);
+}
+
+// Save game summary text to the clipboard
+document.getElementById('copySummaryBtn').addEventListener('click', function() {
+    const summary = summarizeGame();
+    navigator.clipboard.writeText(summary).then(() => {
+        alert('Game summary copied to clipboard');
+    });
 });
 
 // Start a new game from the Game Summary screen

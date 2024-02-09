@@ -6,6 +6,7 @@
     <title>Ultimate Stats Tracker</title>
     <link rel="stylesheet" href="main.css">
     <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 </head>
 <body>
     <header>
@@ -117,7 +118,7 @@
     </section>    
 
     <!-- Game Summary Screen -->
-    <section id="gameSummaryScreen" style="display: none;">
+    <section id="gameSummaryScreen" style="display: none;" class="in-game-content">
         <h2>Game Summary</h2>
 
         <div id="finalScore">
@@ -131,8 +132,29 @@
         </div>
 
         <!-- Further statistics can be added here -->
-
+        <div id="playerStats">
+            <h3>Player Stats</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Points Played</th>
+                        <th>Goals</th>
+                        <th>Assists</th>
+                        <th>Ds</th>
+                        <th>Completion %</th>
+                        <th>Huck Completion %</th>
+                        <th>Turnovers</th>
+                    </tr>
+                </thead>
+                <tbody id="playerStatsTable">
+                    <!-- Player stats will be dynamically populated here -->
+                </tbody>
+            </table>
+        </div>
         <footer>
+            <button id="downloadGameBtn">Download Game (JSON)</button>
+            <button id="copySummaryBtn"><i class="fas fa-clipboard"></i> Copy Summary</button>
             <button id="anotherGameBtn">New Game</button>
         </footer>
     </section>
