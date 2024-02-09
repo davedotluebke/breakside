@@ -330,7 +330,7 @@ function deserializeEvent(eventData, playerLookup) {
         case 'Turnover': event = new Turnover({ /* default parameters */ }); break;
         case 'Violation': event = new Violation({ /* default parameters */ }); break;
         case 'Defense': event = new Defense({ /* default parameters */ }); break;
-        case 'Other': event = new Other(eventData.subtype); break;
+        case 'Other': event = new Other({ /* default parameters */ }); break;
         default:
             throw new Error(`Unknown event type: ${eventData.type}`);
     }
