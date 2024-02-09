@@ -203,9 +203,23 @@ class Defense extends Event {
 }
 
 class Other extends Event {
-    constructor(type) {
+    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null}) {
         super('Other');
-        this.subtype = type; // Time-out, Injury sub, time cap
+        this.timeout_flag = timeout;
+        this.injury_flag = injury;
+        this.timecap_flag = timecap;
+        this.switchsides_flag = switchsides;
+        this.halftime_flag = halftime;
+    }
+    // Override summarize for Other events
+    summarize() {
+        let summary = '';
+        if (this.timeout_flag)      { summary += 'Timeout called. '; }
+        if (this.injury_flag)       { summary += 'Injury sub called '; }
+        if (this.timecap_flag)      { summary += 'Hard cap called; game over '; }
+        if (this.switchsides_flag)  { summary += 'O and D switch sides '; }
+        if (this.halftime_flag)     { summary += 'Halftime '; }
+        return summary;
     }
 }
 
@@ -804,14 +818,22 @@ function startNextPoint() {
         }
     });
 
-    // Create a new Point with the active players 
+    // Create a new Point with the active players and starting position
     // Don't set the winning team yet
     // Don't set startTimeStamp yet, wait till first player touches the disc
     let startPointOn = "";
     if (currentGame().points.length === 0) {
+        // First point of the game
         startPointOn = currentGame().startingPosition;
     } else {
-        startPointOn = currentGame().points[currentGame().points.length - 1].winner === Role.TEAM ? 'defense' : 'offense';
+        // Start on D if won last point, otherwise start on O
+        const lastPoint = currentGame().points[currentGame().points.length - 1];
+        startPointOn = lastPoint.winner === Role.TEAM ? 'defense' : 'offense';
+        // if last poessession includes switchsides event, switch the starting position
+        const lastPossession = lastPoint.possessions[lastPoint.possessions.length - 1];
+        if (lastPossession.events.some(event => event.type === 'Other' && event.switchsides_flag)) {
+            startPointOn = startPointOn === 'offense' ? 'defense' : 'offense';
+        }
     } 
     currentPoint = new Point(activePlayersForThisPoint, startPointOn);
     currentGame().points.push(currentPoint);
@@ -879,6 +901,7 @@ function summarizeGame() {
     runningScoreUs = 0;
     runningScoreThem = 0;
     currentGame().points.forEach(point => {
+        let switchsides = false;
         numPoints += 1;
         summary += `\nPoint ${numPoints} roster:`;
         point.players.forEach(player => summary += ` ${player}`);
@@ -891,6 +914,9 @@ function summarizeGame() {
         point.possessions.forEach(possession => {
             possession.events.forEach(event => {
                 summary += `\n${event.summarize()}`;
+                if (event.type === 'Other' && event.switchsides_flag) {
+                    switchsides = true;
+                }
             })
         });
         // if most recent event is a score, indicate which team scored
@@ -905,7 +931,15 @@ function summarizeGame() {
         if (point.winner) {
             summary += `\nCurrent score: ${currentGame().team} ${runningScoreUs}, ${currentGame().opponent} ${runningScoreThem}`; 
         }
-    })
+        if (switchsides) {
+            summary += `\nO and D switching sides for next point. `;
+            if (point.winner === 'team') {
+                summary += `\n${currentGame().team} will receive pull and play O. `;
+            } else {
+                summary += `\n${currentGame().team} will pull to ${currentGame().opponent} and play D. `;
+            }
+        }
+    });
     console.log(summary); 
     return summary;
 }
@@ -1323,6 +1357,9 @@ function undoEvent() {
 
 document.getElementById('undoBtn').addEventListener('click', undoEvent);
 
+/******************************************************************************/
+/********************************** Game Events *******************************/
+/******************************************************************************/
 document.getElementById('endGameBtn').addEventListener('click', function() {
     if (confirm('Are you sure you want to end the game?')) {
         currentGame().endTimestamp = new Date(); // Set end timestamp
@@ -1335,6 +1372,36 @@ document.getElementById('endGameBtn').addEventListener('click', function() {
         showScreen('gameSummaryScreen');
         saveAllTeamsData();
     }
+});
+
+document.getElementById('switchSidesBtn').addEventListener('click', function() {
+    // create Other event with switchsides flag set
+    currentEvent = new Other({switchsides: true});
+    // find the most recent point and add the event to its final possession
+    try {
+        const lastPoint = currentGame().points[currentGame().points.length - 1];
+        const lastPossession = lastPoint.possessions[lastPoint.possessions.length - 1];
+        lastPossession.addEvent(currentEvent);
+        logEvent(currentEvent.summarize());
+    } catch (e) {
+        logEvent("Error: could not find most recent point or possession to add switchsides event");
+    }
+});
+
+document.getElementById('timeOutBtn').addEventListener('click', function() {
+    // create Other event with timeout flag set; append to most recent point
+    currentEvent = new Other({timeout: true});
+    let currentPossession = getActivePossession(currentPoint);
+    currentPossession.addEvent(currentEvent);
+    logEvent(currentEvent.summarize());
+});
+
+document.getElementById('halftimeBtn').addEventListener('click', function() {
+    // create Other event with halftime flag set; append to most recent point
+    currentEvent = new Other({halftime: true});
+    let currentPossession = getActivePossession(currentPoint);
+    currentPossession.addEvent(currentEvent);
+    logEvent(currentEvent.summarize());
 });
 
 
