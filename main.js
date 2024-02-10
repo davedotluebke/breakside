@@ -1375,16 +1375,22 @@ document.getElementById('endGameBtn').addEventListener('click', function() {
 });
 
 document.getElementById('switchSidesBtn').addEventListener('click', function() {
-    // create Other event with switchsides flag set
-    currentEvent = new Other({switchsides: true});
-    // find the most recent point and add the event to its final possession
-    try {
-        const lastPoint = currentGame().points[currentGame().points.length - 1];
-        const lastPossession = lastPoint.possessions[lastPoint.possessions.length - 1];
-        lastPossession.addEvent(currentEvent);
-        logEvent(currentEvent.summarize());
-    } catch (e) {
-        logEvent("Error: could not find most recent point or possession to add switchsides event");
+    // if no points exist yet, just change the Game.startingPosition flag
+    if (currentGame().points.length === 0) {
+        currentGame().startingPosition = currentGame().startingPosition === 'offense' ? 'defense' : 'offense';
+        logEvent(`Switching starting position to ${currentGame().startingPosition}`);
+    } else {
+        // add Other event with switchsides flag set to current point
+        currentEvent = new Other({switchsides: true});
+        // find the most recent point and add the event to its final possession
+        try {
+            const lastPoint = currentGame().points[currentGame().points.length - 1];
+            const lastPossession = lastPoint.possessions[lastPoint.possessions.length - 1];
+            lastPossession.addEvent(currentEvent);
+            logEvent(currentEvent.summarize());
+        } catch (e) {
+            logEvent("Error: could not find most recent point or possession to add switchsides event");
+        }
     }
 });
 
