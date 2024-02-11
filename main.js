@@ -441,13 +441,14 @@ function currentGame() {
     return currentTeam.games[currentTeam.games.length - 1];
 }
 
-// Get the current possession (the last one in the current point); error if none
+// Get the current possession (the last one in the current point); null if none
 function getActivePossession(activePoint) {
     if (! activePoint) {
         throw new Error("No active point");
     }
     if (activePoint.possessions.length === 0) {
-        throw new Error("No possessions in active point");
+        console.log("No possessions in active point");
+        return null
     }
     return activePoint.possessions[activePoint.possessions.length - 1];
 }
@@ -768,10 +769,12 @@ function checkPlayerCount() {
     const expectedCount = parseInt(document.getElementById('playersOnFieldInput').value, 10);
 
     const startPointBtn = document.getElementById('startPointBtn');
-    if (selectedCount !== expectedCount) {
+    startPointBtn.classList.remove('warning');
+    startPointBtn.classList.remove('inactive');
+    if (selectedCount === 0) {
+        startPointBtn.classList.add('inactive');
+    } else if (selectedCount !== expectedCount) {
         startPointBtn.classList.add('warning');
-    } else {
-        startPointBtn.classList.remove('warning');
     }
 }
 
@@ -798,9 +801,8 @@ function moveToNextPoint() {
     updateActivePlayersList();
     logEvent("New point started");
     showScreen('beforePointScreen');
-    // once the table is rendered, make the left columns sticky
-    makeColumnsSticky();
-    // (could call window.requestAnimationFrame(makeColumnsSticky) to force a render, shouldn't be needed)
+    checkPlayerCount();  // to update the "Start Point" button style
+    makeColumnsSticky(); // once the table is rendered, make the left columns sticky
 }
 
 // Transition from Before Point to Play-by-Play
@@ -957,7 +959,7 @@ document.getElementById('toggleEventLogSpan').addEventListener('click', function
     var toggleIcon = document.getElementById('toggleEventLogIcon');
 
     // Check if the event log is currently visible
-    if (eventLog.style.display === 'none') {
+    if (eventLog.style.display != 'block') {
         eventLog.style.display = 'block'; // Show the event log
         toggleIcon.textContent = '[-]'; // Set the icon to 'collapse' indicator
     } else {
@@ -993,6 +995,20 @@ function displayOPlayerButtons() {
         playerButton.addEventListener('click', function() {
             handleOPlayerButton(playerName);
         });
+        // if this player has the disc, mark the button as selected:
+        //     - if most recent event is a Throw and the thrower is this player
+        //     - if most recent event is a Turnover interception and the defender is this player
+        latestPossession = getActivePossession(currentPoint);
+        latestEvent = latestPossession ? latestPossession.events[latestPossession.events.length - 1] : null;
+        if (latestEvent && latestEvent.type === 'Throw' && latestEvent.thrower.name === playerName) {
+            playerButton.classList.add('selected');
+        }
+        if (latestEvent 
+            && latestEvent.type === 'Turnover' 
+            && latestEvent.interception_flag  
+            && latestEvent.defender.name === playerName) {
+            playerButton.classList.add('selected');
+        }
         playerButtonsContainer.appendChild(playerButton);
     });
 }
@@ -1006,6 +1022,14 @@ function handleOPlayerButton(playerName) {
     if (currentPoint.possessions.length === 0) {
         currentPoint.addPossession(new Possession(true));
     }
+    // unselect all player buttons and select this one
+    document.querySelectorAll('.player-button').forEach(button => {
+        if (button.textContent === playerName) {
+            button.classList.add('selected');
+        } else {
+            button.classList.remove('selected');
+        }
+    });
     // if most recent event is a throw: 
     if (currentEvent && currentEvent instanceof Throw) {
         // mark this player as the receiver (thrower will already be set)
