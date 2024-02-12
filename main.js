@@ -879,18 +879,27 @@ function startNextPoint() {
     // Don't set the winning team yet
     // Don't set startTimeStamp yet, wait till first player touches the disc
     let startPointOn = "";
-    if (currentGame().points.length === 0) {
+    if (getLatestPoint() === null) {
         // First point of the game
         startPointOn = currentGame().startingPosition;
     } else {
         // Start on D if won last point, otherwise start on O
-        const lastPoint = currentGame().points[currentGame().points.length - 1];
-        startPointOn = lastPoint.winner === Role.TEAM ? 'defense' : 'offense';
-        // if last poessession includes switchsides event, switch the starting position
-        const lastPossession = lastPoint.possessions[lastPoint.possessions.length - 1];
-        if (lastPossession.events.some(event => event.type === 'Other' && event.switchsides_flag)) {
-            startPointOn = startPointOn === 'offense' ? 'defense' : 'offense';
-        }
+        startPointOn = (getLatestPoint().winner === Role.TEAM) ? 'defense' : 'offense';
+        // if last possession includes switchsides event, switch the starting position
+        if (getLatestPossession().events.some(event => event.type === 'Other' && event.switchsides_flag)) {
+            startPointOn = (startPointOn === 'offense') ? 'defense' : 'offense';
+        } else {
+            // in case the current possession is empty, check the last couple events explicitly
+            const latestEvent = getLatestEvent();
+            if (latestEvent && latestEvent.type === 'Other' && latestEvent.switchsides_flag) {
+                startPointOn = (startPointOn === 'offense') ? 'defense' : 'offense';
+            } else {
+                const prevEvent = getPreviousEvent();
+                if (prevEvent && prevEvent.type === 'Other' && prevEvent.switchsides_flag) {
+                    startPointOn = (startPointOn === 'offense') ? 'defense' : 'offense';
+                }
+            }
+        }        
     } 
     currentPoint = new Point(activePlayersForThisPoint, startPointOn);
     currentGame().points.push(currentPoint);
