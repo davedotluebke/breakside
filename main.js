@@ -462,14 +462,22 @@ function getLatestPossession() {
 function getLatestEvent() {
     const latestPossession = getLatestPossession();
     if (!latestPossession) { return null; }
-    if (latestPossession.events.length === 0) {
-        return getPreviousEvent();
+    if (latestPossession.events.length > 0) {
+        return latestPossession.events[latestPossession.events.length - 1];
     }
-    return latestPossession.events[latestPossession.events.length - 1];
+    // no events in the current possession; return the last event of the previous possession
+    latestPoint = getLatestPoint();
+    if (!latestPoint) { return null; }
+    if (latestPoint.possessions.length < 2) { 
+        // no previous possession; return null
+        return null; 
+    }
+    const prevPossession = latestPoint.possessions[latestPoint.possessions.length - 2];
+    return prevPossession.events[prevPossession.events.length - 1];        
 }
 
-// Get the second most recent event in the current or previous possession this point; null if none
-function getPreviousEvent() {
+// Get the most recent event of the second most-recent possession this point; null if none
+function getLastEventPreviousPossession() {
     const latestPoint = getLatestPoint();
     if (!latestPoint) { return null; }
     if (latestPoint.possessions.length === 0) { return null; }
@@ -1062,13 +1070,13 @@ function displayOPlayerButtons() {
         // if this player has the disc, mark the button as selected:
         //     - if most recent event is a Throw and the thrower is this player
         //     - if most recent event is a Turnover interception and the defender is this player
-        latestPossession = getActivePossession(currentPoint);
-        latestEvent = latestPossession ? latestPossession.events[latestPossession.events.length - 1] : null;
+        latestPossession = getLatestPossession();
+        latestEvent = getLatestEvent();
         if (latestEvent && latestEvent.type === 'Throw' && latestEvent.thrower.name === playerName) {
             playerButton.classList.add('selected');
         }
         if (latestEvent 
-            && latestEvent.type === 'Turnover' 
+            && latestEvent.type === 'Defense' 
             && latestEvent.interception_flag  
             && latestEvent.defender.name === playerName) {
             playerButton.classList.add('selected');
@@ -1161,6 +1169,11 @@ function displayOActionButtons() {
     // Add event listeners to these buttons
     throwButton.addEventListener('click', function() {
         currentEvent = new Throw({thrower: currentPlayer, receiver: null, huck: false, strike: false, dump: false, hammer: false, sky: false, layout: false, score: false});
+        // special case: if the most recent event is an interception, set the thrower to the defender
+        if (getLatestEvent() && getLatestEvent().type === 'Defense' && getLatestEvent().interception_flag) {
+            currentEvent.thrower = getLatestEvent().defender;
+            currentPlayer = currentEvent.thrower;
+        }
         showActionPanel('throw');
         generateSubButtons('throw');
         logEvent(currentEvent.summarize());
