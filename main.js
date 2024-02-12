@@ -249,11 +249,6 @@ class Point {
     }
 }
 
-// Given a player name, return the corresponding Player object from the team roster
-function getPlayerFromName(playerName) {
-    return currentTeam.teamRoster.find(player => player.name === playerName);
-}
-
 /*
  * Saving and loading team data
  */
@@ -276,8 +271,8 @@ function serializeEvent(event) {
     return serializedEvent;
 }
 
+// Simplify the team & game objects into serializable objects and output JSON
 function serializeTeam(team) {
-    // Simplify the team and game objects into serializable objects
     const simplifiedGames = team.games.map(game => ({
         ...game,
         gameStartTimestamp: game.gameStartTimestamp.toISOString(),
@@ -299,6 +294,7 @@ function serializeTeam(team) {
     }, null, 4);
 }
 
+// Log team data to the console
 function logTeamData(team) {
     console.log("Team data: ");
     console.log(team);
@@ -306,6 +302,7 @@ function logTeamData(team) {
     console.log(serializeTeam(team));
 }
 
+// Save all teams' data to local storage
 function saveAllTeamsData() {
     // Serialize each team in the global teams array
     const serializedTeams = teams.map(team => JSON.parse(serializeTeam(team)));
@@ -433,6 +430,12 @@ let currentPlayer = null;       // ...the current player with the disc
 /* 
  * Utility functions
  */
+
+// Given a player name, return the corresponding Player object from the team roster
+function getPlayerFromName(playerName) {
+    return currentTeam.teamRoster.find(player => player.name === playerName);
+}
+
 // Get the current game
 function currentGame() {
     if (currentTeam.games.length === 0) {
@@ -441,13 +444,63 @@ function currentGame() {
     return currentTeam.games[currentTeam.games.length - 1];
 }
 
+// Return the most recent point, or null if no points yet
+function getLatestPoint() {
+    if (currentGame().points.length === 0) { return null; }
+    return currentGame().points[currentGame().points.length - 1];
+}
+
+// Get the most recent possession (in most recent point); null if none
+function getLatestPossession() {
+    const latestPoint = getLatestPoint();
+    if (!latestPoint) { return null; }
+    if (latestPoint.possessions.length === 0) { return null; }
+    return latestPoint.possessions[latestPoint.possessions.length - 1];
+}
+
+// Get the most recent event (in most recent possession with any events); null if no possessions this point
+function getLatestEvent() {
+    const latestPossession = getLatestPossession();
+    if (!latestPossession) { return null; }
+    if (latestPossession.events.length === 0) {
+        return getPreviousEvent();
+    }
+    return latestPossession.events[latestPossession.events.length - 1];
+}
+
+// Get the second most recent event in the current or previous possession this point; null if none
+function getPreviousEvent() {
+    const latestPoint = getLatestPoint();
+    if (!latestPoint) { return null; }
+    if (latestPoint.possessions.length === 0) { return null; }
+    if (latestPoint.possessions.length === 1) {
+        // only one possession this point; return null if less than 2 events
+        if (latestPoint.possessions[0].events.length < 2) { return null; }
+        return latestPoint.possessions[0].events[latestPoint.possessions[0].events.length - 2];
+    }
+    // more than one possession this point
+    if (getLatestPossession().events.length >= 2) {
+        // last possession has two or more events; return second-last event
+        return getLatestPossession().events[getLatestPossession().events.length - 2];
+    } 
+    const prevPossession = latestPoint.possessions[latestPoint.possessions.length - 2];
+    if (getLatestPossession().events.length === 1) {
+        // last possession has one event; return last event of previous possession
+        return prevPossession.events[prevPossession.events.length - 1];
+    }
+    // last possession has no events; return second-last event of previous possession
+    if (prevPossession.events.length < 2) { return null; }
+    return prevPossession.events[prevPossession.events.length - 2];
+}
+
 // Get the current possession (the last one in the current point); null if none
 function getActivePossession(activePoint) {
     if (! activePoint) {
-        throw new Error("No active point");
+        console.log("getActivePossession() called, but no active point");
+        return null;
     }
     if (activePoint.possessions.length === 0) {
-        console.log("No possessions in active point");
+        console.log("getActivePossession() called, but no possessions in active point");
         return null
     }
     return activePoint.possessions[activePoint.possessions.length - 1];
@@ -553,9 +606,9 @@ function updateTeamRosterDisplay() {
 }
 updateTeamRosterDisplay();
 
-// Handling player addition to teamRoster
+// UI: Handle player addition to teamRoster
+const playerNameInput = document.getElementById('newPlayerInput');
 document.getElementById('addPlayerBtn').addEventListener('click', function() {
-    const playerNameInput = document.getElementById('newPlayerInput');
     const playerName = playerNameInput.value.trim();
 
     if (playerName && !currentTeam.teamRoster.some(player => player.name === playerName)) {
@@ -566,14 +619,13 @@ document.getElementById('addPlayerBtn').addEventListener('click', function() {
     playerNameInput.value = '';
 });
 // Also accept an Enter keypress to add a player
-const playerNameInput = document.getElementById('newPlayerInput');
 playerNameInput.addEventListener('keydown', function(event) {
     if (event.key === "Enter") {
         document.getElementById('addPlayerBtn').click();
     }
 });
 
-// Restoring team data from local storage
+// UI: Restore team data from local storage
 document.getElementById('restoreGamesBtn').addEventListener('click', function() {
     loadTeams();
     if (teams.length > 0) {
@@ -584,6 +636,7 @@ document.getElementById('restoreGamesBtn').addEventListener('click', function() 
     logTeamData(currentTeam);
 });
 
+// Load team data from local storage
 function loadTeams(silent = false) {
     const serializedTeams = localStorage.getItem('teamsData');
     if (serializedTeams) {
@@ -595,7 +648,8 @@ function loadTeams(silent = false) {
         }
     }
 }
-// Clearing games from local storage
+
+// UI: Clear games from local storage
 document.getElementById('clearGamesBtn').addEventListener('click', function() {
     if (confirm('Are you sure you want to clear all saved game data?')) {
         localStorage.removeItem('teamsData');
@@ -731,6 +785,7 @@ function updateActivePlayersList() {
     // After adding all rows to the tableBody, calculate the widths
     makeColumnsSticky();
 }
+
 /*
  * Make left 3 columns "sticky", calculating widths to set left offsets, 
  * and scroll table all the way right so the latest points are visible.
@@ -761,7 +816,6 @@ function makeColumnsSticky() {
     tableContainer.scrollLeft = tableContainer.scrollWidth;
 }
 
-
 // Show start-next-point button with warning style if wrong # of players selected
 function checkPlayerCount() {
     const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
@@ -788,6 +842,7 @@ function startNewGame(startingPosition) {
     logEvent(`New game started against ${opponentName}`);
     moveToNextPoint();
 }
+
 document.getElementById('startGameOnOBtn').addEventListener('click', function() {
     startNewGame('offense');
 });
