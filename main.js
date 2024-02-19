@@ -476,31 +476,6 @@ function getLatestEvent() {
     return prevPossession.events[prevPossession.events.length - 1];        
 }
 
-// Get the most recent event of the second most-recent possession this point; null if none
-function getLastEventPreviousPossession() {
-    const latestPoint = getLatestPoint();
-    if (!latestPoint) { return null; }
-    if (latestPoint.possessions.length === 0) { return null; }
-    if (latestPoint.possessions.length === 1) {
-        // only one possession this point; return null if less than 2 events
-        if (latestPoint.possessions[0].events.length < 2) { return null; }
-        return latestPoint.possessions[0].events[latestPoint.possessions[0].events.length - 2];
-    }
-    // more than one possession this point
-    if (getLatestPossession().events.length >= 2) {
-        // last possession has two or more events; return second-last event
-        return getLatestPossession().events[getLatestPossession().events.length - 2];
-    } 
-    const prevPossession = latestPoint.possessions[latestPoint.possessions.length - 2];
-    if (getLatestPossession().events.length === 1) {
-        // last possession has one event; return last event of previous possession
-        return prevPossession.events[prevPossession.events.length - 1];
-    }
-    // last possession has no events; return second-last event of previous possession
-    if (prevPossession.events.length < 2) { return null; }
-    return prevPossession.events[prevPossession.events.length - 2];
-}
-
 // Get the current possession (the last one in the current point); null if none
 function getActivePossession(activePoint) {
     if (! activePoint) {
@@ -883,32 +858,29 @@ function startNextPoint() {
         }
     });
 
+    // determine starting position: check point winners and switchside events 
+    let startPointOn = currentGame().startingPosition;
+    currentGame().points.forEach(point => {
+        let switchsides = false;  // flag to indicate if O and D switch sides after this point
+        point.possessions.forEach(possession => {
+            possession.events.forEach(event => {
+                if (event.type === 'Other' && event.switchsides_flag) {
+                    switchsides = !switchsides;
+                }
+            })
+        })
+        if (point.winner == 'team') {
+            // if the team won the last point, they will start on defense unless switchsides is true
+            startPointOn = switchsides ? 'offense' : 'defense';
+        } else {  
+            //  the opponent won the last point, our team will start on offense unless switchsides is true
+            startPointOn = switchsides ? 'defense' : 'offense';
+        }   
+    });
+
     // Create a new Point with the active players and starting position
     // Don't set the winning team yet
     // Don't set startTimeStamp yet, wait till first player touches the disc
-    let startPointOn = "";
-    if (getLatestPoint() === null) {
-        // First point of the game
-        startPointOn = currentGame().startingPosition;
-    } else {
-        // Start on D if won last point, otherwise start on O
-        startPointOn = (getLatestPoint().winner === Role.TEAM) ? 'defense' : 'offense';
-        // if last possession includes switchsides event, switch the starting position
-        if (getLatestPossession().events.some(event => event.type === 'Other' && event.switchsides_flag)) {
-            startPointOn = (startPointOn === 'offense') ? 'defense' : 'offense';
-        } else {
-            // in case the current possession is empty, check the last couple events explicitly
-            const latestEvent = getLatestEvent();
-            if (latestEvent && latestEvent.type === 'Other' && latestEvent.switchsides_flag) {
-                startPointOn = (startPointOn === 'offense') ? 'defense' : 'offense';
-            } else {
-                const prevEvent = getPreviousEvent();
-                if (prevEvent && prevEvent.type === 'Other' && prevEvent.switchsides_flag) {
-                    startPointOn = (startPointOn === 'offense') ? 'defense' : 'offense';
-                }
-            }
-        }        
-    } 
     currentPoint = new Point(activePlayersForThisPoint, startPointOn);
     currentGame().points.push(currentPoint);
     if (startPointOn === 'offense') {
@@ -929,7 +901,7 @@ document.getElementById('startPointBtn').addEventListener('click', startNextPoin
 // Handling scores and game end
 function updateScore(winner) {
     if (winner !== Role.TEAM && winner !== Role.OPPONENT) {
-        throw new Error("Invalid role");
+        throw new Error("inactive role");
     }
 
     if (currentPoint) {
@@ -956,6 +928,10 @@ function updateScore(winner) {
         currentPoint = null;  // Reset the temporary point object
         currentEvent = null;  // Reset the temporary event object
         currentPlayer = null; // Reset the temporary player object
+        // Un-select all player buttons so O action buttons will be inactive next point
+        document.querySelectorAll('.player-button').forEach(button => {
+            button.classList.remove('selected');
+        });
     } else {
         throw new Error("No current point");
     }
@@ -1078,6 +1054,7 @@ function displayOPlayerButtons() {
         if (latestEvent 
             && latestEvent.type === 'Defense' 
             && latestEvent.interception_flag  
+            && latestEvent.defender 
             && latestEvent.defender.name === playerName) {
             playerButton.classList.add('selected');
         }
@@ -1120,28 +1097,29 @@ function handleOPlayerButton(playerName) {
             moveToNextPoint(); 
         }
     }
-    // set currentPlayer to this player
+    // set currentPlayer to this player and update the action buttons
     currentPlayer = getPlayerFromName(playerName);
+    displayOActionButtons();
 }
 
 function displayOActionButtons() {
     let actionButtonsContainer = document.getElementById('offensiveActionButtons');
     actionButtonsContainer.innerHTML = ''; // Clear existing buttons
 
-    // Main action buttons
+    // Main action buttons, initially inactive
     const throwButton = document.createElement('button');
     throwButton.textContent = 'Throw';
-    throwButton.classList.add('main-action-btn');
+    throwButton.classList.add('main-action-btn', 'inactive');
     throwButton.dataset.action = 'Throw'; // This will be used to identify which panel to toggle
 
     const turnoverButton = document.createElement('button');
     turnoverButton.textContent = 'Turnover';
-    turnoverButton.classList.add('main-action-btn');
+    turnoverButton.classList.add('main-action-btn', 'inactive');
     turnoverButton.dataset.action = 'Turnover';
 
     const violationButton = document.createElement('button');
     violationButton.textContent = 'Violation';
-    violationButton.classList.add('main-action-btn');
+    violationButton.classList.add('main-action-btn', 'inactive');
     violationButton.dataset.action = 'Violation';
 
     // Action panels for sub-buttons, initially hidden
@@ -1166,12 +1144,28 @@ function displayOActionButtons() {
     offensiveActionButtons.appendChild(violationButton);
     offensiveActionButtons.appendChild(violationPanel); // Panel for Violation sub-buttons
 
+    // if a player button is selected, main action buttons are active 
+    if (document.querySelector('.player-button.selected')) {
+        document.querySelectorAll('.main-action-btn').forEach(button => {
+            button.classList.remove('inactive');
+        });
+    }
     // Add event listeners to these buttons
     throwButton.addEventListener('click', function() {
+        // set this button to appear selected and de-select all other main-action-btns
+        document.querySelectorAll('.main-action-btn').forEach(button => {
+            if (button === throwButton) {
+                button.classList.add('selected');
+            } else {
+                button.classList.remove('selected');
+            }
+        });
+        // Create a new Throw event and add it to the current possession
         currentEvent = new Throw({thrower: currentPlayer, receiver: null, huck: false, strike: false, dump: false, hammer: false, sky: false, layout: false, score: false});
         // special case: if the most recent event is an interception, set the thrower to the defender
-        if (getLatestEvent() && getLatestEvent().type === 'Defense' && getLatestEvent().interception_flag) {
-            currentEvent.thrower = getLatestEvent().defender;
+        const latest = getLatestEvent();
+        if (latest && latest.type === 'Defense' && (latest.interception_flag || latest.Callahan_flag)) {
+            currentEvent.thrower = latest.defender;
             currentPlayer = currentEvent.thrower;
         }
         showActionPanel('throw');
@@ -1182,6 +1176,14 @@ function displayOActionButtons() {
         currentPlayer.completedPasses++;
     });
     turnoverButton.addEventListener('click', function() {
+        // set this button to appear selected and de-select all other main-action-btns
+        document.querySelectorAll('.main-action-btn').forEach(button => {
+            if (button === turnoverButton) {
+                button.classList.add('selected');
+            } else {
+                button.classList.remove('selected');
+            }
+        });
         // Create a new Turnover event and add it to the current possession
         currentEvent = new Turnover({thrower: currentPlayer, throwaway: true, receiverError: false, goodDefense: false, stall: false});
         logEvent(currentEvent.summarize());
@@ -1193,6 +1195,14 @@ function displayOActionButtons() {
         currentPoint.addPossession(currentPossession);
     });
     violationButton.addEventListener('click', function() {
+        // set this button to appear selected and de-select all other main-action-btns
+        document.querySelectorAll('.main-action-btn').forEach(button => {
+            if (button === violationButton) {
+                button.classList.add('selected');
+            } else {
+                button.classList.remove('selected');
+            }
+        });
         // Create a new Violation event and add it to the current possession
         currentEvent = new Violation({thrower: currentPlayer, receiver: null, strip: false, pick: false, travel: false, contested: false, doubleTeam: false});
         logEvent(currentEvent.summarize());
@@ -1274,8 +1284,6 @@ function handleSubAction(flagKey, action) {
     }
 }
 
-
-
 // Assuming 'currentEvent' global is an instance of one of the Event subclasses
 // and has properties like 'huck_flag', 'dump_flag', etc.
 function getFlagsForAction() {
@@ -1324,7 +1332,7 @@ function displayDPlayerButtons() {
         let playerButton = document.createElement('button');
         playerButton.textContent = playerName;
         playerButton.classList.add('player-button'); // Add a class for styling
-        playerButton.classList.add('invalid'); // Player names can't be clicked at first
+        playerButton.classList.add('inactive'); // Player names can't be clicked at first
         playerButton.addEventListener('click', function() {
             handleDPlayerButton(playerName);
         });
@@ -1332,23 +1340,53 @@ function displayDPlayerButtons() {
     });
 }
 
+// Logic to handle click on a defensive player button 
 function handleDPlayerButton(playerName) {
-     // Logic to handle click on a defensive player button 
-        // XXX if button is marked invalid, ignore and return 
-     // if most recent event is a defensive turnover:
-     if (currentEvent && currentEvent instanceof Defense) {
+    // find the player button that matches this player name
+    let thisButton = null;
+    document.querySelectorAll('.player-button').forEach(button => {
+        if (button.textContent === playerName) { thisButton = button; }
+    });
+    // if this button doesn't exist, log a warning and return
+    if (!thisButton) {
+        console.log(`Warning: could not find button for player ${playerName}`);
+        return;
+    }
+    // if this button is marked inactive, ignore and return 
+    if (thisButton.classList.contains('inactive')) { return; }
+    // if most recent event is a defensive turnover:
+    if (currentEvent && currentEvent instanceof Defense) {
         // mark this player as the defender
         currentEvent.defender = getPlayerFromName(playerName);
         if (! currentEvent.defender) {
             console.log(`Warning: could not find player for defender ${playerName}`);
         }
         logEvent(currentEvent.summarize());
-        // XXX get player button, mark as 'selected' and unselect other players
-     }
+        // get player button, mark as 'selected' and unselect other players
+        document.querySelectorAll('.player-button').forEach(button => {
+            if (button === thisButton) {
+                button.classList.add('selected');
+            } else {
+                button.classList.remove('selected');
+            }
+        });
+    }
 }
 
-// XXX add function to mark all buttons as 'invalid' (unclickable)
+// function to mark all buttons as 'inactive' (unclickable)
 // (to be made valid again when a defensive Turnover action is selected)
+function markAllDPlayerButtonsinactive() {
+    document.querySelectorAll('.player-button').forEach(button => {
+        button.classList.add('inactive');
+    });
+}
+
+// function to mark all buttons as 'valid' (clickable)
+function markAllDPlayerButtonsValid() {
+    document.querySelectorAll('.player-button').forEach(button => {
+        button.classList.remove('inactive');
+    });
+}
 
 function displayDActionButtons() {
     let actionButtonsContainer = document.getElementById('defensiveActionButtons');
@@ -1383,14 +1421,34 @@ function displayDActionButtons() {
 
     // Add event listeners to these buttons
     dTurnoverButton.addEventListener('click', function() {
-        // Create a new Defense event and add it to the current possession
+        // If button already selected, unselect and remove Defense event (which should already exist)
+        if (dTurnoverButton.classList.contains('selected')) {
+            dTurnoverButton.classList.remove('selected');
+            if (currentEvent && currentEvent instanceof Defense) {
+                // remove the most recent event from the current possession
+                if (getLatestEvent() && getLatestEvent().type === 'Defense') {
+                    let currentPossession = getActivePossession(currentPoint);
+                    currentPossession.events.pop();
+                    currentEvent = null;
+                } else {
+                    console.log("Error: turnover button unselected, but most recent event is not a Defense event");
+                }   
+            }
+            markAllDPlayerButtonsinactive();  // mark all player buttons as 'inactive' (unclickable)
+            showActionPanel('none');    // unfurl the "They Turnover" panel
+            return;
+        }
+        // Button not already selected, mark as selected and create a new Defense event
+        dTurnoverButton.classList.add('selected');        
         currentEvent = new Defense({defender: null, interception: false, layout: false, sky: false, Callahan: false, turnover: true});
         logEvent(currentEvent.summarize());
         let currentPossession = getActivePossession(currentPoint);
         currentPossession.addEvent(currentEvent);        
         showActionPanel('theyturnover');
         generateSubButtons('theyturnover');
+        markAllDPlayerButtonsValid();   // mark all player buttons as 'valid' (clickable)
     });
+
     dScoreButton.addEventListener('click', function() {
         updateScore(Role.OPPONENT);
         moveToNextPoint();
@@ -1431,7 +1489,7 @@ function undoEvent() {
                         player.totalPointsPlayed--;
                         player.consecutivePointsPlayed--;
                     });
-                    currentGame.scores[currentPoint.winner]--;
+                    currentGame().scores[currentPoint.winner]--;
                     currentGame().points.pop();
                     currentPoint = null;
                     // display the "before point screen" 
@@ -1481,16 +1539,24 @@ document.getElementById('switchSidesBtn').addEventListener('click', function() {
         currentGame().startingPosition = currentGame().startingPosition === 'offense' ? 'defense' : 'offense';
         logEvent(`Switching starting position to ${currentGame().startingPosition}`);
     } else {
-        // add Other event with switchsides flag set to current point
-        currentEvent = new Other({switchsides: true});
-        // find the most recent point and add the event to its final possession
-        try {
-            const lastPoint = currentGame().points[currentGame().points.length - 1];
-            const lastPossession = lastPoint.possessions[lastPoint.possessions.length - 1];
-            lastPossession.addEvent(currentEvent);
-            logEvent(currentEvent.summarize());
-        } catch (e) {
-            logEvent("Error: could not find most recent point or possession to add switchsides event");
+        // if the latest event is a switch sides event, just remove it
+        let latestEvent = getLatestEvent();
+        if (latestEvent && latestEvent.type === 'Other' && latestEvent.switchsides_flag) {
+            let currentPossession = getActivePossession(currentPoint);
+            currentPossession.events.pop();
+            logEvent("Removed most recent switch sides event");
+        } else {
+            // add Other event with switchsides flag set to current point
+            currentEvent = new Other({switchsides: true});
+            // find the most recent point and add the event to its final possession
+            try {
+                const lastPoint = currentGame().points[currentGame().points.length - 1];
+                const lastPossession = lastPoint.possessions[lastPoint.possessions.length - 1];
+                lastPossession.addEvent(currentEvent);
+                logEvent(currentEvent.summarize());
+            } catch (e) {
+                logEvent("Error: could not find most recent point or possession to add switchsides event");
+            }
         }
     }
 });
