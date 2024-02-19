@@ -115,7 +115,7 @@ th {
     justify-content: flex-start; 
 }
 
-.sub-action-btn.invalid {
+.sub-action-btn.inactive {
     background-color: #888888; /* Or any other style to indicate selection */
 }
 
