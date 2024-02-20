@@ -1089,7 +1089,7 @@ function handleOPlayerButton(playerName) {
         logEvent(currentEvent.summarize()); 
         // close the Throw panel (maybe just clear sub-btn "selected" status instead?)
         showActionPanel('none');
-        // Additional logic to handle scores (XXX add Callahan handling under Defense)
+        // Additional logic to handle scores (similar logic to handle Callahan on D)
         if (currentEvent.score_flag) {
             currentEvent.receiver.goals++;
             currentEvent.thrower.assists++;
@@ -1259,9 +1259,22 @@ function generateSubButtons(action) {
             currentPossession = new Possession(act === 'theyturnover'); // D Turnover --> new O possession
             currentPoint.addPossession(currentPossession);
             if (act === 'theyturnover') {
-                updateOffensivePossessionScreen();
-                showScreen('offensePlayByPlayScreen');
+                // the defense turned it over, switch to offense UNLESS a Callahan was scored
+                if (currentEvent.Callahan_flag) {
+                    if (currentEvent.defender) {
+                        currentEvent.defender.goals++;
+                    } else {
+                        console.log("Warning: no defender found for Callahan");
+                    }                    
+                    updateScore(Role.TEAM);
+                    moveToNextPoint();
+                } else {
+                    updateOffensivePossessionScreen();
+                    showScreen('offensePlayByPlayScreen');
+                }
+                
             } else {
+                // the offense turned it over, switch to defense
                 updateDefensivePossessionScreen();
                 showScreen('defensePlayByPlayScreen');
             }
