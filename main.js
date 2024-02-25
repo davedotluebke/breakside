@@ -179,14 +179,13 @@ class Violation extends Event {
 }
 
 class Defense extends Event {
-    constructor({defender = null, interception = false, layout = false, sky = false, Callahan = false, turnover = true}) {
+    constructor({defender = null, interception = false, layout = false, sky = false, Callahan = false}) {
         super('Defense');
-        this.defender = defender;
+        this.defender = defender;       // null indicates an unforced turnover by opponent
         this.interception_flag = interception;
         this.layout_flag = layout;
         this.sky_flag = sky;
         this.Callahan_flag = Callahan;
-        this.turnover_flag = turnover;
     }
     // Override summarize for Defense events
     summarize() {
@@ -195,9 +194,12 @@ class Defense extends Event {
         if (this.interception_flag)     { summary += 'Interception '; }
         if (this.layout_flag)           { summary += 'Layout D '; }
         if (this.sky_flag)              { summary += 'Sky D '; }
-        if (this.Callahan_flag)         { summary += 'Callahan'; }
-        if (summary && defender)        { summary += `by ${defender}`; }
-        if (this.turnover_flag)         { summary += `Turnover ${defender ? "caused by " + defender : ""}`; }
+        if (this.Callahan_flag)         { summary += 'Callahan '; }
+        if (this.defender) {
+            summary += (summary ? summary : 'Turnover causeed ') + `by ${defender}`;
+        } else {
+            summary = (summary ? summary : 'Unforced turnover by opponent');
+        }
         return summary;
     }
 }
@@ -909,6 +911,9 @@ function updateScore(winner) {
         currentPoint.winner = winner; // Setting the winning team for the current point
         currentGame().scores[winner]++;
 
+        // Update event log
+        logEvent(`${currentPoint.winner} scores!`);
+
         // Update player stats for those who played this point
         currentTeam.teamRoster.forEach(p => {
             if (currentPoint.players.includes(p.name)) { // the player played this point
@@ -1024,6 +1029,7 @@ document.getElementById('toggleEventLogSpan').addEventListener('click', function
 function updateOffensivePossessionScreen() {
     displayOPlayerButtons();
     displayOActionButtons();
+    logEvent('Refresh event log');
 }
 
 function displayOPlayerButtons() {
@@ -1086,10 +1092,9 @@ function handleOPlayerButton(playerName) {
         if (! currentEvent.receiver) {
             console.log(`Warning: could not find player for receiver ${playerName}`);
         }
-        logEvent(currentEvent.summarize()); 
         // close the Throw panel (maybe just clear sub-btn "selected" status instead?)
         showActionPanel('none');
-        // Additional logic to handle scores (similar logic to handle Callahan on D)
+        // Additional logic to handle scores 
         if (currentEvent.score_flag) {
             currentEvent.receiver.goals++;
             currentEvent.thrower.assists++;
@@ -1097,6 +1102,7 @@ function handleOPlayerButton(playerName) {
             moveToNextPoint(); 
         }
     }
+    logEvent('Refresh event log');
     // set currentPlayer to this player and update the action buttons
     currentPlayer = getPlayerFromName(playerName);
     displayOActionButtons();
@@ -1289,7 +1295,8 @@ function handleSubAction(flagKey, action) {
     console.log(`Flag ${flagKey} for action ${action} was toggled`);
     // Toggle the flag value in the currentEvent object
     currentEvent[`${flagKey}_flag`] = !currentEvent[`${flagKey}_flag`];
-    
+    // Update the event log to reflect the change in flags
+    logEvent(currentEvent.summarize());
     // Toggle the "selected" class on the button to show it's been activated/deactivated
     const subButton = document.querySelector(`button[data-flag="${flagKey}"]`);
     if (subButton) {
@@ -1329,8 +1336,16 @@ document.querySelectorAll('.main-action-btn').forEach(btn => {
 function updateDefensivePossessionScreen() {
     displayDPlayerButtons();
     displayDActionButtons();
+    logEvent('Refresh event log');
 }
 
+/* 
+ * Create the player buttons for the defensive possession screen.
+ * If current point empty (no possessions) or current possession empty (no events),
+ * mark all player buttons as 'inactive' (unclickable). If the most recent event is a
+ * defensive turnover, mark all player buttons as 'valid' (clickable) and show the 
+ * defender (if any) as 'selected'.
+ */
 function displayDPlayerButtons() {
     // throw an error if there is no current point
     if (!currentPoint) {
@@ -1349,6 +1364,18 @@ function displayDPlayerButtons() {
         playerButton.addEventListener('click', function() {
             handleDPlayerButton(playerName);
         });
+        // if latest event (XXX ignore timeouts etc) is a defensive turnover:
+        if (getLatestPoint() && getLatestPoint().possessions.length > 0) {
+            if (getLatestPossession().events.length > 0) {
+                let latest = getLatestEvent();
+                if (latest && latest.type === 'Defense') {
+                    playerButton.classList.remove('inactive');
+                    if (latest.defender && latest.defender.name === playerName) {
+                        playerButton.classList.add('selected');
+                    }
+                }
+            }
+        }
         playerButtonsContainer.appendChild(playerButton);
     });
 }
@@ -1383,12 +1410,13 @@ function handleDPlayerButton(playerName) {
                 button.classList.remove('selected');
             }
         });
+        logEvent(currentEvent.summarize());
     }
 }
 
 // function to mark all buttons as 'inactive' (unclickable)
 // (to be made valid again when a defensive Turnover action is selected)
-function markAllDPlayerButtonsinactive() {
+function markAllDPlayerButtonsInvalid() {
     document.querySelectorAll('.player-button').forEach(button => {
         button.classList.add('inactive');
     });
@@ -1432,6 +1460,16 @@ function displayDActionButtons() {
     defensiveActionButtons.appendChild(dScoreButton);
     defensiveActionButtons.appendChild(dScorePanel); // Panel for D Score sub-buttons
 
+    // if the latest event is Defense, make the 'They Turnover' button active & unfurl the panel
+    if (getLatestEvent() && getLatestEvent() instanceof Defense) {
+        dTurnoverButton.classList.add('selected');
+        showActionPanel('theyturnover');
+        generateSubButtons('theyturnover');
+        markAllDPlayerButtonsValid();   // mark all player buttons as 'valid' (clickable)
+    } else {
+        markAllDPlayerButtonsInvalid();  // mark all player buttons as 'inactive' (unclickable)
+        showActionPanel('none');         // hide the panel
+    }
     // Add event listeners to these buttons
     dTurnoverButton.addEventListener('click', function() {
         // If button already selected, unselect and remove Defense event (which should already exist)
@@ -1447,16 +1485,16 @@ function displayDActionButtons() {
                     console.log("Error: turnover button unselected, but most recent event is not a Defense event");
                 }   
             }
-            markAllDPlayerButtonsinactive();  // mark all player buttons as 'inactive' (unclickable)
+            markAllDPlayerButtonsInvalid();  // mark all player buttons as 'inactive' (unclickable)
             showActionPanel('none');    // unfurl the "They Turnover" panel
             return;
         }
         // Button not already selected, mark as selected and create a new Defense event
         dTurnoverButton.classList.add('selected');        
         currentEvent = new Defense({defender: null, interception: false, layout: false, sky: false, Callahan: false, turnover: true});
-        logEvent(currentEvent.summarize());
         let currentPossession = getActivePossession(currentPoint);
         currentPossession.addEvent(currentEvent);        
+        logEvent(currentEvent.summarize());
         showActionPanel('theyturnover');
         generateSubButtons('theyturnover');
         markAllDPlayerButtonsValid();   // mark all player buttons as 'valid' (clickable)
@@ -1490,6 +1528,12 @@ function undoEvent() {
                         undoneEvent.thrower.assists--;
                     }
                 }
+                if (currentPossession.offensive) {
+                    updateOffensivePossessionScreen();
+                } else {
+                    updateDefensivePossessionScreen();
+                }
+
                 // XXX we allocate but don't currently maintain turnover stats for players 
                 // XXX when we handle Callahans, we will need to decrement player goals
             } else {
