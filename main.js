@@ -35,6 +35,12 @@ function showScreen(screenId) {
     } else {
         document.getElementById('bottomPanel').style.display = 'none';
     }
+
+    // Update specific UI elements for the new screen
+    if (screenId === 'beforePointScreen') {
+        updateActivePlayersList();
+        checkPlayerCount();
+    }
 }
 
 /*
@@ -478,6 +484,16 @@ function getLatestEvent() {
     return prevPossession.events[prevPossession.events.length - 1];        
 }
 
+// Return true if a point is currently in progress
+// (i.e., the latest point has at least one possession and does not 
+// have a winner yet)
+function isPointInProgress() {
+    const latestPoint = getLatestPoint();
+    if (!latestPoint) { return false; }
+    if (latestPoint.possessions.length === 0) { return false; }
+    return latestPoint.winner === "";
+}
+
 // Get the current possession (the last one in the current point); null if none
 function getActivePossession(activePoint) {
     if (! activePoint) {
@@ -610,6 +626,29 @@ playerNameInput.addEventListener('keydown', function(event) {
     }
 });
 
+// UI: Continue an in-progress game (inactive by default)
+//     Used to add players to the roster or change players during an injury sub)
+document.getElementById('continueGameBtn').addEventListener('click', function() {
+    if (currentTeam.games.length > 0) {
+        // if adding new player to roster between points, return to choose players screen
+        if (isPointInProgress() === false) {
+            updateActivePlayersList();
+            showScreen('beforePointScreen');
+        } else {
+            // if the game is in progress, and the last event is not a score, return to the O or D possession screen
+            if (getLatestPossession().offensive) {
+                updateOffensivePossessionScreen();
+                showScreen('offensePlayByPlayScreen');
+            } else {
+                updateDefensivePossessionScreen();
+                showScreen('defensePlayByPlayScreen');
+            }
+            // make contiueGameBtn inactive now that we've handled it
+            document.getElementById('continueGameBtn').classList.add('inactive');
+        }
+    }
+});
+
 // UI: Restore team data from local storage
 document.getElementById('restoreGamesBtn').addEventListener('click', function() {
     loadTeams();
@@ -653,6 +692,12 @@ document.getElementById('clearGamesBtn').addEventListener('click', function() {
  *   SELECT PLAYERS TABLE 
  * 
  ************************************************************************/
+
+// Adjust Roster button returns to the "Team Roster Screen" and enables "Continue Game" button
+document.getElementById('adjustRosterBtn').addEventListener('click', function() {
+    showScreen('teamRosterScreen');
+    document.getElementById('continueGameBtn').classList.remove('inactive');
+});
 
 // Updates the displayed roster on the "Before Point Screen"
 function updateActivePlayersList() {
@@ -801,7 +846,7 @@ function makeColumnsSticky() {
     tableContainer.scrollLeft = tableContainer.scrollWidth;
 }
 
-// Show start-next-point button with warning style if wrong # of players selected
+// Show start/continue-point button with warning style if wrong # of players selected
 function checkPlayerCount() {
     const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
     const selectedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
@@ -814,6 +859,12 @@ function checkPlayerCount() {
         startPointBtn.classList.add('inactive');
     } else if (selectedCount !== expectedCount) {
         startPointBtn.classList.add('warning');
+    }
+    // if a point is in progress, the button should say "Continue Point"
+    if (isPointInProgress()) {
+        startPointBtn.textContent = "Continue Point";
+    } else {
+        startPointBtn.textContent = "Start Point";
     }
 }
 
@@ -840,6 +891,8 @@ document.getElementById('startGameOnDBtn').addEventListener('click', function() 
 function moveToNextPoint() {
     updateActivePlayersList();
     logEvent("New point started");
+    // make contiueGameBtn active to enable changing roster between points
+    document.getElementById('continueGameBtn').classList.remove('inactive');
     showScreen('beforePointScreen');
     checkPlayerCount();  // to update the "Start Point" button style
     makeColumnsSticky(); // once the table is rendered, make the left columns sticky
@@ -1035,7 +1088,10 @@ function updateOffensivePossessionScreen() {
 function displayOPlayerButtons() {
     // throw an error if there is no current point
     if (!currentPoint) {
-        throw new Error("No current point");
+        currentPoint = getLatestPoint();
+        if (!currentPoint) { 
+            throw new Error("No current point");
+        }
     }
     let activePlayers = currentPoint.players; // Holds the names of active players
 
@@ -1328,7 +1384,6 @@ document.querySelectorAll('.main-action-btn').forEach(btn => {
 });
 
 
-
 /******************************************************************************/
 /**************************** Defense play-by-play ****************************/
 /******************************************************************************/
@@ -1349,7 +1404,10 @@ function updateDefensivePossessionScreen() {
 function displayDPlayerButtons() {
     // throw an error if there is no current point
     if (!currentPoint) {
-        throw new Error("No current point");
+        currentPoint = getLatestPoint();
+        if (!currentPoint) { 
+            throw new Error("No current point");
+        }
     }
     let activePlayers = currentPoint.players; // Holds the names of active players
 
@@ -1634,7 +1692,19 @@ document.getElementById('halftimeBtn').addEventListener('click', function() {
     logEvent(currentEvent.summarize());
 });
 
-
+// Event listener for adjust roster buttons
+document.getElementById('oSubPlayersBtn').addEventListener('click', function() {
+    updateActivePlayersList();
+    showScreen('beforePointScreen');
+    // enable the "continue game" button
+    document.getElementById('continueGameBtn').classList.remove('inactive');
+});
+document.getElementById('dSubPlayersBtn').addEventListener('click', function() {
+    updateActivePlayersList();
+    showScreen('beforePointScreen');
+    // enable the "continue game" button
+    document.getElementById('continueGameBtn').classList.remove('inactive');
+});
 /******************************************************************************/
 /**************************** Game summary & stats ****************************/
 /******************************************************************************/
