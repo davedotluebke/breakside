@@ -1632,6 +1632,58 @@ function undoEvent() {
 document.getElementById('undoBtn').addEventListener('click', undoEvent);
 
 /******************************************************************************/
+/********************************** Send Audio  *******************************/
+/******************************************************************************/
+
+let mediaRecorder;
+let audioChunks = [];
+
+navigator.mediaDevices.getUserMedia({ audio: true })
+.then(stream => {
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = event => {
+        audioChunks.push(event.data);
+    };
+    document.getElementById('sendAudioBtn').onclick = () => {
+        if (mediaRecorder.state === "recording") {
+            mediaRecorder.stop();
+            document.getElementById('sendAudioBtn').textContent = 'Send Audio';
+        } else {
+            audioChunks = [];
+            mediaRecorder.start();
+            document.getElementById('sendAudioBtn').textContent = 'Stop and Send';
+        }
+    };
+    mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunks, { 'type' : 'audio/ogg; codecs=opus' });
+        ws.send(audioBlob);
+    };
+})
+.catch(error => {
+    console.error('Error accessing the microphone:', error);
+});
+
+
+
+const ws = new WebSocket('ws://3.212.138.180:7538/audio_stream');
+
+ws.onopen = () => {
+    console.log('WebSocket connection established');
+};
+
+ws.onclose = () => {
+    console.log('WebSocket closed');
+};
+
+ws.onerror = error => {
+    console.error('WebSocket error:', error);
+};
+
+ws.onmessage = event => {
+    console.log('Message from server:', event.data);
+};
+
+/******************************************************************************/
 /********************************** Game Events *******************************/
 /******************************************************************************/
 document.getElementById('endGameBtn').addEventListener('click', function() {
