@@ -1634,37 +1634,113 @@ document.getElementById('undoBtn').addEventListener('click', undoEvent);
 /******************************************************************************/
 /********************************** Send Audio  *******************************/
 /******************************************************************************/
+const OPENAI_API_KEY = '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'; // XXX move this out of client code later for security
 
 let mediaRecorder;
 let audioChunks = [];
+let isRecording = false;
+
+const TRANSCRIPTION_API_URL = 'https://api.openai.com/v1/audio/transcriptions';
+const CHAT_COMPLETION_API_URL = 'https://api.openai.com/v1/completions';
+const WHISPER_MODEL = 'whisper-1'; // Replace with the actual model name if different
+const GPT_MODEL = 'gpt-4o'; // Replace with the actual model name if different
 
 navigator.mediaDevices.getUserMedia({ audio: true })
-.then(stream => {
-    mediaRecorder = new MediaRecorder(stream);
-    mediaRecorder.ondataavailable = event => {
-        audioChunks.push(event.data);
-    };
-    document.getElementById('sendAudioBtn').onclick = () => {
-        if (mediaRecorder.state === "recording") {
-            mediaRecorder.stop();
-            document.getElementById('sendAudioBtn').textContent = 'Send Audio';
+    .then(stream => {
+        if (MediaRecorder.isTypeSupported('audio/webm; codecs=opus')) {
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
         } else {
-            audioChunks = [];
-            mediaRecorder.start();
-            document.getElementById('sendAudioBtn').textContent = 'Stop and Send';
+            // Fallback to default format
+            console.log('Requested MIME format unsupported by MediaRecorder; using default audio format');
+            mediaRecorder = new MediaRecorder(stream);
         }
-    };
-    mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { 'type' : 'audio/ogg; codecs=opus' });
-        ws.send(audioBlob);
-    };
-})
-.catch(error => {
-    console.error('Error accessing the microphone:', error);
-});
+        mediaRecorder.ondataavailable = event => {
+            console.log('Received audio chunk with size:', event.data.size, 'bytes');
+            audioChunks.push(event.data);
+        };
+
+        document.getElementById('sendAudioBtn').onclick = () => {
+            if (isRecording) {
+                console.log('Stopping recording');
+                mediaRecorder.stop();
+                document.getElementById('sendAudioBtn').textContent = 'Send Audio';
+                isRecording = false;
+            } else {
+                console.log('Starting recording');
+                audioChunks = [];
+                mediaRecorder.start(1000);  // Set timeslice to 1000 milliseconds
+                isRecording = true;
+                document.getElementById('sendAudioBtn').textContent = 'Stop and Send';
+                processAudioChunks();
+            }
+        };
+    })
+    .catch(error => {
+        console.error('Error accessing the microphone:', error);
+    });
+
+async function processAudioChunks() {
+    console.log('Processing audio chunks');
+    while (isRecording) {
+        console.log('Checking for audio chunks');
+        if (audioChunks.length > 0) {
+            const audioBlob = new Blob(audioChunks.splice(0), { type: 'audio/webm; codecs=opus' });
+            console.log('Sending audio chunk with size:', audioBlob.size, 'bytes');
+            await sendAudioChunk(audioBlob);
+        } else {
+            await new Promise(resolve => setTimeout(resolve, 200)); // Wait for more audio chunks
+        }
+    }
+}
+
+async function sendAudioChunk(audioBlob) {
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'audio.webm');
+    formData.append('model', WHISPER_MODEL);
+
+    try {
+        // Send to OpenAI Whisper API
+        const transcriptionResponse = await fetch(TRANSCRIPTION_API_URL, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`
+            },
+            body: formData
+        });
+        if (!transcriptionResponse.ok) {
+            throw new Error(`Error: ${transcriptionResponse.statusText}`);
+        }
+        const transcriptionData = await transcriptionResponse.json();
+        const transcriptionText = transcriptionData.text;
+
+        console.log('Transcription:', transcriptionText);
+/*
+        // Send transcription to GPT-4o for event generation
+        const gptResponse = await fetch(CHAT_COMPLETION_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: GPT_MODEL,
+                prompt: transcriptionText,
+                max_tokens: 100, // Adjust as needed
+                temperature: 0.7
+            })
+        });
+        const gptData = await gptResponse.json();
+        const events = gptData.choices[0].text;
+
+        console.log('Events:', events);
+*/
+    } catch (error) {
+        console.error('Error during audio processing:', error);
+    }
+}
 
 
-
+/* 
 const ws = new WebSocket('ws://3.212.138.180:7538/audio_stream');
 
 ws.onopen = () => {
@@ -1682,7 +1758,7 @@ ws.onerror = error => {
 ws.onmessage = event => {
     console.log('Message from server:', event.data);
 };
-
+ */
 /******************************************************************************/
 /********************************** Game Events *******************************/
 /******************************************************************************/

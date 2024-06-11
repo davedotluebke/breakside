@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Transcription</title>
+</head>
+<body>
+    <button id="startButton">Start Recording</button>
+    <button id="stopButton" disabled>Stop Recording</button>
+    <input type="file" id="fileInput" accept="audio/*">
+    <button id="streamFromFileButton">Stream Audio from File</button>
+
+    <div id="transcriptions"></div>
+    <div>
+        <h2>Segments</h2>
+        <ul id="segmentsList"></ul>
+    </div>
+
+    <script>
+        const apiKey = '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'; // Replace with your actual API key
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const transcriptions = document.getElementById('transcriptions');
+        const segmentsList = document.getElementById('segmentsList');
+        let mediaRecorder;
+        let audioChunks = [];
+        let completeAudioChunks = [];
+        let previousResponse = null;
+
+        startButton.addEventListener('click', async () => {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            
+            mediaRecorder.ondataavailable = event => {
+                audioChunks.push(event.data);
+                completeAudioChunks.push(event.data);  // Append to complete audio chunks
+                sendAudioChunk(completeAudioChunks);  // Send the combined audio chunk
+            };
+            
+            mediaRecorder.start(5000); // Record in 5-second chunks
+            startButton.disabled = true;
+            stopButton.disabled = false;
+        });
+
+        stopButton.addEventListener('click', () => {
+            mediaRecorder.stop();
+            startButton.disabled = false;
+            stopButton.disabled = true;
+        });
+
+        streamFromFileButton.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select a file first.');
+                return;
+            }
+
+            const audioContext = new AudioContext();
+            const audioElement = new Audio();
+            const fileReader = new FileReader();
+
+            fileReader.onload = async () => {
+                const arrayBuffer = fileReader.result;
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                const duration = audioBuffer.duration;
+                const chunkSize = 5; // seconds
+                let startTime = 0;
+
+                while (startTime < duration) {
+                    const endTime = Math.min(startTime + chunkSize, duration);
+                    const chunkLength = Math.ceil((endTime - startTime) * audioBuffer.sampleRate);
+                    const chunk = audioContext.createBuffer(1, chunkLength, audioBuffer.sampleRate);
+                    chunk.getChannelData(0).set(audioBuffer.getChannelData(0).slice(startTime * audioBuffer.sampleRate, endTime * audioBuffer.sampleRate));
+                    
+                    const source = audioContext.createBufferSource();
+                    source.buffer = chunk;
+                    source.connect(audioContext.destination);
+                    source.start();
+
+                    mediaRecorder = audioContext.createMediaStreamDestination();
+                    source.connect(mediaRecorder);
+
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                        completeAudioChunks.push(event.data);  // Append to complete audio chunks
+                        sendAudioChunk(completeAudioChunks);  // Send the combined audio chunk
+                    };
+
+                    await new Promise(resolve => setTimeout(resolve, (endTime - startTime) * 1000)); // Wait for chunk to finish
+                    startTime = endTime;
+                }
+
+
+                startButton.disabled = true;
+                stopButton.disabled = false;
+            };
+
+            fileReader.readAsArrayBuffer(file);
+        });
+
+
+        async function sendAudioChunk(chunks) {
+            const blob = new Blob(chunks, { type: 'audio/webm' });
+            const formData = new FormData();
+            formData.append('file', blob, 'audio.webm');
+            formData.append('model', 'whisper-1');
+            formData.append('response_format', 'verbose_json');
+            formData.append('timestamp_granularities[]', 'segment');
+            formData.append('prompt', 'Narration of an ultimate frisbee game. Players: "Cyrus L" or "Cyrus Luebke","Leif","Cesc","Cyrus J" or "Cyrus Jackson","Abby","Avery","James","Simeon","Soren","Walden"');
+
+            console.log('Sending audio chunk...');
+            try {
+                const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                    },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok ' + response.statusText);
+                }
+
+                const data = await response.json();
+                const transcription = document.createElement('p');
+                transcription.textContent = data.text;
+                transcriptions.innerHTML = '';  // Clear previous transcriptions
+                transcriptions.appendChild(transcription);
+
+                // Clear previous segments and display new segments
+                segmentsList.innerHTML = '';
+
+                if (previousResponse) {
+                    previousResponse.segments.forEach(segment => {
+                        const listItem = document.createElement('li');
+                        listItem.textContent = segment.text;
+                        segmentsList.appendChild(listItem);
+                    });
+                }
+                previousResponse = data;
+
+            } catch (error) {
+                console.error('There was a problem with the fetch operation:', error);
+            }
+
+            // get events from text and display in own section after the segements as ordered list
+            const events = await generateEventsFromText(previousResponse.text);
+            const eventsList = document.createElement('ol');
+            eventsList.innerHTML = events;
+            segmentsList.insertAdjacentElement('afterend', eventsList);           
+        }
+        async function generateEventsFromText(text) {
+            const model = 'gpt-4o'; 
+
+            // text = "Alright, Cyrus picks up the disc and throws it to Avery, Avery to Cesc, Cesc throws it to James, and James throws a break mark hammer to Cyrus Jackson for the score.";
+            try {
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`,
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [
+                            {"role": "system", 
+                            "content": "You are collecting statistics for a game of ultimate frisbee. " +
+                                "Convert the following transcription of a sports commentator's narration " +
+                                "of the game into a terse list of one-sentence discrete game events. Here " +
+                                "are the names of the players: " +
+                                "Cyrus Luebke (aka Cyrus L), Leif, Cesc, Cyrus J (aka Cyrus J), Abby, Avery, James, Simeon, Soren, Walden. " +
+                                "The transcription is as follows: "
+                            },
+                            {"role": "user", "content": text}
+                        ]
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok ' + response.statusText);
+                }
+
+                const data = await response.json();
+                const events = data.choices[0].message.content;
+                return events;
+            } catch (error) {
+                console.error('There was a problem with the fetch operation:', error);
+                return null;
+            }
+        }
+    </script>
+</body>
+</html>
