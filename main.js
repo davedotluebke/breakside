@@ -510,6 +510,23 @@ function getActivePossession(activePoint) {
     return activePoint.possessions[activePoint.possessions.length - 1];
 }
 
+// Helper function to calculate player's time in current game
+function getPlayerGameTime(playerName) {
+    let totalTime = 0;
+    if (currentGame()) {
+        currentGame().points.forEach(point => {
+            if (point.players.includes(playerName)) {
+                if (point.endTimestamp) {
+                    totalTime += point.endTimestamp - point.startTimestamp;
+                } else if (point.startTimestamp) {
+                    totalTime += (new Date()) - point.startTimestamp;
+                }
+            }
+        });
+    }
+    return totalTime;
+}
+
 // print playing time in mm:ss format
 function formatPlayTime(totalTimePlayed) {
     const timeDifferenceInMilliseconds = totalTimePlayed;
@@ -842,6 +859,7 @@ function togglePlayerStats() {
     document.getElementById('statsToggle').textContent = showingTotalStats ? '(Total)' : '(Game)';
     updateActivePlayersList();  // Refresh the display with new stats
 }
+document.getElementById('statsToggle').addEventListener('click', togglePlayerStats);
 
 // Adjust Roster button returns to the "Team Roster Screen" and enables "Continue Game" button
 document.getElementById('adjustRosterBtn').addEventListener('click', function() {
@@ -917,31 +935,33 @@ function updateActivePlayersList() {
         return a.name.localeCompare(b.name);
     });
 
-    // Add player rows
+    // When creating the table header and populating player rows, 
+    // use either game-specific or total stats based on showingTotalStats
     currentTeam.teamRoster.forEach(player => {
         const row = document.createElement('tr');
-
-        // Checkbox cell
-        let checkboxCell = document.createElement('td');
+        
+        // Add checkbox column
+        const checkboxCell = document.createElement('td');
         checkboxCell.classList.add('active-checkbox-column');
-        let checkbox = document.createElement('input');
+        const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        if (lastPointPlayers.includes(player.name)) {
-            checkbox.checked = true;
-        }
         checkboxCell.appendChild(checkbox);
         row.appendChild(checkboxCell);
 
-        // Player name cell
-        let nameCell = document.createElement('td');
+        // Add name column
+        const nameCell = document.createElement('td');
         nameCell.classList.add('active-name-column');
         nameCell.textContent = player.name;
         row.appendChild(nameCell);
 
-        // Player time cell
-        let timeCell = document.createElement('td');
+        // Add time column - either game or total stats
+        const timeCell = document.createElement('td');
         timeCell.classList.add('active-time-column');
-        timeCell.textContent = formatPlayTime(player.totalTimePlayed);
+        if (showingTotalStats) {
+            timeCell.textContent = formatPlayTime(player.totalTimePlayed);
+        } else {
+            timeCell.textContent = formatPlayTime(getPlayerGameTime(player.name));
+        }
         row.appendChild(timeCell);
 
         // Points data cells
