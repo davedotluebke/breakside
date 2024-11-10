@@ -707,6 +707,12 @@ document.getElementById('continueGameBtn').addEventListener('click', function() 
     }
 });
 
+// UI: Add a download button to save team data from the roster screen
+document.getElementById('downloadTeamBtn').addEventListener('click', function() {
+    const teamData = serializeTeam(currentTeam);
+    downloadJSON(teamData, `${currentTeam.name}_roster.json`);
+});
+
 // UI: Restore team data from local storage
 document.getElementById('restoreGamesBtn').addEventListener('click', function() {
     loadTeams();
