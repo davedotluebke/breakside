@@ -898,7 +898,6 @@ function checkPlayerCount() {
     function capitalize(word) {
         return word.charAt(0).toUpperCase() + word.slice(1);
     }
-
 }
 
 // Starting a new game, on O or D
