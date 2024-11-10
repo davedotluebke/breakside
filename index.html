@@ -14,6 +14,15 @@
     </header>
 
     <!-- Select Your Team Screen -->
+        <!-- Add this modal inside the body tag -->
+    <div id="createTeamModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Create New Team</h2>
+            <input type="text" id="newTeamNameInput" placeholder="Enter team name" />
+            <button id="saveNewTeamBtn">Save</button>
+        </div>
+    </div>
     <section id="selectTeamScreen" style="display: none;">
         <h2>Select Your Team</h2>
         <div id="teamListWarning" class="warning-box" style="display: none;">
@@ -22,13 +31,16 @@
         <ul id="teamList">
             <!-- Dynamically populated list of teams -->
         </ul>
+        <!-- Buttons to load a team from file or create a new one -->
+        <input type="file" id="fileInput" accept=".json" style="display: none;">
+        <button id="loadTeamBtn">Load Team</button>
         <button id="createNewTeamBtn">Create New Team</button>
         <button id="backToRosterScreenBtn">Back</button>
     </section>
 
     <!-- Team Roster Screen -->
     <section id="teamRosterScreen"> 
-        <h2>Team Roster</h2>
+        <h2 id="teamRosterHeader">Team Roster</h2>
         <table>
             <thead>
                 <tr>

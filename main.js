@@ -447,14 +447,15 @@ function getPlayerFromName(playerName) {
 // Get the current game
 function currentGame() {
     if (currentTeam.games.length === 0) {
-        throw new Error("No current game");
+        console.log("Warning: No current game");
+        return null;
     }
     return currentTeam.games[currentTeam.games.length - 1];
 }
 
 // Return the most recent point, or null if no points yet
 function getLatestPoint() {
-    if (currentGame().points.length === 0) { return null; }
+    if (!currentGame() || currentGame().points.length === 0) { return null; }
     return currentGame().points[currentGame().points.length - 1];
 }
 
@@ -548,6 +549,30 @@ function showSelectTeamScreen(firsttime = false) {
     showScreen('selectTeamScreen');
 }
 
+// Load team data from a file
+document.getElementById('loadTeamBtn').onclick = () => {
+    document.getElementById('fileInput').click();
+};
+document.getElementById('fileInput').addEventListener('change', function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const jsonData = JSON.parse(e.target.result);
+            // deserialize the JSON data and appent to the current team data
+            let newTeam = deserializeSingleTeam(jsonData);
+            teams.push(newTeam);
+            currentTeam = newTeam;
+            updateTeamRosterDisplay();
+            showSelectTeamScreen();
+        } catch (error) {
+            console.error("Error parsing JSON:", error);
+        }
+    };
+    reader.readAsText(file);
+});
 // Handle team selection
 function selectTeam(index) {
     currentTeam = teams[index]; // assumes teams global already populated
@@ -557,11 +582,37 @@ function selectTeam(index) {
 
 // Event listeners for relevant  buttons
 document.getElementById('switchTeamsBtn').addEventListener('click', showSelectTeamScreen);
+// Show the modal when the "Create New Team" button is clicked
 document.getElementById('createNewTeamBtn').addEventListener('click', () => {
-    currentTeam = new Team(); // Create a new empty team
-    teams.push(currentTeam); // Add it to the teams array
-    updateTeamRosterDisplay(); // Update the display
-    showScreen('teamRosterScreen'); // Return to the roster screen
+    document.getElementById('createTeamModal').style.display = 'block';
+});
+
+// Close the modal when the close button is clicked
+document.querySelector('.close').addEventListener('click', () => {
+    document.getElementById('createTeamModal').style.display = 'none';
+});
+
+// Save the new team when the "Save" button is clicked
+document.getElementById('saveNewTeamBtn').addEventListener('click', () => {
+    const newTeamName = document.getElementById('newTeamNameInput').value.trim();
+    if (newTeamName) {
+        const newTeam = new Team(newTeamName);
+        teams.push(newTeam);
+        currentTeam = newTeam;
+        updateTeamRosterDisplay();
+        showScreen('teamRosterScreen');
+        document.getElementById('createTeamModal').style.display = 'none';
+    } else {
+        alert('Please enter a team name.');
+    }
+});
+
+// Close the modal if the user clicks outside of it
+window.addEventListener('click', (event) => {
+    const modal = document.getElementById('createTeamModal');
+    if (event.target === modal) {
+        modal.style.display = 'none';
+    }
 });
 document.getElementById('backToRosterScreenBtn').addEventListener('click', () => {
     showScreen('teamRosterScreen'); // Return to the roster screen
@@ -576,6 +627,12 @@ document.getElementById('backToRosterScreenBtn').addEventListener('click', () =>
 
 // Updates the displayed roster on the "Team Roster Screen"
 function updateTeamRosterDisplay() {
+    const teamRosterHeader = document.getElementById('teamRosterHeader');
+    if (currentTeam && currentTeam.name) {
+        teamRosterHeader.textContent = `Roster: ${currentTeam.name}`;
+    } else {
+        teamRosterHeader.textContent = 'Team Roster';
+    }
     const rosterElement = document.getElementById('rosterList');
     rosterElement.innerHTML = '';  // Clear existing rows
 
@@ -606,6 +663,7 @@ function updateTeamRosterDisplay() {
     });
 }
 updateTeamRosterDisplay();
+
 
 // UI: Handle player addition to teamRoster
 const playerNameInput = document.getElementById('newPlayerInput');
@@ -848,6 +906,7 @@ function makeColumnsSticky() {
 
 // return the starting position for the next point, based on points played so far
 function determineStartingPosition() {
+    if (! currentGame()) { console.log("Warning: No current game"); return 'offense'; }
     let startPointOn = currentGame().startingPosition;
     currentGame().points.forEach(point => {
         let switchsides = false; // flag to indicate if O and D switch sides after this point
