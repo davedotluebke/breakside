@@ -411,8 +411,8 @@ function deserializeSingleTeam(data) {
     return team;
 }
 
+// load teams from local storage or create a sample team
 function initializeTeams() {
-    // load teams from local storage or create a sample team
     loadTeams({ silent: true })
     if (teams.length === 0) {
         const sampleNames = ["Cyrus L","Leif","Cesc","Cyrus J","Abby","Avery","James","Simeon","Soren","Walden"];
@@ -433,6 +433,8 @@ initializeTeams();              // Load teams from local storage or create a sam
 let currentPoint = null;        // This will hold the current point being played
 let currentEvent = null;        // ...the current event taking place in the current possession
 let currentPlayer = null;       // ...the current player with the disc
+
+let showingTotalStats = false;  // true if showing total stats, false if showing game stats
 
 
 /* 
@@ -532,20 +534,97 @@ function showSelectTeamScreen(firsttime = false) {
     const teamListWarning = document.getElementById('teamListWarning');
     teamListElement.innerHTML = ''; // Clear current list
 
-    // assume teams global already populated
     if (teams.length === 0 || teams.length === 1 && teams[0].name === "Sample Team") {
-        teamListWarning.style.display = 'block'; // Show warning if no teams are found
+        teamListWarning.style.display = 'block';
     } else {
-        teamListWarning.style.display = 'none'; // Hide warning otherwise
+        teamListWarning.style.display = 'none';
     }
 
-    teams.forEach((team, index) => {
-        let teamItem = document.createElement('li');
-        teamItem.textContent = team.name;
-        teamItem.onclick = () => selectTeam(index);
-        teamListElement.appendChild(teamItem);
+    // Create a table instead of a simple list
+    const table = document.createElement('table');
+    table.classList.add('team-selection-table');
+
+    teams.forEach((team, teamIndex) => {
+        // Create team row
+        const teamRow = document.createElement('tr');
+        teamRow.classList.add('team-row');
+        
+        // Team name cell
+        const teamNameCell = document.createElement('td');
+        teamNameCell.textContent = team.name;
+        teamNameCell.classList.add('team-name');
+        teamNameCell.onclick = () => selectTeam(teamIndex);
+        teamRow.appendChild(teamNameCell);
+
+        // Games list cell
+        const gamesCell = document.createElement('td');
+        const gamesList = document.createElement('ul');
+        gamesList.classList.add('games-list');
+
+        team.games.forEach((game, gameIndex) => {
+            const gameItem = document.createElement('li');
+            
+            // Game description
+            const gameText = document.createElement('span');
+            gameText.textContent = `vs ${game.opponent} (${game.scores[Role.TEAM]}-${game.scores[Role.OPPONENT]})`;
+            if (!game.gameEndTimestamp) {
+                gameText.textContent += ' [In Progress]';
+            }
+            gameItem.appendChild(gameText);
+
+            // Resume game button
+            if (!game.gameEndTimestamp) {
+                const resumeBtn = document.createElement('button');
+                resumeBtn.textContent = '↪️';
+                resumeBtn.classList.add('icon-button');
+                resumeBtn.title = 'Resume Game';
+                resumeBtn.onclick = (e) => {
+                    e.stopPropagation(); // Prevent triggering team selection
+                    if (confirm('Resume this game?')) {
+                        currentTeam = team;
+                        // Resume game logic - determine which screen to show
+                        if (isPointInProgress()) {
+                            const latestPossession = getLatestPossession();
+                            if (latestPossession.offensive) {
+                                updateOffensivePossessionScreen();
+                                showScreen('offensePlayByPlayScreen');
+                            } else {
+                                updateDefensivePossessionScreen();
+                                showScreen('defensePlayByPlayScreen');
+                            }
+                        } else {
+                            updateActivePlayersList();
+                            showScreen('beforePointScreen');
+                        }
+                    }
+                };
+                gameItem.appendChild(resumeBtn);
+            }
+
+            // Delete game button
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = '🗑️';
+            deleteBtn.classList.add('icon-button');
+            deleteBtn.title = 'Delete Game';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation(); // Prevent triggering team selection
+                if (confirm('Delete this game? This cannot be undone.')) {
+                    team.games.splice(gameIndex, 1);
+                    showSelectTeamScreen(); // Refresh the screen
+                    saveAllTeamsData(); // Save the updated data
+                }
+            };
+            gameItem.appendChild(deleteBtn);
+
+            gamesList.appendChild(gameItem);
+        });
+
+        gamesCell.appendChild(gamesList);
+        teamRow.appendChild(gamesCell);
+        table.appendChild(teamRow);
     });
 
+    teamListElement.appendChild(table);
     showScreen('selectTeamScreen');
 }
 
@@ -756,6 +835,13 @@ document.getElementById('clearGamesBtn').addEventListener('click', function() {
  *   SELECT PLAYERS TABLE 
  * 
  ************************************************************************/
+
+// Toggle between showing total stats and game stats on the "Select Active Players" table
+function togglePlayerStats() {
+    showingTotalStats = !showingTotalStats;
+    document.getElementById('statsToggle').textContent = showingTotalStats ? '(Total)' : '(Game)';
+    updateActivePlayersList();  // Refresh the display with new stats
+}
 
 // Adjust Roster button returns to the "Team Roster Screen" and enables "Continue Game" button
 document.getElementById('adjustRosterBtn').addEventListener('click', function() {
