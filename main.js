@@ -846,6 +846,29 @@ function makeColumnsSticky() {
     tableContainer.scrollLeft = tableContainer.scrollWidth;
 }
 
+// return the starting position for the next point, based on points played so far
+function determineStartingPosition() {
+    let startPointOn = currentGame().startingPosition;
+    currentGame().points.forEach(point => {
+        let switchsides = false; // flag to indicate if O and D switch sides after this point
+        point.possessions.forEach(possession => {
+            possession.events.forEach(event => {
+                if (event.type === 'Other' && event.switchsides_flag) {
+                    switchsides = !switchsides;
+                }
+            });
+        });
+        if (point.winner == 'team') {
+            // if the team won the last point, they will start on defense unless switchsides is true
+            startPointOn = switchsides ? 'offense' : 'defense';
+        } else {
+            //  the opponent won the last point, our team will start on offense unless switchsides is true
+            startPointOn = switchsides ? 'defense' : 'offense';
+        }
+    });
+    return startPointOn;
+}
+
 // Show start/continue-point button with warning style if wrong # of players selected
 function checkPlayerCount() {
     const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
@@ -866,6 +889,16 @@ function checkPlayerCount() {
     } else {
         startPointBtn.textContent = "Start Point";
     }
+        
+    // Append "(Offense)" or "(Defense)" based on the next point 
+    let startPointOn = determineStartingPosition();
+    startPointBtn.textContent += ` (${capitalize(startPointOn)})`;
+
+    // Helper function to capitalize the first letter of a string
+    function capitalize(word) {
+        return word.charAt(0).toUpperCase() + word.slice(1);
+    }
+
 }
 
 // Starting a new game, on O or D
@@ -914,24 +947,7 @@ function startNextPoint() {
     });
 
     // determine starting position: check point winners and switchside events 
-    let startPointOn = currentGame().startingPosition;
-    currentGame().points.forEach(point => {
-        let switchsides = false;  // flag to indicate if O and D switch sides after this point
-        point.possessions.forEach(possession => {
-            possession.events.forEach(event => {
-                if (event.type === 'Other' && event.switchsides_flag) {
-                    switchsides = !switchsides;
-                }
-            })
-        })
-        if (point.winner == 'team') {
-            // if the team won the last point, they will start on defense unless switchsides is true
-            startPointOn = switchsides ? 'offense' : 'defense';
-        } else {  
-            //  the opponent won the last point, our team will start on offense unless switchsides is true
-            startPointOn = switchsides ? 'defense' : 'offense';
-        }   
-    });
+    let startPointOn = determineStartingPosition();
 
     // Create a new Point with the active players and starting position
     // Don't set the winning team yet
