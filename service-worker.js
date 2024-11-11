@@ -23,5 +23,30 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', e => {
     console.log('Service Worker: Fetching');
-    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+    e.respondWith(
+        Promise.race([
+            // Try network first
+            fetch(e.request)
+                .then(networkResponse => {
+                    // Clone the response before caching it
+                    const responseClone = networkResponse.clone();
+                    caches.open(cacheName)
+                        .then(cache => {
+                            cache.put(e.request, responseClone);
+                        });
+                    return networkResponse;
+                }),
+            // Timeout after 5 seconds
+            new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Timeout')), 5000);
+            })
+        ])
+        .catch(() => {
+            // If network fails or times out, try cache
+            return caches.match(e.request)
+                .then(cacheResponse => {
+                    return cacheResponse || Promise.reject('No cached response found');
+                });
+        })
+    );
 });
