@@ -64,7 +64,7 @@ button.inactive {
 
 .warning-box {
     border: 1px solid #d9534f; /* Bootstrap's warning color */
-    background-color: #f2dede;
+    background-color: #fffb00;
     color: #a94442;
     padding: 10px;
     margin-bottom: 10px;
