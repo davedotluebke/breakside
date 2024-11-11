@@ -627,6 +627,9 @@ function showSelectTeamScreen(firsttime = false) {
             deleteBtn.onclick = (e) => {
                 e.stopPropagation(); // Prevent triggering team selection
                 if (confirm('Delete this game? This cannot be undone.')) {
+                    // Remove player stats from this game
+                    removeGameStatsFromRoster(team, game);
+                    // Remove the game
                     team.games.splice(gameIndex, 1);
                     showSelectTeamScreen(); // Refresh the screen
                     saveAllTeamsData(); // Save the updated data
@@ -644,6 +647,34 @@ function showSelectTeamScreen(firsttime = false) {
 
     teamListElement.appendChild(table);
     showScreen('selectTeamScreen');
+}
+
+function removeGameStatsFromRoster(team, game) {
+    // Get all points from the game
+    const points = game.points || [];
+    
+    // For each point
+    points.forEach(point => {
+        // Get the duration of the point
+        const pointDuration = (point.endTimestamp || point.startTimestamp) - point.startTimestamp;
+        
+        // Subtract time and point from each player who was on the field
+        point.players.forEach(playerName => {
+            const player = getPlayerFromName(playerName);
+            if (player) {
+                // Decrement total points played
+                player.totalPointsPlayed = Math.max(0, (player.totalPointsPlayed || 0) - 1);
+                
+                // Subtract time played
+                player.totalTimePlayed = Math.max(0, (player.totalTimePlayed || 0) - pointDuration);
+                
+                // If this was their most recent game, reset consecutive points
+                if (game === team.games[team.games.length - 1]) {
+                    player.consecutivePointsPlayed = 0;
+                }
+            }
+        });
+    });
 }
 
 // Load team data from a file
