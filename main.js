@@ -57,6 +57,7 @@ function Player(name, nickname = "") {
     this.nickname = nickname;
     this.totalPointsPlayed = 0;
     this.consecutivePointsPlayed = 0;
+    this.pointsPlayedPreviousGames = 0;
     this.totalTimePlayed = 0;  // in milliseconds
     this.completedPasses = 0;
     this.turnovers = 0;
@@ -855,9 +856,28 @@ document.getElementById('clearGamesBtn').addEventListener('click', function() {
 
 // Toggle between showing total stats and game stats on the "Select Active Players" table
 function togglePlayerStats() {
+    // Store current checkbox states before updating
+    const checkboxStates = {};
+    document.querySelectorAll('#activePlayersTable input[type="checkbox"]').forEach((checkbox, index) => {
+        const playerName = currentTeam.teamRoster[index].name;
+        checkboxStates[playerName] = checkbox.checked;
+    });
+
+    // Toggle stats display
     showingTotalStats = !showingTotalStats;
     document.getElementById('statsToggle').textContent = showingTotalStats ? '(Total)' : '(Game)';
-    updateActivePlayersList();  // Refresh the display with new stats
+    
+    // Update the display
+    updateActivePlayersList();
+
+    // Restore checkbox states
+    document.querySelectorAll('#activePlayersTable input[type="checkbox"]').forEach((checkbox, index) => {
+        const playerName = currentTeam.teamRoster[index].name;
+        checkbox.checked = checkboxStates[playerName];
+    });
+
+    // Make sure the Start Point button state is correct
+    checkPlayerCount();
 }
 document.getElementById('statsToggle').addEventListener('click', togglePlayerStats);
 
@@ -881,7 +901,7 @@ function updateActivePlayersList() {
     let teamScoreRow = document.createElement('tr');
     let opponentScoreRow = document.createElement('tr');
 
-    // Function to add cells to the score rows
+    // Add cells to the score rows
     const addScoreCells = (row, teamName, scores) => {
         let nameCell = document.createElement('th');
         nameCell.textContent = teamName;
@@ -945,6 +965,7 @@ function updateActivePlayersList() {
         checkboxCell.classList.add('active-checkbox-column');
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
+        checkbox.checked = lastPointPlayers.includes(player.name);  // Use the existing lastPointPlayers list
         checkboxCell.appendChild(checkbox);
         row.appendChild(checkboxCell);
 
@@ -965,18 +986,18 @@ function updateActivePlayersList() {
         row.appendChild(timeCell);
 
         // Points data cells
-        let runningPointTotal = 0;
+        // If showing total stats, add points from previous games
+        let runningPointTotal = showingTotalStats ? player.pointsPlayedPreviousGames : 0;
         currentGame().points.forEach(point => {
             let pointCell = document.createElement('td');
             pointCell.classList.add('active-points-columns');
 
             if (point.players.includes(player.name)) {
                 runningPointTotal++;
-                pointCell.textContent = runningPointTotal.toString();
+                pointCell.textContent = `${runningPointTotal}`;
             } else {
                 pointCell.textContent = '-';
             }
-
             row.appendChild(pointCell);
         });
 
@@ -1076,6 +1097,10 @@ function startNewGame(startingPosition) {
     const opponentNameInput = document.getElementById('opponentNameInput');
     const opponentName = opponentNameInput.value.trim() || "Bad Guys";
 
+    // Store current totalPointsPlayed into pointsPlayedPreviousGames for each player
+    currentTeam.teamRoster.forEach(player => {
+        player.pointsPlayedPreviousGames = player.totalPointsPlayed;
+    });
     let newGame = new Game(currentTeam.name, opponentName, startingPosition);
     currentTeam.games.push(newGame);
     logEvent(`New game started against ${opponentName}`);
@@ -1146,6 +1171,10 @@ function updateScore(winner) {
     }
 
     if (currentPoint) {
+        if (currentPoint.startTimestamp === null) {
+            console.log("Warning: currentPoint.startTimestamp is null; setting to now");
+            currentPoint.startTimestamp = new Date();
+        }
         currentPoint.endTimestamp = new Date();
         currentPoint.winner = winner; // Setting the winning team for the current point
         currentGame().scores[winner]++;
