@@ -181,7 +181,17 @@
     <!-- Undo + Event Log Panel, only visible on in-game screens -->
     <footer id="bottomPanel">
         <button id="undoBtn">Undo</button>
-        <button id="sendAudioBtn">Send Audio</button>
+        <div id="audioControls">
+            <button id="startNarrationBtn">
+                <i class="fas fa-microphone"></i> Start Narration
+            </button>
+            <div id="audioStatus" style="display: none;">
+                <span id="audioStatusText">Listening...</span>
+                <div class="audio-level-indicator">
+                    <div class="level-bar"></div>
+                </div>
+            </div>
+        </div>
         <span id="toggleEventLogSpan">Play-by-play <span id="toggleEventLogIcon">[+]</span></span>
         <textarea id="eventLog" readonly></textarea>
     </footer>

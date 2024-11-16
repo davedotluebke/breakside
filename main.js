@@ -1,3 +1,5 @@
+// import AudioNarrationService from './audioNarration.js';
+
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker
@@ -50,6 +52,9 @@ const Role = {
     TEAM: "team",
     OPPONENT: "opponent",
 };
+
+const UNKNOWN_PLAYER = "Unknown Player";
+const UNKNOWN_PLAYER_OBJ = new Player(UNKNOWN_PLAYER);  // Single reusable instance
 
 // Player data structure
 function Player(name, nickname = "") {
@@ -444,6 +449,9 @@ let showingTotalStats = false;  // true if showing total stats, false if showing
 
 // Given a player name, return the corresponding Player object from the team roster
 function getPlayerFromName(playerName) {
+    if (playerName === UNKNOWN_PLAYER) {
+        return UNKNOWN_PLAYER_OBJ;  // Return the singleton instance
+    }
     return currentTeam.teamRoster.find(player => player.name === playerName);
 }
 
@@ -1344,6 +1352,16 @@ function displayOPlayerButtons() {
     let playerButtonsContainer = document.getElementById('offensivePlayerButtons');
     playerButtonsContainer.innerHTML = ''; // Clear existing buttons
 
+    // Add Unknown Player button first
+    let unknownButton = document.createElement('button');
+    unknownButton.textContent = UNKNOWN_PLAYER;
+    unknownButton.classList.add('player-button', 'unknown-player');
+    unknownButton.addEventListener('click', function() {
+        handleOPlayerButton(UNKNOWN_PLAYER);
+    });
+    playerButtonsContainer.appendChild(unknownButton);
+
+    // Add the rest of the player buttons
     activePlayers.forEach(playerName => {
         let playerButton = document.createElement('button');
         playerButton.textContent = playerName;
@@ -1660,6 +1678,16 @@ function displayDPlayerButtons() {
     let playerButtonsContainer = document.getElementById('defensivePlayerButtons');
     playerButtonsContainer.innerHTML = ''; // Clear existing buttons
 
+    // Add Unknown Player button first
+    let unknownButton = document.createElement('button');
+    unknownButton.textContent = UNKNOWN_PLAYER;
+    unknownButton.classList.add('player-button', 'unknown-player', 'inactive'); // Start as inactive like other D buttons
+    unknownButton.addEventListener('click', function() {
+        handleDPlayerButton(UNKNOWN_PLAYER);
+    });
+    playerButtonsContainer.appendChild(unknownButton);
+
+    // Add rest of the players
     activePlayers.forEach(playerName => {
         let playerButton = document.createElement('button');
         playerButton.textContent = playerName;
@@ -1882,108 +1910,6 @@ document.getElementById('undoBtn').addEventListener('click', undoEvent);
 /******************************************************************************/
 const OPENAI_API_KEY = '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'; // XXX move this out of client code later for security
 
-let mediaRecorder;
-let audioChunks = [];
-let isRecording = false;
-
-const TRANSCRIPTION_API_URL = 'https://api.openai.com/v1/audio/transcriptions';
-const CHAT_COMPLETION_API_URL = 'https://api.openai.com/v1/completions';
-const WHISPER_MODEL = 'whisper-1'; // Replace with the actual model name if different
-const GPT_MODEL = 'gpt-4o'; // Replace with the actual model name if different
-
-navigator.mediaDevices.getUserMedia({ audio: true })
-    .then(stream => {
-        if (MediaRecorder.isTypeSupported('audio/webm; codecs=opus')) {
-            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
-        } else {
-            // Fallback to default format
-            console.log('Requested MIME format unsupported by MediaRecorder; using default audio format');
-            mediaRecorder = new MediaRecorder(stream);
-        }
-        mediaRecorder.ondataavailable = event => {
-            console.log('Received audio chunk with size:', event.data.size, 'bytes');
-            audioChunks.push(event.data);
-        };
-
-        document.getElementById('sendAudioBtn').onclick = () => {
-            if (isRecording) {
-                console.log('Stopping recording');
-                mediaRecorder.stop();
-                document.getElementById('sendAudioBtn').textContent = 'Send Audio';
-                isRecording = false;
-            } else {
-                console.log('Starting recording');
-                audioChunks = [];
-                mediaRecorder.start(1000);  // Set timeslice to 1000 milliseconds
-                isRecording = true;
-                document.getElementById('sendAudioBtn').textContent = 'Stop and Send';
-                processAudioChunks();
-            }
-        };
-    })
-    .catch(error => {
-        console.error('Error accessing the microphone:', error);
-    });
-
-async function processAudioChunks() {
-    console.log('Processing audio chunks');
-    while (isRecording) {
-        console.log('Checking for audio chunks');
-        if (audioChunks.length > 0) {
-            const audioBlob = new Blob(audioChunks.splice(0), { type: 'audio/webm; codecs=opus' });
-            console.log('Sending audio chunk with size:', audioBlob.size, 'bytes');
-            await sendAudioChunk(audioBlob);
-        } else {
-            await new Promise(resolve => setTimeout(resolve, 200)); // Wait for more audio chunks
-        }
-    }
-}
-
-async function sendAudioChunk(audioBlob) {
-    const formData = new FormData();
-    formData.append('file', audioBlob, 'audio.webm');
-    formData.append('model', WHISPER_MODEL);
-
-    try {
-        // Send to OpenAI Whisper API
-        const transcriptionResponse = await fetch(TRANSCRIPTION_API_URL, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${OPENAI_API_KEY}`
-            },
-            body: formData
-        });
-        if (!transcriptionResponse.ok) {
-            throw new Error(`Error: ${transcriptionResponse.statusText}`);
-        }
-        const transcriptionData = await transcriptionResponse.json();
-        const transcriptionText = transcriptionData.text;
-
-        console.log('Transcription:', transcriptionText);
-/*
-        // Send transcription to GPT-4o for event generation
-        const gptResponse = await fetch(CHAT_COMPLETION_API_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${OPENAI_API_KEY}`
-            },
-            body: JSON.stringify({
-                model: GPT_MODEL,
-                prompt: transcriptionText,
-                max_tokens: 100, // Adjust as needed
-                temperature: 0.7
-            })
-        });
-        const gptData = await gptResponse.json();
-        const events = gptData.choices[0].text;
-
-        console.log('Events:', events);
-*/
-    } catch (error) {
-        console.error('Error during audio processing:', error);
-    }
-}
 
 
 /* 
@@ -2126,3 +2052,14 @@ document.getElementById('anotherGameBtn').addEventListener('click', function() {
 // whenever a player's checkbox is clicked
 document.getElementById('activePlayersTable').addEventListener('change', checkPlayerCount);
 document.getElementById('playersOnFieldInput').addEventListener('input', checkPlayerCount);
+
+
+// Commenting out audio narration code for now
+// import AudioNarrationService from './audioNarration.js';
+// let audioNarration = null;
+// function initializeAudioNarration() {
+//     audioNarration = new AudioNarrationService(
+//         gameState,
+//         eventLog
+//     );
+// }
