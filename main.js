@@ -772,6 +772,16 @@ function updateTeamRosterDisplay() {
     const rosterElement = document.getElementById('rosterList');
     rosterElement.innerHTML = '';  // Clear existing rows
 
+    // Add header row
+    let headerRow = document.createElement('tr');
+    ['Name', 'Points', 'Time', 'Goals', 'Assists', '+/-', '+/- per pt'].forEach(headerText => {
+        let headerCell = document.createElement('th');
+        headerCell.textContent = headerText;
+        headerCell.classList.add('roster-header');
+        headerRow.appendChild(headerCell);
+    });
+    rosterElement.appendChild(headerRow);
+
     currentTeam.teamRoster.forEach(player => {
         let playerRow = document.createElement('tr');
 
@@ -785,14 +795,43 @@ function updateTeamRosterDisplay() {
         totalPointsCell.classList.add('roster-points-column');
         totalPointsCell.textContent = player.totalPointsPlayed;
 
+        // Total time played column
         let totalTimeCell = document.createElement('td');
         totalTimeCell.classList.add('roster-time-column');
         totalTimeCell.textContent = formatPlayTime(player.totalTimePlayed);
+
+        // Goals column
+        let goalsCell = document.createElement('td');
+        goalsCell.classList.add('roster-goals-column');
+        goalsCell.textContent = player.goals || 0;
+
+        // Assists column
+        let assistsCell = document.createElement('td');
+        assistsCell.classList.add('roster-assists-column');
+        assistsCell.textContent = player.assists || 0;
+
+        // Plus/Minus column
+        let plusMinusCell = document.createElement('td');
+        plusMinusCell.classList.add('roster-plusminus-column');
+        const plusMinus = (player.pointsWon || 0) - (player.pointsLost || 0);
+        plusMinusCell.textContent = plusMinus > 0 ? `+${plusMinus}` : plusMinus;
+
+        // Plus/Minus per point column
+        let plusMinusPerPointCell = document.createElement('td');
+        plusMinusPerPointCell.classList.add('roster-plusminus-per-point-column');
+        const plusMinusPerPoint = player.totalPointsPlayed > 0 
+            ? (plusMinus / player.totalPointsPlayed).toFixed(2)
+            : '0.0';
+        plusMinusPerPointCell.textContent = plusMinusPerPoint > 0 ? `+${plusMinusPerPoint}` : plusMinusPerPoint;
 
         // Append cells to the row
         playerRow.appendChild(nameCell);
         playerRow.appendChild(totalPointsCell);
         playerRow.appendChild(totalTimeCell);
+        playerRow.appendChild(goalsCell);
+        playerRow.appendChild(assistsCell);
+        playerRow.appendChild(plusMinusCell);
+        playerRow.appendChild(plusMinusPerPointCell);
 
         // Append row to the table body
         rosterElement.appendChild(playerRow);

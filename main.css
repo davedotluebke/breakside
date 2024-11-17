@@ -291,16 +291,24 @@ ul {
     border-right: none;
 }
 
-.roster-points-column {
+.roster-points-column,
+.roster-time-column,
+.roster-goals-column,
+.roster-assists-column,
+.roster-plusminus-column,
+.roster-plusminus-per-point-column {
     text-align: center;
-    border-right: none;
-    border-left: none;
+    padding: 5px;
 }
 
 .roster-time-column {
-    text-align: center;
     font-style: italic;
-    border-left: none;
+}
+
+.roster-plusminus-column,
+.roster-plusminus-per-point-column {
+    font-family: monospace;
+    text-align: right;
 }
 
 /* Responsive button sizes */
