@@ -9,6 +9,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 </head>
 <body>
+    <div id="countdownTimer" class="countdown-timer">
+        <span class="timer-label">Next Point</span>
+        <span id="timerDisplay">01:30</span>
+    </div>
     <header>
         <h4>Ultimate Stats Tracker</h4>
     </header>
@@ -56,6 +60,10 @@
             <input type="text" id="opponentNameInput" placeholder="Opponent Name" />
             <br>Start Game on: <button id="startGameOnOBtn">Offense</button>
             <button id="startGameOnDBtn">Defense</button>
+            <div>
+                <label for="pointTimerInput">Seconds between points:</label>
+                <input type="number" id="pointTimerInput" value="90" min="0" max="300">
+            </div>
             <hr>
             <button id="downloadTeamBtn">Download Team (JSON)</button>
             <button id="switchTeamsBtn">Switch Team</button>

@@ -440,8 +440,11 @@ let currentPoint = null;        // This will hold the current point being played
 let currentEvent = null;        // ...the current event taking place in the current possession
 let currentPlayer = null;       // ...the current player with the disc
 
+/* UI Globals */
 let showingTotalStats = false;  // true if showing total stats, false if showing game stats
-
+let countdownInterval = null;
+let countdownSeconds = 90;      // Default 90 seconds
+let isCountdownRunning = false;
 
 /* 
  * Utility functions
@@ -1171,7 +1174,7 @@ function checkPlayerCount() {
 }
 
 // Starting a new game, on O or D
-function startNewGame(startingPosition) {
+function startNewGame(startingPosition, seconds) {
     const opponentNameInput = document.getElementById('opponentNameInput');
     const opponentName = opponentNameInput.value.trim() || "Bad Guys";
 
@@ -1182,15 +1185,24 @@ function startNewGame(startingPosition) {
     let newGame = new Game(currentTeam.name, opponentName, startingPosition);
     currentTeam.games.push(newGame);
     logEvent(`New game started against ${opponentName}`);
+
+    // Set countdown seconds before moving to next point
+    countdownSeconds = seconds;
+    
     moveToNextPoint();
 }
 
+
 document.getElementById('startGameOnOBtn').addEventListener('click', function() {
-    startNewGame('offense');
+    const timerInput = document.getElementById('pointTimerInput');
+    const seconds = parseInt(timerInput.value) || 90;
+    startNewGame('offense', seconds);
 });
 
 document.getElementById('startGameOnDBtn').addEventListener('click', function() {
-    startNewGame('defense');
+    const timerInput = document.getElementById('pointTimerInput');
+    const seconds = parseInt(timerInput.value) || 90;
+    startNewGame('defense', seconds);
 });
 
 // Transition from Play-by-Play to Before Point when either team scores
@@ -1202,10 +1214,16 @@ function moveToNextPoint() {
     showScreen('beforePointScreen');
     checkPlayerCount();  // to update the "Start Point" button style
     makeColumnsSticky(); // once the table is rendered, make the left columns sticky
+
+    // Start the countdown timer
+    startCountdown();
 }
 
 // Transition from Before Point to Play-by-Play
 function startNextPoint() {
+    // Stop the countdown when point starts
+    stopCountdown();
+    
     // Get the checkboxes and player names
     let checkboxes = [...document.querySelectorAll('#activePlayersTable input[type="checkbox"]')];
 
@@ -1975,6 +1993,7 @@ ws.onmessage = event => {
 /******************************************************************************/
 document.getElementById('endGameBtn').addEventListener('click', function() {
     if (confirm('Are you sure you want to end the game?')) {
+        stopCountdown();
         currentGame().endTimestamp = new Date(); // Set end timestamp
 
         // Populate the gameSummaryScreen with statistics, then show it
@@ -2102,3 +2121,59 @@ document.getElementById('playersOnFieldInput').addEventListener('input', checkPl
 //         eventLog
 //     );
 // }
+
+/******************************************************************************/
+/**************************** Countdown Timer *********************************/
+/******************************************************************************/
+function updateTimerDisplay(seconds) {
+    const display = document.getElementById('timerDisplay');
+    const minutes = Math.floor(Math.abs(seconds) / 60);
+    const remainingSeconds = Math.abs(seconds) % 60;
+    const sign = seconds < 0 ? '-' : '';
+    display.textContent = `${sign}${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+    
+    // Update color based on remaining time
+    display.className = '';
+    if (seconds < 0) {
+        display.classList.add('timer-danger');
+    } else if (seconds <= 30) {
+        display.classList.add('timer-warning');
+    } else {
+        display.classList.add('timer-normal');
+    }
+}
+
+function startCountdown() {
+    // Show the timer when starting countdown
+    document.getElementById('countdownTimer').style.display = 'flex';
+
+    // Clear any existing interval
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+    }
+    
+    let timeRemaining = countdownSeconds;
+    isCountdownRunning = true;
+    
+    updateTimerDisplay(timeRemaining);
+    
+    countdownInterval = setInterval(() => {
+        timeRemaining--;
+        updateTimerDisplay(timeRemaining);
+    }, 1000);
+}
+
+function stopCountdown() {
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+    isCountdownRunning = false;
+    // Hide the timer when stopping countdown
+    document.getElementById('countdownTimer').style.display = 'none';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Hide countdown timer initially
+    document.getElementById('countdownTimer').style.display = 'none';
+});
