@@ -19,6 +19,7 @@ const screens = [
     document.getElementById('beforePointScreen'),
     document.getElementById('offensePlayByPlayScreen'),
     document.getElementById('defensePlayByPlayScreen'),
+    document.getElementById('simpleModeScreen'),  // Add Simple Mode screen
     document.getElementById('gameSummaryScreen')
 ];
 
@@ -1378,8 +1379,6 @@ function startNextPoint() {
     let activePlayersForThisPoint = [];
     checkboxes.forEach((checkbox, index) => {
         if (checkbox.checked) {
-            //  this code works because we re-sort the actual team roster after 
-            //  each point in updateActivePlayersList():
             let player = currentTeam.teamRoster[index];  
             activePlayersForThisPoint.push(player.name);
         }
@@ -1389,20 +1388,23 @@ function startNextPoint() {
     let startPointOn = determineStartingPosition();
 
     // Create a new Point with the active players and starting position
-    // Don't set the winning team yet
-    // Don't set startTimeStamp yet, wait till first player touches the disc
     currentPoint = new Point(activePlayersForThisPoint, startPointOn);
     currentGame().points.push(currentPoint);
-    if (startPointOn === 'offense') {
-        updateOffensivePossessionScreen();
-        showScreen('offensePlayByPlayScreen');
+    
+    if (isSimpleMode) {
+        showScreen('simpleModeScreen');
     } else {
-        updateDefensivePossessionScreen();
-        showScreen('defensePlayByPlayScreen');
-        // For now start possession and timing when D points start
-        currentPoint.addPossession(new Possession(false));
-        if (currentPoint.startTimestamp === null) {
-            currentPoint.startTimestamp = new Date();
+        if (startPointOn === 'offense') {
+            updateOffensivePossessionScreen();
+            showScreen('offensePlayByPlayScreen');
+        } else {
+            updateDefensivePossessionScreen();
+            showScreen('defensePlayByPlayScreen');
+            // For now start possession and timing when D points start
+            currentPoint.addPossession(new Possession(false));
+            if (currentPoint.startTimestamp === null) {
+                currentPoint.startTimestamp = new Date();
+            }
         }
     }
 }
@@ -2478,4 +2480,185 @@ function updateActivePlayersDisplay() {
         }
     });
 }
+
+// Simple Mode Event Handlers
+document.getElementById('weScoreBtn').addEventListener('click', function() {
+    showScoreAttributionDialog();
+});
+
+document.getElementById('theyScoreBtn').addEventListener('click', function() {
+    updateScore(Role.OPPONENT);
+    moveToNextPoint();
+});
+
+// Track selected players for score attribution
+let selectedThrower = null;
+let selectedReceiver = null;
+
+function showScoreAttributionDialog() {
+    const dialog = document.getElementById('scoreAttributionDialog');
+    const throwerButtons = document.getElementById('throwerButtons');
+    const receiverButtons = document.getElementById('receiverButtons');
+    
+    // Reset selections
+    selectedThrower = null;
+    selectedReceiver = null;
+    
+    // Clear existing buttons
+    throwerButtons.innerHTML = '';
+    receiverButtons.innerHTML = '';
+    
+    // Add Unknown Player buttons
+    const unknownThrowerBtn = createPlayerButton(UNKNOWN_PLAYER);
+    const unknownReceiverBtn = createPlayerButton(UNKNOWN_PLAYER);
+    throwerButtons.appendChild(unknownThrowerBtn);
+    receiverButtons.appendChild(unknownReceiverBtn);
+    
+    // Add player buttons
+    currentPoint.players.forEach(playerName => {
+        const throwerBtn = createPlayerButton(playerName);
+        const receiverBtn = createPlayerButton(playerName);
+        throwerButtons.appendChild(throwerBtn);
+        receiverButtons.appendChild(receiverBtn);
+    });
+    
+    // Show dialog
+    dialog.style.display = 'block';
+}
+
+function createPlayerButton(playerName) {
+    const button = document.createElement('button');
+    button.textContent = playerName;
+    button.classList.add('player-button');
+    if (playerName === UNKNOWN_PLAYER) {
+        button.classList.add('unknown-player');
+    }
+    button.addEventListener('click', function() {
+        handleScoreAttribution(playerName, this.parentElement.id === 'throwerButtons', this);
+    });
+    return button;
+}
+
+function handleScoreAttribution(playerName, isThrower, buttonElement) {
+    const dialog = document.getElementById('scoreAttributionDialog');
+    const player = getPlayerFromName(playerName);
+    
+    // Check if this button is already selected
+    if (buttonElement.classList.contains('selected')) {
+        // Unselect the button
+        buttonElement.classList.remove('selected');
+        // Reset the appropriate selection
+        if (isThrower) {
+            selectedThrower = null;
+            // Re-enable this player's button in the receiver column
+            document.querySelectorAll('#receiverButtons .player-button').forEach(btn => {
+                if (btn.textContent === playerName) {
+                    btn.disabled = false;
+                    btn.classList.remove('inactive');
+                }
+            });
+        } else {
+            selectedReceiver = null;
+            // Re-enable this player's button in the thrower column
+            document.querySelectorAll('#throwerButtons .player-button').forEach(btn => {
+                if (btn.textContent === playerName) {
+                    btn.disabled = false;
+                    btn.classList.remove('inactive');
+                }
+            });
+        }
+        return;
+    }
+    
+    // Update selection
+    if (isThrower) {
+        selectedThrower = player;
+        // Update button styles
+        document.querySelectorAll('#throwerButtons .player-button').forEach(btn => {
+            btn.classList.remove('selected');
+        });
+        buttonElement.classList.add('selected');
+        // Disable this player's button in the receiver column
+        document.querySelectorAll('#receiverButtons .player-button').forEach(btn => {
+            if (btn.textContent === playerName) {
+                btn.disabled = true;
+                btn.classList.add('inactive');
+            }
+        });
+    } else {
+        selectedReceiver = player;
+        // Update button styles
+        document.querySelectorAll('#receiverButtons .player-button').forEach(btn => {
+            btn.classList.remove('selected');
+        });
+        buttonElement.classList.add('selected');
+        // Disable this player's button in the thrower column
+        document.querySelectorAll('#throwerButtons .player-button').forEach(btn => {
+            if (btn.textContent === playerName) {
+                btn.disabled = true;
+                btn.classList.add('inactive');
+            }
+        });
+    }
+    
+    // If both players are selected, create the event and move to next point
+    if (selectedThrower && selectedReceiver) {
+        const scoreEvent = new Throw({
+            thrower: selectedThrower,
+            receiver: selectedReceiver,
+            score: true
+        });
+        currentPoint.addPossession(new Possession(true));
+        getActivePossession(currentPoint).addEvent(scoreEvent);
+        selectedThrower.assists++;
+        selectedReceiver.goals++;
+        
+        // Update score and move to next point
+        updateScore(Role.TEAM);
+        dialog.style.display = 'none';
+        moveToNextPoint();
+    }
+}
+
+// Callahan button handler
+document.getElementById('callahanBtn').addEventListener('click', function() {
+    const dialog = document.getElementById('scoreAttributionDialog');
+    const callahanEvent = new Defense({
+        Callahan: true
+    });
+    currentPoint.addPossession(new Possession(false));
+    getActivePossession(currentPoint).addEvent(callahanEvent);
+    updateScore(Role.TEAM);
+    dialog.style.display = 'none';
+    moveToNextPoint();
+});
+
+// Skip button handler
+document.getElementById('skipAttributionBtn').addEventListener('click', function() {
+    const dialog = document.getElementById('scoreAttributionDialog');
+    updateScore(Role.TEAM);
+    dialog.style.display = 'none';
+    moveToNextPoint();
+});
+
+// Close dialog when clicking the X
+document.querySelector('#scoreAttributionDialog .close').addEventListener('click', function() {
+    document.getElementById('scoreAttributionDialog').style.display = 'none';
+});
+
+// Close dialog when clicking outside
+window.addEventListener('click', function(event) {
+    const dialog = document.getElementById('scoreAttributionDialog');
+    if (event.target === dialog) {
+        dialog.style.display = 'none';
+    }
+});
+
+// Simple Mode Toggle
+let isSimpleMode = false;
+
+document.getElementById('toggleSimpleModeBtn').addEventListener('click', function() {
+    isSimpleMode = !isSimpleMode;
+    this.textContent = isSimpleMode ? 'Toggle Detailed Mode' : 'Toggle Simple Mode';
+});
 
