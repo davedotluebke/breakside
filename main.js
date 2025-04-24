@@ -1519,17 +1519,19 @@ function logEvent(description) {
     eventLog.scrollTop = eventLog.scrollHeight; // Auto-scroll to the bottom
 }
 
-document.getElementById('toggleEventLogSpan').addEventListener('click', function() {
+document.getElementById('toggleEventLogBtn').addEventListener('click', function() {
     var eventLog = document.getElementById('eventLog');
-    var toggleIcon = document.getElementById('toggleEventLogIcon');
+    var toggleBtn = document.getElementById('toggleEventLogBtn');
 
     // Check if the event log is currently visible
     if (eventLog.style.display != 'block') {
         eventLog.style.display = 'block'; // Show the event log
-        toggleIcon.textContent = '[-]'; // Set the icon to 'collapse' indicator
+        toggleBtn.textContent = 'Hide play-by-play';
+        toggleBtn.classList.add('selected');
     } else {
         eventLog.style.display = 'none'; // Hide the event log
-        toggleIcon.textContent = '[+]'; // Set the icon to 'expand' indicator
+        toggleBtn.textContent = 'Show play-by-play';
+        toggleBtn.classList.remove('selected');
     }
 });
 
