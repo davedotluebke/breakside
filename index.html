@@ -211,8 +211,8 @@
     <footer id="bottomPanel">
         <button id="undoBtn">Undo</button>
         <div id="audioControls">
-            <button id="startNarrationBtn">
-                <i class="fas fa-microphone"></i> Start Narration
+            <button id="startNarrationBtn" class="inactive">
+                <i class="fas fa-microphone"></i> Narrate
             </button>
             <div id="audioStatus" style="display: none;">
                 <span id="audioStatusText">Listening...</span>
@@ -221,7 +221,7 @@
                 </div>
             </div>
         </div>
-        <span id="toggleEventLogSpan">Play-by-play <span id="toggleEventLogIcon">[+]</span></span>
+        <button id="toggleEventLogBtn">Show play-by-play</button>
         <textarea id="eventLog" readonly></textarea>
     </footer>
 

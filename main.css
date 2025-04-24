@@ -186,26 +186,69 @@ th {
     align-items: center;
     justify-content: space-between;
     z-index: 10;
+    white-space: nowrap;
+    gap: 10px;
 }
 
-#toggleEventLogSpan {
-    font-size: 1.2rem; /* Adjust the font size as needed */
-    font-weight: bold; /* Make the text bold */
-    cursor: pointer; /* Change the cursor to indicate it's clickable */
-    display: inline-block; /* To ensure proper spacing and alignment */
-    color: #0011fb; /* Adjust the color as needed */
+#undoBtn {
+    padding: 5px 10px;
+    margin-right: 10px;
+    flex-shrink: 0;
 }
 
-#toggleEventLogIcon {
-    font-size: 1.4rem; /* Make the icon slightly larger than the text */
-    padding-left: 5px; /* Add some space before the icon */
+#audioControls {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
 
+#startNarrationBtn {
+    background-color: #28a745;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    white-space: nowrap;
+}
+
+#startNarrationBtn.inactive {
+    background-color: #cccccc;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+#startNarrationBtn.recording {
+    background-color: #dc3545;
+    animation: pulse 2s infinite;
+}
+
+#audioStatus {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.9em;
+    color: #666;
+}
+
+#toggleEventLogBtn {
+    padding: 5px 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+#toggleEventLogBtn.selected {
+    background-color: #007bff;
+    color: #ffffff;
+}
 
 #eventLog {
-    display: none; /* Initially hidden */
+    display: none;
     width: 100%;
-    height: 100px; /* Adjust to the desired expanded height */
+    height: 100px;
     position: absolute;
     bottom: 100%;
     left: 0;
@@ -216,13 +259,6 @@ th {
     resize: none;
     overflow-y: auto;
 }
-
-/* Styles for the Undo button */
-#undoBtn {
-    padding: 5px 10px;
-    margin-right: 10px;
-}
-
 
 /* Input field styling */
 input[type="text"], input[type="number"] {
@@ -410,32 +446,6 @@ ul {
 .icon-button:hover {
     background-color: #f0f0f0;
     border-radius: 4px;
-}
-
-#audioControls {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-#startNarrationBtn {
-    background-color: #28a745;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-#startNarrationBtn.recording {
-    background-color: #dc3545;
-    animation: pulse 2s infinite;
-}
-
-#audioStatus {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.9em;
-    color: #666;
 }
 
 .audio-level-indicator {
