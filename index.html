@@ -51,8 +51,18 @@
             </tbody>
         </table>
         
-        <input type="text" id="newPlayerInput" placeholder="Add new player" />
-        <button id="addPlayerBtn">Add Player</button>
+        <div class="add-player-container">
+            <input type="text" id="newPlayerInput" placeholder="Add new player" />
+            <button id="addPlayerBtn">Add Player</button>
+        </div>
+
+        <div class="line-management">
+            <div class="add-line-container">
+                <input type="text" class="line-name-input" placeholder="Add new line" />
+                <button class="add-line-button">Add Line</button>
+            </div>
+            <button class="delete-line-button">Delete Line</button>
+        </div>
 
         <footer>
             <input type="number" id="playersOnFieldInput" value="5" min="2" max="7" />
@@ -96,6 +106,7 @@
                 </table>    
             </div>
             <button id="adjustRosterBtn">Edit Roster...</button>
+            <button id="selectLineBtn">Lines...</button>
         </section>
         
 

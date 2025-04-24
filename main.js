@@ -85,6 +85,7 @@ function Game(teamName, opponentName, startOn) {
     this.gameStartTimestamp = new Date();
     this.gameEndTimestamp = null;
     this.pointsData = [];  // Array of objects, each object will have player names as keys and true/false as values.
+    this.lastLineUsed = null; // Track the last line used in this game
 }
 
 // Team data structure
@@ -92,6 +93,7 @@ function Team(name = "My Team", initialRoster = []) {
     this.name = name;
     this.games = [];  // array of Games played by this team
     this.teamRoster = []; // array of Players on the team
+    this.lines = []; // array of pre-defined player lines
     initialRoster.forEach(name => {
         let newPlayer = new Player(name);
         this.teamRoster.push(newPlayer);
@@ -304,7 +306,8 @@ function serializeTeam(team) {
 
     return JSON.stringify({
         ...team,
-        games: simplifiedGames
+        games: simplifiedGames,
+        lines: team.lines // Include the lines array in serialization
     }, null, 4);
 }
 
@@ -367,54 +370,48 @@ function deserializeEvent(eventData, playerLookup) {
     return event;
 }
 
-function deserializeTeams(serializedTeamsData) {
-    const teamsData = JSON.parse(serializedTeamsData);
-    return teamsData.map(deserializeSingleTeam); // Each item is an object, not a string
-}
-
-function deserializeSingleTeam(data) {
-    // Create a new Team instance
-    const team = new Team(data.name);
-    currentTeam = team;
-
-    // Reconstruct Player instances
-    data.teamRoster.forEach(playerData => {
-        const player = new Player(playerData.name);
-        // Reassign other properties
-        for (const key in playerData) {
-            if (playerData.hasOwnProperty(key) && key !== 'name') {
-                player[key] = playerData[key];
-            }
-        }
-        team.teamRoster.push(player);
-    });
-
-    // Reconstruct Game instances and other nested structures
-    data.games.forEach(gameData => {
-        const game = new Game(gameData.team, gameData.opponent, gameData.startingPosition);
-        // Reassign other properties
-
-        gameData.points.forEach(pointData => {
-            const point = new Point(pointData.players, pointData.startingPosition);
-
-            pointData.possessions.forEach(possessionData => {
-                const possession = new Possession(possessionData.offensive);
-
-                possessionData.events.forEach(eventData => {
-                    const event = deserializeEvent(eventData);
-                    possession.addEvent(event);
-                });
-
-                point.addPossession(possession);
-            });
-
-            game.points.push(point);
+// Convert serialized team data back into team objects
+function deserializeTeams(serializedData) {
+    const parsedData = JSON.parse(serializedData);
+    return parsedData.map(teamData => {
+        const team = new Team(teamData.name);
+        currentTeam = team; // Set current team before deserializing events
+        
+        // First deserialize the roster
+        team.teamRoster = teamData.teamRoster.map(playerData => {
+            const player = new Player(playerData.name);
+            Object.assign(player, playerData);
+            return player;
         });
-
-        team.games.push(game);
+        
+        // Then deserialize games and their nested structures
+        team.games = teamData.games.map(gameData => {
+            const game = new Game(
+                gameData.team,
+                gameData.opponent,
+                gameData.startingPosition
+            );
+            game.gameStartTimestamp = new Date(gameData.gameStartTimestamp);
+            game.gameEndTimestamp = gameData.gameEndTimestamp ? new Date(gameData.gameEndTimestamp) : null;
+            game.points = gameData.points.map(pointData => {
+                const point = new Point(pointData.players, pointData.startingPosition);
+                point.startTimestamp = pointData.startTimestamp ? new Date(pointData.startTimestamp) : null;
+                point.endTimestamp = pointData.endTimestamp ? new Date(pointData.endTimestamp) : null;
+                point.winner = pointData.winner;
+                point.possessions = pointData.possessions.map(possessionData => {
+                    const possession = new Possession(possessionData.offensive);
+                    possession.events = possessionData.events.map(eventData => deserializeEvent(eventData));
+                    return possession;
+                });
+                return point;
+            });
+            return game;
+        });
+        
+        // Finally set the lines data
+        team.lines = teamData.lines || [];
+        return team;
     });
-
-    return team;
 }
 
 // load teams from local storage or create a sample team
@@ -700,10 +697,10 @@ document.getElementById('fileInput').addEventListener('change', function(event) 
     reader.onload = function(e) {
         try {
             const jsonData = JSON.parse(e.target.result);
-            // deserialize the JSON data and appent to the current team data
-            let newTeam = deserializeSingleTeam(jsonData);
-            teams.push(newTeam);
-            currentTeam = newTeam;
+            // deserialize the JSON data and append to the current team data
+            const newTeams = deserializeTeams(JSON.stringify([jsonData]));
+            teams.push(newTeams[0]);
+            currentTeam = newTeams[0];
             updateTeamRosterDisplay();
             showSelectTeamScreen();
         } catch (error) {
@@ -777,7 +774,7 @@ function updateTeamRosterDisplay() {
 
     // Add header row
     let headerRow = document.createElement('tr');
-    ['Name', 'Points', 'Time', 'Goals', 'Assists', '+/-', '+/- per pt'].forEach(headerText => {
+    ['', 'Name', 'Points', 'Time', 'Goals', 'Assists', '+/-', '+/- per pt'].forEach(headerText => {
         let headerCell = document.createElement('th');
         headerCell.textContent = headerText;
         headerCell.classList.add('roster-header');
@@ -788,36 +785,51 @@ function updateTeamRosterDisplay() {
     currentTeam.teamRoster.forEach(player => {
         let playerRow = document.createElement('tr');
 
+        // Add checkbox column
+        let checkboxCell = document.createElement('td');
+        checkboxCell.classList.add('active-checkbox-column');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.classList.add('active-checkbox');
+        checkboxCell.appendChild(checkbox);
+        playerRow.appendChild(checkboxCell);
+
         // Player name column
         let nameCell = document.createElement('td');
         nameCell.classList.add('roster-name-column');
         nameCell.textContent = player.name;
+        playerRow.appendChild(nameCell);
 
         // Total points played column
         let totalPointsCell = document.createElement('td');
         totalPointsCell.classList.add('roster-points-column');
         totalPointsCell.textContent = player.totalPointsPlayed;
+        playerRow.appendChild(totalPointsCell);
 
         // Total time played column
         let totalTimeCell = document.createElement('td');
         totalTimeCell.classList.add('roster-time-column');
         totalTimeCell.textContent = formatPlayTime(player.totalTimePlayed);
+        playerRow.appendChild(totalTimeCell);
 
         // Goals column
         let goalsCell = document.createElement('td');
         goalsCell.classList.add('roster-goals-column');
         goalsCell.textContent = player.goals || 0;
+        playerRow.appendChild(goalsCell);
 
         // Assists column
         let assistsCell = document.createElement('td');
         assistsCell.classList.add('roster-assists-column');
         assistsCell.textContent = player.assists || 0;
+        playerRow.appendChild(assistsCell);
 
         // Plus/Minus column
         let plusMinusCell = document.createElement('td');
         plusMinusCell.classList.add('roster-plusminus-column');
         const plusMinus = (player.pointsWon || 0) - (player.pointsLost || 0);
         plusMinusCell.textContent = plusMinus > 0 ? `+${plusMinus}` : plusMinus;
+        playerRow.appendChild(plusMinusCell);
 
         // Plus/Minus per point column
         let plusMinusPerPointCell = document.createElement('td');
@@ -826,22 +838,12 @@ function updateTeamRosterDisplay() {
             ? (plusMinus / player.totalPointsPlayed).toFixed(2)
             : '0.0';
         plusMinusPerPointCell.textContent = plusMinusPerPoint > 0 ? `+${plusMinusPerPoint}` : plusMinusPerPoint;
-
-        // Append cells to the row
-        playerRow.appendChild(nameCell);
-        playerRow.appendChild(totalPointsCell);
-        playerRow.appendChild(totalTimeCell);
-        playerRow.appendChild(goalsCell);
-        playerRow.appendChild(assistsCell);
-        playerRow.appendChild(plusMinusCell);
         playerRow.appendChild(plusMinusPerPointCell);
 
         // Append row to the table body
         rosterElement.appendChild(playerRow);
     });
 }
-updateTeamRosterDisplay();
-
 
 // UI: Handle player addition to teamRoster
 const playerNameInput = document.getElementById('newPlayerInput');
@@ -927,6 +929,142 @@ document.getElementById('clearGamesBtn').addEventListener('click', function() {
     }
 });
 
+// Function to add a new line
+function addNewLine() {
+    const lineNameInput = document.querySelector('.line-name-input');
+    const lineName = lineNameInput.value.trim();
+    
+    if (!lineName) {
+        alert('Please enter a line name');
+        return;
+    }
+    
+    // Get selected players
+    const selectedPlayers = Array.from(document.querySelectorAll('.active-checkbox:checked'))
+        .map(checkbox => {
+            const row = checkbox.closest('tr');
+            return row.querySelector('.roster-name-column').textContent;
+        });
+    
+    if (selectedPlayers.length === 0) {
+        alert('Please select at least one player for the line');
+        return;
+    }
+    
+    // Add the new line
+    currentTeam.lines.push({
+        name: lineName,
+        players: selectedPlayers,
+        lastUsed: null
+    });
+    
+    // Clear input and save changes
+    lineNameInput.value = '';
+    saveAllTeamsData();
+    updateTeamRosterDisplay();
+}
+
+// Add event listener for the add line button
+document.querySelector('.add-line-button').addEventListener('click', addNewLine);
+
+// Function to show delete line dialog
+function showDeleteLineDialog() {
+    if (!currentTeam.lines || currentTeam.lines.length === 0) {
+        alert('No lines to delete');
+        return;
+    }
+    
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.classList.add('delete-line-overlay');
+    
+    // Create dialog container
+    const dialog = document.createElement('div');
+    dialog.classList.add('delete-line-dialog');
+    
+    const title = document.createElement('h3');
+    title.textContent = 'Select Line to Delete';
+    dialog.appendChild(title);
+    
+    // Create container for radio buttons
+    const radioContainer = document.createElement('div');
+    radioContainer.classList.add('delete-line-radio-container');
+    
+    currentTeam.lines.forEach((line, index) => {
+        const radioDiv = document.createElement('div');
+        radioDiv.classList.add('delete-line-radio-option');
+        
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'lineToDelete';
+        radio.value = index;
+        radio.id = `line-${index}`;
+        
+        const label = document.createElement('label');
+        label.htmlFor = `line-${index}`;
+        
+        const lineName = document.createElement('span');
+        lineName.classList.add('line-name');
+        lineName.textContent = line.name;
+        
+        const linePlayers = document.createElement('span');
+        linePlayers.classList.add('line-players');
+        linePlayers.textContent = line.players.join(', ');
+        
+        label.appendChild(lineName);
+        label.appendChild(linePlayers);
+        
+        radioDiv.appendChild(radio);
+        radioDiv.appendChild(label);
+        radioContainer.appendChild(radioDiv);
+    });
+    
+    dialog.appendChild(radioContainer);
+    
+    const buttonDiv = document.createElement('div');
+    buttonDiv.classList.add('delete-line-buttons');
+    
+    const confirmButton = document.createElement('button');
+    confirmButton.textContent = 'Delete';
+    confirmButton.classList.add('delete-line-button', 'delete');
+    confirmButton.disabled = true; // Initially disabled
+    
+    // Add event listener to radio buttons to enable/disable delete button
+    const radioButtons = dialog.querySelectorAll('input[type="radio"]');
+    radioButtons.forEach(radio => {
+        radio.addEventListener('change', () => {
+            confirmButton.disabled = false;
+        });
+    });
+    
+    confirmButton.addEventListener('click', () => {
+        const selectedRadio = dialog.querySelector('input[name="lineToDelete"]:checked');
+        if (selectedRadio) {
+            const index = parseInt(selectedRadio.value);
+            currentTeam.lines.splice(index, 1);
+            saveAllTeamsData();
+            updateTeamRosterDisplay();
+        }
+        document.body.removeChild(overlay);
+    });
+    
+    const cancelButton = document.createElement('button');
+    cancelButton.textContent = 'Cancel';
+    cancelButton.classList.add('delete-line-button', 'cancel');
+    cancelButton.addEventListener('click', () => {
+        document.body.removeChild(overlay);
+    });
+    
+    buttonDiv.appendChild(cancelButton);
+    buttonDiv.appendChild(confirmButton);
+    dialog.appendChild(buttonDiv);
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+}
+
+// Add event listener for the delete line button
+document.querySelector('.delete-line-button').addEventListener('click', showDeleteLineDialog);
 
 /************************************************************************ 
  *
@@ -970,6 +1108,8 @@ document.getElementById('adjustRosterBtn').addEventListener('click', function() 
 
 // Updates the displayed roster on the "Before Point Screen"
 function updateActivePlayersList() {
+    console.log('Updating active players list...');
+    
     let table = document.getElementById('activePlayersTable');
     let tableBody = table.querySelector('tbody');
     let tableHead = table.querySelector('thead');
@@ -999,7 +1139,7 @@ function updateActivePlayersList() {
 
     // Calculate and add score cells
     let runningScores = { team: [0], opponent: [0] };
-        currentGame().points.forEach(point => {
+    currentGame().points.forEach(point => {
         runningScores.team.push(point.winner === 'team' ? runningScores.team.slice(-1)[0] + 1 : runningScores.team.slice(-1)[0]);
         runningScores.opponent.push(point.winner === 'opponent' ? runningScores.opponent.slice(-1)[0] + 1 : runningScores.opponent.slice(-1)[0]);
     });
@@ -1015,6 +1155,8 @@ function updateActivePlayersList() {
     const lastPointPlayers = currentGame().points.length > 0
         ? currentGame().points[currentGame().points.length - 1].players
         : [];
+    
+    console.log('Last point players:', lastPointPlayers);
 
     // Check if a player has played any points
     function hasPlayedAnyPoints(playerName) {
@@ -1046,7 +1188,11 @@ function updateActivePlayersList() {
         checkboxCell.classList.add('active-checkbox-column');
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        checkbox.checked = lastPointPlayers.includes(player.name);  // Use the existing lastPointPlayers list
+        checkbox.classList.add('active-checkbox');
+        if (lastPointPlayers.includes(player.name)) {
+            console.log('Checking checkbox for player:', player.name);
+            checkbox.checked = true;
+        }
         checkboxCell.appendChild(checkbox);
         row.appendChild(checkboxCell);
 
@@ -1084,6 +1230,8 @@ function updateActivePlayersList() {
 
         tableBody.appendChild(row);
     });
+    
+    console.log('Finished updating active players list');
     // After adding all rows to the tableBody, calculate the widths
     makeColumnsSticky();
 }
@@ -2177,3 +2325,155 @@ document.addEventListener('DOMContentLoaded', function() {
     // Hide countdown timer initially
     document.getElementById('countdownTimer').style.display = 'none';
 });
+
+function showLineSelectionDialog() {
+    if (!currentTeam || !currentTeam.lines || currentTeam.lines.length === 0) {
+        alert('No lines have been created yet. Please create lines in the roster management screen.');
+        return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'select-line-overlay';
+
+    const dialog = document.createElement('div');
+    dialog.className = 'select-line-dialog';
+
+    const heading = document.createElement('h3');
+    heading.textContent = 'Select Line';
+    dialog.appendChild(heading);
+
+    const radioContainer = document.createElement('div');
+    radioContainer.className = 'select-line-radio-container';
+
+    let selectedLine = null;
+
+    currentTeam.lines.forEach((line, index) => {
+        const option = document.createElement('div');
+        option.className = 'select-line-radio-option';
+        if (currentGame && currentGame.lastLineUsed === line.name) {
+            option.classList.add('last-used');
+        }
+
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'lineSelection';
+        radio.id = `line-${index}`;
+        radio.value = line.name;
+
+        const label = document.createElement('label');
+        label.htmlFor = `line-${index}`;
+        
+        const lineName = document.createElement('span');
+        lineName.className = 'line-name';
+        lineName.textContent = line.name;
+        
+        const players = document.createElement('span');
+        players.className = 'line-players';
+        players.textContent = line.players.join(', ');
+        
+        label.appendChild(lineName);
+        label.appendChild(players);
+
+        radio.addEventListener('change', () => {
+            selectedLine = line;
+            selectButton.disabled = false;
+        });
+
+        option.appendChild(radio);
+        option.appendChild(label);
+        radioContainer.appendChild(option);
+    });
+
+    dialog.appendChild(radioContainer);
+
+    const buttons = document.createElement('div');
+    buttons.className = 'select-line-buttons';
+
+    const selectButton = document.createElement('button');
+    selectButton.className = 'select-line-button select';
+    selectButton.textContent = 'Select';
+    selectButton.disabled = true;
+    selectButton.addEventListener('click', () => {
+        if (selectedLine) {
+            // Uncheck all checkboxes
+            document.querySelectorAll('#activePlayersTable input[type="checkbox"]').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+
+            // Check boxes for players in the selected line
+            const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
+            currentTeam.teamRoster.forEach((player, index) => {
+                if (selectedLine.players.includes(player.name)) {
+                    checkboxes[index].checked = true;
+                }
+            });
+
+            // Update the last used line and save
+            currentGame.lastLineUsed = selectedLine.name;
+            saveAllTeamsData();
+            
+            // Update the Start Point button state
+            checkPlayerCount();
+            
+            // Close the dialog
+            overlay.remove();
+        }
+    });
+
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'select-line-button cancel';
+    cancelButton.textContent = 'Cancel';
+    cancelButton.addEventListener('click', () => {
+        overlay.remove();
+    });
+
+    buttons.appendChild(selectButton);
+    buttons.appendChild(cancelButton);
+    dialog.appendChild(buttons);
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+}
+
+// Add event listener for the Lines button
+document.getElementById('selectLineBtn').addEventListener('click', showLineSelectionDialog);
+
+function updateActivePlayersDisplay() {
+    const table = document.getElementById('activePlayersTable');
+    if (!table) return;
+
+    // Clear existing rows except header
+    while (table.rows.length > 1) {
+        table.deleteRow(1);
+    }
+
+    // Add rows for each active player
+    currentGame.activePlayers.forEach(playerName => {
+        const row = table.insertRow();
+        
+        // Add checkbox cell
+        const checkboxCell = row.insertCell();
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'active-checkbox';
+        checkbox.checked = true; // Active players are checked by default
+        checkboxCell.appendChild(checkbox);
+        
+        // Add player name cell
+        const nameCell = row.insertCell();
+        nameCell.textContent = playerName;
+        
+        // Add time played cell
+        const timeCell = row.insertCell();
+        timeCell.textContent = formatPlayTime(getPlayerGameTime(playerName));
+        
+        // Add cells for each point
+        const latestPoint = getLatestPoint();
+        if (latestPoint) {
+            const pointsPlayed = latestPoint.playingPlayers.includes(playerName) ? '✓' : '';
+            const pointCell = row.insertCell();
+            pointCell.textContent = pointsPlayed;
+        }
+    });
+}
+

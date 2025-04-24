@@ -263,6 +263,12 @@ ul {
 
 .active-checkbox-column {
     left: 0;
+    width: 30px !important;  /* Force narrow width for checkbox column */
+    min-width: 30px !important;  /* Prevent cell from growing */
+    max-width: 30px !important;  /* Prevent cell from growing */
+    text-align: center;
+    padding: 5px !important;  /* Override default td padding */
+    box-sizing: border-box;  /* Include padding in width calculation */
 }
 
 .active-name-column {
@@ -487,3 +493,178 @@ ul {
 .timer-normal { color: #007bff; }  /* Bootstrap blue */
 .timer-warning { color: #ffc107; } /* Bootstrap yellow */
 .timer-danger { color: #dc3545; }  /* Bootstrap red */
+
+/* Delete Line Dialog Styles */
+.delete-line-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.delete-line-dialog {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    max-width: 500px;
+    width: 90%;
+}
+
+.delete-line-dialog h3 {
+    margin-top: 0;
+}
+
+.delete-line-radio-container {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+}
+
+.delete-line-radio-option {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: flex-start;
+}
+
+.delete-line-radio-option input {
+    margin-right: 10px;
+    margin-top: 3px;
+}
+
+.delete-line-radio-option label {
+    text-align: left;
+    flex: 1;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+}
+
+.line-name {
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.line-players {
+    color: #666;
+}
+
+.delete-line-button.delete:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.delete-line-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.delete-line-button {
+    padding: 8px 16px;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.delete-line-button.delete {
+    background-color: #dc3545;
+}
+
+.delete-line-button.cancel {
+    background-color: #6c757d;
+}
+
+/* Line Selection Dialog Styles */
+.select-line-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.select-line-dialog {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    max-width: 500px;
+    width: 90%;
+}
+
+.select-line-dialog h3 {
+    margin-top: 0;
+}
+
+.select-line-radio-container {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+}
+
+.select-line-radio-option {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: flex-start;
+}
+
+.select-line-radio-option input {
+    margin-right: 10px;
+    margin-top: 3px;
+}
+
+.select-line-radio-option label {
+    text-align: left;
+    flex: 1;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+}
+
+.select-line-radio-option.last-used {
+    background-color: #f8f9fa;
+    border-left: 4px solid #007bff;
+    padding-left: 6px;
+}
+
+.select-line-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.select-line-button {
+    padding: 8px 16px;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.select-line-button.select {
+    background-color: #28a745;
+}
+
+.select-line-button.cancel {
+    background-color: #6c757d;
+}
+
+.select-line-button.select:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
