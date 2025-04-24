@@ -470,7 +470,7 @@ ul {
 }
 
 .unknown-player {
-    background-color: #f0f0f0;
+    background-color: #d0d0d0;
     border: 2px dashed #999;
     font-style: italic;
 }
@@ -810,4 +810,175 @@ ul {
 
 .top-buttons button {
     padding: 10px 20px;
+}
+
+/* Simple Mode Styles */
+.simple-mode-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    padding: 2rem;
+}
+
+.large-action-btn {
+    width: 80%;
+    max-width: 400px;
+    padding: 2rem;
+    font-size: 2rem;
+    border-radius: 1rem;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.large-action-btn:hover {
+    background-color: #45a049;
+}
+
+#theyScoreBtn {
+    background-color: #f44336;
+}
+
+#theyScoreBtn:hover {
+    background-color: #da190b;
+}
+
+/* Score Attribution Dialog Styles */
+.score-attribution-container {
+    display: flex;
+    gap: 2rem;
+    margin: 0;
+    padding: 0 1rem;
+}
+
+.score-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.score-column h4 {
+    display: none; /* Hide the old headers since they're now in the dialog header */
+}
+
+.callahan-separator {
+    width: 100%;
+    margin: 1rem 0;
+    border: 1px solid #ccc;
+}
+
+.score-attribution-actions {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+}
+
+.special-action-btn, .secondary-action-btn {
+    padding: 1rem 2rem;
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    font-size: 1.2rem;
+    width: auto;
+    min-width: 120px;
+}
+
+.special-action-btn {
+    background-color: #ff9800;
+    color: white;
+}
+
+.special-action-btn:hover {
+    background-color: #f57c00;
+}
+
+.secondary-action-btn {
+    background-color: #9e9e9e;
+    color: white;
+}
+
+.secondary-action-btn:hover {
+    background-color: #757575;
+}
+
+/* Modal Styles for Score Attribution */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.4);
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 15% auto;
+    padding: 2rem;
+    border: 1px solid #888;
+    width: 80%;
+    max-width: 600px;
+    border-radius: 1rem;
+    position: relative;
+}
+
+.close {
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+    font-size: 1.5rem;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover {
+    color: #f44336;
+}
+
+.dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0 1rem;
+}
+
+.dialog-header h4 {
+    font-size: 1.5rem;
+    margin: 0;
+    color: #333;
+    flex: 1;
+    text-align: center;
+}
+
+.dialog-header .close {
+    font-size: 2rem;
+    font-weight: bold;
+    cursor: pointer;
+    color: #666;
+    flex: 0 0 auto;
+}
+
+.dialog-header .close:hover {
+    color: #f44336;
+}
+
+.score-column h4 {
+    display: none; /* Hide the old headers since they're now in the dialog header */
+}
+
+.score-attribution-container {
+    display: flex;
+    gap: 2rem;
+    margin: 0;
+    padding: 0 1rem;
 }

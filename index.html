@@ -97,7 +97,9 @@
             <button id="continueGameBtn" class="inactive">Continue Game</button>
             <hr>
             <button id="restoreGamesBtn">Restore Saved Games</button>
-            <button id="clearGamesBtn">Clear Saved Games</button>            
+            <button id="clearGamesBtn">Clear Saved Games</button>
+            <hr>
+            <button id="toggleSimpleModeBtn">Toggle Simple Mode</button>
         </footer>
     </section>
 
@@ -166,6 +168,43 @@
         </div>
         <button id="dSubPlayersBtn">Sub Players</button>
     </section>    
+
+    <!-- Simple Mode Screen -->
+    <section id="simpleModeScreen" style="display: none;" class="in-game-content">
+        <h2>Simple Mode</h2>
+        <div class="simple-mode-container">
+            <button id="weScoreBtn" class="large-action-btn">We Score</button>
+            <button id="theyScoreBtn" class="large-action-btn">They Score</button>
+        </div>
+
+        <!-- Score Attribution Dialog -->
+        <div id="scoreAttributionDialog" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="dialog-header">
+                    <span class="close">&times;</span>
+                    <h4>Threw Score</h4>
+                    <h4>Caught Score</h4>
+                </div>
+                <div class="score-attribution-container">
+                    <div class="score-column">
+                        <div id="throwerButtons" class="player-buttons">
+                            <!-- Player buttons will be dynamically added here -->
+                        </div>
+                    </div>
+                    <div class="score-column">
+                        <div id="receiverButtons" class="player-buttons">
+                            <!-- Player buttons will be dynamically added here -->
+                        </div>
+                    </div>
+                </div>
+                <hr class="callahan-separator">
+                <div class="score-attribution-actions">
+                    <button id="callahanBtn" class="special-action-btn">Callahan</button>
+                    <button id="skipAttributionBtn" class="secondary-action-btn">Skip</button>
+                </div>
+            </div>
+        </div>
+    </section>
 
     <!-- Game Summary Screen -->
     <section id="gameSummaryScreen" style="display: none;" class="in-game-content">
