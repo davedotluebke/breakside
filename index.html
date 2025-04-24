@@ -51,17 +51,34 @@
             </tbody>
         </table>
         
-        <div class="add-player-container">
-            <input type="text" id="newPlayerInput" placeholder="Add new player" />
-            <button id="addPlayerBtn">Add Player</button>
-        </div>
-
-        <div class="line-management">
-            <div class="add-line-container">
-                <input type="text" class="line-name-input" placeholder="Add new line" />
-                <button class="add-line-button">Add Line</button>
+        <div class="management-row">
+            <div class="management-container">
+                <div class="management-controls">
+                    <input type="text" id="newPlayerInput" placeholder="Add player" />
+                    <div class="management-icons">
+                        <button id="addPlayerBtn" class="icon-button">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                        <button id="deletePlayerBtn" class="icon-button">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
-            <button class="delete-line-button">Delete Line</button>
+
+            <div class="management-container">
+                <div class="management-controls">
+                    <input type="text" class="line-name-input" placeholder="Create line" />
+                    <div class="management-icons">
+                        <button class="add-line-button icon-button">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                        <button class="delete-line-button icon-button">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <footer>
