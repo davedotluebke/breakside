@@ -717,9 +717,10 @@ ul {
     flex-shrink: 0;
 }
 
-.icon-button {
-    width: 24px;
-    height: 24px;
+/* Management icon button styles */
+.management-icons .icon-button {
+    width: 28px;
+    height: 28px;
     padding: 0;
     border: 1px solid #ccc;
     border-radius: 3px;
@@ -733,19 +734,59 @@ ul {
     flex-shrink: 0;
 }
 
-.icon-button:hover {
+.management-icons .icon-button:hover {
     background-color: #e0e0e0;
 }
 
-.icon-button i {
+.management-icons .icon-button i {
     font-size: 12px;
 }
 
-/* Specific button styles */
-#addPlayerBtn, .add-line-button {
+/* Specific management icon button styles */
+.management-icons #addPlayerBtn, 
+.management-icons .add-line-button {
     color: #28a745;
 }
 
-#deletePlayerBtn, .delete-line-button {
+.management-icons #deletePlayerBtn, 
+.management-icons .delete-line-button {
     color: #dc3545;
+}
+
+/* Delete Line Dialog Button Styles */
+.delete-line-button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    color: white;
+}
+
+.delete-line-button.delete {
+    background-color: #dc3545;
+}
+
+.delete-line-button.delete:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.delete-line-button.cancel {
+    background-color: #6c757d;
+}
+
+/* Games list icon button styles */
+.games-list .icon-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.2em 0.4em;
+    font-size: 1em;
+}
+
+.games-list .icon-button:hover {
+    background-color: #f0f0f0;
+    border-radius: 4px;
 }
