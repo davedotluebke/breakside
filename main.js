@@ -774,7 +774,7 @@ function updateTeamRosterDisplay() {
 
     // Add header row
     let headerRow = document.createElement('tr');
-    ['', 'Name', 'Points', 'Time', 'Goals', 'Assists', '+/-', '+/- per pt'].forEach(headerText => {
+    ['', 'Name', 'Pts', 'Time', 'Goals', 'Assists', '+/-', '..per pt'].forEach(headerText => {
         let headerCell = document.createElement('th');
         headerCell.textContent = headerText;
         headerCell.classList.add('roster-header');
