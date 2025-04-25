@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate Stats Tracker</title>
+    <title>Breakside</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="main.css">
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
@@ -14,7 +17,20 @@
         <span id="timerDisplay">01:30</span>
     </div>
     <header>
-        <h4>Ultimate Stats Tracker</h4>
+        <div class="header-content">
+            <div class="logo-container">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="40" height="40">
+                    <circle cx="60" cy="60" r="45" stroke="#fff" stroke-width="6" fill="none"/>
+                    <path d="M 95 60 A 35 35 0 0 1 60 95" stroke="#fff" stroke-width="6" fill="none" marker-end="url(#arrowhead)"/>
+                    <defs>
+                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#fff"/>
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
+            <h1>Breakside</h1>
+        </div>
     </header>
 
     <!-- Select Your Team Screen -->
@@ -175,6 +191,15 @@
         <div class="simple-mode-container">
             <button id="weScoreBtn" class="large-action-btn">We Score</button>
             <button id="theyScoreBtn" class="large-action-btn">They Score</button>
+            <div class="point-clock-container">
+                <div class="point-clock">
+                    <span id="pointTimer">0:00</span>
+                </div>
+                <button id="pauseResumeBtn" class="pause-resume-btn">
+                    <i class="fas fa-pause"></i>
+                    <span class="pause-resume-text">Pause</span>
+                </button>
+            </div>
         </div>
 
         <!-- Score Attribution Dialog -->
