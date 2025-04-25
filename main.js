@@ -41,6 +41,7 @@ function showScreen(screenId) {
 
     // Update specific UI elements for the new screen
     if (screenId === 'beforePointScreen') {
+        shouldUnselectAllPlayers = true;  // Reset flag when entering Before Point screen
         updateActivePlayersList();
         checkPlayerCount();
     }
@@ -443,6 +444,7 @@ let showingTotalStats = false;  // true if showing total stats, false if showing
 let countdownInterval = null;
 let countdownSeconds = 90;      // Default 90 seconds
 let isCountdownRunning = false;
+let shouldUnselectAllPlayers = true;  // true when first entering Before Point screen, false after first line selection
 
 /* 
  * Utility functions
@@ -2399,10 +2401,13 @@ function showLineSelectionDialog() {
     selectButton.disabled = true;
     selectButton.addEventListener('click', () => {
         if (selectedLine) {
-            // Uncheck all checkboxes
-            document.querySelectorAll('#activePlayersTable input[type="checkbox"]').forEach(checkbox => {
-                checkbox.checked = false;
-            });
+            // Only uncheck all checkboxes if this is the first line selection for this point
+            if (shouldUnselectAllPlayers) {
+                document.querySelectorAll('#activePlayersTable input[type="checkbox"]').forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+                shouldUnselectAllPlayers = false;  // Clear the flag after first use
+            }
 
             // Check boxes for players in the selected line
             const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
