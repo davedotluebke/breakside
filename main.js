@@ -260,6 +260,8 @@ class Point {
         this.winner = "";  // Either 'team' or 'opponent'     
         this.startTimestamp = null;
         this.endTimestamp = null;
+        this.totalPointTime = 0;  // New field to track accumulated time
+        this.lastPauseTime = null;  // New field to track when point was paused
     }
 
     addPossession(possession) {
@@ -291,26 +293,46 @@ function serializeEvent(event) {
 
 // Simplify the team & game objects into serializable objects and output JSON
 function serializeTeam(team) {
-    const simplifiedGames = team.games.map(game => ({
-        ...game,
-        gameStartTimestamp: game.gameStartTimestamp.toISOString(),
-        gameEndTimestamp: game.gameEndTimestamp ? game.gameEndTimestamp.toISOString() : null,
-        points: game.points.map(point => ({
-            ...point,
-            startTimestamp: point.startTimestamp ? point.startTimestamp.toISOString() : null,
-            endTimestamp: point.endTimestamp ? point.endTimestamp.toISOString() : null,
-            possessions: point.possessions.map(possession => ({
-                ...possession,
-                events: possession.events.map(serializeEvent)
+    const serializedTeam = {
+        name: team.name,
+        teamRoster: team.teamRoster.map(player => ({
+            name: player.name,
+            nickname: player.nickname,
+            totalPointsPlayed: player.totalPointsPlayed,
+            consecutivePointsPlayed: player.consecutivePointsPlayed,
+            pointsPlayedPreviousGames: player.pointsPlayedPreviousGames,
+            totalTimePlayed: player.totalTimePlayed,
+            completedPasses: player.completedPasses,
+            turnovers: player.turnovers,
+            goals: player.goals,
+            assists: player.assists,
+            pointsWon: player.pointsWon,
+            pointsLost: player.pointsLost
+        })),
+        games: team.games.map(game => ({
+            team: game.team,
+            opponent: game.opponent,
+            startingPosition: game.startingPosition,
+            scores: game.scores,
+            gameStartTimestamp: game.gameStartTimestamp.toISOString(),
+            gameEndTimestamp: game.gameEndTimestamp ? game.gameEndTimestamp.toISOString() : null,
+            points: game.points.map(point => ({
+                players: point.players,
+                startingPosition: point.startingPosition,
+                winner: point.winner,
+                startTimestamp: point.startTimestamp ? point.startTimestamp.toISOString() : null,
+                endTimestamp: point.endTimestamp ? point.endTimestamp.toISOString() : null,
+                totalPointTime: point.totalPointTime,
+                lastPauseTime: point.lastPauseTime ? point.lastPauseTime.toISOString() : null,
+                possessions: point.possessions.map(possession => ({
+                    offensive: possession.offensive,
+                    events: possession.events.map(event => serializeEvent(event))
+                }))
             }))
-        }))
-    }));
-
-    return JSON.stringify({
-        ...team,
-        games: simplifiedGames,
-        lines: team.lines // Include the lines array in serialization
-    }, null, 4);
+        })),
+        lines: team.lines
+    };
+    return JSON.stringify(serializedTeam, null, 4);
 }
 
 // Log team data to the console
@@ -400,6 +422,8 @@ function deserializeTeams(serializedData) {
                 point.startTimestamp = pointData.startTimestamp ? new Date(pointData.startTimestamp) : null;
                 point.endTimestamp = pointData.endTimestamp ? new Date(pointData.endTimestamp) : null;
                 point.winner = pointData.winner;
+                point.totalPointTime = pointData.totalPointTime || 0;
+                point.lastPauseTime = pointData.lastPauseTime ? new Date(pointData.lastPauseTime) : null;
                 point.possessions = pointData.possessions.map(possessionData => {
                     const possession = new Possession(possessionData.offensive);
                     possession.events = possessionData.events.map(eventData => deserializeEvent(eventData));
@@ -529,9 +553,26 @@ function getPlayerGameTime(playerName) {
         currentGame().points.forEach(point => {
             if (point.players.includes(playerName)) {
                 if (point.endTimestamp) {
-                    totalTime += point.endTimestamp - point.startTimestamp;
-                } else if (point.startTimestamp) {
-                    totalTime += (new Date()) - point.startTimestamp;
+                    // For completed points, just use the totalPointTime
+                    totalTime += point.totalPointTime;
+                } else if (point === currentPoint) {
+                    // For the current point, handle paused state
+                    if (isPaused) {
+                        // If paused, just use the accumulated time
+                        totalTime += point.totalPointTime;
+                    } else if (point.startTimestamp) {
+                        // If running, calculate current running time and update totalPointTime
+                        const currentRunningTime = new Date() - point.startTimestamp;
+                        point.totalPointTime += currentRunningTime;
+                        point.startTimestamp = new Date(); // Reset start time to now
+                        totalTime += point.totalPointTime;
+                    } else {
+                        // If no start time, just use accumulated time
+                        totalTime += point.totalPointTime;
+                    }
+                } else {
+                    // For other incomplete points (shouldn't happen), use accumulated time
+                    totalTime += point.totalPointTime;
                 }
             }
         });
@@ -666,8 +707,8 @@ function removeGameStatsFromRoster(team, game) {
     
     // For each point
     points.forEach(point => {
-        // Get the duration of the point
-        const pointDuration = (point.endTimestamp || point.startTimestamp) - point.startTimestamp;
+        // Get the duration of the point using totalPointTime
+        const pointDuration = point.totalPointTime;
         
         // Subtract time and point from each player who was on the field
         point.players.forEach(playerName => {
@@ -1395,6 +1436,11 @@ function startNextPoint() {
     
     if (isSimpleMode) {
         showScreen('simpleModeScreen');
+        // Start timing immediately in simple mode
+        if (currentPoint.startTimestamp !== null) {
+            console.warn("Warning: startTimestamp was already set when starting point in simple mode");
+        }
+        currentPoint.startTimestamp = new Date();
     } else {
         if (startPointOn === 'offense') {
             updateOffensivePossessionScreen();
@@ -1404,9 +1450,10 @@ function startNextPoint() {
             showScreen('defensePlayByPlayScreen');
             // For now start possession and timing when D points start
             currentPoint.addPossession(new Possession(false));
-            if (currentPoint.startTimestamp === null) {
-                currentPoint.startTimestamp = new Date();
+            if (currentPoint.startTimestamp !== null) {
+                console.warn("Warning: startTimestamp was already set when starting defensive point");
             }
+            currentPoint.startTimestamp = new Date();
         }
     }
 }
@@ -1420,9 +1467,11 @@ function updateScore(winner) {
 
     if (currentPoint) {
         if (currentPoint.startTimestamp === null) {
-            console.log("Warning: currentPoint.startTimestamp is null; setting to now");
+            console.warn("Warning: currentPoint.startTimestamp is null; setting to now");
             currentPoint.startTimestamp = new Date();
         }
+        // Add any remaining time to totalPointTime before ending
+        currentPoint.totalPointTime += (new Date() - currentPoint.startTimestamp);
         currentPoint.endTimestamp = new Date();
         currentPoint.winner = winner; // Setting the winning team for the current point
         currentGame().scores[winner]++;
@@ -1435,7 +1484,7 @@ function updateScore(winner) {
             if (currentPoint.players.includes(p.name)) { // the player played this point
                 p.totalPointsPlayed++;
                 p.consecutivePointsPlayed++;
-                p.totalTimePlayed += currentPoint.endTimestamp - currentPoint.startTimestamp;
+                p.totalTimePlayed += currentPoint.totalPointTime;
                 if (winner === Role.TEAM) {
                     p.pointsWon++;
                 } else {
@@ -2666,4 +2715,54 @@ document.getElementById('toggleSimpleModeBtn').addEventListener('click', functio
     isSimpleMode = !isSimpleMode;
     this.textContent = isSimpleMode ? 'Toggle Detailed Mode' : 'Toggle Simple Mode';
 });
+
+// Add this near the top with other DOM element references
+const pauseResumeBtn = document.getElementById('pauseResumeBtn');
+const pauseResumeText = pauseResumeBtn.querySelector('.pause-resume-text');
+const pauseResumeIcon = pauseResumeBtn.querySelector('i');
+let isPaused = false;
+
+// Add this near other event listeners
+pauseResumeBtn.addEventListener('click', () => {
+    if (!currentPoint) {
+        console.warn("Warning: pause/resume button clicked, but currentPoint is null");
+        return;
+    }
+    
+    isPaused = !isPaused;
+    if (isPaused) {
+        // Pause logic
+        currentPoint.lastPauseTime = new Date();
+        if (currentPoint.startTimestamp) {
+            currentPoint.totalPointTime += (currentPoint.lastPauseTime - currentPoint.startTimestamp);
+            currentPoint.startTimestamp = null;
+        }
+        pauseResumeIcon.className = 'fas fa-play';
+        pauseResumeText.textContent = 'Resume';
+    } else {
+        // Resume logic
+        currentPoint.startTimestamp = new Date();
+        currentPoint.lastPauseTime = null;
+        pauseResumeIcon.className = 'fas fa-pause';
+        pauseResumeText.textContent = 'Pause';
+    }
+});
+
+// New function to update the timer display
+function updatePointTimer() {
+    if (!currentPoint) return;
+    
+    let elapsedTime = currentPoint.totalPointTime;
+    if (currentPoint.startTimestamp && !isPaused) {
+        elapsedTime += (new Date() - currentPoint.startTimestamp);
+    }
+    
+    const minutes = Math.floor(elapsedTime / 60000);
+    const seconds = Math.floor((elapsedTime % 60000) / 1000);
+    document.getElementById('pointTimer').textContent = 
+        `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+// Add timer update to existing interval
+setInterval(updatePointTimer, 1000);
 
