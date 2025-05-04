@@ -1579,11 +1579,9 @@ document.getElementById('toggleEventLogBtn').addEventListener('click', function(
     // Check if the event log is currently visible
     if (eventLog.style.display != 'block') {
         eventLog.style.display = 'block'; // Show the event log
-        toggleBtn.textContent = 'Hide play-by-play';
         toggleBtn.classList.add('selected');
     } else {
         eventLog.style.display = 'none'; // Hide the event log
-        toggleBtn.textContent = 'Show play-by-play';
         toggleBtn.classList.remove('selected');
     }
 });
