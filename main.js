@@ -35,6 +35,9 @@ function showScreen(screenId) {
     // In-game screens display a bottom panel with play-by-play textarea
     if (targetScreen.classList && targetScreen.classList.contains('in-game-content')) {
         document.getElementById('bottomPanel').style.display = 'flex';
+        // Match button widths when footer is shown
+        matchButtonWidths();
+        setTimeout(matchButtonWidths, 100);
     } else {
         document.getElementById('bottomPanel').style.display = 'none';
     }
@@ -2377,6 +2380,10 @@ function stopCountdown() {
 document.addEventListener('DOMContentLoaded', function() {
     // Hide countdown timer initially
     document.getElementById('countdownTimer').style.display = 'none';
+    
+    // Match button widths
+    matchButtonWidths();
+    setTimeout(matchButtonWidths, 100);
 });
 
 function showLineSelectionDialog() {
@@ -2763,4 +2770,30 @@ function updatePointTimer() {
 
 // Add timer update to existing interval
 setInterval(updatePointTimer, 1000);
+
+// Function to match button widths
+function matchButtonWidths() {
+    const gameLogBtn = document.getElementById('toggleEventLogBtn');
+    const undoBtn = document.getElementById('undoBtn');
+    
+    if (gameLogBtn && undoBtn) {
+        // Use getComputedStyle for accurate width and height
+        const gameLogStyle = window.getComputedStyle(gameLogBtn);
+        undoBtn.style.width = gameLogStyle.width;
+        undoBtn.style.height = gameLogStyle.height;
+        undoBtn.style.lineHeight = gameLogStyle.lineHeight;
+        undoBtn.style.fontSize = gameLogStyle.fontSize;
+        undoBtn.style.borderRadius = gameLogStyle.borderRadius;
+        undoBtn.style.padding = gameLogStyle.padding;
+    }
+}
+
+// Call the function when the page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Initial call
+    matchButtonWidths();
+    
+    // Also call after a short delay to ensure all styles are applied
+    setTimeout(matchButtonWidths, 100);
+});
 
