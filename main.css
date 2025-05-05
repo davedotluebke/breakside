@@ -1,3 +1,6 @@
+/* Import JetBrains Mono font */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
 * {
     margin: 0;
     padding: 0;
@@ -1011,7 +1014,7 @@ ul {
 .point-clock {
     flex: 1;
     text-align: center;
-    font-family: monospace;
+    font-family: 'JetBrains Mono', monospace;
     font-size: 2rem;
     font-weight: bold;
     color: #333;
@@ -1020,6 +1023,10 @@ ul {
     border: 1px solid #ccc;
     border-radius: 0.5rem;
     margin-right: 1rem;
+    min-width: 100px;
+    width: 100px;
+    display: inline-block;
+    letter-spacing: -0.5px;
 }
 
 .pause-resume-btn {
@@ -1175,4 +1182,11 @@ input:checked + .slider:before {
 
 .slider.round:before {
     border-radius: 50%;
+}
+
+/* Make sure the timer text itself uses JetBrains Mono */
+#pointTimer {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-weight: 700;
+    letter-spacing: -0.5px;
 }

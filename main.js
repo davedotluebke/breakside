@@ -23,6 +23,13 @@ const screens = [
     document.getElementById('gameSummaryScreen')
 ];
 
+// Play-by-play screens where simple mode toggle changes are relevant
+const playByPlayScreenIds = [
+    'offensePlayByPlayScreen',
+    'defensePlayByPlayScreen',
+    'simpleModeScreen'
+];
+
 // Function to handle screen transitions
 function showScreen(screenId) {
     // Hide all screens first
@@ -40,6 +47,13 @@ function showScreen(screenId) {
         setTimeout(matchButtonWidths, 100);
     } else {
         document.getElementById('bottomPanel').style.display = 'none';
+    }
+
+    // Update the simple mode toggle to match current screen
+    if (screenId === 'simpleModeScreen') {
+        document.getElementById('simpleModeToggle').checked = true;
+    } else if (playByPlayScreenIds.includes(screenId) && screenId !== 'simpleModeScreen') {
+        document.getElementById('simpleModeToggle').checked = false;
     }
 
     // Update specific UI elements for the new screen
@@ -1437,6 +1451,9 @@ function startNextPoint() {
     currentPoint = new Point(activePlayersForThisPoint, startPointOn);
     currentGame().points.push(currentPoint);
     
+    // Update the simple mode toggle to match isSimpleMode before showing the screen
+    document.getElementById('simpleModeToggle').checked = isSimpleMode;
+    
     if (isSimpleMode) {
         showScreen('simpleModeScreen');
         // Start timing immediately in simple mode
@@ -2542,10 +2559,20 @@ function updateActivePlayersDisplay() {
 
 // Simple Mode Event Handlers
 document.getElementById('weScoreBtn').addEventListener('click', function() {
+    // Immediately stop the timer when "We Score" is pressed
+    if (currentPoint && currentPoint.startTimestamp) {
+        currentPoint.totalPointTime += (new Date() - currentPoint.startTimestamp);
+        currentPoint.startTimestamp = null;
+    }
     showScoreAttributionDialog();
 });
 
 document.getElementById('theyScoreBtn').addEventListener('click', function() {
+    // Immediately stop the timer when "They Score" is pressed
+    if (currentPoint && currentPoint.startTimestamp) {
+        currentPoint.totalPointTime += (new Date() - currentPoint.startTimestamp);
+        currentPoint.startTimestamp = null;
+    }
     updateScore(Role.OPPONENT);
     moveToNextPoint();
 });
@@ -2716,9 +2743,62 @@ window.addEventListener('click', function(event) {
 // Simple Mode Toggle
 let isSimpleMode = false;
 
-document.getElementById('toggleSimpleModeBtn').addEventListener('click', function() {
-    isSimpleMode = !isSimpleMode;
-    this.textContent = isSimpleMode ? 'Toggle Detailed Mode' : 'Toggle Simple Mode';
+document.getElementById('simpleModeToggle').addEventListener('change', function() {
+    isSimpleMode = this.checked;
+    
+    // Find which screen is currently visible
+    let currentScreenId = null;
+    for (const screen of screens) {
+        if (screen && screen.style.display !== 'none') {
+            currentScreenId = screen.id;
+            break;
+        }
+    }
+    
+    // Only process screen transitions if we're on a play-by-play screen
+    if (playByPlayScreenIds.includes(currentScreenId)) {
+        if (isSimpleMode) {
+            // When switching to simple mode, keep existing possession data
+            showScreen('simpleModeScreen');
+            
+            // Make sure point timer is running
+            if (currentPoint && !currentPoint.startTimestamp) {
+                currentPoint.startTimestamp = new Date();
+            }
+        } else {
+            // When switching back to detailed mode, determine which screen to show
+            if (!currentPoint) {
+                console.warn("No current point when toggling from simple mode");
+                return;
+            }
+            
+            // Check if we have any possessions in this point
+            if (currentPoint.possessions.length > 0) {
+                // Check if the latest possession is offensive or defensive
+                const latestPossession = currentPoint.possessions[currentPoint.possessions.length - 1];
+                if (latestPossession.offensive) {
+                    updateOffensivePossessionScreen();
+                    showScreen('offensePlayByPlayScreen');
+                } else {
+                    updateDefensivePossessionScreen();
+                    showScreen('defensePlayByPlayScreen');
+                }
+            } else {
+                // No possessions yet, use the starting position of the point
+                if (currentPoint.startingPosition === 'offense') {
+                    // Create the first possession as offensive
+                    currentPoint.addPossession(new Possession(true));
+                    updateOffensivePossessionScreen();
+                    showScreen('offensePlayByPlayScreen');
+                } else {
+                    // Create the first possession as defensive
+                    currentPoint.addPossession(new Possession(false));
+                    updateDefensivePossessionScreen();
+                    showScreen('defensePlayByPlayScreen');
+                }
+            }
+        }
+    }
 });
 
 // Add this near the top with other DOM element references
