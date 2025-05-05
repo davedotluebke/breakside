@@ -861,11 +861,34 @@ ul {
 }
 
 /* Score Attribution Dialog Styles */
+.dialog-header {
+    position: relative;
+    margin-bottom: 0.5rem;
+    padding: 0;
+}
+
+.dialog-header .close {
+    position: absolute;
+    right: 0;
+    top: 0;
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: bold;
+    cursor: pointer;
+    color: #666;
+}
+
+.dialog-header .close:hover {
+    color: #f44336;
+}
+
 .score-attribution-container {
     display: flex;
-    gap: 2rem;
+    justify-content: space-between;
+    width: 100%;
+    gap: 1rem;
     margin: 0;
-    padding: 0 1rem;
+    padding: 0;
 }
 
 .score-column {
@@ -873,53 +896,36 @@ ul {
     display: flex;
     flex-direction: column;
     align-items: center;
+    min-width: 0; /* Allow columns to shrink below content size */
 }
 
-.score-column h4 {
-    display: none; /* Hide the old headers since they're now in the dialog header */
-}
-
-.callahan-separator {
+.score-column-header {
+    font-weight: bold;
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+    text-align: center;
     width: 100%;
-    margin: 1rem 0;
-    border: 1px solid #ccc;
 }
 
-.score-attribution-actions {
+.player-buttons {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.player-button {
+    padding: 0.7rem 0.3rem;
+    margin: 0.3rem 0;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: normal;
+    word-break: break-word;
     display: flex;
     justify-content: center;
-    gap: 2rem;
-    margin-top: 1rem;
-    margin-bottom: 1rem;
-}
-
-.special-action-btn, .secondary-action-btn {
-    padding: 1rem 2rem;
-    border: none;
-    border-radius: 0.5rem;
-    cursor: pointer;
-    transition: background-color 0.3s;
-    font-size: 1.2rem;
-    width: auto;
-    min-width: 120px;
-}
-
-.special-action-btn {
-    background-color: #ff9800;
-    color: white;
-}
-
-.special-action-btn:hover {
-    background-color: #f57c00;
-}
-
-.secondary-action-btn {
-    background-color: #9e9e9e;
-    color: white;
-}
-
-.secondary-action-btn:hover {
-    background-color: #757575;
+    align-items: center;
+    min-height: 2.5rem;
 }
 
 /* Modal Styles for Score Attribution */
@@ -937,134 +943,64 @@ ul {
 .modal-content {
     background-color: #fefefe;
     margin: 15% auto;
-    padding: 2rem;
+    padding: 1rem 1rem;
     border: 1px solid #888;
-    width: 80%;
-    max-width: 600px;
-    border-radius: 1rem;
+    width: 90%;
+    max-width: 500px;
+    border-radius: 0.5rem;
     position: relative;
 }
 
-.close {
-    position: absolute;
-    right: 1rem;
-    top: 1rem;
-    font-size: 1.5rem;
-    font-weight: bold;
-    cursor: pointer;
-}
-
-.close:hover {
-    color: #f44336;
-}
-
-.dialog-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-    padding: 0 1rem;
-}
-
-.dialog-header h4 {
-    font-size: 1.5rem;
-    margin: 0;
-    color: #333;
-    flex: 1;
-    text-align: center;
-}
-
-.dialog-header .close {
-    font-size: 2rem;
-    font-weight: bold;
-    cursor: pointer;
-    color: #666;
-    flex: 0 0 auto;
-}
-
-.dialog-header .close:hover {
-    color: #f44336;
-}
-
-.score-column h4 {
-    display: none; /* Hide the old headers since they're now in the dialog header */
-}
-
-.score-attribution-container {
-    display: flex;
-    gap: 2rem;
-    margin: 0;
-    padding: 0 1rem;
-}
-
-.point-clock-container {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 80%;
-    max-width: 400px;
-    background-color: #f5f5f5;
-    border: 2px solid #ddd;
-    border-radius: 1rem;
-    padding: 1rem;
-    margin: 2rem auto;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.point-clock {
-    flex: 1;
-    text-align: center;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 2rem;
-    font-weight: bold;
-    color: #333;
-    padding: 0.5rem 1rem;
-    background-color: white;
+.callahan-separator {
+    width: 100%;
+    margin: 0.5rem 0;
     border: 1px solid #ccc;
-    border-radius: 0.5rem;
-    margin-right: 1rem;
-    min-width: 100px;
-    width: 100px;
-    display: inline-block;
-    letter-spacing: -0.5px;
 }
 
-.pause-resume-btn {
+.score-attribution-actions {
     display: flex;
-    flex-direction: column;
-    align-items: center;
     justify-content: center;
-    background-color: #0066cc;
-    border: none;
-    cursor: pointer;
-    padding: 1rem;
-    color: white;
-    border-radius: 0.5rem;
-    min-width: 100px;
-    transition: background-color 0.2s;
-}
-
-.pause-resume-btn:hover {
-    background-color: #0052a3;
-}
-
-.pause-resume-btn i {
-    font-size: 1.5rem;
+    gap: 1rem;
+    margin-top: 0.5rem;
     margin-bottom: 0.5rem;
 }
 
-.pause-resume-text {
+.special-action-btn, .secondary-action-btn {
+    padding: 0.7rem 1rem;
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.3s;
     font-size: 1rem;
-    font-weight: 500;
+    min-width: 80px;
 }
 
-/* Update simple mode container spacing */
-.simple-mode-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1rem;
-    padding: 2rem;
+/* Responsive adjustments for very small screens */
+@media (max-width: 360px) {
+    .modal-content {
+        padding: 0.5rem;
+        width: 95%;
+    }
+    
+    .player-button {
+        padding: 0.5rem 0.2rem;
+        font-size: 0.8rem;
+        min-height: 2rem;
+    }
+    
+    .special-action-btn, .secondary-action-btn {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+        min-width: 70px;
+    }
+    
+    .score-attribution-container {
+        gap: 0.5rem;
+    }
+    
+    .score-column-header {
+        font-size: 1rem;
+    }
 }
 
 /* Header styles */
@@ -1189,4 +1125,94 @@ input:checked + .slider:before {
     font-family: 'JetBrains Mono', monospace !important;
     font-weight: 700;
     letter-spacing: -0.5px;
+}
+
+/* Add back specific button styles */
+.special-action-btn {
+    background-color: #ff9800;
+    color: white;
+}
+
+.special-action-btn:hover {
+    background-color: #f57c00;
+}
+
+.secondary-action-btn {
+    background-color: #9e9e9e;
+    color: white;
+}
+
+.secondary-action-btn:hover {
+    background-color: #757575;
+}
+
+/* Point clock container styles */
+.point-clock-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 80%;
+    max-width: 400px;
+    background-color: #f5f5f5;
+    border: 2px solid #ddd;
+    border-radius: 1rem;
+    padding: 1rem;
+    margin: 2rem auto;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.point-clock {
+    flex: 1;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2rem;
+    font-weight: bold;
+    color: #333;
+    padding: 0.5rem 1rem;
+    background-color: white;
+    border: 1px solid #ccc;
+    border-radius: 0.5rem;
+    margin-right: 1rem;
+    min-width: 100px;
+    width: 100px;
+    display: inline-block;
+    letter-spacing: -0.5px;
+}
+
+.pause-resume-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: #0066cc;
+    border: none;
+    cursor: pointer;
+    padding: 1rem;
+    color: white;
+    border-radius: 0.5rem;
+    min-width: 100px;
+    transition: background-color 0.2s;
+}
+
+.pause-resume-btn:hover {
+    background-color: #0052a3;
+}
+
+.pause-resume-btn i {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.pause-resume-text {
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+/* Update simple mode container spacing */
+.simple-mode-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem;
 }
