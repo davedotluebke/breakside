@@ -1011,16 +1011,24 @@ header {
     text-align: center;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     margin-bottom: 1rem;
+    position: relative;
+    min-height: 60px; /* Ensure consistent height in both modes */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden; /* Prevent elements from overflowing */
 }
 
 .header-content {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 1rem;
     max-width: 1200px;
     margin: 0 auto;
     padding: 0 1rem;
+    position: relative;
+    width: 100%; /* Ensure content spans full width */
+    height: 40px; /* Match the logo height */
 }
 
 .logo-container {
@@ -1030,22 +1038,50 @@ header {
     width: 40px;
     height: 40px;
     flex-shrink: 0;
+    transition: transform 0.5s ease, position 0.5s ease;
 }
 
+/* Remove hover transition */
 .logo-container svg {
-    transition: transform 0.3s ease;
+    transition: none;
 }
 
 .logo-container svg:hover {
-    transform: rotate(15deg);
+    transform: none;
 }
 
+/* Title styling with transition */
 header h1 {
     margin: 0;
     font-size: 2rem;
     font-weight: 600;
     letter-spacing: 0.5px;
     text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    margin-left: 1rem;
+    line-height: 40px; /* Match the logo height */
+    white-space: nowrap; /* Prevent wrapping */
+}
+
+/* Header states */
+.header-full .logo-container {
+    position: relative;
+    left: 0;
+    margin-right: 0; /* Remove any margin that might affect centering */
+}
+
+.header-compact .logo-container {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.header-compact h1 {
+    opacity: 0;
+    transform: translateY(-10px);
+    position: absolute;
+    pointer-events: none;
 }
 
 /* Simple Mode Toggle Styles */
@@ -1054,6 +1090,16 @@ header h1 {
     flex-direction: column;
     align-items: center;
     gap: 0.25rem;
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    transition: opacity 0.3s ease;
+}
+
+.simple-mode-toggle.hidden {
+    opacity: 0;
+    pointer-events: none;
 }
 
 .toggle-label {
@@ -1215,4 +1261,10 @@ input:checked + .slider:before {
     align-items: center;
     gap: 1rem;
     padding: 2rem;
+}
+
+/* When in full mode, make sure we have enough space for both title and logo */
+.header-full .header-content {
+    justify-content: center;
+    min-width: 180px; /* Ensure enough space for title and logo */
 }
