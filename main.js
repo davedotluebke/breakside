@@ -49,6 +49,22 @@ function showScreen(screenId) {
         document.getElementById('bottomPanel').style.display = 'none';
     }
 
+    // Update header layout based on the current screen
+    const headerElement = document.querySelector('header');
+    const simpleModeToggle = document.querySelector('.simple-mode-toggle');
+    
+    // Hide simple mode toggle on team select and roster screens
+    if (screenId === 'selectTeamScreen' || screenId === 'teamRosterScreen') {
+        headerElement.classList.remove('header-compact');
+        headerElement.classList.add('header-full');
+        simpleModeToggle.classList.add('hidden');
+    } else {
+        // Show compact header for gameplay screens
+        headerElement.classList.remove('header-full');
+        headerElement.classList.add('header-compact');
+        simpleModeToggle.classList.remove('hidden');
+    }
+
     // Update the simple mode toggle to match current screen
     if (screenId === 'simpleModeScreen') {
         document.getElementById('simpleModeToggle').checked = true;
@@ -2332,6 +2348,24 @@ document.getElementById('anotherGameBtn').addEventListener('click', function() {
 document.getElementById('activePlayersTable').addEventListener('change', checkPlayerCount);
 document.getElementById('playersOnFieldInput').addEventListener('input', checkPlayerCount);
 
+// Initialize header state on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Set initial header state based on starting screen
+    const headerElement = document.querySelector('header');
+    const simpleModeToggle = document.querySelector('.simple-mode-toggle');
+    
+    // Start with full header and hidden toggle since we start on team select
+    headerElement.classList.add('header-full');
+    headerElement.classList.remove('header-compact');
+    simpleModeToggle.classList.add('hidden');
+    
+    // Initial display of countdown timer
+    document.getElementById('countdownTimer').style.display = 'none';
+    
+    // Match button widths
+    matchButtonWidths();
+    setTimeout(matchButtonWidths, 100);
+});
 
 // Commenting out audio narration code for now
 // import AudioNarrationService from './audioNarration.js';
