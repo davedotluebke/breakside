@@ -1372,29 +1372,39 @@ function checkPlayerCount() {
     const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
     const selectedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
     const expectedCount = parseInt(document.getElementById('playersOnFieldInput').value, 10);
-
+    
+    // Determine which button to update based on mode
+    const inNextLineMode = document.body.classList.contains('next-line-mode');
     const startPointBtn = document.getElementById('startPointBtn');
-    startPointBtn.classList.remove('warning');
-    startPointBtn.classList.remove('inactive');
+    const selectNextLineBtn = document.getElementById('selectNextLineBtn');
+    const activeBtn = inNextLineMode ? selectNextLineBtn : startPointBtn;
+    
+    // Remove warning and inactive classes
+    activeBtn.classList.remove('warning');
+    activeBtn.classList.remove('inactive');
+    
+    // Apply appropriate classes based on player count
     if (selectedCount === 0) {
-        startPointBtn.classList.add('inactive');
+        activeBtn.classList.add('inactive');
     } else if (selectedCount !== expectedCount) {
-        startPointBtn.classList.add('warning');
+        activeBtn.classList.add('warning');
     }
-    // if a point is in progress, the button should say "Continue Point"
-    if (isPointInProgress()) {
-        startPointBtn.textContent = "Continue Point";
-    } else {
-        startPointBtn.textContent = "Start Point";
-    }
+    
+    // Update button text (only for startPointBtn when not in next line mode)
+    if (!inNextLineMode) {
+        // If a point is in progress, the button should say "Continue Point"
+        if (isPointInProgress()) {
+            startPointBtn.textContent = "Continue Point";
+        } else {
+            startPointBtn.textContent = "Start Point";
+        }
         
-    // Append "(Offense)" or "(Defense)" based on the next point 
-    let startPointOn = determineStartingPosition();
-    startPointBtn.textContent += ` (${capitalize(startPointOn)})`;
-
-    // Helper function to capitalize the first letter of a string
-    function capitalize(word) {
-        return word.charAt(0).toUpperCase() + word.slice(1);
+        // Append "(Offense)" or "(Defense)" based on the next point 
+        let startPointOn = determineStartingPosition();
+        startPointBtn.textContent += ` (${capitalize(startPointOn)})`;
+    } else {
+        // In next line mode, always show "Select Next Line"
+        selectNextLineBtn.textContent = "Select Next Line";
     }
 }
 
@@ -1432,6 +1442,11 @@ document.getElementById('startGameOnDBtn').addEventListener('click', function() 
 
 // Transition from Play-by-Play to Before Point when either team scores
 function moveToNextPoint() {
+    // If we're in next line selection mode, exit it
+    if (document.body.classList.contains('next-line-mode')) {
+        exitNextLineSelectionMode();
+    }
+    
     updateActivePlayersList();
     logEvent("New point started");
     // make contiueGameBtn active to enable changing roster between points
@@ -1534,6 +1549,12 @@ function updateScore(winner) {
         currentPoint = null;  // Reset the temporary point object
         currentEvent = null;  // Reset the temporary event object
         currentPlayer = null; // Reset the temporary player object
+        
+        // Check if we're in next line selection mode and exit if we are
+        if (document.body.classList.contains('next-line-mode')) {
+            exitNextLineSelectionMode();
+        }
+        
         // Un-select all player buttons so O action buttons will be inactive next point
         document.querySelectorAll('.player-button').forEach(button => {
             button.classList.remove('selected');
@@ -2780,6 +2801,11 @@ let isSimpleMode = false;
 document.getElementById('simpleModeToggle').addEventListener('change', function() {
     isSimpleMode = this.checked;
     
+    // If we're in next line selection mode, exit it first
+    if (document.body.classList.contains('next-line-mode')) {
+        exitNextLineSelectionMode();
+    }
+    
     // Find which screen is currently visible
     let currentScreenId = null;
     for (const screen of screens) {
@@ -2878,12 +2904,134 @@ function updatePointTimer() {
     
     const minutes = Math.floor(elapsedTime / 60000);
     const seconds = Math.floor((elapsedTime % 60000) / 1000);
-    document.getElementById('pointTimer').textContent = 
-        `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    const formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    
+    // Update both the main and mini timers
+    document.getElementById('pointTimer').textContent = formattedTime;
+    
+    // Also update mini timer if in next line selection mode
+    if (document.body.classList.contains('next-line-mode')) {
+        document.getElementById('pointTimerMini').textContent = formattedTime;
+        
+        // In next line selection mode, also update the time displays for active players
+        if (currentPoint && currentPoint.players) {
+            const timeCells = document.querySelectorAll('.active-time-column');
+            
+            currentTeam.teamRoster.forEach((player, idx) => {
+                if (idx < timeCells.length) {
+                    // Only update time for players currently in the game
+                    if (currentPoint.players.includes(player.name)) {
+                        let totalTime = getPlayerGameTime(player.name);
+                        timeCells[idx].textContent = formatPlayTime(totalTime);
+                    }
+                }
+            });
+        }
+    }
 }
 
-// Add timer update to existing interval
-setInterval(updatePointTimer, 1000);
+// Remove the previous modification that wrapped the original updatePointTimer
+// Since we're replacing it completely
+// Delete these lines:
+// const originalUpdatePointTimer = updatePointTimer;
+// updatePointTimer = function() {
+//     originalUpdatePointTimer();
+//     if (document.body.classList.contains('next-line-mode')) {
+//         syncPointTimers();
+//     }
+// };
+
+// Update function to enter next line selection mode
+function enterNextLineSelectionMode() {
+    // First, update the active players list
+    updateActivePlayersList();
+    
+    // Show the next line header
+    document.getElementById('nextLineHeader').style.display = 'block';
+    
+    // Add class to body to trigger the CSS changes
+    document.body.classList.add('next-line-mode');
+    
+    // Update the pause/resume button icon
+    updatePauseResumeIconsForNextLineMode();
+    
+    // Make table columns sticky after rendering
+    setTimeout(makeColumnsSticky, 100);
+    
+    // Set up the touch events for swiping
+    setupSwipeEvents();
+    
+    // Start a timer to update player times in this view
+    startNextLinePlayerTimeUpdates();
+    
+    // Update the player count check for the selectNextLineBtn
+    checkPlayerCount();
+}
+
+// Function to periodically update player times in next line mode
+function startNextLinePlayerTimeUpdates() {
+    // Make sure we don't have duplicate intervals
+    if (window.nextLineTimeUpdateInterval) {
+        clearInterval(window.nextLineTimeUpdateInterval);
+    }
+    
+    // Update times immediately
+    updatePlayerTimesInNextLineMode();
+    
+    // Set interval to update times every second
+    window.nextLineTimeUpdateInterval = setInterval(function() {
+        if (document.body.classList.contains('next-line-mode')) {
+            updatePlayerTimesInNextLineMode();
+        } else {
+            // Clean up interval if we're not in next line mode
+            clearInterval(window.nextLineTimeUpdateInterval);
+            window.nextLineTimeUpdateInterval = null;
+        }
+    }, 1000);
+}
+
+// Function to update player times in next line mode
+function updatePlayerTimesInNextLineMode() {
+    if (!currentPoint || !currentPoint.players) return;
+    
+    const timeCells = document.querySelectorAll('.active-time-column');
+    currentTeam.teamRoster.forEach((player, idx) => {
+        if (idx < timeCells.length) {
+            // Highlight and update time for players currently in the game
+            if (currentPoint.players.includes(player.name)) {
+                timeCells[idx].textContent = formatPlayTime(getPlayerGameTime(player.name));
+                timeCells[idx].classList.add('active-player-time');
+            } else {
+                timeCells[idx].classList.remove('active-player-time');
+            }
+        }
+    });
+}
+
+// Function to exit the next line selection mode
+function exitNextLineSelectionMode() {
+    // Hide the next line header
+    document.getElementById('nextLineHeader').style.display = 'none';
+    
+    // Remove class from body
+    document.body.classList.remove('next-line-mode');
+    
+    // Restore the Start Point button text
+    let startPointOn = determineStartingPosition();
+    document.getElementById('startPointBtn').textContent = `Start Point (${capitalize(startPointOn)})`;
+    
+    // Clean up any swipe event listeners
+    cleanupSwipeEvents();
+    
+    // Clean up time update interval
+    if (window.nextLineTimeUpdateInterval) {
+        clearInterval(window.nextLineTimeUpdateInterval);
+        window.nextLineTimeUpdateInterval = null;
+    }
+    
+    // Update the player count check for the startPointBtn
+    checkPlayerCount();
+}
 
 // Function to match button widths
 function matchButtonWidths() {
@@ -2909,5 +3057,117 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Also call after a short delay to ensure all styles are applied
     setTimeout(matchButtonWidths, 100);
+});
+
+// Next Line Selection Mode functions
+document.getElementById('chooseNextLineBtn').addEventListener('click', function() {
+    enterNextLineSelectionMode();
+});
+
+// Mini versions of score and pause buttons in the header
+document.getElementById('weScoreBtnMini').addEventListener('click', function() {
+    // Delegate the click to the main We Score button
+    document.getElementById('weScoreBtn').click();
+});
+
+document.getElementById('theyScoreBtnMini').addEventListener('click', function() {
+    // Delegate the click to the main They Score button
+    document.getElementById('theyScoreBtn').click();
+});
+
+document.getElementById('pauseResumeBtnMini').addEventListener('click', function() {
+    // Delegate the click to the main pause/resume button
+    document.getElementById('pauseResumeBtn').click();
+    // Update the mini button's icon based on pause state
+    updatePauseResumeIconsForNextLineMode();
+});
+
+// Swipe down to return to simple mode
+document.querySelector('.swipe-indicator').addEventListener('click', function() {
+    exitNextLineSelectionMode();
+});
+
+// Function to sync the point timer between the main display and mini display
+function syncPointTimers() {
+    const mainTimer = document.getElementById('pointTimer');
+    const miniTimer = document.getElementById('pointTimerMini');
+    miniTimer.textContent = mainTimer.textContent;
+}
+
+// Update both main and mini pause/resume button icons
+function updatePauseResumeIconsForNextLineMode() {
+    const iconClass = isPaused ? 'fa-play' : 'fa-pause';
+    const mainIcon = document.querySelector('#pauseResumeBtn i');
+    const miniIcon = document.querySelector('#pauseResumeBtnMini i');
+    
+    if (mainIcon) mainIcon.className = `fas ${iconClass}`;
+    if (miniIcon) miniIcon.className = `fas ${iconClass}`;
+    
+    const pauseResumeText = document.querySelector('.pause-resume-text');
+    if (pauseResumeText) {
+        pauseResumeText.textContent = isPaused ? 'Resume' : 'Pause';
+    }
+}
+
+// Track touch events for swipe gesture
+let touchStartY = 0;
+let touchSwipeListenerActive = false;
+
+function setupSwipeEvents() {
+    if (touchSwipeListenerActive) return;
+    
+    const nextLineHeader = document.getElementById('nextLineHeader');
+    
+    nextLineHeader.addEventListener('touchstart', handleTouchStart, { passive: true });
+    nextLineHeader.addEventListener('touchmove', handleTouchMove, { passive: true });
+    nextLineHeader.addEventListener('touchend', handleTouchEnd, { passive: true });
+    
+    touchSwipeListenerActive = true;
+}
+
+function cleanupSwipeEvents() {
+    if (!touchSwipeListenerActive) return;
+    
+    const nextLineHeader = document.getElementById('nextLineHeader');
+    
+    nextLineHeader.removeEventListener('touchstart', handleTouchStart);
+    nextLineHeader.removeEventListener('touchmove', handleTouchMove);
+    nextLineHeader.removeEventListener('touchend', handleTouchEnd);
+    
+    touchSwipeListenerActive = false;
+}
+
+function handleTouchStart(event) {
+    touchStartY = event.touches[0].clientY;
+}
+
+function handleTouchMove(event) {
+    if (!touchStartY) return;
+    
+    const touchY = event.touches[0].clientY;
+    const diff = touchY - touchStartY;
+    
+    // If user has swiped down at least 50px, exit the next line mode
+    if (diff > 50) {
+        exitNextLineSelectionMode();
+        touchStartY = 0; // Reset
+    }
+}
+
+function handleTouchEnd() {
+    touchStartY = 0; // Reset
+}
+
+// Helper function to capitalize the first letter of a string
+function capitalize(word) {
+    return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+// Add timer update to existing interval
+setInterval(updatePointTimer, 1000);
+
+// Add event listener for the new Select Next Line button
+document.getElementById('selectNextLineBtn').addEventListener('click', function() {
+    exitNextLineSelectionMode();
 });
 
