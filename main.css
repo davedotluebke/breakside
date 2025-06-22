@@ -1268,3 +1268,182 @@ input:checked + .slider:before {
     justify-content: center;
     min-width: 180px; /* Ensure enough space for title and logo */
 }
+
+/* Next Line Selection Mode Styles */
+.next-line-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: #2c3e50;
+    color: white;
+    z-index: 100;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    transition: transform 0.3s ease;
+}
+
+.next-line-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 10px 5px;
+    gap: 10px;
+}
+
+.mini-action-btn {
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    border-radius: 4px;
+    background-color: #444;
+    color: white;
+    border: none;
+    margin: 0;
+}
+
+#weScoreBtnMini {
+    background-color: #4CAF50;
+}
+
+#theyScoreBtnMini {
+    background-color: #f44336;
+}
+
+.mini-point-clock {
+    background-color: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: #333;
+    min-width: 70px;
+    text-align: center;
+}
+
+.swipe-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-bottom: 5px;
+}
+
+.swipe-line {
+    width: 40px;
+    height: 3px;
+    background-color: rgba(255, 255, 255, 0.5);
+    border-radius: 2px;
+    margin: 2px 0;
+}
+
+/* Choose next line button styling */
+#chooseNextLineBtn {
+    width: 80%;
+    max-width: 400px;
+    margin-top: 10px;
+    background-color: #0066cc;
+    color: white;
+}
+
+#chooseNextLineBtn:hover {
+    background-color: #0052a3;
+}
+
+/* Styles for next line selection mode */
+body.next-line-mode .simple-mode-content {
+    display: none;
+}
+
+body.next-line-mode #beforePointScreen {
+    padding-top: 70px; /* Make room for the fixed header */
+    display: block !important;
+}
+
+body.next-line-mode .beforepoint-controls,
+body.next-line-mode #gameEvents {
+    display: none;
+}
+
+body.next-line-mode #startPointBtn {
+    background-color: #cccccc;
+    color: #666666;
+    cursor: not-allowed;
+}
+
+body.next-line-mode #simpleModeScreen {
+    display: block !important;
+}
+
+body.next-line-mode header {
+    display: none;
+}
+
+body.next-line-mode #bottomPanel {
+    display: none !important;
+}
+
+/* Ensure the table containers are visible and responsive in next line mode */
+body.next-line-mode #selectCurrentPlayers {
+    height: calc(100vh - 75px); /* Give it almost the full viewport height */
+    overflow-y: auto;
+}
+
+body.next-line-mode h3,
+body.next-line-mode .top-buttons {
+    margin-top: 10px;
+    padding-top: 0;
+}
+
+body.next-line-mode #tableContainer {
+    height: calc(100vh - 150px);
+    overflow-y: auto;
+}
+
+/* Make sure the simple-mode-content is visible by default */
+.simple-mode-content {
+    display: block;
+}
+
+/* Ensure good spacing of simple mode elements */
+.simple-mode-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+}
+
+/* Styling for active player times in next line mode */
+.active-player-time {
+    color: #007bff;
+}
+
+/* Make the mini point clock stand out a bit more */
+.mini-point-clock {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    background-color: white;
+    min-width: 80px;
+    padding: 6px 10px;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Select Next Line button styling */
+#selectNextLineBtn {
+    background-color: #444;
+    color: #fff;
+}
+
+#selectNextLineBtn.warning {
+    background-color: #d9534f;
+}
+
+/* Show/hide buttons in next-line-mode */
+body.next-line-mode #startPointBtn {
+    display: none !important;
+}
+
+body.next-line-mode #selectNextLineBtn {
+    display: block !important;
+}
