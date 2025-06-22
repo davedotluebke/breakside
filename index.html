@@ -126,10 +126,78 @@
         </footer>
     </section>
 
+    <!-- Simple Mode Screen -->
+    <section id="simpleModeScreen" style="display: none;" class="in-game-content">
+        <div class="simple-mode-content">
+            <h2>Simple Mode</h2>
+            <div class="simple-mode-container">
+                <button id="weScoreBtn" class="large-action-btn">We Score</button>
+                <button id="theyScoreBtn" class="large-action-btn">They Score</button>
+                <div class="point-clock-container">
+                    <div class="point-clock">
+                        <span id="pointTimer">0:00</span>
+                    </div>
+                    <button id="pauseResumeBtn" class="pause-resume-btn">
+                        <i class="fas fa-pause"></i>
+                        <span class="pause-resume-text">Pause</span>
+                    </button>
+                </div>
+                <button id="chooseNextLineBtn" class="secondary-action-btn">Choose next line...</button>
+            </div>
+        </div>
+
+        <!-- Next Line Selection Mode Header (initially hidden) -->
+        <div id="nextLineHeader" class="next-line-header" style="display: none;">
+            <div class="next-line-controls">
+                <button id="weScoreBtnMini" class="mini-action-btn">We Score</button>
+                <button id="theyScoreBtnMini" class="mini-action-btn">They Score</button>
+                <div class="mini-point-clock">
+                    <span id="pointTimerMini">0:00</span>
+                </div>
+                <button id="pauseResumeBtnMini" class="mini-action-btn">
+                    <i class="fas fa-pause"></i>
+                </button>
+            </div>
+            <div class="swipe-indicator">
+                <div class="swipe-line"></div>
+                <div class="swipe-line"></div>
+            </div>
+        </div>
+
+        <!-- Score Attribution Dialog -->
+        <div id="scoreAttributionDialog" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="dialog-header">
+                    <span class="close">&times;</span>
+                </div>
+                <div class="score-attribution-container">
+                    <div class="score-column">
+                        <div class="score-column-header">Threw<br>Score</div>
+                        <div id="throwerButtons" class="player-buttons">
+                            <!-- Player buttons will be dynamically added here -->
+                        </div>
+                    </div>
+                    <div class="score-column">
+                        <div class="score-column-header">Caught<br>Score</div>
+                        <div id="receiverButtons" class="player-buttons">
+                            <!-- Player buttons will be dynamically added here -->
+                        </div>
+                    </div>
+                </div>
+                <hr class="callahan-separator">
+                <div class="score-attribution-actions">
+                    <button id="callahanBtn" class="special-action-btn">Callahan</button>
+                    <button id="skipAttributionBtn" class="secondary-action-btn">Skip</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Before Point Screen -->
     <section id="beforePointScreen" style="display: none;" class="in-game-content">
         <div class="top-buttons">
             <button id="startPointBtn">Start Point</button>
+            <button id="selectNextLineBtn" style="display: none;">Select Next Line</button>
             <button id="selectLineBtn">Lines...</button>
         </div>
 
@@ -150,10 +218,11 @@
                     </tbody>
                 </table>    
             </div>
-            <button id="adjustRosterBtn">Edit Roster...</button>
+            <div class="beforepoint-controls">
+                <button id="adjustRosterBtn">Edit Roster...</button>
+            </div>
         </section>
         
-
         <!-- Game Events Section -->
         <section id="gameEvents">
             <h3>Game Events</h3>
@@ -191,52 +260,6 @@
         </div>
         <button id="dSubPlayersBtn">Sub Players</button>
     </section>    
-
-    <!-- Simple Mode Screen -->
-    <section id="simpleModeScreen" style="display: none;" class="in-game-content">
-        <h2>Simple Mode</h2>
-        <div class="simple-mode-container">
-            <button id="weScoreBtn" class="large-action-btn">We Score</button>
-            <button id="theyScoreBtn" class="large-action-btn">They Score</button>
-            <div class="point-clock-container">
-                <div class="point-clock">
-                    <span id="pointTimer">0:00</span>
-                </div>
-                <button id="pauseResumeBtn" class="pause-resume-btn">
-                    <i class="fas fa-pause"></i>
-                    <span class="pause-resume-text">Pause</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Score Attribution Dialog -->
-        <div id="scoreAttributionDialog" class="modal" style="display: none;">
-            <div class="modal-content">
-                <div class="dialog-header">
-                    <span class="close">&times;</span>
-                </div>
-                <div class="score-attribution-container">
-                    <div class="score-column">
-                        <div class="score-column-header">Threw<br>Score</div>
-                        <div id="throwerButtons" class="player-buttons">
-                            <!-- Player buttons will be dynamically added here -->
-                        </div>
-                    </div>
-                    <div class="score-column">
-                        <div class="score-column-header">Caught<br>Score</div>
-                        <div id="receiverButtons" class="player-buttons">
-                            <!-- Player buttons will be dynamically added here -->
-                        </div>
-                    </div>
-                </div>
-                <hr class="callahan-separator">
-                <div class="score-attribution-actions">
-                    <button id="callahanBtn" class="special-action-btn">Callahan</button>
-                    <button id="skipAttributionBtn" class="secondary-action-btn">Skip</button>
-                </div>
-            </div>
-        </div>
-    </section>
 
     <!-- Game Summary Screen -->
     <section id="gameSummaryScreen" style="display: none;" class="in-game-content">
