@@ -1187,6 +1187,24 @@ document.getElementById('adjustRosterBtn').addEventListener('click', function() 
 function updateActivePlayersList() {
     console.log('Updating active players list...');
     
+    // Clear and recreate the table structure
+    createActivePlayersTable();
+    
+    // Set checkbox states based on last point players
+    setPlayerCheckboxes();
+    
+    // Populate player statistics and point data
+    populatePlayerStats();
+    
+    console.log('Finished updating active players list');
+    // After adding all rows to the tableBody, calculate the widths
+    makeColumnsSticky();
+}
+
+/**
+ * Creates the HTML table structure with headers and score rows
+ */
+function createActivePlayersTable() {
     let table = document.getElementById('activePlayersTable');
     let tableBody = table.querySelector('tbody');
     let tableHead = table.querySelector('thead');
@@ -1214,12 +1232,8 @@ function updateActivePlayersList() {
         });
     };
 
-    // Calculate and add score cells
-    let runningScores = { team: [0], opponent: [0] };
-    currentGame().points.forEach(point => {
-        runningScores.team.push(point.winner === 'team' ? runningScores.team.slice(-1)[0] + 1 : runningScores.team.slice(-1)[0]);
-        runningScores.opponent.push(point.winner === 'opponent' ? runningScores.opponent.slice(-1)[0] + 1 : runningScores.opponent.slice(-1)[0]);
-    });
+    // Calculate and add score cells using utility function
+    let runningScores = getRunningScores();
 
     addScoreCells(teamScoreRow, currentGame().team, runningScores.team);
     addScoreCells(opponentScoreRow, currentGame().opponent, runningScores.opponent);
@@ -1227,18 +1241,16 @@ function updateActivePlayersList() {
     // Add score rows to the head
     tableHead.appendChild(teamScoreRow);
     tableHead.appendChild(opponentScoreRow);
+}
 
-    // Determine players from the last point
-    const lastPointPlayers = currentGame().points.length > 0
-        ? currentGame().points[currentGame().points.length - 1].players
-        : [];
+/**
+ * Sets checkbox states based on who played the last point
+ */
+function setPlayerCheckboxes() {
+    // Determine players from the last point using utility function
+    const lastPointPlayers = getLastPointPlayers();
     
     console.log('Last point players:', lastPointPlayers);
-
-    // Check if a player has played any points
-    function hasPlayedAnyPoints(playerName) {
-        return currentGame().points.some(point => point.players.includes(playerName));
-    }
 
     // Sort roster into 3 alphabetical lists: played the last point, played any points, played no points 
     currentTeam.teamRoster.sort((a, b) => {
@@ -1255,8 +1267,9 @@ function updateActivePlayersList() {
         return a.name.localeCompare(b.name);
     });
 
-    // When creating the table header and populating player rows, 
-    // use either game-specific or total stats based on showingTotalStats
+    // Create player rows with checkboxes
+    let tableBody = document.getElementById('activePlayersTable').querySelector('tbody');
+    
     currentTeam.teamRoster.forEach(player => {
         const row = document.createElement('tr');
         
@@ -1279,38 +1292,90 @@ function updateActivePlayersList() {
         nameCell.textContent = player.name;
         row.appendChild(nameCell);
 
-        // Add time column - either game or total stats
+        // Add time column using utility function
         const timeCell = document.createElement('td');
         timeCell.classList.add('active-time-column');
-        if (showingTotalStats) {
-            timeCell.textContent = formatPlayTime(player.totalTimePlayed);
-        } else {
-            timeCell.textContent = formatPlayTime(getPlayerGameTime(player.name));
-        }
+        timeCell.textContent = getPlayerDisplayTime(player.name);
         row.appendChild(timeCell);
 
-        // Points data cells
-        // If showing total stats, add points from previous games
-        let runningPointTotal = showingTotalStats ? player.pointsPlayedPreviousGames : 0;
-        currentGame().points.forEach(point => {
+        // Add placeholder cells for points data (will be populated by populatePlayerStats)
+        currentGame().points.forEach(() => {
             let pointCell = document.createElement('td');
             pointCell.classList.add('active-points-columns');
-
-            if (point.players.includes(player.name)) {
-                runningPointTotal++;
-                pointCell.textContent = `${runningPointTotal}`;
-            } else {
-                pointCell.textContent = '-';
-            }
+            pointCell.textContent = ''; // Will be populated later
             row.appendChild(pointCell);
         });
 
         tableBody.appendChild(row);
     });
+}
+
+/**
+ * Populates the table with player statistics and point data
+ */
+function populatePlayerStats() {
+    let tableBody = document.getElementById('activePlayersTable').querySelector('tbody');
+    const rows = tableBody.querySelectorAll('tr');
     
-    console.log('Finished updating active players list');
-    // After adding all rows to the tableBody, calculate the widths
-    makeColumnsSticky();
+    rows.forEach((row, rowIndex) => {
+        const player = currentTeam.teamRoster[rowIndex];
+        if (!player) return;
+        
+        // Points data cells
+        // If showing total stats, add points from previous games
+        let runningPointTotal = showingTotalStats ? player.pointsPlayedPreviousGames : 0;
+        const pointCells = row.querySelectorAll('.active-points-columns');
+        
+        pointCells.forEach((pointCell, pointIndex) => {
+            const point = currentGame().points[pointIndex];
+            if (point && point.players.includes(player.name)) {
+                runningPointTotal++;
+                pointCell.textContent = `${runningPointTotal}`;
+            } else {
+                pointCell.textContent = '-';
+            }
+        });
+    });
+}
+
+/**
+ * Utility function to get the last point's players
+ */
+function getLastPointPlayers() {
+    return currentGame().points.length > 0
+        ? currentGame().points[currentGame().points.length - 1].players
+        : [];
+}
+
+/**
+ * Utility function to check if a player has played any points in the current game
+ */
+function hasPlayedAnyPoints(playerName) {
+    return currentGame().points.some(point => point.players.includes(playerName));
+}
+
+/**
+ * Utility function to get running scores for both teams
+ */
+function getRunningScores() {
+    let runningScores = { team: [0], opponent: [0] };
+    currentGame().points.forEach(point => {
+        runningScores.team.push(point.winner === 'team' ? runningScores.team.slice(-1)[0] + 1 : runningScores.team.slice(-1)[0]);
+        runningScores.opponent.push(point.winner === 'opponent' ? runningScores.opponent.slice(-1)[0] + 1 : runningScores.opponent.slice(-1)[0]);
+    });
+    return runningScores;
+}
+
+/**
+ * Utility function to get player display time (game vs total stats)
+ */
+function getPlayerDisplayTime(playerName) {
+    if (showingTotalStats) {
+        const player = getPlayerFromName(playerName);
+        return formatPlayTime(player.totalTimePlayed);
+    } else {
+        return formatPlayTime(getPlayerGameTime(playerName));
+    }
 }
 
 /*
