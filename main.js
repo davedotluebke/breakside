@@ -74,7 +74,7 @@ function showScreen(screenId) {
 
     // Update specific UI elements for the new screen
     if (screenId === 'beforePointScreen') {
-        shouldUnselectAllPlayers = true;  // Reset flag when entering Before Point screen
+        shouldClearSelectionsInLineDialog = true;  // Reset checkbox state when entering Before Point screen
         updateActivePlayersList();
         checkPlayerCount();
     }
@@ -501,8 +501,8 @@ let showingTotalStats = false;  // true if showing total stats, false if showing
 let countdownInterval = null;
 let countdownSeconds = 90;      // Default 90 seconds
 let isCountdownRunning = false;
-let shouldUnselectAllPlayers = true;  // true when first entering Before Point screen, false after first line selection
 let nextLineSelections = null;  // Store user's selections made in next line mode
+let shouldClearSelectionsInLineDialog = true;  // true when first entering Before Point screen, false after first line selection
 
 /* 
  * Utility functions
@@ -2636,6 +2636,23 @@ function showLineSelectionDialog() {
     heading.textContent = 'Select Line';
     dialog.appendChild(heading);
 
+    // Add checkbox for clearing existing selections
+    const checkboxContainer = document.createElement('div');
+    checkboxContainer.className = 'clear-selections-checkbox-container';
+    
+    const clearCheckbox = document.createElement('input');
+    clearCheckbox.type = 'checkbox';
+    clearCheckbox.id = 'clearSelectionsCheckbox';
+    clearCheckbox.checked = shouldClearSelectionsInLineDialog;
+    
+    const clearLabel = document.createElement('label');
+    clearLabel.htmlFor = 'clearSelectionsCheckbox';
+    clearLabel.textContent = 'Clear existing selections';
+    
+    checkboxContainer.appendChild(clearCheckbox);
+    checkboxContainer.appendChild(clearLabel);
+    dialog.appendChild(checkboxContainer);
+
     const radioContainer = document.createElement('div');
     radioContainer.className = 'select-line-radio-container';
 
@@ -2689,12 +2706,11 @@ function showLineSelectionDialog() {
     selectButton.disabled = true;
     selectButton.addEventListener('click', () => {
         if (selectedLine) {
-            // Only uncheck all checkboxes if this is the first line selection for this point
-            if (shouldUnselectAllPlayers) {
+            // Only uncheck all checkboxes if the checkbox is checked
+            if (clearCheckbox.checked) {
                 document.querySelectorAll('#activePlayersTable input[type="checkbox"]').forEach(checkbox => {
                     checkbox.checked = false;
                 });
-                shouldUnselectAllPlayers = false;  // Clear the flag after first use
             }
 
             // Check boxes for players in the selected line
@@ -2714,6 +2730,9 @@ function showLineSelectionDialog() {
             
             // Update the Start Point button state
             checkPlayerCount();
+            
+            // Uncheck the checkbox for next time (unless we're still in the same point)
+            shouldClearSelectionsInLineDialog = false;
             
             // Close the dialog
             overlay.remove();

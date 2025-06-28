@@ -634,6 +634,28 @@ ul {
     margin-top: 0;
 }
 
+.clear-selections-checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 15px;
+    padding: 8px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+}
+
+.clear-selections-checkbox-container input[type="checkbox"] {
+    margin: 0;
+}
+
+.clear-selections-checkbox-container label {
+    margin: 0;
+    font-size: 0.9em;
+    color: #495057;
+    cursor: pointer;
+}
+
 .select-line-radio-container {
     max-height: 300px;
     overflow-y: auto;
