@@ -1344,10 +1344,6 @@ input:checked + .slider:before {
     color: white;
 }
 
-#chooseNextLineBtn:hover {
-    background-color: #0052a3;
-}
-
 /* Styles for next line selection mode */
 body.next-line-mode .simple-mode-content {
     display: none;

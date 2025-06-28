@@ -502,6 +502,7 @@ let countdownInterval = null;
 let countdownSeconds = 90;      // Default 90 seconds
 let isCountdownRunning = false;
 let shouldUnselectAllPlayers = true;  // true when first entering Before Point screen, false after first line selection
+let nextLineSelections = null;  // Store user's selections made in next line mode
 
 /* 
  * Utility functions
@@ -1190,7 +1191,7 @@ function updateActivePlayersList() {
     // Clear and recreate the table structure
     createActivePlayersTable();
     
-    // Set checkbox states based on last point players
+    // Create player rows and set checkbox states
     setPlayerCheckboxes();
     
     // Populate player statistics and point data
@@ -1247,6 +1248,17 @@ function createActivePlayersTable() {
  * Sets checkbox states based on who played the last point
  */
 function setPlayerCheckboxes() {
+    // Create player rows with checkboxes
+    createPlayerRows();
+    
+    // Set checkbox states based on last point players
+    setCheckboxStates();
+}
+
+/**
+ * Creates player rows with checkboxes, sorting players by priority
+ */
+function createPlayerRows() {
     // Determine players from the last point using utility function
     const lastPointPlayers = getLastPointPlayers();
     
@@ -1279,10 +1291,6 @@ function setPlayerCheckboxes() {
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.classList.add('active-checkbox');
-        if (lastPointPlayers.includes(player.name)) {
-            console.log('Checking checkbox for player:', player.name);
-            checkbox.checked = true;
-        }
         checkboxCell.appendChild(checkbox);
         row.appendChild(checkboxCell);
 
@@ -1308,6 +1316,51 @@ function setPlayerCheckboxes() {
 
         tableBody.appendChild(row);
     });
+}
+
+/**
+ * Sets checkbox states based on player selection strategy
+ * Currently uses last point players, but can be extended for other strategies
+ */
+function setCheckboxStates() {
+    // Get the players to check based on current strategy
+    const playersToCheck = getPlayersToCheck();
+    console.log('setCheckboxStates() using players:', playersToCheck);
+    
+    // Set checkbox states
+    const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
+    checkboxes.forEach((checkbox, index) => {
+        const player = currentTeam.teamRoster[index];
+        if (player && playersToCheck.includes(player.name)) {
+            console.log('Checking checkbox for player:', player.name);
+            checkbox.checked = true;
+        } else {
+            checkbox.checked = false;
+        }
+    });
+}
+
+/**
+ * Determines which players should be checked based on current selection strategy
+ * Currently returns last point players, but can be extended for other strategies
+ */
+function getPlayersToCheck() {
+    // If we have stored next line selections, use those
+    if (nextLineSelections !== null) {
+        console.log('Using stored next line selections:', nextLineSelections);
+        return nextLineSelections;
+    }
+    
+    // Otherwise, use the last point's players
+    const lastPointPlayers = getLastPointPlayers();
+    console.log('No stored selections, using last point players:', lastPointPlayers);
+    
+    // In the future, this could be extended to support:
+    // - Line-based selection
+    // - Rotation-based selection
+    // - Manual pre-selection
+    // - AI-suggested selection
+    return lastPointPlayers;
 }
 
 /**
@@ -1376,6 +1429,33 @@ function getPlayerDisplayTime(playerName) {
     } else {
         return formatPlayTime(getPlayerGameTime(playerName));
     }
+}
+
+/**
+ * Captures the current checkbox selections and stores them for next line mode
+ */
+function captureNextLineSelections() {
+    const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
+    const selectedPlayers = [];
+    
+    checkboxes.forEach((checkbox, index) => {
+        if (checkbox.checked && index < currentTeam.teamRoster.length) {
+            selectedPlayers.push(currentTeam.teamRoster[index].name);
+        }
+    });
+    
+    nextLineSelections = selectedPlayers;
+    console.log('Captured next line selections:', nextLineSelections);
+}
+
+/**
+ * Clears the stored next line selections
+ */
+function clearNextLineSelections() {
+    if (nextLineSelections !== null) {
+        console.log('Clearing next line selections (was:', nextLineSelections, ')');
+    }
+    nextLineSelections = null;
 }
 
 /*
@@ -1507,10 +1587,16 @@ document.getElementById('startGameOnDBtn').addEventListener('click', function() 
 
 // Transition from Play-by-Play to Before Point when either team scores
 function moveToNextPoint() {
+    console.log('moveToNextPoint() called, current nextLineSelections:', nextLineSelections);
+    
     // If we're in next line selection mode, exit it
     if (document.body.classList.contains('next-line-mode')) {
+        console.log('Exiting next line mode from moveToNextPoint');
         exitNextLineSelectionMode();
     }
+    
+    // Don't clear next line selections here - we want them to persist to the next point's Before Point screen
+    // They will be cleared when the point actually starts in startNextPoint()
     
     updateActivePlayersList();
     logEvent("New point started");
@@ -1539,6 +1625,10 @@ function startNextPoint() {
             activePlayersForThisPoint.push(player.name);
         }
     });
+
+    // Clear the stored next line selections since we're now using them
+    console.log('About to clear next line selections in startNextPoint after using them');
+    clearNextLineSelections();
 
     // determine starting position: check point winners and switchside events 
     let startPointOn = determineStartingPosition();
@@ -2434,6 +2524,13 @@ document.getElementById('anotherGameBtn').addEventListener('click', function() {
 document.getElementById('activePlayersTable').addEventListener('change', checkPlayerCount);
 document.getElementById('playersOnFieldInput').addEventListener('input', checkPlayerCount);
 
+// Also capture next line selections when checkboxes change in next line mode
+document.getElementById('activePlayersTable').addEventListener('change', function(event) {
+    if (event.target.type === 'checkbox' && document.body.classList.contains('next-line-mode')) {
+        captureNextLineSelections();
+    }
+});
+
 // Initialize header state on page load
 document.addEventListener('DOMContentLoaded', function() {
     // Set initial header state based on starting screen
@@ -2608,8 +2705,11 @@ function showLineSelectionDialog() {
                 }
             });
 
+            // Clear any stored next line selections since we just made a new line selection
+            clearNextLineSelections();
+
             // Update the last used line and save
-            currentGame.lastLineUsed = selectedLine.name;
+            currentGame().lastLineUsed = selectedLine.name;
             saveAllTeamsData();
             
             // Update the Start Point button state
@@ -3075,6 +3175,10 @@ function updatePlayerTimesInNextLineMode() {
 
 // Function to exit the next line selection mode
 function exitNextLineSelectionMode() {
+    // Capture the current selections before exiting
+    console.log('exitNextLineSelectionMode() capturing selections');
+    captureNextLineSelections();
+    
     // Hide the next line header
     document.getElementById('nextLineHeader').style.display = 'none';
     
