@@ -1,16 +1,48 @@
 {
-    "name": "Ultimate Frisbee Tracker",
-    "short_name": "UFT",
-    "description": "A PWA for tracking Ultimate Frisbee games.",
+    "name": "Breakside - Ultimate Frisbee Tracker",
+    "short_name": "Breakside",
+    "description": "A PWA for tracking Ultimate Frisbee games and team statistics.",
     "start_url": "/ultistats/index.html",
     "display": "standalone",
-    "background_color": "#ffffff",
-    "theme_color": "#000000",
+    "background_color": "#1a1a1a",
+    "theme_color": "#2c3e50",
+    "orientation": "portrait-primary",
+    "scope": "/ultistats/",
     "icons": [
         {
-            "src": "https://luebke.us/images/bunny.105x105.gif",
-            "sizes": "105x105",
-            "type": "image/gif"
+            "src": "images/favicon-16x16.png",
+            "sizes": "16x16",
+            "type": "image/png"
+        },
+        {
+            "src": "images/favicon-32x32.png",
+            "sizes": "32x32",
+            "type": "image/png"
+        },
+        {
+            "src": "images/favicon-48x48.png",
+            "sizes": "48x48",
+            "type": "image/png"
+        },
+        {
+            "src": "images/favicon-96x96.png",
+            "sizes": "96x96",
+            "type": "image/png"
+        },
+        {
+            "src": "images/favicon-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "images/favicon-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
         }
-    ]
+    ],
+    "categories": ["sports", "utilities"],
+    "lang": "en",
+    "dir": "ltr"
 }
