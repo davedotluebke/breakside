@@ -3065,16 +3065,23 @@ function createKeyPlayPanels() {
 function createKeyPlayPanel(panelTitle, subButtons, panelType) {
     const panel = document.createElement('div');
     panel.classList.add('key-play-panel');
+    panel.dataset.panelType = panelType;
     
-    // Create panel header
+    // Create panel header (clickable)
     const panelHeader = document.createElement('div');
     panelHeader.classList.add('key-play-panel-header');
     panelHeader.textContent = panelTitle;
+    panelHeader.style.cursor = 'pointer';
+    panelHeader.addEventListener('click', function() {
+        handleKeyPlayPanelToggle(panelType, this);
+    });
     panel.appendChild(panelHeader);
     
-    // Create sub-buttons container
+    // Create sub-buttons container (initially hidden)
     const subButtonsContainer = document.createElement('div');
     subButtonsContainer.classList.add('key-play-sub-buttons');
+    subButtonsContainer.style.height = '0'; // Start furled
+    subButtonsContainer.style.opacity = '0'; // Start transparent
     
     // Create sub-buttons
     subButtons.forEach(buttonConfig => {
@@ -3136,6 +3143,57 @@ function createKeyPlayPlayerButtons() {
     }
 }
 
+function handleKeyPlayPanelToggle(panelType, headerElement) {
+    // Get the sub-buttons container for this panel
+    const subButtonsContainer = headerElement.parentElement.querySelector('.key-play-sub-buttons');
+    
+    // Check if this panel is currently unfurled
+    const isCurrentlyUnfurled = subButtonsContainer.style.height !== '0px';
+    
+    if (isCurrentlyUnfurled) {
+        // Furl this panel
+        furlPanel(subButtonsContainer);
+    } else {
+        // Furl all other panels first
+        document.querySelectorAll('#keyPlayPanels .key-play-sub-buttons').forEach(container => {
+            if (container !== subButtonsContainer) {
+                furlPanel(container);
+            }
+        });
+        
+        // Unfurl this panel
+        unfurlPanel(subButtonsContainer);
+        
+        // Update player column header and enable player buttons for this panel type
+        updateKeyPlayPlayerHeader('', panelType);
+        document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
+            btn.classList.remove('inactive');
+        });
+    }
+}
+
+function furlPanel(container) {
+    // Set height to 0 and opacity to 0 for smooth transition
+    container.style.height = '0';
+    container.style.opacity = '0';
+}
+
+function unfurlPanel(container) {
+    // Temporarily set height to auto to measure content
+    container.style.height = 'auto';
+    const fullHeight = container.scrollHeight;
+    
+    // Set height to 0 first, then animate to full height
+    container.style.height = '0';
+    container.style.opacity = '0';
+    
+    // Use requestAnimationFrame to ensure the height: 0 is applied
+    requestAnimationFrame(() => {
+        container.style.height = fullHeight + 'px';
+        container.style.opacity = '1';
+    });
+}
+
 function handleKeyPlaySubButton(subButtonType, panelType, buttonElement) {
     // Toggle selected state of the clicked button
     buttonElement.classList.toggle('selected');
@@ -3165,13 +3223,26 @@ function handleKeyPlaySubButton(subButtonType, panelType, buttonElement) {
 }
 
 function handleKeyPlayPlayerSelection(playerName, buttonElement) {
-    // Check if we have any throw sub-buttons selected
-    const throwSubButtons = keyPlaySelectedSubButtons.filter(id => id.startsWith('throw-'));
+    // Check which panel is currently unfurled (height > 0)
+    const panels = document.querySelectorAll('#keyPlayPanels .key-play-sub-buttons');
+    let unfurledPanel = null;
+    let panelType = null;
     
-    if (throwSubButtons.length > 0) {
-        handleThrowPlayerSelection(playerName, buttonElement);
+    panels.forEach(panel => {
+        if (panel.style.height && panel.style.height !== '0px' && panel.style.height !== '0') {
+            unfurledPanel = panel;
+            // Get panel type from the parent panel's data attribute
+            const parentPanel = panel.closest('.key-play-panel');
+            panelType = parentPanel ? parentPanel.dataset.panelType : null;
+        }
+    });
+    
+    if (unfurledPanel && panelType) {
+        if (panelType === 'throw') {
+            handleThrowPlayerSelection(playerName, buttonElement);
+        }
+        // TODO: Add turnover and defense logic later
     }
-    // TODO: Add turnover and defense logic later
 }
 
 function handleThrowPlayerSelection(playerName, buttonElement) {
@@ -3265,7 +3336,7 @@ function createKeyPlayThrowEvent() {
     // Get selected throw sub-buttons to determine flags
     const throwSubButtons = keyPlaySelectedSubButtons.filter(id => id.startsWith('throw-'));
     
-    // Create throw event with appropriate flags
+    // Create throw event with appropriate flags (basic throw if no sub-buttons selected)
     const throwEvent = new Throw({
         thrower: keyPlaySelectedThrower,
         receiver: keyPlaySelectedReceiver,
@@ -3298,10 +3369,11 @@ function createKeyPlayThrowEvent() {
 }
 
 function handleKeyPlayHeaderToggle() {
-    // Only allow toggling for throw events when we have throw sub-buttons selected
-    const throwSubButtons = keyPlaySelectedSubButtons.filter(id => id.startsWith('throw-'));
+    // Check if the throw panel is currently unfurled
+    const throwPanel = document.querySelector('#keyPlayPanels .key-play-panel:first-child .key-play-sub-buttons');
+    const isThrowPanelUnfurled = throwPanel && throwPanel.style.height && throwPanel.style.height !== '0px' && throwPanel.style.height !== '0';
     
-    if (throwSubButtons.length > 0) {
+    if (isThrowPanelUnfurled) {
         // Toggle between thrower and receiver selection
         if (keyPlayCurrentRole === 'thrower') {
             keyPlayCurrentRole = 'receiver';
