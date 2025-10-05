@@ -167,7 +167,7 @@ Add a "Key Play" button to Simple Mode that allows coaches to record specific ev
 ### Event Creation Logic
 
 #### Throw Events
-```javascript
+   ```javascript
 new Throw({
     thrower: selectedThrower,
     receiver: selectedReceiver,
@@ -182,7 +182,7 @@ new Throw({
 ```
 
 #### Turnover Events
-```javascript
+   ```javascript
 new Turnover({
     thrower: selectedThrower || getPlayerFromName("Unknown Player"),
     receiver: selectedReceiver || getPlayerFromName("Unknown Player"),
@@ -195,7 +195,7 @@ new Turnover({
 ```
 
 #### Defense Events
-```javascript
+   ```javascript
 new Defense({
     defender: selectedDefender || null,
     interception: interception_flag,

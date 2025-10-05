@@ -2820,6 +2820,12 @@ document.getElementById('theyScoreBtn').addEventListener('click', function() {
 let selectedThrower = null;
 let selectedReceiver = null;
 
+// Track Key Play dialog state
+let keyPlaySelectedSubButtons = [];
+let keyPlaySelectedThrower = null;
+let keyPlaySelectedReceiver = null;
+let keyPlayCurrentRole = 'thrower'; // 'thrower' or 'receiver'
+
 function showScoreAttributionDialog() {
     const dialog = document.getElementById('scoreAttributionDialog');
     const throwerButtons = document.getElementById('throwerButtons');
@@ -3001,6 +3007,11 @@ function showKeyPlayDialog() {
     const dialog = document.getElementById('keyPlayDialog');
     
     // Reset dialog state
+    keyPlaySelectedSubButtons = [];
+    keyPlaySelectedThrower = null;
+    keyPlaySelectedReceiver = null;
+    keyPlayCurrentRole = 'thrower';
+    
     createKeyPlayPanels();
     createKeyPlayPlayerButtons();
     
@@ -3097,6 +3108,9 @@ function createKeyPlayPlayerButtons() {
     const unknownButton = document.createElement('button');
     unknownButton.textContent = UNKNOWN_PLAYER;
     unknownButton.classList.add('player-button', 'unknown-player', 'inactive');
+    unknownButton.addEventListener('click', function() {
+        handleKeyPlayPlayerSelection(UNKNOWN_PLAYER, this);
+    });
     playerButtonsContainer.appendChild(unknownButton);
     
     // Add player buttons for all active players
@@ -3105,8 +3119,20 @@ function createKeyPlayPlayerButtons() {
             const playerButton = document.createElement('button');
             playerButton.textContent = playerName;
             playerButton.classList.add('player-button', 'inactive');
+            playerButton.addEventListener('click', function() {
+                handleKeyPlayPlayerSelection(playerName, this);
+            });
             playerButtonsContainer.appendChild(playerButton);
         });
+    }
+    
+    // Add click handler to player header for toggling (only if not already added)
+    const playerHeader = document.getElementById('keyPlayPlayerHeader');
+    if (!playerHeader.hasAttribute('data-toggle-listener-added')) {
+        playerHeader.addEventListener('click', function() {
+            handleKeyPlayHeaderToggle();
+        });
+        playerHeader.setAttribute('data-toggle-listener-added', 'true');
     }
 }
 
@@ -3114,11 +3140,21 @@ function handleKeyPlaySubButton(subButtonType, panelType, buttonElement) {
     // Toggle selected state of the clicked button
     buttonElement.classList.toggle('selected');
     
+    // Update selected sub-buttons array
+    const buttonId = `${panelType}-${subButtonType}`;
+    if (buttonElement.classList.contains('selected')) {
+        if (!keyPlaySelectedSubButtons.includes(buttonId)) {
+            keyPlaySelectedSubButtons.push(buttonId);
+        }
+    } else {
+        keyPlaySelectedSubButtons = keyPlaySelectedSubButtons.filter(id => id !== buttonId);
+    }
+    
     // Update player column header based on selected sub-button
     updateKeyPlayPlayerHeader(subButtonType, panelType);
     
     // Enable player buttons if any sub-button is selected
-    const hasSelectedSubButton = document.querySelectorAll('#keyPlayPanels .key-play-sub-btn.selected').length > 0;
+    const hasSelectedSubButton = keyPlaySelectedSubButtons.length > 0;
     document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
         if (hasSelectedSubButton) {
             btn.classList.remove('inactive');
@@ -3128,11 +3164,200 @@ function handleKeyPlaySubButton(subButtonType, panelType, buttonElement) {
     });
 }
 
+function handleKeyPlayPlayerSelection(playerName, buttonElement) {
+    // Check if we have any throw sub-buttons selected
+    const throwSubButtons = keyPlaySelectedSubButtons.filter(id => id.startsWith('throw-'));
+    
+    if (throwSubButtons.length > 0) {
+        handleThrowPlayerSelection(playerName, buttonElement);
+    }
+    // TODO: Add turnover and defense logic later
+}
+
+function handleThrowPlayerSelection(playerName, buttonElement) {
+    const player = getPlayerFromName(playerName);
+    
+    if (keyPlayCurrentRole === 'thrower') {
+        // Selecting thrower
+        if (keyPlaySelectedThrower && keyPlaySelectedThrower.name === playerName) {
+            // Deselecting current thrower
+            keyPlaySelectedThrower = null;
+            buttonElement.classList.remove('selected');
+            // Re-enable this player's button in receiver column
+            document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
+                if (btn.textContent === playerName) {
+                    btn.disabled = false;
+                    btn.classList.remove('inactive');
+                }
+            });
+        } else {
+            // Selecting new thrower
+            keyPlaySelectedThrower = player;
+            
+            // Update button states
+            document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            buttonElement.classList.add('selected');
+            
+            // Disable this player's button for receiver selection
+            document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
+                if (btn.textContent === playerName) {
+                    btn.disabled = true;
+                    btn.classList.add('inactive');
+                }
+            });
+            
+            // Switch to receiver selection
+            keyPlayCurrentRole = 'receiver';
+            updateKeyPlayPlayerHeader('', 'throw');
+        }
+    } else if (keyPlayCurrentRole === 'receiver') {
+        // Selecting receiver
+        if (keyPlaySelectedReceiver && keyPlaySelectedReceiver.name === playerName) {
+            // Deselecting current receiver
+            keyPlaySelectedReceiver = null;
+            buttonElement.classList.remove('selected');
+        } else {
+            // Selecting new receiver
+            keyPlaySelectedReceiver = player;
+            
+            // Update button states
+            document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            buttonElement.classList.add('selected');
+        }
+    }
+    
+    // Check if both thrower and receiver are selected, then create the event
+    if (keyPlaySelectedThrower && keyPlaySelectedReceiver) {
+        createKeyPlayThrowEvent();
+    }
+}
+
+function ensurePossessionExists(isOffensive) {
+    let currentPossession = getActivePossession(currentPoint);
+    
+    if (!currentPossession) {
+        // No possession exists, create a new one
+        currentPossession = new Possession(isOffensive);
+        currentPoint.addPossession(currentPossession);
+        console.log(`Created new ${isOffensive ? 'offensive' : 'defensive'} possession for Key Play event`);
+    } else if (currentPossession.offensive !== isOffensive) {
+        // Current possession doesn't match the required type, create a new one
+        const previousType = currentPossession.offensive ? 'offensive' : 'defensive';
+        currentPossession = new Possession(isOffensive);
+        currentPoint.addPossession(currentPossession);
+        console.log(`Created new ${isOffensive ? 'offensive' : 'defensive'} possession (switched from ${previousType}) for Key Play event`);
+    }
+    
+    return currentPossession;
+}
+
+function createKeyPlayThrowEvent() {
+    // Validate that we have both thrower and receiver
+    if (!keyPlaySelectedThrower || !keyPlaySelectedReceiver) {
+        console.error('Cannot create throw event: missing thrower or receiver');
+        return;
+    }
+    
+    // Get selected throw sub-buttons to determine flags
+    const throwSubButtons = keyPlaySelectedSubButtons.filter(id => id.startsWith('throw-'));
+    
+    // Create throw event with appropriate flags
+    const throwEvent = new Throw({
+        thrower: keyPlaySelectedThrower,
+        receiver: keyPlaySelectedReceiver,
+        huck: throwSubButtons.includes('throw-huck'),
+        breakmark: throwSubButtons.includes('throw-break'),
+        dump: throwSubButtons.includes('throw-dump'),
+        hammer: throwSubButtons.includes('throw-hammer'),
+        sky: throwSubButtons.includes('throw-sky'),
+        layout: throwSubButtons.includes('throw-layout'),
+        score: throwSubButtons.includes('throw-score')
+    });
+    
+    // Ensure we have an offensive possession to add the event to
+    const currentPossession = ensurePossessionExists(true);
+    
+    // Add event to possession
+    currentPossession.addEvent(throwEvent);
+    logEvent(throwEvent.summarize());
+    
+    // Update player stats
+    keyPlaySelectedThrower.assists++;
+    if (throwEvent.score) {
+        keyPlaySelectedReceiver.goals++;
+    }
+    
+    // Close dialog
+    document.getElementById('keyPlayDialog').style.display = 'none';
+    
+    console.log('Throw event created:', throwEvent.summarize());
+}
+
+function handleKeyPlayHeaderToggle() {
+    // Only allow toggling for throw events when we have throw sub-buttons selected
+    const throwSubButtons = keyPlaySelectedSubButtons.filter(id => id.startsWith('throw-'));
+    
+    if (throwSubButtons.length > 0) {
+        // Toggle between thrower and receiver selection
+        if (keyPlayCurrentRole === 'thrower') {
+            keyPlayCurrentRole = 'receiver';
+        } else {
+            keyPlayCurrentRole = 'thrower';
+        }
+        
+        // Update header and button states
+        updateKeyPlayPlayerHeader('', 'throw');
+        updateKeyPlayPlayerButtonStates();
+    }
+}
+
+function updateKeyPlayPlayerButtonStates() {
+    // Clear all selections
+    document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
+        btn.classList.remove('selected');
+        btn.disabled = false;
+        btn.classList.remove('inactive');
+    });
+    
+    // Re-apply current selections based on role
+    if (keyPlayCurrentRole === 'thrower' && keyPlaySelectedThrower) {
+        document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
+            if (btn.textContent === keyPlaySelectedThrower.name) {
+                btn.classList.add('selected');
+            }
+        });
+    } else if (keyPlayCurrentRole === 'receiver' && keyPlaySelectedReceiver) {
+        document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
+            if (btn.textContent === keyPlaySelectedReceiver.name) {
+                btn.classList.add('selected');
+            }
+        });
+    }
+    
+    // Disable thrower's button when selecting receiver
+    if (keyPlayCurrentRole === 'receiver' && keyPlaySelectedThrower) {
+        document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
+            if (btn.textContent === keyPlaySelectedThrower.name) {
+                btn.disabled = true;
+                btn.classList.add('inactive');
+            }
+        });
+    }
+}
+
 function updateKeyPlayPlayerHeader(subButtonType, panelType) {
     const header = document.getElementById('keyPlayPlayerHeader');
     
     if (panelType === 'throw') {
-        header.textContent = 'Thrower';
+        if (keyPlayCurrentRole === 'thrower') {
+            header.textContent = 'Thrower';
+        } else {
+            header.textContent = 'Receiver';
+        }
     } else if (panelType === 'turnover') {
         if (subButtonType === 'drop') {
             header.textContent = 'Receiver';
