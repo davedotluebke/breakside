@@ -3,14 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Breakside</title>
+    <title>Breakside - Ultimate Frisbee Tracker</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="description" content="A PWA for tracking Ultimate Frisbee games and team statistics.">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Breakside">
+    <meta name="msapplication-TileColor" content="#2c3e50">
+    <meta name="msapplication-config" content="browserconfig.xml">
+    
+    <!-- Favicon and Icons -->
+    <link rel="icon" type="image/x-icon" href="images/favicon.ico">
+    <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="images/favicon-48x48.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="images/favicon-96x96.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="images/favicon-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="images/favicon-512x512.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="images/favicon-192x192.png">
+    
+    <!-- Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="main.css">
-    <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="main.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 </head>
 <body>
     <div id="countdownTimer" class="countdown-timer">
@@ -133,6 +158,7 @@
             <div class="simple-mode-container">
                 <button id="weScoreBtn" class="large-action-btn">We Score</button>
                 <button id="theyScoreBtn" class="large-action-btn">They Score</button>
+                <button id="keyPlayBtn" class="secondary-action-btn">Key Play</button>
                 <div class="point-clock-container">
                     <div class="point-clock">
                         <span id="pointTimer">0:00</span>
@@ -188,6 +214,29 @@
                 <div class="score-attribution-actions">
                     <button id="callahanBtn" class="special-action-btn">Callahan</button>
                     <button id="skipAttributionBtn" class="secondary-action-btn">Skip</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Key Play Dialog -->
+        <div id="keyPlayDialog" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="dialog-header">
+                    <span class="close">&times;</span>
+                </div>
+                <div class="key-play-container">
+                    <div class="key-play-column">
+                        <div class="key-play-header">Plays</div>
+                        <div id="keyPlayPanels" class="key-play-panels">
+                            <!-- Labeled panels will be dynamically added here -->
+                        </div>
+                    </div>
+                    <div class="key-play-column">
+                        <div class="key-play-header" id="keyPlayPlayerHeader">Players</div>
+                        <div id="keyPlayPlayerButtons" class="player-buttons">
+                            <!-- Player buttons will be dynamically added here -->
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
