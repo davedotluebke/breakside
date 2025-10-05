@@ -29,22 +29,25 @@ Add a "Key Play" button to Simple Mode that allows coaches to record specific ev
 
 #### 3. Left Column - Plays Section
 - Header: "Plays"
-- Three main action buttons:
-  1. **Throw** - opens unfurling panel with sub-buttons
-  2. **Turnover** - opens unfurling panel with sub-buttons  
-  3. **Defense** - opens unfurling panel with sub-buttons
+- Three labeled panels of sub-buttons (always visible):
+  1. **Throw Panel** - huck, breakmark, dump, hammer, sky, layout, score
+  2. **Turnover Panel** - throwaway, huck, receiverError, goodDefense, stall
+  3. **Defense Panel** - block, interception, layout, sky, unforced, Callahan
+- Each panel has a header label and contains its sub-buttons
+- Sub-buttons are clickable and can be selected/deselected
+- Multiple sub-buttons can be selected within a panel
 
 #### 4. Right Column - Players Section
-- Header: "Players" (dynamically changes based on selected action)
+- Header: "Players" (dynamically changes based on selected sub-button)
   - Tap header text to toggle between two lists of players when some actions are selected 
   - When header text can be tapped to toggle, append a "switch back and forth" emoji
 - Player buttons for all active players + "Unknown Player"
-- Initially greyed out until action is selected
+- Initially greyed out until a sub-button is selected
   - For some actions, "Unknown Player" is selected by default
-- Dynamic header changes based on action type:
-  - Throw: "Thrower" → "Receiver"
-  - Turnover: "Thrower" → "Receiver" (for some types)
-  - Defense: "Defender"
+- Dynamic header changes based on selected sub-button:
+  - Throw sub-buttons: "Thrower" → "Receiver"
+  - Turnover sub-buttons: "Thrower" → "Receiver" (for some types)
+  - Defense sub-buttons: "Defender"
 
 ### Sub-Button Specifications
 
@@ -74,20 +77,20 @@ Add a "Key Play" button to Simple Mode that allows coaches to record specific ev
 
 ### Player Selection Logic
 
-#### Throw Action
-1. Select "Throw" → header becomes "Thrower"
+#### Throw Sub-Buttons
+1. Select any Throw sub-button → header becomes "Thrower"
 2. Select thrower → header becomes "Receiver", thrower greyed out
 3. Select receiver → event created and dialog closes
 4. Optional: tap "Thrower" header to toggle back to thrower selection
 
-#### Turnover Action
-1. Select "Turnover" → header becomes "Thrower" (for throwaway) or "Receiver" (for drop)
+#### Turnover Sub-Buttons
+1. Select any Turnover sub-button → header becomes "Thrower" (for throwaway) or "Receiver" (for drop)
 2. **Throwaway**: Select thrower → "Unknown Player" auto-selected as receiver → event created
 3. **Drop**: "Unknown Player" auto-selected as thrower → select receiver → event created
 4. Optional: tap header to toggle between thrower/receiver selection
 
-#### Defense Action
-1. Select "Defense" → header becomes "Defender"
+#### Defense Sub-Buttons
+1. Select any Defense sub-button → header becomes "Defender"
 2. Select defender → event created and dialog closes
 
 ### Implementation Steps
@@ -95,23 +98,23 @@ Add a "Key Play" button to Simple Mode that allows coaches to record specific ev
 #### Phase 1: HTML Structure
 1. Add "Key Play" button to simple mode container
 2. Create Key Play modal dialog HTML structure
-3. Add left column with Plays section
+3. Add left column with Plays section containing three labeled panels
 4. Add right column with Players section
-5. Add action panels for sub-buttons (initially hidden)
+5. Add sub-button panels (always visible)
 
 #### Phase 2: CSS Styling
 1. Style Key Play button to match "Choose Next Line" button
 2. Style modal dialog to match score attribution dialog
-3. Style action panels and sub-buttons
+3. Style labeled panels and sub-buttons
 4. Style player buttons with proper states (active/inactive/selected)
 5. Add responsive design for small screens
 
 #### Phase 3: JavaScript Functionality
 1. Add event listener for Key Play button
 2. Create `showKeyPlayDialog()` function
-3. Create `createKeyPlayActionButtons()` function
+3. Create `createKeyPlayPanels()` function
 4. Create `createKeyPlayPlayerButtons()` function
-5. Create `handleKeyPlayAction()` function
+5. Create `handleKeyPlaySubButton()` function
 6. Create `handleKeyPlayPlayerSelection()` function
 7. Create `updateKeyPlayPlayerHeader()` function
 8. Create `createKeyPlayEvent()` function
@@ -121,14 +124,15 @@ Add a "Key Play" button to Simple Mode that allows coaches to record specific ev
 
 #### `showKeyPlayDialog()`
 - Reset dialog state
-- Create action buttons (Throw, Turnover, Defense)
+- Create three labeled panels with sub-buttons
 - Create player buttons (initially inactive)
 - Show modal dialog
 
-#### `createKeyPlayActionButtons()`
-- Create Throw, Turnover, Defense buttons
-- Add click handlers to show sub-panels
-- Style buttons consistently with existing action buttons
+#### `createKeyPlayPanels()`
+- Create three labeled panels: Throw, Turnover, Defense
+- Populate each panel with its respective sub-buttons
+- Add click handlers for sub-button selection/deselection
+- Style panels consistently with existing UI
 
 #### `createKeyPlayPlayerButtons()`
 - Create buttons for all active players + "Unknown Player"
@@ -136,25 +140,24 @@ Add a "Key Play" button to Simple Mode that allows coaches to record specific ev
 - Initially set all buttons to inactive state
 - Add click handlers for player selection
 
-#### `handleKeyPlayAction(actionType)`
-- Show appropriate sub-panel
-- Generate sub-buttons using existing `generateSubButtons()` function
-- Update player column header
-- Enable player buttons
-- Store selected action type for event creation
+#### `handleKeyPlaySubButton(subButtonType, panelType)`
+- Handle sub-button selection/deselection
+- Update player column header based on selected sub-button
+- Enable player buttons when a sub-button is selected
+- Store selected sub-button for event creation
 
 #### `handleKeyPlayPlayerSelection(playerName, role)`
-- Handle player selection based on current action type
+- Handle player selection based on current sub-button type
 - Update button states (selected/inactive)
 - Handle multi-player selections (thrower/receiver)
 - Auto-select "Unknown Player" where appropriate
 - Create event when selection is complete
 
-#### `updateKeyPlayPlayerHeader(headerText)`
-- Update the right column header text
+#### `updateKeyPlayPlayerHeader(subButtonType, panelType)`
+- Update the right column header text based on selected sub-button
 - Handle header click for toggling between roles
 
-#### `createKeyPlayEvent(actionType, players, flags)`
+#### `createKeyPlayEvent(subButtonType, panelType, players, flags)`
 - Create appropriate Event object (Throw, Turnover, Defense)
 - Add event to current possession
 - Log event to event log
@@ -210,9 +213,9 @@ new Defense({
 - `.key-play-container` - Two-column layout container
 - `.key-play-column` - Individual column styling
 - `.key-play-header` - Column header styling
-- `.key-play-action-btn` - Action button styling
-- `.key-play-player-btn` - Player button styling
-- `.key-play-sub-panel` - Sub-button panel styling
+- `.key-play-panel` - Panel container styling
+- `.key-play-panel-header` - Panel header styling
+- `.key-play-sub-btn` - Sub-button styling
 
 #### Reused Classes
 - `.modal` - Modal overlay

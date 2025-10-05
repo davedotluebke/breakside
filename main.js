@@ -2979,6 +2979,173 @@ window.addEventListener('click', function(event) {
     }
 });
 
+// Key Play Dialog Event Handlers
+document.getElementById('keyPlayBtn').addEventListener('click', function() {
+    showKeyPlayDialog();
+});
+
+// Close Key Play dialog when clicking the X
+document.querySelector('#keyPlayDialog .close').addEventListener('click', function() {
+    document.getElementById('keyPlayDialog').style.display = 'none';
+});
+
+// Close Key Play dialog when clicking outside
+window.addEventListener('click', function(event) {
+    const dialog = document.getElementById('keyPlayDialog');
+    if (event.target === dialog) {
+        dialog.style.display = 'none';
+    }
+});
+
+function showKeyPlayDialog() {
+    const dialog = document.getElementById('keyPlayDialog');
+    
+    // Reset dialog state
+    createKeyPlayPanels();
+    createKeyPlayPlayerButtons();
+    
+    // Show dialog
+    dialog.style.display = 'block';
+}
+
+function createKeyPlayPanels() {
+    const panelsContainer = document.getElementById('keyPlayPanels');
+    
+    // Clear existing content
+    panelsContainer.innerHTML = '';
+    
+    // Create Throw Panel
+    const throwPanel = createKeyPlayPanel('Throws', [
+        { text: 'huck', fullWidth: false },
+        { text: 'break', fullWidth: false },
+        { text: 'hammer', fullWidth: false },
+        { text: 'dump', fullWidth: false },
+        { text: 'layout', fullWidth: false },
+        { text: 'sky', fullWidth: false },
+        { text: 'score', fullWidth: true }
+    ], 'throw');
+    
+    // Create Turnover Panel
+    const turnoverPanel = createKeyPlayPanel('Turnover', [
+        { text: 'throwaway', fullWidth: true },
+        { text: 'huck', fullWidth: false },
+        { text: 'drop', fullWidth: false },
+        { text: 'good D', fullWidth: false },
+        { text: 'stall', fullWidth: false }
+    ], 'turnover');
+    
+    // Create Defense Panel
+    const defensePanel = createKeyPlayPanel('Defense', [
+        { text: 'block', fullWidth: false },
+        { text: 'stall', fullWidth: false },
+        { text: 'interception', fullWidth: true },
+        { text: 'layout', fullWidth: false },
+        { text: 'sky', fullWidth: false },
+        { text: 'unforced error', fullWidth: true },
+        { text: 'Callahan', fullWidth: true }
+    ], 'defense');
+    
+    // Append panels
+    panelsContainer.appendChild(throwPanel);
+    panelsContainer.appendChild(turnoverPanel);
+    panelsContainer.appendChild(defensePanel);
+}
+
+function createKeyPlayPanel(panelTitle, subButtons, panelType) {
+    const panel = document.createElement('div');
+    panel.classList.add('key-play-panel');
+    
+    // Create panel header
+    const panelHeader = document.createElement('div');
+    panelHeader.classList.add('key-play-panel-header');
+    panelHeader.textContent = panelTitle;
+    panel.appendChild(panelHeader);
+    
+    // Create sub-buttons container
+    const subButtonsContainer = document.createElement('div');
+    subButtonsContainer.classList.add('key-play-sub-buttons');
+    
+    // Create sub-buttons
+    subButtons.forEach(buttonConfig => {
+        const subButton = document.createElement('button');
+        subButton.textContent = buttonConfig.text;
+        subButton.classList.add('key-play-sub-btn');
+        if (buttonConfig.fullWidth) {
+            subButton.classList.add('full-width');
+        }
+        subButton.dataset.flag = buttonConfig.text;
+        subButton.dataset.panel = panelType;
+        
+        subButton.addEventListener('click', function() {
+            handleKeyPlaySubButton(buttonConfig.text, panelType, this);
+        });
+        
+        subButtonsContainer.appendChild(subButton);
+    });
+    
+    panel.appendChild(subButtonsContainer);
+    return panel;
+}
+
+function createKeyPlayPlayerButtons() {
+    const playerButtonsContainer = document.getElementById('keyPlayPlayerButtons');
+    
+    // Clear existing buttons
+    playerButtonsContainer.innerHTML = '';
+    
+    // Add Unknown Player button first
+    const unknownButton = document.createElement('button');
+    unknownButton.textContent = UNKNOWN_PLAYER;
+    unknownButton.classList.add('player-button', 'unknown-player', 'inactive');
+    playerButtonsContainer.appendChild(unknownButton);
+    
+    // Add player buttons for all active players
+    if (currentPoint && currentPoint.players) {
+        currentPoint.players.forEach(playerName => {
+            const playerButton = document.createElement('button');
+            playerButton.textContent = playerName;
+            playerButton.classList.add('player-button', 'inactive');
+            playerButtonsContainer.appendChild(playerButton);
+        });
+    }
+}
+
+function handleKeyPlaySubButton(subButtonType, panelType, buttonElement) {
+    // Toggle selected state of the clicked button
+    buttonElement.classList.toggle('selected');
+    
+    // Update player column header based on selected sub-button
+    updateKeyPlayPlayerHeader(subButtonType, panelType);
+    
+    // Enable player buttons if any sub-button is selected
+    const hasSelectedSubButton = document.querySelectorAll('#keyPlayPanels .key-play-sub-btn.selected').length > 0;
+    document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
+        if (hasSelectedSubButton) {
+            btn.classList.remove('inactive');
+        } else {
+            btn.classList.add('inactive');
+        }
+    });
+}
+
+function updateKeyPlayPlayerHeader(subButtonType, panelType) {
+    const header = document.getElementById('keyPlayPlayerHeader');
+    
+    if (panelType === 'throw') {
+        header.textContent = 'Thrower';
+    } else if (panelType === 'turnover') {
+        if (subButtonType === 'drop') {
+            header.textContent = 'Receiver';
+        } else {
+            header.textContent = 'Thrower';
+        }
+    } else if (panelType === 'defense') {
+        header.textContent = 'Defender';
+    } else {
+        header.textContent = 'Players';
+    }
+}
+
 // Simple Mode Toggle
 let isSimpleMode = false;
 
