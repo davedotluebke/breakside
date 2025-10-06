@@ -201,6 +201,8 @@ class Turnover extends Event {
         if (this.drop_flag){ return `${r} misses the catch from ${t} ${hucktxt} ${defensetxt}`; }
         if (this.defense_flag)  { return `Turnover ${defensetxt}`; }
         if (this.stall_flag)        { return `${t} gets stalled ${defensetxt}`; }
+        // Fallback for unspecified turnovers
+        return `Turnover by ${t}`;
     }
 }
 
@@ -3093,6 +3095,7 @@ function createKeyPlayPanel(panelTitle, subButtons, panelType) {
         }
         subButton.dataset.flag = buttonConfig.text;
         subButton.dataset.panel = panelType;
+        subButton.dataset.subButtonType = `${panelType}-${buttonConfig.text}`;
         
         subButton.addEventListener('click', function() {
             handleKeyPlaySubButton(buttonConfig.text, panelType, this);
@@ -3195,6 +3198,12 @@ function unfurlPanel(container) {
 }
 
 function handleKeyPlaySubButton(subButtonType, panelType, buttonElement) {
+    // Special handling for turnover events
+    if (panelType === 'turnover') {
+        handleTurnoverSubButton(subButtonType, buttonElement);
+        return;
+    }
+    
     // Toggle selected state of the clicked button
     buttonElement.classList.toggle('selected');
     
@@ -3212,6 +3221,78 @@ function handleKeyPlaySubButton(subButtonType, panelType, buttonElement) {
     updateKeyPlayPlayerHeader(subButtonType, panelType);
     
     // Enable player buttons if any sub-button is selected
+    const hasSelectedSubButton = keyPlaySelectedSubButtons.length > 0;
+    document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
+        if (hasSelectedSubButton) {
+            btn.classList.remove('inactive');
+        } else {
+            btn.classList.add('inactive');
+        }
+    });
+}
+
+function handleTurnoverSubButton(subButtonType, buttonElement) {
+    const buttonId = `turnover-${subButtonType}`;
+    
+    // Special case: "Good D" creates event immediately
+    if (subButtonType === 'good D') {
+        buttonElement.classList.toggle('selected');
+        if (buttonElement.classList.contains('selected')) {
+            keyPlaySelectedSubButtons.push(buttonId);
+            createKeyPlayTurnoverEvent(getPlayerFromName("Unknown Player"));
+        } else {
+            keyPlaySelectedSubButtons = keyPlaySelectedSubButtons.filter(id => id !== buttonId);
+        }
+        return;
+    }
+    
+    // Toggle the clicked button
+    buttonElement.classList.toggle('selected');
+    const isNowSelected = buttonElement.classList.contains('selected');
+    
+    // Update the selected buttons array
+    if (isNowSelected) {
+        keyPlaySelectedSubButtons.push(buttonId);
+    } else {
+        keyPlaySelectedSubButtons = keyPlaySelectedSubButtons.filter(id => id !== buttonId);
+    }
+    
+    // Handle mutual exclusivity rules
+    if (isNowSelected) {
+        // Primary types are mutually exclusive
+        const PrimaryTypes = ['throwaway', 'drop', 'stall'];
+        if (PrimaryTypes.includes(subButtonType)) {
+            const otherPrimaryTypes = PrimaryTypes.filter(type => type !== subButtonType);
+            otherPrimaryTypes.forEach(type => {
+                const otherButton = document.querySelector(`[data-sub-button-type="turnover-${type}"]`);
+                if (otherButton && otherButton.classList.contains('selected')) {
+                    otherButton.classList.remove('selected');
+                    keyPlaySelectedSubButtons = keyPlaySelectedSubButtons.filter(id => id !== `turnover-${type}`);
+                }
+            });
+        }
+        
+        // Huck and Stall are mutually exclusive
+        if (subButtonType === 'huck') {
+            const stallButton = document.querySelector(`[data-sub-button-type="turnover-stall"]`);
+            if (stallButton && stallButton.classList.contains('selected')) {
+                stallButton.classList.remove('selected');
+                keyPlaySelectedSubButtons = keyPlaySelectedSubButtons.filter(id => id !== 'turnover-stall');
+            }
+        }
+        
+        if (subButtonType === 'stall') {
+            const huckButton = document.querySelector(`[data-sub-button-type="turnover-huck"]`);
+            if (huckButton && huckButton.classList.contains('selected')) {
+                huckButton.classList.remove('selected');
+                keyPlaySelectedSubButtons = keyPlaySelectedSubButtons.filter(id => id !== 'turnover-huck');
+            }
+        }
+    }
+    
+    // Update UI
+    updateKeyPlayPlayerHeader(subButtonType, 'turnover');
+    
     const hasSelectedSubButton = keyPlaySelectedSubButtons.length > 0;
     document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
         if (hasSelectedSubButton) {
@@ -3240,8 +3321,10 @@ function handleKeyPlayPlayerSelection(playerName, buttonElement) {
     if (unfurledPanel && panelType) {
         if (panelType === 'throw') {
             handleThrowPlayerSelection(playerName, buttonElement);
+        } else if (panelType === 'turnover') {
+            handleTurnoverPlayerSelection(playerName, buttonElement);
         }
-        // TODO: Add turnover and defense logic later
+        // TODO: Add defense logic later
     }
 }
 
@@ -3369,11 +3452,21 @@ function createKeyPlayThrowEvent() {
 }
 
 function handleKeyPlayHeaderToggle() {
-    // Check if the throw panel is currently unfurled
-    const throwPanel = document.querySelector('#keyPlayPanels .key-play-panel:first-child .key-play-sub-buttons');
-    const isThrowPanelUnfurled = throwPanel && throwPanel.style.height && throwPanel.style.height !== '0px' && throwPanel.style.height !== '0';
+    // Check which panel is currently unfurled
+    const panels = document.querySelectorAll('#keyPlayPanels .key-play-sub-buttons');
+    let unfurledPanel = null;
+    let panelType = null;
     
-    if (isThrowPanelUnfurled) {
+    panels.forEach(panel => {
+        if (panel.style.height && panel.style.height !== '0px' && panel.style.height !== '0') {
+            unfurledPanel = panel;
+            const parentPanel = panel.closest('.key-play-panel');
+            panelType = parentPanel ? parentPanel.dataset.panelType : null;
+        }
+    });
+    
+    // Only allow header toggling for throw events (multi-player selection)
+    if (unfurledPanel && panelType === 'throw') {
         // Toggle between thrower and receiver selection
         if (keyPlayCurrentRole === 'thrower') {
             keyPlayCurrentRole = 'receiver';
@@ -3421,6 +3514,60 @@ function updateKeyPlayPlayerButtonStates() {
     }
 }
 
+function handleTurnoverPlayerSelection(playerName, buttonElement) {
+    const player = getPlayerFromName(playerName);
+    
+    // For turnover events, just select the player and create the event immediately
+    // Update button states
+    document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
+        btn.classList.remove('selected');
+    });
+    buttonElement.classList.add('selected');
+    
+    // Create the turnover event
+    createKeyPlayTurnoverEvent(player);
+}
+
+function createKeyPlayTurnoverEvent(player) {
+    // Get selected turnover sub-buttons to determine flags
+    const turnoverSubButtons = keyPlaySelectedSubButtons.filter(id => id.startsWith('turnover-'));
+    
+    // Determine thrower and receiver based on turnover type
+    let thrower, receiver;
+    if (turnoverSubButtons.includes('turnover-drop')) {
+        // For drops: selected player is the receiver who dropped it, thrower is unknown
+        thrower = getPlayerFromName("Unknown Player");
+        receiver = player;
+    } else {
+        // For other turnovers: selected player is the thrower, receiver is unknown
+        thrower = player;
+        receiver = getPlayerFromName("Unknown Player");
+    }
+    
+    // Create turnover event with appropriate flags
+    const turnoverEvent = new Turnover({
+        thrower: thrower,
+        receiver: receiver,
+        throwaway: turnoverSubButtons.includes('turnover-throwaway'),
+        huck: turnoverSubButtons.includes('turnover-huck'),
+        receiverError: turnoverSubButtons.includes('turnover-drop'),
+        goodDefense: turnoverSubButtons.includes('turnover-good D'),
+        stall: turnoverSubButtons.includes('turnover-stall')
+    });
+    
+    // Ensure we have an offensive possession to add the event to
+    const currentPossession = ensurePossessionExists(true);
+    
+    // Add event to possession
+    currentPossession.addEvent(turnoverEvent);
+    logEvent(turnoverEvent.summarize());
+    
+    // Close dialog
+    document.getElementById('keyPlayDialog').style.display = 'none';
+    
+    console.log('Turnover event created:', turnoverEvent.summarize());
+}
+
 function updateKeyPlayPlayerHeader(subButtonType, panelType) {
     const header = document.getElementById('keyPlayPlayerHeader');
     
@@ -3431,11 +3578,7 @@ function updateKeyPlayPlayerHeader(subButtonType, panelType) {
             header.textContent = 'Receiver';
         }
     } else if (panelType === 'turnover') {
-        if (subButtonType === 'drop') {
-            header.textContent = 'Receiver';
-        } else {
-            header.textContent = 'Thrower';
-        }
+        header.textContent = 'Players';
     } else if (panelType === 'defense') {
         header.textContent = 'Defender';
     } else {
