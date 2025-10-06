@@ -230,13 +230,15 @@ class Violation extends Event {
 }
 
 class Defense extends Event {
-    constructor({defender = null, interception = false, layout = false, sky = false, Callahan = false}) {
+    constructor({defender = null, interception = false, layout = false, sky = false, Callahan = false, stall = false, unforcedError = false}) {
         super('Defense');
         this.defender = defender;       // null indicates an unforced turnover by opponent
         this.interception_flag = interception;
         this.layout_flag = layout;
         this.sky_flag = sky;
         this.Callahan_flag = Callahan;
+        this.stall_flag = stall;
+        this.unforcedError_flag = unforcedError;
     }
     // Override summarize for Defense events
     summarize() {
@@ -246,8 +248,10 @@ class Defense extends Event {
         if (this.layout_flag)           { summary += 'Layout D '; }
         if (this.sky_flag)              { summary += 'Sky D '; }
         if (this.Callahan_flag)         { summary += 'Callahan '; }
+        if (this.stall_flag)            { summary += 'Stall '; }
+        if (this.unforcedError_flag)    { summary += 'Unforced error '; }
         if (this.defender) {
-            summary += (summary ? summary : 'Turnover causeed ') + `by ${defender}`;
+            summary += (summary ? summary : 'Turnover caused ') + `by ${defender}`;
         } else {
             summary = (summary ? summary : 'Unforced turnover by opponent');
         }
@@ -3204,6 +3208,12 @@ function handleKeyPlaySubButton(subButtonType, panelType, buttonElement) {
         return;
     }
     
+    // Special handling for defense events
+    if (panelType === 'defense') {
+        handleDefenseSubButton(subButtonType, buttonElement);
+        return;
+    }
+    
     // Toggle selected state of the clicked button
     buttonElement.classList.toggle('selected');
     
@@ -3303,6 +3313,167 @@ function handleTurnoverSubButton(subButtonType, buttonElement) {
     });
 }
 
+function handleDefenseSubButton(subButtonType, buttonElement) {
+    const buttonId = `defense-${subButtonType}`;
+    
+    // Special case: "Unforced error" creates event immediately
+    if (subButtonType === 'unforced error') {
+        buttonElement.classList.toggle('selected');
+        if (buttonElement.classList.contains('selected')) {
+            // Deselect "Stall" if it's selected (mutually exclusive)
+            const stallButton = document.querySelector(`[data-sub-button-type="defense-stall"]`);
+            if (stallButton && stallButton.classList.contains('selected')) {
+                stallButton.classList.remove('selected');
+                keyPlaySelectedSubButtons = keyPlaySelectedSubButtons.filter(id => id !== 'defense-stall');
+            }
+            
+            keyPlaySelectedSubButtons.push(buttonId);
+            createKeyPlayDefenseEvent(null); // null defender for unforced error
+        } else {
+            keyPlaySelectedSubButtons = keyPlaySelectedSubButtons.filter(id => id !== buttonId);
+        }
+        return;
+    }
+    
+    // Toggle the clicked button
+    buttonElement.classList.toggle('selected');
+    const isNowSelected = buttonElement.classList.contains('selected');
+    
+    // Update the selected buttons array
+    if (isNowSelected) {
+        keyPlaySelectedSubButtons.push(buttonId);
+    } else {
+        keyPlaySelectedSubButtons = keyPlaySelectedSubButtons.filter(id => id !== buttonId);
+    }
+    
+    // Handle mutual exclusivity rules
+    if (isNowSelected) {
+        // "Stall" and "Unforced Error" are exclusive with everything
+        if (subButtonType === 'stall' || subButtonType === 'unforced error') {
+            const allOtherTypes = ['block', 'interception', 'Callahan', 'layout', 'sky'];
+            if (subButtonType === 'stall') {
+                allOtherTypes.push('unforced error');
+            } else {
+                allOtherTypes.push('stall');
+            }
+            
+            allOtherTypes.forEach(type => {
+                const otherButton = document.querySelector(`[data-sub-button-type="defense-${type}"]`);
+                if (otherButton && otherButton.classList.contains('selected')) {
+                    otherButton.classList.remove('selected');
+                    keyPlaySelectedSubButtons = keyPlaySelectedSubButtons.filter(id => id !== `defense-${type}`);
+                }
+            });
+        }
+        
+        // "Block", "Interception", and "Callahan" are mutually exclusive
+        if (subButtonType === 'block' || subButtonType === 'interception' || subButtonType === 'Callahan') {
+            const otherActionTypes = ['block', 'interception', 'Callahan'].filter(type => type !== subButtonType);
+            otherActionTypes.forEach(type => {
+                const otherButton = document.querySelector(`[data-sub-button-type="defense-${type}"]`);
+                if (otherButton && otherButton.classList.contains('selected')) {
+                    otherButton.classList.remove('selected');
+                    keyPlaySelectedSubButtons = keyPlaySelectedSubButtons.filter(id => id !== `defense-${type}`);
+                }
+            });
+            
+            // Also deselect "Stall" and "Unforced Error" when selecting action types
+            const incompatibleTypes = ['stall', 'unforced error'];
+            incompatibleTypes.forEach(type => {
+                const otherButton = document.querySelector(`[data-sub-button-type="defense-${type}"]`);
+                if (otherButton && otherButton.classList.contains('selected')) {
+                    otherButton.classList.remove('selected');
+                    keyPlaySelectedSubButtons = keyPlaySelectedSubButtons.filter(id => id !== `defense-${type}`);
+                }
+            });
+        }
+        
+        // "Layout" and "Sky" are only compatible with "Block", "Interception", and "Callahan"
+        if (subButtonType === 'layout' || subButtonType === 'sky') {
+            const incompatibleTypes = ['stall', 'unforced error'];
+            incompatibleTypes.forEach(type => {
+                const otherButton = document.querySelector(`[data-sub-button-type="defense-${type}"]`);
+                if (otherButton && otherButton.classList.contains('selected')) {
+                    otherButton.classList.remove('selected');
+                    keyPlaySelectedSubButtons = keyPlaySelectedSubButtons.filter(id => id !== `defense-${type}`);
+                }
+            });
+        }
+        
+        // If selecting "Stall" or "Unforced Error", deselect "Layout" and "Sky"
+        if (subButtonType === 'stall' || subButtonType === 'unforced error') {
+            const modifierTypes = ['layout', 'sky'];
+            modifierTypes.forEach(type => {
+                const otherButton = document.querySelector(`[data-sub-button-type="defense-${type}"]`);
+                if (otherButton && otherButton.classList.contains('selected')) {
+                    otherButton.classList.remove('selected');
+                    keyPlaySelectedSubButtons = keyPlaySelectedSubButtons.filter(id => id !== `defense-${type}`);
+                }
+            });
+        }
+    }
+    
+    // Update UI
+    updateKeyPlayPlayerHeader(subButtonType, 'defense');
+    
+    const hasSelectedSubButton = keyPlaySelectedSubButtons.length > 0;
+    document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
+        if (hasSelectedSubButton) {
+            btn.classList.remove('inactive');
+        } else {
+            btn.classList.add('inactive');
+        }
+    });
+}
+
+function handleDefensePlayerSelection(playerName, buttonElement) {
+    const player = getPlayerFromName(playerName);
+    
+    // Update button states
+    document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
+        btn.classList.remove('selected');
+    });
+    buttonElement.classList.add('selected');
+    
+    // Create the defense event
+    createKeyPlayDefenseEvent(player);
+}
+
+function createKeyPlayDefenseEvent(player) {
+    // Get selected defense sub-buttons to determine flags
+    const defenseSubButtons = keyPlaySelectedSubButtons.filter(id => id.startsWith('defense-'));
+    
+    // Create defense event with appropriate flags
+    const defenseEvent = new Defense({
+        defender: player,
+        interception: defenseSubButtons.includes('defense-interception'),
+        layout: defenseSubButtons.includes('defense-layout'),
+        sky: defenseSubButtons.includes('defense-sky'),
+        Callahan: defenseSubButtons.includes('defense-Callahan'),
+        stall: defenseSubButtons.includes('defense-stall'),
+        unforcedError: defenseSubButtons.includes('defense-unforced error')
+    });
+    
+    // Ensure we have a defensive possession to add the event to
+    const currentPossession = ensurePossessionExists(false);
+    
+    // Add event to possession
+    currentPossession.addEvent(defenseEvent);
+    logEvent(defenseEvent.summarize());
+    
+    // Handle Callahan special case
+    if (defenseSubButtons.includes('defense-Callahan')) {
+        // Callahan scores a point and ends the current point
+        updateScore(Role.TEAM);
+        moveToNextPoint();
+    }
+    
+    // Close dialog
+    document.getElementById('keyPlayDialog').style.display = 'none';
+    
+    console.log('Defense event created:', defenseEvent.summarize());
+}
+
 function handleKeyPlayPlayerSelection(playerName, buttonElement) {
     // Check which panel is currently unfurled (height > 0)
     const panels = document.querySelectorAll('#keyPlayPanels .key-play-sub-buttons');
@@ -3323,8 +3494,9 @@ function handleKeyPlayPlayerSelection(playerName, buttonElement) {
             handleThrowPlayerSelection(playerName, buttonElement);
         } else if (panelType === 'turnover') {
             handleTurnoverPlayerSelection(playerName, buttonElement);
+        } else if (panelType === 'defense') {
+            handleDefensePlayerSelection(playerName, buttonElement);
         }
-        // TODO: Add defense logic later
     }
 }
 
