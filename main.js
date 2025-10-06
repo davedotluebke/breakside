@@ -1731,8 +1731,30 @@ function updateScore(winner) {
 /************************ Event logging & game summary ************************/
 /******************************************************************************/
 
+// Load version information
+let appVersion = null;
+async function loadVersion() {
+    try {
+        const response = await fetch('./version.json');
+        const versionData = await response.json();
+        appVersion = versionData;
+        return versionData;
+    } catch (error) {
+        console.warn('Could not load version information:', error);
+        appVersion = { version: 'unknown', build: 'unknown' };
+        return appVersion;
+    }
+}
+
+// Initialize version on page load
+loadVersion();
+
 function summarizeGame() {
-    summary = `Game Summary: ${currentGame().team} vs. ${currentGame().opponent}.\n`;
+    let versionInfo = '';
+    if (appVersion) {
+        versionInfo = `App Version: ${appVersion.version} (Build ${appVersion.build})\n`;
+    }
+    summary = versionInfo + `Game Summary: ${currentGame().team} vs. ${currentGame().opponent}.\n`;
     summary += `${currentGame().team} roster:`;
     currentTeam.teamRoster.forEach(player => summary += ` ${player.name}`);
     numPoints = 0;
