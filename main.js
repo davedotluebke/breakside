@@ -1268,7 +1268,7 @@ function createPlayerRows() {
     // Determine players from the last point using utility function
     const lastPointPlayers = getLastPointPlayers();
     
-    console.log('Last point players:', lastPointPlayers);
+    console.log('Last point players: ', lastPointPlayers);
 
     // Sort roster into 3 alphabetical lists: played the last point, played any points, played no points 
     currentTeam.teamRoster.sort((a, b) => {
