@@ -2966,6 +2966,16 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
     
     // Update selection
     if (isThrower) {
+        // If there was a previous thrower, re-enable their button in the receiver column
+        if (selectedThrower) {
+            const previousThrowerName = selectedThrower.name;
+            document.querySelectorAll('#receiverButtons .player-button').forEach(btn => {
+                if (btn.textContent === previousThrowerName) {
+                    btn.disabled = false;
+                    btn.classList.remove('inactive');
+                }
+            });
+        }
         selectedThrower = player;
         // Update button styles
         document.querySelectorAll('#throwerButtons .player-button').forEach(btn => {
@@ -2980,6 +2990,16 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
             }
         });
     } else {
+        // If there was a previous receiver, re-enable their button in the thrower column
+        if (selectedReceiver) {
+            const previousReceiverName = selectedReceiver.name;
+            document.querySelectorAll('#throwerButtons .player-button').forEach(btn => {
+                if (btn.textContent === previousReceiverName) {
+                    btn.disabled = false;
+                    btn.classList.remove('inactive');
+                }
+            });
+        }
         selectedReceiver = player;
         // Update button styles
         document.querySelectorAll('#receiverButtons .player-button').forEach(btn => {
