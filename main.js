@@ -2241,6 +2241,16 @@ function handleDPlayerButton(playerName) {
             }
         });
         logEvent(currentEvent.summarize());
+        
+        // If this is a Callahan, award the goal and end the point immediately
+        if (currentEvent.Callahan_flag) {
+            if (currentEvent.defender) {
+                currentEvent.defender.goals++;
+            }
+            showActionPanel('none');
+            updateScore(Role.TEAM);
+            moveToNextPoint();
+        }
     }
 }
 
@@ -2881,6 +2891,9 @@ function showScoreAttributionDialog() {
         receiverButtons.appendChild(receiverBtn);
     });
     
+    // Initialize Callahan button state (disabled until a player is selected)
+    updateCallahanButtonState();
+    
     // Show dialog
     dialog.style.display = 'block';
 }
@@ -2896,6 +2909,27 @@ function createPlayerButton(playerName) {
         handleScoreAttribution(playerName, this.parentElement.id === 'throwerButtons', this);
     });
     return button;
+}
+
+function updateCallahanButtonState() {
+    const callahanBtn = document.getElementById('callahanBtn');
+    // Callahan button should only be enabled when exactly one player is selected (the receiver/defender)
+    // It should be disabled if no one is selected OR if both thrower and receiver are selected
+    if (callahanBtn) {
+        if (selectedReceiver && !selectedThrower) {
+            // Exactly one player selected in receiver column - enable Callahan
+            callahanBtn.disabled = false;
+            callahanBtn.classList.remove('inactive');
+        } else if (selectedThrower && !selectedReceiver) {
+            // Only thrower selected - also enable (they could be the defender)
+            callahanBtn.disabled = false;
+            callahanBtn.classList.remove('inactive');
+        } else {
+            // No one selected OR both selected - disable Callahan
+            callahanBtn.disabled = true;
+            callahanBtn.classList.add('inactive');
+        }
+    }
 }
 
 function handleScoreAttribution(playerName, isThrower, buttonElement) {
@@ -2926,6 +2960,7 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
                 }
             });
         }
+        updateCallahanButtonState();
         return;
     }
     
@@ -2960,6 +2995,9 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
         });
     }
     
+    // Update Callahan button state based on current selections
+    updateCallahanButtonState();
+    
     // If both players are selected, create the event and move to next point
     if (selectedThrower && selectedReceiver) {
         const scoreEvent = new Throw({
@@ -2982,11 +3020,22 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
 // Callahan button handler
 document.getElementById('callahanBtn').addEventListener('click', function() {
     const dialog = document.getElementById('scoreAttributionDialog');
+    // Use whichever player is selected (receiver or thrower) as the defender who caught the Callahan
+    const defender = selectedReceiver || selectedThrower || null;
     const callahanEvent = new Defense({
+        defender: defender,
         Callahan: true
     });
     currentPoint.addPossession(new Possession(false));
     getActivePossession(currentPoint).addEvent(callahanEvent);
+    
+    // Award goal to the defender who caught the Callahan
+    if (defender) {
+        defender.goals++;
+    } else {
+        console.log("Warning: no defender selected for Callahan");
+    }
+    
     updateScore(Role.TEAM);
     dialog.style.display = 'none';
     moveToNextPoint();
@@ -3486,6 +3535,12 @@ function createKeyPlayDefenseEvent(player) {
     // Handle Callahan special case
     if (defenseSubButtons.includes('defense-Callahan')) {
         // Callahan scores a point and ends the current point
+        // Award goal to the defender who caught the Callahan
+        if (player) {
+            player.goals++;
+        } else {
+            console.log("Warning: no defender selected for Callahan");
+        }
         updateScore(Role.TEAM);
         moveToNextPoint();
     }
