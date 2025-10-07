@@ -835,6 +835,7 @@ window.addEventListener('click', (event) => {
     }
 });
 document.getElementById('backToRosterScreenBtn').addEventListener('click', () => {
+    updateTeamRosterDisplay();
     showScreen('teamRosterScreen'); // Return to the roster screen
 });
 
@@ -1186,6 +1187,7 @@ document.getElementById('statsToggle').addEventListener('click', togglePlayerSta
 
 // Adjust Roster button returns to the "Team Roster Screen" and enables "Continue Game" button
 document.getElementById('adjustRosterBtn').addEventListener('click', function() {
+    updateTeamRosterDisplay();
     showScreen('teamRosterScreen');
     document.getElementById('continueGameBtn').classList.remove('inactive');
 });
