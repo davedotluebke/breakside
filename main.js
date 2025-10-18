@@ -4035,8 +4035,11 @@ function createKeyPlayThrowEvent() {
     
     // Update player stats
     keyPlaySelectedThrower.assists++;
-    if (throwEvent.score) {
+    if (throwEvent.score_flag) {
         keyPlaySelectedReceiver.goals++;
+        // Update score and move to next point for score events
+        updateScore(Role.TEAM);
+        moveToNextPoint();
     }
     
     // Close dialog
