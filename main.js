@@ -846,6 +846,87 @@ document.getElementById('backToRosterScreenBtn').addEventListener('click', () =>
  * 
  ************************************************************************/
 
+/**
+ * Calculate player statistics from game events
+ * Returns a map of player name -> stats object
+ * Stats include: completions, huckCompletions, totalThrows, totalHucks, turnovers, dPlays
+ */
+function calculatePlayerStatsFromEvents(game) {
+    const stats = {};
+    
+    // Initialize stats for all players
+    currentTeam.teamRoster.forEach(player => {
+        stats[player.name] = {
+            completions: 0,
+            huckCompletions: 0,
+            totalThrows: 0,
+            totalHucks: 0,
+            turnovers: 0,
+            dPlays: 0
+        };
+    });
+    
+    // If no game provided, return empty stats
+    if (!game || !game.points) {
+        return stats;
+    }
+    
+    // Walk through all points and possessions
+    game.points.forEach(point => {
+        point.possessions.forEach(possession => {
+            possession.events.forEach(event => {
+                if (event.type === 'Throw') {
+                    // Count completed passes
+                    if (event.thrower && event.thrower.name) {
+                        const throwerName = event.thrower.name;
+                        if (stats[throwerName]) {
+                            stats[throwerName].totalThrows++;
+                            stats[throwerName].completions++;
+                            
+                            // Count hucks separately
+                            if (event.huck_flag) {
+                                stats[throwerName].totalHucks++;
+                                stats[throwerName].huckCompletions++;
+                            }
+                        }
+                    }
+                } else if (event.type === 'Turnover') {
+                    // Count turnovers
+                    if (event.thrower && event.thrower.name) {
+                        const throwerName = event.thrower.name;
+                        if (stats[throwerName]) {
+                            stats[throwerName].turnovers++;
+                            stats[throwerName].totalThrows++;
+                            
+                            // Count incomplete hucks
+                            if (event.huck_flag) {
+                                stats[throwerName].totalHucks++;
+                            }
+                        }
+                    }
+                    // Count drops as turnovers for the receiver
+                    if (event.drop_flag && event.receiver && event.receiver.name) {
+                        const receiverName = event.receiver.name;
+                        if (stats[receiverName]) {
+                            stats[receiverName].turnovers++;
+                        }
+                    }
+                } else if (event.type === 'Defense') {
+                    // Count defensive plays
+                    if (event.defender && event.defender.name) {
+                        const defenderName = event.defender.name;
+                        if (stats[defenderName]) {
+                            stats[defenderName].dPlays++;
+                        }
+                    }
+                }
+            });
+        });
+    });
+    
+    return stats;
+}
+
 // Updates the displayed roster on the "Team Roster Screen"
 function updateTeamRosterDisplay() {
     const teamRosterHeader = document.getElementById('teamRosterHeader');
@@ -857,9 +938,12 @@ function updateTeamRosterDisplay() {
     const rosterElement = document.getElementById('rosterList');
     rosterElement.innerHTML = '';  // Clear existing rows
 
+    // Calculate stats from current game events (if a game is in progress)
+    const eventStats = currentGame() ? calculatePlayerStatsFromEvents(currentGame()) : {};
+
     // Add header row
     let headerRow = document.createElement('tr');
-    ['', 'Name', 'Pts', 'Time', 'Goals', 'Assists', '+/-', '..per pt'].forEach(headerText => {
+    ['', 'Name', 'Pts', 'Time', 'Goals', 'Assists', 'Comp%', 'Ds', 'TOs', '+/-', '..per pt'].forEach(headerText => {
         let headerCell = document.createElement('th');
         headerCell.textContent = headerText;
         headerCell.classList.add('roster-header');
@@ -909,6 +993,28 @@ function updateTeamRosterDisplay() {
         assistsCell.textContent = player.assists || 0;
         playerRow.appendChild(assistsCell);
 
+        // Completion percentage column
+        let compPctCell = document.createElement('td');
+        compPctCell.classList.add('roster-comppct-column');
+        const playerStats = eventStats[player.name] || {};
+        const compPct = playerStats.totalThrows > 0
+            ? ((playerStats.completions / playerStats.totalThrows) * 100).toFixed(0)
+            : '-';
+        compPctCell.textContent = compPct !== '-' ? `${compPct}%` : compPct;
+        playerRow.appendChild(compPctCell);
+
+        // Ds column
+        let dPlaysCell = document.createElement('td');
+        dPlaysCell.classList.add('roster-dplays-column');
+        dPlaysCell.textContent = playerStats.dPlays || 0;
+        playerRow.appendChild(dPlaysCell);
+
+        // Turnovers column
+        let turnoversCell = document.createElement('td');
+        turnoversCell.classList.add('roster-turnovers-column');
+        turnoversCell.textContent = playerStats.turnovers || 0;
+        playerRow.appendChild(turnoversCell);
+
         // Plus/Minus column
         let plusMinusCell = document.createElement('td');
         plusMinusCell.classList.add('roster-plusminus-column');
@@ -928,6 +1034,222 @@ function updateTeamRosterDisplay() {
         // Append row to the table body
         rosterElement.appendChild(playerRow);
     });
+}
+
+// Updates the game summary roster display (similar to updateTeamRosterDisplay but without checkboxes)
+function updateGameSummaryRosterDisplay() {
+    const rosterElement = document.getElementById('gameSummaryRosterList');
+    rosterElement.innerHTML = '';  // Clear existing rows
+
+    // Calculate stats from current game events
+    const eventStats = currentGame() ? calculatePlayerStatsFromEvents(currentGame()) : {};
+
+    // Add header row
+    let headerRow = document.createElement('tr');
+    ['Name', 'Pts', 'Time', 'Goals', 'Assists', 'Comp%', 'Huck%', 'Ds', 'TOs', '+/-', '..per pt'].forEach(headerText => {
+        let headerCell = document.createElement('th');
+        headerCell.textContent = headerText;
+        headerCell.classList.add('roster-header');
+        headerRow.appendChild(headerCell);
+    });
+    rosterElement.appendChild(headerRow);
+
+    currentTeam.teamRoster.forEach(player => {
+        let playerRow = document.createElement('tr');
+
+        // Player name column
+        let nameCell = document.createElement('td');
+        nameCell.classList.add('roster-name-column');
+        nameCell.textContent = player.name;
+        playerRow.appendChild(nameCell);
+
+        // Total points played column
+        let totalPointsCell = document.createElement('td');
+        totalPointsCell.classList.add('roster-points-column');
+        totalPointsCell.textContent = player.totalPointsPlayed;
+        playerRow.appendChild(totalPointsCell);
+
+        // Total time played column
+        let totalTimeCell = document.createElement('td');
+        totalTimeCell.classList.add('roster-time-column');
+        totalTimeCell.textContent = formatPlayTime(player.totalTimePlayed);
+        playerRow.appendChild(totalTimeCell);
+
+        // Goals column
+        let goalsCell = document.createElement('td');
+        goalsCell.classList.add('roster-goals-column');
+        goalsCell.textContent = player.goals || 0;
+        playerRow.appendChild(goalsCell);
+
+        // Assists column
+        let assistsCell = document.createElement('td');
+        assistsCell.classList.add('roster-assists-column');
+        assistsCell.textContent = player.assists || 0;
+        playerRow.appendChild(assistsCell);
+
+        // Get calculated stats for this player
+        const playerStats = eventStats[player.name] || {};
+
+        // Completion percentage column
+        let compPctCell = document.createElement('td');
+        compPctCell.classList.add('roster-comppct-column');
+        const compPct = playerStats.totalThrows > 0
+            ? ((playerStats.completions / playerStats.totalThrows) * 100).toFixed(0)
+            : '-';
+        compPctCell.textContent = compPct !== '-' ? `${compPct}%` : compPct;
+        playerRow.appendChild(compPctCell);
+
+        // Huck completion percentage column
+        let huckPctCell = document.createElement('td');
+        huckPctCell.classList.add('roster-huckpct-column');
+        const huckPct = playerStats.totalHucks > 0
+            ? ((playerStats.huckCompletions / playerStats.totalHucks) * 100).toFixed(0)
+            : '-';
+        huckPctCell.textContent = huckPct !== '-' ? `${huckPct}%` : huckPct;
+        playerRow.appendChild(huckPctCell);
+
+        // Ds column
+        let dPlaysCell = document.createElement('td');
+        dPlaysCell.classList.add('roster-dplays-column');
+        dPlaysCell.textContent = playerStats.dPlays || 0;
+        playerRow.appendChild(dPlaysCell);
+
+        // Turnovers column
+        let turnoversCell = document.createElement('td');
+        turnoversCell.classList.add('roster-turnovers-column');
+        turnoversCell.textContent = playerStats.turnovers || 0;
+        playerRow.appendChild(turnoversCell);
+
+        // Plus/Minus column
+        let plusMinusCell = document.createElement('td');
+        plusMinusCell.classList.add('roster-plusminus-column');
+        const plusMinus = (player.pointsWon || 0) - (player.pointsLost || 0);
+        plusMinusCell.textContent = plusMinus > 0 ? `+${plusMinus}` : plusMinus;
+        playerRow.appendChild(plusMinusCell);
+
+        // Plus/Minus per point column
+        let plusMinusPerPointCell = document.createElement('td');
+        plusMinusPerPointCell.classList.add('roster-plusminus-per-point-column');
+        const plusMinusPerPoint = player.totalPointsPlayed > 0 
+            ? (plusMinus / player.totalPointsPlayed).toFixed(2)
+            : '0.0';
+        plusMinusPerPointCell.textContent = plusMinusPerPoint > 0 ? `+${plusMinusPerPoint}` : plusMinusPerPoint;
+        playerRow.appendChild(plusMinusPerPointCell);
+
+        // Append row to the table body
+        rosterElement.appendChild(playerRow);
+    });
+
+    // Add aggregate "Team" row
+    let teamRow = document.createElement('tr');
+    teamRow.classList.add('team-aggregate-row');
+
+    // Calculate team totals
+    let totalGoals = 0;
+    let totalAssists = 0;
+    let totalCompletions = 0;
+    let totalThrows = 0;
+    let totalHuckCompletions = 0;
+    let totalHucks = 0;
+    let totalDPlays = 0;
+    let totalTurnovers = 0;
+    let totalTimePlayed = 0;
+
+    currentTeam.teamRoster.forEach(player => {
+        totalGoals += player.goals || 0;
+        totalAssists += player.assists || 0;
+        totalTimePlayed += player.totalTimePlayed || 0;
+        
+        const playerStats = eventStats[player.name] || {};
+        totalCompletions += playerStats.completions || 0;
+        totalThrows += playerStats.totalThrows || 0;
+        totalHuckCompletions += playerStats.huckCompletions || 0;
+        totalHucks += playerStats.totalHucks || 0;
+        totalDPlays += playerStats.dPlays || 0;
+        totalTurnovers += playerStats.turnovers || 0;
+    });
+
+    // Team name cell
+    let teamNameCell = document.createElement('td');
+    teamNameCell.classList.add('roster-name-column', 'team-total-cell');
+    teamNameCell.textContent = 'Team';
+    teamRow.appendChild(teamNameCell);
+
+    // Total points in game
+    let teamPointsCell = document.createElement('td');
+    teamPointsCell.classList.add('roster-points-column', 'team-total-cell');
+    teamPointsCell.textContent = currentGame() ? currentGame().points.length : 0;
+    teamRow.appendChild(teamPointsCell);
+
+    // Total time
+    let teamTimeCell = document.createElement('td');
+    teamTimeCell.classList.add('roster-time-column', 'team-total-cell');
+    teamTimeCell.textContent = formatPlayTime(totalTimePlayed);
+    teamRow.appendChild(teamTimeCell);
+
+    // Total goals
+    let teamGoalsCell = document.createElement('td');
+    teamGoalsCell.classList.add('roster-goals-column', 'team-total-cell');
+    teamGoalsCell.textContent = totalGoals;
+    teamRow.appendChild(teamGoalsCell);
+
+    // Total assists
+    let teamAssistsCell = document.createElement('td');
+    teamAssistsCell.classList.add('roster-assists-column', 'team-total-cell');
+    teamAssistsCell.textContent = totalAssists;
+    teamRow.appendChild(teamAssistsCell);
+
+    // Team completion percentage
+    let teamCompPctCell = document.createElement('td');
+    teamCompPctCell.classList.add('roster-comppct-column', 'team-total-cell');
+    const teamCompPct = totalThrows > 0
+        ? ((totalCompletions / totalThrows) * 100).toFixed(0)
+        : '-';
+    teamCompPctCell.textContent = teamCompPct !== '-' ? `${teamCompPct}%` : teamCompPct;
+    teamRow.appendChild(teamCompPctCell);
+
+    // Team huck percentage
+    let teamHuckPctCell = document.createElement('td');
+    teamHuckPctCell.classList.add('roster-huckpct-column', 'team-total-cell');
+    const teamHuckPct = totalHucks > 0
+        ? ((totalHuckCompletions / totalHucks) * 100).toFixed(0)
+        : '-';
+    teamHuckPctCell.textContent = teamHuckPct !== '-' ? `${teamHuckPct}%` : teamHuckPct;
+    teamRow.appendChild(teamHuckPctCell);
+
+    // Total Ds
+    let teamDPlaysCell = document.createElement('td');
+    teamDPlaysCell.classList.add('roster-dplays-column', 'team-total-cell');
+    teamDPlaysCell.textContent = totalDPlays;
+    teamRow.appendChild(teamDPlaysCell);
+
+    // Total turnovers
+    let teamTurnoversCell = document.createElement('td');
+    teamTurnoversCell.classList.add('roster-turnovers-column', 'team-total-cell');
+    teamTurnoversCell.textContent = totalTurnovers;
+    teamRow.appendChild(teamTurnoversCell);
+
+    // Team plus/minus (score differential)
+    let teamPlusMinusCell = document.createElement('td');
+    teamPlusMinusCell.classList.add('roster-plusminus-column', 'team-total-cell');
+    const teamScore = currentGame() ? currentGame().scores[Role.TEAM] : 0;
+    const opponentScore = currentGame() ? currentGame().scores[Role.OPPONENT] : 0;
+    const teamPlusMinus = teamScore - opponentScore;
+    teamPlusMinusCell.textContent = teamPlusMinus > 0 ? `+${teamPlusMinus}` : teamPlusMinus;
+    teamRow.appendChild(teamPlusMinusCell);
+
+    // Team plus/minus per point
+    let teamPlusMinusPerPointCell = document.createElement('td');
+    teamPlusMinusPerPointCell.classList.add('roster-plusminus-per-point-column', 'team-total-cell');
+    const totalPoints = currentGame() ? currentGame().points.length : 0;
+    const teamPlusMinusPerPoint = totalPoints > 0 
+        ? (teamPlusMinus / totalPoints).toFixed(2)
+        : '0.0';
+    teamPlusMinusPerPointCell.textContent = teamPlusMinusPerPoint > 0 ? `+${teamPlusMinusPerPoint}` : teamPlusMinusPerPoint;
+    teamRow.appendChild(teamPlusMinusPerPointCell);
+
+    // Append team row to the table
+    rosterElement.appendChild(teamRow);
 }
 
 // UI: Handle player addition to teamRoster
@@ -2454,6 +2776,7 @@ document.getElementById('endGameBtn').addEventListener('click', function() {
         document.getElementById('teamFinalScore').textContent = currentGame().scores[Role.TEAM];
         document.getElementById('opponentName').textContent = currentGame().opponent;
         document.getElementById('opponentFinalScore').textContent = currentGame().scores[Role.OPPONENT];
+        updateGameSummaryRosterDisplay(); // Populate the roster stats table
         showScreen('gameSummaryScreen');
         saveAllTeamsData();
     }
