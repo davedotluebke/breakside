@@ -148,3 +148,6 @@ The app uses a hierarchical data model to track comprehensive game statistics:
 - **Data Portability** - Complete JSON export/import for data backup and sharing
 
 </details>
+
+#### License
+This project is licensed under the MIT License — see the LICENSE file for details.
