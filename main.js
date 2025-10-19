@@ -806,7 +806,24 @@ document.getElementById('switchTeamsBtn').addEventListener('click', showSelectTe
 // Feedback link handler - opens GitHub issues page
 document.getElementById('feedbackLink').addEventListener('click', function(e) {
     e.preventDefault();
-    const feedbackUrl = 'https://github.com/davedotluebke/ultistats/issues/new?labels=beta_feedback&title=Beta+Feedback%3A+&body=Please+describe+your+experience+or+issue+below%3A%0A%0A---%0A%0A**Device/Browser:**%0A**App+Version:**%0A**Steps+to+reproduce:**';
+    
+    // Get current app version info
+    const versionInfo = appVersion ? `${appVersion.version} (Build ${appVersion.build})` : 'Unknown';
+    const userAgent = navigator.userAgent;
+    
+    // Build the issue body with version information
+    const body = `Please describe your experience or issue below:
+
+---
+
+**Device/Browser:** ${userAgent}
+**App Version:** ${versionInfo}
+**Steps to reproduce:**`;
+    
+    // URL encode the body for the GitHub URL
+    const encodedBody = encodeURIComponent(body);
+    const feedbackUrl = `https://github.com/davedotluebke/ultistats/issues/new?labels=beta_feedback&title=${encodeURIComponent('Beta Feedback:')}&body=${encodedBody}`;
+    
     window.open(feedbackUrl, '_blank');
 });
 // Show the modal when the "Create New Team" button is clicked
