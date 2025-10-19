@@ -1028,6 +1028,49 @@ ul {
     min-width: 80px;
 }
 
+/* Throw flags checkboxes */
+.throw-flags-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.8rem;
+    margin: 1rem 0;
+    padding: 0.5rem;
+    border-top: 1px solid #eee;
+    border-bottom: 1px solid #eee;
+}
+
+.throw-flag-checkbox {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.throw-flag-checkbox input[type="checkbox"] {
+    margin-right: 0.4rem;
+    cursor: pointer;
+}
+
+/* Responsive break after sky on smaller screens */
+@media (max-width: 480px) {
+    .throw-flags-container {
+        gap: 0.6rem;
+    }
+    
+    .throw-flag-checkbox {
+        font-size: 0.8rem;
+    }
+    
+    /* Break to two rows after sky */
+    .throw-flag-checkbox:nth-child(n+4) {
+        flex-basis: 100%;
+        justify-content: center;
+        margin-top: 0.2rem;
+    }
+}
+
 /* Responsive adjustments for very small screens */
 @media (max-width: 360px) {
     .modal-content {

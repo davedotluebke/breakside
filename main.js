@@ -3198,6 +3198,13 @@ function showScoreAttributionDialog() {
     selectedThrower = null;
     selectedReceiver = null;
     
+    // Reset checkbox flags
+    document.getElementById('huckFlag').checked = false;
+    document.getElementById('breakFlag').checked = false;
+    document.getElementById('skyFlag').checked = false;
+    document.getElementById('layoutFlag').checked = false;
+    document.getElementById('hammerFlag').checked = false;
+    
     // Clear existing buttons
     throwerButtons.innerHTML = '';
     receiverButtons.innerHTML = '';
@@ -3348,7 +3355,12 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
         const scoreEvent = new Throw({
             thrower: selectedThrower,
             receiver: selectedReceiver,
-            score: true
+            score: true,
+            huck: document.getElementById('huckFlag').checked,
+            breakmark: document.getElementById('breakFlag').checked,
+            sky: document.getElementById('skyFlag').checked,
+            layout: document.getElementById('layoutFlag').checked,
+            hammer: document.getElementById('hammerFlag').checked
         });
         currentPoint.addPossession(new Possession(true));
         getActivePossession(currentPoint).addEvent(scoreEvent);
