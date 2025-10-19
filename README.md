@@ -6,8 +6,6 @@ A real-time Progressive Web App for tracking per-player, per-play statistics in 
 
 Breakside is a comprehensive ultimate frisbee statistics tracker designed to help coaches and teams track detailed game metrics, manage team rosters, and analyze player performance. The app provides real-time tracking of gameplay events, comprehensive player statistics, and team management features across multiple games and teams.
 
-[Install Breakside](#installation)
-
 <details>
 <summary><h2>📋 Features</h2></summary>
 
