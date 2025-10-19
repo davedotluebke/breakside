@@ -1,10 +1,10 @@
 # Breakside
 
-A real-time Progressive Web App for tracking per-player, per-play statistics in ultimate frisbee games.
+A real-time Progressive Web App for tracking play-by-play statistics in ultimate frisbee games.
 
 ## Overview
 
-Breakside is a comprehensive ultimate frisbee statistics tracker designed to help coaches and teams track detailed game metrics, manage team rosters, and analyze player performance. The app provides real-time tracking of gameplay events, comprehensive player statistics, and team management features across multiple games and teams.
+Breakside is a comprehensive ultimate frisbee statistics tracker designed to help coaches and teams track detailed game metrics, manage team rosters and subbing strategies, and analyze player performance. The app provides real-time tracking of gameplay events, comprehensive player statistics, and team management features across multiple games and teams.
 
 > **⚠️ Beta Software Notice**
 > 
@@ -12,7 +12,24 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 > 
 > [💬 Give Feedback](https://github.com/davedotluebke/ultistats/issues/new?labels=beta_feedback&title=Beta+Feedback%3A+&body=Please+describe+your+experience+or+issue+below%3A%0A%0A---%0A%0A**Device/Browser:**%0A**App+Version:**%0A**Steps+to+reproduce:**) - Help improve Breakside by reporting bugs or sharing feedback.
 
-[Install Breakside](#installation)
+<details>
+<summary><h2>Quickstart</h2></summary>
+
+* [Install Breakside](#installation) by navigating to the Breakside website on a phone and choosing `Add to home screen`
+* Launch Breakside from the icon on the home screen
+* Create a new team and give it a name
+* Add a bunch of players (tap the `Add player` box and enter their name, then hit enter or tap the `+` button
+* Start a game! Enter the opponent name and indicate whether your team is starting on Offense or Defense
+  * Select 7 players and tap `Start Point`
+  * Enter a few points! 
+    * Try out the `We Score`, `They Score`, and `Key Play` buttons, changing the lineup between points
+    * Notice the roster screen updates the time and points played by each player
+  * Tap the `Game Log` button to see a summary of the game events you've entered
+  * Tap the `Simple Mode` toggle and try out full play-by-play mode
+  * Tap the `End Game` button and admire your team's statistics!
+* Download a copy of the game database, copy the game log summary to the clipboard for pasting in other apps, or start a new game
+
+
 
 <details>
 <summary><h2>📋 Features</h2></summary>
