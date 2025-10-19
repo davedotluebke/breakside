@@ -440,12 +440,6 @@ ul {
     font-weight: bold;
 }
 
-.close:hover,
-.close:focus {
-    color: black;
-    text-decoration: none;
-    cursor: pointer;
-}
 
 .team-selection-table {
     width: 100%;
@@ -463,9 +457,6 @@ ul {
     cursor: pointer;
 }
 
-.team-name:hover {
-    background-color: #f5f5f5;
-}
 
 .games-list {
     list-style-type: none;
@@ -486,11 +477,6 @@ ul {
     cursor: pointer;
     padding: 0.2em 0.4em;
     font-size: 1em;
-}
-
-.icon-button:hover {
-    background-color: #f0f0f0;
-    border-radius: 4px;
 }
 
 .audio-level-indicator {
@@ -811,10 +797,6 @@ ul {
     flex-shrink: 0;
 }
 
-.management-icons .icon-button:hover {
-    background-color: #e0e0e0;
-}
-
 .management-icons .icon-button i {
     font-size: 12px;
 }
@@ -863,11 +845,6 @@ ul {
     font-size: 1em;
 }
 
-.games-list .icon-button:hover {
-    background-color: #f0f0f0;
-    border-radius: 4px;
-}
-
 .top-buttons {
     display: flex;
     justify-content: space-between;
@@ -901,17 +878,11 @@ ul {
     transition: background-color 0.3s;
 }
 
-.large-action-btn:hover {
-    background-color: #45a049;
-}
 
 #theyScoreBtn {
     background-color: #f44336;
 }
 
-#theyScoreBtn:hover {
-    background-color: #da190b;
-}
 
 /* Score Attribution Dialog Styles */
 .dialog-header {
@@ -931,9 +902,6 @@ ul {
     color: #666;
 }
 
-.dialog-header .close:hover {
-    color: #f44336;
-}
 
 .score-attribution-container {
     display: flex;
@@ -1127,9 +1095,6 @@ ul {
     transition: color 0.3s;
 }
 
-.key-play-header:hover {
-    color: #0066cc;
-}
 
 .key-play-panels {
     display: flex;
@@ -1192,10 +1157,6 @@ ul {
     grid-column: 1 / -1;
 }
 
-.key-play-sub-btn:hover {
-    background-color: #e9ecef;
-    border-color: #adb5bd;
-}
 
 .key-play-sub-btn.selected {
     background-color: #0066cc;
@@ -1265,7 +1226,7 @@ header {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     margin-bottom: 1rem;
     position: relative;
-    min-height: 60px; /* Ensure consistent height in both modes */
+    min-height: 70px; /* Ensure consistent height in both modes */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1281,7 +1242,7 @@ header {
     padding: 0 1rem;
     position: relative;
     width: 100%; /* Ensure content spans full width */
-    height: 40px; /* Match the logo height */
+    height: auto; /* Allow height to adjust for feedback text */
 }
 
 .logo-container {
@@ -1289,10 +1250,28 @@ header {
     align-items: center;
     justify-content: center;
     width: auto;
-    height: 40px;
+    height: auto;
     flex-shrink: 0;
     transition: transform 0.5s ease, position 0.5s ease;
+    flex-direction: column;
 }
+
+.logo-container a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-decoration: none;
+    color: inherit;
+}
+
+.feedback-text {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.8);
+    margin-top: 2px;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+    transition: color 0.2s ease;
+}
+
 
 /* Remove hover transition */
 .logo-container img {
@@ -1303,9 +1282,6 @@ header {
     max-width: none; /* Ensure the logo can expand to its natural ratio */
 }
 
-.logo-container img:hover {
-    transform: none;
-}
 
 /* Title styling with transition */
 header h1 {
@@ -1316,7 +1292,7 @@ header h1 {
     text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
     transition: opacity 0.4s ease, transform 0.4s ease;
     margin-left: 1rem;
-    line-height: 40px; /* Match the logo height */
+    line-height: 50px; /* Match the new header height */
     white-space: nowrap; /* Prevent wrapping */
 }
 
@@ -1436,9 +1412,6 @@ input:checked + .slider:before {
     color: white;
 }
 
-.special-action-btn:hover {
-    background-color: #f57c00;
-}
 
 .special-action-btn.inactive,
 .special-action-btn:disabled {
@@ -1453,9 +1426,6 @@ input:checked + .slider:before {
     color: white;
 }
 
-.secondary-action-btn:hover {
-    background-color: #757575;
-}
 
 /* Point clock container styles */
 .point-clock-container {
@@ -1505,9 +1475,6 @@ input:checked + .slider:before {
     transition: background-color 0.2s;
 }
 
-.pause-resume-btn:hover {
-    background-color: #0052a3;
-}
 
 .pause-resume-btn i {
     font-size: 1.5rem;
