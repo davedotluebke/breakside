@@ -118,3 +118,4 @@ else:
     print('  minor  - Increment minor version (1.0.0 -> 1.1.0)')
     print('  build  - Increment build number (default)')
     sys.exit(1)
+

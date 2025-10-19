@@ -12,7 +12,6 @@ This project includes an automatic versioning system that displays the current v
 
 - `version.json` - Contains the current version information
 - `increment-version.py` - Python script to increment versions
-- `increment-version.js` - Node.js script (alternative, requires Node.js)
 - `version.sh` - Shell wrapper script for easy version management
 - `.git/hooks/pre-commit` - Git hook that auto-increments build on commit
 - `.git/hooks/post-commit` - Git hook that creates release tags
@@ -29,6 +28,8 @@ The build number automatically increments with each commit. No action needed!
 ./version.sh build
 # or
 python3 increment-version.py build
+# or simply
+python3 increment-version.py
 
 # Increment minor version (1.0.0 -> 1.1.0)
 ./version.sh minor
@@ -59,7 +60,7 @@ This will automatically create a git tag like `v1.0.0`.
 ## Checking Current Version
 
 The version is displayed in two places:
-1. At the top of the game log in the app
+1. At the top of the game log in the app (when the event log is visible)
 2. In the `version.json` file
 
 To see the current version from command line:
@@ -71,4 +72,6 @@ python3 -c "import json; print(json.load(open('version.json'))['version'], 'Buil
 
 - If the version doesn't appear in the app, check that `version.json` exists and is accessible
 - If automatic incrementing isn't working, ensure the git hooks are executable: `chmod +x .git/hooks/pre-commit`
-- If you don't have Python 3, you can use the Node.js version (requires Node.js installation)
+- Make sure Python 3 is available on your system as the versioning system requires it
+- Version information is loaded asynchronously when the app starts, so it may take a moment to appear
+
