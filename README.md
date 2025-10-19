@@ -12,7 +12,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 > 
 > [💬 Give Feedback](https://github.com/davedotluebke/ultistats/issues/new?labels=beta_feedback&title=Beta+Feedback%3A+&body=Please+describe+your+experience+or+issue+below%3A%0A%0A---%0A%0A**Device/Browser:**%0A**App+Version:**%0A**Steps+to+reproduce:**) - Help improve Breakside by reporting bugs or sharing feedback.
 
-<details>
+<details open>
 <summary><h2>Quickstart</h2></summary>
 
 * [Install Breakside](#installation) by navigating to the Breakside website on a phone and choosing `Add to home screen`
