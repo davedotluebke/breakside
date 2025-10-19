@@ -1258,7 +1258,7 @@ ul {
 
 /* Header styles */
 header {
-    background-color: #2c3e50;
+    background-color: #E19049;
     color: #fff;
     padding: 1rem 0;
     text-align: center;
@@ -1288,18 +1288,22 @@ header {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
+    width: auto;
     height: 40px;
     flex-shrink: 0;
     transition: transform 0.5s ease, position 0.5s ease;
 }
 
 /* Remove hover transition */
-.logo-container svg {
+.logo-container img {
     transition: none;
+    border-radius: 4px; /* Add slight rounded corners for better appearance */
+    height: 40px;
+    width: auto; /* Allow width to adjust to maintain aspect ratio */
+    max-width: none; /* Ensure the logo can expand to its natural ratio */
 }
 
-.logo-container svg:hover {
+.logo-container img:hover {
     transform: none;
 }
 
@@ -1536,7 +1540,7 @@ input:checked + .slider:before {
     top: 0;
     left: 0;
     width: 100%;
-    background-color: #2c3e50;
+    background-color: #E19049;
     color: white;
     z-index: 100;
     box-shadow: 0 2px 6px rgba(0,0,0,0.2);
