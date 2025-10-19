@@ -2912,6 +2912,9 @@ document.addEventListener('DOMContentLoaded', function() {
     headerElement.classList.remove('header-compact');
     simpleModeToggle.classList.add('hidden');
     
+    // Initialize Simple Mode toggle to checked state (since it's now the default)
+    document.getElementById('simpleModeToggle').checked = isSimpleMode;
+    
     // Initial display of countdown timer
     document.getElementById('countdownTimer').style.display = 'none';
     
@@ -4203,7 +4206,7 @@ function updateKeyPlayPlayerHeader(subButtonType, panelType) {
 }
 
 // Simple Mode Toggle
-let isSimpleMode = false;
+let isSimpleMode = true;
 
 document.getElementById('simpleModeToggle').addEventListener('change', function() {
     isSimpleMode = this.checked;
