@@ -6,6 +6,14 @@ A real-time Progressive Web App for tracking per-player, per-play statistics in 
 
 Breakside is a comprehensive ultimate frisbee statistics tracker designed to help coaches and teams track detailed game metrics, manage team rosters, and analyze player performance. The app provides real-time tracking of gameplay events, comprehensive player statistics, and team management features across multiple games and teams.
 
+> **⚠️ Beta Software Notice**
+> 
+> Breakside is currently in beta. This software may contain bugs, and backwards/forwards compatibility is not guaranteed between versions. Please export your team data regularly as a backup.
+> 
+> [💬 Give Feedback](https://github.com/davedotluebke/ultistats/issues/new?labels=beta_feedback&title=Beta+Feedback%3A+&body=Please+describe+your+experience+or+issue+below%3A%0A%0A---%0A%0A**Device/Browser:**%0A**App+Version:**%0A**Steps+to+reproduce:**) - Help improve Breakside by reporting bugs or sharing feedback.
+
+[Install Breakside](#installation)
+
 <details>
 <summary><h2>📋 Features</h2></summary>
 

@@ -802,6 +802,13 @@ function selectTeam(index) {
 
 // Event listeners for relevant  buttons
 document.getElementById('switchTeamsBtn').addEventListener('click', showSelectTeamScreen);
+
+// Feedback link handler - opens GitHub issues page
+document.getElementById('feedbackLink').addEventListener('click', function(e) {
+    e.preventDefault();
+    const feedbackUrl = 'https://github.com/davedotluebke/ultistats/issues/new?labels=beta_feedback&title=Beta+Feedback%3A+&body=Please+describe+your+experience+or+issue+below%3A%0A%0A---%0A%0A**Device/Browser:**%0A**App+Version:**%0A**Steps+to+reproduce:**';
+    window.open(feedbackUrl, '_blank');
+});
 // Show the modal when the "Create New Team" button is clicked
 document.getElementById('createNewTeamBtn').addEventListener('click', () => {
     document.getElementById('createTeamModal').style.display = 'block';
