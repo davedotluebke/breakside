@@ -83,9 +83,11 @@ function showScreen(screenId) {
     }
 }
 
-// Create singleton unknown player instance
-// (Note: UNKNOWN_PLAYER_OBJ is defined in data/models.js but we need to recreate it here after Player is defined)
-const UNKNOWN_PLAYER_OBJ = new Player(UNKNOWN_PLAYER);
+/*
+ * Global variables
+ * These are now initialized from data modules loaded before this file
+ */
+// Globals are now defined before this point by data/storage.js
 
 /*
  * Saving and loading team data
@@ -272,13 +274,9 @@ function initializeTeams() {
 }
 
 /*
- * Globals
+ * Game State Globals
+ * Note: teams, currentTeam, and sampleTeam are initialized in data/storage.js
  */
-let teams = [];                 // An array of teams
-let currentTeam = null;         // The current team being tracked
-let sampleTeam = null;          // A sample team with 10 players, used if no teams are found
-initializeTeams();              // Load teams from local storage or create a sample team
-
 let currentPoint = null;        // This will hold the current point being played
 let currentEvent = null;        // ...the current event taking place in the current possession
 let currentPlayer = null;       // ...the current player with the disc
