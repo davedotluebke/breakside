@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Data Modules</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>Testing Data Modules</h1>
+    <div id="test-output"></div>
+    
+    <script>
+        // Global variables that the modules expect
+        let teams = [];
+        let currentTeam = null;
+        let sampleTeam = null;
+        
+        // Mock getPlayerFromName function for storage module
+        function getPlayerFromName(playerName) {
+            if (playerName === "Unknown Player") {
+                return UNKNOWN_PLAYER_OBJ;
+            }
+            return currentTeam ? currentTeam.teamRoster.find(player => player.name === playerName) : null;
+        }
+    </script>
+    
+    <!-- Load data modules -->
+    <script src="data/models.js"></script>
+    <script src="data/storage.js"></script>
+    
+    <script>
+        // Test the modules
+        const output = document.getElementById('test-output');
+        const results = [];
+        
+        try {
+            // Test 1: Create a player
+            const player1 = new Player("John Doe", "JD");
+            results.push("✓ Player creation works");
+            
+            // Test 2: Create a team
+            const team = new Team("Test Team", ["Alice", "Bob"]);
+            results.push("✓ Team creation works");
+            
+            // Test 3: Create a game
+            const game = new Game("Test Team", "Opponents", "offense");
+            results.push("✓ Game creation works");
+            
+            // Test 4: Create events
+            const throwEvent = new Throw({
+                thrower: player1,
+                receiver: new Player("Jane Doe"),
+                huck: true,
+                score: false
+            });
+            results.push("✓ Throw event creation works");
+            
+            // Test 5: Create point and possession
+            const point = new Point(["Alice", "Bob"], "offense");
+            const possession = new Possession(true);
+            possession.addEvent(throwEvent);
+            point.addPossession(possession);
+            results.push("✓ Point and possession creation works");
+            
+            // Test 6: Add game to team
+            team.games.push(game);
+            game.points.push(point);
+            results.push("✓ Team composition works");
+            
+            // Test 7: Serialization
+            currentTeam = team;
+            const serialized = serializeTeam(team);
+            results.push("✓ Serialization works");
+            
+            // Test 8: Deserialization
+            const deserializedTeams = deserializeTeams(serialized);
+            results.push("✓ Deserialization works");
+            
+            output.innerHTML = "<h2>All tests passed!</h2><ul>" + 
+                results.map(r => `<li>${r}</li>`).join('') + 
+                "</ul>";
+            
+        } catch (error) {
+            output.innerHTML = `<h2 style="color:red">Test failed:</h2><pre>${error.stack}</pre>`;
+        }
+    </script>
+</body>
+</html>
+
