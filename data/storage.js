@@ -219,13 +219,17 @@ function initializeTeams() {
 /*
  * Global variables - initialized by this module
  * These globals are shared across the application
+ * Using var to ensure they are in global scope
  */
-let teams = [];                 // An array of teams
-let currentTeam = null;         // The current team being tracked
-let sampleTeam = null;          // A sample team with 10 players, used if no teams are found
+var teams = [];                 // An array of teams
+var currentTeam = null;         // The current team being tracked
+var sampleTeam = null;          // A sample team with 10 players, used if no teams are found
 
-// Create singleton unknown player instance (defined in models.js but recreated here for compatibility)
-const UNKNOWN_PLAYER_OBJ = new Player(UNKNOWN_PLAYER);
+/*
+ * Global initialization
+ * Note: Player class must be defined before creating UNKNOWN_PLAYER_OBJ
+ */
+var UNKNOWN_PLAYER_OBJ = new Player(UNKNOWN_PLAYER);
 
 // Initialize teams on module load
 initializeTeams();

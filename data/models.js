@@ -28,8 +28,7 @@ function Player(name, nickname = "") {
     this.pointsLost = 0;
 }
 
-// Create singleton unknown player instance
-const UNKNOWN_PLAYER_OBJ = new Player(UNKNOWN_PLAYER);
+// Note: UNKNOWN_PLAYER_OBJ singleton will be created in data/storage.js after Player is defined
 
 // Game data structure; includes a list of 'points'
 function Game(teamName, opponentName, startOn) {
