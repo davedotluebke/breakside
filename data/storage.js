@@ -216,6 +216,20 @@ function initializeTeams() {
     currentTeam = teams[0];         // there will be at least one team in the array
 }
 
+/*
+ * Global variables - initialized by this module
+ * These globals are shared across the application
+ */
+let teams = [];                 // An array of teams
+let currentTeam = null;         // The current team being tracked
+let sampleTeam = null;          // A sample team with 10 players, used if no teams are found
+
+// Create singleton unknown player instance (defined in models.js but recreated here for compatibility)
+const UNKNOWN_PLAYER_OBJ = new Player(UNKNOWN_PLAYER);
+
+// Initialize teams on module load
+initializeTeams();
+
 /**
  * Create a sample team with predefined players
  * Used for initial setup when no teams exist
