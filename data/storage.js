@@ -104,7 +104,8 @@ function saveAllTeamsData() {
  * Event object of the proper subclass and convert any player name strings into
  * references to Player instances.
  * 
- * Note: This function uses getPlayerFromName which needs to be provided externally
+ * Note: This function uses getPlayerFromName which is defined in main.js
+ * In the future, this should be moved to utils/helpers.js
  */
 function deserializeEvent(eventData) {
     let event;
@@ -186,6 +187,18 @@ function deserializeTeams(serializedData) {
         team.lines = teamData.lines || [];
         return team;
     });
+}
+
+/**
+ * Given a player name, return the corresponding Player object from the team roster
+ * This is a helper function used by deserializeEvent
+ * TODO: Move this to utils/helpers.js
+ */
+function getPlayerFromName(playerName) {
+    if (playerName === UNKNOWN_PLAYER) {
+        return UNKNOWN_PLAYER_OBJ;  // Return the singleton instance
+    }
+    return currentTeam ? currentTeam.teamRoster.find(player => player.name === playerName) : null;
 }
 
 /**
