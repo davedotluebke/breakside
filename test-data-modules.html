@@ -68,11 +68,14 @@
             
             // Test 7: Serialization
             currentTeam = team;
-            const serialized = serializeTeam(team);
+            const serializedTeam = serializeTeam(team);
             results.push("✓ Serialization works");
             
             // Test 8: Deserialization
-            const deserializedTeams = deserializeTeams(serialized);
+            // serializeTeam returns a JSON string, deserializeTeams expects an array of teams
+            // Wrap the single team in an array to match expected format
+            const teamsArray = JSON.stringify([JSON.parse(serializedTeam)]);
+            const deserializedTeams = deserializeTeams(teamsArray);
             results.push("✓ Deserialization works");
             
             output.innerHTML = "<h2>All tests passed!</h2><ul>" + 
