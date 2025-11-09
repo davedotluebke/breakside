@@ -14,74 +14,8 @@ if ('serviceWorker' in navigator) {
 
 /*
  * Screens & other app-wide HTML elements
+ * (see screens/navigation.js for screen management helpers)
  */
-// A list of all our main screens
-const screens = [
-    document.getElementById('selectTeamScreen'), 
-    document.getElementById('teamRosterScreen'),
-    document.getElementById('beforePointScreen'),
-    document.getElementById('offensePlayByPlayScreen'),
-    document.getElementById('defensePlayByPlayScreen'),
-    document.getElementById('simpleModeScreen'),  // Add Simple Mode screen
-    document.getElementById('gameSummaryScreen')
-];
-
-// Play-by-play screens where simple mode toggle changes are relevant
-const playByPlayScreenIds = [
-    'offensePlayByPlayScreen',
-    'defensePlayByPlayScreen',
-    'simpleModeScreen'
-];
-
-// Function to handle screen transitions
-function showScreen(screenId) {
-    // Hide all screens first
-    screens.forEach(screen => screen.style.display = 'none');
-
-    // Display the desired screen
-    const targetScreen = document.getElementById(screenId);
-    targetScreen.style.display = 'block';
-
-    // In-game screens display a bottom panel with play-by-play textarea
-    if (targetScreen.classList && targetScreen.classList.contains('in-game-content')) {
-        document.getElementById('bottomPanel').style.display = 'flex';
-        // Match button widths when footer is shown
-        matchButtonWidths();
-        setTimeout(matchButtonWidths, 100);
-    } else {
-        document.getElementById('bottomPanel').style.display = 'none';
-    }
-
-    // Update header layout based on the current screen
-    const headerElement = document.querySelector('header');
-    const simpleModeToggle = document.querySelector('.simple-mode-toggle');
-    
-    // Hide simple mode toggle on team select and roster screens
-    if (screenId === 'selectTeamScreen' || screenId === 'teamRosterScreen') {
-        headerElement.classList.remove('header-compact');
-        headerElement.classList.add('header-full');
-        simpleModeToggle.classList.add('hidden');
-    } else {
-        // Show compact header for gameplay screens
-        headerElement.classList.remove('header-full');
-        headerElement.classList.add('header-compact');
-        simpleModeToggle.classList.remove('hidden');
-    }
-
-    // Update the simple mode toggle to match current screen
-    if (screenId === 'simpleModeScreen') {
-        document.getElementById('simpleModeToggle').checked = true;
-    } else if (playByPlayScreenIds.includes(screenId) && screenId !== 'simpleModeScreen') {
-        document.getElementById('simpleModeToggle').checked = false;
-    }
-
-    // Update specific UI elements for the new screen
-    if (screenId === 'beforePointScreen') {
-        shouldClearSelectionsInLineDialog = true;  // Reset checkbox state when entering Before Point screen
-        updateActivePlayersList();
-        checkPlayerCount();
-    }
-}
 
 /*
  * Global variables
@@ -418,229 +352,29 @@ function formatPlayTime(totalTimePlayed) {
 // Open up with the "Select Your Team" screen
 showSelectTeamScreen(true);
 
-function showSelectTeamScreen(firsttime = false) {
-    const teamListElement = document.getElementById('teamList');
-    const teamListWarning = document.getElementById('teamListWarning');
-    teamListElement.innerHTML = ''; // Clear current list
-
-    if (teams.length === 0 || teams.length === 1 && teams[0].name === "Sample Team") {
-        teamListWarning.style.display = 'block';
-    } else {
-        teamListWarning.style.display = 'none';
-    }
-
-    // Create a table instead of a simple list
-    const table = document.createElement('table');
-    table.classList.add('team-selection-table');
-
-    teams.forEach((team, teamIndex) => {
-        // Create team row
-        const teamRow = document.createElement('tr');
-        teamRow.classList.add('team-row');
-        
-        // Team name cell
-        const teamNameCell = document.createElement('td');
-        teamNameCell.textContent = team.name;
-        teamNameCell.classList.add('team-name');
-        teamNameCell.onclick = () => selectTeam(teamIndex);
-        teamRow.appendChild(teamNameCell);
-
-        // Games list cell
-        const gamesCell = document.createElement('td');
-        const gamesList = document.createElement('ul');
-        gamesList.classList.add('games-list');
-
-        team.games.forEach((game, gameIndex) => {
-            const gameItem = document.createElement('li');
-            
-            // Game description
-            const gameText = document.createElement('span');
-            gameText.textContent = `vs ${game.opponent} (${game.scores[Role.TEAM]}-${game.scores[Role.OPPONENT]})`;
-            if (!game.gameEndTimestamp) {
-                gameText.textContent += ' [In Progress]';
-            }
-            gameItem.appendChild(gameText);
-
-            // Resume game button
-            if (!game.gameEndTimestamp) {
-                const resumeBtn = document.createElement('button');
-                resumeBtn.textContent = '↪️';
-                resumeBtn.classList.add('icon-button');
-                resumeBtn.title = 'Resume Game';
-                resumeBtn.onclick = (e) => {
-                    e.stopPropagation(); // Prevent triggering team selection
-                    if (confirm('Resume this game?')) {
-                        currentTeam = team;
-                        // Resume game logic - determine which screen to show
-                        if (isPointInProgress()) {
-                            const latestPossession = getLatestPossession();
-                            if (latestPossession.offensive) {
-                                updateOffensivePossessionScreen();
-                                showScreen('offensePlayByPlayScreen');
-                            } else {
-                                updateDefensivePossessionScreen();
-                                showScreen('defensePlayByPlayScreen');
-                            }
-                        } else {
-                            updateActivePlayersList();
-                            showScreen('beforePointScreen');
-                        }
-                    }
-                };
-                gameItem.appendChild(resumeBtn);
-            }
-
-            // Delete game button
-            const deleteBtn = document.createElement('button');
-            deleteBtn.textContent = '🗑️';
-            deleteBtn.classList.add('icon-button');
-            deleteBtn.title = 'Delete Game';
-            deleteBtn.onclick = (e) => {
-                e.stopPropagation(); // Prevent triggering team selection
-                if (confirm('Delete this game? This cannot be undone.')) {
-                    // Remove player stats from this game
-                    removeGameStatsFromRoster(team, game);
-                    // Remove the game
-                    team.games.splice(gameIndex, 1);
-                    showSelectTeamScreen(); // Refresh the screen
-                    saveAllTeamsData(); // Save the updated data
-                }
-            };
-            gameItem.appendChild(deleteBtn);
-
-            gamesList.appendChild(gameItem);
-        });
-
-        gamesCell.appendChild(gamesList);
-        teamRow.appendChild(gamesCell);
-        table.appendChild(teamRow);
-    });
-
-    teamListElement.appendChild(table);
-    showScreen('selectTeamScreen');
-}
-
-function removeGameStatsFromRoster(team, game) {
-    // Get all points from the game
-    const points = game.points || [];
-    
-    // For each point
-    points.forEach(point => {
-        // Get the duration of the point using totalPointTime
-        const pointDuration = point.totalPointTime;
-        
-        // Subtract time and point from each player who was on the field
-        point.players.forEach(playerName => {
-            const player = getPlayerFromName(playerName);
-            if (player) {
-                // Decrement total points played
-                player.totalPointsPlayed = Math.max(0, (player.totalPointsPlayed || 0) - 1);
-                
-                // Subtract time played
-                player.totalTimePlayed = Math.max(0, (player.totalTimePlayed || 0) - pointDuration);
-                
-                // If this was their most recent game, reset consecutive points
-                if (game === team.games[team.games.length - 1]) {
-                    player.consecutivePointsPlayed = 0;
-                }
-            }
-        });
-    });
-}
-
-// Load team data from a file
-document.getElementById('loadTeamBtn').onclick = () => {
-    document.getElementById('fileInput').click();
-};
-document.getElementById('fileInput').addEventListener('change', function(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const jsonData = JSON.parse(e.target.result);
-            // deserialize the JSON data and append to the current team data
-            const newTeams = deserializeTeams(JSON.stringify([jsonData]));
-            teams.push(newTeams[0]);
-            currentTeam = newTeams[0];
-            updateTeamRosterDisplay();
-            showSelectTeamScreen();
-        } catch (error) {
-            console.error("Error parsing JSON:", error);
-        }
-    };
-    reader.readAsText(file);
-});
-// Handle team selection
-function selectTeam(index) {
-    currentTeam = teams[index]; // assumes teams global already populated
-    updateTeamRosterDisplay(); // Update the roster display
-    showScreen('teamRosterScreen'); // Go back to the roster screen
-}
-
-// Event listeners for relevant  buttons
-document.getElementById('switchTeamsBtn').addEventListener('click', showSelectTeamScreen);
-
 // Feedback link handler - opens GitHub issues page
-document.getElementById('feedbackLink').addEventListener('click', function(e) {
-    e.preventDefault();
-    
-    // Get current app version info
-    const versionInfo = appVersion ? `${appVersion.version} (Build ${appVersion.build})` : 'Unknown';
-    const userAgent = navigator.userAgent;
-    
-    // Build the issue body with version information
-    const body = `Please describe your experience or issue below:
+const feedbackLink = document.getElementById('feedbackLink');
+if (feedbackLink) {
+    feedbackLink.addEventListener('click', function(e) {
+        e.preventDefault();
+
+        const versionInfo = appVersion ? `${appVersion.version} (Build ${appVersion.build})` : 'Unknown';
+        const userAgent = navigator.userAgent;
+
+        const body = `Please describe your experience or issue below:
 
 ---
 
 **Device/Browser:** ${userAgent}
 **App Version:** ${versionInfo}
 **Steps to reproduce:**`;
-    
-    // URL encode the body for the GitHub URL
-    const encodedBody = encodeURIComponent(body);
-    const feedbackUrl = `https://github.com/davedotluebke/ultistats/issues/new?labels=beta_feedback&title=${encodeURIComponent('Beta Feedback:')}&body=${encodedBody}`;
-    
-    window.open(feedbackUrl, '_blank');
-});
-// Show the modal when the "Create New Team" button is clicked
-document.getElementById('createNewTeamBtn').addEventListener('click', () => {
-    document.getElementById('createTeamModal').style.display = 'block';
-});
 
-// Close the modal when the close button is clicked
-document.querySelector('.close').addEventListener('click', () => {
-    document.getElementById('createTeamModal').style.display = 'none';
-});
+        const encodedBody = encodeURIComponent(body);
+        const feedbackUrl = `https://github.com/davedotluebke/ultistats/issues/new?labels=beta_feedback&title=${encodeURIComponent('Beta Feedback:')}&body=${encodedBody}`;
 
-// Save the new team when the "Save" button is clicked
-document.getElementById('saveNewTeamBtn').addEventListener('click', () => {
-    const newTeamName = document.getElementById('newTeamNameInput').value.trim();
-    if (newTeamName) {
-        const newTeam = new Team(newTeamName);
-        teams.push(newTeam);
-        currentTeam = newTeam;
-        updateTeamRosterDisplay();
-        showScreen('teamRosterScreen');
-        document.getElementById('createTeamModal').style.display = 'none';
-    } else {
-        alert('Please enter a team name.');
-    }
-});
-
-// Close the modal if the user clicks outside of it
-window.addEventListener('click', (event) => {
-    const modal = document.getElementById('createTeamModal');
-    if (event.target === modal) {
-        modal.style.display = 'none';
-    }
-});
-document.getElementById('backToRosterScreenBtn').addEventListener('click', () => {
-    updateTeamRosterDisplay();
-    showScreen('teamRosterScreen'); // Return to the roster screen
-});
+        window.open(feedbackUrl, '_blank');
+    });
+}
 
 /************************************************************************ 
  *
@@ -648,87 +382,6 @@ document.getElementById('backToRosterScreenBtn').addEventListener('click', () =>
  *   TEAM ROSTER TABLE 
  * 
  ************************************************************************/
-
-/**
- * Calculate player statistics from game events
- * Returns a map of player name -> stats object
- * Stats include: completions, huckCompletions, totalThrows, totalHucks, turnovers, dPlays
- */
-function calculatePlayerStatsFromEvents(game) {
-    const stats = {};
-    
-    // Initialize stats for all players
-    currentTeam.teamRoster.forEach(player => {
-        stats[player.name] = {
-            completions: 0,
-            huckCompletions: 0,
-            totalThrows: 0,
-            totalHucks: 0,
-            turnovers: 0,
-            dPlays: 0
-        };
-    });
-    
-    // If no game provided, return empty stats
-    if (!game || !game.points) {
-        return stats;
-    }
-    
-    // Walk through all points and possessions
-    game.points.forEach(point => {
-        point.possessions.forEach(possession => {
-            possession.events.forEach(event => {
-                if (event.type === 'Throw') {
-                    // Count completed passes
-                    if (event.thrower && event.thrower.name) {
-                        const throwerName = event.thrower.name;
-                        if (stats[throwerName]) {
-                            stats[throwerName].totalThrows++;
-                            stats[throwerName].completions++;
-                            
-                            // Count hucks separately
-                            if (event.huck_flag) {
-                                stats[throwerName].totalHucks++;
-                                stats[throwerName].huckCompletions++;
-                            }
-                        }
-                    }
-                } else if (event.type === 'Turnover') {
-                    // Count turnovers
-                    if (event.thrower && event.thrower.name) {
-                        const throwerName = event.thrower.name;
-                        if (stats[throwerName]) {
-                            stats[throwerName].turnovers++;
-                            stats[throwerName].totalThrows++;
-                            
-                            // Count incomplete hucks
-                            if (event.huck_flag) {
-                                stats[throwerName].totalHucks++;
-                            }
-                        }
-                    }
-                    // Count drops as turnovers for the receiver
-                    if (event.drop_flag && event.receiver && event.receiver.name) {
-                        const receiverName = event.receiver.name;
-                        if (stats[receiverName]) {
-                            stats[receiverName].turnovers++;
-                        }
-                    }
-                } else if (event.type === 'Defense') {
-                    // Count defensive plays
-                    if (event.defender && event.defender.name) {
-                        const defenderName = event.defender.name;
-                        if (stats[defenderName]) {
-                            stats[defenderName].dPlays++;
-                        }
-                    }
-                }
-            });
-        });
-    });
-    
-    return stats;
-}
 
 // Updates the displayed roster on the "Team Roster Screen"
 function updateTeamRosterDisplay() {
