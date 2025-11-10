@@ -700,24 +700,7 @@ if (deleteLineButton) {
  * 
  ************************************************************************/
 
-const toggleEventLogBtn = document.getElementById('toggleEventLogBtn');
-if (toggleEventLogBtn) {
-    toggleEventLogBtn.addEventListener('click', function() {
-        const eventLog = document.getElementById('eventLog');
-        if (!eventLog) {
-            console.warn('Event log element not found.');
-            return;
-        }
-
-        if (eventLog.style.display !== 'block') {
-            eventLog.style.display = 'block';
-            toggleEventLogBtn.classList.add('selected');
-        } else {
-            eventLog.style.display = 'none';
-            toggleEventLogBtn.classList.remove('selected');
-        }
-    });
-}
+// Event log toggle is now handled in ui/eventLogDisplay.js
 
 
 /******************************************************************************/
