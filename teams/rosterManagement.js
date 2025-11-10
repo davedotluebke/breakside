@@ -319,5 +319,154 @@ function updateGameSummaryRosterDisplay() {
             }
         });
     }
+
+    // Line management functions
+    const addLineButton = document.querySelector('.add-line-button');
+    if (addLineButton) {
+        addLineButton.addEventListener('click', addNewLine);
+    }
+
+    const deleteLineButton = document.querySelector('.delete-line-button');
+    if (deleteLineButton && !deleteLineButton.classList.contains('delete')) {
+        deleteLineButton.addEventListener('click', showDeleteLineDialog);
+    }
 })();
+
+/**
+ * Function to add a new line
+ */
+function addNewLine() {
+    const lineNameInput = document.querySelector('.line-name-input');
+    const lineName = lineNameInput ? lineNameInput.value.trim() : '';
+    
+    if (!lineName) {
+        alert('Please enter a line name');
+        return;
+    }
+    
+    // Get selected players
+    const selectedPlayers = Array.from(document.querySelectorAll('.active-checkbox:checked'))
+        .map(checkbox => {
+            const row = checkbox.closest('tr');
+            return row ? row.querySelector('.roster-name-column').textContent : null;
+        })
+        .filter(name => name !== null);
+    
+    if (selectedPlayers.length === 0) {
+        alert('Please select at least one player for the line');
+        return;
+    }
+    
+    // Add the new line
+    currentTeam.lines.push({
+        name: lineName,
+        players: selectedPlayers,
+        lastUsed: null
+    });
+    
+    // Clear input and save changes
+    if (lineNameInput) {
+        lineNameInput.value = '';
+    }
+    saveAllTeamsData();
+    updateTeamRosterDisplay();
+}
+
+/**
+ * Function to show delete line dialog
+ */
+function showDeleteLineDialog() {
+    if (!currentTeam.lines || currentTeam.lines.length === 0) {
+        alert('No lines to delete');
+        return;
+    }
+    
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.classList.add('delete-line-overlay');
+    
+    // Create dialog container
+    const dialog = document.createElement('div');
+    dialog.classList.add('delete-line-dialog');
+    
+    const title = document.createElement('h3');
+    title.textContent = 'Select Line to Delete';
+    dialog.appendChild(title);
+    
+    // Create container for radio buttons
+    const radioContainer = document.createElement('div');
+    radioContainer.classList.add('delete-line-radio-container');
+    
+    currentTeam.lines.forEach((line, index) => {
+        const radioDiv = document.createElement('div');
+        radioDiv.classList.add('delete-line-radio-option');
+        
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'lineToDelete';
+        radio.value = index;
+        radio.id = `line-${index}`;
+        
+        const label = document.createElement('label');
+        label.htmlFor = `line-${index}`;
+        
+        const lineName = document.createElement('span');
+        lineName.classList.add('line-name');
+        lineName.textContent = line.name;
+        
+        const linePlayers = document.createElement('span');
+        linePlayers.classList.add('line-players');
+        linePlayers.textContent = line.players.join(', ');
+        
+        label.appendChild(lineName);
+        label.appendChild(linePlayers);
+        
+        radioDiv.appendChild(radio);
+        radioDiv.appendChild(label);
+        radioContainer.appendChild(radioDiv);
+    });
+    
+    dialog.appendChild(radioContainer);
+    
+    const buttonDiv = document.createElement('div');
+    buttonDiv.classList.add('delete-line-buttons');
+    
+    const confirmButton = document.createElement('button');
+    confirmButton.textContent = 'Delete';
+    confirmButton.classList.add('delete-line-button', 'delete');
+    confirmButton.disabled = true; // Initially disabled
+    
+    // Add event listener to radio buttons to enable/disable delete button
+    const radioButtons = dialog.querySelectorAll('input[type="radio"]');
+    radioButtons.forEach(radio => {
+        radio.addEventListener('change', () => {
+            confirmButton.disabled = false;
+        });
+    });
+    
+    confirmButton.addEventListener('click', () => {
+        const selectedRadio = dialog.querySelector('input[name="lineToDelete"]:checked');
+        if (selectedRadio) {
+            const index = parseInt(selectedRadio.value);
+            currentTeam.lines.splice(index, 1);
+            saveAllTeamsData();
+            updateTeamRosterDisplay();
+        }
+        document.body.removeChild(overlay);
+    });
+    
+    const cancelButton = document.createElement('button');
+    cancelButton.textContent = 'Cancel';
+    cancelButton.classList.add('delete-line-button', 'cancel');
+    cancelButton.addEventListener('click', () => {
+        document.body.removeChild(overlay);
+    });
+    
+    buttonDiv.appendChild(cancelButton);
+    buttonDiv.appendChild(confirmButton);
+    dialog.appendChild(buttonDiv);
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+}
 
