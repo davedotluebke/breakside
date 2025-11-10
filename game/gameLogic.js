@@ -321,10 +321,4 @@ function summarizeGame() {
     return summary;
 }
 
-function logEvent(description) {
-    console.log("Event: " + description);
-    /* update the running event log on the screen */
-    const eventLog = document.getElementById('eventLog');
-    eventLog.value = summarizeGame();           // Replace log with the new game summary
-    eventLog.scrollTop = eventLog.scrollHeight; // Auto-scroll to the bottom
-}
+// logEvent is now in ui/eventLogDisplay.js
