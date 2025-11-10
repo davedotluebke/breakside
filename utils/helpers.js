@@ -64,6 +64,63 @@ function getLatestEvent() {
 }
 
 /**
+ * Find the possession containing the provided event, searching latest first
+ */
+function getPossessionOf(targetEvent) {
+    if (!targetEvent) { return null; }
+
+    const latestPossession = getLatestPossession();
+    if (latestPossession && latestPossession.events.includes(targetEvent)) {
+        return latestPossession;
+    }
+
+    const game = currentGame();
+    if (!game) { return null; }
+
+    for (let pointIndex = game.points.length - 1; pointIndex >= 0; pointIndex--) {
+        const point = game.points[pointIndex];
+        for (let possessionIndex = point.possessions.length - 1; possessionIndex >= 0; possessionIndex--) {
+            const possession = point.possessions[possessionIndex];
+            if (possession.events.includes(targetEvent)) {
+                return possession;
+            }
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Find the point containing the provided event, searching latest first
+ */
+function getPointOf(targetEvent) {
+    if (!targetEvent) { return null; }
+
+    const latestPoint = getLatestPoint();
+    if (latestPoint) {
+        for (const possession of latestPoint.possessions) {
+            if (possession.events.includes(targetEvent)) {
+                return latestPoint;
+            }
+        }
+    }
+
+    const game = currentGame();
+    if (!game) { return null; }
+
+    for (let pointIndex = game.points.length - 1; pointIndex >= 0; pointIndex--) {
+        const point = game.points[pointIndex];
+        for (const possession of point.possessions) {
+            if (possession.events.includes(targetEvent)) {
+                return point;
+            }
+        }
+    }
+
+    return null;
+}
+
+/**
  * Check if a point is currently in progress
  */
 function isPointInProgress() {

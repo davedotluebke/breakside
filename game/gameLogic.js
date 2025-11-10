@@ -1,0 +1,330 @@
+/*
+ * Game Logic
+ * Handles game initialization, scoring, and high-level game state transitions.
+ */
+let currentPoint = null;
+let currentEvent = null;
+let currentPlayer = null;
+let appVersion = null;
+
+function startNewGame(startingPosition, seconds) {
+    const opponentNameInput = document.getElementById('opponentNameInput');
+    const opponentName = opponentNameInput.value.trim() || "Bad Guys";
+
+    // Store current totalPointsPlayed into pointsPlayedPreviousGames for each player
+    currentTeam.teamRoster.forEach(player => {
+        player.pointsPlayedPreviousGames = player.totalPointsPlayed;
+    });
+    const newGame = new Game(currentTeam.name, opponentName, startingPosition);
+    currentTeam.games.push(newGame);
+    logEvent(`New game started against ${opponentName}`);
+
+    // Set countdown seconds before moving to next point
+    countdownSeconds = seconds;
+
+    moveToNextPoint();
+}
+
+document.getElementById('startGameOnOBtn').addEventListener('click', function() {
+    const timerInput = document.getElementById('pointTimerInput');
+    const seconds = parseInt(timerInput.value) || 90;
+    startNewGame('offense', seconds);
+});
+
+document.getElementById('startGameOnDBtn').addEventListener('click', function() {
+    const timerInput = document.getElementById('pointTimerInput');
+    const seconds = parseInt(timerInput.value) || 90;
+    startNewGame('defense', seconds);
+});
+
+function updateScore(winner) {
+    if (winner !== Role.TEAM && winner !== Role.OPPONENT) {
+        throw new Error("inactive role");
+    }
+
+    if (!currentPoint) {
+        throw new Error("No current point");
+    }
+
+    if (currentPoint.startTimestamp === null) {
+        console.warn("Warning: currentPoint.startTimestamp is null; setting to now");
+        currentPoint.startTimestamp = new Date();
+    }
+
+    // Add any remaining time to totalPointTime before ending
+    currentPoint.totalPointTime += (new Date() - currentPoint.startTimestamp);
+    currentPoint.endTimestamp = new Date();
+    currentPoint.winner = winner; // Setting the winning team for the current point
+    currentGame().scores[winner]++;
+
+    // Update event log
+    logEvent(`${currentPoint.winner} scores!`);
+
+    // Update player stats for those who played this point
+    currentTeam.teamRoster.forEach(player => {
+        if (currentPoint.players.includes(player.name)) { // the player played this point
+            player.totalPointsPlayed++;
+            player.consecutivePointsPlayed++;
+            player.totalTimePlayed += currentPoint.totalPointTime;
+            if (winner === Role.TEAM) {
+                player.pointsWon++;
+            } else {
+                player.pointsLost++;
+            }
+        } else {                                    // the player did not play this point
+            player.consecutivePointsPlayed = 0;
+        }
+    });
+
+    currentPoint = null;  // Reset the temporary point object
+    currentEvent = null;  // Reset the temporary event object
+    currentPlayer = null; // Reset the temporary player object
+
+    // Check if we're in next line selection mode and exit if we are
+    if (document.body.classList.contains('next-line-mode')) {
+        exitNextLineSelectionMode();
+    }
+
+    // Un-select all player buttons so O action buttons will be inactive next point
+    document.querySelectorAll('.player-button').forEach(button => {
+        button.classList.remove('selected');
+    });
+
+    summarizeGame();
+    updateActivePlayersList();  // Update the table with the new point data
+}
+
+document.getElementById('endGameBtn').addEventListener('click', function() {
+    if (confirm('Are you sure you want to end the game?')) {
+        stopCountdown();
+        currentGame().endTimestamp = new Date(); // Set end timestamp
+
+        // Populate the gameSummaryScreen with statistics, then show it
+        document.getElementById('teamName').textContent = currentGame().team;
+        document.getElementById('teamFinalScore').textContent = currentGame().scores[Role.TEAM];
+        document.getElementById('opponentName').textContent = currentGame().opponent;
+        document.getElementById('opponentFinalScore').textContent = currentGame().scores[Role.OPPONENT];
+        updateGameSummaryRosterDisplay(); // Populate the roster stats table
+        showScreen('gameSummaryScreen');
+        saveAllTeamsData();
+    }
+});
+
+document.getElementById('switchSidesBtn').addEventListener('click', function() {
+    const inNextLineMode = document.body.classList.contains('next-line-mode');
+    const startPointBtn = document.getElementById('startPointBtn');
+
+    const game = currentGame();
+    const lastPoint = getLatestPoint();
+
+    if (!game || !lastPoint) {
+        currentGame().startingPosition = currentGame().startingPosition === 'offense' ? 'defense' : 'offense';
+        logEvent(`Switching starting position to ${currentGame().startingPosition}`);
+
+        if (!inNextLineMode && startPointBtn) {
+            const newStart = determineStartingPosition();
+            startPointBtn.textContent = `Start Point (${capitalize(newStart)})`;
+        }
+
+        if (typeof checkPlayerCount === 'function') {
+            checkPlayerCount();
+        }
+        return;
+    }
+
+    let possessionIndex = -1;
+    let eventIndex = -1;
+
+    for (let pIdx = lastPoint.possessions.length - 1; pIdx >= 0 && possessionIndex === -1; pIdx--) {
+        const possession = lastPoint.possessions[pIdx];
+        for (let eIdx = possession.events.length - 1; eIdx >= 0; eIdx--) {
+            const event = possession.events[eIdx];
+            if (event.type === 'Other' && event.switchsides_flag) {
+                possessionIndex = pIdx;
+                eventIndex = eIdx;
+                break;
+            }
+        }
+    }
+
+    if (possessionIndex !== -1) {
+        const possession = lastPoint.possessions[possessionIndex];
+        possession.events.splice(eventIndex, 1);
+        if (possession.events.length === 0) {
+            lastPoint.possessions.splice(possessionIndex, 1);
+        }
+        logEvent("Removed most recent switch sides event");
+    } else {
+        let targetPossession = lastPoint.possessions.length > 0
+            ? lastPoint.possessions[lastPoint.possessions.length - 1]
+            : null;
+
+        if (!targetPossession) {
+            targetPossession = new Possession(false);
+            lastPoint.addPossession(targetPossession);
+        }
+
+        const switchSidesEvent = new Other({ switchsides: true });
+        targetPossession.addEvent(switchSidesEvent);
+        logEvent(switchSidesEvent.summarize());
+    }
+
+    if (!inNextLineMode && startPointBtn) {
+        const newStart = determineStartingPosition();
+        startPointBtn.textContent = `Start Point (${capitalize(newStart)})`;
+    }
+
+    if (typeof checkPlayerCount === 'function') {
+        checkPlayerCount();
+    }
+});
+
+document.getElementById('timeOutBtn').addEventListener('click', function() {
+    // create Other event with timeout flag set; append to most recent point
+    currentEvent = new Other({timeout: true});
+    const currentPossession = getActivePossession(currentPoint);
+    currentPossession.addEvent(currentEvent);
+    logEvent(currentEvent.summarize());
+});
+
+document.getElementById('halftimeBtn').addEventListener('click', function() {
+    // create Other event with halftime flag set; append to most recent point
+    currentEvent = new Other({halftime: true});
+    const currentPossession = getActivePossession(currentPoint);
+    currentPossession.addEvent(currentEvent);
+    logEvent(currentEvent.summarize());
+});
+
+document.getElementById('oSubPlayersBtn').addEventListener('click', function() {
+    updateActivePlayersList();
+    showScreen('beforePointScreen');
+    // enable the "continue game" button
+    document.getElementById('continueGameBtn').classList.remove('inactive');
+});
+
+document.getElementById('dSubPlayersBtn').addEventListener('click', function() {
+    updateActivePlayersList();
+    showScreen('beforePointScreen');
+    // enable the "continue game" button
+    document.getElementById('continueGameBtn').classList.remove('inactive');
+});
+
+document.getElementById('downloadGameBtn').addEventListener('click', function() {
+    const teamData = serializeTeam(currentTeam); // Assuming serializeTeam returns a JSON string
+    downloadJSON(teamData, 'teamData.json');
+});
+
+document.getElementById('copySummaryBtn').addEventListener('click', function() {
+    const summary = summarizeGame();
+    navigator.clipboard.writeText(summary).then(() => {
+        alert('Game summary copied to clipboard');
+    });
+});
+
+document.getElementById('anotherGameBtn').addEventListener('click', function() {
+    stopCountdown();
+    isPaused = false;
+    clearNextLineSelections();
+    currentPoint = null;
+    currentEvent = null;
+    currentPlayer = null;
+    updateTeamRosterDisplay();
+    document.getElementById('continueGameBtn').classList.add('inactive');
+    showScreen('teamRosterScreen');
+});
+
+async function loadVersion() {
+    try {
+        const response = await fetch('./version.json');
+        const versionData = await response.json();
+        appVersion = versionData;
+        return versionData;
+    } catch (error) {
+        console.warn('Could not load version information:', error);
+        appVersion = { version: 'unknown', build: 'unknown' };
+        return appVersion;
+    }
+}
+
+loadVersion();
+
+function downloadJSON(jsonData, filename) {
+    // Create a Blob with the JSON data
+    const blob = new Blob([jsonData], {type: 'application/json'});
+    // Create a URL for the blob
+    const url = URL.createObjectURL(blob);
+    // Create a temporary anchor element and set its href to the blob URL
+    const a = document.createElement('a');
+    a.href = url;
+    // Set the download attribute to suggest a filename for the download based on current teams and date
+    a.download = filename || `${currentGame().team}_${currentGame().opponent}_${new Date().toISOString()}.json`;
+    // Append the anchor to the body, click it, and then remove it
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Revoke the blob URL to free up resources
+    URL.revokeObjectURL(url);
+}
+
+function summarizeGame() {
+    let versionInfo = '';
+    if (appVersion) {
+        versionInfo = `App Version: ${appVersion.version} (Build ${appVersion.build})\n`;
+    }
+    let summary = versionInfo + `Game Summary: ${currentGame().team} vs. ${currentGame().opponent}.\n`;
+    summary += `${currentGame().team} roster:`;
+    currentTeam.teamRoster.forEach(player => summary += ` ${player.name}`);
+    let numPoints = 0;
+    let runningScoreUs = 0;
+    let runningScoreThem = 0;
+    currentGame().points.forEach(point => {
+        let switchsides = false;
+        numPoints += 1;
+        summary += `\nPoint ${numPoints} roster:`;
+        point.players.forEach(player => summary += ` ${player}`);
+        // indicate which team pulls and which receives (thus starting on offense)
+        if (point.startingPosition === 'offense') {
+            summary += `\n${currentGame().opponent} pulls to ${currentGame().team}.`;
+        } else {
+            summary += `\n${currentGame().team} pulls to ${currentGame().opponent}.`;
+        }
+        point.possessions.forEach(possession => {
+            possession.events.forEach(event => {
+                summary += `\n${event.summarize()}`;
+                if (event.type === 'Other' && event.switchsides_flag) {
+                    switchsides = true;
+                }
+            });
+        });
+        // if most recent event is a score, indicate which team scored
+        if (point.winner === 'team') {
+            summary += `\n${currentGame().team} scores! `;
+            runningScoreUs++;
+        }
+        if (point.winner === 'opponent') {
+            summary += `\n${currentGame().opponent} scores! `;
+            runningScoreThem++;
+        }
+        if (point.winner) {
+            summary += `\nCurrent score: ${currentGame().team} ${runningScoreUs}, ${currentGame().opponent} ${runningScoreThem}`;
+        }
+        if (switchsides) {
+            summary += `\nO and D switching sides for next point. `;
+            if (point.winner === 'team') {
+                summary += `\n${currentGame().team} will receive pull and play O. `;
+            } else {
+                summary += `\n${currentGame().team} will pull to ${currentGame().opponent} and play D. `;
+            }
+        }
+    });
+    console.log(summary);
+    return summary;
+}
+
+function logEvent(description) {
+    console.log("Event: " + description);
+    /* update the running event log on the screen */
+    const eventLog = document.getElementById('eventLog');
+    eventLog.value = summarizeGame();           // Replace log with the new game summary
+    eventLog.scrollTop = eventLog.scrollHeight; // Auto-scroll to the bottom
+}
