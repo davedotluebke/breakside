@@ -66,8 +66,10 @@
         <!-- Add this modal inside the body tag -->
     <div id="createTeamModal" class="modal" style="display: none;">
         <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>Create New Team</h2>
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Create New Team</h2>
+                <span class="close">&times;</span>
+            </div>
             <input type="text" id="newTeamNameInput" placeholder="Enter team name" />
             <button id="saveNewTeamBtn">Save</button>
         </div>
@@ -195,7 +197,8 @@
         <!-- Score Attribution Dialog -->
         <div id="scoreAttributionDialog" class="modal" style="display: none;">
             <div class="modal-content">
-                <div class="dialog-header">
+                <div class="dialog-header prominent-dialog-header">
+                    <h2>Score Attribution</h2>
                     <span class="close">&times;</span>
                 </div>
                 <div class="score-attribution-container">
@@ -245,7 +248,8 @@
         <!-- Key Play Dialog -->
         <div id="keyPlayDialog" class="modal" style="display: none;">
             <div class="modal-content">
-                <div class="dialog-header">
+                <div class="dialog-header prominent-dialog-header">
+                    <h2>Key Play</h2>
                     <span class="close">&times;</span>
                 </div>
                 <div class="key-play-container">
@@ -270,8 +274,8 @@
     <!-- Pull Dialog (outside all sections so it's not hidden by showScreen) -->
     <div id="pullDialog" class="modal" style="display: none;">
         <div class="modal-content">
-            <div class="dialog-header">
-                <h3 id="pullDialogTitle">Pull</h3>
+            <div class="dialog-header prominent-dialog-header">
+                <h2 id="pullDialogTitle">Pull</h2>
                 <span class="close">&times;</span>
             </div>
             <div id="pullGenderSelection" style="display: none;">
@@ -283,13 +287,11 @@
             </div>
             <div class="pull-container">
                 <div class="pull-column">
-                    <div class="pull-header">Pulling</div>
                     <div id="pullPlayerButtons" class="player-buttons">
                         <!-- Player buttons will be dynamically added here -->
                     </div>
                 </div>
                 <div class="pull-column">
-                    <div class="pull-header">Quality</div>
                     <div id="pullQualityButtons" class="pull-quality-buttons">
                         <button class="pull-quality-btn" data-quality="Good Pull">Good Pull</button>
                         <button class="pull-quality-btn" data-quality="Okay Pull">Okay Pull</button>

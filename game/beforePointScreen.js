@@ -105,8 +105,8 @@ function checkPlayerCount() {
         selectNextLineBtn.textContent = "Select Next Line";
     }
     
-    // Update gender ratio display
-    updateGenderRatioDisplay();
+    // Update gender ratio display (pass genderRatioWarning to style it)
+    updateGenderRatioDisplay(genderRatioWarning);
 }
 
 function checkGenderRatio() {
@@ -168,7 +168,7 @@ function getExpectedGenderRatio(game) {
     return useFirstRatio ? game.startingGenderRatio : (game.startingGenderRatio === 'FMP' ? 'MMP' : 'FMP');
 }
 
-function updateGenderRatioDisplay() {
+function updateGenderRatioDisplay(genderRatioWarning = false) {
     const game = currentGame();
     const display = document.getElementById('genderRatioDisplay');
     const text = document.getElementById('genderRatioText');
@@ -182,11 +182,21 @@ function updateGenderRatioDisplay() {
     
     if (!display || !text) return;
     
+    // Remove any existing gender ratio warning classes
+    text.classList.remove('gender-ratio-fmp-warning', 'gender-ratio-mmp-warning');
+    
     const expectedRatio = getExpectedGenderRatio(game);
     if (expectedRatio) {
         display.style.display = 'block';
         text.textContent = `+${expectedRatio} point`;
         if (ratioSelection) ratioSelection.style.display = 'none';
+        
+        // Always apply color styling based on expected ratio (regardless of warning state)
+        if (expectedRatio === 'FMP') {
+            text.classList.add('gender-ratio-fmp-warning');
+        } else if (expectedRatio === 'MMP') {
+            text.classList.add('gender-ratio-mmp-warning');
+        }
     } else {
         // First point - need to set starting ratio
         display.style.display = 'block';
