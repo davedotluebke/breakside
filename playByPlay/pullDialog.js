@@ -4,7 +4,7 @@
  */
 
 // Track Pull dialog state
-let pullSelectedPlayer = null;
+let pullSelectedPlayer = undefined; // undefined = no selection yet, null = Unknown Player selected, Player object = specific player selected
 let pullSelectedQuality = null;
 let pullSelectedGender = null;
 
@@ -45,6 +45,7 @@ function initializePullDialog() {
         pullGenderFMP.addEventListener('change', function() {
             if (this.checked) {
                 pullSelectedGender = Gender.FMP;
+                refreshPullPlayerButtonStyles();
                 updatePullDialogState();
             }
         });
@@ -54,6 +55,7 @@ function initializePullDialog() {
         pullGenderMMP.addEventListener('change', function() {
             if (this.checked) {
                 pullSelectedGender = Gender.MMP;
+                refreshPullPlayerButtonStyles();
                 updatePullDialogState();
             }
         });
@@ -75,9 +77,14 @@ function showPullDialog() {
     }
 
     // Reset dialog state
-    pullSelectedPlayer = null;
+    pullSelectedPlayer = undefined; // undefined = no selection yet, null = Unknown Player selected, Player object = specific player selected
     pullSelectedQuality = null;
     pullSelectedGender = null;
+    
+    // Reset quality buttons - remove selected class from all
+    document.querySelectorAll('.pull-quality-btn').forEach(btn => {
+        btn.classList.remove('selected');
+    });
 
     // Check if alternating gender pulls are enabled
     const alternatePulls = game.alternateGenderPulls || false;
@@ -137,7 +144,7 @@ function showPullDialog() {
     document.getElementById('pullIO').checked = false;
     document.getElementById('pullOI').checked = false;
 
-    // Update dialog state
+    // Update dialog state (will disable proceed button since no player selected yet)
     updatePullDialogState();
 
     // Show dialog
@@ -159,7 +166,7 @@ function createPullPlayerButtons(expectedGender, alternatePulls) {
     // Add Unknown Player button first
     const unknownButton = document.createElement('button');
     unknownButton.textContent = UNKNOWN_PLAYER;
-    unknownButton.classList.add('player-button', 'unknown-player', 'inactive');
+    unknownButton.classList.add('player-button', 'unknown-player');
     unknownButton.addEventListener('click', function() {
         handlePullPlayerSelection(null, this);
     });
@@ -171,7 +178,7 @@ function createPullPlayerButtons(expectedGender, alternatePulls) {
             const player = getPlayerFromName(playerName);
             const playerButton = document.createElement('button');
             playerButton.textContent = playerName;
-            playerButton.classList.add('player-button', 'inactive');
+            playerButton.classList.add('player-button');
             
             // Check if player is eligible based on gender
             if (alternatePulls && expectedGender && player && player.gender !== Gender.UNKNOWN) {
@@ -196,13 +203,16 @@ function setupPullQualityButtons() {
         button.parentNode.replaceChild(newButton, button);
         
         newButton.addEventListener('click', function() {
+            // Get all quality buttons (including the newly cloned ones)
+            const allQualityButtons = document.querySelectorAll('.pull-quality-btn');
+            
             // Toggle selection
             if (this.classList.contains('selected')) {
                 this.classList.remove('selected');
                 pullSelectedQuality = null;
             } else {
                 // Deselect all others
-                qualityButtons.forEach(btn => btn.classList.remove('selected'));
+                allQualityButtons.forEach(btn => btn.classList.remove('selected'));
                 this.classList.add('selected');
                 pullSelectedQuality = this.dataset.quality;
             }
@@ -211,24 +221,85 @@ function setupPullQualityButtons() {
     });
 }
 
+function refreshPullPlayerButtonStyles() {
+    // Refresh styling for all player buttons based on current gender selection
+    const game = currentGame();
+    const playerButtons = document.querySelectorAll('#pullPlayerButtons .player-button');
+    
+    playerButtons.forEach(button => {
+        // Skip Unknown Player button
+        if (button.classList.contains('unknown-player')) {
+            return;
+        }
+        
+        const playerName = button.textContent;
+        const player = getPlayerFromName(playerName);
+        
+        // Remove ineligible class first
+        button.classList.remove('ineligible-puller');
+        
+        // Check if player is eligible based on current gender selection
+        if (game && game.alternateGenderPulls && pullSelectedGender && player && player.gender !== Gender.UNKNOWN) {
+            if (player.gender !== pullSelectedGender) {
+                // Player is ineligible - add ineligible class
+                button.classList.add('ineligible-puller');
+            }
+        }
+        
+        // If this button is selected, ensure it has the correct styling
+        if (button.classList.contains('selected')) {
+            // The selected styling will be handled by CSS based on ineligible-puller class
+            // No additional action needed here
+        }
+    });
+}
+
 function handlePullPlayerSelection(player, buttonElement) {
-    // Update button states
+    // Update button states - deselect all player buttons
     document.querySelectorAll('#pullPlayerButtons .player-button').forEach(btn => {
         btn.classList.remove('selected');
         btn.classList.remove('inactive');
+        // Note: Keep ineligible-puller class for visual indication, but remove selected state
     });
     
+    // Select the clicked button
     buttonElement.classList.add('selected');
-    pullSelectedPlayer = player;
+    pullSelectedPlayer = player; // null for Unknown Player, Player object otherwise
     
-    // Check if player is ineligible
     const game = currentGame();
-    if (game && game.alternateGenderPulls && pullSelectedGender) {
-        const playerGender = player ? player.gender : Gender.UNKNOWN;
-        if (playerGender !== Gender.UNKNOWN && playerGender !== pullSelectedGender) {
-            // Ineligible player selected
-            buttonElement.classList.add('ineligible-puller');
+    const playerGender = player ? player.gender : Gender.UNKNOWN;
+    
+    // If this is the first defensive point and no gender is selected yet,
+    // automatically select the gender radio button based on the selected player's gender
+    if (game && game.alternateGenderPulls && pullSelectedGender === null && playerGender !== Gender.UNKNOWN) {
+        const pullGenderFMP = document.getElementById('pullGenderFMP');
+        const pullGenderMMP = document.getElementById('pullGenderMMP');
+        
+        if (playerGender === Gender.FMP && pullGenderFMP) {
+            pullGenderFMP.checked = true;
+            pullSelectedGender = Gender.FMP;
+        } else if (playerGender === Gender.MMP && pullGenderMMP) {
+            pullGenderMMP.checked = true;
+            pullSelectedGender = Gender.MMP;
         }
+        
+        // Refresh button styles now that gender is selected
+        refreshPullPlayerButtonStyles();
+    }
+    
+    // Check if player is ineligible - the ineligible-puller class should already be on the button
+    // from when it was created, but we ensure it's there if needed
+    if (game && game.alternateGenderPulls && pullSelectedGender) {
+        if (playerGender !== Gender.UNKNOWN && playerGender !== pullSelectedGender) {
+            // Ineligible player selected - ensure class is present
+            buttonElement.classList.add('ineligible-puller');
+        } else {
+            // Eligible player selected - remove ineligible class if present
+            buttonElement.classList.remove('ineligible-puller');
+        }
+    } else {
+        // Not checking eligibility - remove ineligible class if present
+        buttonElement.classList.remove('ineligible-puller');
     }
     
     updatePullDialogState();
@@ -250,9 +321,12 @@ function updatePullDialogState() {
     }
     // When alternate pulling is NOT enabled, genderSelected stays true (not required)
     
-    // Check if we have all required selections
-    const hasPlayer = true; // Unknown Player is always an option
-    const hasQuality = pullSelectedQuality !== null;
+    // Check if we have required selections
+    // Player selection is required (pullSelectedPlayer is set when any button is clicked, including Unknown Player which sets it to null)
+    // Note: pullSelectedPlayer will be undefined initially, null when Unknown Player is selected, or a Player object when a player is selected
+    const hasPlayer = pullSelectedPlayer !== undefined; // A player button has been clicked (including Unknown Player)
+    
+    // Quality selection is NOT required - proceed button should enable when any player is selected
     
     // Check if ineligible player is selected (only relevant when alternate pulling is enabled)
     let ineligibleSelected = false;
@@ -264,13 +338,13 @@ function updatePullDialogState() {
     }
     
     // Enable/disable proceed button
-    // When alternate pulling is NOT enabled, genderSelected is always true, so we only check hasPlayer and hasQuality
+    // Quality selection is NOT required - only player selection (and gender if required) is needed
     if (genderRequired && !genderSelected) {
         // Gender selection required but not selected (only when alternate pulling enabled and first defensive point)
         proceedBtn.disabled = true;
         proceedBtn.classList.remove('warning');
-    } else if (hasPlayer && hasQuality && genderSelected) {
-        // All required selections made (genderSelected is always true when alternate pulling is disabled)
+    } else if (hasPlayer && genderSelected) {
+        // Player selected (and gender if required) - enable proceed button
         proceedBtn.disabled = false;
         if (ineligibleSelected) {
             proceedBtn.classList.add('warning');
@@ -278,7 +352,7 @@ function updatePullDialogState() {
             proceedBtn.classList.remove('warning');
         }
     } else {
-        // Missing required selections (player or quality)
+        // Missing required selections (player not selected)
         proceedBtn.disabled = true;
         proceedBtn.classList.remove('warning');
     }
@@ -289,6 +363,12 @@ function createPullEvent() {
     const game = currentGame();
     if (!game || !currentPoint) {
         console.error('Cannot create pull event: no game or point');
+        return;
+    }
+    
+    // Ensure a player has been selected (including Unknown Player)
+    if (pullSelectedPlayer === undefined) {
+        console.error('Cannot create pull event: no player selected');
         return;
     }
 

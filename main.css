@@ -367,6 +367,49 @@ ul {
     font-weight: bold;
 }
 
+/* Gender ratio warning styling - matches player colors */
+#genderRatioText.gender-ratio-fmp-warning {
+    color: #9b59b6; /* Purple - matches FMP player color */
+    font-weight: bold;
+}
+
+#genderRatioText.gender-ratio-mmp-warning {
+    color: #ff8c00; /* Amber/Orange - matches MMP player color */
+    font-weight: bold;
+}
+
+/* Starting Gender Ratio Selection - Prominent styling for first point */
+#startingGenderRatioSelection {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #dc3545; /* Bright warning red */
+    text-align: center;
+}
+
+#startingGenderRatioSelection > label:first-of-type {
+    font-weight: bold;
+    color: #dc3545; /* Bright warning red */
+    font-size: 1.2rem;
+    margin-right: 0.75rem;
+}
+
+#startingGenderRatioSelection label[for="startingRatioFMP"],
+#startingGenderRatioSelection label[for="startingRatioMMP"] {
+    font-weight: bold;
+    color: #dc3545; /* Bright warning red */
+    font-size: 1.2rem;
+    margin: 0 0.5rem;
+    cursor: pointer;
+}
+
+#startingGenderRatioSelection input[type="radio"] {
+    width: 1.2em;
+    height: 1.2em;
+    margin-right: 0.5rem;
+    cursor: pointer;
+    accent-color: #dc3545; /* Bright warning red for radio button */
+}
+
 .active-time-column {
     left: 140px; /* this will be overwritten dynamically to width of left 2 columns */
     font-style: italic;
@@ -917,6 +960,28 @@ ul {
     color: #666;
 }
 
+/* Prominent Dialog Header Style - Applied to all dialogs */
+.prominent-dialog-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #E19049;
+}
+
+.prominent-dialog-header h2 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #E19049;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.prominent-dialog-header .close {
+    top: 0;
+    right: 0;
+}
+
 
 .score-attribution-container {
     display: flex;
@@ -1232,7 +1297,8 @@ ul {
     }
 }
 
-/* Pull Dialog Styles */
+/* Pull Dialog Styles - Uses prominent-dialog-header class */
+
 .pull-container {
     display: flex;
     justify-content: space-between;
@@ -1247,14 +1313,6 @@ ul {
     flex-direction: column;
     align-items: center;
     min-width: 0;
-}
-
-.pull-header {
-    font-weight: bold;
-    font-size: 1.2rem;
-    margin-bottom: 0.5rem;
-    text-align: center;
-    width: 100%;
 }
 
 .pull-quality-buttons {
@@ -1357,8 +1415,16 @@ ul {
 }
 
 .player-button.ineligible-puller {
-    background-color: #ffe4cc;
-    opacity: 0.7;
+    background-color: #a0a0a0; /* Medium grey - different from eligible players but not as light as disabled */
+    opacity: 1;
+}
+
+/* Selected ineligible player button - show selected style with warning orange */
+.player-button.selected.ineligible-puller {
+    background-color: #ff8800 !important; /* Full warning orange - matches Proceed button warning style */
+    opacity: 1 !important; /* Full opacity for selected style */
+    border: 2px solid #007bff !important; /* Add blue border to show selected state */
+    color: #fff !important; /* White text for contrast on orange background */
 }
 
 @media (max-width: 480px) {
@@ -1366,8 +1432,8 @@ ul {
         gap: 0.5rem;
     }
     
-    .pull-header {
-        font-size: 1rem;
+    .prominent-dialog-header h2 {
+        font-size: 1.5rem;
     }
     
     .pull-quality-btn {
