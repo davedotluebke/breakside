@@ -211,7 +211,10 @@ function updateGenderRatioDisplay(genderRatioWarning = false) {
         if (display) display.style.display = 'block';
         if (text) {
             text.textContent = `${game.alternateGenderRatio} FMP:MMP`;
-            text.classList.remove('gender-ratio-fmp-warning', 'gender-ratio-mmp-warning');
+            text.classList.remove('gender-ratio-fmp-warning', 'gender-ratio-mmp-warning', 'gender-ratio-editable');
+            // Remove click handler for fixed ratios
+            text.style.cursor = 'default';
+            text.onclick = null;
         }
         if (ratioSelection) ratioSelection.style.display = 'none';
         return;
@@ -226,7 +229,17 @@ function updateGenderRatioDisplay(genderRatioWarning = false) {
     if (expectedRatio) {
         display.style.display = 'block';
         text.textContent = `+${expectedRatio} point`;
-        if (ratioSelection) ratioSelection.style.display = 'none';
+        // Make text clickable to show radio buttons
+        text.style.cursor = 'pointer';
+        text.classList.add('gender-ratio-editable');
+        text.onclick = function() {
+            showGenderRatioRadioButtons();
+        };
+        
+        // Hide radio buttons by default (unless already shown)
+        if (ratioSelection && !ratioSelection.classList.contains('editing-ratio')) {
+            ratioSelection.style.display = 'none';
+        }
         
         // Always apply color styling based on expected ratio (regardless of warning state)
         if (expectedRatio === 'FMP') {
@@ -238,18 +251,51 @@ function updateGenderRatioDisplay(genderRatioWarning = false) {
         // First point - need to set starting ratio
         display.style.display = 'block';
         text.textContent = 'Select starting ratio';
+        text.style.cursor = 'default';
+        text.classList.remove('gender-ratio-editable');
+        text.onclick = null;
         if (ratioSelection) {
             ratioSelection.style.display = 'block';
+            ratioSelection.classList.add('editing-ratio');
             // Set up radio button handlers if not already set
             setupStartingRatioRadioButtons();
         }
     }
 }
 
+function showGenderRatioRadioButtons() {
+    const game = currentGame();
+    const ratioSelection = document.getElementById('startingGenderRatioSelection');
+    const text = document.getElementById('genderRatioText');
+    
+    if (!game || !ratioSelection || !text) return;
+    
+    // Warn user if changing ratio after first point
+    if (game.points.length > 0) {
+        alert('Changing the gender ratio alternation will cause previous points to be incorrectly colored in the lineup selection screen.');
+    }
+    
+    // Show the radio buttons
+    ratioSelection.style.display = 'block';
+    ratioSelection.classList.add('editing-ratio');
+    
+    // Hide the text temporarily
+    text.style.display = 'none';
+    
+    // Set up radio buttons with current ratio pre-selected
+    setupGenderRatioRadioButtons();
+}
+
 function setupStartingRatioRadioButtons() {
+    setupGenderRatioRadioButtons();
+}
+
+function setupGenderRatioRadioButtons() {
     const fmpRadio = document.getElementById('startingRatioFMP');
     const mmpRadio = document.getElementById('startingRatioMMP');
     const game = currentGame();
+    const ratioSelection = document.getElementById('startingGenderRatioSelection');
+    const text = document.getElementById('genderRatioText');
     
     if (!fmpRadio || !mmpRadio || !game) return;
     
@@ -259,37 +305,128 @@ function setupStartingRatioRadioButtons() {
     fmpRadio.parentNode.replaceChild(newFMP, fmpRadio);
     mmpRadio.parentNode.replaceChild(newMMP, mmpRadio);
     
-    // Set current value if already set
-    if (game.startingGenderRatio === 'FMP') {
-        newFMP.checked = true;
-    } else if (game.startingGenderRatio === 'MMP') {
-        newMMP.checked = true;
+    // Determine current ratio to pre-select
+    let currentRatio = game.startingGenderRatio;
+    if (!currentRatio && game.points.length > 0) {
+        // If starting ratio not set but we have points, determine from expected ratio
+        const expectedRatio = getExpectedGenderRatio(game);
+        if (expectedRatio) {
+            // Work backwards to determine starting ratio
+            const pointCount = game.points.length;
+            const pattern = [0, 1, 1, 0, 0, 1, 1];
+            const patternIndex = pointCount % 7;
+            const useFirstRatio = pattern[patternIndex] === 0;
+            // If we're on the first ratio in pattern, starting ratio matches expected
+            // Otherwise, it's the opposite
+            currentRatio = useFirstRatio ? expectedRatio : (expectedRatio === 'FMP' ? 'MMP' : 'FMP');
+        }
     }
     
-    // Add event listeners
-    newFMP.addEventListener('change', function() {
-        if (this.checked) {
-            game.startingGenderRatio = 'FMP';
+    // Pre-select current ratio
+    if (currentRatio === 'FMP') {
+        newFMP.checked = true;
+        newMMP.checked = false;
+    } else if (currentRatio === 'MMP') {
+        newFMP.checked = false;
+        newMMP.checked = true;
+    } else {
+        // Neither selected (shouldn't happen in edit mode, but handle gracefully)
+        newFMP.checked = false;
+        newMMP.checked = false;
+    }
+    
+    // Function to handle ratio confirmation
+    let confirming = false;
+    const confirmRatio = function(selectedRatio) {
+        if (confirming) return; // Prevent double-firing
+        confirming = true;
+        
+        // Save currently checked players before updating
+        const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
+        const checkedPlayers = [];
+        checkboxes.forEach((checkbox, index) => {
+            if (checkbox.checked && currentTeam.teamRoster[index]) {
+                checkedPlayers.push(currentTeam.teamRoster[index].name);
+            }
+        });
+        
+        game.startingGenderRatio = selectedRatio;
             saveAllTeamsData();
-            checkPlayerCount(); // Update display
+        
+        // Hide radio buttons and show text again
+        if (ratioSelection) {
+            ratioSelection.style.display = 'none';
+            ratioSelection.classList.remove('editing-ratio');
+        }
+        if (text) {
+            text.style.display = '';
+        }
+        
             // Recreate the table to update score cell colors
             if (typeof updateActivePlayersList === 'function') {
                 updateActivePlayersList();
             }
+        
+        // Restore the checked players after table recreation
+        setTimeout(function() {
+            const newCheckboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
+            newCheckboxes.forEach((checkbox, index) => {
+                if (currentTeam.teamRoster[index] && checkedPlayers.includes(currentTeam.teamRoster[index].name)) {
+                    checkbox.checked = true;
+                }
+            });
+            checkPlayerCount(); // Update display after restoring selections
+        }, 0);
+    };
+    
+    // Add event listeners - clicking either button confirms the selection
+    // Query labels after cloning (they reference the IDs which remain the same)
+    const fmpLabel = document.querySelector('label[for="startingRatioFMP"]');
+    const mmpLabel = document.querySelector('label[for="startingRatioMMP"]');
+    
+    // Handle change events (fires when switching from one to the other)
+    newFMP.addEventListener('change', function() {
+        if (this.checked && !confirming) {
+            confirmRatio('FMP');
         }
     });
     
     newMMP.addEventListener('change', function() {
-        if (this.checked) {
-            game.startingGenderRatio = 'MMP';
-            saveAllTeamsData();
-            checkPlayerCount(); // Update display
-            // Recreate the table to update score cell colors
-            if (typeof updateActivePlayersList === 'function') {
-                updateActivePlayersList();
-            }
+        if (this.checked && !confirming) {
+            confirmRatio('MMP');
         }
     });
+    
+    // Handle click events (fires even when clicking already-selected button)
+    // Use a small delay to let change event fire first if switching
+    newFMP.addEventListener('click', function() {
+        setTimeout(function() {
+            if (newFMP.checked && !confirming) {
+                confirmRatio('FMP');
+            }
+        }, 50);
+    });
+    
+    newMMP.addEventListener('click', function() {
+        setTimeout(function() {
+            if (newMMP.checked && !confirming) {
+                confirmRatio('MMP');
+            }
+        }, 50);
+    });
+    
+    // Also handle clicks on labels (remove old listeners by cloning labels too)
+    if (fmpLabel) {
+        const newFMPLabel = fmpLabel.cloneNode(true);
+        fmpLabel.parentNode.replaceChild(newFMPLabel, fmpLabel);
+        // Label clicks will trigger the radio button's change/click events, so no need for separate handler
+    }
+    
+    if (mmpLabel) {
+        const newMMPLabel = mmpLabel.cloneNode(true);
+        mmpLabel.parentNode.replaceChild(newMMPLabel, mmpLabel);
+        // Label clicks will trigger the radio button's change/click events, so no need for separate handler
+    }
 }
 
 document.getElementById('selectLineBtn').addEventListener('click', showLineSelectionDialog);
