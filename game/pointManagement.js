@@ -68,27 +68,51 @@ function startNextPoint() {
     // Update the simple mode toggle to match isSimpleMode before showing the screen
     document.getElementById('simpleModeToggle').checked = window.isSimpleMode;
 
+    // For defense points, show Pull dialog first (regardless of simple mode)
+    // The dialog will handle proceeding to the appropriate screen
+    if (startPointOn === 'defense') {
+        if (typeof showPullDialog === 'function') {
+            showPullDialog();
+        } else {
+            // Fallback if dialog not available
+            proceedToDefenseScreen();
+        }
+    } else {
+        // Offense points go directly to their screen
+        if (window.isSimpleMode) {
+            showScreen('simpleModeScreen');
+            // Start timing immediately in simple mode
+            if (currentPoint.startTimestamp !== null) {
+                console.warn("Warning: startTimestamp was already set when starting point in simple mode");
+            }
+            currentPoint.startTimestamp = new Date();
+        } else {
+            updateOffensivePossessionScreen();
+            showScreen('offensePlayByPlayScreen');
+        }
+    }
+}
+
+function proceedToDefenseScreen() {
+    console.log('proceedToDefenseScreen() called, isSimpleMode:', window.isSimpleMode, 'possessions.length:', currentPoint ? currentPoint.possessions.length : 'no currentPoint');
     if (window.isSimpleMode) {
         showScreen('simpleModeScreen');
         // Start timing immediately in simple mode
         if (currentPoint.startTimestamp !== null) {
-            console.warn("Warning: startTimestamp was already set when starting point in simple mode");
+            console.warn("Warning: startTimestamp was already set when starting defensive point in simple mode");
         }
         currentPoint.startTimestamp = new Date();
     } else {
-        if (startPointOn === 'offense') {
-            updateOffensivePossessionScreen();
-            showScreen('offensePlayByPlayScreen');
-        } else {
-            updateDefensivePossessionScreen();
-            showScreen('defensePlayByPlayScreen');
-            // For now start possession and timing when D points start
+        updateDefensivePossessionScreen();
+        showScreen('defensePlayByPlayScreen');
+        // Ensure we have a defensive possession
+        if (currentPoint.possessions.length === 0) {
             currentPoint.addPossession(new Possession(false));
-            if (currentPoint.startTimestamp !== null) {
-                console.warn("Warning: startTimestamp was already set when starting defensive point");
-            }
-            currentPoint.startTimestamp = new Date();
         }
+        if (currentPoint.startTimestamp !== null) {
+            console.warn("Warning: startTimestamp was already set when starting defensive point");
+        }
+        currentPoint.startTimestamp = new Date();
     }
 }
 

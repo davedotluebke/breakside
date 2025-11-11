@@ -306,10 +306,18 @@ th {
 }
 
 /* Input field styling */
-input[type="text"], input[type="number"] {
+input[type="text"], input[type="number"], select {
     padding: 8px;
     margin: 10px;
     border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+/* Fixed width for gender ratio dropdown to prevent layout shifts */
+#enforceGenderRatioSelect {
+    width: 280px; /* Width to accommodate "Alternating (4:3 / 3:4)" plus padding */
+    min-width: 280px;
+    max-width: 280px;
     border-radius: 4px;
 }
 
@@ -354,6 +362,80 @@ ul {
 
 .active-name-column {
     left: 40px; /* this will be overwritten dynamically to width of checkbox column */
+}
+
+/* Gender-based color coding for player names */
+.player-fmp {
+    color: #7d3c98; /* Darker purple for better contrast */
+    font-weight: bold;
+}
+
+.player-mmp {
+    color: #2d8659; /* Darker green */
+    font-weight: bold;
+}
+
+/* Gender ratio warning styling - matches player colors */
+#genderRatioText.gender-ratio-fmp-warning {
+    color: #7d3c98; /* Darker purple - matches FMP player color */
+    font-weight: bold;
+}
+
+#genderRatioText.gender-ratio-mmp-warning {
+    color: #2d8659; /* Darker green - matches MMP player color */
+    font-weight: bold;
+}
+
+/* Make gender ratio text look clickable when editable */
+#genderRatioText.gender-ratio-editable {
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    cursor: pointer;
+}
+
+/* Score cell coloring for alternating gender ratio games */
+.score-cell-fmp {
+    background-color: rgba(125, 60, 152, 0.2); /* Light darker purple background */
+    color: #000; /* Black text for better contrast */
+    font-weight: bold;
+}
+
+.score-cell-mmp {
+    background-color: rgba(45, 134, 89, 0.2); /* Light darker green background */
+    color: #000; /* Black text for better contrast */
+    font-weight: bold;
+}
+
+/* Starting Gender Ratio Selection - Prominent styling for first point */
+#startingGenderRatioSelection {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #dc3545; /* Bright warning red */
+    text-align: center;
+}
+
+#startingGenderRatioSelection > label:first-of-type {
+    font-weight: bold;
+    color: #dc3545; /* Bright warning red */
+    font-size: 1.2rem;
+    margin-right: 0.75rem;
+}
+
+#startingGenderRatioSelection label[for="startingRatioFMP"],
+#startingGenderRatioSelection label[for="startingRatioMMP"] {
+    font-weight: bold;
+    color: #dc3545; /* Bright warning red */
+    font-size: 1.2rem;
+    margin: 0 0.5rem;
+    cursor: pointer;
+}
+
+#startingGenderRatioSelection input[type="radio"] {
+    width: 1.2em;
+    height: 1.2em;
+    margin-right: 0.5rem;
+    cursor: pointer;
+    accent-color: #dc3545; /* Bright warning red for radio button */
 }
 
 .active-time-column {
@@ -415,7 +497,7 @@ ul {
 .modal {
     display: none; /* Hidden by default */
     position: fixed; /* Stay in place */
-    z-index: 1; /* Sit on top */
+    z-index: 1000; /* Sit on top of everything */
     left: 0;
     top: 0;
     width: 100%; /* Full width */
@@ -802,14 +884,18 @@ ul {
 }
 
 /* Specific management icon button styles */
-.management-icons #addPlayerBtn, 
-.management-icons .add-line-button {
-    color: #28a745;
+.management-icons #addFMPPlayerBtn {
+    color: #7d3c98; /* Darker purple - matches FMP player color */
+    font-weight: bold;
 }
 
-.management-icons #deletePlayerBtn, 
-.management-icons .delete-line-button {
-    color: #dc3545;
+.management-icons #addMMPPlayerBtn {
+    color: #2d8659; /* Darker green - matches MMP player color */
+    font-weight: bold;
+}
+
+.management-icons .add-line-button {
+    color: #28a745;
 }
 
 /* Delete Line Dialog Button Styles */
@@ -900,6 +986,28 @@ ul {
     font-weight: bold;
     cursor: pointer;
     color: #666;
+}
+
+/* Prominent Dialog Header Style - Applied to all dialogs */
+.prominent-dialog-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #E19049;
+}
+
+.prominent-dialog-header h2 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #E19049;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.prominent-dialog-header .close {
+    top: 0;
+    right: 0;
 }
 
 
@@ -1214,6 +1322,155 @@ ul {
         font-size: 0.75rem;
         min-height: 1.4rem;
         margin: 1px !important;
+    }
+}
+
+/* Pull Dialog Styles - Uses prominent-dialog-header class */
+
+.pull-container {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.pull-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+}
+
+.pull-quality-buttons {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 0.5rem;
+}
+
+.pull-quality-btn {
+    padding: 0.7rem;
+    border: 2px solid #000;
+    border-radius: 0.5rem;
+    background-color: #f8f9fa;
+    color: #000;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.pull-quality-btn:hover {
+    background-color: #e9ecef;
+}
+
+.pull-quality-btn.selected {
+    background-color: #0066cc;
+    color: white;
+    border-color: #0066cc;
+}
+
+.pull-checkboxes {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+}
+
+.pull-checkboxes label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.pull-checkboxes input[type="checkbox"] {
+    margin-right: 0.4rem;
+    cursor: pointer;
+}
+
+.pull-dialog-buttons {
+    display: flex;
+    justify-content: center;
+    margin-top: 1rem;
+}
+
+.pull-proceed-btn {
+    padding: 0.8rem 2rem;
+    border: none;
+    border-radius: 0.5rem;
+    background-color: #28a745;
+    color: white;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.pull-proceed-btn:hover:not(:disabled) {
+    background-color: #218838;
+}
+
+.pull-proceed-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+.pull-proceed-btn.warning {
+    background-color: #ff8800;
+}
+
+.pull-proceed-btn.warning:hover {
+    background-color: #ff7700;
+}
+
+#pullGenderSelection {
+    margin: 1rem 0;
+    text-align: center;
+}
+
+#pullGenderSelection label {
+    margin: 0 0.5rem;
+    cursor: pointer;
+}
+
+#pullGenderSelection input[type="radio"] {
+    margin-right: 0.3rem;
+    cursor: pointer;
+}
+
+.player-button.ineligible-puller {
+    background-color: #a0a0a0; /* Medium grey - different from eligible players but not as light as disabled */
+    opacity: 1;
+}
+
+/* Selected ineligible player button - show selected style with warning orange */
+.player-button.selected.ineligible-puller {
+    background-color: #ff8800 !important; /* Full warning orange - matches Proceed button warning style */
+    opacity: 1 !important; /* Full opacity for selected style */
+    border: 2px solid #007bff !important; /* Add blue border to show selected state */
+    color: #fff !important; /* White text for contrast on orange background */
+}
+
+@media (max-width: 480px) {
+    .pull-container {
+        gap: 0.5rem;
+    }
+    
+    .prominent-dialog-header h2 {
+        font-size: 1.5rem;
+    }
+    
+    .pull-quality-btn {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .pull-checkboxes {
+        gap: 0.5rem;
     }
 }
 
