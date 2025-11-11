@@ -1,0 +1,28 @@
+.accordion {
+    margin: 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    overflow: hidden;
+    transition: max-height 1.4s ease-out;
+  }
+  
+  .accordion-input {
+    display: none;
+  }
+  
+  .accordion-label {
+    display: block;
+    background-color: #f1f1f1;
+    padding: 10px;
+    cursor: pointer;
+  }
+  
+  .accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 1.4s ease-out;
+  }
+  
+  .accordion-input:checked ~ .accordion-content {
+    max-height: 200px; /* Adjust this value according to the content size */
+  }
