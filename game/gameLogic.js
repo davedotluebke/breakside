@@ -17,10 +17,10 @@ function startNewGame(startingPosition, seconds) {
     });
     const newGame = new Game(currentTeam.name, opponentName, startingPosition);
     
-    // Set mixed rules flags from checkboxes
-    const alternateGenderRatioCheckbox = document.getElementById('alternateGenderRatioCheckbox');
+    // Set mixed rules flags from dropdown and checkbox
+    const enforceGenderRatioSelect = document.getElementById('enforceGenderRatioSelect');
     const alternateGenderPullsCheckbox = document.getElementById('alternateGenderPullsCheckbox');
-    newGame.alternateGenderRatio = alternateGenderRatioCheckbox ? alternateGenderRatioCheckbox.checked : false;
+    newGame.alternateGenderRatio = enforceGenderRatioSelect ? enforceGenderRatioSelect.value : 'No';
     newGame.alternateGenderPulls = alternateGenderPullsCheckbox ? alternateGenderPullsCheckbox.checked : false;
     
     currentTeam.games.push(newGame);

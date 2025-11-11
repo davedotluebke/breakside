@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Live Audio Processing Example</title>
+</head>
+<body>
+    <h1>Live Audio Processing Example</h1>
+    <button id="start-mic">Start Microphone</button>
+    <button id="stop-mic">Stop Microphone</button>
+    <input type="file" id="upload-audio" accept="audio/*">
+    <pre id="output"></pre>
+    <script>
+        const whisperApiUrl = 'YOUR_WHISPER_API_ENDPOINT';
+        const gpt4oApiUrl = 'YOUR_GPT4O_API_ENDPOINT';
+        let mediaRecorder;
+        let audioChunks = [];
+        let transcribedText = '';
+
+        // Function to send audio data to Whisper API
+        async function sendToWhisper(audioBlob, prompt) {
+            const formData = new FormData();
+            formData.append('audio', audioBlob);
+            formData.append('prompt', prompt);
+
+            const response = await fetch(whisperApiUrl, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            return data.transcription;
+        }
+
+        // Function to send text to GPT-4o API
+        async function sendToGpt4o(text) {
+            const response = await fetch(gpt4oApiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: text })
+            });
+            const data = await response.json();
+            return data;
+        }
+
+        // Process and transcribe audio in 3-second chunks
+        async function processAudio() {
+            if (audioChunks.length === 0) return;
+
+            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            const transcription = await sendToWhisper(audioBlob, transcribedText);
+            transcribedText += ' ' + transcription;
+            document.getElementById('output').textContent = transcribedText;
+
+            const processedData = await sendToGpt4o(transcribedText);
+            console.log(processedData);
+
+            // Clear the chunks after processing
+            audioChunks = [];
+        }
+
+        // Start capturing audio from microphone
+        document.getElementById('start-mic').addEventListener('click', async () => {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.start(3000);
+
+            mediaRecorder.ondataavailable = event => {
+                audioChunks.push(event.data);
+                processAudio();
+            };
+        });
+
+        // Stop capturing audio from microphone
+        document.getElementById('stop-mic').addEventListener('click', () => {
+            if (mediaRecorder) {
+                mediaRecorder.stop();
+            }
+        });
+
+        // Handle audio file upload
+        document.getElementById('upload-audio').addEventListener('change', event => {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.readAsArrayBuffer(file);
+
+            reader.onload = () => {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                audioContext.decodeAudioData(reader.result, buffer => {
+                    const chunkDuration = 3;
+                    const sampleRate = buffer.sampleRate;
+                    const chunkSize = chunkDuration * sampleRate;
+
+                    for (let i = 0; i < buffer.length; i += chunkSize) {
+                        const chunk = buffer.getChannelData(0).slice(i, i + chunkSize);
+                        const audioBuffer = audioContext.createBuffer(1, chunk.length, sampleRate);
+                        audioBuffer.copyToChannel(chunk, 0);
+
+                        audioBufferToBlob(audioBuffer).then(blob => {
+                            audioChunks.push(blob);
+                            processAudio();
+                        });
+                    }
+                });
+            };
+        });
+
+        // Utility function to convert AudioBuffer to Blob
+        function audioBufferToBlob(audioBuffer) {
+            return new Promise(resolve => {
+                const worker = new Worker(URL.createObjectURL(new Blob([`
+                    onmessage = function(event) {
+                        const audioBuffer = event.data;
+                        const bufferLength = audioBuffer.length;
+                        const channels = audioBuffer.numberOfChannels;
+                        const sampleRate = audioBuffer.sampleRate;
+                        const pcmArray = new Float32Array(bufferLength * channels);
+                        for (let channel = 0; channel < channels; channel++) {
+                            pcmArray.set(audioBuffer.getChannelData(channel), channel * bufferLength);
+                        }
+                        const wavBlob = new Blob([pcmArray.buffer], { type: 'audio/wav' });
+                        postMessage(wavBlob);
+                    }
+                `], { type: 'application/javascript' })));
+
+                worker.onmessage = event => {
+                    resolve(event.data);
+                };
+
+                worker.postMessage(audioBuffer);
+            });
+        }
+    </script>
+</body>
+</html>

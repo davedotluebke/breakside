@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Live Audio Processing Example</title>
+</head>
+<body>
+    <h1>Live Audio Processing Example</h1>
+    <button id="start-mic">Start Microphone</button>
+    <button id="stop-mic">Stop Microphone</button>
+    <input type="file" id="upload-audio" accept="audio/*">
+    <pre id="output"></pre>
+    <script>
+        const apiKey = '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'; // Remove before deploying
+
+        const whisperApiUrl = 'https://api.openai.com/v1/audio/transcriptions';
+        const gpt4oApiUrl = 'https://api.openai.com/v1/chat/completions';
+        let mediaRecorder;
+        let audioChunks = [];
+        let transcribedText = '';
+
+        // Function to send audio data to Whisper API
+        async function sendToWhisper(audioBlob, prompt) {
+            const formData = new FormData();
+            formData.append('file', audioBlob, 'audio.webm');
+            formData.append('model', 'whisper-1');
+            // formData.append('prompt', prompt);
+            formData.append('prompt', 'Narration of an ultimate frisbee game. Players: "Cyrus L" or "Cyrus Luebke","Leif","Cesc","Cyrus J" or "Cyrus Jackson","Abby","Avery","James","Simeon","Soren","Walden"');
+
+            const response = await fetch(whisperApiUrl, {
+                method: 'POST',
+                headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                },
+                body: formData
+            });
+            const data = await response.json();
+            return data.transcription;
+        }
+
+        // Function to send text to GPT-4o API
+        async function sendToGpt4o(text) {
+            const model = 'gpt-4o'; 
+            const response = await fetch(gpt4oApiUrl, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                        model: model,
+                        messages: [
+                            {"role": "system", 
+                            "content": "You are collecting statistics for a game of ultimate frisbee. " +
+                                "Convert the following transcription of a sports commentator's narration " +
+                                "of the game into a terse list of one-sentence discrete game events. Here " +
+                                "are the names of the players: " +
+                                "Cyrus Luebke (aka Cyrus L), Leif, Cesc, Cyrus J (aka Cyrus J), Abby, Avery, James, Simeon, Soren, Walden. " +
+                                "The transcription is as follows: "
+                            },
+                            {"role": "user", "content": text}
+                        ]
+                    })
+            });
+            const data = await response.json();
+            return data;
+        }
+
+        // Process and transcribe audio in 3-second chunks
+        async function processAudio() {
+            if (audioChunks.length === 0) return;
+
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            const transcription = await sendToWhisper(audioBlob, transcribedText);
+            transcribedText += ' ' + transcription;
+            document.getElementById('output').textContent = transcribedText;
+
+            const processedData = await sendToGpt4o(transcribedText);
+            console.log(processedData);
+
+            // Clear the chunks after processing
+            audioChunks = [];
+        }
+
+        // Start capturing audio from microphone
+        document.getElementById('start-mic').addEventListener('click', async () => {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            mediaRecorder.start(3000);
+
+            mediaRecorder.ondataavailable = event => {
+                audioChunks.push(event.data);
+                processAudio();
+            };
+        });
+
+        // Stop capturing audio from microphone
+        document.getElementById('stop-mic').addEventListener('click', () => {
+            if (mediaRecorder) {
+                mediaRecorder.stop();
+            }
+        });
+
+        // Handle audio file upload
+        document.getElementById('upload-audio').addEventListener('change', event => {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.readAsArrayBuffer(file);
+
+            reader.onload = () => {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                audioContext.decodeAudioData(reader.result, buffer => {
+                    const chunkDuration = 3;
+                    const sampleRate = buffer.sampleRate;
+                    const chunkSize = chunkDuration * sampleRate;
+
+                    for (let i = 0; i < buffer.length; i += chunkSize) {
+                        const chunk = buffer.getChannelData(0).slice(i, i + chunkSize);
+                        const audioBuffer = audioContext.createBuffer(1, chunk.length, sampleRate);
+                        audioBuffer.copyToChannel(chunk, 0);
+
+                        audioBufferToWebmBlob(audioBuffer).then(blob => {
+                            audioChunks.push(blob);
+                            processAudio();
+                        });
+                    }
+                });
+            };
+        });
+
+
+
+        // Utility function to convert AudioBuffer to Blob in .webm format
+        async function audioBufferToWebmBlob(audioBuffer) {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const destination = audioContext.createMediaStreamDestination();
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(destination);
+            source.start();
+
+            return new Promise(resolve => {
+                const mediaRecorder = new MediaRecorder(destination.stream, { mimeType: 'audio/webm' });
+                const chunks = [];
+                mediaRecorder.ondataavailable = event => chunks.push(event.data);
+                mediaRecorder.onstop = () => resolve(new Blob(chunks, { type: 'audio/webm' }));
+                mediaRecorder.start();
+                setTimeout(() => mediaRecorder.stop(), 3000);  // Stop recording after 3 seconds
+            });
+        }
+
+    </script>
+</body>
+</html>

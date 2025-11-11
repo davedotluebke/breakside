@@ -306,10 +306,18 @@ th {
 }
 
 /* Input field styling */
-input[type="text"], input[type="number"] {
+input[type="text"], input[type="number"], select {
     padding: 8px;
     margin: 10px;
     border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+/* Fixed width for gender ratio dropdown to prevent layout shifts */
+#enforceGenderRatioSelect {
+    width: 280px; /* Width to accommodate "Alternating (4:3 / 3:4)" plus padding */
+    min-width: 280px;
+    max-width: 280px;
     border-radius: 4px;
 }
 
@@ -375,6 +383,19 @@ ul {
 
 #genderRatioText.gender-ratio-mmp-warning {
     color: #ff8c00; /* Amber/Orange - matches MMP player color */
+    font-weight: bold;
+}
+
+/* Score cell coloring for alternating gender ratio games */
+.score-cell-fmp {
+    background-color: rgba(155, 89, 182, 0.2); /* Light purple background */
+    color: #000; /* Black text for better contrast */
+    font-weight: bold;
+}
+
+.score-cell-mmp {
+    background-color: rgba(255, 140, 0, 0.2); /* Light amber/orange background */
+    color: #000; /* Black text for better contrast */
     font-weight: bold;
 }
 

@@ -188,7 +188,14 @@ function deserializeTeams(serializedData) {
             );
             game.gameStartTimestamp = new Date(gameData.gameStartTimestamp);
             game.gameEndTimestamp = gameData.gameEndTimestamp ? new Date(gameData.gameEndTimestamp) : null;
-            game.alternateGenderRatio = gameData.alternateGenderRatio || false;
+            // Handle backward compatibility: convert boolean to string format
+            if (gameData.alternateGenderRatio === true) {
+                game.alternateGenderRatio = 'Alternating';
+            } else if (gameData.alternateGenderRatio === false || !gameData.alternateGenderRatio) {
+                game.alternateGenderRatio = 'No';
+            } else {
+                game.alternateGenderRatio = gameData.alternateGenderRatio;
+            }
             game.alternateGenderPulls = gameData.alternateGenderPulls || false;
             game.startingGenderRatio = gameData.startingGenderRatio || null;
             game.lastLineUsed = gameData.lastLineUsed || null;

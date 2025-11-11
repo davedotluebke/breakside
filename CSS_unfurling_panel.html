@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="CSS_unfurling_panel.css">
+  <title>CSS-Only Unfurling Panel with JavaScript</title>
+</head>
+<body>
+  <div class="accordion">
+    <input type="checkbox" id="panel1" class="accordion-input">
+    <label for="panel1" class="accordion-label">Click to Expand/Contract</label>
+    <div class="accordion-content">
+      <p>This is the content of the unfurling panel. It can contain any HTML elements.</p>
+    </div>
+  </div>
+
+  <button id="toggle-button">Toggle Panel from JavaScript</button>
+
+  <script>
+    // wait for DOM to load then add event listener
+    document.addEventListener('DOMContentLoaded', function() {
+      const panel = document.querySelector('.accordion-input');
+      const button = document.getElementById('toggle-button');
+
+      button.addEventListener('click', function() {
+        panel.checked = !panel.checked;
+      });
+    });
+  </script>
+</body>
+</html>

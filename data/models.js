@@ -52,7 +52,7 @@ function Game(teamName, opponentName, startOn) {
     this.gameEndTimestamp = null;
     this.pointsData = [];  // Array of objects, each object will have player names as keys and true/false as values.
     this.lastLineUsed = null; // Track the last line used in this game
-    this.alternateGenderRatio = false; // Whether to follow Mixed rules for alternating gender ratio
+    this.alternateGenderRatio = 'No'; // Gender ratio enforcement: 'No', 'Alternating', or ratio string like '4:3'
     this.alternateGenderPulls = false; // Whether to follow Mixed rules for alternating gender pulls
     this.startingGenderRatio = null; // 'FMP' or 'MMP' - the gender that should have more players on the first point
 }

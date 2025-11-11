@@ -53,40 +53,43 @@ function checkPlayerCount() {
     const selectNextLineBtn = document.getElementById('selectNextLineBtn');
     const activeBtn = inNextLineMode ? selectNextLineBtn : startPointBtn;
 
-    // Remove warning and inactive classes
+    // Remove warning and inactive classes, and reset background color
     activeBtn.classList.remove('warning');
     activeBtn.classList.remove('inactive');
+    activeBtn.style.backgroundColor = ''; // Reset background color
 
     // Check gender ratio if applicable
     const game = currentGame();
     let genderRatioWarning = false;
     let startingRatioRequired = false;
     
-    if (game && game.alternateGenderRatio) {
-        // Check if starting ratio needs to be set (first point)
-        if (!game.startingGenderRatio && game.points.length === 0) {
+    if (game && game.alternateGenderRatio && game.alternateGenderRatio !== 'No') {
+        // For alternating mode, check if starting ratio needs to be set (first point)
+        if (game.alternateGenderRatio === 'Alternating' && !game.startingGenderRatio && game.points.length === 0) {
             startingRatioRequired = true;
         } else if (selectedCount === expectedCount) {
+            // Only check gender ratio if count is correct
             genderRatioWarning = !checkGenderRatio();
         }
     }
 
     // Apply appropriate classes based on player count and gender ratio
+    // Priority: wrong count (red) > wrong gender ratio (orange) > normal
     if (selectedCount === 0) {
         activeBtn.classList.add('inactive');
     } else if (startingRatioRequired) {
         // Starting ratio not selected - disable button
         activeBtn.classList.add('inactive');
     } else if (selectedCount !== expectedCount) {
+        // Wrong count - always RED (regardless of gender ratio)
         activeBtn.classList.add('warning');
+        activeBtn.style.backgroundColor = ''; // Use default warning color (red)
     } else if (genderRatioWarning) {
-        // Wrong gender ratio - use orange warning
+        // Correct count but wrong gender ratio - ORANGE
         activeBtn.classList.add('warning');
         activeBtn.style.backgroundColor = '#ff8800'; // Orange
-    } else {
-        // Reset to default warning color if not gender ratio issue
-        activeBtn.style.backgroundColor = '';
     }
+    // Otherwise: normal styling (already reset above)
 
     // Update button text (only for startPointBtn when not in next line mode)
     if (!inNextLineMode) {
@@ -111,7 +114,7 @@ function checkPlayerCount() {
 
 function checkGenderRatio() {
     const game = currentGame();
-    if (!game || !game.alternateGenderRatio) return true; // Not checking gender ratio
+    if (!game || !game.alternateGenderRatio || game.alternateGenderRatio === 'No') return true; // Not checking gender ratio
     
     const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
     const selectedPlayers = [];
@@ -135,24 +138,47 @@ function checkGenderRatio() {
         else if (player.gender === Gender.MMP) mmpCount++;
     });
     
-    // Determine expected ratio for this point
-    const expectedRatio = getExpectedGenderRatio(game);
-    if (!expectedRatio) return true; // No ratio set yet
-    
-    // Check if ratio matches (for 7 players: 4:3 or 3:4)
-    if (expectedCount === 7) {
-        if (expectedRatio === 'FMP') {
-            return fmpCount === 4 && mmpCount === 3;
-        } else {
-            return fmpCount === 3 && mmpCount === 4;
+    // Handle fixed ratio (e.g., "4:3", "3:2")
+    if (game.alternateGenderRatio !== 'Alternating') {
+        const ratioParts = game.alternateGenderRatio.split(':');
+        if (ratioParts.length === 2) {
+            const expectedFmp = parseInt(ratioParts[0], 10);
+            const expectedMmp = parseInt(ratioParts[1], 10);
+            return fmpCount === expectedFmp && mmpCount === expectedMmp;
         }
     }
     
-    return true; // For other player counts, don't enforce ratio
+    // Handle alternating ratio
+    const expectedRatio = getExpectedGenderRatio(game);
+    if (!expectedRatio) return true; // No ratio set yet
+    
+    // Determine expected counts based on player count and ratio
+    const expectedCounts = getExpectedGenderCounts(expectedCount, expectedRatio);
+    if (!expectedCounts) return true;
+    
+    return fmpCount === expectedCounts.fmp && mmpCount === expectedCounts.mmp;
+}
+
+/**
+ * Get expected FMP and MMP counts for a given total player count and ratio type
+ * Returns {fmp, mmp} or null if not applicable
+ */
+function getExpectedGenderCounts(totalCount, ratioType) {
+    if (totalCount === 7) {
+        if (ratioType === 'FMP') return { fmp: 4, mmp: 3 };
+        if (ratioType === 'MMP') return { fmp: 3, mmp: 4 };
+    } else if (totalCount === 5) {
+        if (ratioType === 'FMP') return { fmp: 3, mmp: 2 };
+        if (ratioType === 'MMP') return { fmp: 2, mmp: 3 };
+    }
+    return null;
 }
 
 function getExpectedGenderRatio(game) {
-    if (!game || !game.alternateGenderRatio) return null;
+    if (!game || !game.alternateGenderRatio || game.alternateGenderRatio === 'No') return null;
+    
+    // For fixed ratios, return null (handled directly in checkGenderRatio)
+    if (game.alternateGenderRatio !== 'Alternating') return null;
     
     // If starting ratio not set, return null (user needs to set it)
     if (!game.startingGenderRatio) return null;
@@ -174,8 +200,19 @@ function updateGenderRatioDisplay(genderRatioWarning = false) {
     const text = document.getElementById('genderRatioText');
     const ratioSelection = document.getElementById('startingGenderRatioSelection');
     
-    if (!game || !game.alternateGenderRatio) {
+    if (!game || !game.alternateGenderRatio || game.alternateGenderRatio === 'No') {
         if (display) display.style.display = 'none';
+        if (ratioSelection) ratioSelection.style.display = 'none';
+        return;
+    }
+    
+    // For fixed ratios, show the ratio but don't show starting ratio selection
+    if (game.alternateGenderRatio !== 'Alternating') {
+        if (display) display.style.display = 'block';
+        if (text) {
+            text.textContent = `${game.alternateGenderRatio} FMP:MMP`;
+            text.classList.remove('gender-ratio-fmp-warning', 'gender-ratio-mmp-warning');
+        }
         if (ratioSelection) ratioSelection.style.display = 'none';
         return;
     }
@@ -235,6 +272,10 @@ function setupStartingRatioRadioButtons() {
             game.startingGenderRatio = 'FMP';
             saveAllTeamsData();
             checkPlayerCount(); // Update display
+            // Recreate the table to update score cell colors
+            if (typeof updateActivePlayersList === 'function') {
+                updateActivePlayersList();
+            }
         }
     });
     
@@ -243,6 +284,10 @@ function setupStartingRatioRadioButtons() {
             game.startingGenderRatio = 'MMP';
             saveAllTeamsData();
             checkPlayerCount(); // Update display
+            // Recreate the table to update score cell colors
+            if (typeof updateActivePlayersList === 'function') {
+                updateActivePlayersList();
+            }
         }
     });
 }
