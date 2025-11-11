@@ -57,11 +57,35 @@ function checkPlayerCount() {
     activeBtn.classList.remove('warning');
     activeBtn.classList.remove('inactive');
 
-    // Apply appropriate classes based on player count
+    // Check gender ratio if applicable
+    const game = currentGame();
+    let genderRatioWarning = false;
+    let startingRatioRequired = false;
+    
+    if (game && game.alternateGenderRatio) {
+        // Check if starting ratio needs to be set (first point)
+        if (!game.startingGenderRatio && game.points.length === 0) {
+            startingRatioRequired = true;
+        } else if (selectedCount === expectedCount) {
+            genderRatioWarning = !checkGenderRatio();
+        }
+    }
+
+    // Apply appropriate classes based on player count and gender ratio
     if (selectedCount === 0) {
+        activeBtn.classList.add('inactive');
+    } else if (startingRatioRequired) {
+        // Starting ratio not selected - disable button
         activeBtn.classList.add('inactive');
     } else if (selectedCount !== expectedCount) {
         activeBtn.classList.add('warning');
+    } else if (genderRatioWarning) {
+        // Wrong gender ratio - use orange warning
+        activeBtn.classList.add('warning');
+        activeBtn.style.backgroundColor = '#ff8800'; // Orange
+    } else {
+        // Reset to default warning color if not gender ratio issue
+        activeBtn.style.backgroundColor = '';
     }
 
     // Update button text (only for startPointBtn when not in next line mode)
@@ -80,6 +104,137 @@ function checkPlayerCount() {
         // In next line mode, always show "Select Next Line"
         selectNextLineBtn.textContent = "Select Next Line";
     }
+    
+    // Update gender ratio display
+    updateGenderRatioDisplay();
+}
+
+function checkGenderRatio() {
+    const game = currentGame();
+    if (!game || !game.alternateGenderRatio) return true; // Not checking gender ratio
+    
+    const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
+    const selectedPlayers = [];
+    checkboxes.forEach((checkbox, index) => {
+        if (checkbox.checked) {
+            const player = currentTeam.teamRoster[index];
+            if (player) {
+                selectedPlayers.push(player);
+            }
+        }
+    });
+    
+    const expectedCount = parseInt(document.getElementById('playersOnFieldInput').value, 10);
+    if (selectedPlayers.length !== expectedCount) return true; // Wrong count, handled elsewhere
+    
+    // Count genders
+    let fmpCount = 0;
+    let mmpCount = 0;
+    selectedPlayers.forEach(player => {
+        if (player.gender === Gender.FMP) fmpCount++;
+        else if (player.gender === Gender.MMP) mmpCount++;
+    });
+    
+    // Determine expected ratio for this point
+    const expectedRatio = getExpectedGenderRatio(game);
+    if (!expectedRatio) return true; // No ratio set yet
+    
+    // Check if ratio matches (for 7 players: 4:3 or 3:4)
+    if (expectedCount === 7) {
+        if (expectedRatio === 'FMP') {
+            return fmpCount === 4 && mmpCount === 3;
+        } else {
+            return fmpCount === 3 && mmpCount === 4;
+        }
+    }
+    
+    return true; // For other player counts, don't enforce ratio
+}
+
+function getExpectedGenderRatio(game) {
+    if (!game || !game.alternateGenderRatio) return null;
+    
+    // If starting ratio not set, return null (user needs to set it)
+    if (!game.startingGenderRatio) return null;
+    
+    // Count points to determine pattern position (ABBAABB)
+    const pointCount = game.points.length;
+    
+    // Pattern: ABBAABB (0-indexed: 0=A, 1=B, 2=B, 3=A, 4=A, 5=B, 6=B, 7=A, ...)
+    const pattern = [0, 1, 1, 0, 0, 1, 1]; // 0 = first ratio, 1 = second ratio
+    const patternIndex = pointCount % 7;
+    const useFirstRatio = pattern[patternIndex] === 0;
+    
+    return useFirstRatio ? game.startingGenderRatio : (game.startingGenderRatio === 'FMP' ? 'MMP' : 'FMP');
+}
+
+function updateGenderRatioDisplay() {
+    const game = currentGame();
+    const display = document.getElementById('genderRatioDisplay');
+    const text = document.getElementById('genderRatioText');
+    const ratioSelection = document.getElementById('startingGenderRatioSelection');
+    
+    if (!game || !game.alternateGenderRatio) {
+        if (display) display.style.display = 'none';
+        if (ratioSelection) ratioSelection.style.display = 'none';
+        return;
+    }
+    
+    if (!display || !text) return;
+    
+    const expectedRatio = getExpectedGenderRatio(game);
+    if (expectedRatio) {
+        display.style.display = 'block';
+        text.textContent = `+${expectedRatio} point`;
+        if (ratioSelection) ratioSelection.style.display = 'none';
+    } else {
+        // First point - need to set starting ratio
+        display.style.display = 'block';
+        text.textContent = 'Select starting ratio';
+        if (ratioSelection) {
+            ratioSelection.style.display = 'block';
+            // Set up radio button handlers if not already set
+            setupStartingRatioRadioButtons();
+        }
+    }
+}
+
+function setupStartingRatioRadioButtons() {
+    const fmpRadio = document.getElementById('startingRatioFMP');
+    const mmpRadio = document.getElementById('startingRatioMMP');
+    const game = currentGame();
+    
+    if (!fmpRadio || !mmpRadio || !game) return;
+    
+    // Remove existing listeners by cloning
+    const newFMP = fmpRadio.cloneNode(true);
+    const newMMP = mmpRadio.cloneNode(true);
+    fmpRadio.parentNode.replaceChild(newFMP, fmpRadio);
+    mmpRadio.parentNode.replaceChild(newMMP, mmpRadio);
+    
+    // Set current value if already set
+    if (game.startingGenderRatio === 'FMP') {
+        newFMP.checked = true;
+    } else if (game.startingGenderRatio === 'MMP') {
+        newMMP.checked = true;
+    }
+    
+    // Add event listeners
+    newFMP.addEventListener('change', function() {
+        if (this.checked) {
+            game.startingGenderRatio = 'FMP';
+            saveAllTeamsData();
+            checkPlayerCount(); // Update display
+        }
+    });
+    
+    newMMP.addEventListener('change', function() {
+        if (this.checked) {
+            game.startingGenderRatio = 'MMP';
+            saveAllTeamsData();
+            checkPlayerCount(); // Update display
+        }
+    });
 }
 
 document.getElementById('selectLineBtn').addEventListener('click', showLineSelectionDialog);

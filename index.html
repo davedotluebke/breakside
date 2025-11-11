@@ -104,11 +104,11 @@
                 <div class="management-controls">
                     <input type="text" id="newPlayerInput" placeholder="Add player" />
                     <div class="management-icons">
-                        <button id="addPlayerBtn" class="icon-button">
-                            <i class="fas fa-plus"></i>
+                        <button id="addFMPPlayerBtn" class="icon-button">
+                            +FMP
                         </button>
-                        <button id="deletePlayerBtn" class="icon-button">
-                            <i class="fas fa-trash"></i>
+                        <button id="addMMPPlayerBtn" class="icon-button">
+                            +MMP
                         </button>
                     </div>
                 </div>
@@ -135,6 +135,10 @@
             <input type="text" id="opponentNameInput" placeholder="Opponent Name" />
             <br>Start Game on: <button id="startGameOnOBtn">Offense</button>
             <button id="startGameOnDBtn">Defense</button>
+            <div>
+                <label><input type="checkbox" id="alternateGenderRatioCheckbox"> Alternate Gender Ratio</label>
+                <label><input type="checkbox" id="alternateGenderPullsCheckbox"> Alternate Gender Pulls</label>
+            </div>
             <div>
                 <label for="pointTimerInput">Seconds between points:</label>
                 <input type="number" id="pointTimerInput" value="90" min="0" max="300">
@@ -260,7 +264,51 @@
                 </div>
             </div>
         </div>
+
     </section>
+
+    <!-- Pull Dialog (outside all sections so it's not hidden by showScreen) -->
+    <div id="pullDialog" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="dialog-header">
+                <h3 id="pullDialogTitle">Pull</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div id="pullGenderSelection" style="display: none;">
+                <label>Pulling: </label>
+                <input type="radio" id="pullGenderFMP" name="pullGender" value="FMP">
+                <label for="pullGenderFMP">FMP</label>
+                <input type="radio" id="pullGenderMMP" name="pullGender" value="MMP">
+                <label for="pullGenderMMP">MMP</label>
+            </div>
+            <div class="pull-container">
+                <div class="pull-column">
+                    <div class="pull-header">Pulling</div>
+                    <div id="pullPlayerButtons" class="player-buttons">
+                        <!-- Player buttons will be dynamically added here -->
+                    </div>
+                </div>
+                <div class="pull-column">
+                    <div class="pull-header">Quality</div>
+                    <div id="pullQualityButtons" class="pull-quality-buttons">
+                        <button class="pull-quality-btn" data-quality="Good Pull">Good Pull</button>
+                        <button class="pull-quality-btn" data-quality="Okay Pull">Okay Pull</button>
+                        <button class="pull-quality-btn" data-quality="Poor Pull">Poor Pull</button>
+                        <button class="pull-quality-btn" data-quality="Brick">Brick</button>
+                    </div>
+                </div>
+            </div>
+            <div class="pull-checkboxes">
+                <label><input type="checkbox" id="pullFlick"> Flick</label>
+                <label><input type="checkbox" id="pullRoller"> Roller</label>
+                <label><input type="checkbox" id="pullIO"> IO</label>
+                <label><input type="checkbox" id="pullOI"> OI</label>
+            </div>
+            <div class="pull-dialog-buttons">
+                <button id="pullProceedBtn" class="pull-proceed-btn">Proceed</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Before Point Screen -->
     <section id="beforePointScreen" style="display: none;" class="in-game-content">
@@ -273,6 +321,16 @@
         <!-- Select Current Players Section -->
         <section id="selectCurrentPlayers">
             <h3>Select Active Players <span id="statsToggle" style="font-size: 0.8em; cursor: pointer; color: blue;">(Game)</span></h3>
+            <div id="genderRatioDisplay" style="display: none; margin: 0.5rem 0;">
+                <span>Gender Ratio: </span><span id="genderRatioText"></span>
+            </div>
+            <div id="startingGenderRatioSelection" style="display: none; margin: 0.5rem 0;">
+                <label>Starting Ratio: </label>
+                <input type="radio" id="startingRatioFMP" name="startingRatio" value="FMP">
+                <label for="startingRatioFMP">FMP</label>
+                <input type="radio" id="startingRatioMMP" name="startingRatio" value="MMP">
+                <label for="startingRatioMMP">MMP</label>
+            </div>
             <div id="tableContainer">
                 <table id="activePlayersTable">
                     <thead>
@@ -406,6 +464,7 @@
     <script src="playByPlay/defenseScreen.js"></script>
     <script src="playByPlay/simpleModeScreen.js"></script>
     <script src="playByPlay/keyPlayDialog.js"></script>
+    <script src="playByPlay/pullDialog.js"></script>
     
     <!-- Main application -->
     <script src="main.js"></script>
