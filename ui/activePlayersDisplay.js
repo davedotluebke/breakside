@@ -57,9 +57,22 @@ function createActivePlayersTable() {
         nameCell.setAttribute('text-align', 'center');
         nameCell.classList.add('active-header-teams');
         row.appendChild(nameCell);
-        scores.forEach(score => {
+        scores.forEach((score, index) => {
             const scoreCell = document.createElement('th');
             scoreCell.textContent = score;
+            
+            // Color score cells based on gender ratio for alternating games
+            const game = currentGame();
+            if (game && game.alternateGenderRatio === 'Alternating' && game.startingGenderRatio) {
+                    const pointIndex = index; 
+                    const genderRatio = getGenderRatioForPoint(game, pointIndex);
+                    if (genderRatio === 'FMP') {
+                        scoreCell.classList.add('score-cell-fmp');
+                    } else if (genderRatio === 'MMP') {
+                        scoreCell.classList.add('score-cell-mmp');
+                    }
+            }
+            
             row.appendChild(scoreCell);
         });
     };
@@ -255,6 +268,25 @@ function getRunningScores() {
         runningScores.opponent.push(point.winner === 'opponent' ? runningScores.opponent.slice(-1)[0] + 1 : runningScores.opponent.slice(-1)[0]);
     });
     return runningScores;
+}
+
+/**
+ * Get the gender ratio (FMP or MMP) for a specific point index in an alternating game
+ * Returns 'FMP', 'MMP', or null if not applicable. 
+ * 
+ * The pattern is: ABBAABB... (or {0,1,1,0,0,1,1}...) 
+ * which is (i+1) // 2 % 2   [where // is integer division and % is modulo]
+ * or ((i+1) >> 1) & 1   using bitwise operations
+ * 
+ */
+function getGenderRatioForPoint(game, pointIndex) {
+    if (!game || game.alternateGenderRatio !== 'Alternating' || !game.startingGenderRatio) {
+        return null;
+    }
+    
+    const useFirstRatio = (((pointIndex + 1) >> 1) & 1) === 0;
+    
+    return useFirstRatio ? game.startingGenderRatio : (game.startingGenderRatio === 'FMP' ? 'MMP' : 'FMP');
 }
 
 /**

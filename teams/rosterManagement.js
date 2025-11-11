@@ -12,6 +12,11 @@ function updateTeamRosterDisplay() {
             teamRosterHeader.textContent = 'Team Roster';
         }
     }
+    
+    // Initialize gender ratio dropdown when roster screen is displayed
+    if (typeof initializeGenderRatioDropdown === 'function') {
+        initializeGenderRatioDropdown();
+    }
 
     const rosterElement = document.getElementById('rosterList');
     if (!rosterElement) {
