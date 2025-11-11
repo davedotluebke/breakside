@@ -150,6 +150,12 @@ function createPlayerRows() {
             nameCell.classList.add('player-mmp');
         }
         
+        // Make name cell clickable to toggle checkbox (mobile-friendly)
+        nameCell.style.cursor = 'pointer';
+        nameCell.addEventListener('click', function() {
+            checkbox.click();
+        });
+        
         row.appendChild(nameCell);
 
         // Add time column using utility function
