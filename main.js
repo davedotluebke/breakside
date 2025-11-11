@@ -1,7 +1,53 @@
-// Breakside PWA - Main Application Entry Point
-// Data layer is now in data/models.js and data/storage.js
-
-// import AudioNarrationService from './audioNarration.js';
+/********************************************************************
+ * Breakside PWA - Main Application Entry Point                     *
+ ********************************************************************
+ *
+ *   File Structure Map
+ *
+ *   ultistats/
+ *   ├── data/                    # Data layer
+ *   │   ├── models.js           # Data structure definitions (Player, Game, Team, Point, Possession, Event classes)
+ *   │   └── storage.js          # Serialization/deserialization and local storage operations
+ *   │
+ *   ├── utils/                   # Utility functions
+ *   │   ├── helpers.js          # Pure utility functions and current state accessors
+ *   │   └── statistics.js       # Statistics calculation and game summary generation
+ *   │
+ *   ├── screens/                 # Screen management
+ *   │   └── navigation.js       # Screen navigation and state management
+ *   │
+ *   ├── teams/                   # Team management
+ *   │   ├── teamSelection.js    # Team selection screen and team CRUD operations
+ *   │   └── rosterManagement.js # Roster display, player management, and line management
+ *   │
+ *   ├── game/                    # Game core logic
+ *   │   ├── gameLogic.js        # Game initialization, scoring, and undo functionality
+ *   │   ├── pointManagement.js  # Point creation, timing, and transitions
+ *   │   └── beforePointScreen.js # Before Point screen with player selection and line management
+ *   │
+ *   ├── playByPlay/              # Play-by-play tracking screens
+ *   │   ├── offenseScreen.js    # Offensive possession tracking and event creation
+ *   │   ├── defenseScreen.js    # Defensive possession tracking and event creation
+ *   │   ├── simpleModeScreen.js # Simple mode scoring and score attribution
+ *   │   └── keyPlayDialog.js    # Key play dialog for recording important events
+ *   │
+ *   ├── ui/                      # UI update functions
+ *   │   ├── activePlayersDisplay.js # Active players table rendering and management
+ *   │   ├── eventLogDisplay.js   # Event log management and display
+ *   │   └── buttonLayout.js      # UI consistency functions (button width matching)
+ *   │
+ *   ├── main.js                  # Application bootstrap (~200 lines)
+ *   │                            # - Service worker registration
+ *   │                            # - App initialization
+ *   │                            # - Simple mode toggle coordination
+ *   │                            # - Module coordination
+ *   │
+ *   ├── index.html              # Main HTML with module script tags
+ *   ├── main.css                # Application styles
+ *   ├── manifest.json           # PWA manifest
+ *   └── service-worker.js       # Service worker for offline functionality
+ *
+ ************************************************************************/
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -12,27 +58,6 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-/*
- * Screens & other app-wide HTML elements
- * (see screens/navigation.js for screen management helpers)
- */
-
-/*
- * Global variables
- * These are now initialized from data modules loaded before this file
- */
-// Globals are now defined before this point by data/storage.js
-
-/*
- * Saving and loading team data
- * NOTE: Serialization functions are now in data/storage.js
- */
-
-/************************************************************************ 
- *
- *   TEAM SELECTION SCREEN
- * 
- ************************************************************************/
 // Open up with the "Select Your Team" screen
 showSelectTeamScreen(true);
 
@@ -59,35 +84,6 @@ if (feedbackLink) {
         window.open(feedbackUrl, '_blank');
     });
 }
-
-/************************************************************************ 
- *
- *   BEFORE GAME SCREEN
- *   TEAM ROSTER TABLE 
- * 
- ************************************************************************/
-// Roster management functions are now in teams/rosterManagement.js
-
-/************************************************************************ 
- *
- *   BEFORE POINT SCREEN
- *   SELECT PLAYERS TABLE 
- * 
- ************************************************************************/
-
-// Event log toggle is now handled in ui/eventLogDisplay.js
-
-
-/******************************************************************************/
-/**************************** Offense/Defense play-by-play ********************/
-/******************************************************************************/
-// Offense and Defense screen code is now in playByPlay/offenseScreen.js and playByPlay/defenseScreen.js
-
-
-/******************************************************************************/
-/**************************** Undo Event Button *******************************/
-/******************************************************************************/
-// Undo functionality is now in game/gameLogic.js
 
 /******************************************************************************/
 /********************************** App Initialization ************************/
@@ -118,16 +114,14 @@ document.addEventListener('DOMContentLoaded', function() {
         initializeKeyPlayDialog();
     }
     
+    if (typeof initializePullDialog === 'function') {
+        initializePullDialog();
+    }
+    
     // Match button widths
     matchButtonWidths();
     setTimeout(matchButtonWidths, 100);
 });
-
-
-/******************************************************************************/
-/**************************** Countdown Timer *********************************/
-/******************************************************************************/
-// Timer functions are now in game/pointManagement.js
 
 // Simple Mode Toggle
 window.isSimpleMode = window.isSimpleMode ?? true;
@@ -194,6 +188,4 @@ document.getElementById('simpleModeToggle').addEventListener('change', function(
         }
     }
 });
-
-// updateGameSummaryRosterDisplay is now in teams/rosterManagement.js
 

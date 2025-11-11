@@ -45,6 +45,14 @@ function updateTeamRosterDisplay() {
         const nameCell = document.createElement('td');
         nameCell.classList.add('roster-name-column');
         nameCell.textContent = player.name;
+        
+        // Add gender-based color coding
+        if (player.gender === Gender.FMP) {
+            nameCell.classList.add('player-fmp');
+        } else if (player.gender === Gender.MMP) {
+            nameCell.classList.add('player-mmp');
+        }
+        
         playerRow.appendChild(nameCell);
 
         const totalPointsCell = document.createElement('td');
@@ -190,6 +198,14 @@ function updateGameSummaryRosterDisplay() {
         const nameCell = document.createElement('td');
         nameCell.classList.add('roster-name-column');
         nameCell.textContent = player.name;
+        
+        // Add gender-based color coding
+        if (player.gender === Gender.FMP) {
+            nameCell.classList.add('player-fmp');
+        } else if (player.gender === Gender.MMP) {
+            nameCell.classList.add('player-mmp');
+        }
+        
         playerRow.appendChild(nameCell);
 
         const totalPointsCell = document.createElement('td');
@@ -260,26 +276,40 @@ function updateGameSummaryRosterDisplay() {
 
 (function setupRosterUI() {
     const playerNameInput = document.getElementById('newPlayerInput');
-    const addPlayerBtn = document.getElementById('addPlayerBtn');
-    if (addPlayerBtn) {
-        addPlayerBtn.addEventListener('click', () => {
-            const playerName = playerNameInput ? playerNameInput.value.trim() : '';
+    
+    function addPlayerWithGender(gender) {
+        const playerName = playerNameInput ? playerNameInput.value.trim() : '';
+        if (playerName && !currentTeam.teamRoster.some(player => player.name === playerName)) {
+            const newPlayer = new Player(playerName, "", gender);
+            currentTeam.teamRoster.push(newPlayer);
+            updateTeamRosterDisplay();
+        }
+        if (playerNameInput) {
+            playerNameInput.value = '';
+        }
+    }
+    
+    const addFMPPlayerBtn = document.getElementById('addFMPPlayerBtn');
+    if (addFMPPlayerBtn) {
+        addFMPPlayerBtn.addEventListener('click', () => {
+            addPlayerWithGender(Gender.FMP);
+        });
+    }
 
-            if (playerName && !currentTeam.teamRoster.some(player => player.name === playerName)) {
-                const newPlayer = new Player(playerName);
-                currentTeam.teamRoster.push(newPlayer);
-                updateTeamRosterDisplay();
-            }
-            if (playerNameInput) {
-                playerNameInput.value = '';
-            }
+    const addMMPPlayerBtn = document.getElementById('addMMPPlayerBtn');
+    if (addMMPPlayerBtn) {
+        addMMPPlayerBtn.addEventListener('click', () => {
+            addPlayerWithGender(Gender.MMP);
         });
     }
 
     if (playerNameInput) {
         playerNameInput.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' && addPlayerBtn) {
-                addPlayerBtn.click();
+            if (event.key === 'Enter') {
+                // Default to FMP if Enter is pressed (user can change later if needed)
+                if (addFMPPlayerBtn) {
+                    addFMPPlayerBtn.click();
+                }
             }
         });
     }

@@ -25,6 +25,11 @@ function updateActivePlayersList() {
     console.log('Finished updating active players list');
     // After adding all rows to the tableBody, calculate the widths
     makeColumnsSticky();
+    
+    // Update gender ratio display
+    if (typeof updateGenderRatioDisplay === 'function') {
+        updateGenderRatioDisplay();
+    }
 }
 
 /**
@@ -120,10 +125,18 @@ function createPlayerRows() {
         checkboxCell.appendChild(checkbox);
         row.appendChild(checkboxCell);
 
-        // Add name column
+        // Add name column with gender-based styling
         const nameCell = document.createElement('td');
         nameCell.classList.add('active-name-column');
         nameCell.textContent = player.name;
+        
+        // Add gender-based color coding
+        if (player.gender === Gender.FMP) {
+            nameCell.classList.add('player-fmp');
+        } else if (player.gender === Gender.MMP) {
+            nameCell.classList.add('player-mmp');
+        }
+        
         row.appendChild(nameCell);
 
         // Add time column using utility function

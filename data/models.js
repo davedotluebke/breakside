@@ -12,10 +12,18 @@ const Role = {
 // Unknown player constant and singleton instance
 const UNKNOWN_PLAYER = "Unknown Player";
 
+// Gender constants
+const Gender = {
+    MMP: "MMP",
+    FMP: "FMP",
+    UNKNOWN: "Unknown"
+};
+
 // Player data structure
-function Player(name, nickname = "") {
+function Player(name, nickname = "", gender = Gender.UNKNOWN) {
     this.name = name;
     this.nickname = nickname;
+    this.gender = gender;
     this.totalPointsPlayed = 0;
     this.consecutivePointsPlayed = 0;
     this.pointsPlayedPreviousGames = 0;
@@ -44,6 +52,9 @@ function Game(teamName, opponentName, startOn) {
     this.gameEndTimestamp = null;
     this.pointsData = [];  // Array of objects, each object will have player names as keys and true/false as values.
     this.lastLineUsed = null; // Track the last line used in this game
+    this.alternateGenderRatio = false; // Whether to follow Mixed rules for alternating gender ratio
+    this.alternateGenderPulls = false; // Whether to follow Mixed rules for alternating gender pulls
+    this.startingGenderRatio = null; // 'FMP' or 'MMP' - the gender that should have more players on the first point
 }
 
 // Team data structure
@@ -209,6 +220,38 @@ class Other extends Event {
         if (this.timecap_flag)      { summary += 'Hard cap called; game over '; }
         if (this.switchsides_flag)  { summary += 'O and D switch sides '; }
         if (this.halftime_flag)     { summary += 'Halftime '; }
+        return summary;
+    }
+}
+
+// Pull event class
+class Pull extends Event {
+    constructor({puller = null, pullerGender = Gender.UNKNOWN, quality = null, flick = false, roller = false, io = false, oi = false}) {
+        super('Pull');
+        this.puller = puller; // Player object or null for Unknown Player
+        this.pullerGender = pullerGender; // 'FMP', 'MMP', or 'Unknown'
+        this.quality = quality; // 'Good Pull', 'Okay Pull', 'Poor Pull', or 'Brick'
+        this.flick_flag = flick;
+        this.roller_flag = roller;
+        this.io_flag = io;
+        this.oi_flag = oi;
+    }
+    
+    // Override summarize for Pull events
+    summarize() {
+        let pullerName = this.puller ? this.puller.name : UNKNOWN_PLAYER;
+        let summary = `Pull by ${pullerName}`;
+        if (this.quality) {
+            summary += ` (${this.quality})`;
+        }
+        let pullType = [];
+        if (this.flick_flag) pullType.push('Flick');
+        if (this.roller_flag) pullType.push('Roller');
+        if (this.io_flag) pullType.push('IO');
+        if (this.oi_flag) pullType.push('OI');
+        if (pullType.length > 0) {
+            summary += ` - ${pullType.join(', ')}`;
+        }
         return summary;
     }
 }

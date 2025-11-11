@@ -16,6 +16,13 @@ function startNewGame(startingPosition, seconds) {
         player.pointsPlayedPreviousGames = player.totalPointsPlayed;
     });
     const newGame = new Game(currentTeam.name, opponentName, startingPosition);
+    
+    // Set mixed rules flags from checkboxes
+    const alternateGenderRatioCheckbox = document.getElementById('alternateGenderRatioCheckbox');
+    const alternateGenderPullsCheckbox = document.getElementById('alternateGenderPullsCheckbox');
+    newGame.alternateGenderRatio = alternateGenderRatioCheckbox ? alternateGenderRatioCheckbox.checked : false;
+    newGame.alternateGenderPulls = alternateGenderPullsCheckbox ? alternateGenderPullsCheckbox.checked : false;
+    
     currentTeam.games.push(newGame);
     logEvent(`New game started against ${opponentName}`);
 

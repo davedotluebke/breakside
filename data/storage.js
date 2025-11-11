@@ -25,6 +25,8 @@ function serializeEvent(event) {
     // Serialize player names if available
     if (event.thrower) serializedEvent.thrower = event.thrower.name;
     if (event.receiver) serializedEvent.receiver = event.receiver.name;
+    if (event.puller) serializedEvent.puller = event.puller.name;
+    if (event.defender) serializedEvent.defender = event.defender.name;
 
     return serializedEvent;
 }
@@ -38,6 +40,7 @@ function serializeTeam(team) {
         teamRoster: team.teamRoster.map(player => ({
             name: player.name,
             nickname: player.nickname,
+            gender: player.gender,
             totalPointsPlayed: player.totalPointsPlayed,
             consecutivePointsPlayed: player.consecutivePointsPlayed,
             pointsPlayedPreviousGames: player.pointsPlayedPreviousGames,
@@ -56,6 +59,10 @@ function serializeTeam(team) {
             scores: game.scores,
             gameStartTimestamp: game.gameStartTimestamp.toISOString(),
             gameEndTimestamp: game.gameEndTimestamp ? game.gameEndTimestamp.toISOString() : null,
+            alternateGenderRatio: game.alternateGenderRatio,
+            alternateGenderPulls: game.alternateGenderPulls,
+            startingGenderRatio: game.startingGenderRatio,
+            lastLineUsed: game.lastLineUsed,
             points: game.points.map(point => ({
                 players: point.players,
                 startingPosition: point.startingPosition,
@@ -115,6 +122,7 @@ function deserializeEvent(eventData) {
         case 'Turnover': event = new Turnover({ /* default parameters */ }); break;
         case 'Violation': event = new Violation({ /* default parameters */ }); break;
         case 'Defense': event = new Defense({ /* default parameters */ }); break;
+        case 'Pull': event = new Pull({ /* default parameters */ }); break;
         case 'Other': event = new Other({ /* default parameters */ }); break;
         default:
             throw new Error(`Unknown event type: ${eventData.type}`);
@@ -136,6 +144,16 @@ function deserializeEvent(eventData) {
                 event.receiver = getPlayerFromName(eventData.receiver);
             }
             break;
+        case 'Defense':
+            if (eventData.defender) {
+                event.defender = getPlayerFromName(eventData.defender);
+            }
+            break;
+        case 'Pull':
+            if (eventData.puller) {
+                event.puller = getPlayerFromName(eventData.puller);
+            }
+            break;
         // Add other event types here, if they refer to players
     }
     return event;
@@ -152,8 +170,12 @@ function deserializeTeams(serializedData) {
         
         // First deserialize the roster
         team.teamRoster = teamData.teamRoster.map(playerData => {
-            const player = new Player(playerData.name);
+            const player = new Player(playerData.name, playerData.nickname || "", playerData.gender || Gender.UNKNOWN);
             Object.assign(player, playerData);
+            // Ensure gender is set (for backward compatibility with old saves)
+            if (!player.gender) {
+                player.gender = Gender.UNKNOWN;
+            }
             return player;
         });
         
@@ -166,6 +188,10 @@ function deserializeTeams(serializedData) {
             );
             game.gameStartTimestamp = new Date(gameData.gameStartTimestamp);
             game.gameEndTimestamp = gameData.gameEndTimestamp ? new Date(gameData.gameEndTimestamp) : null;
+            game.alternateGenderRatio = gameData.alternateGenderRatio || false;
+            game.alternateGenderPulls = gameData.alternateGenderPulls || false;
+            game.startingGenderRatio = gameData.startingGenderRatio || null;
+            game.lastLineUsed = gameData.lastLineUsed || null;
             game.points = gameData.points.map(pointData => {
                 const point = new Point(pointData.players, pointData.startingPosition);
                 point.startTimestamp = pointData.startTimestamp ? new Date(pointData.startTimestamp) : null;
