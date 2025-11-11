@@ -366,35 +366,42 @@ ul {
 
 /* Gender-based color coding for player names */
 .player-fmp {
-    color: #9b59b6; /* Purple */
+    color: #7d3c98; /* Darker purple for better contrast */
     font-weight: bold;
 }
 
 .player-mmp {
-    color: #ff8c00; /* Amber/Orange */
+    color: #2d8659; /* Darker green */
     font-weight: bold;
 }
 
 /* Gender ratio warning styling - matches player colors */
 #genderRatioText.gender-ratio-fmp-warning {
-    color: #9b59b6; /* Purple - matches FMP player color */
+    color: #7d3c98; /* Darker purple - matches FMP player color */
     font-weight: bold;
 }
 
 #genderRatioText.gender-ratio-mmp-warning {
-    color: #ff8c00; /* Amber/Orange - matches MMP player color */
+    color: #2d8659; /* Darker green - matches MMP player color */
     font-weight: bold;
+}
+
+/* Make gender ratio text look clickable when editable */
+#genderRatioText.gender-ratio-editable {
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    cursor: pointer;
 }
 
 /* Score cell coloring for alternating gender ratio games */
 .score-cell-fmp {
-    background-color: rgba(155, 89, 182, 0.2); /* Light purple background */
+    background-color: rgba(125, 60, 152, 0.2); /* Light darker purple background */
     color: #000; /* Black text for better contrast */
     font-weight: bold;
 }
 
 .score-cell-mmp {
-    background-color: rgba(255, 140, 0, 0.2); /* Light amber/orange background */
+    background-color: rgba(45, 134, 89, 0.2); /* Light darker green background */
     color: #000; /* Black text for better contrast */
     font-weight: bold;
 }
@@ -878,12 +885,12 @@ ul {
 
 /* Specific management icon button styles */
 .management-icons #addFMPPlayerBtn {
-    color: #9b59b6; /* Purple - matches FMP player color */
+    color: #7d3c98; /* Darker purple - matches FMP player color */
     font-weight: bold;
 }
 
 .management-icons #addMMPPlayerBtn {
-    color: #ff8c00; /* Amber/Orange - matches MMP player color */
+    color: #2d8659; /* Darker green - matches MMP player color */
     font-weight: bold;
 }
 
