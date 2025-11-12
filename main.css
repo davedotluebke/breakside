@@ -1498,6 +1498,141 @@ td.player-mmp,
     color: #fff !important; /* White text for contrast on orange background */
 }
 
+/* Edit Player Dialog Styles */
+.edit-player-modal-content {
+    max-width: 400px;
+}
+
+.edit-player-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin: 1.5rem 0;
+}
+
+.edit-player-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.edit-player-field label {
+    font-weight: bold;
+    font-size: 1rem;
+}
+
+.edit-player-input {
+    padding: 0.7rem;
+    border: 2px solid #ccc;
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.edit-player-input:focus {
+    outline: none;
+    border-color: #E19049;
+}
+
+.edit-player-gender-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-start;
+}
+
+.edit-player-gender-buttons .gender-button {
+    width: 80px;
+    height: 40px;
+    padding: 4px 8px;
+    font-size: 1em;
+    font-weight: bold;
+    border: 2px solid;
+    border-radius: 0.5rem;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.edit-player-gender-buttons .gender-button.fmp-button {
+    background-color: #e8d5f2;
+    color: #7d3c98;
+    border-color: #7d3c98;
+}
+
+
+.edit-player-gender-buttons .gender-button.fmp-button.selected {
+    background-color: #7d3c98;
+    color: white;
+    border-color: #7d3c98;
+}
+
+.edit-player-gender-buttons .gender-button.mmp-button {
+    background-color: #d4e8dd;
+    color: #2d8659;
+    border-color: #2d8659;
+}
+
+
+.edit-player-gender-buttons .gender-button.mmp-button.selected {
+    background-color: #2d8659;
+    color: white;
+    border-color: #2d8659;
+}
+
+.edit-player-dialog-buttons {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #eee;
+}
+
+.edit-player-dialog-buttons-right {
+    display: flex;
+    gap: 1rem;
+}
+
+.edit-player-cancel-btn,
+.edit-player-confirm-btn,
+.edit-player-delete-btn {
+    padding: 0.8rem 2rem;
+    border: none;
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.edit-player-cancel-btn {
+    background-color: #6c757d;
+    color: white;
+}
+
+.edit-player-confirm-btn {
+    background-color: #28a745;
+    color: white;
+}
+
+.edit-player-confirm-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.edit-player-delete-btn {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* Make roster name cells clickable */
+.roster-name-column {
+    cursor: pointer;
+    user-select: none;
+}
+
 @media (max-width: 480px) {
     .pull-container {
         gap: 0.5rem;

@@ -318,6 +318,40 @@
         </div>
     </div>
 
+    <!-- Edit Player Dialog (outside all sections so it's not hidden by showScreen) -->
+    <div id="editPlayerDialog" class="modal" style="display: none;">
+        <div class="modal-content edit-player-modal-content">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Edit Player</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="edit-player-container">
+                <div class="edit-player-field">
+                    <label for="editPlayerName">Name:</label>
+                    <input type="text" id="editPlayerName" class="edit-player-input" />
+                </div>
+                <div class="edit-player-field">
+                    <label for="editPlayerNumber">Jersey Number:</label>
+                    <input type="number" id="editPlayerNumber" class="edit-player-input" placeholder="Optional" />
+                </div>
+                <div class="edit-player-field">
+                    <label>Gender:</label>
+                    <div class="edit-player-gender-buttons">
+                        <button id="editPlayerFMPBtn" class="gender-button fmp-button">FMP</button>
+                        <button id="editPlayerMMPBtn" class="gender-button mmp-button">MMP</button>
+                    </div>
+                </div>
+            </div>
+            <div class="edit-player-dialog-buttons">
+                <button id="editPlayerDeleteBtn" class="edit-player-delete-btn">Delete Player</button>
+                <div class="edit-player-dialog-buttons-right">
+                    <button id="editPlayerCancelBtn" class="edit-player-cancel-btn">Cancel</button>
+                    <button id="editPlayerConfirmBtn" class="edit-player-confirm-btn" disabled>Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Before Point Screen -->
     <section id="beforePointScreen" style="display: none;" class="in-game-content">
         <div class="top-buttons">
