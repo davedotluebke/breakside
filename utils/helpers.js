@@ -202,3 +202,26 @@ function capitalize(word) {
     return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
+/**
+ * Format player name with jersey number for display
+ * Returns "Name (#)" if number exists, otherwise just "Name"
+ */
+function formatPlayerName(player) {
+    if (!player) return '';
+    if (player.number !== null && player.number !== undefined) {
+        return `${player.name} (${player.number})`;
+    }
+    return player.name;
+}
+
+/**
+ * Extract player name from displayed text that may include number
+ * Strips "(#)" suffix if present
+ */
+function extractPlayerName(displayText) {
+    if (!displayText) return '';
+    // Match pattern: "Name (#)" and extract just "Name"
+    const match = displayText.match(/^(.+?)\s*\(\d+\)$/);
+    return match ? match[1].trim() : displayText.trim();
+}
+

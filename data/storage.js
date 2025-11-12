@@ -41,6 +41,7 @@ function serializeTeam(team) {
             name: player.name,
             nickname: player.nickname,
             gender: player.gender,
+            number: player.number,
             totalPointsPlayed: player.totalPointsPlayed,
             consecutivePointsPlayed: player.consecutivePointsPlayed,
             pointsPlayedPreviousGames: player.pointsPlayedPreviousGames,
@@ -170,7 +171,7 @@ function deserializeTeams(serializedData) {
         
         // First deserialize the roster
         team.teamRoster = teamData.teamRoster.map(playerData => {
-            const player = new Player(playerData.name, playerData.nickname || "", playerData.gender || Gender.UNKNOWN);
+            const player = new Player(playerData.name, playerData.nickname || "", playerData.gender || Gender.UNKNOWN, playerData.number || null);
             Object.assign(player, playerData);
             // Ensure gender is set (for backward compatibility with old saves)
             if (!player.gender) {

@@ -20,10 +20,11 @@ const Gender = {
 };
 
 // Player data structure
-function Player(name, nickname = "", gender = Gender.UNKNOWN) {
+function Player(name, nickname = "", gender = Gender.UNKNOWN, number = null) {
     this.name = name;
     this.nickname = nickname;
     this.gender = gender;
+    this.number = number; // Jersey number
     this.totalPointsPlayed = 0;
     this.consecutivePointsPlayed = 0;
     this.pointsPlayedPreviousGames = 0;

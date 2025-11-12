@@ -31,34 +31,34 @@ Create a new branch for these features and proceed to implement them in the belo
 
 ## Testing Checklist
 
-- [ ] **ABBAABB pattern correctness**
-  - [ ] Verify pattern sequence across multiple points (0-13+)
-  - [ ] Test pattern resets correctly after 7 points (point 7 matches point 0)
-- [ ] **Non-7 player counts**
-  - [ ] Test behavior with 5, 6, 8+ players
-  - [ ] Verify ratio display/validation behavior for non-7 counts
-- [ ] **Pull gender alternation across multiple points**
-  - [ ] Verify alternation works correctly across many defensive points
-  - [ ] Test edge case: consecutive offensive points (no defensive pulls)
+- [x] **ABBAABB pattern correctness**
+  - [x] Verify pattern sequence across multiple points (0-13+)
+  - [x] Test pattern resets correctly after 7 points (point 7 matches point 0)
+- [x] **Non-7 player counts**
+  - [x] Test behavior with 5, 6, 8+ players
+  - [x] Verify ratio display/validation behavior for non-7 counts
+- [x] **Pull gender alternation across multiple points**
+  - [x] Verify alternation works correctly across many defensive points
+  - [x] Test edge case: consecutive offensive points (no defensive pulls)
 - [ ] **Unknown gender players**
   - [ ] Test handling in gender ratio calculations
   - [ ] Test handling in pull eligibility
   - [ ] Test visual styling
-- [ ] **Warning color distinction**
-  - [ ] Orange warning for wrong gender ratio (correct count)
-  - [ ] Red warning for wrong count
-- [ ] **Starting ratio selection**
-  - [ ] First point requires ratio selection before starting
-  - [ ] Changing starting ratio mid-game (if possible)
-- [ ] **Pull dialog edge cases**
-  - [ ] No players have gender set
-  - [ ] All players are ineligible (e.g., all FMP when MMP expected)
-  - [ ] Unknown Player selection behavior
-- [ ] **Data persistence**
-  - [ ] `alternateGenderRatio`, `alternateGenderPulls`, `startingGenderRatio` persist when saving/loading games
-- [ ] **Visual feedback consistency**
-  - [ ] Gender ratio text color updates correctly when switching between correct/wrong ratios
-  - [ ] Player button styling updates correctly when gender radio buttons change
-- [ ] **Integration between features**
-  - [ ] Games with both `alternateGenderRatio` and `alternateGenderPulls` enabled
-  - [ ] Games with only one feature enabled 
+- [x] **Warning color distinction**
+  - [x] Orange warning for wrong gender ratio (correct count)
+  - [x] Red warning for wrong count
+- [x] **Starting ratio selection**
+  - [x] First point requires ratio selection before starting
+  - [x] Changing starting ratio mid-game (if possible)
+- [x] **Pull dialog edge cases**
+  - [x] No players have gender set
+  - [x] All players are ineligible (e.g., all FMP when MMP expected)
+  - [x] Unknown Player selection behavior
+- [x] **Data persistence**
+  - [x] `alternateGenderRatio`, `alternateGenderPulls`, `startingGenderRatio` persist when saving/loading games
+- [x] **Visual feedback consistency**
+  - [x] Gender ratio text color updates correctly when switching between correct/wrong ratios
+  - [x] Player button styling updates correctly when gender radio buttons change
+- [x] **Integration between features**
+  - [x] Games with both `alternateGenderRatio` and `alternateGenderPulls` enabled
+  - [x] Games with only one feature enabled 
