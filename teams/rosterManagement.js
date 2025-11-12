@@ -49,7 +49,7 @@ function updateTeamRosterDisplay() {
 
         const nameCell = document.createElement('td');
         nameCell.classList.add('roster-name-column');
-        nameCell.textContent = player.name;
+        nameCell.textContent = formatPlayerName(player);
         
         // Add gender-based color coding
         if (player.gender === Gender.FMP) {
@@ -202,7 +202,7 @@ function updateGameSummaryRosterDisplay() {
 
         const nameCell = document.createElement('td');
         nameCell.classList.add('roster-name-column');
-        nameCell.textContent = player.name;
+        nameCell.textContent = formatPlayerName(player);
         
         // Add gender-based color coding
         if (player.gender === Gender.FMP) {
@@ -280,17 +280,23 @@ function updateGameSummaryRosterDisplay() {
 }
 
 (function setupRosterUI() {
-    const playerNameInput = document.getElementById('newPlayerInput');
-    
     function addPlayerWithGender(gender) {
+        const playerNameInput = document.getElementById('newPlayerInput');
+        const playerNumberInput = document.getElementById('newPlayerNumberInput');
         const playerName = playerNameInput ? playerNameInput.value.trim() : '';
+        const playerNumber = playerNumberInput ? (playerNumberInput.value.trim() || null) : null;
+        
         if (playerName && !currentTeam.teamRoster.some(player => player.name === playerName)) {
-            const newPlayer = new Player(playerName, "", gender);
+            const numberValue = playerNumber ? parseInt(playerNumber, 10) : null;
+            const newPlayer = new Player(playerName, "", gender, numberValue);
             currentTeam.teamRoster.push(newPlayer);
             updateTeamRosterDisplay();
         }
         if (playerNameInput) {
             playerNameInput.value = '';
+        }
+        if (playerNumberInput) {
+            playerNumberInput.value = '';
         }
     }
     
@@ -308,10 +314,12 @@ function updateGameSummaryRosterDisplay() {
         });
     }
 
+    const playerNameInput = document.getElementById('newPlayerInput');
     if (playerNameInput) {
         playerNameInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
                 // Default to FMP if Enter is pressed (user can change later if needed)
+                const addFMPPlayerBtn = document.getElementById('addFMPPlayerBtn');
                 if (addFMPPlayerBtn) {
                     addFMPPlayerBtn.click();
                 }
@@ -383,7 +391,8 @@ function addNewLine() {
     const selectedPlayers = Array.from(document.querySelectorAll('.active-checkbox:checked'))
         .map(checkbox => {
             const row = checkbox.closest('tr');
-            return row ? row.querySelector('.roster-name-column').textContent : null;
+            const displayText = row ? row.querySelector('.roster-name-column').textContent : null;
+            return displayText ? extractPlayerName(displayText) : null;
         })
         .filter(name => name !== null);
     

@@ -102,20 +102,23 @@
         </table>
         
         <div class="management-row">
-            <div class="management-container">
+            <div class="management-container full-width">
                 <div class="management-controls">
                     <input type="text" id="newPlayerInput" placeholder="Add player" />
+                    <input type="number" id="newPlayerNumberInput" placeholder="#" class="player-number-input" />
                     <div class="management-icons">
-                        <button id="addFMPPlayerBtn" class="icon-button">
+                        <button id="addFMPPlayerBtn" class="icon-button gender-button fmp-button">
                             +FMP
                         </button>
-                        <button id="addMMPPlayerBtn" class="icon-button">
+                        <button id="addMMPPlayerBtn" class="icon-button gender-button mmp-button">
                             +MMP
                         </button>
                     </div>
                 </div>
             </div>
-
+        </div>
+        
+        <div class="management-row">
             <div class="management-container">
                 <div class="management-controls">
                     <input type="text" class="line-name-input" placeholder="Create line" />

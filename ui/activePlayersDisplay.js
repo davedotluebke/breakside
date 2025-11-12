@@ -141,7 +141,7 @@ function createPlayerRows() {
         // Add name column with gender-based styling
         const nameCell = document.createElement('td');
         nameCell.classList.add('active-name-column');
-        nameCell.textContent = player.name;
+        nameCell.textContent = formatPlayerName(player);
         
         // Add gender-based color coding
         if (player.gender === Gender.FMP) {

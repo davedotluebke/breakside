@@ -317,7 +317,7 @@ input[type="text"], input[type="number"], select {
 #enforceGenderRatioSelect {
     width: 280px; /* Width to accommodate "Alternating (4:3 / 3:4)" plus padding */
     min-width: 280px;
-    max-width: 280px;
+    max-width: 50%; /* Max width 50% of container for iPhone */
     border-radius: 4px;
 }
 
@@ -365,13 +365,19 @@ ul {
 }
 
 /* Gender-based color coding for player names */
-.player-fmp {
-    color: #7d3c98; /* Darker purple for better contrast */
+.player-fmp,
+td.player-fmp,
+.active-name-column.player-fmp,
+.roster-name-column.player-fmp {
+    color: #7d3c98 !important; /* Darker purple for better contrast */
     font-weight: bold;
 }
 
-.player-mmp {
-    color: #2d8659; /* Darker green */
+.player-mmp,
+td.player-mmp,
+.active-name-column.player-mmp,
+.roster-name-column.player-mmp {
+    color: #2d8659 !important; /* Darker green */
     font-weight: bold;
 }
 
@@ -834,6 +840,11 @@ ul {
     min-width: 0;
 }
 
+.management-container.full-width {
+    flex: 1 1 100%;
+    width: 100%;
+}
+
 .management-label {
     font-weight: bold;
     margin-bottom: 4px;
@@ -854,6 +865,16 @@ ul {
     border-radius: 3px;
     font-size: 0.9em;
     min-width: 0;
+}
+
+.management-controls input[type="number"].player-number-input {
+    width: 50px;
+    flex: 0 0 50px;
+    padding: 4px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    font-size: 0.9em;
+    text-align: center;
 }
 
 .management-icons {
@@ -883,16 +904,38 @@ ul {
     font-size: 12px;
 }
 
-/* Specific management icon button styles */
-.management-icons #addFMPPlayerBtn {
-    color: #7d3c98; /* Darker purple - matches FMP player color */
+/* Gender button styles - bigger with gender colors */
+.management-icons .gender-button {
+    width: 60px;
+    height: 36px;
+    padding: 4px 8px;
+    font-size: 0.95em;
     font-weight: bold;
+    border: 2px solid;
+    transition: all 0.2s;
 }
 
-.management-icons #addMMPPlayerBtn {
-    color: #2d8659; /* Darker green - matches MMP player color */
-    font-weight: bold;
+.management-icons .gender-button.fmp-button {
+    background-color: #e8d5f2; /* Light purple background */
+    color: #7d3c98; /* Darker purple text - matches FMP player color */
+    border-color: #7d3c98;
 }
+
+.management-icons .gender-button.fmp-button:hover {
+    background-color: #d4b5e5;
+}
+
+.management-icons .gender-button.mmp-button {
+    background-color: #d4e8dd; /* Light green background */
+    color: #2d8659; /* Darker green text - matches MMP player color */
+    border-color: #2d8659;
+}
+
+.management-icons .gender-button.mmp-button:hover {
+    background-color: #b8dcc8;
+}
+
+/* Specific management icon button styles - gender buttons use .gender-button classes above */
 
 .management-icons .add-line-button {
     color: #28a745;
