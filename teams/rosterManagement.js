@@ -58,6 +58,11 @@ function updateTeamRosterDisplay() {
             nameCell.classList.add('player-mmp');
         }
         
+        // Make name cell clickable to edit player
+        nameCell.addEventListener('click', () => {
+            showEditPlayerDialog(player);
+        });
+        
         playerRow.appendChild(nameCell);
 
         const totalPointsCell = document.createElement('td');
@@ -513,4 +518,293 @@ function showDeleteLineDialog() {
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
 }
+
+// Edit Player Dialog state
+let editPlayerDialogPlayer = null;
+let editPlayerDialogOriginalData = null;
+
+/**
+ * Show the edit player dialog for a given player
+ */
+function showEditPlayerDialog(player) {
+    if (!player) {
+        console.error('Cannot show edit player dialog: no player provided');
+        return;
+    }
+
+    editPlayerDialogPlayer = player;
+    // Store original values to detect changes
+    editPlayerDialogOriginalData = {
+        name: player.name,
+        number: player.number,
+        gender: player.gender
+    };
+
+    const dialog = document.getElementById('editPlayerDialog');
+    if (!dialog) {
+        console.error('Edit player dialog element not found');
+        return;
+    }
+
+    // Populate form fields with current player data
+    const nameInput = document.getElementById('editPlayerName');
+    const numberInput = document.getElementById('editPlayerNumber');
+    const fmpBtn = document.getElementById('editPlayerFMPBtn');
+    const mmpBtn = document.getElementById('editPlayerMMPBtn');
+    const confirmBtn = document.getElementById('editPlayerConfirmBtn');
+
+    if (nameInput) nameInput.value = player.name;
+    if (numberInput) numberInput.value = player.number || '';
+    
+    // Set gender button states
+    if (fmpBtn && mmpBtn) {
+        fmpBtn.classList.remove('selected');
+        mmpBtn.classList.remove('selected');
+        if (player.gender === Gender.FMP) {
+            fmpBtn.classList.add('selected');
+        } else if (player.gender === Gender.MMP) {
+            mmpBtn.classList.add('selected');
+        }
+    }
+
+    // Reset confirm button state
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+    }
+
+    // Show dialog
+    dialog.style.display = 'block';
+}
+
+/**
+ * Close the edit player dialog
+ */
+function closeEditPlayerDialog() {
+    const dialog = document.getElementById('editPlayerDialog');
+    if (dialog) {
+        dialog.style.display = 'none';
+    }
+    editPlayerDialogPlayer = null;
+    editPlayerDialogOriginalData = null;
+}
+
+/**
+ * Check if any changes have been made and update confirm button state
+ */
+function updateEditPlayerDialogState() {
+    if (!editPlayerDialogPlayer || !editPlayerDialogOriginalData) {
+        return;
+    }
+
+    const nameInput = document.getElementById('editPlayerName');
+    const numberInput = document.getElementById('editPlayerNumber');
+    const fmpBtn = document.getElementById('editPlayerFMPBtn');
+    const mmpBtn = document.getElementById('editPlayerMMPBtn');
+    const confirmBtn = document.getElementById('editPlayerConfirmBtn');
+
+    if (!nameInput || !confirmBtn) {
+        return;
+    }
+
+    // Get current form values
+    const currentName = nameInput.value.trim();
+    const currentNumber = numberInput.value.trim();
+    const currentNumberValue = currentNumber ? parseInt(currentNumber, 10) : null;
+    
+    // Determine current gender selection
+    let currentGender = Gender.UNKNOWN;
+    if (fmpBtn && fmpBtn.classList.contains('selected')) {
+        currentGender = Gender.FMP;
+    } else if (mmpBtn && mmpBtn.classList.contains('selected')) {
+        currentGender = Gender.MMP;
+    }
+
+    // Check if any changes were made
+    const nameChanged = currentName !== editPlayerDialogOriginalData.name;
+    const numberChanged = currentNumberValue !== editPlayerDialogOriginalData.number;
+    const genderChanged = currentGender !== editPlayerDialogOriginalData.gender;
+
+    // Enable confirm button if changes were made and name is not empty
+    confirmBtn.disabled = !(nameChanged || numberChanged || genderChanged) || currentName === '';
+}
+
+/**
+ * Delete the current player with confirmation
+ */
+function deletePlayer() {
+    if (!editPlayerDialogPlayer) {
+        console.error('Cannot delete player: no player selected');
+        return;
+    }
+
+    const playerName = editPlayerDialogPlayer.name;
+    
+    // Show confirmation alert
+    if (!confirm(`Are you sure you want to delete ${playerName}?`)) {
+        return; // User cancelled
+    }
+
+    // Remove player from roster
+    const index = currentTeam.teamRoster.indexOf(editPlayerDialogPlayer);
+    if (index > -1) {
+        currentTeam.teamRoster.splice(index, 1);
+    }
+
+    // Save changes
+    saveAllTeamsData();
+    
+    // Refresh roster display
+    updateTeamRosterDisplay();
+
+    // Close dialog
+    closeEditPlayerDialog();
+}
+
+/**
+ * Save the edited player data
+ */
+function saveEditedPlayer() {
+    if (!editPlayerDialogPlayer || !editPlayerDialogOriginalData) {
+        console.error('Cannot save edited player: no player or original data');
+        return;
+    }
+
+    const nameInput = document.getElementById('editPlayerName');
+    const numberInput = document.getElementById('editPlayerNumber');
+    const fmpBtn = document.getElementById('editPlayerFMPBtn');
+    const mmpBtn = document.getElementById('editPlayerMMPBtn');
+
+    if (!nameInput) {
+        console.error('Cannot save edited player: name input not found');
+        return;
+    }
+
+    const newName = nameInput.value.trim();
+    if (!newName) {
+        alert('Player name cannot be empty');
+        return;
+    }
+
+    // Check if name already exists (excluding current player)
+    const nameExists = currentTeam.teamRoster.some(p => 
+        p !== editPlayerDialogPlayer && p.name === newName
+    );
+    if (nameExists) {
+        alert('A player with this name already exists');
+        return;
+    }
+
+    // Get new values
+    const newNumber = numberInput.value.trim();
+    const newNumberValue = newNumber ? parseInt(newNumber, 10) : null;
+    
+    // Determine new gender
+    let newGender = Gender.UNKNOWN;
+    if (fmpBtn && fmpBtn.classList.contains('selected')) {
+        newGender = Gender.FMP;
+    } else if (mmpBtn && mmpBtn.classList.contains('selected')) {
+        newGender = Gender.MMP;
+    }
+
+    // Update player object
+    editPlayerDialogPlayer.name = newName;
+    editPlayerDialogPlayer.number = newNumberValue;
+    editPlayerDialogPlayer.gender = newGender;
+
+    // Save changes
+    saveAllTeamsData();
+    
+    // Refresh roster display
+    updateTeamRosterDisplay();
+
+    // Close dialog
+    closeEditPlayerDialog();
+}
+
+// Initialize edit player dialog event handlers
+(function initializeEditPlayerDialog() {
+    const dialog = document.getElementById('editPlayerDialog');
+    if (!dialog) {
+        console.warn('Edit player dialog not found, skipping initialization');
+        return;
+    }
+
+    // Close button
+    const closeBtn = dialog.querySelector('.close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeEditPlayerDialog);
+    }
+
+    // Close when clicking outside dialog
+    window.addEventListener('click', function(event) {
+        if (event.target === dialog) {
+            closeEditPlayerDialog();
+        }
+    });
+
+    // Cancel button
+    const cancelBtn = document.getElementById('editPlayerCancelBtn');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', closeEditPlayerDialog);
+    }
+
+    // Confirm button
+    const confirmBtn = document.getElementById('editPlayerConfirmBtn');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', saveEditedPlayer);
+    }
+
+    // Delete button
+    const deleteBtn = document.getElementById('editPlayerDeleteBtn');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', deletePlayer);
+    }
+
+    // Gender buttons
+    const fmpBtn = document.getElementById('editPlayerFMPBtn');
+    const mmpBtn = document.getElementById('editPlayerMMPBtn');
+    
+    if (fmpBtn) {
+        fmpBtn.addEventListener('click', function() {
+            // Toggle selection
+            if (this.classList.contains('selected')) {
+                this.classList.remove('selected');
+            } else {
+                this.classList.add('selected');
+                if (mmpBtn) mmpBtn.classList.remove('selected');
+            }
+            updateEditPlayerDialogState();
+        });
+    }
+
+    if (mmpBtn) {
+        mmpBtn.addEventListener('click', function() {
+            // Toggle selection
+            if (this.classList.contains('selected')) {
+                this.classList.remove('selected');
+            } else {
+                this.classList.add('selected');
+                if (fmpBtn) fmpBtn.classList.remove('selected');
+            }
+            updateEditPlayerDialogState();
+        });
+    }
+
+    // Input fields - track changes
+    const nameInput = document.getElementById('editPlayerName');
+    const numberInput = document.getElementById('editPlayerNumber');
+    
+    if (nameInput) {
+        nameInput.addEventListener('input', updateEditPlayerDialogState);
+        nameInput.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter' && !confirmBtn.disabled) {
+                saveEditedPlayer();
+            }
+        });
+    }
+    
+    if (numberInput) {
+        numberInput.addEventListener('input', updateEditPlayerDialogState);
+    }
+})();
 
