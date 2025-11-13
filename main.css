@@ -361,27 +361,18 @@ ul {
     padding: 1vw 1vw;
 }
 
-/* Apply position:sticky to the first THREE columns: checkbox, player name, time played */
-/* first column of header (.active-header-teams) spans all 3 sticky columns */
-/* Styles for sticky columns */
-.active-header-teams, .active-checkbox-column, .active-name-column, .active-time-column {
-    background-color: #fafafa;
-    position: sticky;
-    z-index: 1;
-}
-
+/* Sticky column styles - positioning is handled dynamically in makeColumnsSticky() */
+/* Base styles for sticky columns */
 .active-checkbox-column {
-    left: 0;
-    width: 30px !important;  /* Force narrow width for checkbox column */
-    min-width: 30px !important;  /* Prevent cell from growing */
-    max-width: 30px !important;  /* Prevent cell from growing */
     text-align: center;
     padding: 5px !important;  /* Override default td padding */
     box-sizing: border-box;  /* Include padding in width calculation */
 }
 
-.active-name-column {
-    left: 40px; /* this will be overwritten dynamically to width of checkbox column */
+/* Header cell for merged sticky columns */
+.active-header-teams {
+    background-color: #fafafa;
+    box-sizing: border-box;
 }
 
 /* Gender-based color coding for player names */

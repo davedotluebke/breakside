@@ -622,7 +622,9 @@ function enterNextLineSelectionMode() {
     updatePauseResumeIconsForNextLineMode();
 
     // Make table columns sticky after rendering
-    setTimeout(makeColumnsSticky, 100);
+    requestAnimationFrame(() => {
+        makeColumnsSticky();
+    });
 
     // Set up the touch events for swiping
     setupSwipeEvents();

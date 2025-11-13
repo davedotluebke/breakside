@@ -24,7 +24,10 @@ function updateActivePlayersList() {
 
     console.log('Finished updating active players list');
     // After adding all rows to the tableBody, calculate the widths
-    makeColumnsSticky();
+    // Use requestAnimationFrame to ensure DOM is fully laid out
+    requestAnimationFrame(() => {
+        makeColumnsSticky();
+    });
     
     // Update gender ratio display
     if (typeof updateGenderRatioDisplay === 'function') {
@@ -53,7 +56,7 @@ function createActivePlayersTable() {
     const addScoreCells = (row, teamName, scores) => {
         const nameCell = document.createElement('th');
         nameCell.textContent = teamName;
-        nameCell.setAttribute('colspan', '3');  // merge with time column in header row
+        nameCell.setAttribute('colspan', '3');  // merge with checkbox, name, and time columns
         nameCell.setAttribute('text-align', 'center');
         nameCell.classList.add('active-header-teams');
         row.appendChild(nameCell);
@@ -141,6 +144,7 @@ function createPlayerRows() {
         // Add name column with gender-based styling
         const nameCell = document.createElement('td');
         nameCell.classList.add('active-name-column');
+        // Always show numbers if they exist
         nameCell.textContent = formatPlayerName(player);
         
         // Add gender-based color coding
@@ -336,31 +340,108 @@ function clearNextLineSelections() {
 
 /**
  * Make the first few columns sticky for horizontal scrolling
+ * Uses techniques from teamRosterScreen: box-shadow for borders, proper z-index, etc.
  */
 function makeColumnsSticky() {
-    // Below assumes all checkbox & name cells will have the same width
     const checkboxCells = document.querySelectorAll('.active-checkbox-column');
     if (checkboxCells.length === 0) {
         return;
     }
-    const checkboxCellWidth = checkboxCells[0].getBoundingClientRect().width + 1;  // 1-pixel border each side
-
+    
+    // Get checkbox column width - use getBoundingClientRect which includes padding and border
+    // Use the first data cell (not header) for accurate measurement
+    const firstCheckboxCell = checkboxCells[0];
+    const checkboxRect = firstCheckboxCell.getBoundingClientRect();
+    let checkboxCellWidth = checkboxRect.width;
+    
+    // If width is 0 or invalid, try to get computed style width
+    if (checkboxCellWidth <= 0) {
+        const computedStyle = window.getComputedStyle(firstCheckboxCell);
+        checkboxCellWidth = parseFloat(computedStyle.width) || 30; // fallback to 30px
+    }
+    
+    // Ensure checkbox column has consistent width and positioning
+    checkboxCells.forEach(cell => {
+        cell.style.position = 'sticky';
+        cell.style.left = '0';
+        cell.style.zIndex = '4';
+        cell.style.backgroundColor = '#fafafa';
+        // Force consistent width
+        cell.style.width = `${checkboxCellWidth}px`;
+        cell.style.minWidth = `${checkboxCellWidth}px`;
+        cell.style.maxWidth = `${checkboxCellWidth}px`;
+        cell.style.boxSizing = 'border-box';
+        // Use box-shadow to create borders that stay with sticky column
+        // Format: x-offset y-offset blur spread color
+        // Right border (2px), left border (1px), bottom border (1px)
+        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
+        // Remove all CSS borders that would scroll
+        cell.style.borderLeft = 'none';
+        cell.style.borderRight = 'none';
+        cell.style.borderTop = 'none';
+        cell.style.borderBottom = 'none';
+    });
+    
+    // Get name column cells
     const nameCells = document.querySelectorAll('.active-name-column');
-    const nameCellWidth = nameCells.length > 0 ? nameCells[0].getBoundingClientRect().width + 1 : 0;
-    // Update the second sticky column's left offset
+    
+    // Get name column width
+    const nameCellWidth = nameCells.length > 0 ? nameCells[0].getBoundingClientRect().width : 0;
+    
+    // Apply sticky positioning to name column (positioned right after checkbox)
+    // Use the exact checkbox width to prevent overlap
     nameCells.forEach(cell => {
         cell.style.position = 'sticky';
         cell.style.left = `${checkboxCellWidth}px`;
-        cell.style.zIndex = 1;
+        cell.style.zIndex = '3';
+        cell.style.backgroundColor = '#fafafa';
+        // Use box-shadow to create borders that stay with sticky column
+        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
+        // Remove all borders that would scroll
+        cell.style.borderLeft = 'none';
+        cell.style.borderRight = 'none';
+        cell.style.borderTop = 'none';
+        cell.style.borderBottom = 'none';
     });
-
+    
+    // Get time column cells
     const timeCells = document.querySelectorAll('.active-time-column');
-    // Update the third sticky column's left offset
+    
+    // Get time column width
+    const timeCellWidth = timeCells.length > 0 ? timeCells[0].getBoundingClientRect().width : 0;
+    
+    // Apply sticky positioning to time column (positioned right after name)
     timeCells.forEach(cell => {
         cell.style.position = 'sticky';
         cell.style.left = `${checkboxCellWidth + nameCellWidth}px`;
-        cell.style.zIndex = 1;
+        cell.style.zIndex = '3';
+        cell.style.backgroundColor = '#fafafa';
+        // Use box-shadow to create borders that stay with sticky column
+        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
+        // Remove all borders that would scroll
+        cell.style.borderLeft = 'none';
+        cell.style.borderRight = 'none';
+        cell.style.borderTop = 'none';
+        cell.style.borderBottom = 'none';
     });
+    
+    // Also make header cells sticky (merged cell spans all three sticky columns)
+    const headerTeamCells = document.querySelectorAll('.active-header-teams');
+    headerTeamCells.forEach(headerTeam => {
+        headerTeam.style.position = 'sticky';
+        headerTeam.style.left = '0';
+        headerTeam.style.zIndex = '5';
+        headerTeam.style.backgroundColor = '#fafafa';
+        // Use box-shadow to create borders that stay with sticky column
+        // Right border (2px), left border (1px), bottom border (1px)
+        headerTeam.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
+        // Remove all CSS borders that would scroll
+        headerTeam.style.borderLeft = 'none';
+        headerTeam.style.borderRight = 'none';
+        headerTeam.style.borderTop = 'none';
+        headerTeam.style.borderBottom = 'none';
+    });
+    
     // Set the scroll position to the maximum scroll width
     const tableContainer = document.getElementById('tableContainer');
     if (tableContainer) {
