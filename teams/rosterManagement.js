@@ -28,10 +28,14 @@ function updateTeamRosterDisplay() {
     const eventStats = currentGame() ? calculatePlayerStatsFromEvents(currentGame()) : {};
 
     const headerRow = document.createElement('tr');
-    ['', 'Name', 'Pts', 'Time', 'Goals', 'Assists', 'Comp%', 'Ds', 'TOs', '+/-', '..per pt'].forEach(headerText => {
+    const headerClasses = ['roster-checkbox-header', 'roster-name-header', 'roster-points-header', 'roster-time-header', 'roster-goals-header', 'roster-assists-header', 'roster-comppct-header', 'roster-dplays-header', 'roster-turnovers-header', 'roster-plusminus-header', 'roster-plusminus-per-point-header'];
+    ['', 'Name', 'Pts', 'Time', 'Goals', 'Assists', 'Comp%', 'Ds', 'TOs', '+/-', '..per pt'].forEach((headerText, index) => {
         const headerCell = document.createElement('th');
         headerCell.textContent = headerText;
         headerCell.classList.add('roster-header');
+        if (headerClasses[index]) {
+            headerCell.classList.add(headerClasses[index]);
+        }
         headerRow.appendChild(headerCell);
     });
     rosterElement.appendChild(headerRow);
@@ -40,7 +44,7 @@ function updateTeamRosterDisplay() {
         const playerRow = document.createElement('tr');
 
         const checkboxCell = document.createElement('td');
-        checkboxCell.classList.add('active-checkbox-column');
+        checkboxCell.classList.add('active-checkbox-column', 'roster-sticky-checkbox');
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.classList.add('active-checkbox');
@@ -48,7 +52,7 @@ function updateTeamRosterDisplay() {
         playerRow.appendChild(checkboxCell);
 
         const nameCell = document.createElement('td');
-        nameCell.classList.add('roster-name-column');
+        nameCell.classList.add('roster-name-column', 'roster-sticky-name');
         nameCell.textContent = formatPlayerName(player);
         
         // Add gender-based color coding
@@ -122,6 +126,12 @@ function updateTeamRosterDisplay() {
         rosterElement.appendChild(playerRow);
     });
 
+    // Make sticky columns work after all rows are added
+    // Use requestAnimationFrame to ensure DOM is fully rendered before calculating widths
+    requestAnimationFrame(() => {
+        makeRosterColumnsSticky();
+    });
+
     const teamRow = document.createElement('tr');
     teamRow.classList.add('team-aggregate-row');
 
@@ -149,14 +159,24 @@ function updateTeamRosterDisplay() {
         totalTurnovers += playerStats.turnovers || 0;
     });
 
-    const appendTeamCell = (value, className) => {
+    const appendTeamCell = (value, className, isSticky = false) => {
         const cell = document.createElement('td');
         cell.classList.add(className, 'team-total-cell');
+        if (isSticky) {
+            if (className === 'active-checkbox-column') {
+                cell.classList.add('roster-sticky-checkbox');
+            } else if (className === 'roster-name-column') {
+                cell.classList.add('roster-sticky-name');
+            }
+        }
         cell.textContent = value;
         teamRow.appendChild(cell);
     };
 
-    appendTeamCell('Team', 'roster-name-column');
+    // First cell is empty (checkbox column) - make it sticky
+    appendTeamCell('', 'active-checkbox-column', true);
+    // Second cell is "Team" (name column) - make it sticky
+    appendTeamCell('Team', 'roster-name-column', true);
     appendTeamCell(currentGame() ? currentGame().points.length : 0, 'roster-points-column');
     appendTeamCell(formatPlayTime(totalTimePlayed), 'roster-time-column');
     appendTeamCell(totalGoals, 'roster-goals-column');
@@ -181,6 +201,11 @@ function updateTeamRosterDisplay() {
     appendTeamCell(teamPlusMinusPerPoint > 0 ? `+${teamPlusMinusPerPoint}` : teamPlusMinusPerPoint, 'roster-plusminus-per-point-column');
 
     rosterElement.appendChild(teamRow);
+    
+    // Re-run sticky columns function to include team row
+    requestAnimationFrame(() => {
+        makeRosterColumnsSticky();
+    });
 }
 
 function updateGameSummaryRosterDisplay() {
@@ -807,4 +832,103 @@ function saveEditedPlayer() {
         numberInput.addEventListener('input', updateEditPlayerDialogState);
     }
 })();
+
+/**
+ * Make the first two columns (checkbox, name) sticky for horizontal scrolling
+ */
+function makeRosterColumnsSticky() {
+    const checkboxCells = document.querySelectorAll('.roster-sticky-checkbox');
+    if (checkboxCells.length === 0) {
+        return;
+    }
+    
+    // Get checkbox column width - use getBoundingClientRect which includes padding and border
+    // Use the first data cell (not header) for accurate measurement
+    const firstCheckboxCell = checkboxCells[0];
+    const checkboxRect = firstCheckboxCell.getBoundingClientRect();
+    let checkboxCellWidth = checkboxRect.width;
+    
+    // If width is 0 or invalid, try to get computed style width
+    if (checkboxCellWidth <= 0) {
+        const computedStyle = window.getComputedStyle(firstCheckboxCell);
+        checkboxCellWidth = parseFloat(computedStyle.width) || 30; // fallback to 30px
+    }
+    
+    // Ensure checkbox column has consistent width and positioning
+    checkboxCells.forEach(cell => {
+        cell.style.position = 'sticky';
+        cell.style.left = '0';
+        cell.style.zIndex = '4';
+        cell.style.backgroundColor = '#fafafa';
+        // Force consistent width
+        cell.style.width = `${checkboxCellWidth}px`;
+        cell.style.minWidth = `${checkboxCellWidth}px`;
+        cell.style.maxWidth = `${checkboxCellWidth}px`;
+        cell.style.boxSizing = 'border-box';
+        // Use box-shadow to create borders that stay with sticky column
+        // Format: x-offset y-offset blur spread color
+        // Right border (2px), left border (1px), bottom border (1px)
+        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
+        // Remove all CSS borders that would scroll
+        cell.style.borderLeft = 'none';
+        cell.style.borderRight = 'none';
+        cell.style.borderTop = 'none';
+        cell.style.borderBottom = 'none';
+    });
+    
+    // Get name column cells
+    const nameCells = document.querySelectorAll('.roster-sticky-name');
+    
+    // Apply sticky positioning to name column (positioned right after checkbox)
+    // Use the exact checkbox width to prevent overlap
+    nameCells.forEach(cell => {
+        cell.style.position = 'sticky';
+        cell.style.left = `${checkboxCellWidth}px`;
+        cell.style.zIndex = '3';
+        cell.style.backgroundColor = '#fafafa';
+        // Use box-shadow to create borders that stay with sticky column
+        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
+        // Remove all borders that would scroll
+        cell.style.borderLeft = 'none';
+        cell.style.borderRight = 'none';
+        cell.style.borderTop = 'none';
+        cell.style.borderBottom = 'none';
+    });
+    
+    // Also make header cells sticky
+    const headerCheckbox = document.querySelector('.roster-checkbox-header');
+    if (headerCheckbox) {
+        headerCheckbox.style.position = 'sticky';
+        headerCheckbox.style.left = '0';
+        headerCheckbox.style.zIndex = '5';
+        headerCheckbox.style.backgroundColor = '#fafafa';
+        // Ensure header checkbox has same width as data cells
+        headerCheckbox.style.width = `${checkboxCellWidth}px`;
+        headerCheckbox.style.minWidth = `${checkboxCellWidth}px`;
+        headerCheckbox.style.maxWidth = `${checkboxCellWidth}px`;
+        headerCheckbox.style.boxSizing = 'border-box';
+        // Use box-shadow to create borders that stay with sticky column
+        // Right border (2px), left border (1px), bottom border (1px)
+        headerCheckbox.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
+        // Remove all CSS borders that would scroll
+        headerCheckbox.style.borderLeft = 'none';
+        headerCheckbox.style.borderRight = 'none';
+        headerCheckbox.style.borderTop = 'none';
+        headerCheckbox.style.borderBottom = 'none';
+    }
+    
+    const headerName = document.querySelector('.roster-name-header');
+    if (headerName) {
+        headerName.style.position = 'sticky';
+        headerName.style.left = `${checkboxCellWidth}px`;
+        headerName.style.zIndex = '4';
+        headerName.style.backgroundColor = '#fafafa';
+        // Use box-shadow to create borders that stay with sticky column
+        headerName.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
+        headerName.style.borderLeft = 'none';
+        headerName.style.borderRight = 'none';
+        headerName.style.borderTop = 'none';
+        headerName.style.borderBottom = 'none';
+    }
+}
 

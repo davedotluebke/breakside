@@ -95,11 +95,13 @@
             <h2 id="teamRosterHeader">Team Roster</h2>
             <button id="continueGameBtn" class="inactive">Continue Game</button>
         </div>
-        <table>
-            <tbody id="rosterList">
-                <!-- Rows for players will be dynamically populated here -->
-            </tbody>
-        </table>
+        <div class="roster-table-container">
+            <table id="rosterTable">
+                <tbody id="rosterList">
+                    <!-- Rows for players will be dynamically populated here -->
+                </tbody>
+            </table>
+        </div>
         
         <div class="management-row">
             <div class="management-container full-width">
@@ -334,12 +336,10 @@
                     <label for="editPlayerNumber">Jersey Number:</label>
                     <input type="number" id="editPlayerNumber" class="edit-player-input" placeholder="Optional" />
                 </div>
-                <div class="edit-player-field">
+                <div class="edit-player-field edit-player-gender-field">
                     <label>Gender:</label>
-                    <div class="edit-player-gender-buttons">
-                        <button id="editPlayerFMPBtn" class="gender-button fmp-button">FMP</button>
-                        <button id="editPlayerMMPBtn" class="gender-button mmp-button">MMP</button>
-                    </div>
+                    <button id="editPlayerFMPBtn" class="gender-button fmp-button">FMP</button>
+                    <button id="editPlayerMMPBtn" class="gender-button mmp-button">MMP</button>
                 </div>
             </div>
             <div class="edit-player-dialog-buttons">
