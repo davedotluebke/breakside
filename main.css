@@ -336,6 +336,26 @@ ul {
     width: max-content;
 }
 
+/* Roster table scrollable container */
+.roster-table-container {
+    overflow-x: auto;
+    width: 100%;
+    margin: 0 20px;
+    box-sizing: border-box;
+}
+
+#rosterTable {
+    border-collapse: collapse;
+    width: max-content;
+    min-width: 100%;
+}
+
+#rosterTable th, #rosterTable td {
+    border: 1px solid grey;
+    padding: 5px;
+    white-space: nowrap;
+}
+
 #activePlayersTable th, #activePlayersTable td {
     border: 1px solid grey;
     padding: 1vw 1vw;
@@ -1501,6 +1521,9 @@ td.player-mmp,
 /* Edit Player Dialog Styles */
 .edit-player-modal-content {
     max-width: 400px;
+    width: 90%;
+    box-sizing: border-box;
+    overflow-x: hidden;
 }
 
 .edit-player-container {
@@ -1508,6 +1531,9 @@ td.player-mmp,
     flex-direction: column;
     gap: 1.5rem;
     margin: 1.5rem 0;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
 }
 
 .edit-player-field {
@@ -1519,6 +1545,19 @@ td.player-mmp,
 .edit-player-field label {
     font-weight: bold;
     font-size: 1rem;
+}
+
+.edit-player-gender-field {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.edit-player-gender-field label {
+    margin: 0;
+    min-width: fit-content;
 }
 
 .edit-player-input {
@@ -1535,13 +1574,7 @@ td.player-mmp,
     border-color: #E19049;
 }
 
-.edit-player-gender-buttons {
-    display: flex;
-    gap: 1rem;
-    justify-content: flex-start;
-}
-
-.edit-player-gender-buttons .gender-button {
+.edit-player-gender-field .gender-button {
     width: 80px;
     height: 40px;
     padding: 4px 8px;
@@ -1551,29 +1584,28 @@ td.player-mmp,
     border-radius: 0.5rem;
     transition: all 0.2s;
     cursor: pointer;
+    flex-shrink: 0;
 }
 
-.edit-player-gender-buttons .gender-button.fmp-button {
+.edit-player-gender-field .gender-button.fmp-button {
     background-color: #e8d5f2;
     color: #7d3c98;
     border-color: #7d3c98;
 }
 
-
-.edit-player-gender-buttons .gender-button.fmp-button.selected {
+.edit-player-gender-field .gender-button.fmp-button.selected {
     background-color: #7d3c98;
     color: white;
     border-color: #7d3c98;
 }
 
-.edit-player-gender-buttons .gender-button.mmp-button {
+.edit-player-gender-field .gender-button.mmp-button {
     background-color: #d4e8dd;
     color: #2d8659;
     border-color: #2d8659;
 }
 
-
-.edit-player-gender-buttons .gender-button.mmp-button.selected {
+.edit-player-gender-field .gender-button.mmp-button.selected {
     background-color: #2d8659;
     color: white;
     border-color: #2d8659;
@@ -1581,8 +1613,7 @@ td.player-mmp,
 
 .edit-player-dialog-buttons {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
     gap: 1rem;
     margin-top: 1.5rem;
     padding-top: 1rem;
@@ -1592,18 +1623,34 @@ td.player-mmp,
 .edit-player-dialog-buttons-right {
     display: flex;
     gap: 1rem;
+    justify-content: flex-end;
+    flex-wrap: wrap;
 }
 
 .edit-player-cancel-btn,
 .edit-player-confirm-btn,
 .edit-player-delete-btn {
-    padding: 0.8rem 2rem;
+    padding: 0.8rem 1.5rem;
     border: none;
     border-radius: 0.5rem;
     font-size: 1rem;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.3s;
+    flex: 0 0 auto;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.edit-player-delete-btn {
+    width: 100%;
+}
+
+.edit-player-dialog-buttons-right .edit-player-cancel-btn,
+.edit-player-dialog-buttons-right .edit-player-confirm-btn {
+    flex: 1 1 auto;
+    min-width: 100px;
+    max-width: calc(50% - 0.5rem);
 }
 
 .edit-player-cancel-btn {
