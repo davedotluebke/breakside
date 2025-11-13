@@ -309,6 +309,42 @@ function updateGameSummaryRosterDisplay() {
     });
 }
 
+/**
+ * Validate jersey number input
+ * Returns the validated value (string or null), or null if user cancels invalid input
+ * Accepts: null/empty, "00", or integers 0-99
+ * Shows confirmation alert for invalid values like "pi", "ASDF", "1e23"
+ */
+function validateJerseyNumber(input) {
+    const trimmed = input ? input.trim() : '';
+    
+    // Empty is valid (no jersey number)
+    if (!trimmed) {
+        return null;
+    }
+    
+    // Special case: "00" is valid
+    if (trimmed === '00') {
+        return '00';
+    }
+    
+    // Try to parse as integer
+    const parsed = parseInt(trimmed, 10);
+    
+    // Check if it's a valid integer between 0 and 99
+    if (!isNaN(parsed) && parsed >= 0 && parsed <= 99 && parsed.toString() === trimmed) {
+        return trimmed;
+    }
+    
+    // Invalid value - ask for confirmation
+    const confirmed = confirm(
+        `"${trimmed}" is not a valid jersey number (must be 0-99 or 00).\n\n` +
+        `Do you want to use "${trimmed}" anyway?`
+    );
+    
+    return confirmed ? trimmed : null;
+}
+
 (function setupRosterUI() {
     function addPlayerWithGender(gender) {
         const playerNameInput = document.getElementById('newPlayerInput');
@@ -317,7 +353,11 @@ function updateGameSummaryRosterDisplay() {
         const playerNumber = playerNumberInput ? (playerNumberInput.value.trim() || null) : null;
         
         if (playerName && !currentTeam.teamRoster.some(player => player.name === playerName)) {
-            const numberValue = playerNumber ? parseInt(playerNumber, 10) : null;
+            const numberValue = validateJerseyNumber(playerNumber);
+            // If validation was cancelled (returned null when input was provided), don't add player
+            if (playerNumber && numberValue === null) {
+                return;
+            }
             const newPlayer = new Player(playerName, "", gender, numberValue);
             currentTeam.teamRoster.push(newPlayer);
             updateTeamRosterDisplay();
@@ -634,7 +674,7 @@ function updateEditPlayerDialogState() {
     // Get current form values
     const currentName = nameInput.value.trim();
     const currentNumber = numberInput.value.trim();
-    const currentNumberValue = currentNumber ? parseInt(currentNumber, 10) : null;
+    const currentNumberValue = currentNumber || null;
     
     // Determine current gender selection
     let currentGender = Gender.UNKNOWN;
@@ -721,7 +761,12 @@ function saveEditedPlayer() {
 
     // Get new values
     const newNumber = numberInput.value.trim();
-    const newNumberValue = newNumber ? parseInt(newNumber, 10) : null;
+    const newNumberValue = validateJerseyNumber(newNumber);
+    
+    // If validation was cancelled (returned null when input was provided), don't save
+    if (newNumber && newNumberValue === null) {
+        return;
+    }
     
     // Determine new gender
     let newGender = Gender.UNKNOWN;
