@@ -32,6 +32,41 @@ function showSelectTeamScreen(firsttime = false) {
         teamNameCell.onclick = () => selectTeam(teamIndex);
         teamRow.appendChild(teamNameCell);
 
+        const deleteTeamCell = document.createElement('td');
+        deleteTeamCell.style.width = '40px';
+        deleteTeamCell.style.textAlign = 'center';
+        const deleteTeamBtn = document.createElement('button');
+        deleteTeamBtn.innerHTML = '<i class="fas fa-trash" style="color: #dc3545;"></i>';
+        deleteTeamBtn.classList.add('icon-button');
+        deleteTeamBtn.title = 'Delete Team';
+        deleteTeamBtn.onclick = (e) => {
+            e.stopPropagation();
+            // Prevent deletion if it's the last team
+            if (teams.length === 1) {
+                alert('Cannot delete the last team. Please create another team first.');
+                return;
+            }
+            if (confirm(`Are you sure you want to delete "${team.name}"? This will permanently delete the team and all its game data. This cannot be undone.`)) {
+                // If deleting the current team, switch to another team
+                if (currentTeam === team) {
+                    // Switch to the first team if deleting index 0, otherwise switch to index 0
+                    // (We know teams.length > 1 because of the check above)
+                    const newTeamIndex = teamIndex === 0 ? 1 : 0;
+                    currentTeam = teams[newTeamIndex];
+                }
+                // Remove the team from the array
+                teams.splice(teamIndex, 1);
+                // Save the updated data
+                if (typeof saveAllTeamsData === 'function') {
+                    saveAllTeamsData();
+                }
+                // Refresh the display
+                showSelectTeamScreen();
+            }
+        };
+        deleteTeamCell.appendChild(deleteTeamBtn);
+        teamRow.appendChild(deleteTeamCell);
+
         const gamesCell = document.createElement('td');
         const gamesList = document.createElement('ul');
         gamesList.classList.add('games-list');
@@ -164,6 +199,19 @@ function initializeTeamSelection() {
         switchTeamsBtn.addEventListener('click', () => showSelectTeamScreen());
     }
 
+    const downloadTeamBtn = document.getElementById('downloadTeamBtn');
+    if (downloadTeamBtn) {
+        downloadTeamBtn.addEventListener('click', () => {
+            if (currentTeam) {
+                const teamData = serializeTeam(currentTeam);
+                const filename = `${currentTeam.name}_${new Date().toISOString().split('T')[0]}.json`;
+                downloadJSON(teamData, filename);
+            } else {
+                alert('No team selected.');
+            }
+        });
+    }
+
     const createNewTeamBtn = document.getElementById('createNewTeamBtn');
     if (createNewTeamBtn) {
         createNewTeamBtn.addEventListener('click', () => {
@@ -224,6 +272,61 @@ function initializeTeamSelection() {
                 updateTeamRosterDisplay();
             }
             showScreen('teamRosterScreen');
+        });
+    }
+
+    const restoreGamesBtn = document.getElementById('restoreGamesBtn');
+    if (restoreGamesBtn) {
+        restoreGamesBtn.addEventListener('click', () => {
+            if (confirm('Restore saved games from storage? This will overwrite any unsaved changes.')) {
+                loadTeams(false);
+                // Set currentTeam to the first team if teams were loaded
+                if (teams.length > 0) {
+                    currentTeam = teams[0];
+                }
+                if (currentTeam && typeof updateTeamRosterDisplay === 'function') {
+                    updateTeamRosterDisplay();
+                }
+                showSelectTeamScreen();
+            }
+        });
+    }
+
+    const clearGamesBtn = document.getElementById('clearGamesBtn');
+    if (clearGamesBtn) {
+        clearGamesBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to clear all saved games? This will delete all game data for all teams. This cannot be undone.')) {
+                // Clear all games from all teams
+                teams.forEach(team => {
+                    // Reset player stats that came from games
+                    team.teamRoster.forEach(player => {
+                        player.totalPointsPlayed = 0;
+                        player.totalTimePlayed = 0;
+                        player.completedPasses = 0;
+                        player.turnovers = 0;
+                        player.goals = 0;
+                        player.assists = 0;
+                        player.pointsWon = 0;
+                        player.pointsLost = 0;
+                        player.consecutivePointsPlayed = 0;
+                        player.pointsPlayedPreviousGames = 0;
+                    });
+                    team.games = [];
+                });
+                
+                // Save the updated data
+                if (typeof saveAllTeamsData === 'function') {
+                    saveAllTeamsData();
+                }
+                
+                // Update displays
+                if (currentTeam && typeof updateTeamRosterDisplay === 'function') {
+                    updateTeamRosterDisplay();
+                }
+                showSelectTeamScreen();
+                
+                alert('All saved games have been cleared.');
+            }
         });
     }
 }
