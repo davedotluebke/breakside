@@ -345,20 +345,45 @@ function undoEvent() {
                 logEvent(`Undid event: ${undoneEvent.summarize()}`);
                 if (undoneEvent instanceof Throw) {
                     // update player stats for the thrower and receiver
-                    undoneEvent.thrower.completedPasses--;
+                    if (undoneEvent.thrower) {
+                        undoneEvent.thrower.completedPasses--;
+                        // Ensure completedPasses doesn't go negative
+                        if (undoneEvent.thrower.completedPasses < 0) {
+                            undoneEvent.thrower.completedPasses = 0;
+                        }
+                    }
                     if (undoneEvent.score_flag) {
-                        undoneEvent.receiver.goals--;
-                        undoneEvent.thrower.assists--;
+                        if (undoneEvent.receiver) {
+                            undoneEvent.receiver.goals--;
+                            // Ensure goals doesn't go negative
+                            if (undoneEvent.receiver.goals < 0) {
+                                undoneEvent.receiver.goals = 0;
+                            }
+                        }
+                        if (undoneEvent.thrower) {
+                            undoneEvent.thrower.assists--;
+                            // Ensure assists doesn't go negative
+                            if (undoneEvent.thrower.assists < 0) {
+                                undoneEvent.thrower.assists = 0;
+                            }
+                        }
+                    }
+                } else if (undoneEvent instanceof Defense) {
+                    // Handle Callahan: decrement defender's goals
+                    if (undoneEvent.Callahan_flag && undoneEvent.defender) {
+                        undoneEvent.defender.goals--;
+                        // Ensure goals doesn't go negative
+                        if (undoneEvent.defender.goals < 0) {
+                            undoneEvent.defender.goals = 0;
+                        }
                     }
                 }
+                // XXX we allocate but don't currently maintain turnover stats for players
                 if (currentPossession.offensive) {
                     updateOffensivePossessionScreen();
                 } else {
                     updateDefensivePossessionScreen();
                 }
-
-                // XXX we allocate but don't currently maintain turnover stats for players 
-                // XXX when we handle Callahans, we will need to decrement player goals
             } else {
                 // no events in this possession, remove the possession
                 currentPoint.possessions.pop();
@@ -368,8 +393,31 @@ function undoEvent() {
                         let player = getPlayerFromName(playerName);
                         player.totalPointsPlayed--;
                         player.consecutivePointsPlayed--;
+                        // Decrement time played for this point
+                        if (currentPoint.totalPointTime) {
+                            player.totalTimePlayed -= currentPoint.totalPointTime;
+                            // Ensure totalTimePlayed doesn't go negative
+                            if (player.totalTimePlayed < 0) {
+                                player.totalTimePlayed = 0;
+                            }
+                        }
+                        // Decrement pointsWon or pointsLost based on winner
+                        if (currentPoint.winner === Role.TEAM) {
+                            player.pointsWon--;
+                            if (player.pointsWon < 0) {
+                                player.pointsWon = 0;
+                            }
+                        } else if (currentPoint.winner === Role.OPPONENT) {
+                            player.pointsLost--;
+                            if (player.pointsLost < 0) {
+                                player.pointsLost = 0;
+                            }
+                        }
                     });
-                    currentGame().scores[currentPoint.winner]--;
+                    // Decrement game score if winner is set
+                    if (currentPoint.winner) {
+                        currentGame().scores[currentPoint.winner]--;
+                    }
                     currentGame().points.pop();
                     currentPoint = null;
                     // display the "before point screen" 
