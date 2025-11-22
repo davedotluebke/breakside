@@ -225,3 +225,21 @@ function extractPlayerName(displayText) {
     return match ? match[1].trim() : displayText.trim();
 }
 
+/**
+ * Get the gender ratio (FMP or MMP) for a specific point index in an alternating game
+ * Returns 'FMP', 'MMP', or null if not applicable. 
+ * 
+ * The pattern is: ABBAABB... (or {0,1,1,0,0,1,1}...) 
+ * which is (i+1) // 2 % 2   [where // is integer division and % is modulo]
+ * or ((i+1) >> 1) & 1   using bitwise operations
+ */
+function getGenderRatioForPoint(game, pointIndex) {
+    if (!game || game.alternateGenderRatio !== 'Alternating' || !game.startingGenderRatio) {
+        return null;
+    }
+    
+    const useFirstRatio = (((pointIndex + 1) >> 1) & 1) === 0;
+    
+    return useFirstRatio ? game.startingGenderRatio : (game.startingGenderRatio === 'FMP' ? 'MMP' : 'FMP');
+}
+

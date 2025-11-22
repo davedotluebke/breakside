@@ -183,15 +183,9 @@ function getExpectedGenderRatio(game) {
     // If starting ratio not set, return null (user needs to set it)
     if (!game.startingGenderRatio) return null;
     
-    // Count points to determine pattern position (ABBAABB)
+    // Get the gender ratio for the next point (pointCount is the index of the next point)
     const pointCount = game.points.length;
-    
-    // Pattern: ABBAABB (0-indexed: 0=A, 1=B, 2=B, 3=A, 4=A, 5=B, 6=B, 7=A, ...)
-    const pattern = [0, 1, 1, 0, 0, 1, 1]; // 0 = first ratio, 1 = second ratio
-    const patternIndex = pointCount % 7;
-    const useFirstRatio = pattern[patternIndex] === 0;
-    
-    return useFirstRatio ? game.startingGenderRatio : (game.startingGenderRatio === 'FMP' ? 'MMP' : 'FMP');
+    return getGenderRatioForPoint(game, pointCount);
 }
 
 function updateGenderRatioDisplay(genderRatioWarning = false) {
@@ -313,9 +307,8 @@ function setupGenderRatioRadioButtons() {
         if (expectedRatio) {
             // Work backwards to determine starting ratio
             const pointCount = game.points.length;
-            const pattern = [0, 1, 1, 0, 0, 1, 1];
-            const patternIndex = pointCount % 7;
-            const useFirstRatio = pattern[patternIndex] === 0;
+            // Check if current point uses first ratio (starting ratio) or second ratio (opposite)
+            const useFirstRatio = (((pointCount + 1) >> 1) & 1) === 0;
             // If we're on the first ratio in pattern, starting ratio matches expected
             // Otherwise, it's the opposite
             currentRatio = useFirstRatio ? expectedRatio : (expectedRatio === 'FMP' ? 'MMP' : 'FMP');

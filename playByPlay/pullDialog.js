@@ -112,13 +112,13 @@ function showPullDialog() {
         genderSelection.style.display = 'block';
         // Check if this is the first defensive point
         const isFirstDefensivePoint = isFirstDefensivePointForTeam(game);
-        if (isFirstDefensivePoint) {
-            // First defensive point: neither selected, disable proceed
+        if (isFirstDefensivePoint && !expectedPullGender) {
+            // First defensive point and we can't determine expected gender: neither selected
             if (pullGenderFMP) pullGenderFMP.checked = false;
             if (pullGenderMMP) pullGenderMMP.checked = false;
             pullSelectedGender = null;
-        } else {
-            // Subsequent points: pre-select opposite gender
+        } else if (expectedPullGender) {
+            // Pre-select expected gender (works for both first and subsequent points)
             pullSelectedGender = expectedPullGender;
             if (expectedPullGender === Gender.FMP) {
                 if (pullGenderFMP) pullGenderFMP.checked = true;
@@ -127,6 +127,11 @@ function showPullDialog() {
                 if (pullGenderFMP) pullGenderFMP.checked = false;
                 if (pullGenderMMP) pullGenderMMP.checked = true;
             }
+        } else {
+            // No expected gender determined: neither selected
+            if (pullGenderFMP) pullGenderFMP.checked = false;
+            if (pullGenderMMP) pullGenderMMP.checked = false;
+            pullSelectedGender = null;
         }
     } else {
         genderSelection.style.display = 'none';
@@ -465,6 +470,25 @@ function isFirstDefensivePointForTeam(game) {
 function getExpectedPullGender(game) {
     if (!game || !game.alternateGenderPulls) return null;
     
+    // For alternating gender ratio games (4:3 - 3:4 or 3:2 - 2:3)
+    // The pull should be done by a player matching the majority gender matching preference
+    if (game.alternateGenderRatio === 'Alternating' && game.startingGenderRatio) {
+        // Determine the current point index (currentPoint has already been added to game.points)
+        const currentPointIndex = game.points.length - 1;
+        
+        // Get the gender ratio for this point (FMP+ or MMP+)
+        const pointGenderRatio = getGenderRatioForPoint(game, currentPointIndex);
+        
+        if (pointGenderRatio === 'FMP') {
+            return Gender.FMP;
+        } else if (pointGenderRatio === 'MMP') {
+            return Gender.MMP;
+        }
+        // If we can't determine the ratio, fall through to alternating logic below
+    }
+    
+    // For fixed ratio games (e.g., "4:3", "3:2") with alternating gender pulls enabled,
+    // pulls should alternate gender every point
     // Get all defensive points (excluding current point)
     const defensivePoints = [];
     for (const point of game.points) {
