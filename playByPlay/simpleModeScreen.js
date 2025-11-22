@@ -217,13 +217,15 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
             btn.classList.remove('selected');
         });
         buttonElement.classList.add('selected');
-        // Disable this player's button in the receiver column
-        document.querySelectorAll('#receiverButtons .player-button').forEach(btn => {
-            if (btn.textContent === playerName) {
-                btn.disabled = true;
-                btn.classList.add('inactive');
-            }
-        });
+        // Disable this player's button in the receiver column (unless it's Unknown Player)
+        if (playerName !== UNKNOWN_PLAYER) {
+            document.querySelectorAll('#receiverButtons .player-button').forEach(btn => {
+                if (btn.textContent === playerName) {
+                    btn.disabled = true;
+                    btn.classList.add('inactive');
+                }
+            });
+        }
     } else {
         // If there was a previous receiver, re-enable their button in the thrower column
         if (selectedReceiver) {
@@ -241,13 +243,15 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
             btn.classList.remove('selected');
         });
         buttonElement.classList.add('selected');
-        // Disable this player's button in the thrower column
-        document.querySelectorAll('#throwerButtons .player-button').forEach(btn => {
-            if (btn.textContent === playerName) {
-                btn.disabled = true;
-                btn.classList.add('inactive');
-            }
-        });
+        // Disable this player's button in the thrower column (unless it's Unknown Player)
+        if (playerName !== UNKNOWN_PLAYER) {
+            document.querySelectorAll('#throwerButtons .player-button').forEach(btn => {
+                if (btn.textContent === playerName) {
+                    btn.disabled = true;
+                    btn.classList.add('inactive');
+                }
+            });
+        }
     }
     
     // Update Callahan button state based on current selections
