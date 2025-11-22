@@ -43,51 +43,51 @@ Header rows (rows 1-3):
 - Row 3: (Optional) Column descriptions/formatting hints
 
 Data columns (left to right, most common first):
-1. **Point Start Columns** (Columns A-C)
+1. **Point Start Columns** (Columns A-D)
    - `Point #` - Sequential point number
    - `Point Start Time` - Timestamp when point started
    - `Starting Position` - "Offense" or "Defense"
    - `Active Players` - Comma-separated list of player names (7 players)
 
-2. **Throw Columns** (Columns D-F) - Most common events
+2. **Point End Columns** (Columns E-G)
+   - `Point End Time` - Timestamp when point ended
+   - `Point Duration` - Duration in seconds
+   - `Point Winner` - "team" or "opponent"
+   - `Score After Point` - Format: "team_score-opponent_score"
+
+3. **Pull Column** (Column H)
+   - `Pull` - Format: "PlayerName (quality) [flags]"
+   - Example: "John Doe (Good Pull) flick io" or "Unknown Player (Brick)"
+
+4. **Throw Columns** (Columns I-K) - Most common events
    - `Thrower` - Player name
    - `Receiver` - Player name  
    - `Throw Modifiers` - Space-separated flags: "huck", "break", "dump", "hammer", "sky", "layout", "score"
    - Example: "huck sky score" means a huck that was caught with a sky for a score
 
-3. **Defense Columns** (Columns G-H)
+5. **Defense Columns** (Columns L-M)
    - `Defender` - Player name
    - `Defense Modifiers` - Space-separated flags: "interception", "layout", "sky", "Callahan", "stall", "unforced"
    - Example: "interception layout" means a layout interception
 
-4. **Turnover Columns** (Columns I-K)
+6. **Turnover Columns** (Columns N-P)
    - `Turnover Type` - "throwaway", "drop", "stall", "unforced"
    - `Turnover Player` - Player name (thrower or receiver depending on type)
    - `Turnover Modifiers` - Space-separated flags: "huck", "defense"
    - Example: "drop defense huck" means a dropped huck due to good defense
 
-5. **Violation Columns** (Columns L-M)
+7. **Violation Columns** (Columns Q-R)
    - `Violation Type` - "offensive", "strip", "pick", "travel", "contested", "doubleTeam"
    - `Violation Player` - Player name (if applicable)
 
-6. **Pull Column** (Column N)
-   - `Pull` - Format: "PlayerName (quality) [flags]"
-   - Example: "John Doe (Good Pull) flick io" or "Unknown Player (Brick)"
-
-7. **Other Events Columns** (Columns O-R) - Rare events
+8. **Other Events Columns** (Columns S-V) - Rare events
    - `Timeout` - "team" or "opponent" or empty
    - `Injury Sub` - Player name or empty
    - `Time Cap` - "hard" or "soft" or empty
    - `Side Switch` - "yes" or empty
    - `Halftime` - "yes" or empty
 
-8. **Point End Columns** (Columns S-U)
-   - `Point End Time` - Timestamp when point ended
-   - `Point Duration` - Duration in seconds
-   - `Point Winner` - "team" or "opponent"
-   - `Score After Point` - Format: "team_score-opponent_score"
-
-9. **Possession Tracking** (Columns V-W) - Optional, for detailed analysis
+9. **Possession Tracking** (Columns W-X) - Optional, for detailed analysis
    - `Possession #` - Sequential possession number within point
    - `Possession Type` - "offensive" or "defensive"
 
@@ -101,12 +101,12 @@ Data columns (left to right, most common first):
 
 **Example Row:**
 ```
-Point # | Point Start Time | Starting Position | Active Players | Thrower | Receiver | Throw Modifiers | Defender | Defense Modifiers | ...
-1       | 2024-01-15 10:00 | Offense          | Alice,Bob,...  |         |          |                 |          |                   | ...
-1       |                  |                  |                | Alice   | Bob      | huck            |          |                   | ...
-1       |                  |                  |                | Bob     | Charlie  | break           |          |                   | ...
-1       |                  |                  |                |         |          |                 | Dave     | interception      | ...
-1       |                  |                  |                |         |          |                 |          |                   | ... (point end)
+Point # | Point Start Time | Starting Position | Active Players | Point End Time | Point Duration | Point Winner | Score After Point | Pull | Thrower | Receiver | Throw Modifiers | Defender | Defense Modifiers | ...
+1       | 2024-01-15 10:00 | Offense          | Alice,Bob,...  |                |                |              |                   |      |         |          |                 |          |                   | ...
+1       |                  |                  |                |                |                |              |                   |      | Alice   | Bob      | huck            |          |                   | ...
+1       |                  |                  |                |                |                |              |                   |      | Bob     | Charlie  | break           |          |                   | ...
+1       |                  |                  |                |                |                |              |                   |      |         |          |                 | Dave     | interception      | ...
+1       |                  |                  |                | 2024-01-15 10:05 | 300           | team         | 1-0               |      |         |          |                 |          |                   | ... (point end)
 ```
 
 #### Phase 2: Server Architecture
