@@ -1,4 +1,4 @@
-## New feature: cLoud-based backend hosted on Google Sheets
+## New feature: Cloud-based backend hosted on Google Sheets
 
 I want to store Teams, Players, and Games in a backend hosted on the cloud. I want to use Google Sheets as a robust human-readable storage strategy. This app is restricted to "friends and family" for now, so it is fine to use a single Google Sheet to store all Teams (Players etc). Each Game is a separate tab in the spreadsheet, and are represented as a few header rows followed by a row-by-row serialization of each Point, Possession, and Events. The sheet should be optimized for human readability of the play-by-play events, for example with columns representing common plays (first throws - a column each for thrower, receiver, and a string listing modifiers [huck, sky, etc]; then defense, with column for defender then a string of modifier flags; then turnovers etc.). The rare events (timeouts, injury sub, etc)should be the rightmost columns.  The first couple of columns can be reserved for Point beginnings (including roster) and endings (including defense plays including "They Score" events). 
 
@@ -9,10 +9,16 @@ As for the cloud backend, I already have a small EC2 instance and can run a Node
 There are a few major reason to do this refactor:
 - Robust cloud backup of games 
 - Persistent between users, which allows:
-- Interactive handoff bwetween users - one player or coach can take on updating the game when the other sets down their phone to play or talk to players etc. 
+- Interactive handoff between users - one player or coach can take on updating the game when the other sets down their phone to play or talk to players etc. 
 - More easily human-readable summaries of games
 
-Note that Google Sheets can be slow to respond, and the app must continue working even if it loses connectivity. This means the Google Sheets storage is probably more of a continuously and aysnchronously updated log of the game, than the actual storage relied on by the app for play-by-play event updates.  
+Note that Google Sheets can be slow to respond, and the app must continue working even if it loses connectivity. This means the Google Sheets storage is probably more of a continuously and asynchronously updated log of the game, than the actual storage relied on by the app for play-by-play event updates.  
+
+**Architecture Decision: REST API Only**
+- Using REST API for all operations (no WebSocket for MVP)
+- Handoff between users can take a couple seconds (periodic sync/polling is acceptable)
+- Offline-first design is more important than real-time updates
+- WebSocket can be added as a future enhancement if needed
 
 ### Detailed plan
 
@@ -126,9 +132,6 @@ ultistats_server/
 │   ├── service.py             # Reuse SheetsService class pattern
 │   ├── operations.py          # CRUD operations for Teams, Players, Games
 │   └── serialization.py       # Convert between app data models and Sheets format
-├── websocket/                 # WebSocket handlers
-│   ├── __init__.py
-│   └── handlers.py           # Real-time game update handlers
 └── static/                    # Static files (if needed)
 ```
 
@@ -148,78 +151,82 @@ ultistats_server/
    - `create_game(game_data)` - Create game in Games sheet + create new tab
    - `get_game_data(game_id)` - Read play-by-play from game tab
    - `append_game_event(game_id, event_data)` - Add event row to game tab
-   - `update_point_end(game_id, point_data)` - Update point end columns
+   - `append_game_events_batch(game_id, events)` - Batch append multiple events (for efficiency)
 
 3. **Sheets Serialization** (`sheets/serialization.py`)
    - `serialize_point_to_rows(point)` - Convert Point object to sheet rows
    - `serialize_event_to_row(event, point_num, possession_num)` - Convert Event to row
-   - `deserialize_game_tab(game_id)` - Read tab and reconstruct Game object
+   - `serialize_game_to_sheet_rows(game)` - Convert full game to sheet rows
    - `format_throw_modifiers(throw_event)` - Convert flags to space-separated string
    - `parse_throw_modifiers(modifier_string)` - Parse string back to flags
    - Similar functions for Defense, Turnover, Violation, Pull, Other events
 
-4. **API Endpoints** (`main.py`)
-   - `GET /teams` - List all teams
-   - `POST /teams` - Create new team
-   - `GET /teams/{team_id}/players` - Get team roster
-   - `POST /teams/{team_id}/players` - Add player to team
-   - `GET /teams/{team_id}/games` - List games for team
-   - `POST /games` - Create new game (creates tab)
-   - `GET /games/{game_id}` - Get game data
-   - `POST /games/{game_id}/events` - Append event to game (async, non-blocking)
-   - `POST /games/{game_id}/points/{point_id}/end` - Mark point as ended
-   - `POST /games/{game_id}/end` - End game
-   - `WebSocket /ws/{game_id}` - Real-time updates
-
-5. **WebSocket Handler** (`websocket/handlers.py`)
-   - Reuse `ConnectionManager` pattern from license_plate_server
-   - Message types:
-     - `new_event` - Broadcast when event is added
-     - `point_started` - Broadcast when point begins
-     - `point_ended` - Broadcast when point ends
-     - `game_ended` - Broadcast when game ends
-     - `sync_request` - Client requests full game state
-     - `sync_response` - Server sends full game state
+4. **REST API Endpoints** (`main.py`)
+   - **Teams:**
+     - `GET /teams` - List all teams
+     - `POST /teams` - Create new team
+     - `GET /teams/{team_id}` - Get team details
+     - `PUT /teams/{team_id}` - Update team
+   
+   - **Players:**
+     - `GET /teams/{team_id}/players` - Get team roster
+     - `POST /teams/{team_id}/players` - Add player to team
+     - `GET /players/{player_id}` - Get player details
+   
+   - **Games:**
+     - `GET /teams/{team_id}/games` - List games for team
+     - `POST /games` - Create new game (creates tab)
+     - `GET /games/{game_id}` - Get game metadata
+     - `GET /games/{game_id}/data` - Get all play-by-play data (for sync/handoff)
+     - `POST /games/{game_id}/events` - Append single event to game
+     - `POST /games/{game_id}/events/batch` - Batch append multiple events (for efficiency)
+     - `POST /games/{game_id}/points/{point_id}/end` - Mark point as ended
+     - `POST /games/{game_id}/end` - End game
+     - `POST /games/{game_id}/sync` - Full game sync (for handoff - uploads complete game state)
+   
+   - **Authentication:**
+     - `POST /auth/register` - Register new user
+     - `POST /auth/login` - Login and get JWT token
+     - `GET /auth/me` - Get current user info
 
 #### Phase 3: Client-Side Architecture
 
 **Storage Strategy:**
 - **Primary Storage**: LocalStorage (unchanged) - app continues to work offline
-- **Secondary Storage**: Google Sheets via server - async backup and sync
+- **Secondary Storage**: Google Sheets via REST API - async backup and sync
 - **Sync Queue**: Queue of pending operations when offline
+- **Periodic Sync**: Client polls server periodically (every 5-10 seconds) when game is active for handoff support
 
 **New Modules:**
 
-1. **`data/sync.js`** - Synchronization layer
-   - `syncToCloud()` - Send local changes to server
-   - `syncFromCloud()` - Pull latest changes from server
+1. **`data/sync.js`** - Synchronization layer (REST API based)
+   - `syncToCloud()` - Send local changes to server via REST
+   - `syncFromCloud(gameId)` - Pull latest changes from server via REST
    - `queueOperation(operation)` - Queue operation when offline
    - `processSyncQueue()` - Process queued operations when online
    - `isOnline()` - Check connectivity
    - `getLastSyncTimestamp()` - Track last successful sync
+   - `startPeriodicSync(gameId, interval)` - Start periodic polling for handoff
+   - `stopPeriodicSync()` - Stop periodic polling
 
-2. **`data/websocket.js`** - WebSocket client
-   - `connectToGame(gameId, token)` - Establish WebSocket connection
-   - `sendEvent(event)` - Send event to server
-   - `onEventReceived(callback)` - Handle incoming events
-   - `onPointStarted(callback)` - Handle point start broadcasts
-   - `onPointEnded(callback)` - Handle point end broadcasts
-   - Handle reconnection logic
-
-3. **Modify `data/storage.js`**:
+2. **Modify `data/storage.js`**:
    - Add hooks after `saveAllTeamsData()` to trigger `syncToCloud()`
-   - Add `syncGameToCloud(game)` - Serialize and send game to server
-   - Add `syncEventToCloud(gameId, pointId, possessionId, event)` - Send single event
+   - Add `syncGameToCloud(game)` - Serialize and send game to server via REST
+   - Add `syncEventToCloud(gameId, eventRow)` - Send single event via REST
+   - Add `syncEventsBatch(gameId, eventRows)` - Batch send multiple events
    - Make sync operations async and non-blocking (fire-and-forget)
+   - Add `fullGameSync(gameId, gameData)` - Full game sync for handoff
 
 **Integration Points:**
 
 1. **Game Creation** (`game/gameLogic.js`):
    - After creating game locally, call `syncToCloud()` to create game tab
    - Store `gameId` (server-generated) in Game object
+   - Start periodic sync polling
 
 2. **Event Creation** (`playByPlay/offenseScreen.js`, `playByPlay/defenseScreen.js`, etc.):
    - After adding event locally, queue `syncEventToCloud()` operation
+   - Batch events when possible (collect events for 1-2 seconds, then send batch)
    - Don't wait for server response before continuing
 
 3. **Point Management** (`game/pointManagement.js`):
@@ -229,6 +236,13 @@ ultistats_server/
 4. **Game End** (`game/gameLogic.js`):
    - On game end: sync final game state to server
    - Update Games sheet with final scores
+   - Stop periodic sync polling
+
+5. **Handoff Flow** (new):
+   - User A: App periodically syncs to server (every 5-10 seconds)
+   - User B: On app start/refresh, calls `syncFromCloud(gameId)` to get latest state
+   - User B: Merges cloud state with local state (conflict resolution)
+   - User B: Continues tracking from latest state
 
 **Offline-First Flow:**
 1. User action → Save to LocalStorage immediately (unchanged behavior)
@@ -237,6 +251,7 @@ ultistats_server/
 4. If offline: queue operation for later
 5. On reconnect: process sync queue
 6. On app startup: check for pending syncs and process
+7. During active game: periodic polling for handoff support
 
 **Conflict Resolution:**
 - Last-write-wins for events (server timestamp wins)
@@ -244,13 +259,14 @@ ultistats_server/
 - If local is newer: send to server
 - If cloud is newer: update local storage
 - For simultaneous edits: server timestamp breaks tie
+- Full game sync endpoint allows complete state replacement for handoff
 
 #### Phase 4: Authentication & Authorization
 
 **Reuse from license_plate_server:**
 - JWT-based authentication
 - User registration/login endpoints
-- WebSocket token authentication
+- Token-based REST API authentication
 
 **User Model:**
 - Store users in Google Sheets (Users sheet)
@@ -260,49 +276,51 @@ ultistats_server/
 **Client Authentication:**
 - Add login screen to PWA (optional - can work offline without login)
 - Store JWT token in LocalStorage
-- Include token in WebSocket connection and API requests
+- Include token in REST API requests (Authorization header)
 - If no token: app works offline-only (no sync)
 
 #### Phase 5: Implementation Phases
 
-**Phase 5.1: Google Sheets Serialization (Foundation)**
-- [ ] Create `sheets/serialization.py` with conversion functions
-- [ ] Design and document exact column schema
-- [ ] Write unit tests for serialization/deserialization
-- [ ] Create sample game tab manually to validate readability
-- [ ] Iterate on schema based on readability feedback
+**Phase 5.1: Google Sheets Serialization (Foundation)** ✅ COMPLETE
+- [x] Create `sheets/serialization.py` with conversion functions
+- [x] Design and document exact column schema
+- [x] Write unit tests for serialization/deserialization
+- [x] Create sample game tab manually to validate readability
+- [x] Test with real game data
 
-**Phase 5.2: Server Setup**
-- [ ] Create `ultistats_server/` directory structure
-- [ ] Copy and adapt `config.py` from license_plate_server
-- [ ] Copy and adapt `sheets/service.py` (SheetsService)
-- [ ] Copy and adapt `auth/` modules
-- [ ] Set up Google Sheets API credentials
-- [ ] Create master spreadsheet with Teams, Players, Games sheets
-- [ ] Test basic read/write operations
+**Phase 5.2: Server Setup** ✅ COMPLETE
+- [x] Create `ultistats_server/` directory structure
+- [x] Copy and adapt `config.py` from license_plate_server
+- [x] Copy and adapt `sheets/service.py` (SheetsService)
+- [x] Copy and adapt `auth/` modules
+- [x] Set up Google Sheets API credentials (reusing license plate game credentials)
+- [x] Create master spreadsheet with Teams, Players, Games sheets
+- [x] Test basic read/write operations
 
-**Phase 5.3: Server API Implementation**
-- [ ] Implement `sheets/operations.py` for Teams, Players, Games CRUD
-- [ ] Implement `sheets/serialization.py` for game tab format
-- [ ] Implement REST API endpoints in `main.py`
-- [ ] Test API endpoints with Postman/curl
-- [ ] Implement WebSocket handler for real-time updates
-- [ ] Test WebSocket connection and message passing
+**Phase 5.3: Server API Implementation** 🔄 IN PROGRESS
+- [x] Implement `sheets/operations.py` for Teams, Players, Games CRUD
+- [x] Implement `sheets/serialization.py` for game tab format
+- [x] Implement REST API endpoints in `main.py`
+- [ ] Add batch event endpoint (`POST /games/{game_id}/events/batch`)
+- [ ] Add full game sync endpoint (`POST /games/{game_id}/sync`)
+- [ ] Test API endpoints with curl/Postman
+- [ ] Remove WebSocket placeholder endpoint
 
 **Phase 5.4: Client Sync Layer**
-- [ ] Create `data/sync.js` module
-- [ ] Create `data/websocket.js` module
+- [ ] Create `data/sync.js` module (REST API based)
 - [ ] Modify `data/storage.js` to add sync hooks
 - [ ] Implement sync queue for offline operations
+- [ ] Implement periodic sync polling for handoff
 - [ ] Test offline/online transitions
+- [ ] Test sync queue processing
 
 **Phase 5.5: Client Integration**
 - [ ] Integrate sync into game creation flow
-- [ ] Integrate sync into event creation flows
+- [ ] Integrate sync into event creation flows (with batching)
 - [ ] Integrate sync into point management
-- [ ] Add WebSocket connection on game start
-- [ ] Handle real-time updates from other users
-- [ ] Test multi-user scenarios
+- [ ] Add periodic sync polling on game start
+- [ ] Implement handoff flow (sync on app start/refresh)
+- [ ] Test multi-user handoff scenarios
 
 **Phase 5.6: Testing & Refinement**
 - [ ] Test full game tracking with cloud sync
@@ -326,9 +344,9 @@ ultistats_server/
 **Performance:**
 - Google Sheets API has rate limits (~100 requests/100 seconds/user)
 - Batch operations where possible (append multiple rows at once)
-- Debounce rapid event creation (batch events within 1-2 seconds)
-- Use WebSocket for real-time updates (avoid polling)
-- Cache game state on server to reduce Sheets reads
+- Debounce rapid event creation (batch events within 1-2 seconds before sending)
+- Periodic sync polling every 5-10 seconds (configurable, can be disabled)
+- Cache game state on server to reduce Sheets reads (future optimization)
 
 **Error Handling:**
 - Retry logic with exponential backoff for failed syncs
@@ -336,12 +354,14 @@ ultistats_server/
 - Log sync errors but don't block user actions
 - Show sync status indicator in UI (optional)
 - Handle Sheets API quota errors gracefully
+- Handle network timeouts gracefully
 
 **Data Consistency:**
 - Use timestamps for conflict resolution
 - Validate data before writing to Sheets
 - Handle partial writes (if point start succeeds but event fails)
 - Periodic full sync to catch any inconsistencies
+- Full game sync endpoint for handoff scenarios
 
 **Security:**
 - Keep service account credentials secure (never commit to git)
@@ -349,16 +369,19 @@ ultistats_server/
 - Validate all user input on server
 - Rate limit API endpoints
 - Sanitize data before writing to Sheets (prevent injection)
+- JWT token expiration and refresh
 
 **Monitoring:**
 - Log all sync operations
 - Track sync success/failure rates
-- Monitor WebSocket connection counts
+- Monitor API request rates
 - Alert on Sheets API errors
 - Track game creation and event rates
+- Monitor sync queue sizes
 
 #### Phase 7: Future Enhancements (Post-MVP)
 
+- [ ] **WebSocket support** - Real-time updates for instant collaboration (if needed)
 - [ ] Conflict resolution UI (show conflicts to user)
 - [ ] Sync status dashboard
 - [ ] Export game data to other formats (CSV, JSON)
@@ -368,3 +391,4 @@ ultistats_server/
 - [ ] Historical game browsing
 - [ ] Automated backups
 - [ ] Mobile app notifications for sync status
+- [ ] Optimistic UI updates with rollback on sync failure

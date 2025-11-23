@@ -1,0 +1,22 @@
+.selectionBox {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px;
+    margin: 5px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.1s ease-in-out;
+    will-change: background-color;
+    --selected-bg: #e0e0e0;
+    --unselected-bg: transparent;
+}
+
+.selectionBox.selected {
+    background-color: var(--selected-bg);
+}
+
+.selectionBox:not(.selected) {
+    background-color: var(--unselected-bg);
+} 
