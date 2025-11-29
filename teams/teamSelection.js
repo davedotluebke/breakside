@@ -110,7 +110,7 @@ function showSelectTeamScreen(firsttime = false) {
             }
 
             const deleteBtn = document.createElement('button');
-            deleteBtn.textContent = '🗑️';
+            deleteBtn.innerHTML = '<i class="fas fa-trash" style="color: #dc3545;"></i>';
             deleteBtn.classList.add('icon-button');
             deleteBtn.title = 'Delete Game';
             deleteBtn.onclick = (e) => {
@@ -149,23 +149,16 @@ function showSelectTeamScreen(firsttime = false) {
 }
 
 async function populateCloudGames() {
-    console.log('populateCloudGames: Starting...');
     const listElement = document.getElementById('cloudGamesList');
-    if (!listElement) {
-        console.log('populateCloudGames: cloudGamesList element not found');
-        return;
-    }
+    if (!listElement) return;
 
     if (typeof listServerGames !== 'function') {
-        console.log('populateCloudGames: listServerGames is not a function');
         listElement.innerHTML = '<p>Cloud sync not available.</p>';
         return;
     }
 
     try {
-        console.log('populateCloudGames: Calling listServerGames...');
         const games = await listServerGames();
-        console.log('populateCloudGames: Received games:', games);
         
         if (games.length === 0) {
             listElement.innerHTML = '<p>No games found on server.</p>';
@@ -205,30 +198,54 @@ async function populateCloudGames() {
 
             gamesByTeam[teamName].forEach(game => {
                 const gameItem = document.createElement('li');
+                // Style fix: Flex layout for alignment
+                gameItem.style.display = 'flex';
+                gameItem.style.justifyContent = 'space-between';
+                gameItem.style.alignItems = 'center';
+                gameItem.style.padding = '5px 0';
+                
                 const dateStr = game.game_start_timestamp ? new Date(game.game_start_timestamp).toLocaleDateString() : 'Unknown Date';
                 
                 const gameText = document.createElement('span');
                 gameText.textContent = `${dateStr}: vs ${game.opponent} (${game.scores.team}-${game.scores.opponent})`;
                 gameItem.appendChild(gameText);
 
+                // Buttons Container
+                const buttonsDiv = document.createElement('div');
+                buttonsDiv.style.display = 'flex';
+                buttonsDiv.style.gap = '5px';
+
                 // Load Button
                 const loadBtn = document.createElement('button');
-                loadBtn.textContent = '⬇️ Load';
+                // Style fix: Use dark color for text/icon
+                loadBtn.innerHTML = '<i class="fas fa-download" style="color: #333;"></i> Load';
                 loadBtn.classList.add('icon-button');
                 loadBtn.title = 'Download to Device';
-                loadBtn.style.marginLeft = '10px';
+                loadBtn.style.color = '#333'; // Ensure text is visible
+                loadBtn.style.width = 'auto'; // Allow width to fit text
+                loadBtn.style.padding = '5px 10px';
                 loadBtn.onclick = () => importCloudGame(game.game_id);
                 
                 // Check if we already have this game locally (by ID or roughly by timestamp/opponent)
-                // This is a bit naive but helpful visual cue
                 const isLocal = teams.some(t => t.games.some(g => g.id === game.game_id));
                 if (isLocal) {
-                    loadBtn.textContent = '✅ Local';
+                    loadBtn.innerHTML = '<i class="fas fa-check" style="color: green;"></i> Local';
                     loadBtn.disabled = true;
                     loadBtn.style.opacity = '0.7';
+                    loadBtn.style.color = '#333';
                 }
 
-                gameItem.appendChild(loadBtn);
+                // Delete Button
+                const deleteBtn = document.createElement('button');
+                deleteBtn.innerHTML = '<i class="fas fa-trash" style="color: #dc3545;"></i>';
+                deleteBtn.classList.add('icon-button');
+                deleteBtn.title = 'Delete from Cloud';
+                deleteBtn.onclick = () => deleteCloudGame(game.game_id);
+
+                buttonsDiv.appendChild(loadBtn);
+                buttonsDiv.appendChild(deleteBtn);
+                gameItem.appendChild(buttonsDiv);
+                
                 gamesList.appendChild(gameItem);
             });
 
@@ -239,17 +256,29 @@ async function populateCloudGames() {
 
         listElement.innerHTML = '';
         listElement.appendChild(table);
-        console.log('populateCloudGames: Table appended');
         
-        // Re-attach refresh listener if needed (or just let the showSelectTeamScreen handle the button creation)
+        // Re-attach refresh listener
         const refreshBtn = document.getElementById('refreshCloudGamesBtn');
         if (refreshBtn) {
+            // Style fix: Ensure refresh icon is visible
+            refreshBtn.innerHTML = '<i class="fas fa-sync" style="color: #333;"></i>';
             refreshBtn.onclick = populateCloudGames;
         }
 
     } catch (error) {
         console.error('Error populating cloud games:', error);
         listElement.innerHTML = '<p>Error loading cloud games. Check connection.</p>';
+    }
+}
+
+async function deleteCloudGame(gameId) {
+    if (!confirm('Are you sure you want to delete this game from the cloud? This cannot be undone.')) return;
+    
+    try {
+        await deleteGameFromCloud(gameId);
+        populateCloudGames(); // Refresh list
+    } catch (error) {
+        alert('Failed to delete game: ' + error.message);
     }
 }
 
