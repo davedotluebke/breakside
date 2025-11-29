@@ -1,11 +1,15 @@
-const cacheName = 'v1';
+const cacheName = 'v2';
 
 self.addEventListener('install', (e) => {
     console.log('Service Worker: Installed');
+    self.skipWaiting(); // Force activation
 });
 
 self.addEventListener('activate', (e) => {
     console.log('Service Worker: Activated');
+    // Take control of all clients immediately
+    e.waitUntil(clients.claim());
+    
     // Remove unwanted caches
     e.waitUntil(
         caches.keys().then(cacheNames => {
@@ -22,7 +26,17 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', e => {
-    console.log('Service Worker: Fetching');
+    // Only cache GET requests
+    if (e.request.method !== 'GET') {
+        return;
+    }
+
+    // Don't cache API calls (localhost:8000)
+    if (e.request.url.includes(':8000/')) {
+        return;
+    }
+
+    console.log('Service Worker: Fetching', e.request.url);
     e.respondWith(
         Promise.race([
             // Try network first

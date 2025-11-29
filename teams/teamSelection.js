@@ -135,7 +135,186 @@ function showSelectTeamScreen(firsttime = false) {
     });
 
     teamListElement.appendChild(table);
+
+    // Cloud Games Section
+    const cloudGamesContainer = document.createElement('div');
+    cloudGamesContainer.id = 'cloudGamesContainer';
+    cloudGamesContainer.innerHTML = '<h3>Cloud Games <button id="refreshCloudGamesBtn" class="icon-button"><i class="fas fa-sync"></i></button></h3><div id="cloudGamesList">Loading...</div>';
+    teamListElement.appendChild(cloudGamesContainer);
+
+    // Populate cloud games asynchronously
+    populateCloudGames();
+
     showScreen('selectTeamScreen');
+}
+
+async function populateCloudGames() {
+    console.log('populateCloudGames: Starting...');
+    const listElement = document.getElementById('cloudGamesList');
+    if (!listElement) {
+        console.log('populateCloudGames: cloudGamesList element not found');
+        return;
+    }
+
+    if (typeof listServerGames !== 'function') {
+        console.log('populateCloudGames: listServerGames is not a function');
+        listElement.innerHTML = '<p>Cloud sync not available.</p>';
+        return;
+    }
+
+    try {
+        console.log('populateCloudGames: Calling listServerGames...');
+        const games = await listServerGames();
+        console.log('populateCloudGames: Received games:', games);
+        
+        if (games.length === 0) {
+            listElement.innerHTML = '<p>No games found on server.</p>';
+            return;
+        }
+
+        const table = document.createElement('table');
+        table.classList.add('team-selection-table');
+        table.style.marginTop = '10px';
+
+        // Group by team
+        const gamesByTeam = {};
+        games.forEach(game => {
+            const teamName = game.team || 'Unknown Team';
+            if (!gamesByTeam[teamName]) {
+                gamesByTeam[teamName] = [];
+            }
+            gamesByTeam[teamName].push(game);
+        });
+
+        Object.keys(gamesByTeam).sort().forEach(teamName => {
+            const teamRow = document.createElement('tr');
+            teamRow.classList.add('team-row');
+            
+            const teamNameCell = document.createElement('td');
+            teamNameCell.textContent = teamName;
+            teamNameCell.classList.add('team-name');
+            teamRow.appendChild(teamNameCell);
+
+            // Spacer for delete button column to match above table
+            const spacerCell = document.createElement('td');
+            teamRow.appendChild(spacerCell);
+
+            const gamesCell = document.createElement('td');
+            const gamesList = document.createElement('ul');
+            gamesList.classList.add('games-list');
+
+            gamesByTeam[teamName].forEach(game => {
+                const gameItem = document.createElement('li');
+                const dateStr = game.game_start_timestamp ? new Date(game.game_start_timestamp).toLocaleDateString() : 'Unknown Date';
+                
+                const gameText = document.createElement('span');
+                gameText.textContent = `${dateStr}: vs ${game.opponent} (${game.scores.team}-${game.scores.opponent})`;
+                gameItem.appendChild(gameText);
+
+                // Load Button
+                const loadBtn = document.createElement('button');
+                loadBtn.textContent = '⬇️ Load';
+                loadBtn.classList.add('icon-button');
+                loadBtn.title = 'Download to Device';
+                loadBtn.style.marginLeft = '10px';
+                loadBtn.onclick = () => importCloudGame(game.game_id);
+                
+                // Check if we already have this game locally (by ID or roughly by timestamp/opponent)
+                // This is a bit naive but helpful visual cue
+                const isLocal = teams.some(t => t.games.some(g => g.id === game.game_id));
+                if (isLocal) {
+                    loadBtn.textContent = '✅ Local';
+                    loadBtn.disabled = true;
+                    loadBtn.style.opacity = '0.7';
+                }
+
+                gameItem.appendChild(loadBtn);
+                gamesList.appendChild(gameItem);
+            });
+
+            gamesCell.appendChild(gamesList);
+            teamRow.appendChild(gamesCell);
+            table.appendChild(teamRow);
+        });
+
+        listElement.innerHTML = '';
+        listElement.appendChild(table);
+        console.log('populateCloudGames: Table appended');
+        
+        // Re-attach refresh listener if needed (or just let the showSelectTeamScreen handle the button creation)
+        const refreshBtn = document.getElementById('refreshCloudGamesBtn');
+        if (refreshBtn) {
+            refreshBtn.onclick = populateCloudGames;
+        }
+
+    } catch (error) {
+        console.error('Error populating cloud games:', error);
+        listElement.innerHTML = '<p>Error loading cloud games. Check connection.</p>';
+    }
+}
+
+async function importCloudGame(gameId) {
+    if (!confirm('Download this game from the cloud?')) return;
+
+    try {
+        const game = await loadGameFromCloud(gameId);
+        if (!game) throw new Error('Failed to load game data');
+
+        console.log('Importing game:', game);
+
+        // Find or create team
+        let team = teams.find(t => t.name === game.team);
+        if (!team) {
+            if (confirm(`Team "${game.team}" does not exist locally. Create it?`)) {
+                team = new Team(game.team);
+                teams.push(team);
+            } else {
+                return;
+            }
+        }
+
+        // Check if game already exists in team (by ID)
+        const existingIndex = team.games.findIndex(g => g.id === game.id);
+        if (existingIndex !== -1) {
+            if (!confirm('This game already exists locally. Overwrite it?')) {
+                return;
+            }
+            // Replace existing
+            team.games[existingIndex] = game;
+        } else {
+            // Add new
+            team.games.push(game);
+        }
+        
+        // Ensure players from the game are in the roster
+        // Game points contain player names. We need to make sure they exist in team.teamRoster
+        const playerNames = new Set();
+        if (game.points) {
+            game.points.forEach(p => {
+                if (p.players) p.players.forEach(name => playerNames.add(name));
+            });
+        }
+        
+        playerNames.forEach(name => {
+            if (!team.teamRoster.find(p => p.name === name)) {
+                // Add new player to roster
+                // We don't know gender/number so use defaults
+                const newPlayer = new Player(name);
+                // Try to guess gender from name using existing helper if possible, or just default
+                team.teamRoster.push(newPlayer);
+            }
+        });
+
+        // Update storage
+        saveAllTeamsData();
+        
+        alert('Game imported successfully!');
+        showSelectTeamScreen(); // Refresh UI
+
+    } catch (error) {
+        console.error('Import failed:', error);
+        alert('Failed to import game: ' + error.message);
+    }
 }
 
 function removeGameStatsFromRoster(team, game) {

@@ -105,6 +105,19 @@ function saveAllTeamsData() {
 
     // Log each team's data
     teams.forEach(team => logTeamData(team));
+
+    // SYNC: Attempt to sync current game to cloud if available
+    if (typeof syncGameToCloud === 'function' && typeof currentGame === 'function') {
+        try {
+            const game = currentGame();
+            if (game) {
+                syncGameToCloud(game);
+            }
+        } catch (e) {
+            // Ignore errors if no current game (e.g. during initialization)
+            console.log("Skipping cloud sync: " + e.message);
+        }
+    }
 }
 
 /** 
