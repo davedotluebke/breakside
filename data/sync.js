@@ -194,21 +194,17 @@ async function processSyncQueue() {
  * @returns {Promise<Array>} List of games metadata
  */
 async function listServerGames() {
-    console.log('listServerGames: Check online status', isOnline);
     if (!isOnline) {
         console.warn('Cannot list server games: Offline');
         return [];
     }
 
     try {
-        console.log('listServerGames: Fetching from', `${API_BASE_URL}/games`);
         const response = await fetch(`${API_BASE_URL}/games`);
-        console.log('listServerGames: Response status', response.status);
         if (!response.ok) {
             throw new Error(`Failed to list games: ${response.statusText}`);
         }
         const data = await response.json();
-        console.log('listServerGames: Data received', data);
         return data.games || [];
     } catch (error) {
         console.error('Error listing server games:', error);
@@ -292,8 +288,31 @@ async function loadGameFromCloud(gameId) {
 }
 
 
+async function deleteGameFromCloud(gameId) {
+    if (!isOnline) {
+        throw new Error('Cannot delete game: Offline');
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/games/${gameId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to delete game: ${response.statusText}`);
+        }
+        
+        console.log(`✅ Deleted game ${gameId}`);
+        return true;
+    } catch (error) {
+        console.error(`Error deleting game ${gameId}:`, error);
+        throw error;
+    }
+}
+
 // Export functions
 window.syncGameToCloud = syncGameToCloud;
 window.generateGameId = generateGameId;
 window.listServerGames = listServerGames;
 window.loadGameFromCloud = loadGameFromCloud;
+window.deleteGameFromCloud = deleteGameFromCloud;
