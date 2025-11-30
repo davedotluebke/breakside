@@ -777,6 +777,7 @@ function createKeyPlayTurnoverEvent(player) {
     document.getElementById('keyPlayDialog').style.display = 'none';
     
     console.log('Turnover event created:', turnoverEvent.summarize());
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
 }
 
 function updateKeyPlayPlayerHeader(subButtonType, panelType) {

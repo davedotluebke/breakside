@@ -1,0 +1,217 @@
+{
+  "id": "2025-11-30_CUDO-Mixed_vs_Bedbugs_1764544153352",
+  "team": "CUDO Mixed",
+  "opponent": "Bedbugs",
+  "startingPosition": "defense",
+  "scores": {
+    "team": 3,
+    "opponent": 1
+  },
+  "gameStartTimestamp": "2025-11-30T23:09:13.352Z",
+  "gameEndTimestamp": null,
+  "alternateGenderRatio": "Alternating",
+  "alternateGenderPulls": true,
+  "startingGenderRatio": "FMP",
+  "lastLineUsed": null,
+  "points": [
+    {
+      "players": [
+        "Abby",
+        "Avery",
+        "Curtis",
+        "Cyrus",
+        "Ella",
+        "Felix",
+        "Finn"
+      ],
+      "startingPosition": "defense",
+      "winner": "team",
+      "startTimestamp": "2025-11-30T23:10:16.070Z",
+      "endTimestamp": "2025-11-30T23:10:37.082Z",
+      "totalPointTime": 21012,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Pull",
+              "puller": "Abby",
+              "pullerGender": "FMP",
+              "quality": "Good Pull"
+            },
+            {
+              "type": "Defense",
+              "defender": "Abby",
+              "interception_flag": true
+            }
+          ]
+        },
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Abby",
+              "receiver": "Avery"
+            },
+            {
+              "type": "Throw",
+              "thrower": "Avery",
+              "receiver": "Cyrus",
+              "huck_flag": true
+            },
+            {
+              "type": "Throw",
+              "thrower": "Cyrus",
+              "receiver": "Ella",
+              "break_flag": true,
+              "score_flag": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Abby",
+        "Avery",
+        "Curtis",
+        "Cyrus",
+        "Ella",
+        "Felix",
+        "Henry"
+      ],
+      "startingPosition": "defense",
+      "winner": "opponent",
+      "startTimestamp": "2025-11-30T23:11:47.591Z",
+      "endTimestamp": "2025-11-30T23:12:25.702Z",
+      "totalPointTime": 38111,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Pull",
+              "puller": "Curtis",
+              "pullerGender": "MMP",
+              "quality": "Okay Pull"
+            },
+            {
+              "type": "Defense"
+            }
+          ]
+        },
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Cyrus",
+              "receiver": "Abby"
+            },
+            {
+              "type": "Throw",
+              "thrower": "Abby",
+              "receiver": "Felix"
+            },
+            {
+              "type": "Turnover",
+              "thrower": "Felix",
+              "throwaway_flag": true,
+              "huck_flag": true
+            }
+          ]
+        },
+        {
+          "offensive": false,
+          "events": []
+        }
+      ]
+    },
+    {
+      "players": [
+        "Abby",
+        "Avery",
+        "Curtis",
+        "Cyrus",
+        "Ella",
+        "Felix",
+        "Henry"
+      ],
+      "startingPosition": "offense",
+      "winner": "team",
+      "startTimestamp": "2025-11-30T23:12:55.198Z",
+      "endTimestamp": "2025-11-30T23:13:14.466Z",
+      "totalPointTime": 19268,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Cyrus",
+              "receiver": "Avery",
+              "huck_flag": true,
+              "sky_flag": true
+            },
+            {
+              "type": "Throw",
+              "thrower": "Avery",
+              "receiver": "Curtis",
+              "score_flag": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Abby",
+        "Avery",
+        "Curtis",
+        "Cyrus",
+        "Ella",
+        "Felix",
+        "Finn"
+      ],
+      "startingPosition": "defense",
+      "winner": "team",
+      "startTimestamp": "2025-11-30T23:14:04.968Z",
+      "endTimestamp": "2025-11-30T23:14:19.899Z",
+      "totalPointTime": 14931,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Pull",
+              "puller": "Abby",
+              "pullerGender": "FMP",
+              "quality": "Good Pull"
+            },
+            {
+              "type": "Defense",
+              "defender": "Ella",
+              "sky_flag": true
+            }
+          ]
+        },
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Felix",
+              "receiver": "Abby",
+              "score_flag": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

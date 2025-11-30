@@ -1,0 +1,36 @@
+{
+  "id": "2025-11-30_Sample-Team_vs_Test-Viewer-6_1764537850938",
+  "team": "Sample Team",
+  "opponent": "Test Viewer 6",
+  "startingPosition": "offense",
+  "scores": {
+    "team": 0,
+    "opponent": 0
+  },
+  "gameStartTimestamp": "2025-11-30T21:24:10.938Z",
+  "gameEndTimestamp": null,
+  "alternateGenderRatio": "No",
+  "alternateGenderPulls": false,
+  "startingGenderRatio": null,
+  "lastLineUsed": null,
+  "points": [
+    {
+      "players": [
+        "Abby",
+        "Avery",
+        "Cesc",
+        "Cyrus J",
+        "Cyrus L",
+        "David",
+        "James"
+      ],
+      "startingPosition": "offense",
+      "winner": "",
+      "startTimestamp": "2025-11-30T21:27:57.404Z",
+      "endTimestamp": null,
+      "totalPointTime": 0,
+      "lastPauseTime": null,
+      "possessions": []
+    }
+  ]
+}

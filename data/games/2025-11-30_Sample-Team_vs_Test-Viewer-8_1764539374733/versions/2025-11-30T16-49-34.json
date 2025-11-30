@@ -1,0 +1,17 @@
+{
+  "id": "2025-11-30_Sample-Team_vs_Test-Viewer-8_1764539374733",
+  "team": "Sample Team",
+  "opponent": "Test Viewer 8",
+  "startingPosition": "offense",
+  "scores": {
+    "team": 0,
+    "opponent": 0
+  },
+  "gameStartTimestamp": "2025-11-30T21:49:34.732Z",
+  "gameEndTimestamp": null,
+  "alternateGenderRatio": "No",
+  "alternateGenderPulls": false,
+  "startingGenderRatio": null,
+  "lastLineUsed": null,
+  "points": []
+}

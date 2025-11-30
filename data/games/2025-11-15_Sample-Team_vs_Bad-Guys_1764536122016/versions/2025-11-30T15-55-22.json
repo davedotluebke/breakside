@@ -1,0 +1,165 @@
+{
+  "id": "2025-11-15_Sample-Team_vs_Bad-Guys_1764536122016",
+  "team": "Sample Team",
+  "opponent": "Bad Guys",
+  "startingPosition": "offense",
+  "scores": {
+    "team": 0,
+    "opponent": 0
+  },
+  "gameStartTimestamp": "2025-11-15T12:43:49.551Z",
+  "gameEndTimestamp": null,
+  "alternateGenderRatio": "2:2",
+  "alternateGenderPulls": true,
+  "startingGenderRatio": null,
+  "lastLineUsed": null,
+  "points": [
+    {
+      "players": [
+        "Abby",
+        "Avery",
+        "Cesc",
+        "Cyrus J"
+      ],
+      "startingPosition": "offense",
+      "winner": "team",
+      "startTimestamp": "2025-11-15T12:44:32.367Z",
+      "endTimestamp": "2025-11-15T12:44:32.367Z",
+      "totalPointTime": 2494,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Abby",
+              "receiver": "Avery",
+              "score_flag": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Abby",
+        "Avery",
+        "Cesc",
+        "Cyrus J"
+      ],
+      "startingPosition": "defense",
+      "winner": "opponent",
+      "startTimestamp": "2025-11-15T12:44:53.850Z",
+      "endTimestamp": "2025-11-15T12:44:53.850Z",
+      "totalPointTime": 6597,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Pull",
+              "puller": "Abby",
+              "pullerGender": "FMP",
+              "quality": "Good Pull"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Cyrus L",
+        "David",
+        "James",
+        "Leif"
+      ],
+      "startingPosition": "offense",
+      "winner": "team",
+      "startTimestamp": "2025-11-29T01:34:50.266Z",
+      "endTimestamp": "2025-11-29T01:34:50.266Z",
+      "totalPointTime": 1677,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Cyrus L",
+              "receiver": "David",
+              "score_flag": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Cyrus L",
+        "David",
+        "James",
+        "Abby"
+      ],
+      "startingPosition": "defense",
+      "winner": "team",
+      "startTimestamp": "2025-11-29T01:35:02.192Z",
+      "endTimestamp": "2025-11-29T01:35:02.192Z",
+      "totalPointTime": 1333,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Pull",
+              "puller": "Cyrus L",
+              "pullerGender": "MMP",
+              "quality": "Good Pull"
+            }
+          ]
+        },
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Abby",
+              "receiver": "James",
+              "score_flag": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Abby",
+        "Cyrus L",
+        "David",
+        "James"
+      ],
+      "startingPosition": "defense",
+      "winner": "opponent",
+      "startTimestamp": "2025-11-29T01:35:10.681Z",
+      "endTimestamp": "2025-11-29T01:35:10.681Z",
+      "totalPointTime": 1699,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Pull",
+              "puller": "James",
+              "pullerGender": "FMP",
+              "quality": "Okay Pull",
+              "flick_flag": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

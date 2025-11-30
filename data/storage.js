@@ -54,6 +54,7 @@ function serializeTeam(team) {
             pointsLost: player.pointsLost
         })),
         games: team.games.map(game => ({
+            id: game.id,
             team: game.team,
             opponent: game.opponent,
             startingPosition: game.startingPosition,
@@ -200,6 +201,7 @@ function deserializeTeams(serializedData) {
                 gameData.opponent,
                 gameData.startingPosition
             );
+            game.id = gameData.id;
             game.gameStartTimestamp = new Date(gameData.gameStartTimestamp);
             game.gameEndTimestamp = gameData.gameEndTimestamp ? new Date(gameData.gameEndTimestamp) : null;
             // Handle backward compatibility: convert boolean to string format

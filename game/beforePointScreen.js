@@ -562,44 +562,10 @@ function showLineSelectionDialog() {
     document.body.appendChild(overlay);
 }
 
-function updateActivePlayersDisplay() {
-    const table = document.getElementById('activePlayersTable');
-    if (!table) return;
-
-    // Clear existing rows except header
-    while (table.rows.length > 1) {
-        table.deleteRow(1);
-    }
-
-    // Add rows for each active player
-    currentGame.activePlayers.forEach(playerName => {
-        const row = table.insertRow();
-
-        // Add checkbox cell
-        const checkboxCell = row.insertCell();
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.className = 'active-checkbox';
-        checkbox.checked = true; // Active players are checked by default
-        checkboxCell.appendChild(checkbox);
-
-        // Add player name cell
-        const nameCell = row.insertCell();
-        nameCell.textContent = playerName;
-
-        // Add time played cell
-        const timeCell = row.insertCell();
-        timeCell.textContent = formatPlayTime(getPlayerGameTime(playerName));
-
-        // Add cells for each point
-        const latestPoint = getLatestPoint();
-        if (latestPoint) {
-            const pointsPlayed = latestPoint.playingPlayers.includes(playerName) ? '✓' : '';
-            const pointCell = row.insertCell();
-            pointCell.textContent = pointsPlayed;
-        }
-    });
-}
+/* 
+ * DEPRECATED: updateActivePlayersDisplay removed. 
+ * Use updateActivePlayersList from ui/activePlayersDisplay.js instead.
+ */
 
 function enterNextLineSelectionMode() {
     // First, update the active players list

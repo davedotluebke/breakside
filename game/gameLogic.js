@@ -17,6 +17,11 @@ function startNewGame(startingPosition, seconds) {
     });
     const newGame = new Game(currentTeam.name, opponentName, startingPosition);
     
+    // Generate ID immediately for the new game
+    if (typeof window.generateGameId === 'function') {
+        newGame.id = window.generateGameId(newGame);
+    }
+    
     // Set mixed rules flags from dropdown and checkbox
     const enforceGenderRatioSelect = document.getElementById('enforceGenderRatioSelect');
     const alternateGenderPullsCheckbox = document.getElementById('alternateGenderPullsCheckbox');
@@ -24,6 +29,12 @@ function startNewGame(startingPosition, seconds) {
     newGame.alternateGenderPulls = alternateGenderPullsCheckbox ? alternateGenderPullsCheckbox.checked : false;
     
     currentTeam.games.push(newGame);
+    
+    // Save and Sync Immediately
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
+
     logEvent(`New game started against ${opponentName}`);
 
     // Set countdown seconds before moving to next point
@@ -99,6 +110,7 @@ function updateScore(winner) {
 
     summarizeGame();
     updateActivePlayersList();  // Update the table with the new point data
+    saveAllTeamsData(); // Save and Sync
 }
 
 document.getElementById('endGameBtn').addEventListener('click', function() {
@@ -439,7 +451,8 @@ function undoEvent() {
         }
     } 
     // XXX update the event log
-    logEvent("Undo button pressed!");  
+    logEvent("Undo button pressed!");
+    saveAllTeamsData(); // Save and Sync
 }
 
 // Set up undo button event listener

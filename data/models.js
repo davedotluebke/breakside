@@ -48,6 +48,7 @@ function Game(teamName, opponentName, startOn) {
         [Role.TEAM]: 0,
         [Role.OPPONENT]: 0,
     };
+    this.id = null; // Unique Game ID (e.g., YYYY-MM-DD_Team_vs_Opponent_Timestamp)
     this.points = [];  // An array of Point objects
     this.gameStartTimestamp = new Date();
     this.gameEndTimestamp = null;

@@ -105,6 +105,7 @@ function handleOPlayerButton(playerName) {
     // set currentPlayer to this player and update the action buttons
     currentPlayer = getPlayerFromName(playerName);
     displayOActionButtons();
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
 }
 
 /**
@@ -182,6 +183,7 @@ function displayOActionButtons() {
         let currentPossession = getActivePossession(currentPoint);
         currentPossession.addEvent(currentEvent);
         currentPlayer.completedPasses++;
+        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
     });
     turnoverButton.addEventListener('click', function() {
         // set this button to appear selected and de-select all other main-action-btns
@@ -201,6 +203,7 @@ function displayOActionButtons() {
         currentPossession.addEvent(currentEvent);
         currentPossession = new Possession(false);
         currentPoint.addPossession(currentPossession);
+        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
     });
     violationButton.addEventListener('click', function() {
         // set this button to appear selected and de-select all other main-action-btns
@@ -218,6 +221,7 @@ function displayOActionButtons() {
         generateSubButtons('violation');
         let currentPossession = getActivePossession(currentPoint);
         currentPossession.addEvent(currentEvent);
+        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
     });
 }
 
@@ -290,6 +294,7 @@ function generateSubButtons(action) {
                 updateDefensivePossessionScreen();
                 showScreen('defensePlayByPlayScreen');
             }
+            if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
         };
         panel.appendChild(subButton);
     }
@@ -309,6 +314,7 @@ function handleSubAction(flagKey, action) {
     if (subButton) {
         subButton.classList.toggle('selected');
     }
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
 }
 
 /**
