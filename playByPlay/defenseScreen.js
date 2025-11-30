@@ -109,6 +109,7 @@ function handleDPlayerButton(playerName) {
             updateScore(Role.TEAM);
             moveToNextPoint();
         }
+        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
     }
 }
 
@@ -192,6 +193,7 @@ function displayDActionButtons() {
             }
             markAllDPlayerButtonsInvalid();  // mark all player buttons as 'inactive' (unclickable)
             showActionPanel('none');    // unfurl the "They Turnover" panel
+            if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
             return;
         }
         // Button not already selected, mark as selected and create a new Defense event
@@ -203,6 +205,7 @@ function displayDActionButtons() {
         showActionPanel('theyturnover');
         generateSubButtons('theyturnover');
         markAllDPlayerButtonsValid();   // mark all player buttons as 'valid' (clickable)
+        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
     });
 
     dScoreButton.addEventListener('click', function() {

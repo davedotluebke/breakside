@@ -91,6 +91,11 @@ function startNextPoint() {
             showScreen('offensePlayByPlayScreen');
         }
     }
+    
+    // Save and Sync on point start
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
 }
 
 function proceedToDefenseScreen() {

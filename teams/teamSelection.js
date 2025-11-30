@@ -4,6 +4,7 @@
  */
 
 function showSelectTeamScreen(firsttime = false) {
+    console.trace('showSelectTeamScreen called');
     const teamListElement = document.getElementById('teamList');
     const teamListWarning = document.getElementById('teamListWarning');
     if (!teamListElement || !teamListWarning) {
