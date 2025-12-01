@@ -4,7 +4,25 @@
  */
 
 // Configuration
-const API_BASE_URL = 'http://localhost:8000';
+// API_BASE_URL can be set via localStorage for multi-device testing
+// e.g., localStorage.setItem('ultistats_api_url', 'http://192.168.1.100:8000')
+// Default: same host as PWA on port 8000, or localhost:8000 if running from file://
+function getApiBaseUrl() {
+    const storedUrl = localStorage.getItem('ultistats_api_url');
+    if (storedUrl) return storedUrl;
+    
+    // If PWA is served from a real host (not file://), use same host with port 8000
+    if (window.location.protocol !== 'file:' && window.location.hostname !== 'localhost') {
+        return `${window.location.protocol}//${window.location.hostname}:8000`;
+    }
+    
+    // Default for local development
+    return 'http://localhost:8000';
+}
+
+const API_BASE_URL = getApiBaseUrl();
+console.log(`📡 Sync API URL: ${API_BASE_URL}`);
+
 const SYNC_QUEUE_KEY = 'ultistats_sync_queue';
 
 // State

@@ -140,13 +140,98 @@ function showSelectTeamScreen(firsttime = false) {
     // Cloud Games Section
     const cloudGamesContainer = document.createElement('div');
     cloudGamesContainer.id = 'cloudGamesContainer';
-    cloudGamesContainer.innerHTML = '<h3>Cloud Games <button id="refreshCloudGamesBtn" class="icon-button"><i class="fas fa-sync"></i></button></h3><div id="cloudGamesList">Loading...</div>';
+    
+    // Build Cloud Games header with buttons
+    const cloudHeader = document.createElement('h3');
+    cloudHeader.style.display = 'flex';
+    cloudHeader.style.alignItems = 'center';
+    cloudHeader.style.gap = '10px';
+    cloudHeader.style.flexWrap = 'wrap';
+    
+    const cloudTitle = document.createElement('span');
+    cloudTitle.textContent = 'Cloud Games';
+    cloudHeader.appendChild(cloudTitle);
+    
+    const refreshBtn = document.createElement('button');
+    refreshBtn.id = 'refreshCloudGamesBtn';
+    refreshBtn.className = 'icon-button';
+    refreshBtn.innerHTML = '<i class="fas fa-sync" style="color: #333;"></i>';
+    refreshBtn.title = 'Refresh Cloud Games';
+    refreshBtn.onclick = populateCloudGames;
+    cloudHeader.appendChild(refreshBtn);
+    
+    const setServerBtn = document.createElement('button');
+    setServerBtn.id = 'setServerBtn';
+    setServerBtn.className = 'icon-button';
+    setServerBtn.innerHTML = '<i class="fas fa-server" style="color: #333;"></i>';
+    setServerBtn.title = 'Set Server Address';
+    setServerBtn.style.width = 'auto';
+    setServerBtn.style.padding = '5px 10px';
+    setServerBtn.onclick = showSetServerDialog;
+    cloudHeader.appendChild(setServerBtn);
+    
+    // Server URL display
+    const serverUrlDisplay = document.createElement('span');
+    serverUrlDisplay.id = 'serverUrlDisplay';
+    serverUrlDisplay.style.fontSize = '0.75em';
+    serverUrlDisplay.style.color = '#666';
+    serverUrlDisplay.style.marginLeft = 'auto';
+    serverUrlDisplay.textContent = `Server: ${typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'Not configured'}`;
+    cloudHeader.appendChild(serverUrlDisplay);
+    
+    cloudGamesContainer.appendChild(cloudHeader);
+    
+    const cloudGamesList = document.createElement('div');
+    cloudGamesList.id = 'cloudGamesList';
+    cloudGamesList.textContent = 'Loading...';
+    cloudGamesContainer.appendChild(cloudGamesList);
+    
     teamListElement.appendChild(cloudGamesContainer);
 
     // Populate cloud games asynchronously
     populateCloudGames();
 
     showScreen('selectTeamScreen');
+}
+
+function showSetServerDialog() {
+    const currentUrl = localStorage.getItem('ultistats_api_url') || 
+        (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'http://localhost:8000');
+    
+    const newUrl = prompt(
+        'Enter the server address:\n\n' +
+        'Examples:\n' +
+        '• http://192.168.1.100:8000 (local network)\n' +
+        '• http://localhost:8000 (same device)\n\n' +
+        'Leave empty to use auto-detection.',
+        currentUrl
+    );
+    
+    if (newUrl === null) {
+        // User cancelled
+        return;
+    }
+    
+    if (newUrl.trim() === '') {
+        // Clear stored URL - will use auto-detection
+        localStorage.removeItem('ultistats_api_url');
+        alert('Server URL cleared. The app will auto-detect the server on next reload.');
+    } else {
+        // Validate URL format
+        try {
+            new URL(newUrl.trim());
+            localStorage.setItem('ultistats_api_url', newUrl.trim());
+            alert('Server URL updated. Reload the app to apply changes.');
+        } catch (e) {
+            alert('Invalid URL format. Please enter a valid URL (e.g., http://192.168.1.100:8000)');
+            return;
+        }
+    }
+    
+    // Offer to reload
+    if (confirm('Reload the app now to apply changes?')) {
+        window.location.reload();
+    }
 }
 
 async function populateCloudGames() {
