@@ -50,15 +50,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files
+# Mount static files (viewer, etc.) - html=True enables serving index.html for directories
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    app.mount("/static", StaticFiles(directory=str(static_dir), html=True), name="static")
 
-# Root endpoint
+# Mount PWA files from parent directory (the main ultistats app)
+pwa_dir = Path(__file__).parent.parent
+pwa_static_files = ["main.css", "main.js", "manifest.json", "service-worker.js", "version.json"]
+pwa_static_dirs = ["data", "game", "playByPlay", "screens", "teams", "ui", "utils", "images"]
+
 @app.get("/")
 async def root():
-    """Root endpoint that returns API information."""
+    """Serve the PWA index.html"""
+    index_file = pwa_dir / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file, media_type="text/html")
+    return {
+        "message": "Ultistats API Server",
+        "version": "1.0.0",
+        "status": "running"
+    }
+
+@app.get("/api")
+async def api_info():
+    """API information endpoint."""
     return {
         "message": "Ultistats API Server",
         "version": "1.0.0",
@@ -168,6 +184,35 @@ async def restore_version(game_id: str, timestamp: str):
         return {"status": "restored", "game_id": game_id, "timestamp": timestamp}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Version {timestamp} not found")
+
+
+# PWA file serving - MUST be last to avoid catching API routes
+@app.get("/{filename:path}")
+async def serve_pwa_file(filename: str):
+    """Serve PWA files from parent directory."""
+    # Security: only serve known files/directories
+    file_path = pwa_dir / filename
+    
+    # Check if it's a known static file or in a known directory
+    first_part = filename.split('/')[0] if '/' in filename else filename
+    
+    if first_part in pwa_static_files or first_part in pwa_static_dirs:
+        if file_path.exists() and file_path.is_file():
+            # Determine media type
+            suffix = file_path.suffix.lower()
+            media_types = {
+                '.js': 'application/javascript',
+                '.css': 'text/css',
+                '.json': 'application/json',
+                '.html': 'text/html',
+                '.png': 'image/png',
+                '.ico': 'image/x-icon',
+                '.webmanifest': 'application/manifest+json',
+            }
+            media_type = media_types.get(suffix, 'application/octet-stream')
+            return FileResponse(file_path, media_type=media_type)
+    
+    raise HTTPException(status_code=404, detail="File not found")
 
 
 if __name__ == "__main__":
