@@ -7,6 +7,11 @@
     <link rel="stylesheet" href="viewer.css">
 </head>
 <body>
+    <!-- Offline Banner (Phase 3) -->
+    <div id="offline-banner" class="offline-banner">
+        📴 You are offline. Changes will be synced when connection is restored.
+    </div>
+
     <!-- Navigation Header -->
     <header class="main-header">
         <div class="header-content">
@@ -19,12 +24,33 @@
                 <a href="#teams" class="nav-tab" data-tab="teams">Teams</a>
                 <a href="#players" class="nav-tab" data-tab="players">Players</a>
             </nav>
+            <div class="sync-status-container">
+                <div id="sync-status" class="sync-status" onclick="toggleSyncQueuePanel()" title="Click for sync details">
+                    <span class="sync-icon">✓</span>
+                    <span>Synced</span>
+                </div>
+                <button class="sync-btn" onclick="refreshFromServer()" title="Refresh from server">
+                    <span>↻</span>
+                    <span>Refresh</span>
+                </button>
+            </div>
             <div id="connection-status" class="status-badge connecting">Loading...</div>
         </div>
     </header>
 
     <!-- Main Content Area -->
     <main class="main-content">
+        <!-- Sync Queue Panel (Phase 3) -->
+        <div id="sync-queue-panel" class="sync-queue-panel">
+            <div class="sync-queue-header">
+                <h4>Sync Queue</h4>
+                <button id="sync-now-btn" class="sync-now-btn" onclick="triggerSync()">Sync Now</button>
+            </div>
+            <div id="sync-queue-stats" class="sync-queue-stats">
+                <!-- Stats populated by JS -->
+            </div>
+        </div>
+
         <!-- Home View (List Views) -->
         <div id="home-view">
             <!-- Games Tab -->

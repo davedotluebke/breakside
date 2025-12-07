@@ -486,6 +486,200 @@ body {
     border: 1px solid #ffe082;
 }
 
+/* =============================================================================
+   Sync Status Indicator (Phase 3)
+   ============================================================================= */
+
+.sync-status-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+.sync-status {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.9);
+}
+
+.sync-status.has-pending {
+    background: rgba(255, 193, 7, 0.3);
+    color: #ffc107;
+}
+
+.sync-status .sync-icon {
+    font-size: 0.85rem;
+}
+
+.sync-status.syncing .sync-icon {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.sync-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: white;
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.sync-btn:hover {
+    background: rgba(255,255,255,0.2);
+    border-color: rgba(255,255,255,0.4);
+}
+
+.sync-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Pending Sync Badge - appears on entities created offline */
+.pending-sync-badge {
+    background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+    color: white;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    animation: pendingPulse 2s infinite;
+}
+
+@keyframes pendingPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.pending-sync-badge .pending-icon {
+    font-size: 0.7rem;
+}
+
+/* Local-only indicator for cards */
+.entity-card.local-only {
+    border-left: 4px solid #ff9800;
+    position: relative;
+}
+
+.entity-card.local-only::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 0 24px 24px 0;
+    border-color: transparent #ff9800 transparent transparent;
+}
+
+/* Offline indicator */
+.offline-banner {
+    background: linear-gradient(135deg, #ff5722 0%, #e64a19 100%);
+    color: white;
+    padding: 0.5rem 1rem;
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: none;
+}
+
+.offline-banner.visible {
+    display: block;
+}
+
+/* Sync queue panel (expandable) */
+.sync-queue-panel {
+    background: white;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid var(--border-color);
+    display: none;
+}
+
+.sync-queue-panel.visible {
+    display: block;
+}
+
+.sync-queue-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.sync-queue-header h4 {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--primary-color);
+}
+
+.sync-queue-stats {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.sync-queue-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.sync-queue-stat .stat-icon {
+    font-size: 0.9rem;
+}
+
+.sync-queue-stat.pending {
+    color: #ff9800;
+}
+
+.sync-now-btn {
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.sync-now-btn:hover {
+    background: #d63050;
+}
+
+.sync-now-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
 .stats-row {
     display: flex;
     gap: 2rem;

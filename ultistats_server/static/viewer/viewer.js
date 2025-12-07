@@ -1,13 +1,17 @@
 /**
  * Ultistats Viewer
  * Handles navigation, entity listing, and game detail viewing
+ * 
+ * Phase 3 update: Added sync status indicator and pending sync badges
  */
 
 const POLL_INTERVAL = 3000; // 3 seconds
+const SYNC_STATUS_POLL_INTERVAL = 5000; // 5 seconds
 let currentGameId = null;
 let lastGameVersion = null;
 let isPolling = false;
 let pollingInterval = null;
+let syncStatusInterval = null;
 
 // Data caches
 let gamesCache = [];
@@ -16,6 +20,9 @@ let playersCache = [];
 
 // Player ID to name/nickname lookup (built from rosterSnapshot)
 let playerIdToName = {};
+
+// Sync status tracking
+let lastSyncStatus = null;
 
 // =============================================================================
 // Initialization
@@ -39,6 +46,9 @@ document.addEventListener('DOMContentLoaded', () => {
             infoPanel.classList.toggle('open');
         });
     }
+    
+    // Start sync status polling (Phase 3)
+    startSyncStatusPolling();
     
     // Route to appropriate view
     if (gameId) {
@@ -342,12 +352,15 @@ function renderGamesList(games, container) {
         const teamScore = scores.team || 0;
         const oppScore = scores.opponent || 0;
         const isInProgress = !game.game_end_timestamp;
+        const isPending = game._localOnly || isLocalOnly('game', game.game_id);
+        const localOnlyClass = isPending ? 'local-only' : '';
         
         return `
-            <a href="?game_id=${game.game_id}" class="entity-card game-card" onclick="event.preventDefault(); showGameDetail('${game.game_id}')">
+            <a href="?game_id=${game.game_id}" class="entity-card game-card ${localOnlyClass}" onclick="event.preventDefault(); showGameDetail('${game.game_id}')">
                 <div class="card-header">
                     <span class="card-title">${game.team} vs ${game.opponent}</span>
                     ${isInProgress ? '<span class="live-badge">LIVE</span>' : ''}
+                    ${isPending ? '<span class="pending-sync-badge"><span class="pending-icon">⏳</span>Pending</span>' : ''}
                 </div>
                 <div class="card-meta">
                     <span class="card-date">${dateStr}</span>
@@ -367,10 +380,14 @@ function renderTeamsList(teams, container) {
     
     container.innerHTML = teams.map(team => {
         const playerCount = team.playerIds?.length || 0;
+        const isPending = team._localOnly || isLocalOnly('team', team.id);
+        const localOnlyClass = isPending ? 'local-only' : '';
+        
         return `
-            <a href="?team_id=${team.id}" class="entity-card team-card" onclick="event.preventDefault(); showTeamDetail('${team.id}')">
+            <a href="?team_id=${team.id}" class="entity-card team-card ${localOnlyClass}" onclick="event.preventDefault(); showTeamDetail('${team.id}')">
                 <div class="card-header">
                     <span class="card-title">${team.name}</span>
+                    ${isPending ? '<span class="pending-sync-badge"><span class="pending-icon">⏳</span>Pending</span>' : ''}
                 </div>
                 <div class="card-meta">
                     <span class="card-id">${team.id}</span>
@@ -389,11 +406,15 @@ function renderPlayersList(players, container) {
     
     container.innerHTML = players.map(player => {
         const genderClass = player.gender === 'FMP' ? 'gender-fmp' : player.gender === 'MMP' ? 'gender-mmp' : '';
+        const isPending = player._localOnly || isLocalOnly('player', player.id);
+        const localOnlyClass = isPending ? 'local-only' : '';
+        
         return `
-            <a href="?player_id=${player.id}" class="entity-card player-card ${genderClass}" onclick="event.preventDefault(); showPlayerDetail('${player.id}')">
+            <a href="?player_id=${player.id}" class="entity-card player-card ${genderClass} ${localOnlyClass}" onclick="event.preventDefault(); showPlayerDetail('${player.id}')">
                 <div class="card-header">
                     <span class="card-title">${player.name}</span>
                     ${player.number ? `<span class="player-number">#${player.number}</span>` : ''}
+                    ${isPending ? '<span class="pending-sync-badge"><span class="pending-icon">⏳</span>Pending</span>' : ''}
                 </div>
                 <div class="card-meta">
                     <span class="card-id">${player.id}</span>
@@ -792,3 +813,219 @@ window.addEventListener('popstate', () => {
     else if (playerId) showPlayerDetail(playerId);
     else showHomeView();
 });
+
+// =============================================================================
+// Sync Status Functions (Phase 3)
+// =============================================================================
+
+/**
+ * Start polling for sync status from the PWA (via localStorage)
+ * This allows the viewer to show sync status even when the PWA is open in another tab
+ */
+function startSyncStatusPolling() {
+    updateSyncStatusDisplay();
+    syncStatusInterval = setInterval(updateSyncStatusDisplay, SYNC_STATUS_POLL_INTERVAL);
+}
+
+/**
+ * Stop sync status polling
+ */
+function stopSyncStatusPolling() {
+    if (syncStatusInterval) {
+        clearInterval(syncStatusInterval);
+        syncStatusInterval = null;
+    }
+}
+
+/**
+ * Get sync status from localStorage (shared with PWA)
+ */
+function getSyncStatusFromStorage() {
+    try {
+        const queueData = localStorage.getItem('ultistats_sync_queue');
+        const queue = queueData ? JSON.parse(queueData) : [];
+        
+        // Count by type
+        const counts = { player: 0, team: 0, game: 0 };
+        queue.forEach(item => {
+            if (counts[item.type] !== undefined) {
+                counts[item.type]++;
+            }
+        });
+        
+        // Check local-only entities
+        const localPlayers = JSON.parse(localStorage.getItem('ultistats_local_players') || '{}');
+        const localTeams = JSON.parse(localStorage.getItem('ultistats_local_teams') || '{}');
+        const localGames = JSON.parse(localStorage.getItem('ultistats_local_games') || '{}');
+        
+        return {
+            isOnline: navigator.onLine,
+            pendingCount: queue.length,
+            pendingByType: counts,
+            localPlayersCount: Object.keys(localPlayers).filter(k => localPlayers[k]._localOnly).length,
+            localTeamsCount: Object.keys(localTeams).filter(k => localTeams[k]._localOnly).length,
+            localGamesCount: Object.keys(localGames).filter(k => localGames[k]._localOnly).length
+        };
+    } catch (e) {
+        console.error('Failed to get sync status:', e);
+        return null;
+    }
+}
+
+/**
+ * Update the sync status display in the header
+ */
+function updateSyncStatusDisplay() {
+    const status = getSyncStatusFromStorage();
+    if (!status) return;
+    
+    lastSyncStatus = status;
+    
+    const syncStatusEl = document.getElementById('sync-status');
+    const syncQueuePanel = document.getElementById('sync-queue-panel');
+    
+    if (syncStatusEl) {
+        const totalPending = status.pendingCount;
+        const hasLocalOnly = status.localPlayersCount + status.localTeamsCount + status.localGamesCount > 0;
+        
+        if (totalPending > 0 || hasLocalOnly) {
+            syncStatusEl.className = 'sync-status has-pending';
+            syncStatusEl.innerHTML = `
+                <span class="sync-icon">⏳</span>
+                <span>${totalPending} pending</span>
+            `;
+            syncStatusEl.title = `${status.pendingByType.player} players, ${status.pendingByType.team} teams, ${status.pendingByType.game} games pending sync`;
+        } else {
+            syncStatusEl.className = 'sync-status';
+            syncStatusEl.innerHTML = `
+                <span class="sync-icon">✓</span>
+                <span>Synced</span>
+            `;
+            syncStatusEl.title = 'All data synced to server';
+        }
+    }
+    
+    // Update sync queue panel if visible
+    if (syncQueuePanel && syncQueuePanel.classList.contains('visible')) {
+        updateSyncQueuePanel(status);
+    }
+    
+    // Update offline banner
+    const offlineBanner = document.getElementById('offline-banner');
+    if (offlineBanner) {
+        if (!status.isOnline) {
+            offlineBanner.classList.add('visible');
+        } else {
+            offlineBanner.classList.remove('visible');
+        }
+    }
+}
+
+/**
+ * Update the sync queue panel content
+ */
+function updateSyncQueuePanel(status) {
+    const statsEl = document.getElementById('sync-queue-stats');
+    if (!statsEl) return;
+    
+    statsEl.innerHTML = `
+        <div class="sync-queue-stat ${status.pendingByType.player > 0 ? 'pending' : ''}">
+            <span class="stat-icon">👤</span>
+            <span>${status.pendingByType.player} players</span>
+        </div>
+        <div class="sync-queue-stat ${status.pendingByType.team > 0 ? 'pending' : ''}">
+            <span class="stat-icon">👥</span>
+            <span>${status.pendingByType.team} teams</span>
+        </div>
+        <div class="sync-queue-stat ${status.pendingByType.game > 0 ? 'pending' : ''}">
+            <span class="stat-icon">🎮</span>
+            <span>${status.pendingByType.game} games</span>
+        </div>
+    `;
+    
+    // Update sync button state
+    const syncBtn = document.getElementById('sync-now-btn');
+    if (syncBtn) {
+        syncBtn.disabled = !status.isOnline || status.pendingCount === 0;
+        syncBtn.textContent = status.isOnline ? 'Sync Now' : 'Offline';
+    }
+}
+
+/**
+ * Toggle sync queue panel visibility
+ */
+function toggleSyncQueuePanel() {
+    const panel = document.getElementById('sync-queue-panel');
+    if (panel) {
+        panel.classList.toggle('visible');
+        if (panel.classList.contains('visible')) {
+            updateSyncQueuePanel(lastSyncStatus || getSyncStatusFromStorage());
+        }
+    }
+}
+
+/**
+ * Trigger sync (calls PWA's sync function if available)
+ */
+async function triggerSync() {
+    const syncBtn = document.getElementById('sync-now-btn');
+    if (syncBtn) {
+        syncBtn.disabled = true;
+        syncBtn.textContent = 'Syncing...';
+    }
+    
+    try {
+        // Try to call the PWA's sync function if available (same tab)
+        if (typeof window.processSyncQueue === 'function') {
+            await window.processSyncQueue();
+        } else {
+            // Otherwise, just refresh data from server
+            await loadAllData();
+        }
+        
+        // Update sync status
+        updateSyncStatusDisplay();
+        
+    } catch (error) {
+        console.error('Sync failed:', error);
+    } finally {
+        if (syncBtn) {
+            syncBtn.disabled = false;
+            syncBtn.textContent = 'Sync Now';
+        }
+    }
+}
+
+/**
+ * Refresh data from server
+ */
+async function refreshFromServer() {
+    updateConnectionStatus('connecting');
+    try {
+        await loadAllData();
+        updateConnectionStatus('connected');
+    } catch (error) {
+        console.error('Refresh failed:', error);
+        updateConnectionStatus('disconnected');
+    }
+}
+
+/**
+ * Check if an entity is local-only (pending sync)
+ */
+function isLocalOnly(type, id) {
+    try {
+        let storageKey;
+        switch (type) {
+            case 'player': storageKey = 'ultistats_local_players'; break;
+            case 'team': storageKey = 'ultistats_local_teams'; break;
+            case 'game': storageKey = 'ultistats_local_games'; break;
+            default: return false;
+        }
+        
+        const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        return data[id] && data[id]._localOnly;
+    } catch (e) {
+        return false;
+    }
+}
