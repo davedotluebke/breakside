@@ -1,6 +1,8 @@
 /*
  * Team selection screen logic
  * Handles team switching, loading, and creation
+ * 
+ * Phase 4 update: Cloud team fetching, sync status indicator
  */
 
 function showSelectTeamScreen(firsttime = false) {
@@ -19,6 +21,13 @@ function showSelectTeamScreen(firsttime = false) {
     } else {
         teamListWarning.style.display = 'none';
     }
+
+    // Add sync status indicator at the top
+    const syncStatusContainer = document.createElement('div');
+    syncStatusContainer.id = 'syncStatusContainer';
+    syncStatusContainer.className = 'sync-status-bar';
+    syncStatusContainer.innerHTML = buildSyncStatusHTML();
+    teamListElement.appendChild(syncStatusContainer);
 
     const table = document.createElement('table');
     table.classList.add('team-selection-table');
@@ -532,11 +541,27 @@ function initializeTeamSelection() {
             const input = document.getElementById('newTeamNameInput');
             const newTeamName = input ? input.value.trim() : '';
             if (newTeamName) {
+                // Phase 4: Create team with ID, queue for cloud sync
                 const newTeam = new Team(newTeamName);
                 teams.push(newTeam);
                 currentTeam = newTeam;
+                
+                // Queue team for cloud sync if sync functions available
+                if (typeof createTeamOffline === 'function') {
+                    // Create the team offline (marks as _localOnly, queues for sync)
+                    createTeamOffline({
+                        id: newTeam.id,
+                        name: newTeam.name,
+                        playerIds: newTeam.playerIds,
+                        lines: newTeam.lines
+                    });
+                }
+                
                 if (typeof updateTeamRosterDisplay === 'function') {
                     updateTeamRosterDisplay();
+                }
+                if (typeof saveAllTeamsData === 'function') {
+                    saveAllTeamsData();
                 }
                 showScreen('teamRosterScreen');
                 const modal = document.getElementById('createTeamModal');
@@ -626,3 +651,126 @@ function initializeTeamSelection() {
 }
 
 initializeTeamSelection();
+
+// =============================================================================
+// Sync Status Functions (Phase 4)
+// =============================================================================
+
+/**
+ * Build the HTML for the sync status indicator
+ */
+function buildSyncStatusHTML() {
+    let status = { pendingCount: 0, pendingByType: { player: 0, team: 0, game: 0 }, isOnline: navigator.onLine };
+    
+    if (typeof getSyncStatus === 'function') {
+        status = getSyncStatus();
+    }
+    
+    const isOnline = status.isOnline;
+    const totalPending = status.pendingCount || 0;
+    const statusIcon = isOnline ? '🌐' : '📴';
+    const statusText = isOnline ? 'Online' : 'Offline';
+    const pendingText = totalPending > 0 
+        ? `<span class="pending-badge">${totalPending} pending</span>` 
+        : '<span class="synced-badge">✓ Synced</span>';
+    
+    return `
+        <div class="sync-status-info">
+            <span class="sync-status-icon">${statusIcon}</span>
+            <span class="sync-status-text">${statusText}</span>
+            ${pendingText}
+        </div>
+        <div class="sync-status-actions">
+            <button id="syncNowBtn" class="sync-btn" ${!isOnline ? 'disabled' : ''} onclick="triggerManualSync()">
+                <i class="fas fa-sync"></i> Sync
+            </button>
+            <button id="pullFromCloudBtn" class="sync-btn" ${!isOnline ? 'disabled' : ''} onclick="pullDataFromCloud()">
+                <i class="fas fa-cloud-download-alt"></i> Pull
+            </button>
+        </div>
+    `;
+}
+
+/**
+ * Update the sync status display
+ */
+function updateSyncStatusDisplay() {
+    const container = document.getElementById('syncStatusContainer');
+    if (container) {
+        container.innerHTML = buildSyncStatusHTML();
+    }
+}
+
+/**
+ * Trigger a manual sync of all pending data
+ */
+async function triggerManualSync() {
+    if (typeof processSyncQueue !== 'function') {
+        alert('Sync not available');
+        return;
+    }
+    
+    const syncBtn = document.getElementById('syncNowBtn');
+    if (syncBtn) {
+        syncBtn.disabled = true;
+        syncBtn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Syncing...';
+    }
+    
+    try {
+        await processSyncQueue();
+        updateSyncStatusDisplay();
+        // Refresh the cloud games list
+        populateCloudGames();
+    } catch (error) {
+        console.error('Sync failed:', error);
+        alert('Sync failed: ' + error.message);
+    } finally {
+        if (syncBtn) {
+            syncBtn.disabled = false;
+            syncBtn.innerHTML = '<i class="fas fa-sync"></i> Sync';
+        }
+    }
+}
+
+/**
+ * Pull latest data from the cloud
+ */
+async function pullDataFromCloud() {
+    if (typeof pullFromCloud !== 'function') {
+        alert('Cloud sync not available');
+        return;
+    }
+    
+    const pullBtn = document.getElementById('pullFromCloudBtn');
+    if (pullBtn) {
+        pullBtn.disabled = true;
+        pullBtn.innerHTML = '<i class="fas fa-cloud-download-alt fa-spin"></i> Pulling...';
+    }
+    
+    try {
+        const result = await pullFromCloud();
+        if (result.success) {
+            console.log('Pulled data from cloud:', result);
+            // Refresh displays
+            updateSyncStatusDisplay();
+            populateCloudGames();
+        } else {
+            alert('Pull failed: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Pull failed:', error);
+        alert('Pull failed: ' + error.message);
+    } finally {
+        if (pullBtn) {
+            pullBtn.disabled = false;
+            pullBtn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Pull';
+        }
+    }
+}
+
+// Update sync status periodically
+setInterval(() => {
+    if (document.getElementById('syncStatusContainer')) {
+        updateSyncStatusDisplay();
+    }
+}, 5000);

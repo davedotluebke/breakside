@@ -141,6 +141,38 @@
             <div class="entity-detail">
                 <h1 id="team-name">Loading...</h1>
                 <p id="team-id-display" class="id-display"></p>
+                
+                <!-- Phase 4: Team Season Stats Section -->
+                <div class="detail-section season-stats-section">
+                    <h3>Season Stats</h3>
+                    <div id="team-season-stats" class="stats-grid">
+                        <div class="stat-card">
+                            <span class="stat-value" id="season-games">-</span>
+                            <span class="stat-label">Games</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="season-wins">-</span>
+                            <span class="stat-label">Wins</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="season-losses">-</span>
+                            <span class="stat-label">Losses</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="season-points-for">-</span>
+                            <span class="stat-label">Points For</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="season-points-against">-</span>
+                            <span class="stat-label">Points Against</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="season-point-diff">-</span>
+                            <span class="stat-label">Point Diff</span>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="detail-section">
                     <h3>Players (<span id="team-player-count">0</span>)</h3>
                     <div id="team-players-list" class="mini-list"></div>
@@ -170,6 +202,46 @@
                         <span id="player-gender" class="info-value">-</span>
                     </div>
                 </div>
+                
+                <!-- Phase 4: Career Stats Section -->
+                <div class="detail-section career-stats-section">
+                    <h3>Career Stats</h3>
+                    <div id="player-career-stats" class="stats-grid">
+                        <div class="stat-card">
+                            <span class="stat-value" id="career-games">-</span>
+                            <span class="stat-label">Games</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="career-points">-</span>
+                            <span class="stat-label">Points</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="career-goals">-</span>
+                            <span class="stat-label">Goals</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="career-assists">-</span>
+                            <span class="stat-label">Assists</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="career-ds">-</span>
+                            <span class="stat-label">Ds</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="career-turnovers">-</span>
+                            <span class="stat-label">Turnovers</span>
+                        </div>
+                        <div class="stat-card wide">
+                            <span class="stat-value" id="career-plusminus">-</span>
+                            <span class="stat-label">+/-</span>
+                        </div>
+                        <div class="stat-card wide">
+                            <span class="stat-value" id="career-comp-pct">-</span>
+                            <span class="stat-label">Comp %</span>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="detail-section">
                     <h3>Teams</h3>
                     <div id="player-teams-list" class="mini-list"></div>
