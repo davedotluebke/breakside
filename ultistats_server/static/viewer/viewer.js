@@ -470,12 +470,25 @@ function renderGame(game) {
     // Stats
     document.getElementById('total-points').textContent = (game.points || []).length;
     
-    if (game.gameStartTimestamp) {
+    // Calculate duration from sum of point times (more accurate than wall-clock)
+    let totalPlayedMs = 0;
+    (game.points || []).forEach(point => {
+        if (point.totalPointTime) {
+            totalPlayedMs += point.totalPointTime;
+        }
+    });
+    
+    if (totalPlayedMs > 0) {
+        // Use accumulated point times
+        document.getElementById('game-duration').textContent = formatDuration(Math.floor(totalPlayedMs / 1000));
+    } else if (game.gameEndTimestamp) {
+        // Fallback for completed games: use timestamp difference
         const start = new Date(game.gameStartTimestamp);
-        const end = game.gameEndTimestamp ? new Date(game.gameEndTimestamp) : new Date();
-        const diffMs = end - start;
-        const diffSeconds = Math.floor(diffMs / 1000);
+        const end = new Date(game.gameEndTimestamp);
+        const diffSeconds = Math.floor((end - start) / 1000);
         document.getElementById('game-duration').textContent = formatDuration(diffSeconds);
+    } else {
+        document.getElementById('game-duration').textContent = '--:--';
     }
     
     // Show data format indicator (Phase 2)
