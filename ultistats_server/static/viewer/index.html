@@ -3,44 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultistats Game Viewer</title>
+    <title>Ultistats Viewer</title>
     <link rel="stylesheet" href="viewer.css">
 </head>
 <body>
-    <div class="game-header">
-        <div class="header-main-row">
-            <div id="info-toggle" class="info-icon" title="Show Game Info">
-                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="16" x2="12" y2="12"></line>
-                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                </svg>
-            </div>
-            <h1 id="game-title">Loading...</h1>
-            <span id="game-score" class="score-display"></span>
-            <div id="connection-status" class="status-badge connecting">Connecting...</div>
+    <!-- Navigation Header -->
+    <header class="main-header">
+        <div class="header-content">
+            <a href="/static/viewer/" class="logo">
+                <span class="logo-icon">🥏</span>
+                <span class="logo-text">Ultistats</span>
+            </a>
+            <nav class="main-nav" id="main-nav">
+                <a href="#games" class="nav-tab active" data-tab="games">Games</a>
+                <a href="#teams" class="nav-tab" data-tab="teams">Teams</a>
+                <a href="#players" class="nav-tab" data-tab="players">Players</a>
+            </nav>
+            <div id="connection-status" class="status-badge connecting">Loading...</div>
         </div>
-        
-        <div id="game-info-panel" class="game-info-panel">
-            <div class="game-meta-row">
-                <span id="game-date"></span>
-            </div>
-            <div class="stats-row">
-                <div class="stat-item">
-                    <span class="stat-label">Points</span>
-                    <span id="total-points" class="stat-value">0</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Duration</span>
-                    <span id="game-duration" class="stat-value">00:00</span>
-                </div>
-            </div>
-        </div>
-    </div>
+    </header>
 
-    <div id="points-container" class="points-container">
-        <!-- Points will be injected here -->
-    </div>
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <!-- Home View (List Views) -->
+        <div id="home-view">
+            <!-- Games Tab -->
+            <section id="games-tab" class="tab-content active">
+                <div class="section-header">
+                    <h2>Games</h2>
+                    <button class="refresh-btn" onclick="loadGames()">↻ Refresh</button>
+                </div>
+                <div id="games-list" class="entity-list">
+                    <div class="loading">Loading games...</div>
+                </div>
+            </section>
+
+            <!-- Teams Tab -->
+            <section id="teams-tab" class="tab-content">
+                <div class="section-header">
+                    <h2>Teams</h2>
+                    <button class="refresh-btn" onclick="loadTeams()">↻ Refresh</button>
+                </div>
+                <div id="teams-list" class="entity-list">
+                    <div class="loading">Loading teams...</div>
+                </div>
+            </section>
+
+            <!-- Players Tab -->
+            <section id="players-tab" class="tab-content">
+                <div class="section-header">
+                    <h2>Players</h2>
+                    <button class="refresh-btn" onclick="loadPlayers()">↻ Refresh</button>
+                </div>
+                <div id="players-list" class="entity-list">
+                    <div class="loading">Loading players...</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Game Detail View -->
+        <div id="game-detail-view" class="hidden">
+            <div class="detail-header">
+                <button class="back-btn" onclick="showHomeView()">← Back to Games</button>
+            </div>
+            <div class="game-header">
+                <div class="header-main-row">
+                    <div id="info-toggle" class="info-icon" title="Show Game Info">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                        </svg>
+                    </div>
+                    <h1 id="game-title">Loading...</h1>
+                    <span id="game-score" class="score-display"></span>
+                </div>
+                
+                <div id="game-info-panel" class="game-info-panel">
+                    <div class="game-meta-row">
+                        <span id="game-date"></span>
+                        <span id="game-id" class="game-id-display"></span>
+                    </div>
+                    <div class="stats-row">
+                        <div class="stat-item">
+                            <span class="stat-label">Points</span>
+                            <span id="total-points" class="stat-value">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Duration</span>
+                            <span id="game-duration" class="stat-value">00:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="points-container" class="points-container">
+                <!-- Points will be injected here -->
+            </div>
+        </div>
+
+        <!-- Team Detail View -->
+        <div id="team-detail-view" class="hidden">
+            <div class="detail-header">
+                <button class="back-btn" onclick="showHomeView()">← Back to Teams</button>
+            </div>
+            <div class="entity-detail">
+                <h1 id="team-name">Loading...</h1>
+                <p id="team-id-display" class="id-display"></p>
+                <div class="detail-section">
+                    <h3>Players (<span id="team-player-count">0</span>)</h3>
+                    <div id="team-players-list" class="mini-list"></div>
+                </div>
+                <div class="detail-section">
+                    <h3>Games (<span id="team-game-count">0</span>)</h3>
+                    <div id="team-games-list" class="mini-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Player Detail View -->
+        <div id="player-detail-view" class="hidden">
+            <div class="detail-header">
+                <button class="back-btn" onclick="showHomeView()">← Back to Players</button>
+            </div>
+            <div class="entity-detail">
+                <h1 id="player-name">Loading...</h1>
+                <p id="player-id-display" class="id-display"></p>
+                <div class="player-info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Number</span>
+                        <span id="player-number" class="info-value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Gender</span>
+                        <span id="player-gender" class="info-value">-</span>
+                    </div>
+                </div>
+                <div class="detail-section">
+                    <h3>Teams</h3>
+                    <div id="player-teams-list" class="mini-list"></div>
+                </div>
+                <div class="detail-section">
+                    <h3>Games (<span id="player-game-count">0</span>)</h3>
+                    <div id="player-games-list" class="mini-list"></div>
+                </div>
+            </div>
+        </div>
+    </main>
 
     <script src="viewer.js"></script>
 </body>

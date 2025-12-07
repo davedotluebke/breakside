@@ -13,6 +13,7 @@ from datetime import datetime
 try:
     from config import HOST, PORT, DEBUG, ALLOWED_ORIGINS
     from storage import (
+        # Game storage
         save_game_version,
         get_game_current,
         get_game_version,
@@ -20,11 +21,32 @@ try:
         game_exists,
         delete_game,
         list_all_games,
+        # Player storage
+        save_player,
+        get_player,
+        list_players,
+        update_player,
+        delete_player as delete_player_storage,
+        player_exists,
+        # Team storage
+        save_team,
+        get_team,
+        list_teams,
+        update_team,
+        delete_team as delete_team_storage,
+        team_exists,
+        get_team_players,
+        # Index storage
+        rebuild_index,
+        get_index_status,
+        get_player_games,
+        get_team_games,
     )
 except ImportError:
     # Try absolute import (when running as package)
     from ultistats_server.config import HOST, PORT, DEBUG, ALLOWED_ORIGINS
     from ultistats_server.storage import (
+        # Game storage
         save_game_version,
         get_game_current,
         get_game_version,
@@ -32,6 +54,26 @@ except ImportError:
         game_exists,
         delete_game,
         list_all_games,
+        # Player storage
+        save_player,
+        get_player,
+        list_players,
+        update_player,
+        delete_player as delete_player_storage,
+        player_exists,
+        # Team storage
+        save_team,
+        get_team,
+        list_teams,
+        update_team,
+        delete_team as delete_team_storage,
+        team_exists,
+        get_team_players,
+        # Index storage
+        rebuild_index,
+        get_index_status,
+        get_player_games,
+        get_team_games,
     )
 
 # Create FastAPI app
@@ -184,6 +226,211 @@ async def restore_version(game_id: str, timestamp: str):
         return {"status": "restored", "game_id": game_id, "timestamp": timestamp}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Version {timestamp} not found")
+
+
+# =============================================================================
+# Player endpoints
+# =============================================================================
+
+@app.post("/players")
+async def create_player(player_data: Dict[str, Any] = Body(...)):
+    """
+    Create a new player.
+    
+    If 'id' is provided in the body, it will be used (for offline-created players).
+    Otherwise, an ID will be generated from the name.
+    """
+    if "name" not in player_data:
+        raise HTTPException(status_code=400, detail="Player name is required")
+    
+    # Check if client provided an ID (offline creation)
+    provided_id = player_data.get('id')
+    
+    # If ID was provided and already exists, this is an update/sync
+    if provided_id and player_exists(provided_id):
+        update_player(provided_id, player_data)
+        return {"status": "updated", "player_id": provided_id, "player": get_player(provided_id)}
+    
+    player_id = save_player(player_data, provided_id)
+    return {"status": "created", "player_id": player_id, "player": get_player(player_id)}
+
+
+@app.get("/players")
+async def list_players_endpoint():
+    """List all players."""
+    players = list_players()
+    return {"players": players, "count": len(players)}
+
+
+@app.get("/players/{player_id}")
+async def get_player_endpoint(player_id: str):
+    """Get a player by ID."""
+    if not player_exists(player_id):
+        raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
+    
+    return get_player(player_id)
+
+
+@app.put("/players/{player_id}")
+async def update_player_endpoint(player_id: str, player_data: Dict[str, Any] = Body(...)):
+    """Update a player."""
+    if not player_exists(player_id):
+        raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
+    
+    update_player(player_id, player_data)
+    return {"status": "updated", "player_id": player_id, "player": get_player(player_id)}
+
+
+@app.delete("/players/{player_id}")
+async def delete_player_endpoint(player_id: str):
+    """Delete a player."""
+    if not player_exists(player_id):
+        raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
+    
+    delete_player_storage(player_id)
+    return {"status": "deleted", "player_id": player_id}
+
+
+@app.get("/players/{player_id}/games")
+async def get_player_games_endpoint(player_id: str):
+    """Get all games a player has participated in."""
+    if not player_exists(player_id):
+        raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
+    
+    game_ids = get_player_games(player_id)
+    return {"player_id": player_id, "game_ids": game_ids, "count": len(game_ids)}
+
+
+@app.get("/players/{player_id}/teams")
+async def get_player_teams_endpoint(player_id: str):
+    """Get all teams a player belongs to."""
+    if not player_exists(player_id):
+        raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
+    
+    # Import here to avoid circular imports
+    try:
+        from storage.index_storage import get_player_teams
+    except ImportError:
+        from ultistats_server.storage.index_storage import get_player_teams
+    
+    team_ids = get_player_teams(player_id)
+    
+    # Resolve team IDs to team data
+    teams_data = []
+    for team_id in team_ids:
+        try:
+            team = get_team(team_id)
+            teams_data.append(team)
+        except FileNotFoundError:
+            continue
+    
+    return {"player_id": player_id, "teams": teams_data, "count": len(teams_data)}
+
+
+# =============================================================================
+# Team endpoints
+# =============================================================================
+
+@app.post("/teams")
+async def create_team(team_data: Dict[str, Any] = Body(...)):
+    """
+    Create a new team.
+    
+    If 'id' is provided in the body, it will be used (for offline-created teams).
+    Otherwise, an ID will be generated from the name.
+    """
+    if "name" not in team_data:
+        raise HTTPException(status_code=400, detail="Team name is required")
+    
+    # Check if client provided an ID (offline creation)
+    provided_id = team_data.get('id')
+    
+    # If ID was provided and already exists, this is an update/sync
+    if provided_id and team_exists(provided_id):
+        update_team(provided_id, team_data)
+        return {"status": "updated", "team_id": provided_id, "team": get_team(provided_id)}
+    
+    team_id = save_team(team_data, provided_id)
+    return {"status": "created", "team_id": team_id, "team": get_team(team_id)}
+
+
+@app.get("/teams")
+async def list_teams_endpoint():
+    """List all teams."""
+    teams = list_teams()
+    return {"teams": teams, "count": len(teams)}
+
+
+@app.get("/teams/{team_id}")
+async def get_team_endpoint(team_id: str):
+    """Get a team by ID."""
+    if not team_exists(team_id):
+        raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+    
+    return get_team(team_id)
+
+
+@app.put("/teams/{team_id}")
+async def update_team_endpoint(team_id: str, team_data: Dict[str, Any] = Body(...)):
+    """Update a team."""
+    if not team_exists(team_id):
+        raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+    
+    update_team(team_id, team_data)
+    return {"status": "updated", "team_id": team_id, "team": get_team(team_id)}
+
+
+@app.delete("/teams/{team_id}")
+async def delete_team_endpoint(team_id: str):
+    """Delete a team."""
+    if not team_exists(team_id):
+        raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+    
+    delete_team_storage(team_id)
+    return {"status": "deleted", "team_id": team_id}
+
+
+@app.get("/teams/{team_id}/players")
+async def get_team_players_endpoint(team_id: str):
+    """Get all players for a team (resolved from playerIds)."""
+    if not team_exists(team_id):
+        raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+    
+    players = get_team_players(team_id)
+    return {"team_id": team_id, "players": players, "count": len(players)}
+
+
+@app.get("/teams/{team_id}/games")
+async def get_team_games_endpoint(team_id: str):
+    """Get all games for a team."""
+    if not team_exists(team_id):
+        raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+    
+    game_ids = get_team_games(team_id)
+    return {"team_id": team_id, "game_ids": game_ids, "count": len(game_ids)}
+
+
+# =============================================================================
+# Index endpoints
+# =============================================================================
+
+@app.post("/index/rebuild")
+async def rebuild_index_endpoint():
+    """Force rebuild of the index."""
+    index = rebuild_index()
+    return {
+        "status": "rebuilt",
+        "lastRebuilt": index.get("lastRebuilt"),
+        "playerCount": len(index.get("playerGames", {})),
+        "teamCount": len(index.get("teamGames", {})),
+        "gameCount": len(index.get("gameRoster", {})),
+    }
+
+
+@app.get("/index/status")
+async def get_index_status_endpoint():
+    """Get index status and statistics."""
+    return get_index_status()
 
 
 # PWA file serving - MUST be last to avoid catching API routes

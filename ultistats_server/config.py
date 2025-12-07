@@ -10,16 +10,19 @@ _default_data_dir = Path(__file__).parent.parent / "data"
 DATA_DIR = Path(os.getenv("ULTISTATS_DATA_DIR", str(_default_data_dir)))
 GAMES_DIR = DATA_DIR / "games"
 TEAMS_DIR = DATA_DIR / "teams"
+PLAYERS_DIR = DATA_DIR / "players"
 USERS_DIR = DATA_DIR / "users"
+INDEX_FILE = DATA_DIR / "index.json"
 
 # Ensure data directories exist (only if we have write permissions)
 try:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     GAMES_DIR.mkdir(parents=True, exist_ok=True)
     TEAMS_DIR.mkdir(parents=True, exist_ok=True)
+    PLAYERS_DIR.mkdir(parents=True, exist_ok=True)
     USERS_DIR.mkdir(parents=True, exist_ok=True)
 except (OSError, PermissionError):
-    # Will be created when first game is saved
+    # Will be created when first entity is saved
     pass
 
 # Server configuration

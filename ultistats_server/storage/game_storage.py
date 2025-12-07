@@ -24,6 +24,20 @@ except ImportError:
         from config import GAMES_DIR, ENABLE_GIT_VERSIONING
 
 
+def _update_index_for_game(game_id: str, game_data: dict) -> None:
+    """Update the index for this game. Imported lazily to avoid circular imports."""
+    try:
+        from storage.index_storage import update_index_for_game
+        update_index_for_game(game_id, game_data)
+    except ImportError:
+        try:
+            from ultistats_server.storage.index_storage import update_index_for_game
+            update_index_for_game(game_id, game_data)
+        except ImportError:
+            # Index storage not available, skip
+            pass
+
+
 def save_game_version(game_id: str, game_data: dict) -> str:
     """
     Save game with versioning.
@@ -94,6 +108,9 @@ def save_game_version(game_id: str, game_data: dict) -> str:
                 check=False,
                 capture_output=True
             )
+    
+    # Update the index
+    _update_index_for_game(game_id, game_data)
     
     return str(version_file)
 
@@ -215,6 +232,7 @@ def list_all_games() -> List[Dict[str, any]]:
             games.append({
                 "game_id": game_dir.name,
                 "team": game_data.get("team", "Unknown"),
+                "teamId": game_data.get("teamId"),
                 "opponent": game_data.get("opponent", "Unknown"),
                 "game_start_timestamp": game_data.get("gameStartTimestamp"),
                 "game_end_timestamp": game_data.get("gameEndTimestamp"),

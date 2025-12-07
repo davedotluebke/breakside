@@ -1,0 +1,71 @@
+{
+  "id": "2025-12-06_Sample-Team_vs_Persist-test-1_1765032820796",
+  "team": "Sample Team",
+  "opponent": "Persist test 1",
+  "startingPosition": "offense",
+  "scores": {
+    "team": 1,
+    "opponent": 1
+  },
+  "gameStartTimestamp": "2025-12-06T14:53:40.796Z",
+  "gameEndTimestamp": null,
+  "alternateGenderRatio": "No",
+  "alternateGenderPulls": false,
+  "startingGenderRatio": null,
+  "lastLineUsed": null,
+  "points": [
+    {
+      "players": [
+        "Abby",
+        "Avery",
+        "Cesc",
+        "Cyrus J"
+      ],
+      "startingPosition": "offense",
+      "winner": "team",
+      "startTimestamp": "2025-12-06T14:53:48.847Z",
+      "endTimestamp": "2025-12-06T14:53:48.847Z",
+      "totalPointTime": 991,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Abby",
+              "receiver": "Avery",
+              "score_flag": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Cyrus L",
+        "James",
+        "Leif",
+        "Simeon"
+      ],
+      "startingPosition": "defense",
+      "winner": "opponent",
+      "startTimestamp": "2025-12-06T14:54:11.612Z",
+      "endTimestamp": "2025-12-06T14:54:11.612Z",
+      "totalPointTime": 1698,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Pull",
+              "puller": "Cyrus L",
+              "quality": "Good Pull"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
