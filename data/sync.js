@@ -195,6 +195,13 @@ async function processSyncQueue() {
 async function syncQueueItem(item) {
     const { type, action, id, data } = item;
     
+    // Strip _localOnly flag before sending to server (it's client-side only)
+    let cleanData = data;
+    if (data && typeof data === 'object') {
+        cleanData = { ...data };
+        delete cleanData._localOnly;
+    }
+    
     let url, method, body;
     
     switch (type) {
@@ -202,7 +209,7 @@ async function syncQueueItem(item) {
             if (action === 'create' || action === 'update') {
                 url = `${API_BASE_URL}/players`;
                 method = 'POST';  // POST handles both create and update via ID
-                body = JSON.stringify(data);
+                body = JSON.stringify(cleanData);
             } else if (action === 'delete') {
                 url = `${API_BASE_URL}/players/${id}`;
                 method = 'DELETE';
@@ -213,7 +220,7 @@ async function syncQueueItem(item) {
             if (action === 'create' || action === 'update') {
                 url = `${API_BASE_URL}/teams`;
                 method = 'POST';  // POST handles both create and update via ID
-                body = JSON.stringify(data);
+                body = JSON.stringify(cleanData);
             } else if (action === 'delete') {
                 url = `${API_BASE_URL}/teams/${id}`;
                 method = 'DELETE';
@@ -224,7 +231,7 @@ async function syncQueueItem(item) {
             if (action === 'create' || action === 'update' || action === 'sync') {
                 url = `${API_BASE_URL}/games/${id}/sync`;
                 method = 'POST';
-                body = JSON.stringify(data);
+                body = JSON.stringify(cleanData);
             } else if (action === 'delete') {
                 url = `${API_BASE_URL}/games/${id}`;
                 method = 'DELETE';

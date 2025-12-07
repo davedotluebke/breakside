@@ -1,0 +1,165 @@
+{
+  "id": "2025-12-07_Sample-Team_vs_Test-Opponent_1765115369934",
+  "teamId": "Sample-Team-x8bi",
+  "team": "Sample Team",
+  "opponent": "Test Opponent",
+  "startingPosition": "offense",
+  "scores": {
+    "team": 2,
+    "opponent": 0
+  },
+  "gameStartTimestamp": "2025-12-07T13:49:29.933Z",
+  "gameEndTimestamp": null,
+  "alternateGenderRatio": "No",
+  "alternateGenderPulls": false,
+  "startingGenderRatio": null,
+  "lastLineUsed": null,
+  "rosterSnapshot": {
+    "players": [
+      {
+        "id": "Cyrus-L-sk8j",
+        "name": "Cyrus L",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "Leif-m28z",
+        "name": "Leif",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "Cesc-9sga",
+        "name": "Cesc",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "Cyrus-J-rvjk",
+        "name": "Cyrus J",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "Abby-y390",
+        "name": "Abby",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "Avery-gsyg",
+        "name": "Avery",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "James-8o28",
+        "name": "James",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "Simeon-u5v3",
+        "name": "Simeon",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "Soren-9pno",
+        "name": "Soren",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "Walden-t3m5",
+        "name": "Walden",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      }
+    ],
+    "capturedAt": "2025-12-07T13:49:29.934Z"
+  },
+  "points": [
+    {
+      "players": [
+        "Abby",
+        "Avery",
+        "Cesc",
+        "Cyrus J",
+        "Cyrus L"
+      ],
+      "startingPosition": "offense",
+      "winner": "team",
+      "startTimestamp": "2025-12-07T13:49:36.682Z",
+      "endTimestamp": "2025-12-07T13:49:36.682Z",
+      "totalPointTime": 1042,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Abby",
+              "receiver": "Avery",
+              "score_flag": true,
+              "throwerId": "Abby-y390",
+              "receiverId": "Avery-gsyg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Abby",
+        "Avery",
+        "Cesc",
+        "Cyrus J",
+        "Cyrus L"
+      ],
+      "startingPosition": "defense",
+      "winner": "team",
+      "startTimestamp": "2025-12-07T13:52:20.690Z",
+      "endTimestamp": "2025-12-07T13:52:20.690Z",
+      "totalPointTime": 2520,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Pull",
+              "puller": "Avery",
+              "quality": "Poor Pull",
+              "pullerId": "Avery-gsyg"
+            }
+          ]
+        },
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Abby",
+              "receiver": "Cyrus L",
+              "score_flag": true,
+              "throwerId": "Abby-y390",
+              "receiverId": "Cyrus-L-sk8j"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

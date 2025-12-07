@@ -95,6 +95,79 @@
     ],
     "Ella-4mgm": [
       "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720"
+    ],
+    "Taylor-iydd": [
+      "2025-12-07_Test-Warriers_vs_Rival-Squas_1765113818175",
+      "2025-12-07_Test-Warriers_vs_Bad-guys_1765114290928"
+    ],
+    "Alex-4ock": [
+      "2025-12-07_Test-Warriers_vs_Rival-Squas_1765113818175",
+      "2025-12-07_Test-Warriers_vs_Bad-guys_1765114290928"
+    ],
+    "Jordan-zdl9": [
+      "2025-12-07_Test-Warriers_vs_Rival-Squas_1765113818175",
+      "2025-12-07_Test-Warriers_vs_Bad-guys_1765114290928"
+    ],
+    "Sarah-jfon": [
+      "2025-12-07_Test-Warriers_vs_Rival-Squas_1765113818175",
+      "2025-12-07_Test-Warriers_vs_Bad-guys_1765114290928"
+    ],
+    "Chris-5wk1": [
+      "2025-12-07_Test-Warriers_vs_Rival-Squas_1765113818175",
+      "2025-12-07_Test-Warriers_vs_Bad-guys_1765114290928"
+    ],
+    "Fred-l6m7": [
+      "2025-12-07_Test-Warriers_vs_Rival-Squas_1765113818175",
+      "2025-12-07_Test-Warriers_vs_Bad-guys_1765114290928"
+    ],
+    "Mike-r1z9": [
+      "2025-12-07_Test-Warriers_vs_Rival-Squas_1765113818175",
+      "2025-12-07_Test-Warriers_vs_Bad-guys_1765114290928"
+    ],
+    "Casey-idr7": [
+      "2025-12-07_Test-Warriers_vs_Rival-Squas_1765113818175",
+      "2025-12-07_Test-Warriers_vs_Bad-guys_1765114290928"
+    ],
+    "Aaron-w846": [
+      "2025-12-07_Test-Warriers_vs_Rival-Squas_1765113818175",
+      "2025-12-07_Test-Warriers_vs_Bad-guys_1765114290928"
+    ],
+    "Aardvark-gkru": [
+      "2025-12-07_Test-Warriers_vs_Rival-Squas_1765113818175",
+      "2025-12-07_Test-Warriers_vs_Bad-guys_1765114290928"
+    ],
+    "Unknown-Player-qowy": [
+      "2025-12-07_Test-Warriers_vs_Rival-Squas_1765113818175"
+    ],
+    "James-8o28": [
+      "2025-12-07_Sample-Team_vs_Test-Opponent_1765115369934"
+    ],
+    "Cyrus-J-rvjk": [
+      "2025-12-07_Sample-Team_vs_Test-Opponent_1765115369934"
+    ],
+    "Simeon-u5v3": [
+      "2025-12-07_Sample-Team_vs_Test-Opponent_1765115369934"
+    ],
+    "Cyrus-L-sk8j": [
+      "2025-12-07_Sample-Team_vs_Test-Opponent_1765115369934"
+    ],
+    "Walden-t3m5": [
+      "2025-12-07_Sample-Team_vs_Test-Opponent_1765115369934"
+    ],
+    "Soren-9pno": [
+      "2025-12-07_Sample-Team_vs_Test-Opponent_1765115369934"
+    ],
+    "Avery-gsyg": [
+      "2025-12-07_Sample-Team_vs_Test-Opponent_1765115369934"
+    ],
+    "Abby-y390": [
+      "2025-12-07_Sample-Team_vs_Test-Opponent_1765115369934"
+    ],
+    "Leif-m28z": [
+      "2025-12-07_Sample-Team_vs_Test-Opponent_1765115369934"
+    ],
+    "Cesc-9sga": [
+      "2025-12-07_Sample-Team_vs_Test-Opponent_1765115369934"
     ]
   },
   "teamGames": {
@@ -103,6 +176,13 @@
       "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
       "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
       "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
+    ],
+    "Test-Warriers-y95v": [
+      "2025-12-07_Test-Warriers_vs_Rival-Squas_1765113818175",
+      "2025-12-07_Test-Warriers_vs_Bad-guys_1765114290928"
+    ],
+    "Sample-Team-x8bi": [
+      "2025-12-07_Sample-Team_vs_Test-Opponent_1765115369934"
     ]
   },
   "gameRoster": {
@@ -174,6 +254,43 @@
       "Rayanne-a72s",
       "Zeke-5tl2",
       "Felix-m7e6"
+    ],
+    "2025-12-07_Test-Warriers_vs_Rival-Squas_1765113818175": [
+      "Taylor-iydd",
+      "Alex-4ock",
+      "Jordan-zdl9",
+      "Sarah-jfon",
+      "Chris-5wk1",
+      "Fred-l6m7",
+      "Mike-r1z9",
+      "Unknown-Player-qowy",
+      "Casey-idr7",
+      "Aaron-w846",
+      "Aardvark-gkru"
+    ],
+    "2025-12-07_Test-Warriers_vs_Bad-guys_1765114290928": [
+      "Taylor-iydd",
+      "Alex-4ock",
+      "Jordan-zdl9",
+      "Sarah-jfon",
+      "Chris-5wk1",
+      "Fred-l6m7",
+      "Mike-r1z9",
+      "Casey-idr7",
+      "Aaron-w846",
+      "Aardvark-gkru"
+    ],
+    "2025-12-07_Sample-Team_vs_Test-Opponent_1765115369934": [
+      "James-8o28",
+      "Cyrus-J-rvjk",
+      "Simeon-u5v3",
+      "Cyrus-L-sk8j",
+      "Walden-t3m5",
+      "Soren-9pno",
+      "Avery-gsyg",
+      "Abby-y390",
+      "Leif-m28z",
+      "Cesc-9sga"
     ]
   },
   "playerTeams": {

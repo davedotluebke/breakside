@@ -1,0 +1,93 @@
+{
+  "id": "2025-12-07_Test-Warriers_vs_Bad-guys_1765114290928",
+  "teamId": "Test-Warriers-y95v",
+  "team": "Test Warriers",
+  "opponent": "Bad guys",
+  "startingPosition": "defense",
+  "scores": {
+    "team": 0,
+    "opponent": 0
+  },
+  "gameStartTimestamp": "2025-12-07T13:31:30.928Z",
+  "gameEndTimestamp": null,
+  "alternateGenderRatio": "Alternating",
+  "alternateGenderPulls": false,
+  "startingGenderRatio": null,
+  "lastLineUsed": null,
+  "rosterSnapshot": {
+    "players": [
+      {
+        "id": "Aardvark-gkru",
+        "name": "Aardvark",
+        "nickname": "",
+        "number": "00",
+        "gender": "FMP"
+      },
+      {
+        "id": "Aaron-w846",
+        "name": "Aaron",
+        "nickname": "",
+        "number": "19",
+        "gender": "MMP"
+      },
+      {
+        "id": "Alex-4ock",
+        "name": "Alex",
+        "nickname": "",
+        "number": "9",
+        "gender": "FMP"
+      },
+      {
+        "id": "Casey-idr7",
+        "name": "Casey",
+        "nickname": "",
+        "number": "8",
+        "gender": "FMP"
+      },
+      {
+        "id": "Chris-5wk1",
+        "name": "Chris",
+        "nickname": "",
+        "number": "45",
+        "gender": "MMP"
+      },
+      {
+        "id": "Sarah-jfon",
+        "name": "Sarah",
+        "nickname": "",
+        "number": "7",
+        "gender": "FMP"
+      },
+      {
+        "id": "Taylor-iydd",
+        "name": "Taylor",
+        "nickname": "",
+        "number": "33",
+        "gender": "FMP"
+      },
+      {
+        "id": "Fred-l6m7",
+        "name": "Fred",
+        "nickname": "",
+        "number": "0",
+        "gender": "MMP"
+      },
+      {
+        "id": "Jordan-zdl9",
+        "name": "Jordan",
+        "nickname": "",
+        "number": "12",
+        "gender": "FMP"
+      },
+      {
+        "id": "Mike-r1z9",
+        "name": "Mike",
+        "nickname": "",
+        "number": "13",
+        "gender": "MMP"
+      }
+    ],
+    "capturedAt": "2025-12-07T13:31:30.928Z"
+  },
+  "points": []
+}

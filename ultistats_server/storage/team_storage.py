@@ -83,6 +83,9 @@ def save_team(team_data: dict, team_id: Optional[str] = None) -> str:
         team_id = generate_team_id(name)
         team_id = _ensure_unique_id(team_id)
     
+    # Strip client-side-only fields
+    team_data.pop('_localOnly', None)
+    
     # Add metadata
     now = datetime.now().isoformat()
     if 'createdAt' not in team_data:

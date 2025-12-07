@@ -411,6 +411,11 @@ function createPullEvent() {
     firstPossession.events.unshift(pullEvent);
     logEvent(pullEvent.summarize());
 
+    // Sync to cloud for live viewer updates
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
+
     // Close dialog and proceed to defense screen
     closePullDialog();
 

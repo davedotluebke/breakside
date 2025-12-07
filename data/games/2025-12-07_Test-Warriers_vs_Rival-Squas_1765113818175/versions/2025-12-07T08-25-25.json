@@ -1,0 +1,237 @@
+{
+  "id": "2025-12-07_Test-Warriers_vs_Rival-Squas_1765113818175",
+  "teamId": "Test-Warriers-y95v",
+  "team": "Test Warriers",
+  "opponent": "Rival Squas",
+  "startingPosition": "offense",
+  "scores": {
+    "team": 2,
+    "opponent": 2
+  },
+  "gameStartTimestamp": "2025-12-07T13:23:38.175Z",
+  "gameEndTimestamp": null,
+  "alternateGenderRatio": "No",
+  "alternateGenderPulls": false,
+  "startingGenderRatio": null,
+  "lastLineUsed": null,
+  "rosterSnapshot": {
+    "players": [
+      {
+        "id": "Sarah-jfon",
+        "name": "Sarah",
+        "nickname": "",
+        "number": "7",
+        "gender": "FMP"
+      },
+      {
+        "id": "Mike-r1z9",
+        "name": "Mike",
+        "nickname": "",
+        "number": "13",
+        "gender": "MMP"
+      },
+      {
+        "id": "Jordan-zdl9",
+        "name": "Jordan",
+        "nickname": "",
+        "number": "12",
+        "gender": "FMP"
+      },
+      {
+        "id": "Chris-5wk1",
+        "name": "Chris",
+        "nickname": "",
+        "number": "45",
+        "gender": "MMP"
+      },
+      {
+        "id": "Alex-4ock",
+        "name": "Alex",
+        "nickname": "",
+        "number": "9",
+        "gender": "FMP"
+      },
+      {
+        "id": "Taylor-iydd",
+        "name": "Taylor",
+        "nickname": "",
+        "number": "33",
+        "gender": "FMP"
+      },
+      {
+        "id": "Casey-idr7",
+        "name": "Casey",
+        "nickname": "",
+        "number": "8",
+        "gender": "FMP"
+      },
+      {
+        "id": "Fred-l6m7",
+        "name": "Fred",
+        "nickname": "",
+        "number": "0",
+        "gender": "MMP"
+      },
+      {
+        "id": "Aaron-w846",
+        "name": "Aaron",
+        "nickname": "",
+        "number": "19",
+        "gender": "MMP"
+      },
+      {
+        "id": "Aardvark-gkru",
+        "name": "Aardvark",
+        "nickname": "",
+        "number": "00",
+        "gender": "FMP"
+      }
+    ],
+    "capturedAt": "2025-12-07T13:23:38.175Z"
+  },
+  "points": [
+    {
+      "players": [
+        "Aardvark",
+        "Aaron",
+        "Alex",
+        "Casey",
+        "Chris",
+        "Fred",
+        "Jordan"
+      ],
+      "startingPosition": "offense",
+      "winner": "team",
+      "startTimestamp": "2025-12-07T13:24:21.369Z",
+      "endTimestamp": "2025-12-07T13:24:21.369Z",
+      "totalPointTime": 4126,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Aardvark",
+              "receiver": "Aaron",
+              "score_flag": true,
+              "throwerId": "Aardvark-gkru",
+              "receiverId": "Aaron-w846"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Aardvark",
+        "Aaron",
+        "Alex",
+        "Casey",
+        "Chris",
+        "Fred",
+        "Jordan"
+      ],
+      "startingPosition": "defense",
+      "winner": "team",
+      "startTimestamp": "2025-12-07T13:24:52.340Z",
+      "endTimestamp": "2025-12-07T13:24:52.340Z",
+      "totalPointTime": 18230,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Pull",
+              "puller": "Aaron",
+              "pullerGender": "MMP",
+              "flick_flag": true,
+              "pullerId": "Aaron-w846"
+            }
+          ]
+        },
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Aaron",
+              "receiver": "Alex",
+              "score_flag": true,
+              "throwerId": "Aaron-w846",
+              "receiverId": "Alex-4ock"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Aardvark",
+        "Aaron",
+        "Alex",
+        "Casey",
+        "Chris",
+        "Fred",
+        "Jordan"
+      ],
+      "startingPosition": "defense",
+      "winner": "opponent",
+      "startTimestamp": "2025-12-07T13:25:10.845Z",
+      "endTimestamp": "2025-12-07T13:25:10.845Z",
+      "totalPointTime": 2329,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Pull",
+              "puller": "Chris",
+              "pullerGender": "MMP",
+              "quality": "Good Pull",
+              "pullerId": "Chris-5wk1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Aardvark",
+        "Aaron",
+        "Alex",
+        "Casey",
+        "Chris",
+        "Fred",
+        "Jordan"
+      ],
+      "startingPosition": "offense",
+      "winner": "opponent",
+      "startTimestamp": "2025-12-07T13:25:19.779Z",
+      "endTimestamp": "2025-12-07T13:25:19.779Z",
+      "totalPointTime": 1495,
+      "lastPauseTime": null,
+      "possessions": []
+    },
+    {
+      "players": [
+        "Aardvark",
+        "Aaron",
+        "Alex",
+        "Casey",
+        "Chris",
+        "Sarah",
+        "Taylor"
+      ],
+      "startingPosition": "offense",
+      "winner": "",
+      "startTimestamp": "2025-12-07T13:25:25.969Z",
+      "endTimestamp": null,
+      "totalPointTime": 0,
+      "lastPauseTime": null,
+      "possessions": []
+    }
+  ]
+}

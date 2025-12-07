@@ -80,6 +80,9 @@ def save_player(player_data: dict, player_id: Optional[str] = None) -> str:
         player_id = generate_player_id(name)
         player_id = _ensure_unique_id(player_id)
     
+    # Strip client-side-only fields
+    player_data.pop('_localOnly', None)
+    
     # Add metadata
     now = datetime.now().isoformat()
     if 'createdAt' not in player_data:
