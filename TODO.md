@@ -362,14 +362,28 @@ Pre-refactor localStorage data format is no longer supported. Users starting fre
 
 ---
 
-## Phase 6: Testing & Verification
+## Phase 6: Testing & Verification ✅ COMPLETE
 
-- [ ] Unit tests for new storage functions
-- [ ] Integration tests for API endpoints
-- [ ] End-to-end test: create team → add players → start game → sync
-- [ ] **Offline test**: create team offline → add players → start game → come online → verify sync
-- [ ] Index test: rebuild index → verify queries return correct results
-- [ ] Viewer test: verify all entity views work correctly
+- [x] Unit tests for new storage functions (`test_storage.py` - 41 tests)
+  - Player storage: ID generation, CRUD operations, timestamps
+  - Team storage: CRUD, player ID resolution
+  - Game storage: versioning, metadata
+  - Index storage: rebuild, incremental updates, queries
+- [x] Integration tests for API endpoints (`test_api.py` - 34 tests)
+  - Health/info endpoints
+  - Player CRUD + games/teams queries
+  - Team CRUD + players/games queries
+  - Game sync + versioning
+  - Index rebuild/status
+  - Full workflow tests (offline creation, sync)
+- [x] End-to-end test: create team → add players → start game → sync
+- [x] Index test: rebuild index → verify queries return correct results (`test_existing_data.py` - 24 tests)
+  - Data integrity verification (structure, required fields)
+  - Index accuracy (cross-references match actual data)
+  - CUDO Mixed specific tests (4 games, 18 players)
+- [x] Viewer test: verified via browser (entity views working)
+
+**Run tests with:** `cd ultistats_server && python3 -m pytest test_existing_data.py test_api.py test_storage.py -v`
 
 ---
 

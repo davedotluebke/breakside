@@ -1,13 +1,7 @@
 {
-  "lastRebuilt": "2025-12-06T21:43:09.504611",
+  "lastRebuilt": "2025-12-06T23:31:06.657794",
   "playerGames": {
-    "Kellen-syip": [
-      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
-      "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
-      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
-      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
-    ],
-    "Finn-ajs9": [
+    "Rayanne-a72s": [
       "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
       "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
       "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
@@ -19,25 +13,7 @@
       "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
       "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
     ],
-    "Abby-p0br": [
-      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
-      "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
-      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
-      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
-    ],
     "Simeon-bpxf": [
-      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
-      "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
-      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
-      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
-    ],
-    "Leif-w435": [
-      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
-      "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
-      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
-      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
-    ],
-    "Rayanne-a72s": [
       "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
       "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
       "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
@@ -49,30 +25,7 @@
       "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
       "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
     ],
-    "Walden-qmek": [
-      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
-      "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
-      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
-      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
-    ],
-    "Zeke-5tl2": [
-      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
-      "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
-      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
-      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
-    ],
-    "Curtis-qydh": [
-      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
-      "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
-      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
-      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
-    ],
-    "Henry-xydc": [
-      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
-      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
-      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
-    ],
-    "Felix-m7e6": [
+    "Avery-mixr": [
       "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
       "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
       "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
@@ -84,7 +37,54 @@
       "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
       "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
     ],
-    "Avery-mixr": [
+    "Felix-m7e6": [
+      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
+      "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
+      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
+      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
+    ],
+    "Kellen-syip": [
+      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
+      "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
+      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
+      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
+    ],
+    "Henry-xydc": [
+      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
+      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
+      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
+    ],
+    "Zeke-5tl2": [
+      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
+      "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
+      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
+      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
+    ],
+    "Walden-qmek": [
+      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
+      "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
+      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
+      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
+    ],
+    "Abby-p0br": [
+      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
+      "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
+      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
+      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
+    ],
+    "Finn-ajs9": [
+      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
+      "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
+      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
+      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
+    ],
+    "Curtis-qydh": [
+      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
+      "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
+      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
+      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
+    ],
+    "Leif-w435": [
       "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
       "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
       "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
@@ -107,76 +107,86 @@
   },
   "gameRoster": {
     "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301": [
-      "Kellen-syip",
-      "Finn-ajs9",
-      "Stella-9ve7",
-      "Abby-p0br",
-      "Simeon-bpxf",
-      "Leif-w435",
       "Rayanne-a72s",
+      "Stella-9ve7",
+      "Simeon-bpxf",
       "Violet-9ms5",
-      "Walden-qmek",
-      "Zeke-5tl2",
-      "Curtis-qydh",
-      "Henry-xydc",
-      "Felix-m7e6",
+      "Avery-mixr",
       "Cyrus-g0wq",
-      "Avery-mixr"
+      "Felix-m7e6",
+      "Kellen-syip",
+      "Henry-xydc",
+      "Zeke-5tl2",
+      "Walden-qmek",
+      "Abby-p0br",
+      "Finn-ajs9",
+      "Curtis-qydh",
+      "Leif-w435"
     ],
     "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720": [
-      "Kellen-syip",
-      "Finn-ajs9",
-      "Stella-9ve7",
-      "Abby-p0br",
-      "Simeon-bpxf",
-      "Leif-w435",
       "Rayanne-a72s",
+      "Stella-9ve7",
+      "Simeon-bpxf",
       "Violet-9ms5",
+      "Avery-mixr",
+      "Cyrus-g0wq",
+      "Felix-m7e6",
       "Ella-4mgm",
+      "Kellen-syip",
+      "Zeke-5tl2",
       "Keelan-r85a",
       "Walden-qmek",
-      "Zeke-5tl2",
+      "Abby-p0br",
+      "Finn-ajs9",
       "Curtis-qydh",
-      "Felix-m7e6",
-      "Cyrus-g0wq",
-      "Avery-mixr"
+      "Leif-w435"
     ],
     "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804": [
-      "Kellen-syip",
-      "Finn-ajs9",
-      "Stella-9ve7",
-      "Abby-p0br",
-      "Simeon-bpxf",
-      "Leif-w435",
       "Rayanne-a72s",
+      "Stella-9ve7",
+      "Simeon-bpxf",
       "Violet-9ms5",
-      "Walden-qmek",
-      "Zeke-5tl2",
-      "Curtis-qydh",
-      "Henry-xydc",
-      "Felix-m7e6",
+      "Avery-mixr",
       "Cyrus-g0wq",
-      "Avery-mixr"
+      "Felix-m7e6",
+      "Kellen-syip",
+      "Henry-xydc",
+      "Zeke-5tl2",
+      "Walden-qmek",
+      "Abby-p0br",
+      "Finn-ajs9",
+      "Curtis-qydh",
+      "Leif-w435"
     ],
     "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719": [
-      "Kellen-syip",
-      "Finn-ajs9",
-      "Stella-9ve7",
-      "Abby-p0br",
-      "Simeon-bpxf",
-      "Leif-w435",
       "Rayanne-a72s",
+      "Stella-9ve7",
+      "Simeon-bpxf",
       "Violet-9ms5",
-      "Walden-qmek",
-      "Zeke-5tl2",
-      "Curtis-qydh",
-      "Henry-xydc",
-      "Felix-m7e6",
+      "Avery-mixr",
       "Cyrus-g0wq",
-      "Avery-mixr"
-    ]
+      "Felix-m7e6",
+      "Kellen-syip",
+      "Henry-xydc",
+      "Zeke-5tl2",
+      "Walden-qmek",
+      "Abby-p0br",
+      "Finn-ajs9",
+      "Curtis-qydh",
+      "Leif-w435"
+    ],
+    "test-game-001": []
   },
   "playerTeams": {
+    "Player-1234": [
+      "Original-3d5b"
+    ],
+    "P1-test": [
+      "StatusTeam-test"
+    ],
+    "P2-test": [
+      "StatusTeam-test"
+    ],
     "Abby-p0br": [
       "CUDO-Mixed-8kr5"
     ],
@@ -230,6 +240,32 @@
     ],
     "Zeke-5tl2": [
       "CUDO-Mixed-8kr5"
+    ],
+    "Existing-test": [
+      "MixedTeam-hbar"
+    ],
+    "Missing-1234": [
+      "MixedTeam-hbar"
+    ],
+    "Player1-abcd": [
+      "FullTeam-ahl5"
+    ],
+    "Player2-efgh": [
+      "FullTeam-ahl5"
+    ],
+    "Player1-test": [
+      "IndexTeam-test",
+      "FullTeam-v4tm"
+    ],
+    "Player2-test": [
+      "IndexTeam-test",
+      "FullTeam-v4tm"
+    ],
+    "Alice-test": [
+      "TestTeam-test"
+    ],
+    "Bob-test": [
+      "TestTeam-test"
     ]
   }
 }

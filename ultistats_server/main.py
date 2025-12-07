@@ -104,7 +104,7 @@ pwa_static_dirs = ["data", "game", "playByPlay", "screens", "teams", "ui", "util
 
 @app.get("/")
 async def root():
-    """Serve the PWA index.html"""
+    """Serve the PWA index.html at root (redirects to /ultistats/ for PWA compatibility)"""
     index_file = pwa_dir / "index.html"
     if index_file.exists():
         return FileResponse(index_file, media_type="text/html")
@@ -113,6 +113,45 @@ async def root():
         "version": "1.0.0",
         "status": "running"
     }
+
+# =============================================================================
+# PWA routes under /ultistats/ (matches production path and manifest.json)
+# =============================================================================
+
+@app.get("/ultistats/")
+@app.get("/ultistats/index.html")
+async def ultistats_root():
+    """Serve the PWA index.html under /ultistats/ path (for PWA install)"""
+    index_file = pwa_dir / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file, media_type="text/html")
+    raise HTTPException(status_code=404, detail="index.html not found")
+
+@app.get("/ultistats/{filename:path}")
+async def serve_ultistats_file(filename: str):
+    """Serve PWA files under /ultistats/ path."""
+    file_path = pwa_dir / filename
+    
+    # Check if it's a known static file or in a known directory
+    first_part = filename.split('/')[0] if '/' in filename else filename
+    
+    if first_part in pwa_static_files or first_part in pwa_static_dirs:
+        if file_path.exists() and file_path.is_file():
+            # Determine media type
+            suffix = file_path.suffix.lower()
+            media_types = {
+                '.js': 'application/javascript',
+                '.css': 'text/css',
+                '.json': 'application/json',
+                '.html': 'text/html',
+                '.png': 'image/png',
+                '.ico': 'image/x-icon',
+                '.webmanifest': 'application/manifest+json',
+            }
+            media_type = media_types.get(suffix, 'application/octet-stream')
+            return FileResponse(file_path, media_type=media_type)
+    
+    raise HTTPException(status_code=404, detail="File not found")
 
 @app.get("/api")
 async def api_info():
