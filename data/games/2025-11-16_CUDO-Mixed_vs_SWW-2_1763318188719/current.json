@@ -1,0 +1,413 @@
+{
+  "team": "CUDO Mixed",
+  "opponent": "SWW 2",
+  "startingPosition": "defense",
+  "scores": {
+    "team": 5,
+    "opponent": 7
+  },
+  "gameStartTimestamp": "2025-11-16T18:36:28.719Z",
+  "gameEndTimestamp": null,
+  "alternateGenderRatio": "Alternating",
+  "alternateGenderPulls": false,
+  "startingGenderRatio": "FMP",
+  "lastLineUsed": null,
+  "points": [
+    {
+      "players": [
+        "Cyrus",
+        "Felix",
+        "Finn",
+        "Henry",
+        "Rayanne",
+        "Stella",
+        "Violet"
+      ],
+      "startingPosition": "defense",
+      "winner": "",
+      "startTimestamp": "2025-11-16T18:38:08.399Z",
+      "endTimestamp": null,
+      "totalPointTime": 0,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Defense",
+              "defender": "Rayanne"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Cyrus",
+        "Felix",
+        "Finn",
+        "Henry",
+        "Stella",
+        "Violet",
+        "Avery"
+      ],
+      "startingPosition": "offense",
+      "winner": "opponent",
+      "startTimestamp": "2025-11-16T18:45:46.913Z",
+      "endTimestamp": "2025-11-16T18:45:46.913Z",
+      "totalPointTime": 285589,
+      "lastPauseTime": null,
+      "possessions": []
+    },
+    {
+      "players": [
+        "Avery",
+        "Violet",
+        "Rayanne",
+        "Leif",
+        "Simeon",
+        "Walden",
+        "Zeke"
+      ],
+      "startingPosition": "offense",
+      "winner": "team",
+      "startTimestamp": "2025-11-16T18:49:57.108Z",
+      "endTimestamp": "2025-11-16T18:49:57.108Z",
+      "totalPointTime": 112923,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Leif",
+              "receiver": "Walden",
+              "score_flag": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Avery",
+        "Leif",
+        "Felix",
+        "Stella",
+        "Abby",
+        "Curtis",
+        "Kellen"
+      ],
+      "startingPosition": "defense",
+      "winner": "opponent",
+      "startTimestamp": "2025-11-16T18:56:59.652Z",
+      "endTimestamp": "2025-11-16T18:56:59.652Z",
+      "totalPointTime": 272806,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Pull",
+              "puller": "Felix",
+              "pullerGender": "MMP",
+              "quality": "Good Pull"
+            },
+            {
+              "type": "Defense",
+              "defender": "Avery"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Abby",
+        "Curtis",
+        "Stella",
+        "Cyrus",
+        "Finn",
+        "Violet",
+        "Zeke"
+      ],
+      "startingPosition": "offense",
+      "winner": "team",
+      "startTimestamp": "2025-11-16T19:08:43.812Z",
+      "endTimestamp": "2025-11-16T19:08:43.812Z",
+      "totalPointTime": 496894,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Violet",
+              "receiver": "Cyrus",
+              "score_flag": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Finn",
+        "Stella",
+        "Violet",
+        "Avery",
+        "Henry",
+        "Simeon",
+        "Walden"
+      ],
+      "startingPosition": "defense",
+      "winner": "opponent",
+      "startTimestamp": "2025-11-16T19:18:02.424Z",
+      "endTimestamp": "2025-11-16T19:18:02.424Z",
+      "totalPointTime": 356992,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Pull",
+              "puller": "Stella",
+              "pullerGender": "FMP",
+              "quality": "Poor Pull"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Avery",
+        "Stella",
+        "Violet",
+        "Cyrus",
+        "Felix",
+        "Kellen",
+        "Zeke"
+      ],
+      "startingPosition": "offense",
+      "winner": "team",
+      "startTimestamp": "2025-11-16T19:22:33.323Z",
+      "endTimestamp": "2025-11-16T19:22:33.323Z",
+      "totalPointTime": 105650,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Cyrus",
+              "receiver": "Kellen",
+              "score_flag": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Avery",
+        "Violet",
+        "Curtis",
+        "Finn",
+        "Henry",
+        "Leif",
+        "Walden"
+      ],
+      "startingPosition": "defense",
+      "winner": "opponent",
+      "startTimestamp": "2025-11-16T19:27:18.944Z",
+      "endTimestamp": "2025-11-16T19:27:18.944Z",
+      "totalPointTime": 116662,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Pull",
+              "puller": "Leif",
+              "pullerGender": "MMP",
+              "quality": "Good Pull",
+              "roller_flag": true
+            }
+          ]
+        },
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Turnover",
+              "thrower": "Leif",
+              "receiver": "Unknown Player",
+              "huck_flag": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Avery",
+        "Finn",
+        "Abby",
+        "Felix",
+        "Kellen",
+        "Simeon",
+        "Stella"
+      ],
+      "startingPosition": "offense",
+      "winner": "team",
+      "startTimestamp": "2025-11-16T19:31:28.697Z",
+      "endTimestamp": "2025-11-16T19:31:28.697Z",
+      "totalPointTime": 57878,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Abby",
+              "receiver": "Kellen",
+              "score_flag": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Abby",
+        "Avery",
+        "Felix",
+        "Stella",
+        "Violet",
+        "Walden",
+        "Zeke"
+      ],
+      "startingPosition": "defense",
+      "winner": "opponent",
+      "startTimestamp": "2025-11-16T19:37:19.750Z",
+      "endTimestamp": "2025-11-16T19:37:19.750Z",
+      "totalPointTime": 145531,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Pull",
+              "puller": "Avery",
+              "pullerGender": "FMP",
+              "quality": "Good Pull"
+            },
+            {
+              "type": "Other",
+              "switchsides_flag": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Abby",
+        "Avery",
+        "Felix",
+        "Violet",
+        "Zeke",
+        "Curtis",
+        "Leif"
+      ],
+      "startingPosition": "defense",
+      "winner": "team",
+      "startTimestamp": "2025-11-16T19:47:26.033Z",
+      "endTimestamp": "2025-11-16T19:47:26.033Z",
+      "totalPointTime": 48826,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Pull",
+              "puller": "Felix",
+              "pullerGender": "MMP",
+              "quality": "Good Pull"
+            }
+          ]
+        },
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Felix",
+              "receiver": "Curtis",
+              "score_flag": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Avery",
+        "Cyrus",
+        "Finn",
+        "Henry",
+        "Simeon",
+        "Stella",
+        "Walden"
+      ],
+      "startingPosition": "defense",
+      "winner": "opponent",
+      "startTimestamp": "2025-11-16T19:52:57.970Z",
+      "endTimestamp": "2025-11-16T19:52:57.970Z",
+      "totalPointTime": 173882,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": false,
+          "events": [
+            {
+              "type": "Pull",
+              "puller": "Cyrus",
+              "pullerGender": "MMP",
+              "quality": "Good Pull"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "players": [
+        "Avery",
+        "Finn",
+        "Abby",
+        "Felix",
+        "Kellen",
+        "Leif",
+        "Violet"
+      ],
+      "startingPosition": "offense",
+      "winner": "opponent",
+      "startTimestamp": "2025-11-16T20:41:10.781Z",
+      "endTimestamp": "2025-11-16T20:41:10.781Z",
+      "totalPointTime": 2711898,
+      "lastPauseTime": null,
+      "possessions": []
+    }
+  ],
+  "teamId": "CUDO-Mixed-8kr5"
+}

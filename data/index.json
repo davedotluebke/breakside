@@ -1,14 +1,74 @@
 {
-  "lastRebuilt": "2025-12-06T20:58:05.360613",
+  "lastRebuilt": "2025-12-06T21:11:52.032173",
   "playerGames": {},
-  "teamGames": {},
+  "teamGames": {
+    "CUDO-Mixed-8kr5": [
+      "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301",
+      "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720",
+      "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804",
+      "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719"
+    ]
+  },
   "gameRoster": {
-    "2025-12-06_Sample-Team_vs_Persist-test-1_1765032820796": [],
-    "2025-12-06_Sample-Team_vs_Bdebugs-1_1765032943029": []
+    "2025-11-16_CUDO-Mixed_vs_Fog_1763312279301": [],
+    "2025-11-15_CUDO-Mixed_vs_Alexandria_1763235977720": [],
+    "2025-11-16_CUDO-Mixed_vs_Jackson-Reed-2_1763305300804": [],
+    "2025-11-16_CUDO-Mixed_vs_SWW-2_1763318188719": []
   },
   "playerTeams": {
-    "Alice-j2ta": [
-      "Sample-Team-ls6n"
+    "Abby-p0br": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Avery-mixr": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Curtis-qydh": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Cyrus-g0wq": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Ella-4mgm": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Felix-m7e6": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Finn-ajs9": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Henry-xydc": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Keelan-r85a": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Kellen-syip": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Leif-w435": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Rayanne-a72s": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Simeon-bpxf": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Stella-9ve7": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Violet-9ms5": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Walden-qmek": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Wythe-ej8x": [
+      "CUDO-Mixed-8kr5"
+    ],
+    "Zeke-5tl2": [
+      "CUDO-Mixed-8kr5"
     ]
   }
 }
