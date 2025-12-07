@@ -1,6 +1,8 @@
 /*
  * Roster management helpers
  * Handles roster displays and roster-related UI interactions
+ * 
+ * Phase 4 update: Player IDs, cloud sync for player creation/updates
  */
 
 function updateTeamRosterDisplay() {
@@ -217,6 +219,21 @@ function updateGameSummaryRosterDisplay() {
     rosterElement.innerHTML = '';
 
     const eventStats = currentGame() ? calculatePlayerStatsFromEvents(currentGame()) : {};
+    
+    // Phase 4: Use rosterSnapshot if available for historical accuracy
+    const game = currentGame();
+    let playersToDisplay = currentTeam.teamRoster;
+    
+    if (game && game.rosterSnapshot && game.rosterSnapshot.players) {
+        // Use snapshot players but merge with current roster for full Player objects
+        // This preserves historical data (names/numbers at game time)
+        playersToDisplay = game.rosterSnapshot.players.map(snapshotPlayer => {
+            // Find the current player by ID to get accumulated stats
+            const currentPlayer = currentTeam.teamRoster.find(p => p.id === snapshotPlayer.id);
+            return currentPlayer || snapshotPlayer;
+        });
+        console.log('📸 Using roster snapshot for game summary display');
+    }
 
     const headerRow = document.createElement('tr');
     ['Name', 'Pts', 'Time', 'Goals', 'Assists', 'Comp%', 'Huck%', 'Ds', 'TOs', '+/-', '..per pt'].forEach(headerText => {
@@ -227,7 +244,7 @@ function updateGameSummaryRosterDisplay() {
     });
     rosterElement.appendChild(headerRow);
 
-    currentTeam.teamRoster.forEach(player => {
+    playersToDisplay.forEach(player => {
         const playerRow = document.createElement('tr');
 
         const nameCell = document.createElement('td');
@@ -358,9 +375,43 @@ function validateJerseyNumber(input) {
             if (playerNumber && numberValue === null) {
                 return;
             }
+            
+            // Phase 4: Create player with ID and queue for cloud sync
             const newPlayer = new Player(playerName, "", gender, numberValue);
             currentTeam.teamRoster.push(newPlayer);
+            
+            // Add player ID to team's playerIds array
+            if (!currentTeam.playerIds) {
+                currentTeam.playerIds = [];
+            }
+            if (!currentTeam.playerIds.includes(newPlayer.id)) {
+                currentTeam.playerIds.push(newPlayer.id);
+            }
+            
+            // Queue player for cloud sync
+            if (typeof createPlayerOffline === 'function') {
+                createPlayerOffline({
+                    id: newPlayer.id,
+                    name: newPlayer.name,
+                    nickname: newPlayer.nickname,
+                    gender: newPlayer.gender,
+                    number: newPlayer.number,
+                    createdAt: newPlayer.createdAt,
+                    updatedAt: newPlayer.updatedAt
+                });
+            }
+            
+            // Update team on cloud
+            if (typeof syncTeamToCloud === 'function' && currentTeam.id) {
+                syncTeamToCloud(currentTeam);
+            }
+            
             updateTeamRosterDisplay();
+            
+            // Save locally
+            if (typeof saveAllTeamsData === 'function') {
+                saveAllTeamsData();
+            }
         }
         if (playerNameInput) {
             playerNameInput.value = '';
@@ -621,6 +672,25 @@ function showEditPlayerDialog(player) {
     if (nameInput) nameInput.value = player.name;
     if (numberInput) numberInput.value = player.number || '';
     
+    // Phase 4: Show player ID for debugging
+    let playerIdDisplay = document.getElementById('editPlayerIdDisplay');
+    if (!playerIdDisplay) {
+        // Create the ID display element if it doesn't exist
+        const container = dialog.querySelector('.edit-player-container');
+        if (container) {
+            const idField = document.createElement('div');
+            idField.className = 'edit-player-field edit-player-id-field';
+            idField.innerHTML = `
+                <label>Player ID:</label>
+                <code id="editPlayerIdDisplay" class="player-id-code">${player.id || 'No ID'}</code>
+            `;
+            container.insertBefore(idField, container.firstChild);
+            playerIdDisplay = document.getElementById('editPlayerIdDisplay');
+        }
+    } else {
+        playerIdDisplay.textContent = player.id || 'No ID';
+    }
+    
     // Set gender button states
     if (fmpBtn && mmpBtn) {
         fmpBtn.classList.remove('selected');
@@ -709,10 +779,27 @@ function deletePlayer() {
         return; // User cancelled
     }
 
+    // Get player ID before removing
+    const playerId = editPlayerDialogPlayer.id;
+    
     // Remove player from roster
     const index = currentTeam.teamRoster.indexOf(editPlayerDialogPlayer);
     if (index > -1) {
         currentTeam.teamRoster.splice(index, 1);
+    }
+    
+    // Remove player ID from team's playerIds array
+    if (currentTeam.playerIds && playerId) {
+        const idIndex = currentTeam.playerIds.indexOf(playerId);
+        if (idIndex > -1) {
+            currentTeam.playerIds.splice(idIndex, 1);
+        }
+    }
+    
+    // Phase 4: Sync team update to cloud (player removed from team)
+    // Note: We don't delete the player entity itself - they may be on other teams
+    if (typeof syncTeamToCloud === 'function' && currentTeam.id) {
+        syncTeamToCloud(currentTeam);
     }
 
     // Save changes
@@ -780,6 +867,12 @@ function saveEditedPlayer() {
     editPlayerDialogPlayer.name = newName;
     editPlayerDialogPlayer.number = newNumberValue;
     editPlayerDialogPlayer.gender = newGender;
+    editPlayerDialogPlayer.updatedAt = new Date().toISOString();
+
+    // Phase 4: Sync player update to cloud
+    if (typeof syncPlayerToCloud === 'function') {
+        syncPlayerToCloud(editPlayerDialogPlayer);
+    }
 
     // Save changes
     saveAllTeamsData();

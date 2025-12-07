@@ -243,6 +243,9 @@ async function loadTeamDetail(teamId) {
         document.getElementById('team-player-count').textContent = playersData.players?.length || 0;
         document.getElementById('team-game-count').textContent = gamesData.game_ids?.length || 0;
         
+        // Phase 4: Load and compute season stats
+        loadTeamSeasonStats(teamId, gamesData.game_ids || []);
+        
         // Render players
         const playersContainer = document.getElementById('team-players-list');
         if (playersData.players && playersData.players.length > 0) {
@@ -295,6 +298,9 @@ async function loadPlayerDetail(playerId) {
         document.getElementById('player-number').textContent = player.number || '-';
         document.getElementById('player-gender').textContent = player.gender || '-';
         document.getElementById('player-game-count').textContent = gamesData.game_ids?.length || 0;
+        
+        // Phase 4: Load and compute career stats
+        loadPlayerCareerStats(playerId, gamesData.game_ids || []);
         
         // Render teams
         const teamsContainer = document.getElementById('player-teams-list');
@@ -1027,5 +1033,304 @@ function isLocalOnly(type, id) {
         return data[id] && data[id]._localOnly;
     } catch (e) {
         return false;
+    }
+}
+
+// =============================================================================
+// Career Stats Functions (Phase 4)
+// =============================================================================
+
+/**
+ * Load and compute career stats for a player
+ * @param {string} playerId - Player ID
+ * @param {Array} gameIds - List of game IDs the player participated in
+ */
+async function loadPlayerCareerStats(playerId, gameIds) {
+    // Initialize with placeholder values
+    const statElements = {
+        games: document.getElementById('career-games'),
+        points: document.getElementById('career-points'),
+        goals: document.getElementById('career-goals'),
+        assists: document.getElementById('career-assists'),
+        ds: document.getElementById('career-ds'),
+        turnovers: document.getElementById('career-turnovers'),
+        plusminus: document.getElementById('career-plusminus'),
+        compPct: document.getElementById('career-comp-pct')
+    };
+    
+    // Set loading state
+    Object.values(statElements).forEach(el => {
+        if (el) el.textContent = '...';
+    });
+    
+    if (!gameIds || gameIds.length === 0) {
+        Object.values(statElements).forEach(el => {
+            if (el) el.textContent = '0';
+        });
+        if (statElements.compPct) statElements.compPct.textContent = '-';
+        return;
+    }
+    
+    try {
+        // Fetch all games and compute stats
+        const stats = {
+            games: gameIds.length,
+            points: 0,
+            goals: 0,
+            assists: 0,
+            ds: 0,
+            turnovers: 0,
+            pointsWon: 0,
+            pointsLost: 0,
+            completions: 0,
+            totalThrows: 0
+        };
+        
+        // Fetch games in batches to avoid overwhelming the server
+        const batchSize = 5;
+        for (let i = 0; i < gameIds.length; i += batchSize) {
+            const batch = gameIds.slice(i, i + batchSize);
+            const gamePromises = batch.map(gameId => 
+                fetch(`/games/${gameId}`).then(r => r.ok ? r.json() : null)
+            );
+            
+            const games = await Promise.all(gamePromises);
+            
+            games.forEach(game => {
+                if (!game) return;
+                
+                const playerStats = computePlayerStatsFromGame(game, playerId);
+                stats.points += playerStats.points;
+                stats.goals += playerStats.goals;
+                stats.assists += playerStats.assists;
+                stats.ds += playerStats.ds;
+                stats.turnovers += playerStats.turnovers;
+                stats.pointsWon += playerStats.pointsWon;
+                stats.pointsLost += playerStats.pointsLost;
+                stats.completions += playerStats.completions;
+                stats.totalThrows += playerStats.totalThrows;
+            });
+        }
+        
+        // Update display
+        if (statElements.games) statElements.games.textContent = stats.games;
+        if (statElements.points) statElements.points.textContent = stats.points;
+        if (statElements.goals) statElements.goals.textContent = stats.goals;
+        if (statElements.assists) statElements.assists.textContent = stats.assists;
+        if (statElements.ds) statElements.ds.textContent = stats.ds;
+        if (statElements.turnovers) statElements.turnovers.textContent = stats.turnovers;
+        
+        const plusMinus = stats.pointsWon - stats.pointsLost;
+        if (statElements.plusminus) {
+            statElements.plusminus.textContent = plusMinus > 0 ? `+${plusMinus}` : plusMinus;
+            statElements.plusminus.className = 'stat-value ' + (plusMinus > 0 ? 'positive' : plusMinus < 0 ? 'negative' : '');
+        }
+        
+        if (statElements.compPct) {
+            if (stats.totalThrows > 0) {
+                const pct = Math.round((stats.completions / stats.totalThrows) * 100);
+                statElements.compPct.textContent = `${pct}%`;
+            } else {
+                statElements.compPct.textContent = '-';
+            }
+        }
+        
+    } catch (error) {
+        console.error('Failed to load career stats:', error);
+        Object.values(statElements).forEach(el => {
+            if (el) el.textContent = '-';
+        });
+    }
+}
+
+/**
+ * Compute player stats from a single game
+ * @param {Object} game - Game data
+ * @param {string} playerId - Player ID to compute stats for
+ * @returns {Object} Stats object
+ */
+function computePlayerStatsFromGame(game, playerId) {
+    const stats = {
+        points: 0,
+        goals: 0,
+        assists: 0,
+        ds: 0,
+        turnovers: 0,
+        pointsWon: 0,
+        pointsLost: 0,
+        completions: 0,
+        totalThrows: 0
+    };
+    
+    if (!game.points) return stats;
+    
+    // Find player name(s) - check roster snapshot and legacy name matching
+    const playerNames = new Set();
+    playerNames.add(playerId);
+    
+    if (game.rosterSnapshot && game.rosterSnapshot.players) {
+        const snapshotPlayer = game.rosterSnapshot.players.find(p => p.id === playerId);
+        if (snapshotPlayer) {
+            playerNames.add(snapshotPlayer.name);
+        }
+    }
+    
+    // Also try to extract name from ID (format: Name-hash)
+    const lastHyphen = playerId.lastIndexOf('-');
+    if (lastHyphen > 0) {
+        playerNames.add(playerId.substring(0, lastHyphen));
+    }
+    
+    game.points.forEach(point => {
+        // Check if player was in this point
+        const wasInPoint = point.players && point.players.some(p => playerNames.has(p));
+        
+        if (wasInPoint) {
+            stats.points++;
+            
+            if (point.winner === 'team') {
+                stats.pointsWon++;
+            } else if (point.winner === 'opponent') {
+                stats.pointsLost++;
+            }
+        }
+        
+        // Scan events for this player's actions
+        if (point.possessions) {
+            point.possessions.forEach(possession => {
+                if (!possession.events) return;
+                
+                possession.events.forEach(event => {
+                    const thrower = event.thrower || event.throwerId;
+                    const receiver = event.receiver || event.receiverId;
+                    const defender = event.defender || event.defenderId;
+                    
+                    if (event.type === 'Throw') {
+                        if (thrower && playerNames.has(thrower)) {
+                            stats.totalThrows++;
+                            stats.completions++;
+                            if (event.score_flag && receiver && playerNames.has(receiver)) {
+                                stats.goals++;
+                            } else if (event.score_flag) {
+                                stats.assists++;
+                            }
+                        } else if (receiver && playerNames.has(receiver)) {
+                            if (event.score_flag) {
+                                stats.goals++;
+                            }
+                        }
+                    } else if (event.type === 'Turnover') {
+                        if (thrower && playerNames.has(thrower)) {
+                            stats.totalThrows++;
+                            stats.turnovers++;
+                        }
+                    } else if (event.type === 'Defense') {
+                        if (defender && playerNames.has(defender)) {
+                            stats.ds++;
+                            if (event.Callahan_flag) {
+                                stats.goals++;
+                            }
+                        }
+                    }
+                });
+            });
+        }
+    });
+    
+    return stats;
+}
+
+/**
+ * Load and compute season stats for a team
+ * @param {string} teamId - Team ID
+ * @param {Array} gameIds - List of game IDs
+ */
+async function loadTeamSeasonStats(teamId, gameIds) {
+    const statElements = {
+        games: document.getElementById('season-games'),
+        wins: document.getElementById('season-wins'),
+        losses: document.getElementById('season-losses'),
+        pointsFor: document.getElementById('season-points-for'),
+        pointsAgainst: document.getElementById('season-points-against'),
+        pointDiff: document.getElementById('season-point-diff')
+    };
+    
+    // Set loading state
+    Object.values(statElements).forEach(el => {
+        if (el) el.textContent = '...';
+    });
+    
+    if (!gameIds || gameIds.length === 0) {
+        Object.values(statElements).forEach(el => {
+            if (el) el.textContent = '0';
+        });
+        return;
+    }
+    
+    try {
+        // Use the games cache if available, otherwise fetch
+        let games = [];
+        
+        for (const gameId of gameIds) {
+            const cached = gamesCache.find(g => g.game_id === gameId);
+            if (cached) {
+                games.push(cached);
+            } else {
+                try {
+                    const response = await fetch(`/games/${gameId}`);
+                    if (response.ok) {
+                        const game = await response.json();
+                        games.push({
+                            game_id: gameId,
+                            scores: game.scores
+                        });
+                    }
+                } catch (e) {
+                    // Skip this game
+                }
+            }
+        }
+        
+        const stats = {
+            games: games.length,
+            wins: 0,
+            losses: 0,
+            pointsFor: 0,
+            pointsAgainst: 0
+        };
+        
+        games.forEach(game => {
+            const scores = game.scores || {};
+            const teamScore = scores.team || 0;
+            const oppScore = scores.opponent || 0;
+            
+            stats.pointsFor += teamScore;
+            stats.pointsAgainst += oppScore;
+            
+            if (teamScore > oppScore) {
+                stats.wins++;
+            } else if (teamScore < oppScore) {
+                stats.losses++;
+            }
+        });
+        
+        // Update display
+        if (statElements.games) statElements.games.textContent = stats.games;
+        if (statElements.wins) statElements.wins.textContent = stats.wins;
+        if (statElements.losses) statElements.losses.textContent = stats.losses;
+        if (statElements.pointsFor) statElements.pointsFor.textContent = stats.pointsFor;
+        if (statElements.pointsAgainst) statElements.pointsAgainst.textContent = stats.pointsAgainst;
+        
+        const pointDiff = stats.pointsFor - stats.pointsAgainst;
+        if (statElements.pointDiff) {
+            statElements.pointDiff.textContent = pointDiff > 0 ? `+${pointDiff}` : pointDiff;
+            statElements.pointDiff.className = 'stat-value ' + (pointDiff > 0 ? 'positive' : pointDiff < 0 ? 'negative' : '');
+        }
+        
+    } catch (error) {
+        console.error('Failed to load season stats:', error);
+        Object.values(statElements).forEach(el => {
+            if (el) el.textContent = '-';
+        });
     }
 }

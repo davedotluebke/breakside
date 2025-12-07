@@ -2148,3 +2148,141 @@ body.next-line-mode #startPointBtn {
 body.next-line-mode #selectNextLineBtn {
     display: block !important;
 }
+
+/* =============================================================================
+   Sync Status Bar (Phase 4)
+   ============================================================================= */
+
+.sync-status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 10px 15px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.sync-status-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.sync-status-icon {
+    font-size: 1.2rem;
+}
+
+.sync-status-text {
+    font-weight: 500;
+    color: #495057;
+}
+
+.pending-badge {
+    background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    animation: pendingPulse 2s infinite;
+}
+
+@keyframes pendingPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.synced-badge {
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.sync-status-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.sync-btn {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s ease;
+    margin: 0;
+}
+
+.sync-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+    transform: translateY(-1px);
+}
+
+.sync-btn:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.sync-btn i {
+    font-size: 0.9rem;
+}
+
+.fa-spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Local-only entity indicator */
+.local-only-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #fff3cd;
+    color: #856404;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+.local-only-indicator::before {
+    content: '⏳';
+}
+
+/* Player ID display in edit dialog */
+.edit-player-id-field {
+    background: #f8f9fa;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+}
+
+.player-id-code {
+    font-family: 'JetBrains Mono', monospace;
+    background: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    color: #495057;
+    user-select: all;
+}

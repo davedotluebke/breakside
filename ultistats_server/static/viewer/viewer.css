@@ -891,3 +891,70 @@ body {
         gap: 0.5rem;
     }
 }
+
+/* =============================================================================
+   Stats Grid (Phase 4 - Career & Season Stats)
+   ============================================================================= */
+
+.career-stats-section,
+.season-stats-section {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 10px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+}
+
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.stat-card {
+    background: white;
+    border-radius: 8px;
+    padding: 0.75rem;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.stat-card.wide {
+    grid-column: span 2;
+}
+
+.stat-card .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    line-height: 1.2;
+}
+
+.stat-card .stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.stat-value.positive {
+    color: #28a745;
+}
+
+.stat-value.negative {
+    color: #dc3545;
+}

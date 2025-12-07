@@ -1,6 +1,8 @@
 /*
  * Game Logic
  * Handles game initialization, scoring, and high-level game state transitions.
+ * 
+ * Phase 4 update: Games use teamId and create rosterSnapshot
  */
 let currentPoint = null;
 let currentEvent = null;
@@ -15,11 +17,19 @@ function startNewGame(startingPosition, seconds) {
     currentTeam.teamRoster.forEach(player => {
         player.pointsPlayedPreviousGames = player.totalPointsPlayed;
     });
-    const newGame = new Game(currentTeam.name, opponentName, startingPosition);
+    
+    // Phase 4: Pass teamId to Game constructor
+    const newGame = new Game(currentTeam.name, opponentName, startingPosition, currentTeam.id);
     
     // Generate ID immediately for the new game
     if (typeof window.generateGameId === 'function') {
         newGame.id = window.generateGameId(newGame);
+    }
+    
+    // Phase 4: Create roster snapshot from current team roster
+    if (typeof createRosterSnapshot === 'function') {
+        newGame.rosterSnapshot = createRosterSnapshot(currentTeam);
+        console.log('📸 Created roster snapshot:', newGame.rosterSnapshot);
     }
     
     // Set mixed rules flags from dropdown and checkbox
