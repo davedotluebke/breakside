@@ -15,13 +15,13 @@
   "points": [
     {
       "players": [
-        "Cyrus",
-        "Felix",
-        "Finn",
-        "Henry",
-        "Rayanne",
-        "Stella",
-        "Violet"
+        "Cyrus-g0wq",
+        "Felix-m7e6",
+        "Finn-ajs9",
+        "Henry-xydc",
+        "Rayanne-a72s",
+        "Stella-9ve7",
+        "Violet-9ms5"
       ],
       "startingPosition": "defense",
       "winner": "",
@@ -35,7 +35,8 @@
           "events": [
             {
               "type": "Defense",
-              "defender": "Rayanne"
+              "defender": "Rayanne",
+              "defenderId": "Rayanne-a72s"
             }
           ]
         }
@@ -43,13 +44,13 @@
     },
     {
       "players": [
-        "Cyrus",
-        "Felix",
-        "Finn",
-        "Henry",
-        "Stella",
-        "Violet",
-        "Avery"
+        "Cyrus-g0wq",
+        "Felix-m7e6",
+        "Finn-ajs9",
+        "Henry-xydc",
+        "Stella-9ve7",
+        "Violet-9ms5",
+        "Avery-mixr"
       ],
       "startingPosition": "offense",
       "winner": "opponent",
@@ -61,13 +62,13 @@
     },
     {
       "players": [
-        "Avery",
-        "Violet",
-        "Rayanne",
-        "Leif",
-        "Simeon",
-        "Walden",
-        "Zeke"
+        "Avery-mixr",
+        "Violet-9ms5",
+        "Rayanne-a72s",
+        "Leif-w435",
+        "Simeon-bpxf",
+        "Walden-qmek",
+        "Zeke-5tl2"
       ],
       "startingPosition": "offense",
       "winner": "team",
@@ -83,7 +84,9 @@
               "type": "Throw",
               "thrower": "Leif",
               "receiver": "Walden",
-              "score_flag": true
+              "score_flag": true,
+              "throwerId": "Leif-w435",
+              "receiverId": "Walden-qmek"
             }
           ]
         }
@@ -91,13 +94,13 @@
     },
     {
       "players": [
-        "Avery",
-        "Leif",
-        "Felix",
-        "Stella",
-        "Abby",
-        "Curtis",
-        "Kellen"
+        "Avery-mixr",
+        "Leif-w435",
+        "Felix-m7e6",
+        "Stella-9ve7",
+        "Abby-p0br",
+        "Curtis-qydh",
+        "Kellen-syip"
       ],
       "startingPosition": "defense",
       "winner": "opponent",
@@ -113,11 +116,13 @@
               "type": "Pull",
               "puller": "Felix",
               "pullerGender": "MMP",
-              "quality": "Good Pull"
+              "quality": "Good Pull",
+              "pullerId": "Felix-m7e6"
             },
             {
               "type": "Defense",
-              "defender": "Avery"
+              "defender": "Avery",
+              "defenderId": "Avery-mixr"
             }
           ]
         }
@@ -125,13 +130,13 @@
     },
     {
       "players": [
-        "Abby",
-        "Curtis",
-        "Stella",
-        "Cyrus",
-        "Finn",
-        "Violet",
-        "Zeke"
+        "Abby-p0br",
+        "Curtis-qydh",
+        "Stella-9ve7",
+        "Cyrus-g0wq",
+        "Finn-ajs9",
+        "Violet-9ms5",
+        "Zeke-5tl2"
       ],
       "startingPosition": "offense",
       "winner": "team",
@@ -147,7 +152,9 @@
               "type": "Throw",
               "thrower": "Violet",
               "receiver": "Cyrus",
-              "score_flag": true
+              "score_flag": true,
+              "throwerId": "Violet-9ms5",
+              "receiverId": "Cyrus-g0wq"
             }
           ]
         }
@@ -155,13 +162,13 @@
     },
     {
       "players": [
-        "Finn",
-        "Stella",
-        "Violet",
-        "Avery",
-        "Henry",
-        "Simeon",
-        "Walden"
+        "Finn-ajs9",
+        "Stella-9ve7",
+        "Violet-9ms5",
+        "Avery-mixr",
+        "Henry-xydc",
+        "Simeon-bpxf",
+        "Walden-qmek"
       ],
       "startingPosition": "defense",
       "winner": "opponent",
@@ -177,7 +184,8 @@
               "type": "Pull",
               "puller": "Stella",
               "pullerGender": "FMP",
-              "quality": "Poor Pull"
+              "quality": "Poor Pull",
+              "pullerId": "Stella-9ve7"
             }
           ]
         }
@@ -185,13 +193,13 @@
     },
     {
       "players": [
-        "Avery",
-        "Stella",
-        "Violet",
-        "Cyrus",
-        "Felix",
-        "Kellen",
-        "Zeke"
+        "Avery-mixr",
+        "Stella-9ve7",
+        "Violet-9ms5",
+        "Cyrus-g0wq",
+        "Felix-m7e6",
+        "Kellen-syip",
+        "Zeke-5tl2"
       ],
       "startingPosition": "offense",
       "winner": "team",
@@ -207,7 +215,9 @@
               "type": "Throw",
               "thrower": "Cyrus",
               "receiver": "Kellen",
-              "score_flag": true
+              "score_flag": true,
+              "throwerId": "Cyrus-g0wq",
+              "receiverId": "Kellen-syip"
             }
           ]
         }
@@ -215,13 +225,13 @@
     },
     {
       "players": [
-        "Avery",
-        "Violet",
-        "Curtis",
-        "Finn",
-        "Henry",
-        "Leif",
-        "Walden"
+        "Avery-mixr",
+        "Violet-9ms5",
+        "Curtis-qydh",
+        "Finn-ajs9",
+        "Henry-xydc",
+        "Leif-w435",
+        "Walden-qmek"
       ],
       "startingPosition": "defense",
       "winner": "opponent",
@@ -238,7 +248,8 @@
               "puller": "Leif",
               "pullerGender": "MMP",
               "quality": "Good Pull",
-              "roller_flag": true
+              "roller_flag": true,
+              "pullerId": "Leif-w435"
             }
           ]
         },
@@ -249,7 +260,8 @@
               "type": "Turnover",
               "thrower": "Leif",
               "receiver": "Unknown Player",
-              "huck_flag": true
+              "huck_flag": true,
+              "throwerId": "Leif-w435"
             }
           ]
         }
@@ -257,13 +269,13 @@
     },
     {
       "players": [
-        "Avery",
-        "Finn",
-        "Abby",
-        "Felix",
-        "Kellen",
-        "Simeon",
-        "Stella"
+        "Avery-mixr",
+        "Finn-ajs9",
+        "Abby-p0br",
+        "Felix-m7e6",
+        "Kellen-syip",
+        "Simeon-bpxf",
+        "Stella-9ve7"
       ],
       "startingPosition": "offense",
       "winner": "team",
@@ -279,7 +291,9 @@
               "type": "Throw",
               "thrower": "Abby",
               "receiver": "Kellen",
-              "score_flag": true
+              "score_flag": true,
+              "throwerId": "Abby-p0br",
+              "receiverId": "Kellen-syip"
             }
           ]
         }
@@ -287,13 +301,13 @@
     },
     {
       "players": [
-        "Abby",
-        "Avery",
-        "Felix",
-        "Stella",
-        "Violet",
-        "Walden",
-        "Zeke"
+        "Abby-p0br",
+        "Avery-mixr",
+        "Felix-m7e6",
+        "Stella-9ve7",
+        "Violet-9ms5",
+        "Walden-qmek",
+        "Zeke-5tl2"
       ],
       "startingPosition": "defense",
       "winner": "opponent",
@@ -309,7 +323,8 @@
               "type": "Pull",
               "puller": "Avery",
               "pullerGender": "FMP",
-              "quality": "Good Pull"
+              "quality": "Good Pull",
+              "pullerId": "Avery-mixr"
             },
             {
               "type": "Other",
@@ -321,13 +336,13 @@
     },
     {
       "players": [
-        "Abby",
-        "Avery",
-        "Felix",
-        "Violet",
-        "Zeke",
-        "Curtis",
-        "Leif"
+        "Abby-p0br",
+        "Avery-mixr",
+        "Felix-m7e6",
+        "Violet-9ms5",
+        "Zeke-5tl2",
+        "Curtis-qydh",
+        "Leif-w435"
       ],
       "startingPosition": "defense",
       "winner": "team",
@@ -343,7 +358,8 @@
               "type": "Pull",
               "puller": "Felix",
               "pullerGender": "MMP",
-              "quality": "Good Pull"
+              "quality": "Good Pull",
+              "pullerId": "Felix-m7e6"
             }
           ]
         },
@@ -354,7 +370,9 @@
               "type": "Throw",
               "thrower": "Felix",
               "receiver": "Curtis",
-              "score_flag": true
+              "score_flag": true,
+              "throwerId": "Felix-m7e6",
+              "receiverId": "Curtis-qydh"
             }
           ]
         }
@@ -362,13 +380,13 @@
     },
     {
       "players": [
-        "Avery",
-        "Cyrus",
-        "Finn",
-        "Henry",
-        "Simeon",
-        "Stella",
-        "Walden"
+        "Avery-mixr",
+        "Cyrus-g0wq",
+        "Finn-ajs9",
+        "Henry-xydc",
+        "Simeon-bpxf",
+        "Stella-9ve7",
+        "Walden-qmek"
       ],
       "startingPosition": "defense",
       "winner": "opponent",
@@ -384,7 +402,8 @@
               "type": "Pull",
               "puller": "Cyrus",
               "pullerGender": "MMP",
-              "quality": "Good Pull"
+              "quality": "Good Pull",
+              "pullerId": "Cyrus-g0wq"
             }
           ]
         }
@@ -392,13 +411,13 @@
     },
     {
       "players": [
-        "Avery",
-        "Finn",
-        "Abby",
-        "Felix",
-        "Kellen",
-        "Leif",
-        "Violet"
+        "Avery-mixr",
+        "Finn-ajs9",
+        "Abby-p0br",
+        "Felix-m7e6",
+        "Kellen-syip",
+        "Leif-w435",
+        "Violet-9ms5"
       ],
       "startingPosition": "offense",
       "winner": "opponent",
@@ -409,5 +428,115 @@
       "possessions": []
     }
   ],
-  "teamId": "CUDO-Mixed-8kr5"
+  "teamId": "CUDO-Mixed-8kr5",
+  "rosterSnapshot": {
+    "players": [
+      {
+        "id": "Abby-p0br",
+        "name": "Abby",
+        "nickname": "",
+        "number": "15",
+        "gender": "FMP"
+      },
+      {
+        "id": "Avery-mixr",
+        "name": "Avery",
+        "nickname": "",
+        "number": "12",
+        "gender": "FMP"
+      },
+      {
+        "id": "Curtis-qydh",
+        "name": "Curtis",
+        "nickname": "",
+        "number": "9",
+        "gender": "MMP"
+      },
+      {
+        "id": "Cyrus-g0wq",
+        "name": "Cyrus",
+        "nickname": "",
+        "number": "0",
+        "gender": "MMP"
+      },
+      {
+        "id": "Felix-m7e6",
+        "name": "Felix",
+        "nickname": "",
+        "number": "63",
+        "gender": "MMP"
+      },
+      {
+        "id": "Finn-ajs9",
+        "name": "Finn",
+        "nickname": "",
+        "number": "47",
+        "gender": "FMP"
+      },
+      {
+        "id": "Henry-xydc",
+        "name": "Henry",
+        "nickname": "",
+        "number": "27",
+        "gender": "MMP"
+      },
+      {
+        "id": "Kellen-syip",
+        "name": "Kellen",
+        "nickname": "",
+        "number": "99",
+        "gender": "MMP"
+      },
+      {
+        "id": "Leif-w435",
+        "name": "Leif",
+        "nickname": "",
+        "number": "21",
+        "gender": "MMP"
+      },
+      {
+        "id": "Rayanne-a72s",
+        "name": "Rayanne",
+        "nickname": "",
+        "number": "31",
+        "gender": "FMP"
+      },
+      {
+        "id": "Simeon-bpxf",
+        "name": "Simeon",
+        "nickname": "",
+        "number": "1",
+        "gender": "MMP"
+      },
+      {
+        "id": "Stella-9ve7",
+        "name": "Stella",
+        "nickname": "",
+        "number": "99",
+        "gender": "FMP"
+      },
+      {
+        "id": "Violet-9ms5",
+        "name": "Violet",
+        "nickname": "",
+        "number": "14",
+        "gender": "FMP"
+      },
+      {
+        "id": "Walden-qmek",
+        "name": "Walden",
+        "nickname": "",
+        "number": "2",
+        "gender": "MMP"
+      },
+      {
+        "id": "Zeke-5tl2",
+        "name": "Zeke",
+        "nickname": "",
+        "number": "18",
+        "gender": "MMP"
+      }
+    ],
+    "capturedAt": "2025-12-06T21:43:03.935808"
+  }
 }
