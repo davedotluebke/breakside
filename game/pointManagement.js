@@ -37,6 +37,11 @@ function moveToNextPoint() {
 
     // Start the countdown timer
     startCountdown();
+    
+    // Sync to cloud when point ends (for live viewer updates)
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
 }
 
 function startNextPoint() {
