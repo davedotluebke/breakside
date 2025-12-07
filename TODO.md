@@ -348,42 +348,17 @@ Target: Update UI to work with new data model.
 
 ---
 
-## Phase 5: Data Migration
+## Phase 5: Data Migration ✅ SKIPPED
 
-Target: Migrate existing data to new format.
+**Decision (2024-12-07):** Migration tooling not needed. The only data worth preserving (4 CUDO Mixed games) was already migrated using `scripts/migrate_games_to_ids.py`. 
 
-### 5.1 Migration Script
+Pre-refactor localStorage data format is no longer supported. Users starting fresh will use the new ID-based format from the start.
 
-- [ ] Create `scripts/migrate_data.js` (runs in browser console):
-    - [ ] Read existing localStorage `teamsData`
-    - [ ] For each team:
-        - [ ] Generate team ID: `{teamName}-{hash}`
-        - [ ] For each player in roster:
-            - [ ] Generate player ID: `{playerName}-{hash}`
-            - [ ] Create player record (queue for sync)
-            - [ ] Add player ID to team's playerIds
-        - [ ] Create team record (queue for sync)
-        - [ ] For each game in team:
-            - [ ] Update game with teamId
-            - [ ] Create rosterSnapshot from embedded player data
-            - [ ] Queue game for sync
-- [ ] Handle duplicates:
-    - [ ] Players with same name across teams → prompt user to merge or keep separate
-    - [ ] Use name+number as fuzzy match for potential duplicates
-
-### 5.2 Migration Flow in App
-
-- [ ] On app load, detect old data format (check for embedded `teamRoster`)
-- [ ] Show migration prompt: "We've updated how data is stored. Migrate now?"
-- [ ] Run migration with progress indicator
-- [ ] Backup old localStorage before migration (`teamsData_backup_TIMESTAMP`)
-- [ ] Clear old format after successful migration and sync
-
-### 5.3 Viewer Updates (Phase 5)
-
-- [ ] Add migration status page to viewer
-- [ ] Show before/after entity counts
-- [ ] Link to any migration warnings or duplicates found
+**What was done instead:**
+- [x] Server-side Python script (`scripts/migrate_games_to_ids.py`) migrated existing game files
+- [x] All 4 CUDO Mixed games have `teamId`, `rosterSnapshot`, and player ID references
+- [x] 18 players exist in `data/players/` with proper IDs
+- [x] Index rebuilt with all cross-references
 
 ---
 
@@ -393,7 +368,6 @@ Target: Migrate existing data to new format.
 - [ ] Integration tests for API endpoints
 - [ ] End-to-end test: create team → add players → start game → sync
 - [ ] **Offline test**: create team offline → add players → start game → come online → verify sync
-- [ ] Migration test: load old data → migrate → verify integrity
 - [ ] Index test: rebuild index → verify queries return correct results
 - [ ] Viewer test: verify all entity views work correctly
 
@@ -546,7 +520,7 @@ When online:
 3. ✅ Games reference teams by ID and include roster snapshot
 4. ✅ All data syncs to cloud server
 5. ✅ App works fully offline (create teams, players, games)
-6. ✅ Existing data migrates cleanly
+6. ✅ Existing data migrates cleanly *(4 CUDO games migrated via Python script)*
 7. ✅ Stats computed correctly from events
 8. ✅ Server index enables efficient cross-entity queries
 9. ✅ Viewer shows games, teams, and players with navigation

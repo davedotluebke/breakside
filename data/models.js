@@ -401,3 +401,12 @@ class Point {
     }
 }
 
+// =============================================================================
+// Exports
+// =============================================================================
+
+// ID generation functions - needed by sync.js for offline entity creation
+window.generateShortId = generateShortId;
+window.generatePlayerId = generatePlayerId;
+window.generateTeamId = generateTeamId;
+
