@@ -14,6 +14,9 @@ let gamesCache = [];
 let teamsCache = [];
 let playersCache = [];
 
+// Player ID to name/nickname lookup (built from rosterSnapshot)
+let playerIdToName = {};
+
 // =============================================================================
 // Initialization
 // =============================================================================
@@ -453,7 +456,51 @@ async function loadGameDetail() {
     updateConnectionStatus('connected');
 }
 
+/**
+ * Resolve a player ID to display name (nickname if present, otherwise name)
+ * Falls back to the ID itself if not found in rosterSnapshot
+ */
+function resolvePlayerName(playerId) {
+    if (!playerId) return 'Unknown';
+    
+    // Check if we have a mapping
+    if (playerIdToName[playerId]) {
+        return playerIdToName[playerId];
+    }
+    
+    // If it doesn't look like an ID (no hyphen with 4-char suffix), it's probably already a name
+    if (!playerId.includes('-') || playerId.length < 6) {
+        return playerId;
+    }
+    
+    // Extract name portion from ID (everything before the last hyphen)
+    const lastHyphen = playerId.lastIndexOf('-');
+    if (lastHyphen > 0) {
+        return playerId.substring(0, lastHyphen);
+    }
+    
+    return playerId;
+}
+
+/**
+ * Build player ID to name lookup from rosterSnapshot
+ */
+function buildPlayerLookup(game) {
+    playerIdToName = {};
+    
+    if (game.rosterSnapshot && game.rosterSnapshot.players) {
+        game.rosterSnapshot.players.forEach(player => {
+            // Prefer nickname if present, otherwise use name
+            const displayName = player.nickname || player.name;
+            playerIdToName[player.id] = displayName;
+        });
+    }
+}
+
 function renderGame(game) {
+    // Build player lookup for this game
+    buildPlayerLookup(game);
+    
     // Render Header
     document.getElementById('game-title').textContent = `${game.team} vs ${game.opponent}`;
     document.getElementById('game-id').textContent = `ID: ${currentGameId}`;
@@ -470,7 +517,22 @@ function renderGame(game) {
     // Stats
     document.getElementById('total-points').textContent = (game.points || []).length;
     
-    // Calculate duration from sum of point times (more accurate than wall-clock)
+    // Duration = wall-clock time from start to end (or now if in progress)
+    if (game.gameStartTimestamp) {
+        const start = new Date(game.gameStartTimestamp);
+        const end = game.gameEndTimestamp ? new Date(game.gameEndTimestamp) : null;
+        if (end) {
+            const diffSeconds = Math.floor((end - start) / 1000);
+            document.getElementById('game-duration').textContent = formatDuration(diffSeconds);
+        } else {
+            // Game in progress - show "--:--" since wall-clock from weeks ago is meaningless
+            document.getElementById('game-duration').textContent = '--:--';
+        }
+    } else {
+        document.getElementById('game-duration').textContent = '--:--';
+    }
+    
+    // Play Time = sum of actual point durations (excludes timeouts, halftime, etc.)
     let totalPlayedMs = 0;
     (game.points || []).forEach(point => {
         if (point.totalPointTime) {
@@ -478,17 +540,13 @@ function renderGame(game) {
         }
     });
     
-    if (totalPlayedMs > 0) {
-        // Use accumulated point times
-        document.getElementById('game-duration').textContent = formatDuration(Math.floor(totalPlayedMs / 1000));
-    } else if (game.gameEndTimestamp) {
-        // Fallback for completed games: use timestamp difference
-        const start = new Date(game.gameStartTimestamp);
-        const end = new Date(game.gameEndTimestamp);
-        const diffSeconds = Math.floor((end - start) / 1000);
-        document.getElementById('game-duration').textContent = formatDuration(diffSeconds);
-    } else {
-        document.getElementById('game-duration').textContent = '--:--';
+    const playTimeEl = document.getElementById('game-play-time');
+    if (playTimeEl) {
+        if (totalPlayedMs > 0) {
+            playTimeEl.textContent = formatDuration(Math.floor(totalPlayedMs / 1000));
+        } else {
+            playTimeEl.textContent = '--:--';
+        }
     }
     
     // Show data format indicator (Phase 2)
@@ -564,7 +622,8 @@ function createPointElement(point, pointNumber, teamName, opponentName) {
 
     const durationSeconds = point.totalPointTime ? Math.floor(point.totalPointTime / 1000) : 0;
     const summary = `Duration: ${formatDuration(durationSeconds)}`;
-    const rosterList = (point.players || []).join(', ');
+    // Resolve player IDs to names
+    const rosterList = (point.players || []).map(p => resolvePlayerName(p)).join(', ');
 
     div.innerHTML = `
         <div class="point-header" onclick="togglePoint(this)">

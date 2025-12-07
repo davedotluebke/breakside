@@ -116,7 +116,7 @@ function updateScore(winner) {
 document.getElementById('endGameBtn').addEventListener('click', function() {
     if (confirm('Are you sure you want to end the game?')) {
         stopCountdown();
-        currentGame().endTimestamp = new Date(); // Set end timestamp
+        currentGame().gameEndTimestamp = new Date(); // Set end timestamp (fixed: was incorrectly using endTimestamp)
 
         // Populate the gameSummaryScreen with statistics, then show it
         document.getElementById('teamName').textContent = currentGame().team;
