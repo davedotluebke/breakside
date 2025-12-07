@@ -58,17 +58,23 @@ function generateGameId(game) {
 }
 
 /**
- * Serialize game for API (wrapper around storage.js serialize functions)
+ * Serialize game for API
+ * Phase 2 update: Uses serializeGame from storage.js and includes new fields
  * Returns a plain object, not a JSON string
  */
 function prepareGameForSync(game) {
-    // Create a dummy team object to reuse the serialization logic in storage.js
-    // This is a bit of a hack but avoids duplicating serialization logic
-    // We need to extract the single game serialization logic
+    // Use the serializeGame function from storage.js if available
+    if (typeof serializeGame === 'function') {
+        const serialized = serializeGame(game);
+        // Ensure ID is set
+        serialized.id = serialized.id || generateGameId(game);
+        return serialized;
+    }
     
-    // Manually serialize the game based on storage.js logic
+    // Fallback: manual serialization (includes Phase 2 fields)
     return {
         id: game.id || generateGameId(game),
+        teamId: game.teamId || null,  // New: team ID reference
         team: game.team,
         opponent: game.opponent,
         startingPosition: game.startingPosition,
@@ -79,6 +85,7 @@ function prepareGameForSync(game) {
         alternateGenderPulls: game.alternateGenderPulls,
         startingGenderRatio: game.startingGenderRatio,
         lastLineUsed: game.lastLineUsed,
+        rosterSnapshot: game.rosterSnapshot || null,  // New: roster snapshot
         points: game.points.map(point => ({
             players: point.players,
             startingPosition: point.startingPosition,
@@ -232,6 +239,7 @@ async function listServerGames() {
 
 /**
  * Load a game from the server and deserialize it
+ * Phase 2 update: Uses deserializeGame from storage.js and handles new fields
  * @param {string} gameId 
  * @returns {Promise<Object>} The deserialized Game object
  */
@@ -248,15 +256,19 @@ async function loadGameFromCloud(gameId) {
         
         const gameData = await response.json();
         
-        // Use deserializeTeams logic to deserialize a single game
-        // We wrap it in a dummy structure to reuse existing deserialization logic
-        // or we can manually deserialize it similar to deserializeTeams
+        // Use deserializeGame from storage.js if available
+        if (typeof deserializeGame === 'function') {
+            const game = deserializeGame(gameData);
+            game.id = gameId; // Ensure ID is set
+            return game;
+        }
         
-        // Manual deserialization following storage.js logic:
+        // Fallback: manual deserialization (includes Phase 2 fields)
         const game = new Game(
             gameData.team,
             gameData.opponent,
-            gameData.startingPosition
+            gameData.startingPosition,
+            gameData.teamId || null  // New: team ID reference
         );
         game.id = gameId; // Important: Set the ID!
         game.gameStartTimestamp = new Date(gameData.gameStartTimestamp);
@@ -273,7 +285,8 @@ async function loadGameFromCloud(gameId) {
         game.alternateGenderPulls = gameData.alternateGenderPulls || false;
         game.startingGenderRatio = gameData.startingGenderRatio || null;
         game.lastLineUsed = gameData.lastLineUsed || null;
-        game.scores = gameData.scores || { [Role.TEAM]: 0, [Role.OPPONENT]: 0 }; // Ensure scores are set
+        game.rosterSnapshot = gameData.rosterSnapshot || null;  // New: roster snapshot
+        game.scores = gameData.scores || { [Role.TEAM]: 0, [Role.OPPONENT]: 0 };
 
         if (gameData.points) {
             game.points = gameData.points.map(pointData => {

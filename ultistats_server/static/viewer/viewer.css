@@ -463,6 +463,29 @@ body {
     font-size: 0.8rem;
 }
 
+/* Data format indicator (Phase 2) */
+.format-badge {
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-left: auto;
+}
+
+.format-badge.new-format {
+    background-color: #e3f2fd;
+    color: #1565c0;
+    border: 1px solid #90caf9;
+}
+
+.format-badge.legacy-format {
+    background-color: #fff8e1;
+    color: #f57f17;
+    border: 1px solid #ffe082;
+}
+
 .stats-row {
     display: flex;
     gap: 2rem;

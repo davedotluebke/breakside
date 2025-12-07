@@ -19,12 +19,71 @@ const Gender = {
     UNKNOWN: "Unknown"
 };
 
+// =============================================================================
+// Short ID Generation (matches server-side logic)
+// =============================================================================
+
+/**
+ * Generate a short, human-readable ID.
+ * Format: {sanitized-name}-{4-char-hash}
+ * Example: "Alice-7f3a", "Sample-Team-b2c4"
+ * 
+ * @param {string} name - The name to generate an ID from
+ * @returns {string} A short, human-readable ID
+ */
+function generateShortId(name) {
+    // Sanitize: keep alphanumeric and spaces, convert spaces to hyphens
+    let safeName = name.replace(/[^a-zA-Z0-9\s-]/g, '');
+    safeName = safeName.replace(/\s+/g, '-').replace(/^-+|-+$/g, '');
+    safeName = safeName.substring(0, 20);
+    safeName = safeName.replace(/-+$/, ''); // Trim trailing hyphens
+    
+    if (!safeName) {
+        safeName = 'entity';
+    }
+    
+    // Generate 4-char alphanumeric hash
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let hash = '';
+    for (let i = 0; i < 4; i++) {
+        hash += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    
+    return `${safeName}-${hash}`;
+}
+
+/**
+ * Generate a player ID
+ * @param {string} name - Player name
+ * @returns {string} Player ID like "Alice-7f3a"
+ */
+function generatePlayerId(name) {
+    return generateShortId(name || 'Player');
+}
+
+/**
+ * Generate a team ID
+ * @param {string} name - Team name  
+ * @returns {string} Team ID like "Sample-Team-b2c4"
+ */
+function generateTeamId(name) {
+    return generateShortId(name || 'Team');
+}
+
 // Player data structure
-function Player(name, nickname = "", gender = Gender.UNKNOWN, number = null) {
+// Phase 2 update: Added id, createdAt, updatedAt fields
+// Cumulative stats (totalPointsPlayed, etc.) are now derived from game events, not stored on player
+function Player(name, nickname = "", gender = Gender.UNKNOWN, number = null, id = null) {
+    this.id = id || generatePlayerId(name);  // Short ID like "Alice-7f3a"
     this.name = name;
     this.nickname = nickname;
     this.gender = gender;
     this.number = number; // Jersey number
+    this.createdAt = new Date().toISOString();
+    this.updatedAt = new Date().toISOString();
+    
+    // Legacy stats - kept for backward compatibility during migration
+    // In the new model, these are computed from game events
     this.totalPointsPlayed = 0;
     this.consecutivePointsPlayed = 0;
     this.pointsPlayedPreviousGames = 0;
@@ -40,9 +99,17 @@ function Player(name, nickname = "", gender = Gender.UNKNOWN, number = null) {
 // Note: UNKNOWN_PLAYER_OBJ singleton will be created in data/storage.js after Player is defined
 
 // Game data structure; includes a list of 'points'
-function Game(teamName, opponentName, startOn) {
+// Phase 2 update: Added teamId, rosterSnapshot for cloud-first architecture
+function Game(teamName, opponentName, startOn, teamId = null) {
+    // New model: reference team by ID
+    this.teamId = teamId || null;  // Team ID like "Sample-Team-b2c4"
+    
+    // Legacy: team name string (kept for backward compatibility and display)
     this.team = teamName;
+    
+    // Opponent is kept as string (opponent team may not be in our system)
     this.opponent = opponentName;
+    
     this.startingPosition = startOn;
     this.scores = {
         [Role.TEAM]: 0,
@@ -57,17 +124,63 @@ function Game(teamName, opponentName, startOn) {
     this.alternateGenderRatio = 'No'; // Gender ratio enforcement: 'No', 'Alternating', or ratio string like '4:3'
     this.alternateGenderPulls = false; // Whether to follow Mixed rules for alternating gender pulls
     this.startingGenderRatio = null; // 'FMP' or 'MMP' - the gender that should have more players on the first point
+    
+    // New model: Snapshot of player info at game time for historical accuracy
+    // This preserves player data (id, name, nickname, number, gender) at the time of the game
+    this.rosterSnapshot = null;  // { players: [{id, name, nickname, number, gender}, ...], capturedAt: ISO timestamp }
+}
+
+/**
+ * Create a roster snapshot from a team's current roster
+ * Call this when starting a new game to capture player info for historical accuracy
+ * @param {Team} team - The team object with players
+ * @returns {Object} Roster snapshot with players array and timestamp
+ */
+function createRosterSnapshot(team) {
+    if (!team || !team.teamRoster) {
+        return null;
+    }
+    
+    return {
+        players: team.teamRoster.map(player => ({
+            id: player.id,
+            name: player.name,
+            nickname: player.nickname || '',
+            number: player.number || null,
+            gender: player.gender || Gender.UNKNOWN
+        })),
+        capturedAt: new Date().toISOString()
+    };
 }
 
 // Team data structure
-function Team(name = "My Team", initialRoster = []) {
+// Phase 2 update: Added id, playerIds, createdAt, updatedAt
+// In the new model: games are separate entities, players are referenced by ID
+// During transition: teamRoster and games are kept for backward compatibility
+function Team(name = "My Team", initialRoster = [], id = null) {
+    this.id = id || generateTeamId(name);  // Short ID like "Sample-Team-b2c4"
     this.name = name;
-    this.games = [];  // array of Games played by this team
-    this.teamRoster = []; // array of Players on the team
-    this.lines = []; // array of pre-defined player lines
-    initialRoster.forEach(name => {
-        let newPlayer = new Player(name);
+    this.createdAt = new Date().toISOString();
+    this.updatedAt = new Date().toISOString();
+    
+    // New model: array of player IDs (references to Player entities)
+    this.playerIds = [];
+    
+    // Legacy: array of Games played by this team (kept for backward compatibility)
+    this.games = [];
+    
+    // Legacy: array of Players on the team (kept for backward compatibility)
+    // In the new model, use playerIds instead and look up players by ID
+    this.teamRoster = [];
+    
+    // Pre-defined player lines
+    this.lines = [];
+    
+    // Handle initial roster (legacy behavior)
+    initialRoster.forEach(playerName => {
+        let newPlayer = new Player(playerName);
         this.teamRoster.push(newPlayer);
+        this.playerIds.push(newPlayer.id);  // Also populate playerIds
     });
 }
 

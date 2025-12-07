@@ -1,6 +1,8 @@
 /*
  * Data Storage and Serialization
  * Handles all data persistence operations
+ * 
+ * Phase 2 update: Support for ID-based player references alongside name-based (legacy)
  */
 
 // Note: This module depends on data/models.js for data structures
@@ -9,8 +11,11 @@
 
 /**
  * Serialize an event to JSON
+ * Supports both legacy (name-based) and new (ID-based) player references
+ * @param {Event} event - The event object to serialize
+ * @param {boolean} useIds - If true, include player IDs (new format). Default: true for new games
  */
-function serializeEvent(event) {
+function serializeEvent(event, useIds = true) {
     const serializedEvent = { type: event.type };
     // Create a new instance of the event with default values
     const defaultEvent = new event.constructor({});
@@ -22,63 +27,118 @@ function serializeEvent(event) {
         }
     }
 
-    // Serialize player names if available
-    if (event.thrower) serializedEvent.thrower = event.thrower.name;
-    if (event.receiver) serializedEvent.receiver = event.receiver.name;
-    if (event.puller) serializedEvent.puller = event.puller.name;
-    if (event.defender) serializedEvent.defender = event.defender.name;
+    // Serialize player references
+    // Legacy format: store player name (for backward compatibility)
+    // New format: also store player ID for direct lookup
+    if (event.thrower) {
+        serializedEvent.thrower = event.thrower.name;
+        if (useIds && event.thrower.id) {
+            serializedEvent.throwerId = event.thrower.id;
+        }
+    }
+    if (event.receiver) {
+        serializedEvent.receiver = event.receiver.name;
+        if (useIds && event.receiver.id) {
+            serializedEvent.receiverId = event.receiver.id;
+        }
+    }
+    if (event.puller) {
+        serializedEvent.puller = event.puller.name;
+        if (useIds && event.puller.id) {
+            serializedEvent.pullerId = event.puller.id;
+        }
+    }
+    if (event.defender) {
+        serializedEvent.defender = event.defender.name;
+        if (useIds && event.defender.id) {
+            serializedEvent.defenderId = event.defender.id;
+        }
+    }
 
     return serializedEvent;
 }
 
 /**
+ * Serialize a single player to a plain object
+ */
+function serializePlayer(player) {
+    return {
+        id: player.id,
+        name: player.name,
+        nickname: player.nickname,
+        gender: player.gender,
+        number: player.number,
+        createdAt: player.createdAt,
+        updatedAt: player.updatedAt,
+        // Legacy stats (kept for backward compatibility)
+        totalPointsPlayed: player.totalPointsPlayed,
+        consecutivePointsPlayed: player.consecutivePointsPlayed,
+        pointsPlayedPreviousGames: player.pointsPlayedPreviousGames,
+        totalTimePlayed: player.totalTimePlayed,
+        completedPasses: player.completedPasses,
+        turnovers: player.turnovers,
+        goals: player.goals,
+        assists: player.assists,
+        pointsWon: player.pointsWon,
+        pointsLost: player.pointsLost
+    };
+}
+
+/**
+ * Serialize a single game to a plain object
+ */
+function serializeGame(game) {
+    return {
+        id: game.id,
+        teamId: game.teamId,  // New: reference to team by ID
+        team: game.team,       // Legacy: team name string
+        opponent: game.opponent,
+        startingPosition: game.startingPosition,
+        scores: game.scores,
+        gameStartTimestamp: game.gameStartTimestamp.toISOString(),
+        gameEndTimestamp: game.gameEndTimestamp ? game.gameEndTimestamp.toISOString() : null,
+        alternateGenderRatio: game.alternateGenderRatio,
+        alternateGenderPulls: game.alternateGenderPulls,
+        startingGenderRatio: game.startingGenderRatio,
+        lastLineUsed: game.lastLineUsed,
+        rosterSnapshot: game.rosterSnapshot,  // New: snapshot of player data at game time
+        points: game.points.map(point => ({
+            players: point.players,
+            startingPosition: point.startingPosition,
+            winner: point.winner,
+            startTimestamp: point.startTimestamp ? point.startTimestamp.toISOString() : null,
+            endTimestamp: point.endTimestamp ? point.endTimestamp.toISOString() : null,
+            totalPointTime: point.totalPointTime,
+            lastPauseTime: point.lastPauseTime ? point.lastPauseTime.toISOString() : null,
+            possessions: point.possessions.map(possession => ({
+                offensive: possession.offensive,
+                events: possession.events.map(event => serializeEvent(event))
+            }))
+        }))
+    };
+}
+
+/**
  * Simplify the team & game objects into serializable objects and output JSON
+ * Phase 2 update: includes id, playerIds, createdAt, updatedAt
  */
 function serializeTeam(team) {
     const serializedTeam = {
+        // New fields
+        id: team.id,
+        createdAt: team.createdAt,
+        updatedAt: team.updatedAt,
+        playerIds: team.playerIds || [],
+        
+        // Existing fields
         name: team.name,
-        teamRoster: team.teamRoster.map(player => ({
-            name: player.name,
-            nickname: player.nickname,
-            gender: player.gender,
-            number: player.number,
-            totalPointsPlayed: player.totalPointsPlayed,
-            consecutivePointsPlayed: player.consecutivePointsPlayed,
-            pointsPlayedPreviousGames: player.pointsPlayedPreviousGames,
-            totalTimePlayed: player.totalTimePlayed,
-            completedPasses: player.completedPasses,
-            turnovers: player.turnovers,
-            goals: player.goals,
-            assists: player.assists,
-            pointsWon: player.pointsWon,
-            pointsLost: player.pointsLost
-        })),
-        games: team.games.map(game => ({
-            id: game.id,
-            team: game.team,
-            opponent: game.opponent,
-            startingPosition: game.startingPosition,
-            scores: game.scores,
-            gameStartTimestamp: game.gameStartTimestamp.toISOString(),
-            gameEndTimestamp: game.gameEndTimestamp ? game.gameEndTimestamp.toISOString() : null,
-            alternateGenderRatio: game.alternateGenderRatio,
-            alternateGenderPulls: game.alternateGenderPulls,
-            startingGenderRatio: game.startingGenderRatio,
-            lastLineUsed: game.lastLineUsed,
-            points: game.points.map(point => ({
-                players: point.players,
-                startingPosition: point.startingPosition,
-                winner: point.winner,
-                startTimestamp: point.startTimestamp ? point.startTimestamp.toISOString() : null,
-                endTimestamp: point.endTimestamp ? point.endTimestamp.toISOString() : null,
-                totalPointTime: point.totalPointTime,
-                lastPauseTime: point.lastPauseTime ? point.lastPauseTime.toISOString() : null,
-                possessions: point.possessions.map(possession => ({
-                    offensive: possession.offensive,
-                    events: possession.events.map(event => serializeEvent(event))
-                }))
-            }))
-        })),
+        
+        // Legacy: embedded roster (kept for backward compatibility)
+        teamRoster: team.teamRoster.map(player => serializePlayer(player)),
+        
+        // Legacy: embedded games (kept for backward compatibility during migration)
+        games: team.games.map(game => serializeGame(game)),
+        
         lines: team.lines
     };
     return JSON.stringify(serializedTeam, null, 4);
@@ -123,11 +183,12 @@ function saveAllTeamsData() {
 
 /** 
  * Given eventData created when deserializing an Event from JSON, create an
- * Event object of the proper subclass and convert any player name strings into
- * references to Player instances.
+ * Event object of the proper subclass and convert any player references into
+ * Player instances.
  * 
- * Note: This function uses getPlayerFromName which is defined in main.js
- * In the future, this should be moved to utils/helpers.js
+ * Phase 2 update: Supports both ID-based (new) and name-based (legacy) lookups
+ * - If throwerId/receiverId/etc exists, use ID lookup
+ * - Otherwise fall back to name lookup (legacy)
  */
 function deserializeEvent(eventData) {
     let event;
@@ -148,25 +209,30 @@ function deserializeEvent(eventData) {
             event[key] = eventData[key];
         }
     }
-    // Now replace player names with Player instances
+    
+    // Now replace player references with Player instances
+    // Try ID-based lookup first (new format), fall back to name lookup (legacy)
     switch (eventData.type) {
         case 'Throw':
-            event.thrower = getPlayerFromName(eventData.thrower);
-            event.receiver = getPlayerFromName(eventData.receiver);
+            event.thrower = resolvePlayerReference(eventData.throwerId, eventData.thrower);
+            event.receiver = resolvePlayerReference(eventData.receiverId, eventData.receiver);
             break;
         case 'Turnover':
-            if (event.receiverError) {
-                event.receiver = getPlayerFromName(eventData.receiver);
+            if (eventData.thrower || eventData.throwerId) {
+                event.thrower = resolvePlayerReference(eventData.throwerId, eventData.thrower);
+            }
+            if (eventData.receiver || eventData.receiverId) {
+                event.receiver = resolvePlayerReference(eventData.receiverId, eventData.receiver);
             }
             break;
         case 'Defense':
-            if (eventData.defender) {
-                event.defender = getPlayerFromName(eventData.defender);
+            if (eventData.defender || eventData.defenderId) {
+                event.defender = resolvePlayerReference(eventData.defenderId, eventData.defender);
             }
             break;
         case 'Pull':
-            if (eventData.puller) {
-                event.puller = getPlayerFromName(eventData.puller);
+            if (eventData.puller || eventData.pullerId) {
+                event.puller = resolvePlayerReference(eventData.pullerId, eventData.puller);
             }
             break;
         // Add other event types here, if they refer to players
@@ -175,65 +241,147 @@ function deserializeEvent(eventData) {
 }
 
 /**
+ * Resolve a player reference - try ID first, then name
+ * @param {string|null} playerId - Player ID (new format)
+ * @param {string|null} playerName - Player name (legacy format)
+ * @returns {Player|null} The resolved Player object or null
+ */
+function resolvePlayerReference(playerId, playerName) {
+    // Try ID lookup first (new format)
+    if (playerId) {
+        const player = getPlayerById(playerId);
+        if (player) return player;
+    }
+    // Fall back to name lookup (legacy format)
+    if (playerName) {
+        return getPlayerFromName(playerName);
+    }
+    return null;
+}
+
+/**
+ * Get a player by their unique ID
+ * Searches the current team's roster for a player with matching ID
+ * @param {string} playerId - The player's unique ID
+ * @returns {Player|null} The Player object or null if not found
+ */
+function getPlayerById(playerId) {
+    if (!playerId) return null;
+    if (!currentTeam || !currentTeam.teamRoster) return null;
+    return currentTeam.teamRoster.find(player => player.id === playerId) || null;
+}
+
+/**
+ * Deserialize a single player from data
+ * Handles both legacy (no id) and new (with id) formats
+ */
+function deserializePlayer(playerData) {
+    // Create player with id if available, otherwise it will be generated
+    const player = new Player(
+        playerData.name, 
+        playerData.nickname || "", 
+        playerData.gender || Gender.UNKNOWN, 
+        playerData.number || null,
+        playerData.id || null  // Pass existing id if available
+    );
+    
+    // Copy over all properties (handles legacy stats)
+    Object.assign(player, playerData);
+    
+    // Ensure required fields are set
+    if (!player.gender) {
+        player.gender = Gender.UNKNOWN;
+    }
+    if (!player.createdAt) {
+        player.createdAt = new Date().toISOString();
+    }
+    if (!player.updatedAt) {
+        player.updatedAt = player.createdAt;
+    }
+    
+    return player;
+}
+
+/**
+ * Deserialize a single game from data
+ * Handles both legacy and new formats
+ */
+function deserializeGame(gameData) {
+    const game = new Game(
+        gameData.team,
+        gameData.opponent,
+        gameData.startingPosition,
+        gameData.teamId || null  // New: team ID reference
+    );
+    
+    game.id = gameData.id;
+    game.gameStartTimestamp = new Date(gameData.gameStartTimestamp);
+    game.gameEndTimestamp = gameData.gameEndTimestamp ? new Date(gameData.gameEndTimestamp) : null;
+    
+    // Handle backward compatibility: convert boolean to string format
+    if (gameData.alternateGenderRatio === true) {
+        game.alternateGenderRatio = 'Alternating';
+    } else if (gameData.alternateGenderRatio === false || !gameData.alternateGenderRatio) {
+        game.alternateGenderRatio = 'No';
+    } else {
+        game.alternateGenderRatio = gameData.alternateGenderRatio;
+    }
+    
+    game.alternateGenderPulls = gameData.alternateGenderPulls || false;
+    game.startingGenderRatio = gameData.startingGenderRatio || null;
+    game.lastLineUsed = gameData.lastLineUsed || null;
+    game.rosterSnapshot = gameData.rosterSnapshot || null;  // New: roster snapshot
+    
+    game.points = gameData.points.map(pointData => {
+        const point = new Point(pointData.players, pointData.startingPosition);
+        point.startTimestamp = pointData.startTimestamp ? new Date(pointData.startTimestamp) : null;
+        point.endTimestamp = pointData.endTimestamp ? new Date(pointData.endTimestamp) : null;
+        point.winner = pointData.winner;
+        point.totalPointTime = pointData.totalPointTime || 0;
+        point.lastPauseTime = pointData.lastPauseTime ? new Date(pointData.lastPauseTime) : null;
+        point.possessions = pointData.possessions.map(possessionData => {
+            const possession = new Possession(possessionData.offensive);
+            possession.events = possessionData.events.map(eventData => deserializeEvent(eventData));
+            return possession;
+        });
+        return point;
+    });
+    
+    return game;
+}
+
+/**
  * Convert serialized team data back into team objects
+ * Phase 2 update: handles id, playerIds, createdAt, updatedAt fields
  */
 function deserializeTeams(serializedData) {
     const parsedData = JSON.parse(serializedData);
     return parsedData.map(teamData => {
-        const team = new Team(teamData.name);
+        // Create team with id if available
+        const team = new Team(teamData.name, [], teamData.id || null);
         currentTeam = team; // Set current team before deserializing events
         
-        // First deserialize the roster
-        team.teamRoster = teamData.teamRoster.map(playerData => {
-            const player = new Player(playerData.name, playerData.nickname || "", playerData.gender || Gender.UNKNOWN, playerData.number || null);
-            Object.assign(player, playerData);
-            // Ensure gender is set (for backward compatibility with old saves)
-            if (!player.gender) {
-                player.gender = Gender.UNKNOWN;
-            }
-            return player;
-        });
+        // Restore metadata
+        team.createdAt = teamData.createdAt || new Date().toISOString();
+        team.updatedAt = teamData.updatedAt || team.createdAt;
         
-        // Then deserialize games and their nested structures
-        team.games = teamData.games.map(gameData => {
-            const game = new Game(
-                gameData.team,
-                gameData.opponent,
-                gameData.startingPosition
-            );
-            game.id = gameData.id;
-            game.gameStartTimestamp = new Date(gameData.gameStartTimestamp);
-            game.gameEndTimestamp = gameData.gameEndTimestamp ? new Date(gameData.gameEndTimestamp) : null;
-            // Handle backward compatibility: convert boolean to string format
-            if (gameData.alternateGenderRatio === true) {
-                game.alternateGenderRatio = 'Alternating';
-            } else if (gameData.alternateGenderRatio === false || !gameData.alternateGenderRatio) {
-                game.alternateGenderRatio = 'No';
-            } else {
-                game.alternateGenderRatio = gameData.alternateGenderRatio;
-            }
-            game.alternateGenderPulls = gameData.alternateGenderPulls || false;
-            game.startingGenderRatio = gameData.startingGenderRatio || null;
-            game.lastLineUsed = gameData.lastLineUsed || null;
-            game.points = gameData.points.map(pointData => {
-                const point = new Point(pointData.players, pointData.startingPosition);
-                point.startTimestamp = pointData.startTimestamp ? new Date(pointData.startTimestamp) : null;
-                point.endTimestamp = pointData.endTimestamp ? new Date(pointData.endTimestamp) : null;
-                point.winner = pointData.winner;
-                point.totalPointTime = pointData.totalPointTime || 0;
-                point.lastPauseTime = pointData.lastPauseTime ? new Date(pointData.lastPauseTime) : null;
-                point.possessions = pointData.possessions.map(possessionData => {
-                    const possession = new Possession(possessionData.offensive);
-                    possession.events = possessionData.events.map(eventData => deserializeEvent(eventData));
-                    return possession;
-                });
-                return point;
-            });
-            return game;
-        });
+        // Deserialize the roster
+        team.teamRoster = teamData.teamRoster.map(playerData => deserializePlayer(playerData));
         
-        // Finally set the lines data
+        // Build playerIds from roster (ensures consistency)
+        // If playerIds exists in data, use it; otherwise build from roster
+        if (teamData.playerIds && teamData.playerIds.length > 0) {
+            team.playerIds = teamData.playerIds;
+        } else {
+            team.playerIds = team.teamRoster.map(p => p.id);
+        }
+        
+        // Deserialize games
+        team.games = teamData.games.map(gameData => deserializeGame(gameData));
+        
+        // Set the lines data
         team.lines = teamData.lines || [];
+        
         return team;
     });
 }
