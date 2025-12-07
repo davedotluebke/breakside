@@ -1,52 +1,420 @@
 /**
- * Game Viewer Logic
- * Handles fetching and rendering game data
+ * Ultistats Viewer
+ * Handles navigation, entity listing, and game detail viewing
  */
 
 const POLL_INTERVAL = 3000; // 3 seconds
 let currentGameId = null;
-let lastVersion = null;
+let lastGameVersion = null;
 let isPolling = false;
+let pollingInterval = null;
 
-// Parse query parameters
-const urlParams = new URLSearchParams(window.location.search);
-currentGameId = urlParams.get('game_id');
+// Data caches
+let gamesCache = [];
+let teamsCache = [];
+let playersCache = [];
 
-    // Initialize
-    document.addEventListener('DOMContentLoaded', () => {
-        if (!currentGameId) {
-            showError('No game ID specified. Please use ?game_id=YOUR_GAME_ID');
-            return;
-        }
+// =============================================================================
+// Initialization
+// =============================================================================
 
-        // Setup Info Toggle
-        const infoToggle = document.getElementById('info-toggle');
+document.addEventListener('DOMContentLoaded', () => {
+    // Parse URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const gameId = urlParams.get('game_id');
+    const teamId = urlParams.get('team_id');
+    const playerId = urlParams.get('player_id');
+    
+    // Setup navigation tabs
+    setupNavigation();
+    
+    // Setup info toggle for game detail view
+    const infoToggle = document.getElementById('info-toggle');
+    if (infoToggle) {
         const infoPanel = document.getElementById('game-info-panel');
         infoToggle.addEventListener('click', () => {
             infoPanel.classList.toggle('open');
         });
+    }
+    
+    // Route to appropriate view
+    if (gameId) {
+        showGameDetail(gameId);
+    } else if (teamId) {
+        showTeamDetail(teamId);
+    } else if (playerId) {
+        showPlayerDetail(playerId);
+    } else {
+        showHomeView();
+        loadAllData();
+    }
+});
 
-        // Start polling
-        startPolling();
+function setupNavigation() {
+    const navTabs = document.querySelectorAll('.nav-tab');
+    navTabs.forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            e.preventDefault();
+            const tabName = tab.getAttribute('data-tab');
+            switchTab(tabName);
+        });
     });
+}
 
-async function startPolling() {
-    if (isPolling) return;
-    isPolling = true;
+function switchTab(tabName) {
+    // Update nav tabs
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.nav-tab[data-tab="${tabName}"]`).classList.add('active');
+    
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.getElementById(`${tabName}-tab`).classList.add('active');
+    
+    // Update URL hash
+    window.location.hash = tabName;
+}
 
+// =============================================================================
+// View Management
+// =============================================================================
+
+function showHomeView() {
+    stopPolling();
+    document.getElementById('home-view').classList.remove('hidden');
+    document.getElementById('game-detail-view').classList.add('hidden');
+    document.getElementById('team-detail-view').classList.add('hidden');
+    document.getElementById('player-detail-view').classList.add('hidden');
+    document.getElementById('main-nav').classList.remove('hidden');
+    
+    // Update URL
+    history.pushState({}, '', '/static/viewer/');
+    
+    // Refresh current tab data
+    const activeTab = document.querySelector('.nav-tab.active');
+    if (activeTab) {
+        const tabName = activeTab.getAttribute('data-tab');
+        if (tabName === 'games') loadGames();
+        else if (tabName === 'teams') loadTeams();
+        else if (tabName === 'players') loadPlayers();
+    }
+}
+
+function showGameDetail(gameId) {
+    currentGameId = gameId;
+    document.getElementById('home-view').classList.add('hidden');
+    document.getElementById('game-detail-view').classList.remove('hidden');
+    document.getElementById('team-detail-view').classList.add('hidden');
+    document.getElementById('player-detail-view').classList.add('hidden');
+    document.getElementById('main-nav').classList.add('hidden');
+    
+    // Update URL
+    history.pushState({}, '', `/static/viewer/?game_id=${gameId}`);
+    
+    // Start loading and polling
+    startGamePolling();
+}
+
+function showTeamDetail(teamId) {
+    stopPolling();
+    document.getElementById('home-view').classList.add('hidden');
+    document.getElementById('game-detail-view').classList.add('hidden');
+    document.getElementById('team-detail-view').classList.remove('hidden');
+    document.getElementById('player-detail-view').classList.add('hidden');
+    document.getElementById('main-nav').classList.add('hidden');
+    
+    // Update URL
+    history.pushState({}, '', `/static/viewer/?team_id=${teamId}`);
+    
+    loadTeamDetail(teamId);
+}
+
+function showPlayerDetail(playerId) {
+    stopPolling();
+    document.getElementById('home-view').classList.add('hidden');
+    document.getElementById('game-detail-view').classList.add('hidden');
+    document.getElementById('team-detail-view').classList.add('hidden');
+    document.getElementById('player-detail-view').classList.remove('hidden');
+    document.getElementById('main-nav').classList.add('hidden');
+    
+    // Update URL
+    history.pushState({}, '', `/static/viewer/?player_id=${playerId}`);
+    
+    loadPlayerDetail(playerId);
+}
+
+// =============================================================================
+// Data Loading
+// =============================================================================
+
+async function loadAllData() {
     updateConnectionStatus('connecting');
-
     try {
-        await loadGame();
+        await Promise.all([loadGames(), loadTeams(), loadPlayers()]);
+        updateConnectionStatus('connected');
     } catch (error) {
-        console.error('Initial load failed:', error);
+        console.error('Failed to load data:', error);
         updateConnectionStatus('disconnected');
     }
+}
 
-    // Poll interval
-    setInterval(async () => {
+async function loadGames() {
+    const container = document.getElementById('games-list');
+    try {
+        const response = await fetch('/games');
+        if (!response.ok) throw new Error(`Failed to fetch games: ${response.statusText}`);
+        
+        const data = await response.json();
+        gamesCache = data.games || [];
+        
+        renderGamesList(gamesCache, container);
+        updateConnectionStatus('connected');
+    } catch (error) {
+        console.error('Failed to load games:', error);
+        container.innerHTML = `<div class="error-message">Failed to load games: ${error.message}</div>`;
+        updateConnectionStatus('disconnected');
+    }
+}
+
+async function loadTeams() {
+    const container = document.getElementById('teams-list');
+    try {
+        const response = await fetch('/teams');
+        if (!response.ok) throw new Error(`Failed to fetch teams: ${response.statusText}`);
+        
+        const data = await response.json();
+        teamsCache = data.teams || [];
+        
+        renderTeamsList(teamsCache, container);
+        updateConnectionStatus('connected');
+    } catch (error) {
+        console.error('Failed to load teams:', error);
+        container.innerHTML = `<div class="error-message">Failed to load teams: ${error.message}</div>`;
+        updateConnectionStatus('disconnected');
+    }
+}
+
+async function loadPlayers() {
+    const container = document.getElementById('players-list');
+    try {
+        const response = await fetch('/players');
+        if (!response.ok) throw new Error(`Failed to fetch players: ${response.statusText}`);
+        
+        const data = await response.json();
+        playersCache = data.players || [];
+        
+        renderPlayersList(playersCache, container);
+        updateConnectionStatus('connected');
+    } catch (error) {
+        console.error('Failed to load players:', error);
+        container.innerHTML = `<div class="error-message">Failed to load players: ${error.message}</div>`;
+        updateConnectionStatus('disconnected');
+    }
+}
+
+async function loadTeamDetail(teamId) {
+    try {
+        const [teamResponse, playersResponse, gamesResponse] = await Promise.all([
+            fetch(`/teams/${teamId}`),
+            fetch(`/teams/${teamId}/players`),
+            fetch(`/teams/${teamId}/games`)
+        ]);
+        
+        if (!teamResponse.ok) throw new Error('Team not found');
+        
+        const team = await teamResponse.json();
+        const playersData = await playersResponse.json();
+        const gamesData = await gamesResponse.json();
+        
+        document.getElementById('team-name').textContent = team.name;
+        document.getElementById('team-id-display').textContent = `ID: ${team.id}`;
+        document.getElementById('team-player-count').textContent = playersData.players?.length || 0;
+        document.getElementById('team-game-count').textContent = gamesData.game_ids?.length || 0;
+        
+        // Render players
+        const playersContainer = document.getElementById('team-players-list');
+        if (playersData.players && playersData.players.length > 0) {
+            playersContainer.innerHTML = playersData.players.map(p => `
+                <a href="?player_id=${p.id}" class="mini-item" onclick="event.preventDefault(); showPlayerDetail('${p.id}')">
+                    <span class="mini-name">${p.name}</span>
+                    <span class="mini-badge">#${p.number || '-'}</span>
+                </a>
+            `).join('');
+        } else {
+            playersContainer.innerHTML = '<div class="empty-state">No players</div>';
+        }
+        
+        // Render games (need to fetch game details)
+        const gamesContainer = document.getElementById('team-games-list');
+        if (gamesData.game_ids && gamesData.game_ids.length > 0) {
+            gamesContainer.innerHTML = gamesData.game_ids.map(gameId => `
+                <a href="?game_id=${gameId}" class="mini-item" onclick="event.preventDefault(); showGameDetail('${gameId}')">
+                    <span class="mini-name">${formatGameId(gameId)}</span>
+                </a>
+            `).join('');
+        } else {
+            gamesContainer.innerHTML = '<div class="empty-state">No games</div>';
+        }
+        
+        updateConnectionStatus('connected');
+    } catch (error) {
+        console.error('Failed to load team:', error);
+        document.getElementById('team-name').textContent = 'Error loading team';
+        updateConnectionStatus('disconnected');
+    }
+}
+
+async function loadPlayerDetail(playerId) {
+    try {
+        const [playerResponse, gamesResponse, teamsResponse] = await Promise.all([
+            fetch(`/players/${playerId}`),
+            fetch(`/players/${playerId}/games`),
+            fetch(`/players/${playerId}/teams`)
+        ]);
+        
+        if (!playerResponse.ok) throw new Error('Player not found');
+        
+        const player = await playerResponse.json();
+        const gamesData = await gamesResponse.json();
+        const teamsData = teamsResponse.ok ? await teamsResponse.json() : { teams: [] };
+        
+        document.getElementById('player-name').textContent = player.name;
+        document.getElementById('player-id-display').textContent = `ID: ${player.id}`;
+        document.getElementById('player-number').textContent = player.number || '-';
+        document.getElementById('player-gender').textContent = player.gender || '-';
+        document.getElementById('player-game-count').textContent = gamesData.game_ids?.length || 0;
+        
+        // Render teams
+        const teamsContainer = document.getElementById('player-teams-list');
+        if (teamsData.teams && teamsData.teams.length > 0) {
+            teamsContainer.innerHTML = teamsData.teams.map(team => `
+                <a href="?team_id=${team.id}" class="mini-item" onclick="event.preventDefault(); showTeamDetail('${team.id}')">
+                    <span class="mini-name">${team.name}</span>
+                </a>
+            `).join('');
+        } else {
+            teamsContainer.innerHTML = '<div class="empty-state">Not on any teams</div>';
+        }
+        
+        // Render games
+        const gamesContainer = document.getElementById('player-games-list');
+        if (gamesData.game_ids && gamesData.game_ids.length > 0) {
+            gamesContainer.innerHTML = gamesData.game_ids.map(gameId => `
+                <a href="?game_id=${gameId}" class="mini-item" onclick="event.preventDefault(); showGameDetail('${gameId}')">
+                    <span class="mini-name">${formatGameId(gameId)}</span>
+                </a>
+            `).join('');
+        } else {
+            gamesContainer.innerHTML = '<div class="empty-state">No games</div>';
+        }
+        
+        updateConnectionStatus('connected');
+    } catch (error) {
+        console.error('Failed to load player:', error);
+        document.getElementById('player-name').textContent = 'Error loading player';
+        updateConnectionStatus('disconnected');
+    }
+}
+
+// =============================================================================
+// List Rendering
+// =============================================================================
+
+function renderGamesList(games, container) {
+    if (games.length === 0) {
+        container.innerHTML = '<div class="empty-state">No games found</div>';
+        return;
+    }
+    
+    // Sort by date, newest first
+    games.sort((a, b) => {
+        const dateA = new Date(a.game_start_timestamp || 0);
+        const dateB = new Date(b.game_start_timestamp || 0);
+        return dateB - dateA;
+    });
+    
+    container.innerHTML = games.map(game => {
+        const date = game.game_start_timestamp ? new Date(game.game_start_timestamp) : null;
+        const dateStr = date ? date.toLocaleDateString() : 'Unknown date';
+        const scores = game.scores || {};
+        const teamScore = scores.team || 0;
+        const oppScore = scores.opponent || 0;
+        const isInProgress = !game.game_end_timestamp;
+        
+        return `
+            <a href="?game_id=${game.game_id}" class="entity-card game-card" onclick="event.preventDefault(); showGameDetail('${game.game_id}')">
+                <div class="card-header">
+                    <span class="card-title">${game.team} vs ${game.opponent}</span>
+                    ${isInProgress ? '<span class="live-badge">LIVE</span>' : ''}
+                </div>
+                <div class="card-meta">
+                    <span class="card-date">${dateStr}</span>
+                    <span class="card-score">${teamScore} - ${oppScore}</span>
+                    <span class="card-points">${game.points_count || 0} pts</span>
+                </div>
+            </a>
+        `;
+    }).join('');
+}
+
+function renderTeamsList(teams, container) {
+    if (teams.length === 0) {
+        container.innerHTML = '<div class="empty-state">No teams found. Create teams in the PWA to see them here.</div>';
+        return;
+    }
+    
+    container.innerHTML = teams.map(team => {
+        const playerCount = team.playerIds?.length || 0;
+        return `
+            <a href="?team_id=${team.id}" class="entity-card team-card" onclick="event.preventDefault(); showTeamDetail('${team.id}')">
+                <div class="card-header">
+                    <span class="card-title">${team.name}</span>
+                </div>
+                <div class="card-meta">
+                    <span class="card-id">${team.id}</span>
+                    <span class="card-count">${playerCount} players</span>
+                </div>
+            </a>
+        `;
+    }).join('');
+}
+
+function renderPlayersList(players, container) {
+    if (players.length === 0) {
+        container.innerHTML = '<div class="empty-state">No players found. Create players in the PWA to see them here.</div>';
+        return;
+    }
+    
+    container.innerHTML = players.map(player => {
+        const genderClass = player.gender === 'FMP' ? 'gender-fmp' : player.gender === 'MMP' ? 'gender-mmp' : '';
+        return `
+            <a href="?player_id=${player.id}" class="entity-card player-card ${genderClass}" onclick="event.preventDefault(); showPlayerDetail('${player.id}')">
+                <div class="card-header">
+                    <span class="card-title">${player.name}</span>
+                    ${player.number ? `<span class="player-number">#${player.number}</span>` : ''}
+                </div>
+                <div class="card-meta">
+                    <span class="card-id">${player.id}</span>
+                    ${player.gender ? `<span class="card-gender">${player.gender}</span>` : ''}
+                </div>
+            </a>
+        `;
+    }).join('');
+}
+
+// =============================================================================
+// Game Detail & Polling
+// =============================================================================
+
+function startGamePolling() {
+    if (isPolling) return;
+    isPolling = true;
+    
+    updateConnectionStatus('connecting');
+    loadGameDetail();
+    
+    pollingInterval = setInterval(async () => {
         try {
-            await loadGame();
+            await loadGameDetail();
             updateConnectionStatus('connected');
         } catch (error) {
             console.error('Poll failed:', error);
@@ -55,7 +423,19 @@ async function startPolling() {
     }, POLL_INTERVAL);
 }
 
-async function loadGame() {
+function stopPolling() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+    }
+    isPolling = false;
+    currentGameId = null;
+    lastGameVersion = null;
+}
+
+async function loadGameDetail() {
+    if (!currentGameId) return;
+    
     const response = await fetch(`/games/${currentGameId}`);
     if (!response.ok) {
         throw new Error(`Failed to fetch game: ${response.statusText}`);
@@ -63,47 +443,25 @@ async function loadGame() {
 
     const gameData = await response.json();
     
-    // Simple check to see if we need to re-render
-    // In a real app, we might check a version timestamp or hash
-    // For now, we'll just re-render if the data JSON string is different
-    // Optimization: The server returns "version" in sync response, but get_game returns the raw game data.
-    // We can implement a smarter check later.
+    // Check if data changed
     const currentDataJson = JSON.stringify(gameData);
-    if (lastVersion !== currentDataJson) {
-        console.log('Game data updated', gameData);
-        if (gameData.points && gameData.points.length > 0) {
-            const lastPoint = gameData.points[gameData.points.length - 1];
-            console.log(`Last point (index ${gameData.points.length-1}):`, lastPoint);
-            console.log(`Last point possessions:`, lastPoint.possessions ? lastPoint.possessions.length : 0);
-        }
-        lastVersion = currentDataJson;
+    if (lastGameVersion !== currentDataJson) {
+        lastGameVersion = currentDataJson;
         renderGame(gameData);
     }
-}
-
-function updateConnectionStatus(status) {
-    const badge = document.getElementById('connection-status');
-    badge.className = `status-badge ${status}`;
     
-    if (status === 'connected') badge.textContent = 'Live';
-    else if (status === 'connecting') badge.textContent = 'Connecting...';
-    else if (status === 'disconnected') badge.textContent = 'Disconnected';
-}
-
-function showError(message) {
-    const container = document.getElementById('points-container');
-    container.innerHTML = `<div class="error-message">${message}</div>`;
+    updateConnectionStatus('connected');
 }
 
 function renderGame(game) {
     // Render Header
     document.getElementById('game-title').textContent = `${game.team} vs ${game.opponent}`;
+    document.getElementById('game-id').textContent = `ID: ${currentGameId}`;
     
     const date = new Date(game.gameStartTimestamp);
     document.getElementById('game-date').textContent = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
     
     const scores = game.scores || { team: 0, opponent: 0 };
-    // Try to get keys if they differ from "team"/"opponent" (based on Role enum)
     const teamScore = scores.team || scores[game.team] || 0;
     const oppScore = scores.opponent || scores[game.opponent] || 0;
     
@@ -114,7 +472,6 @@ function renderGame(game) {
     
     if (game.gameStartTimestamp) {
         const start = new Date(game.gameStartTimestamp);
-        // Use current time for game duration if game is in progress
         const end = game.gameEndTimestamp ? new Date(game.gameEndTimestamp) : new Date();
         const diffMs = end - start;
         const diffSeconds = Math.floor(diffMs / 1000);
@@ -124,46 +481,33 @@ function renderGame(game) {
     // Render Points
     const pointsContainer = document.getElementById('points-container');
     
-    // Save which points are expanded
+    // Save expanded state
     const expandedPoints = new Set();
     document.querySelectorAll('.point-content.expanded').forEach(el => {
         expandedPoints.add(el.getAttribute('data-point-index'));
     });
 
-    // Check if user is near bottom before update (for auto-scroll)
+    // Check scroll position
     const isNearBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 100;
 
-    pointsContainer.innerHTML = ''; // Clear current
+    pointsContainer.innerHTML = '';
 
-    // Reverse points to show newest first
-    const reversedPoints = [...(game.points || [])].reverse();
     const totalPoints = (game.points || []).length;
 
-    // BUT for the viewer, we actually want to see the OLDEST point at the top and NEWEST at the bottom
-    // So let's iterate through the original points array instead of reversed
     (game.points || []).forEach((point, index) => {
         const pointEl = createPointElement(point, index + 1, game.team, game.opponent);
         pointsContainer.appendChild(pointEl);
 
-        // Restore expanded state or expand latest point by default
-        // Expand if:
-        // 1. It was previously expanded by the user (in expandedPoints)
-        // 2. It is the LAST point AND it is in progress (no winner)
-        // 3. It is the LAST point AND this is the initial load (!lastVersion)
         const isLast = index === totalPoints - 1;
         const isInProgress = !point.winner;
         
-        if (expandedPoints.has(String(index)) || (isLast && (isInProgress || (!lastVersion && expandedPoints.size === 0)))) {
+        if (expandedPoints.has(String(index)) || (isLast && (isInProgress || expandedPoints.size === 0))) {
             const content = pointEl.querySelector('.point-content');
             content.classList.add('expanded');
-            content.setAttribute('data-point-index', index);
-        } else {
-            const content = pointEl.querySelector('.point-content');
-             content.setAttribute('data-point-index', index);
         }
+        pointEl.querySelector('.point-content').setAttribute('data-point-index', index);
     });
 
-    // Auto-scroll if was near bottom
     if (isNearBottom) {
         window.scrollTo(0, document.body.scrollHeight);
     }
@@ -173,7 +517,6 @@ function createPointElement(point, pointNumber, teamName, opponentName) {
     const div = document.createElement('div');
     div.className = 'point-card';
     
-    // Determine result
     let resultClass = '';
     let resultText = 'In Progress';
     
@@ -187,11 +530,8 @@ function createPointElement(point, pointNumber, teamName, opponentName) {
         }
     }
 
-    // Convert milliseconds to seconds for formatting
     const durationSeconds = point.totalPointTime ? Math.floor(point.totalPointTime / 1000) : 0;
     const summary = `Duration: ${formatDuration(durationSeconds)}`;
-    
-    // Format roster list
     const rosterList = (point.players || []).join(', ');
 
     div.innerHTML = `
@@ -228,16 +568,15 @@ function renderEvent(event) {
     let type = event.type;
     let desc = '';
     
-    // Basic description logic based on event type matching models.js logic
     if (type === 'Throw') {
         let verb = event.huck_flag ? 'hucks' : 'throws';
         desc = `${event.thrower || 'Unknown'} ${verb} `;
         let throwType = '';
-        if (event.break_flag)        { throwType += 'break '; }
-        if (event.hammer_flag)       { throwType += 'hammer '; }
-        if (event.dump_flag)         { throwType += 'dump '; }
-        if (throwType)              { desc += `a ${throwType}`; }
-        if (event.receiver)         { desc += `to ${event.receiver} `; }
+        if (event.break_flag) throwType += 'break ';
+        if (event.hammer_flag) throwType += 'hammer ';
+        if (event.dump_flag) throwType += 'dump ';
+        if (throwType) desc += `a ${throwType}`;
+        if (event.receiver) desc += `to ${event.receiver} `;
         if (event.sky_flag || event.layout_flag) {
             desc += `for a ${event.sky_flag ? "sky ":""}${event.layout_flag ? "layout ":""}catch `;
         }        
@@ -248,60 +587,56 @@ function renderEvent(event) {
         const r = event.receiver || "Unknown";
         const hucktxt = event.huck_flag ? 'on a huck' : '';
         const defensetxt = event.defense_flag ? 'due to good defense' : '';
-        if (event.throwaway_flag)    { desc = `${t} throws it away ${hucktxt} ${defensetxt}`; }
-        else if (event.drop_flag)    { desc = `${r} misses the catch from ${t} ${hucktxt} ${defensetxt}`; }
-        else if (event.defense_flag) { desc = `Turnover ${defensetxt}`; }
-        else if (event.stall_flag)   { desc = `${t} gets stalled ${defensetxt}`; }
-        else { desc = `Turnover by ${t}`; }
+        if (event.throwaway_flag) desc = `${t} throws it away ${hucktxt} ${defensetxt}`;
+        else if (event.drop_flag) desc = `${r} misses the catch from ${t} ${hucktxt} ${defensetxt}`;
+        else if (event.defense_flag) desc = `Turnover ${defensetxt}`;
+        else if (event.stall_flag) desc = `${t} gets stalled ${defensetxt}`;
+        else desc = `Turnover by ${t}`;
 
     } else if (type === 'Defense') {
         let summary = '';
         let defender = event.defender || '';
-        if (event.interception_flag)     { summary += 'Interception '; }
-        if (event.layout_flag)           { summary += 'Layout D '; }
-        if (event.sky_flag)              { summary += 'Sky D '; }
-        if (event.Callahan_flag)         { summary += 'Callahan '; }
-        if (event.stall_flag)            { summary += 'Stall '; }
-        if (event.unforcedError_flag)    { summary += 'Unforced error '; }
+        if (event.interception_flag) summary += 'Interception ';
+        if (event.layout_flag) summary += 'Layout D ';
+        if (event.sky_flag) summary += 'Sky D ';
+        if (event.Callahan_flag) summary += 'Callahan ';
+        if (event.stall_flag) summary += 'Stall ';
+        if (event.unforcedError_flag) summary += 'Unforced error ';
         if (defender) {
-            summary += (summary ? summary : 'Turnover caused ') + `by ${defender}`;
+            summary += (summary ? '' : 'Turnover caused ') + `by ${defender}`;
         } else {
-            summary = (summary ? summary : 'Unforced turnover by opponent');
+            summary = summary || 'Unforced turnover by opponent';
         }
         desc = summary;
 
     } else if (type === 'Pull') {
         let pullerName = event.puller || 'Unknown';
         desc = `Pull by ${pullerName}`;
-        if (event.quality) {
-            desc += ` (${event.quality})`;
-        }
+        if (event.quality) desc += ` (${event.quality})`;
         let pullType = [];
         if (event.flick_flag) pullType.push('Flick');
         if (event.roller_flag) pullType.push('Roller');
         if (event.io_flag) pullType.push('IO');
         if (event.oi_flag) pullType.push('OI');
-        if (pullType.length > 0) {
-            desc += ` - ${pullType.join(', ')}`;
-        }
+        if (pullType.length > 0) desc += ` - ${pullType.join(', ')}`;
 
     } else if (type === 'Violation') {
         let summary = 'Violation called: ';
-        if (event.ofoul_flag)        { summary += 'Offensive foul '; }
-        if (event.strip_flag)            { summary += 'Strip '; }
-        if (event.pick_flag)             { summary += 'Pick '; }
-        if (event.travel_flag)           { summary += 'Travel '; }
-        if (event.contest_flag)        { summary += 'Contested foul '; }
-        if (event.dblteam_flag)       { summary += 'Double team '; }
+        if (event.ofoul_flag) summary += 'Offensive foul ';
+        if (event.strip_flag) summary += 'Strip ';
+        if (event.pick_flag) summary += 'Pick ';
+        if (event.travel_flag) summary += 'Travel ';
+        if (event.contest_flag) summary += 'Contested foul ';
+        if (event.dblteam_flag) summary += 'Double team ';
         desc = summary;
 
     } else if (type === 'Other') {
         let summary = '';
-        if (event.timeout_flag)      { summary += 'Timeout called. '; }
-        if (event.injury_flag)       { summary += 'Injury sub called '; }
-        if (event.timecap_flag)      { summary += 'Hard cap called; game over '; }
-        if (event.switchsides_flag)  { summary += 'O and D switch sides '; }
-        if (event.halftime_flag)     { summary += 'Halftime '; }
+        if (event.timeout_flag) summary += 'Timeout called. ';
+        if (event.injury_flag) summary += 'Injury sub called ';
+        if (event.timecap_flag) summary += 'Hard cap called; game over ';
+        if (event.switchsides_flag) summary += 'O and D switch sides ';
+        if (event.halftime_flag) summary += 'Halftime ';
         desc = summary;
 
     } else {
@@ -316,6 +651,10 @@ function renderEvent(event) {
     `;
 }
 
+// =============================================================================
+// Utility Functions
+// =============================================================================
+
 function togglePoint(header) {
     const content = header.nextElementSibling;
     content.classList.toggle('expanded');
@@ -328,3 +667,37 @@ function formatDuration(seconds) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+function formatGameId(gameId) {
+    // Extract date and teams from game ID
+    // Format: YYYY-MM-DD_Team_vs_Opponent_Timestamp
+    const parts = gameId.split('_');
+    if (parts.length >= 4) {
+        const date = parts[0];
+        const team = parts[1];
+        const opponent = parts[3];
+        return `${date}: ${team} vs ${opponent}`;
+    }
+    return gameId;
+}
+
+function updateConnectionStatus(status) {
+    const badge = document.getElementById('connection-status');
+    badge.className = `status-badge ${status}`;
+    
+    if (status === 'connected') badge.textContent = 'Connected';
+    else if (status === 'connecting') badge.textContent = 'Loading...';
+    else if (status === 'disconnected') badge.textContent = 'Disconnected';
+}
+
+// Handle browser back button
+window.addEventListener('popstate', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const gameId = urlParams.get('game_id');
+    const teamId = urlParams.get('team_id');
+    const playerId = urlParams.get('player_id');
+    
+    if (gameId) showGameDetail(gameId);
+    else if (teamId) showTeamDetail(teamId);
+    else if (playerId) showPlayerDetail(playerId);
+    else showHomeView();
+});
