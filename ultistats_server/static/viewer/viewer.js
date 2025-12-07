@@ -477,6 +477,25 @@ function renderGame(game) {
         const diffSeconds = Math.floor(diffMs / 1000);
         document.getElementById('game-duration').textContent = formatDuration(diffSeconds);
     }
+    
+    // Show data format indicator (Phase 2)
+    const formatIndicator = document.getElementById('data-format-indicator');
+    if (formatIndicator) {
+        const hasTeamId = !!game.teamId;
+        const hasRosterSnapshot = !!game.rosterSnapshot;
+        const isNewFormat = hasTeamId || hasRosterSnapshot;
+        
+        if (isNewFormat) {
+            formatIndicator.textContent = 'New Format';
+            formatIndicator.className = 'format-badge new-format';
+            formatIndicator.title = `teamId: ${game.teamId || 'none'}, rosterSnapshot: ${hasRosterSnapshot ? 'yes' : 'no'}`;
+        } else {
+            formatIndicator.textContent = 'Legacy';
+            formatIndicator.className = 'format-badge legacy-format';
+            formatIndicator.title = 'Legacy format (name-based references)';
+        }
+        formatIndicator.style.display = 'inline-block';
+    }
 
     // Render Points
     const pointsContainer = document.getElementById('points-container');
