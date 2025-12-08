@@ -170,8 +170,9 @@ async def health():
 
 
 # Game endpoints
+# Note: All API routes use /api/ prefix to avoid conflicts with PWA static file serving
 
-@app.post("/games/{game_id}/sync")
+@app.post("/api/games/{game_id}/sync")
 async def sync_game(game_id: str, game_data: Dict[str, Any] = Body(...)):
     """
     Full game sync - replaces entire game state.
@@ -198,7 +199,7 @@ async def sync_game(game_id: str, game_data: Dict[str, Any] = Body(...)):
     }
 
 
-@app.get("/games/{game_id}")
+@app.get("/api/games/{game_id}")
 async def get_game(game_id: str):
     """Get current game state."""
     if not game_exists(game_id):
@@ -208,14 +209,14 @@ async def get_game(game_id: str):
     return game_data
 
 
-@app.get("/games")
+@app.get("/api/games")
 async def list_games():
     """List all games with metadata."""
     games = list_all_games()
     return {"games": games}
 
 
-@app.delete("/games/{game_id}")
+@app.delete("/api/games/{game_id}")
 async def delete_game_endpoint(game_id: str):
     """Delete a game and all its versions."""
     if not game_exists(game_id):
@@ -230,7 +231,7 @@ async def delete_game_endpoint(game_id: str):
 
 # Version endpoints
 
-@app.get("/games/{game_id}/versions")
+@app.get("/api/games/{game_id}/versions")
 async def list_versions(game_id: str):
     """List all versions of a game."""
     if not game_exists(game_id):
@@ -240,7 +241,7 @@ async def list_versions(game_id: str):
     return {"game_id": game_id, "versions": versions}
 
 
-@app.get("/games/{game_id}/versions/{timestamp}")
+@app.get("/api/games/{game_id}/versions/{timestamp}")
 async def get_version(game_id: str, timestamp: str):
     """Get specific version of a game."""
     if not game_exists(game_id):
@@ -253,7 +254,7 @@ async def get_version(game_id: str, timestamp: str):
         raise HTTPException(status_code=404, detail=f"Version {timestamp} not found")
 
 
-@app.post("/games/{game_id}/restore/{timestamp}")
+@app.post("/api/games/{game_id}/restore/{timestamp}")
 async def restore_version(game_id: str, timestamp: str):
     """Restore game to a specific version."""
     if not game_exists(game_id):
@@ -271,7 +272,7 @@ async def restore_version(game_id: str, timestamp: str):
 # Player endpoints
 # =============================================================================
 
-@app.post("/players")
+@app.post("/api/players")
 async def create_player(player_data: Dict[str, Any] = Body(...)):
     """
     Create a new player.
@@ -294,14 +295,14 @@ async def create_player(player_data: Dict[str, Any] = Body(...)):
     return {"status": "created", "player_id": player_id, "player": get_player(player_id)}
 
 
-@app.get("/players")
+@app.get("/api/players")
 async def list_players_endpoint():
     """List all players."""
     players = list_players()
     return {"players": players, "count": len(players)}
 
 
-@app.get("/players/{player_id}")
+@app.get("/api/players/{player_id}")
 async def get_player_endpoint(player_id: str):
     """Get a player by ID."""
     if not player_exists(player_id):
@@ -310,7 +311,7 @@ async def get_player_endpoint(player_id: str):
     return get_player(player_id)
 
 
-@app.put("/players/{player_id}")
+@app.put("/api/players/{player_id}")
 async def update_player_endpoint(player_id: str, player_data: Dict[str, Any] = Body(...)):
     """Update a player."""
     if not player_exists(player_id):
@@ -320,7 +321,7 @@ async def update_player_endpoint(player_id: str, player_data: Dict[str, Any] = B
     return {"status": "updated", "player_id": player_id, "player": get_player(player_id)}
 
 
-@app.delete("/players/{player_id}")
+@app.delete("/api/players/{player_id}")
 async def delete_player_endpoint(player_id: str):
     """Delete a player."""
     if not player_exists(player_id):
@@ -330,7 +331,7 @@ async def delete_player_endpoint(player_id: str):
     return {"status": "deleted", "player_id": player_id}
 
 
-@app.get("/players/{player_id}/games")
+@app.get("/api/players/{player_id}/games")
 async def get_player_games_endpoint(player_id: str):
     """Get all games a player has participated in."""
     if not player_exists(player_id):
@@ -340,7 +341,7 @@ async def get_player_games_endpoint(player_id: str):
     return {"player_id": player_id, "game_ids": game_ids, "count": len(game_ids)}
 
 
-@app.get("/players/{player_id}/teams")
+@app.get("/api/players/{player_id}/teams")
 async def get_player_teams_endpoint(player_id: str):
     """Get all teams a player belongs to."""
     if not player_exists(player_id):
@@ -370,7 +371,7 @@ async def get_player_teams_endpoint(player_id: str):
 # Team endpoints
 # =============================================================================
 
-@app.post("/teams")
+@app.post("/api/teams")
 async def create_team(team_data: Dict[str, Any] = Body(...)):
     """
     Create a new team.
@@ -393,14 +394,14 @@ async def create_team(team_data: Dict[str, Any] = Body(...)):
     return {"status": "created", "team_id": team_id, "team": get_team(team_id)}
 
 
-@app.get("/teams")
+@app.get("/api/teams")
 async def list_teams_endpoint():
     """List all teams."""
     teams = list_teams()
     return {"teams": teams, "count": len(teams)}
 
 
-@app.get("/teams/{team_id}")
+@app.get("/api/teams/{team_id}")
 async def get_team_endpoint(team_id: str):
     """Get a team by ID."""
     if not team_exists(team_id):
@@ -409,7 +410,7 @@ async def get_team_endpoint(team_id: str):
     return get_team(team_id)
 
 
-@app.put("/teams/{team_id}")
+@app.put("/api/teams/{team_id}")
 async def update_team_endpoint(team_id: str, team_data: Dict[str, Any] = Body(...)):
     """Update a team."""
     if not team_exists(team_id):
@@ -419,7 +420,7 @@ async def update_team_endpoint(team_id: str, team_data: Dict[str, Any] = Body(..
     return {"status": "updated", "team_id": team_id, "team": get_team(team_id)}
 
 
-@app.delete("/teams/{team_id}")
+@app.delete("/api/teams/{team_id}")
 async def delete_team_endpoint(team_id: str):
     """Delete a team."""
     if not team_exists(team_id):
@@ -429,7 +430,7 @@ async def delete_team_endpoint(team_id: str):
     return {"status": "deleted", "team_id": team_id}
 
 
-@app.get("/teams/{team_id}/players")
+@app.get("/api/teams/{team_id}/players")
 async def get_team_players_endpoint(team_id: str):
     """Get all players for a team (resolved from playerIds)."""
     if not team_exists(team_id):
@@ -439,7 +440,7 @@ async def get_team_players_endpoint(team_id: str):
     return {"team_id": team_id, "players": players, "count": len(players)}
 
 
-@app.get("/teams/{team_id}/games")
+@app.get("/api/teams/{team_id}/games")
 async def get_team_games_endpoint(team_id: str):
     """Get all games for a team."""
     if not team_exists(team_id):
@@ -453,7 +454,7 @@ async def get_team_games_endpoint(team_id: str):
 # Index endpoints
 # =============================================================================
 
-@app.post("/index/rebuild")
+@app.post("/api/index/rebuild")
 async def rebuild_index_endpoint():
     """Force rebuild of the index."""
     index = rebuild_index()
@@ -466,7 +467,7 @@ async def rebuild_index_endpoint():
     }
 
 
-@app.get("/index/status")
+@app.get("/api/index/status")
 async def get_index_status_endpoint():
     """Get index status and statistics."""
     return get_index_status()
