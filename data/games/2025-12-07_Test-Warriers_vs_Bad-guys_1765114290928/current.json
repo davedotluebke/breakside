@@ -114,13 +114,15 @@
               "type": "Pull",
               "pullerGender": "MMP",
               "quality": "Good Pull",
-              "pullerId": "Aaron-w846"
+              "pullerId": "Aaron-w846",
+              "puller": "Aaron"
             },
             {
               "type": "Defense",
               "interception_flag": true,
               "layout_flag": true,
-              "defenderId": "Alex-4ock"
+              "defenderId": "Alex-4ock",
+              "defender": "Alex"
             }
           ]
         },
@@ -132,7 +134,9 @@
               "layout_flag": true,
               "score_flag": true,
               "throwerId": "Alex-4ock",
-              "receiverId": "Chris-5wk1"
+              "receiverId": "Chris-5wk1",
+              "thrower": "Alex",
+              "receiver": "Chris"
             }
           ]
         }
@@ -163,7 +167,8 @@
               "pullerGender": "FMP",
               "quality": "Brick",
               "flick_flag": true,
-              "pullerId": "Aardvark-gkru"
+              "pullerId": "Aardvark-gkru",
+              "puller": "Aardvark"
             }
           ]
         },
@@ -174,7 +179,9 @@
               "type": "Throw",
               "hammer_flag": true,
               "throwerId": "Aaron-w846",
-              "receiverId": "Alex-4ock"
+              "receiverId": "Alex-4ock",
+              "thrower": "Aaron",
+              "receiver": "Alex"
             }
           ]
         }
@@ -204,7 +211,9 @@
               "type": "Throw",
               "score_flag": true,
               "throwerId": "Aardvark-gkru",
-              "receiverId": "Fred-l6m7"
+              "receiverId": "Fred-l6m7",
+              "thrower": "Aardvark",
+              "receiver": "Fred"
             }
           ]
         }
@@ -234,7 +243,8 @@
               "type": "Pull",
               "pullerGender": "FMP",
               "quality": "Good Pull",
-              "pullerId": "Jordan-zdl9"
+              "pullerId": "Jordan-zdl9",
+              "puller": "Jordan"
             }
           ]
         }
@@ -264,7 +274,9 @@
               "type": "Throw",
               "score_flag": true,
               "throwerId": "Aardvark-gkru",
-              "receiverId": "Aaron-w846"
+              "receiverId": "Aaron-w846",
+              "thrower": "Aardvark",
+              "receiver": "Aaron"
             }
           ]
         }
@@ -312,7 +324,9 @@
               "type": "Throw",
               "score_flag": true,
               "throwerId": "Aardvark-gkru",
-              "receiverId": "Jordan-zdl9"
+              "receiverId": "Jordan-zdl9",
+              "thrower": "Aardvark",
+              "receiver": "Jordan"
             }
           ]
         }

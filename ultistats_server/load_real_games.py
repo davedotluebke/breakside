@@ -59,7 +59,7 @@ def load_games():
                 print(f"    -> ID: {game_id}")
 
                 # Prepare request
-                url = f"{SERVER_URL}/games/{game_id}/sync"
+                url = f"{SERVER_URL}/api/games/{game_id}/sync"
                 headers = {'Content-Type': 'application/json'}
                 json_data = json.dumps(game).encode('utf-8')
                 
@@ -79,7 +79,7 @@ def load_games():
 
     print(f"\n🎉 Finished! Loaded {total_loaded} games.")
     print(f"View them at: {SERVER_URL}/docs")
-    print(f"List all games: {SERVER_URL}/games")
+    print(f"List all games: {SERVER_URL}/api/games")
 
 if __name__ == "__main__":
     load_games()

@@ -207,33 +207,33 @@ async function syncQueueItem(item) {
     switch (type) {
         case 'player':
             if (action === 'create' || action === 'update') {
-                url = `${API_BASE_URL}/players`;
+                url = `${API_BASE_URL}/api/players`;
                 method = 'POST';  // POST handles both create and update via ID
                 body = JSON.stringify(cleanData);
             } else if (action === 'delete') {
-                url = `${API_BASE_URL}/players/${id}`;
+                url = `${API_BASE_URL}/api/players/${id}`;
                 method = 'DELETE';
             }
             break;
             
         case 'team':
             if (action === 'create' || action === 'update') {
-                url = `${API_BASE_URL}/teams`;
+                url = `${API_BASE_URL}/api/teams`;
                 method = 'POST';  // POST handles both create and update via ID
                 body = JSON.stringify(cleanData);
             } else if (action === 'delete') {
-                url = `${API_BASE_URL}/teams/${id}`;
+                url = `${API_BASE_URL}/api/teams/${id}`;
                 method = 'DELETE';
             }
             break;
             
         case 'game':
             if (action === 'create' || action === 'update' || action === 'sync') {
-                url = `${API_BASE_URL}/games/${id}/sync`;
+                url = `${API_BASE_URL}/api/games/${id}/sync`;
                 method = 'POST';
                 body = JSON.stringify(cleanData);
             } else if (action === 'delete') {
-                url = `${API_BASE_URL}/games/${id}`;
+                url = `${API_BASE_URL}/api/games/${id}`;
                 method = 'DELETE';
             }
             break;
@@ -411,7 +411,7 @@ async function loadPlayerFromCloud(playerId) {
         throw new Error('Cannot load player: Offline');
     }
     
-    const response = await fetch(`${API_BASE_URL}/players/${playerId}`);
+    const response = await fetch(`${API_BASE_URL}/api/players/${playerId}`);
     if (!response.ok) {
         throw new Error(`Failed to load player: ${response.statusText}`);
     }
@@ -430,7 +430,7 @@ async function listCloudPlayers() {
     }
     
     try {
-        const response = await fetch(`${API_BASE_URL}/players`);
+        const response = await fetch(`${API_BASE_URL}/api/players`);
         if (!response.ok) {
             throw new Error(`Failed to list players: ${response.statusText}`);
         }
@@ -550,7 +550,7 @@ async function loadTeamFromCloud(teamId) {
         throw new Error('Cannot load team: Offline');
     }
     
-    const response = await fetch(`${API_BASE_URL}/teams/${teamId}`);
+    const response = await fetch(`${API_BASE_URL}/api/teams/${teamId}`);
     if (!response.ok) {
         throw new Error(`Failed to load team: ${response.statusText}`);
     }
@@ -569,7 +569,7 @@ async function listCloudTeams() {
     }
     
     try {
-        const response = await fetch(`${API_BASE_URL}/teams`);
+        const response = await fetch(`${API_BASE_URL}/api/teams`);
         if (!response.ok) {
             throw new Error(`Failed to list teams: ${response.statusText}`);
         }
@@ -734,7 +734,7 @@ async function listServerGames() {
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}/games`);
+        const response = await fetch(`${API_BASE_URL}/api/games`);
         if (!response.ok) {
             throw new Error(`Failed to list games: ${response.statusText}`);
         }
@@ -791,7 +791,7 @@ async function loadGameFromCloud(gameId) {
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}/games/${gameId}`);
+        const response = await fetch(`${API_BASE_URL}/api/games/${gameId}`);
         if (!response.ok) {
             throw new Error(`Failed to load game: ${response.statusText}`);
         }

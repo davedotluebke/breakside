@@ -77,7 +77,7 @@ class TestPlayerAPI:
     
     def test_create_player(self, client):
         """Test POST /players creates a new player."""
-        response = client.post("/players", json={
+        response = client.post("/api/players", json={
             "name": "TestPlayer",
             "gender": "MMP",
             "number": "7"
@@ -91,7 +91,7 @@ class TestPlayerAPI:
     
     def test_create_player_with_id(self, client):
         """Test creating a player with a specific ID (offline creation)."""
-        response = client.post("/players", json={
+        response = client.post("/api/players", json={
             "id": "OfflinePlayer-abc1",
             "name": "OfflinePlayer",
             "gender": "FMP"
@@ -103,7 +103,7 @@ class TestPlayerAPI:
     
     def test_create_player_without_name_fails(self, client):
         """Test that creating a player without a name returns 400."""
-        response = client.post("/players", json={
+        response = client.post("/api/players", json={
             "gender": "MMP"
         })
         
@@ -113,7 +113,7 @@ class TestPlayerAPI:
     def test_get_player(self, client):
         """Test GET /players/{player_id} returns player data."""
         # First create a player
-        create_response = client.post("/players", json={
+        create_response = client.post("/api/players", json={
             "name": "GetTestPlayer",
             "nickname": "GTP"
         })
@@ -135,10 +135,10 @@ class TestPlayerAPI:
     def test_list_players(self, client):
         """Test GET /players returns list of players."""
         # Create a few players
-        client.post("/players", json={"name": "ListPlayer1"})
-        client.post("/players", json={"name": "ListPlayer2"})
+        client.post("/api/players", json={"name": "ListPlayer1"})
+        client.post("/api/players", json={"name": "ListPlayer2"})
         
-        response = client.get("/players")
+        response = client.get("/api/players")
         
         assert response.status_code == 200
         data = response.json()
@@ -149,7 +149,7 @@ class TestPlayerAPI:
     def test_update_player(self, client):
         """Test PUT /players/{player_id} updates player data."""
         # Create player
-        create_response = client.post("/players", json={"name": "UpdateMe"})
+        create_response = client.post("/api/players", json={"name": "UpdateMe"})
         player_id = create_response.json()["player_id"]
         
         # Update
@@ -165,7 +165,7 @@ class TestPlayerAPI:
     def test_delete_player(self, client):
         """Test DELETE /players/{player_id} removes player."""
         # Create player
-        create_response = client.post("/players", json={"name": "DeleteMe"})
+        create_response = client.post("/api/players", json={"name": "DeleteMe"})
         player_id = create_response.json()["player_id"]
         
         # Delete
@@ -181,7 +181,7 @@ class TestPlayerAPI:
     def test_get_player_games(self, client):
         """Test GET /players/{player_id}/games returns player's games."""
         # Create player
-        create_response = client.post("/players", json={
+        create_response = client.post("/api/players", json={
             "id": "GamePlayer-test",
             "name": "GamePlayer"
         })
@@ -219,7 +219,7 @@ class TestTeamAPI:
     
     def test_create_team(self, client):
         """Test POST /teams creates a new team."""
-        response = client.post("/teams", json={
+        response = client.post("/api/teams", json={
             "name": "TestTeam",
             "playerIds": []
         })
@@ -232,7 +232,7 @@ class TestTeamAPI:
     
     def test_create_team_with_id(self, client):
         """Test creating a team with a specific ID (offline creation)."""
-        response = client.post("/teams", json={
+        response = client.post("/api/teams", json={
             "id": "OfflineTeam-xyz9",
             "name": "OfflineTeam"
         })
@@ -243,7 +243,7 @@ class TestTeamAPI:
     
     def test_create_team_without_name_fails(self, client):
         """Test that creating a team without a name returns 400."""
-        response = client.post("/teams", json={
+        response = client.post("/api/teams", json={
             "playerIds": []
         })
         
@@ -252,7 +252,7 @@ class TestTeamAPI:
     
     def test_get_team(self, client):
         """Test GET /teams/{team_id} returns team data."""
-        create_response = client.post("/teams", json={"name": "GetTestTeam"})
+        create_response = client.post("/api/teams", json={"name": "GetTestTeam"})
         team_id = create_response.json()["team_id"]
         
         response = client.get(f"/teams/{team_id}")
@@ -268,10 +268,10 @@ class TestTeamAPI:
     
     def test_list_teams(self, client):
         """Test GET /teams returns list of teams."""
-        client.post("/teams", json={"name": "ListTeam1"})
-        client.post("/teams", json={"name": "ListTeam2"})
+        client.post("/api/teams", json={"name": "ListTeam1"})
+        client.post("/api/teams", json={"name": "ListTeam2"})
         
-        response = client.get("/teams")
+        response = client.get("/api/teams")
         
         assert response.status_code == 200
         data = response.json()
@@ -281,7 +281,7 @@ class TestTeamAPI:
     
     def test_update_team(self, client):
         """Test PUT /teams/{team_id} updates team data."""
-        create_response = client.post("/teams", json={"name": "UpdateTeam"})
+        create_response = client.post("/api/teams", json={"name": "UpdateTeam"})
         team_id = create_response.json()["team_id"]
         
         response = client.put(f"/teams/{team_id}", json={
@@ -295,7 +295,7 @@ class TestTeamAPI:
     
     def test_delete_team(self, client):
         """Test DELETE /teams/{team_id} removes team."""
-        create_response = client.post("/teams", json={"name": "DeleteTeam"})
+        create_response = client.post("/api/teams", json={"name": "DeleteTeam"})
         team_id = create_response.json()["team_id"]
         
         response = client.delete(f"/teams/{team_id}")
@@ -309,11 +309,11 @@ class TestTeamAPI:
     def test_get_team_players(self, client):
         """Test GET /teams/{team_id}/players returns resolved players."""
         # Create players first
-        p1 = client.post("/players", json={"id": "TeamP1-test", "name": "Player1"})
-        p2 = client.post("/players", json={"id": "TeamP2-test", "name": "Player2"})
+        p1 = client.post("/api/players", json={"id": "TeamP1-test", "name": "Player1"})
+        p2 = client.post("/api/players", json={"id": "TeamP2-test", "name": "Player2"})
         
         # Create team with players
-        team_response = client.post("/teams", json={
+        team_response = client.post("/api/teams", json={
             "name": "PlayersTeam",
             "playerIds": ["TeamP1-test", "TeamP2-test"]
         })
@@ -332,7 +332,7 @@ class TestTeamAPI:
     def test_get_team_games(self, client):
         """Test GET /teams/{team_id}/games returns team's games."""
         # Create team
-        team_response = client.post("/teams", json={
+        team_response = client.post("/api/teams", json={
             "id": "GamesTeam-test",
             "name": "GamesTeam"
         })
@@ -415,7 +415,7 @@ class TestGameAPI:
             "points": []
         })
         
-        response = client.get("/games")
+        response = client.get("/api/games")
         
         assert response.status_code == 200
         data = response.json()
@@ -514,20 +514,20 @@ class TestAPIWorkflows:
     def test_full_workflow_create_team_add_players_create_game(self, client):
         """Test complete workflow via API."""
         # 1. Create players
-        p1 = client.post("/players", json={
+        p1 = client.post("/api/players", json={
             "id": "Workflow-P1",
             "name": "WorkflowPlayer1",
             "gender": "FMP"
         }).json()
         
-        p2 = client.post("/players", json={
+        p2 = client.post("/api/players", json={
             "id": "Workflow-P2",
             "name": "WorkflowPlayer2",
             "gender": "MMP"
         }).json()
         
         # 2. Create team with players
-        team = client.post("/teams", json={
+        team = client.post("/api/teams", json={
             "id": "Workflow-Team",
             "name": "WorkflowTeam",
             "playerIds": [p1["player_id"], p2["player_id"]]
@@ -579,7 +579,7 @@ class TestAPIWorkflows:
         offline_team_id = "Offline-Team-efgh"
         
         # Player created offline, synced later
-        player = client.post("/players", json={
+        player = client.post("/api/players", json={
             "id": offline_player_id,
             "name": "OfflineCreatedPlayer",
             "gender": "MMP"
@@ -589,7 +589,7 @@ class TestAPIWorkflows:
         assert player["status"] == "created"
         
         # Team created offline, synced later
-        team = client.post("/teams", json={
+        team = client.post("/api/teams", json={
             "id": offline_team_id,
             "name": "OfflineCreatedTeam",
             "playerIds": [offline_player_id]
@@ -609,13 +609,13 @@ class TestAPIWorkflows:
     def test_update_existing_via_create_endpoint(self, client):
         """Test that creating with existing ID updates instead."""
         # Create initial
-        client.post("/players", json={
+        client.post("/api/players", json={
             "id": "Update-Via-Create",
             "name": "Original"
         })
         
         # Create again with same ID
-        response = client.post("/players", json={
+        response = client.post("/api/players", json={
             "id": "Update-Via-Create",
             "name": "Updated"
         })

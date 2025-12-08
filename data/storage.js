@@ -20,9 +20,17 @@ function serializeEvent(event, useIds = true) {
     // Create a new instance of the event with default values
     const defaultEvent = new event.constructor({});
 
+    // Player reference ID fields are handled separately in the player reference section below
+    // We must exclude them here to avoid duplicating IDs when player lookup fails during deserialization
+    const playerIdFields = ['throwerId', 'receiverId', 'pullerId', 'defenderId'];
+
     // Serialize only the properties that are different from the default instance
     for (const prop in event) {
         if (event.hasOwnProperty(prop) && event[prop] !== defaultEvent[prop]) {
+            // Skip player ID fields - they're handled in the player reference section
+            if (playerIdFields.includes(prop)) {
+                continue;
+            }
             serializedEvent[prop] = event[prop];
         }
     }
@@ -244,7 +252,7 @@ function deserializeEvent(eventData) {
  * Resolve a player reference - try ID first, then name
  * @param {string|null} playerId - Player ID (new format)
  * @param {string|null} playerName - Player name (legacy format)
- * @returns {Player|null} The resolved Player object or null
+ * @returns {Player|Object|null} The resolved Player object, a minimal object with name/id, or null
  */
 function resolvePlayerReference(playerId, playerName) {
     // Try ID lookup first (new format)
@@ -254,8 +262,21 @@ function resolvePlayerReference(playerId, playerName) {
     }
     // Fall back to name lookup (legacy format)
     if (playerName) {
-        return getPlayerFromName(playerName);
+        const player = getPlayerFromName(playerName);
+        if (player) return player;
     }
+    
+    // If we have a name and/or ID but couldn't find the player,
+    // create a minimal object to preserve the data for serialization
+    // This prevents data loss when currentTeam isn't set during deserialization
+    if (playerName || playerId) {
+        return {
+            name: playerName || UNKNOWN_PLAYER,
+            id: playerId || null,
+            gender: Gender.UNKNOWN
+        };
+    }
+    
     return null;
 }
 

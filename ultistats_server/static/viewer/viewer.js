@@ -173,7 +173,7 @@ async function loadAllData() {
 async function loadGames() {
     const container = document.getElementById('games-list');
     try {
-        const response = await fetch('/games');
+        const response = await fetch('/api/games');
         if (!response.ok) throw new Error(`Failed to fetch games: ${response.statusText}`);
         
         const data = await response.json();
@@ -191,7 +191,7 @@ async function loadGames() {
 async function loadTeams() {
     const container = document.getElementById('teams-list');
     try {
-        const response = await fetch('/teams');
+        const response = await fetch('/api/teams');
         if (!response.ok) throw new Error(`Failed to fetch teams: ${response.statusText}`);
         
         const data = await response.json();
@@ -209,7 +209,7 @@ async function loadTeams() {
 async function loadPlayers() {
     const container = document.getElementById('players-list');
     try {
-        const response = await fetch('/players');
+        const response = await fetch('/api/players');
         if (!response.ok) throw new Error(`Failed to fetch players: ${response.statusText}`);
         
         const data = await response.json();
@@ -227,9 +227,9 @@ async function loadPlayers() {
 async function loadTeamDetail(teamId) {
     try {
         const [teamResponse, playersResponse, gamesResponse] = await Promise.all([
-            fetch(`/teams/${teamId}`),
-            fetch(`/teams/${teamId}/players`),
-            fetch(`/teams/${teamId}/games`)
+            fetch(`/api/teams/${teamId}`),
+            fetch(`/api/teams/${teamId}/players`),
+            fetch(`/api/teams/${teamId}/games`)
         ]);
         
         if (!teamResponse.ok) throw new Error('Team not found');
@@ -282,9 +282,9 @@ async function loadTeamDetail(teamId) {
 async function loadPlayerDetail(playerId) {
     try {
         const [playerResponse, gamesResponse, teamsResponse] = await Promise.all([
-            fetch(`/players/${playerId}`),
-            fetch(`/players/${playerId}/games`),
-            fetch(`/players/${playerId}/teams`)
+            fetch(`/api/players/${playerId}`),
+            fetch(`/api/players/${playerId}/games`),
+            fetch(`/api/players/${playerId}/teams`)
         ]);
         
         if (!playerResponse.ok) throw new Error('Player not found');
@@ -466,7 +466,7 @@ function stopPolling() {
 async function loadGameDetail() {
     if (!currentGameId) return;
     
-    const response = await fetch(`/games/${currentGameId}`);
+    const response = await fetch(`/api/games/${currentGameId}`);
     if (!response.ok) {
         throw new Error(`Failed to fetch game: ${response.statusText}`);
     }
@@ -1091,7 +1091,7 @@ async function loadPlayerCareerStats(playerId, gameIds) {
         for (let i = 0; i < gameIds.length; i += batchSize) {
             const batch = gameIds.slice(i, i + batchSize);
             const gamePromises = batch.map(gameId => 
-                fetch(`/games/${gameId}`).then(r => r.ok ? r.json() : null)
+                fetch(`/api/games/${gameId}`).then(r => r.ok ? r.json() : null)
             );
             
             const games = await Promise.all(gamePromises);
@@ -1277,7 +1277,7 @@ async function loadTeamSeasonStats(teamId, gameIds) {
                 games.push(cached);
             } else {
                 try {
-                    const response = await fetch(`/games/${gameId}`);
+                    const response = await fetch(`/api/games/${gameId}`);
                     if (response.ok) {
                         const game = await response.json();
                         games.push({
