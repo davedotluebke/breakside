@@ -246,15 +246,18 @@ async function loadTeamDetail(teamId) {
         // Phase 4: Load and compute season stats
         loadTeamSeasonStats(teamId, gamesData.game_ids || []);
         
-        // Render players
+        // Render players with gender-based color coding
         const playersContainer = document.getElementById('team-players-list');
         if (playersData.players && playersData.players.length > 0) {
-            playersContainer.innerHTML = playersData.players.map(p => `
-                <a href="?player_id=${p.id}" class="mini-item" onclick="event.preventDefault(); showPlayerDetail('${p.id}')">
-                    <span class="mini-name">${p.name}</span>
-                    <span class="mini-badge">#${p.number || '-'}</span>
-                </a>
-            `).join('');
+            playersContainer.innerHTML = playersData.players.map(p => {
+                const genderClass = p.gender === 'FMP' ? 'gender-fmp' : p.gender === 'MMP' ? 'gender-mmp' : '';
+                return `
+                    <a href="?player_id=${p.id}" class="mini-item ${genderClass}" onclick="event.preventDefault(); showPlayerDetail('${p.id}')">
+                        <span class="mini-name">${p.name}</span>
+                        <span class="mini-badge">#${p.number || '-'}</span>
+                    </a>
+                `;
+            }).join('');
         } else {
             playersContainer.innerHTML = '<div class="empty-state">No players</div>';
         }
@@ -296,7 +299,17 @@ async function loadPlayerDetail(playerId) {
         document.getElementById('player-name').textContent = player.name;
         document.getElementById('player-id-display').textContent = `ID: ${player.id}`;
         document.getElementById('player-number').textContent = player.number || '-';
-        document.getElementById('player-gender').textContent = player.gender || '-';
+        
+        // Set gender with color styling
+        const genderEl = document.getElementById('player-gender');
+        genderEl.textContent = player.gender || '-';
+        genderEl.classList.remove('gender-fmp', 'gender-mmp');
+        if (player.gender === 'FMP') {
+            genderEl.classList.add('gender-fmp');
+        } else if (player.gender === 'MMP') {
+            genderEl.classList.add('gender-mmp');
+        }
+        
         document.getElementById('player-game-count').textContent = gamesData.game_ids?.length || 0;
         
         // Phase 4: Load and compute career stats
