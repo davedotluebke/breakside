@@ -210,6 +210,7 @@ function showSetServerDialog() {
     const newUrl = prompt(
         'Enter the server address:\n\n' +
         'Examples:\n' +
+        '• https://api.breakside.us (production)\n' +
         '• http://192.168.1.100:8000 (local network)\n' +
         '• http://localhost:8000 (same device)\n\n' +
         'Leave empty to use auto-detection.',

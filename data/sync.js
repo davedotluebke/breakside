@@ -18,9 +18,13 @@ function getApiBaseUrl() {
     const storedUrl = localStorage.getItem('ultistats_api_url');
     if (storedUrl) return storedUrl;
     
-    // If PWA is served from a real host (not file://), use same host with port 8000
-    if (window.location.protocol !== 'file:' && window.location.hostname !== 'localhost') {
-        return `${window.location.protocol}//${window.location.hostname}:8000`;
+    // Production: use api.breakside.us
+    if (window.location.hostname === 'luebke.us' || 
+        window.location.hostname === 'breakside.us' ||
+        window.location.hostname === 'breakside.pro' ||
+        window.location.hostname.endsWith('.breakside.us') ||
+        window.location.hostname.endsWith('.breakside.pro')) {
+        return 'https://api.breakside.us';
     }
     
     // Default for local development
