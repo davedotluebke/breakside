@@ -18,13 +18,13 @@ function getApiBaseUrl() {
     const storedUrl = localStorage.getItem('ultistats_api_url');
     if (storedUrl) return storedUrl;
     
-    // Production: use api.breakside.us
+    // Production: use api.breakside.pro (primary domain)
     if (window.location.hostname === 'luebke.us' || 
         window.location.hostname === 'breakside.us' ||
         window.location.hostname === 'breakside.pro' ||
         window.location.hostname.endsWith('.breakside.us') ||
         window.location.hostname.endsWith('.breakside.pro')) {
-        return 'https://api.breakside.us';
+        return 'https://api.breakside.pro';
     }
     
     // Default for local development
