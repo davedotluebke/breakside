@@ -2,12 +2,12 @@
     "name": "Breakside - Ultimate Frisbee Tracker",
     "short_name": "Breakside",
     "description": "A PWA for tracking Ultimate Frisbee games and team statistics.",
-    "start_url": "/ultistats/index.html",
+    "start_url": "/",
     "display": "standalone",
     "background_color": "#1a1a1a",
-    "theme_color": "#E19049",
+    "theme_color": "#C87830",
     "orientation": "portrait-primary",
-    "scope": "/ultistats/",
+    "scope": "/",
     "icons": [
         {
             "src": "images/favicon-16x16.png",
