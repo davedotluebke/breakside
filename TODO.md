@@ -90,6 +90,7 @@ aws s3 sync . s3://breakside.pro/ \
   --exclude ".git/*" \
   --exclude "ultistats_server/*" \
   --exclude "data/*" \
+  --exclude "scripts/*" \
   --exclude "*.py" \
   --exclude "__pycache__/*" \
   --exclude "*.md" \
@@ -98,11 +99,8 @@ aws s3 sync . s3://breakside.pro/ \
   --exclude "*.ogg" \
   --exclude "*.m4a" \
   --exclude "*.webm"
-
-# Upload data JS modules (sync.js, storage.js, models.js)
-aws s3 cp data/sync.js s3://breakside.pro/data/sync.js
-aws s3 cp data/storage.js s3://breakside.pro/data/storage.js
-aws s3 cp data/models.js s3://breakside.pro/data/models.js
+# Note: store/ directory is included (contains client-side JS modules)
+# Note: data/ directory is excluded (contains server-side JSON data)
 
 # Upload static viewer
 aws s3 sync ultistats_server/static/viewer/ s3://breakside.pro/viewer/
