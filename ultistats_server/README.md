@@ -1,111 +1,83 @@
-# Ultistats Server - JSON File Backend
+# Breakside Server
 
-Python FastAPI server for the Ultistats application, providing JSON file-based cloud storage with versioning.
+FastAPI backend for the Breakside ultimate frisbee statistics tracker.
 
 ## Features
 
-- **JSON File Storage**: Simple, human-readable game storage
-- **Automatic Versioning**: Every sync creates a timestamped version
-- **Git Integration**: Optional git-based versioning for full history
-- **Full Game Sync**: Stateless sync of complete game state
-- **Fast Performance**: ~25-50ms sync time for typical games
+- **Cloud Storage** - Sync games, teams, and players to the server
+- **Automatic Versioning** - Every sync creates a timestamped backup
+- **Offline-First** - PWA works fully offline, syncs when connected
+- **Human-Readable Data** - All data stored as JSON files
+- **Fast Sync** - ~25-50ms for typical game sync
 
-## Setup
+## Quick Start
 
-### 1. Install Dependencies
+### Local Development
 
 ```bash
 cd ultistats_server
 pip install -r requirements.txt
+python main.py
 ```
 
-### 2. Configure Data Directory
+Server runs at http://localhost:8000
 
-Set the data directory via environment variable (defaults to `/data`):
+### API Documentation
 
-```bash
-export ULTISTATS_DATA_DIR=/path/to/data
-```
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
 
-Or set in `config.py` directly.
+## Configuration
 
-### 3. Set Environment Variables (Optional)
+Set via environment variables or in `.env` file:
 
-```bash
-# Server configuration
-export ULTISTATS_HOST=0.0.0.0
-export ULTISTATS_PORT=8000
-export ULTISTATS_DEBUG=false
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ULTISTATS_DATA_DIR` | `/data` | Where game data is stored |
+| `ULTISTATS_HOST` | `0.0.0.0` | Server bind address |
+| `ULTISTATS_PORT` | `8000` | Server port |
+| `ULTISTATS_DEBUG` | `false` | Enable debug mode |
+| `ULTISTATS_ALLOWED_ORIGINS` | `*` | CORS allowed origins |
 
-# Authentication (for future use)
-export ULTISTATS_SECRET_KEY=your-secret-key-here
-
-# CORS
-export ULTISTATS_ALLOWED_ORIGINS=http://localhost:3000,https://yourdomain.com
-
-# Git versioning (optional)
-export ULTISTATS_ENABLE_GIT_VERSIONING=true
-```
-
-### 4. Run Server
-
-```bash
-python3 main.py
-```
-
-Or with uvicorn directly:
-
-```bash
-uvicorn ultistats_server.main:app --host 0.0.0.0 --port 8000
-```
-
-## API Endpoints
+## API Overview
 
 ### Games
+- `POST /api/games/{id}/sync` - Save/update a game
+- `GET /api/games/{id}` - Get a game
+- `GET /api/games` - List all games
+- `DELETE /api/games/{id}` - Delete a game
 
-- `POST /games/{game_id}/sync` - Sync complete game state
-- `GET /games/{game_id}` - Get current game state
-- `GET /games` - List all games
-- `DELETE /games/{game_id}` - Delete game
+### Teams & Players
+- `POST /api/teams/{id}/sync` - Save/update a team
+- `POST /api/players/{id}/sync` - Save/update a player
+- `GET /api/teams`, `GET /api/players` - List all
 
-### Versions
-
-- `GET /games/{game_id}/versions` - List all versions
-- `GET /games/{game_id}/versions/{timestamp}` - Get specific version
-- `POST /games/{game_id}/restore/{timestamp}` - Restore to version
-
-## Data Structure
-
-```
-/data/
-  games/
-    {game_id}/
-      current.json          # Latest version
-      versions/
-        2024-01-15T10-30-45.json
-        2024-01-15T10-35-12.json
-      .git/                 # Optional git repo
-```
+### Utilities
+- `GET /health` - Health check
+- `POST /api/index/rebuild` - Rebuild search index
 
 ## Testing
 
-Test the API with curl:
-
 ```bash
+# Health check
+curl http://localhost:8000/health
+
+# List games
+curl http://localhost:8000/api/games
+
 # Sync a game
-curl -X POST http://localhost:8000/games/test-game-123/sync \
+curl -X POST http://localhost:8000/api/games/test-game/sync \
   -H "Content-Type: application/json" \
-  -d @game_data.json
-
-# Get game
-curl http://localhost:8000/games/test-game-123
-
-# List versions
-curl http://localhost:8000/games/test-game-123/versions
+  -d '{"team": "My Team", "opponent": "Other Team"}'
 ```
 
-## Development
+## Production Deployment
 
-The server uses FastAPI with automatic API documentation:
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+The server is deployed on EC2 with nginx as a reverse proxy.
+
+See [ARCHITECTURE.md](../ARCHITECTURE.md) for:
+- Full deployment architecture
+- Server file structure
+- Data directory layout
+- Infrastructure details
+- Quick reference commands

@@ -169,122 +169,14 @@ Target: Robust version history using Git.
 
 ---
 
-## Technical Notes
+## Technical Documentation
 
-### Short ID Generation
-
-Human-readable IDs with collision-resistant hash:
-
-```javascript
-/**
- * Generate a short, human-readable ID
- * Format: {sanitized-name}-{4-char-hash}
- * Example: "Alice-7f3a", "Sample-Team-b2c4"
- */
-function generateShortId(name) {
-    // Sanitize: keep alphanumeric and hyphens, max 20 chars
-    const safeName = name
-        .replace(/[^a-zA-Z0-9\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .substring(0, 20)
-        .replace(/-+$/, ''); // trim trailing hyphens
-    
-    // Generate 4-char alphanumeric hash
-    const hash = Math.random().toString(36).substring(2, 6);
-    
-    return `${safeName}-${hash}`;
-}
-
-// Examples:
-// generateShortId("Alice")        -> "Alice-7f3a"
-// generateShortId("Sample Team")  -> "Sample-Team-b2c4"
-// generateShortId("Bob Smith Jr") -> "Bob-Smith-Jr-x9d2"
-```
-
-**Collision Handling:**
-- On sync, if ID already exists on server with different data, append 2 more chars
-- Example: `Alice-7f3a` collides → try `Alice-7f3a2b`
-- Extremely rare with 4-char hash (1 in 1.6M chance per name)
-
-### Server-Side Index Structure
-
-```json
-{
-  "lastRebuilt": "2024-01-15T10:30:00Z",
-  "playerGames": {
-    "Alice-7f3a": ["2024-01-15_Team_vs_Opp_123", "2024-01-16_Team_vs_Opp_456"],
-    "Bob-2d9e": ["2024-01-15_Team_vs_Opp_123"]
-  },
-  "teamGames": {
-    "Sample-Team-b2c4": ["2024-01-15_Team_vs_Opp_123", "2024-01-16_Team_vs_Opp_456"]
-  },
-  "gameRoster": {
-    "2024-01-15_Team_vs_Opp_123": ["Alice-7f3a", "Bob-2d9e", "Charlie-4k1m"]
-  }
-}
-```
-
-**Rebuild Logic:**
-- Scan all games, extract player IDs from rosterSnapshot
-- Scan all teams, extract player IDs
-- Takes ~1 second for hundreds of games
-- Triggered manually via `POST /index/rebuild` or automatically if index.json missing
-
-### Roster Snapshot Structure
-
-Capture player state at game time for historical accuracy:
-
-```javascript
-rosterSnapshot: {
-    players: [
-        {
-            id: "Alice-7f3a",
-            name: "Alice",
-            nickname: "Ace",
-            number: "7",
-            gender: "FMP"
-        },
-        // ...
-    ],
-    capturedAt: "2024-01-15T10:30:00Z"
-}
-```
-
-### Event Player References
-
-Events reference players by ID:
-
-```javascript
-{
-    type: "Throw",
-    throwerId: "Alice-7f3a",
-    receiverId: "Bob-2d9e",
-    // ... other flags
-}
-```
-
-### Backward Compatibility
-
-During transition, support both formats:
-- If event has `thrower` (object with name), use legacy lookup
-- If event has `throwerId` (string), use ID lookup
-- Migration converts legacy → ID format
-
-### Offline Creation Flow
-
-```
-User creates player while offline:
-1. generateShortId("Alice") -> "Alice-7f3a"
-2. Save to localStorage with _localOnly: true
-3. Add to sync queue: {type: 'player', action: 'create', id: 'Alice-7f3a', data: {...}}
-4. UI shows player immediately (works offline)
-
-When online:
-5. Process sync queue
-6. POST /players with player data
-7. If ID collision, server returns new ID, update local
-8. Remove _localOnly flag
-```
+For detailed technical documentation, see **[ARCHITECTURE.md](ARCHITECTURE.md)**:
+- System architecture and deployment
+- File structure (frontend and backend)
+- Data model and entity IDs
+- Sync strategy and versioning
+- Quick reference commands
 
 ---
 
