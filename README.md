@@ -76,18 +76,18 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 <details>
 <summary><h2>📱 Installation</h2></summary>
 
-Breakside is a Progressive Web App (PWA) hosted at [https://luebke.us/ultistats](https://luebke.us/ultistats).
+Breakside is a Progressive Web App (PWA) hosted at [https://www.breakside.pro](https://www.breakside.pro).
 
 ### Installing on Mobile Devices
 
 **For iOS (iPhone/iPad):**
-1. Open Safari and navigate to [https://luebke.us/ultistats](https://luebke.us/ultistats)
+1. Open Safari and navigate to [https://www.breakside.pro](https://www.breakside.pro)
 2. Tap the Share button (square with arrow pointing up)
 3. Scroll down and tap "Add to Home Screen"
 4. Tap "Add" to install the app on your home screen
 
 **For Android:**
-1. Open Chrome and navigate to [https://luebke.us/ultistats](https://luebke.us/ultistats)
+1. Open Chrome and navigate to [https://www.breakside.pro](https://www.breakside.pro)
 2. Tap the three-dot menu (⋮) in the top-right corner
 3. Tap "Add to Home screen" or "Install app"
 4. Tap "Install" to add the app to your device
@@ -95,12 +95,12 @@ Breakside is a Progressive Web App (PWA) hosted at [https://luebke.us/ultistats]
 ### Installing on Desktop
 
 **For Chrome/Edge:**
-1. Navigate to [https://luebke.us/ultistats](https://luebke.us/ultistats)
+1. Navigate to [https://www.breakside.pro](https://www.breakside.pro)
 2. Click the install icon in the address bar (or menu → Install Breakside)
 3. Click "Install" when prompted
 
 **For Safari:**
-1. Navigate to [https://luebke.us/ultistats](https://luebke.us/ultistats)
+1. Navigate to [https://www.breakside.pro](https://www.breakside.pro)
 2. Go to File → Add to Desktop (or use Develop menu → Add to Dock)
 
 Once installed, the app will work offline and provide a native app-like experience across all platforms.
@@ -154,85 +154,28 @@ The app uses a hierarchical data model to track comprehensive game statistics:
 - **Progressive Web App (PWA)** - Modern web app with native app features
 - **Vanilla JavaScript** - No external frameworks for optimal performance and reliability
 - **Service Worker** - Offline functionality and caching for uninterrupted use
-- **Local Storage** - Persistent data storage without requiring server infrastructure
+- **Cloud Sync** - FastAPI backend with JSON file storage
 
-### Performance Features
+### Key Features
 - **Network-First Strategy** - Optimized loading with fallback to cached content
-- **Automatic Versioning** - Built-in version tracking and updates
+- **Automatic Versioning** - Built-in version tracking and cloud backups
 - **Responsive CSS** - Mobile-first design with touch-optimized interactions
-- **Efficient Data Structures** - Optimized for real-time updates and statistics calculation
+- **Offline-First** - Works fully offline, syncs when connected
 
 ### Browser Support
 - **Full Support** - Chrome, Safari, Firefox, Edge on desktop and mobile
 - **PWA Features** - Home screen installation, offline mode, and app-like experience
 - **Touch Gestures** - Swipe navigation and touch-optimized controls for mobile use
 
-### Data Persistence
-- **Automatic Saving** - All changes saved immediately to local storage
-- **No Setup Required** - Works immediately without configuration or accounts
-- **Data Portability** - Complete JSON export/import for data backup and sharing
+### Documentation
 
-### File Structure
+For detailed technical documentation including:
+- Complete file structure
+- Server architecture
+- Data model and sync strategy
+- Deployment infrastructure
 
-The codebase is organized into a modular architecture for maintainability and clarity:
-
-```
-ultistats/
-├── data/                    # Data layer
-│   ├── models.js           # Data structure definitions (Player, Game, Team, Point, Possession, Event classes)
-│   └── storage.js          # Serialization/deserialization and local storage operations
-│
-├── utils/                   # Utility functions
-│   ├── helpers.js          # Pure utility functions and current state accessors
-│   └── statistics.js       # Statistics calculation and game summary generation
-│
-├── screens/                 # Screen management
-│   └── navigation.js       # Screen navigation and state management
-│
-├── teams/                   # Team management
-│   ├── teamSelection.js    # Team selection screen and team CRUD operations
-│   └── rosterManagement.js # Roster display, player management, and line management
-│
-├── game/                    # Game core logic
-│   ├── gameLogic.js        # Game initialization, scoring, and undo functionality
-│   ├── pointManagement.js  # Point creation, timing, and transitions
-│   └── beforePointScreen.js # Before Point screen with player selection and line management
-│
-├── playByPlay/              # Play-by-play tracking screens
-│   ├── offenseScreen.js    # Offensive possession tracking and event creation
-│   ├── defenseScreen.js    # Defensive possession tracking and event creation
-│   ├── simpleModeScreen.js # Simple mode scoring and score attribution
-│   └── keyPlayDialog.js    # Key play dialog for recording important events
-│
-├── ui/                      # UI update functions
-│   ├── activePlayersDisplay.js # Active players table rendering and management
-│   ├── eventLogDisplay.js   # Event log management and display
-│   └── buttonLayout.js      # UI consistency functions (button width matching)
-│
-├── main.js                  # Application bootstrap (~200 lines)
-│                            # - Service worker registration
-│                            # - App initialization
-│                            # - Simple mode toggle coordination
-│                            # - Module coordination
-│
-├── index.html              # Main HTML with module script tags
-├── main.css                # Application styles
-├── manifest.json           # PWA manifest
-└── service-worker.js       # Service worker for offline functionality
-```
-
-**Module Dependencies:**
-- Modules are loaded in order via `<script>` tags in `index.html`
-- Data layer (`data/`) loads first, followed by utilities, then feature modules
-- Global state is managed through shared variables defined in `data/storage.js`
-- No circular dependencies - clear data flow from data → utils → features → UI
-
-**Benefits of Modular Structure:**
-- **Maintainability** - Each module has a single, clear responsibility
-- **Testability** - Modules can be tested independently
-- **Extensibility** - Easy to add new features without affecting existing code
-- **Readability** - No single file exceeds 500 lines
-- **Future-Ready** - Prepared for cloud sync, real-time collaboration, and AI narration features
+See **[ARCHITECTURE.md](ARCHITECTURE.md)**
 
 </details>
 
