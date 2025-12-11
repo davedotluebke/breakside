@@ -5,6 +5,43 @@
  * Phase 3 update: Added sync status indicator and pending sync badges
  */
 
+// =============================================================================
+// API Configuration
+// =============================================================================
+
+/**
+ * Get the API base URL based on where the viewer is hosted.
+ * - If served from api.breakside.pro, use relative URLs (same origin)
+ * - If served from www.breakside.pro or other domains, use absolute URL
+ */
+function getApiBaseUrl() {
+    const hostname = window.location.hostname;
+    
+    // If served from the API server itself, use relative URLs
+    if (hostname === 'api.breakside.pro' || hostname === 'api.breakside.us') {
+        return '';
+    }
+    
+    // If served from CloudFront/S3 or other hosts, use absolute API URL
+    if (hostname === 'www.breakside.pro' || hostname === 'breakside.pro' ||
+        hostname === 'www.breakside.us' || hostname === 'breakside.us' ||
+        hostname === 'luebke.us' ||
+        hostname.endsWith('.breakside.pro') || hostname.endsWith('.breakside.us')) {
+        return 'https://api.breakside.pro';
+    }
+    
+    // Local development
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return '';
+    }
+    
+    // Default: assume same origin
+    return '';
+}
+
+const API_BASE_URL = getApiBaseUrl();
+console.log(`📡 Viewer API URL: ${API_BASE_URL || '(same origin)'}`);
+
 const POLL_INTERVAL = 3000; // 3 seconds
 const SYNC_STATUS_POLL_INTERVAL = 5000; // 5 seconds
 let currentGameId = null;
@@ -173,7 +210,7 @@ async function loadAllData() {
 async function loadGames() {
     const container = document.getElementById('games-list');
     try {
-        const response = await fetch('/api/games');
+        const response = await fetch(`${API_BASE_URL}/api/games`);
         if (!response.ok) throw new Error(`Failed to fetch games: ${response.statusText}`);
         
         const data = await response.json();
@@ -191,7 +228,7 @@ async function loadGames() {
 async function loadTeams() {
     const container = document.getElementById('teams-list');
     try {
-        const response = await fetch('/api/teams');
+        const response = await fetch(`${API_BASE_URL}/api/teams`);
         if (!response.ok) throw new Error(`Failed to fetch teams: ${response.statusText}`);
         
         const data = await response.json();
@@ -209,7 +246,7 @@ async function loadTeams() {
 async function loadPlayers() {
     const container = document.getElementById('players-list');
     try {
-        const response = await fetch('/api/players');
+        const response = await fetch(`${API_BASE_URL}/api/players`);
         if (!response.ok) throw new Error(`Failed to fetch players: ${response.statusText}`);
         
         const data = await response.json();
@@ -227,9 +264,9 @@ async function loadPlayers() {
 async function loadTeamDetail(teamId) {
     try {
         const [teamResponse, playersResponse, gamesResponse] = await Promise.all([
-            fetch(`/api/teams/${teamId}`),
-            fetch(`/api/teams/${teamId}/players`),
-            fetch(`/api/teams/${teamId}/games`)
+            fetch(`${API_BASE_URL}/api/teams/${teamId}`),
+            fetch(`${API_BASE_URL}/api/teams/${teamId}/players`),
+            fetch(`${API_BASE_URL}/api/teams/${teamId}/games`)
         ]);
         
         if (!teamResponse.ok) throw new Error('Team not found');
@@ -285,9 +322,9 @@ async function loadTeamDetail(teamId) {
 async function loadPlayerDetail(playerId) {
     try {
         const [playerResponse, gamesResponse, teamsResponse] = await Promise.all([
-            fetch(`/api/players/${playerId}`),
-            fetch(`/api/players/${playerId}/games`),
-            fetch(`/api/players/${playerId}/teams`)
+            fetch(`${API_BASE_URL}/api/players/${playerId}`),
+            fetch(`${API_BASE_URL}/api/players/${playerId}/games`),
+            fetch(`${API_BASE_URL}/api/players/${playerId}/teams`)
         ]);
         
         if (!playerResponse.ok) throw new Error('Player not found');
@@ -479,7 +516,7 @@ function stopPolling() {
 async function loadGameDetail() {
     if (!currentGameId) return;
     
-    const response = await fetch(`/api/games/${currentGameId}`);
+    const response = await fetch(`${API_BASE_URL}/api/games/${currentGameId}`);
     if (!response.ok) {
         throw new Error(`Failed to fetch game: ${response.statusText}`);
     }
@@ -1104,7 +1141,7 @@ async function loadPlayerCareerStats(playerId, gameIds) {
         for (let i = 0; i < gameIds.length; i += batchSize) {
             const batch = gameIds.slice(i, i + batchSize);
             const gamePromises = batch.map(gameId => 
-                fetch(`/api/games/${gameId}`).then(r => r.ok ? r.json() : null)
+                fetch(`${API_BASE_URL}/api/games/${gameId}`).then(r => r.ok ? r.json() : null)
             );
             
             const games = await Promise.all(gamePromises);
@@ -1290,7 +1327,7 @@ async function loadTeamSeasonStats(teamId, gameIds) {
                 games.push(cached);
             } else {
                 try {
-                    const response = await fetch(`/api/games/${gameId}`);
+                    const response = await fetch(`${API_BASE_URL}/api/games/${gameId}`);
                     if (response.ok) {
                         const game = await response.json();
                         games.push({
