@@ -1,39 +1,62 @@
 # Breakside Deployment
 
-## ✅ Deployment Complete (December 10, 2025)
+## ✅ Deployment Complete (December 11, 2025)
 
-The Breakside API server is deployed and running on EC2.
+Breakside is fully deployed with CloudFront CDN for the PWA and EC2 for the API.
+
+### Architecture
+
+```
+                              USERS
+                                │
+         ┌──────────────────────┼──────────────────────┐
+         ▼                      ▼                      ▼
+   breakside.pro          www.breakside.pro      api.breakside.pro
+   (apex domain)                                        
+         │                      │                      │
+         ▼                      ▼                      ▼
+   EC2 / nginx              CloudFront             EC2 / nginx
+   (301 redirect)             (CDN)                 (proxy)
+         │                      │                      │
+         └──────────────►  S3 Bucket              FastAPI
+                          (PWA + Viewer)         (port 8000)
+```
 
 ### Live URLs
 
-| Service | URL | Status |
-|---------|-----|--------|
-| **PWA (Primary)** | https://breakside.pro | ✅ Redirects to PWA |
-| **PWA (Alt)** | https://luebke.us/ultistats | ✅ S3 hosted |
-| **API (Primary)** | https://api.breakside.pro | ✅ Running |
-| **API (Alt)** | https://api.breakside.us | ✅ Running |
-| **Health Check** | https://api.breakside.pro/health | ✅ `{"status":"healthy"}` |
+| Service | URL | Hosted On |
+|---------|-----|-----------|
+| **PWA** | https://www.breakside.pro | CloudFront → S3 |
+| **PWA (redirect)** | https://breakside.pro | EC2 → www |
+| **Static Viewer** | https://www.breakside.pro/viewer/ | CloudFront → S3 |
+| **API** | https://api.breakside.pro | EC2 → FastAPI |
+| **API (alt)** | https://api.breakside.us | EC2 → FastAPI |
+| **Health Check** | https://api.breakside.pro/health | EC2 |
 
 ### Infrastructure
 
 | Component | Details |
 |-----------|---------|
+| **CloudFront** | Distribution `E6M9KCXIU9CKD` (`d17eottm1x91n5.cloudfront.net`) |
+| **S3 Bucket** | `breakside.pro` (us-east-1, static website hosting) |
 | **EC2 Instance** | Amazon Linux 2, IP: 3.212.138.180 |
 | **Python** | 3.8.20 with venv at `/opt/breakside/venv` |
-| **Web Server** | nginx (reverse proxy, SSL termination) |
+| **Web Server** | nginx (reverse proxy, SSL termination for API + apex redirect) |
 | **Process Manager** | systemd (`breakside.service`) |
-| **SSL Certificates** | Let's Encrypt (auto-renews via cron) |
-| **Data Storage** | `/var/lib/breakside/data/` (JSON files) |
+| **SSL Certificates** | ACM (CloudFront) + Let's Encrypt (EC2) |
+| **Data Storage** | `/var/lib/breakside/data/` on EC2 (JSON files) |
 
 ### Data Migrated
 
 - 1 team (CUDO Mixed)
-- 18 players
+- 18 players  
 - 4 games (Nov 15-16, 2025 tournament)
 
 ---
 
 ## Quick Reference Commands
+
+### EC2 / API Management
 
 ```bash
 # SSH into EC2
@@ -48,7 +71,7 @@ sudo journalctl -u breakside -f
 # Restart service
 sudo systemctl restart breakside
 
-# Deploy code updates
+# Deploy API code updates
 cd /opt/breakside && sudo git pull && sudo systemctl restart breakside
 
 # Renew SSL (runs automatically, but manual if needed)
@@ -58,16 +81,60 @@ sudo certbot renew
 curl -X POST https://api.breakside.pro/api/index/rebuild
 ```
 
+### S3 / PWA Deployment
+
+```bash
+# Deploy PWA to S3 (from local machine)
+cd /Users/luebke/src/ultistats
+aws s3 sync . s3://breakside.pro/ \
+  --exclude ".git/*" \
+  --exclude "ultistats_server/*" \
+  --exclude "data/*" \
+  --exclude "*.py" \
+  --exclude "__pycache__/*" \
+  --exclude "*.md" \
+  --exclude ".DS_Store" \
+  --exclude "*.wav" \
+  --exclude "*.ogg" \
+  --exclude "*.m4a" \
+  --exclude "*.webm"
+
+# Upload data JS modules (sync.js, storage.js, models.js)
+aws s3 cp data/sync.js s3://breakside.pro/data/sync.js
+aws s3 cp data/storage.js s3://breakside.pro/data/storage.js
+aws s3 cp data/models.js s3://breakside.pro/data/models.js
+
+# Upload static viewer
+aws s3 sync ultistats_server/static/viewer/ s3://breakside.pro/viewer/
+
+# Invalidate CloudFront cache (after S3 updates)
+aws cloudfront create-invalidation --distribution-id E6M9KCXIU9CKD --paths "/*"
+```
+
 ---
 
-## Configuration Files
+## Configuration Locations
 
-| File | Purpose |
-|------|---------|
-| `/etc/breakside/env` | Environment variables (DATA_DIR, SECRET_KEY, CORS) |
-| `/etc/systemd/system/breakside.service` | Systemd service definition |
-| `/etc/nginx/conf.d/breakside.conf` | nginx reverse proxy config |
-| `/etc/cron.d/certbot` | SSL auto-renewal cron job |
+| Component | Location |
+|-----------|----------|
+| **S3 Bucket** | AWS Console → S3 → `breakside.pro` |
+| **CloudFront** | AWS Console → CloudFront → `E6M9KCXIU9CKD` |
+| **ACM Certificate** | AWS Console → ACM (us-east-1) → `breakside.pro` |
+| **EC2 env file** | `/etc/breakside/env` |
+| **Systemd service** | `/etc/systemd/system/breakside.service` |
+| **nginx config** | `/etc/nginx/conf.d/breakside.conf` |
+| **Let's Encrypt certs** | `/etc/letsencrypt/live/api.breakside.us/` |
+| **Certbot cron** | `/etc/cron.d/certbot` |
+
+### DNS (Pair.com)
+
+| Domain | Type | Value |
+|--------|------|-------|
+| `breakside.pro` | A | 3.212.138.180 |
+| `www.breakside.pro` | CNAME | d17eottm1x91n5.cloudfront.net |
+| `api.breakside.pro` | A | 3.212.138.180 |
+| `breakside.us` | A | 3.212.138.180 |
+| `api.breakside.us` | A | 3.212.138.180 |
 
 ---
 
