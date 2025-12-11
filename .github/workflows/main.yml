@@ -1,48 +1,60 @@
-name: Deploy to S3
+name: Deploy to S3 and CloudFront
 
 on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'ultistats_server/**'
+      - 'data/**'
+      - 'scripts/**'
+      - '*.md'
+      - '*.py'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-      - name: Install AWS CLI
-        run: |
-          curl -s "https://d1vvhvl2y92vvt.cloudfront.net/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip -q awscliv2.zip
-          rm awscliv2.zip
-          sudo ./aws/install --update
-          aws --version
-      - name: Set AWS CLI Configuration
-        run: |
-          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # aws configure set aws_session_token ${{ secrets.AWS_SESSION_TOKEN }}
-          aws configure set region us-west-2  # Set your desired AWS region
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
 
-      - name: Deploy to S3
+      - name: Sync PWA files to S3
         run: |
-          # Sync the contents of the current directory to the S3 bucket, excluding .git, .github, and AWS CLI files
-          set -x  # start debugging
-          aws s3 sync . s3://luebke.us/ultistats/ --exclude ".git/*" --exclude ".github/*" --exclude "aws/*" --region us-west-2
-          set +x  # stop debugging
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws s3 sync . s3://breakside.pro/ \
+            --exclude ".git/*" \
+            --exclude ".github/*" \
+            --exclude "ultistats_server/*" \
+            --exclude "data/*" \
+            --exclude "scripts/*" \
+            --exclude "*.py" \
+            --exclude "__pycache__/*" \
+            --exclude "*.md" \
+            --exclude ".DS_Store" \
+            --exclude "*.wav" \
+            --exclude "*.ogg" \
+            --exclude "*.m4a" \
+            --exclude "*.webm" \
+            --delete
 
-      - name: Create CloudFront Invalidation
+      - name: Sync viewer to S3
         run: |
-          # Use the AWS CLI to create a CloudFront invalidation for the ultistats directory
-          set -x  # start debugging
-          aws cloudfront create-invalidation --distribution-id E3G1NZWEOD2Y27 --paths "/ultistats/*"
-          set +x  # stop debugging
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws s3 sync ultistats_server/static/viewer/ s3://breakside.pro/viewer/
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id E6M9KCXIU9CKD \
+            --paths "/*"
+
+      - name: Deployment complete
+        run: |
+          echo "✅ Deployed to https://www.breakside.pro"
+          echo "📦 CloudFront invalidation started"
