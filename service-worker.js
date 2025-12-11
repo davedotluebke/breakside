@@ -1,4 +1,4 @@
-const cacheName = 'v2';
+const cacheName = 'v3';
 
 self.addEventListener('install', (e) => {
     console.log('Service Worker: Installed');
@@ -31,8 +31,10 @@ self.addEventListener('fetch', e => {
         return;
     }
 
-    // Don't cache API calls (localhost:8000)
-    if (e.request.url.includes(':8000/')) {
+    // Don't cache API calls
+    if (e.request.url.includes(':8000/') || 
+        e.request.url.includes('api.breakside.pro') ||
+        e.request.url.includes('api.breakside.us')) {
         return;
     }
 
