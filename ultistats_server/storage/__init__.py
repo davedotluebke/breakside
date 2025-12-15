@@ -1,5 +1,5 @@
 """
-Storage module for JSON file-based storage of games, players, teams, and index.
+Storage module for JSON file-based storage of games, players, teams, users, and memberships.
 """
 from .game_storage import (
     save_game_version,
@@ -44,6 +44,33 @@ from .index_storage import (
     update_index_for_team,
 )
 
+from .user_storage import (
+    user_exists,
+    get_user,
+    save_user,
+    create_or_update_user,
+    update_user,
+    delete_user,
+    list_users,
+    set_admin,
+)
+
+from .membership_storage import (
+    membership_exists,
+    get_membership,
+    create_membership,
+    update_membership_role,
+    delete_membership,
+    get_user_memberships,
+    get_team_memberships,
+    get_user_team_membership,
+    get_user_team_role,
+    get_user_teams,
+    get_team_coaches,
+    get_team_viewers,
+    rebuild_membership_index,
+)
+
 __all__ = [
     # Game storage
     "save_game_version",
@@ -80,4 +107,27 @@ __all__ = [
     "get_player_teams",
     "update_index_for_game",
     "update_index_for_team",
+    # User storage
+    "user_exists",
+    "get_user",
+    "save_user",
+    "create_or_update_user",
+    "update_user",
+    "delete_user",
+    "list_users",
+    "set_admin",
+    # Membership storage
+    "membership_exists",
+    "get_membership",
+    "create_membership",
+    "update_membership_role",
+    "delete_membership",
+    "get_user_memberships",
+    "get_team_memberships",
+    "get_user_team_membership",
+    "get_user_team_role",
+    "get_user_teams",
+    "get_team_coaches",
+    "get_team_viewers",
+    "rebuild_membership_index",
 ]
