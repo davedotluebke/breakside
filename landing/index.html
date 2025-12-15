@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Breakside - Ultimate Frisbee Stats Tracker</title>
+    
+    <!-- Favicons -->
+    <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/images/favicon-192x192.png">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <link rel="stylesheet" href="landing.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="main-nav">
+        <div class="nav-content">
+            <a href="/" class="nav-logo">
+                <img src="/images/logo.disc.only.png" alt="Breakside" class="nav-logo-img">
+                <span class="nav-logo-text">Breakside</span>
+            </a>
+            <div class="nav-links">
+                <a href="#features" class="nav-link">Features</a>
+                <a href="#install" class="nav-link">Install</a>
+                <a href="/viewer/" class="nav-link">Live Games</a>
+                <button id="loginBtn" class="nav-btn">Sign In</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-text">
+                <h1 class="hero-title">
+                    Track Every Play.<br>
+                    <span class="hero-highlight">Win Every Game.</span>
+                </h1>
+                <p class="hero-subtitle">
+                    Real-time play-by-play statistics for ultimate frisbee. 
+                    Track goals, assists, turnovers, and playing time—all from your phone.
+                </p>
+                <div class="hero-actions">
+                    <button id="getStartedBtn" class="btn btn-primary btn-large">Get Started Free</button>
+                    <a href="/viewer/" class="btn btn-secondary btn-large">Watch Live Games</a>
+                </div>
+                <p class="hero-note">
+                    <span class="beta-badge">Beta</span>
+                    No credit card required. Free for teams of any size.
+                </p>
+            </div>
+            <div class="hero-visual">
+                <div class="phone-mockup">
+                    <div class="phone-screen">
+                        <div class="mockup-header">
+                            <span class="mockup-score">Sample Team 7</span>
+                            <span class="mockup-vs">vs</span>
+                            <span class="mockup-score">Opponents 5</span>
+                        </div>
+                        <div class="mockup-timer">12:34</div>
+                        <div class="mockup-players">
+                            <div class="mockup-player active">Alex</div>
+                            <div class="mockup-player active">Jordan</div>
+                            <div class="mockup-player">Casey</div>
+                            <div class="mockup-player active">Sam</div>
+                        </div>
+                        <div class="mockup-actions">
+                            <div class="mockup-btn green">We Score</div>
+                            <div class="mockup-btn red">They Score</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="section-content">
+            <h2 class="section-title">Everything You Need on the Sideline</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Real-Time Stats</h3>
+                    <p>Track goals, assists, turnovers, Ds, and playing time as the game unfolds.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">👥</div>
+                    <h3>Team Management</h3>
+                    <p>Manage multiple teams, rosters, and saved lines for quick substitutions.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h3>Works Offline</h3>
+                    <p>Full functionality without internet. Syncs automatically when connected.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔄</div>
+                    <h3>Multi-Coach Sync</h3>
+                    <p>Multiple coaches can collaborate—one tracks plays, another manages lines.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📺</div>
+                    <h3>Live Viewer</h3>
+                    <p>Share a link so parents and fans can follow the game in real-time.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📈</div>
+                    <h3>Season Analytics</h3>
+                    <p>Track player performance and team stats across the entire season.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Install Section -->
+    <section id="install" class="install">
+        <div class="section-content">
+            <h2 class="section-title">Install in Seconds</h2>
+            <p class="section-subtitle">Breakside is a Progressive Web App—install it like a native app, no app store required.</p>
+            
+            <div class="install-grid">
+                <div class="install-card">
+                    <div class="install-icon">🍎</div>
+                    <h3>iPhone / iPad</h3>
+                    <ol class="install-steps">
+                        <li>Open Safari and go to <strong>breakside.pro</strong></li>
+                        <li>Tap the <strong>Share</strong> button (box with arrow)</li>
+                        <li>Scroll down and tap <strong>"Add to Home Screen"</strong></li>
+                        <li>Tap <strong>"Add"</strong> to install</li>
+                    </ol>
+                </div>
+                <div class="install-card">
+                    <div class="install-icon">🤖</div>
+                    <h3>Android</h3>
+                    <ol class="install-steps">
+                        <li>Open Chrome and go to <strong>breakside.pro</strong></li>
+                        <li>Tap the <strong>three-dot menu</strong> (⋮)</li>
+                        <li>Tap <strong>"Add to Home screen"</strong></li>
+                        <li>Tap <strong>"Install"</strong> to add</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Auth Modal -->
+    <div id="authModal" class="modal">
+        <div class="modal-content auth-modal">
+            <button class="modal-close" id="closeAuthModal">&times;</button>
+            <div class="auth-header">
+                <img src="/images/logo.disc.only.png" alt="Breakside" class="auth-logo">
+                <h2>Welcome to Breakside</h2>
+                <p class="auth-subtitle">Sign in to sync your teams across devices</p>
+            </div>
+            
+            <div id="authContainer">
+                <!-- Tab buttons -->
+                <div class="auth-tabs">
+                    <button class="auth-tab active" data-tab="signin">Sign In</button>
+                    <button class="auth-tab" data-tab="signup">Sign Up</button>
+                </div>
+                
+                <!-- Sign In Form -->
+                <form id="signinForm" class="auth-form">
+                    <div class="form-group">
+                        <label for="signinEmail">Email</label>
+                        <input type="email" id="signinEmail" required placeholder="you@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="signinPassword">Password</label>
+                        <input type="password" id="signinPassword" required placeholder="Your password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+                    <button type="button" id="forgotPasswordBtn" class="btn-link">Forgot password?</button>
+                </form>
+                
+                <!-- Sign Up Form -->
+                <form id="signupForm" class="auth-form hidden">
+                    <div class="form-group">
+                        <label for="signupEmail">Email</label>
+                        <input type="email" id="signupEmail" required placeholder="you@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="signupPassword">Password</label>
+                        <input type="password" id="signupPassword" required minlength="6" placeholder="At least 6 characters">
+                    </div>
+                    <div class="form-group">
+                        <label for="signupPasswordConfirm">Confirm Password</label>
+                        <input type="password" id="signupPasswordConfirm" required placeholder="Confirm your password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Create Account</button>
+                </form>
+                
+                <!-- Password Reset Form -->
+                <form id="resetForm" class="auth-form hidden">
+                    <p class="auth-info">Enter your email and we'll send you a link to reset your password.</p>
+                    <div class="form-group">
+                        <label for="resetEmail">Email</label>
+                        <input type="email" id="resetEmail" required placeholder="you@example.com">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Send Reset Link</button>
+                    <button type="button" id="backToSigninBtn" class="btn-link">Back to Sign In</button>
+                </form>
+                
+                <div class="auth-divider">
+                    <span>or continue with</span>
+                </div>
+                
+                <button id="googleSignInBtn" class="btn btn-google">
+                    <svg viewBox="0 0 24 24" width="20" height="20" class="google-icon">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    Continue with Google
+                </button>
+                
+                <!-- Status messages -->
+                <div id="authMessage" class="auth-message hidden"></div>
+            </div>
+            
+            <!-- Logged in state -->
+            <div id="loggedInContainer" class="hidden">
+                <div class="logged-in-content">
+                    <div class="user-avatar" id="userAvatar">👤</div>
+                    <h3 id="userName">Welcome!</h3>
+                    <p id="userEmail" class="user-email"></p>
+                    <a href="/" class="btn btn-primary btn-full">Open Breakside App</a>
+                    <button id="signOutBtn" class="btn btn-secondary btn-full">Sign Out</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <img src="/images/logo.disc.only.png" alt="Breakside" class="footer-logo">
+                <span>Breakside</span>
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/davedotluebke/ultistats" target="_blank">GitHub</a>
+                <a href="https://github.com/davedotluebke/ultistats/issues/new?labels=beta_feedback" target="_blank">Feedback</a>
+            </div>
+            <p class="footer-copy">&copy; 2024 Breakside. Open source under MIT License.</p>
+        </div>
+    </footer>
+
+    <script src="landing.js"></script>
+</body>
+</html>
+
