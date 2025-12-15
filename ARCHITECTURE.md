@@ -133,6 +133,8 @@ ultistats_server/
 │   ├── game_storage.py  # Game CRUD operations
 │   ├── team_storage.py  # Team CRUD operations
 │   ├── player_storage.py# Player CRUD operations
+│   ├── user_storage.py  # User account CRUD operations
+│   ├── membership_storage.py # Team membership management
 │   └── index_storage.py # Cross-entity index management
 │
 ├── static/
@@ -141,8 +143,10 @@ ultistats_server/
 │       ├── viewer.js
 │       └── viewer.css
 │
-└── auth/                # Authentication (future)
-    └── __init__.py
+└── auth/                # Authentication
+    ├── __init__.py
+    ├── jwt_validation.py   # Supabase JWT verification
+    └── dependencies.py     # FastAPI auth dependencies
 ```
 
 ### Data Directory Structure
@@ -159,7 +163,9 @@ ultistats_server/
 │   └── {team_id}.json
 ├── players/
 │   └── {player_id}.json
-├── users/                    # Future: user accounts
+├── users/
+│   └── {user_id}.json        # User profile (synced from Supabase)
+├── memberships.json          # Team membership index
 └── index.json                # Cross-entity index
 ```
 
@@ -189,6 +195,24 @@ ultistats_server/
 - `GET /api/games/{game_id}/versions` - List all versions
 - `GET /api/games/{game_id}/versions/{timestamp}` - Get specific version
 - `POST /api/games/{game_id}/restore/{timestamp}` - Restore to version
+
+#### Authentication
+- `GET /api/auth/me` - Get current user profile (requires auth)
+- `PATCH /api/auth/me` - Update current user profile
+- `GET /api/auth/teams` - List teams user has access to
+
+#### Memberships (planned)
+- `POST /api/teams/{team_id}/invite` - Generate invite code
+- `POST /api/invites/{code}/redeem` - Redeem invite code
+- `GET /api/teams/{team_id}/members` - List team members
+- `DELETE /api/teams/{team_id}/members/{user_id}` - Remove member
+
+#### Game Control (planned)
+- `GET /api/games/{game_id}/status` - Get active/line coach status
+- `POST /api/games/{game_id}/claim-active` - Request Active Coach role
+- `POST /api/games/{game_id}/claim-line` - Request Line Coach role
+- `POST /api/games/{game_id}/release` - Release current role
+- `GET /api/games/{game_id}/poll` - Poll for game updates (optimized)
 
 ---
 
@@ -325,6 +349,169 @@ When online:
 5. POST to server
 6. Handle conflicts (last-write-wins)
 ```
+
+---
+
+## Users and Authentication
+
+### Overview
+
+Breakside uses **Supabase Auth** for user authentication, providing email/password login with JWT tokens. User accounts enable multi-coach collaboration during games, team-based access control, and spectator viewing.
+
+### Authentication Flow
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Landing   │────▶│  Supabase   │────▶│    PWA      │
+│    Page     │     │    Auth     │     │   (JWT)     │
+└─────────────┘     └─────────────┘     └─────────────┘
+                          │
+                          ▼
+                    ┌─────────────┐
+                    │  FastAPI    │
+                    │  (verify)   │
+                    └─────────────┘
+```
+
+1. User visits landing page (`breakside.pro`)
+2. Signs in via Supabase Auth (email/password)
+3. Supabase returns JWT access token
+4. PWA includes `Authorization: Bearer {token}` on all API calls
+5. FastAPI validates JWT signature using Supabase JWT secret
+
+### User Roles
+
+#### Persistent Roles (Team-Level)
+
+| Role | Abilities |
+|------|-----------|
+| **Admin** | Full system access. Can modify any team, game, player. Can grant/revoke any role. |
+| **Coach** | Full access to assigned teams. Can create/edit games, modify rosters, add events. |
+| **Viewer** | Read-only access to assigned teams. Can watch games live, view statistics. |
+
+#### Dynamic Roles (Per-Game)
+
+| Role | Abilities |
+|------|-----------|
+| **Active Coach** | Has write control for play-by-play events. Can modify current lineup between points. Only one per game. |
+| **Line Coach** | Can prepare the next lineup during a point. Only one per game. Any Coach can claim this status. |
+
+### Role Assignment
+
+- **Admin**: Manually granted by existing Admin (stored in user profile)
+- **Coach**: Granted via single-use invite code (7-day expiry)
+- **Viewer**: Granted via multi-use invite link (permanent, revocable)
+- **Active Coach**: Claimed by any Coach during a game; requires handoff from current holder
+- **Line Coach**: Claimed by any Coach during a game; requires handoff from current holder
+
+### Handoff Protocol
+
+When a Coach requests Active Coach or Line Coach status:
+
+```
+1. Requester clicks "Play-by-Play" or "Next Line" button
+2. Server notifies current holder (if any)
+3. Current holder sees confirmation panel with 5-second countdown
+4. Options: Confirm (immediate), Deny (cancel request), or timeout (auto-confirm)
+5. On confirm: Role transfers, requester gains control
+6. On deny: Request cancelled, requester notified
+```
+
+This protocol also handles connectivity loss—any Coach can take over within 5 seconds if the current holder loses connection.
+
+### Team Membership Data Model
+
+```json
+{
+  "team_memberships": [
+    {
+      "id": "mem_TeamA-1234_user-abc",
+      "teamId": "TeamA-1234",
+      "userId": "user-abc",
+      "role": "coach",
+      "invitedBy": "user-xyz",
+      "joinedAt": "2025-01-15T10:30:00Z"
+    }
+  ],
+  "user_memberships": {
+    "user-abc": [/* membership objects */]
+  }
+}
+```
+
+### Game Controller State
+
+Per-game controller state (stored in game or in-memory):
+
+```json
+{
+  "activeCoach": {
+    "userId": "user-abc",
+    "claimedAt": "2025-01-15T10:30:00Z",
+    "lastPing": "2025-01-15T10:35:00Z"
+  },
+  "lineCoach": {
+    "userId": "user-xyz",
+    "claimedAt": "2025-01-15T10:32:00Z",
+    "lastPing": "2025-01-15T10:35:00Z"
+  },
+  "pendingHandoff": {
+    "role": "activeCoach",
+    "requesterId": "user-xyz",
+    "requestedAt": "2025-01-15T10:35:30Z",
+    "expiresAt": "2025-01-15T10:35:35Z"
+  }
+}
+```
+
+### Invite Codes
+
+URL structure for invite codes:
+
+| Purpose | URL Format |
+|---------|------------|
+| Coach invite | `/join/t/{team-hash}?role=coach` |
+| Viewer invite | `/join/t/{team-hash}?role=viewer` |
+| Game spectator | `/join/g/{game-hash}` |
+
+Coach invites are single-use with 7-day expiry. Viewer invites are multi-use and permanent (but revocable).
+
+### Multi-User Polling Strategy
+
+| User Type | Poll Interval | Payload |
+|-----------|---------------|---------|
+| Active Coach | 2 seconds | Full game state + controller status |
+| Line Coach | 2 seconds | Current lineup + controller status |
+| Coach (idle) | 3 seconds | Game state + controller status |
+| Viewer | 5 seconds | Game state only |
+
+Handoff requests are checked on every poll. Future optimization: switch to WebSockets if latency becomes problematic.
+
+### URL Structure
+
+| Path | Purpose |
+|------|---------|
+| `/` | Landing page (intro, login, download instructions) |
+| `/app/` | PWA entry point |
+| `/view/{game-hash}` | Public game viewer (no auth required) |
+| `/join/{code}` | Invite redemption handler |
+
+### Client-Side Auth Module
+
+```
+auth/
+├── config.js         # Supabase URL and anon key
+├── auth.js           # Supabase client, session management
+└── loginScreen.js    # Login/signup UI component
+```
+
+Exported via `window.breakside.auth`:
+- `initializeAuth()` - Initialize Supabase client
+- `isAuthenticated()` - Check if user is logged in
+- `getCurrentUser()` - Get current user object
+- `getAuthHeaders()` - Get `Authorization: Bearer {token}` header
+- `signIn(email, password)` - Sign in
+- `signOut()` - Sign out and redirect to landing
 
 ---
 
