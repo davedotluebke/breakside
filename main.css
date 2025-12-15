@@ -2242,6 +2242,16 @@ body.next-line-mode #selectNextLineBtn {
     font-size: 0.9rem;
 }
 
+/* Sign out button - distinct styling */
+.sync-btn.sign-out-btn {
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    margin-left: 8px;
+}
+
+.sync-btn.sign-out-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #5a6268 0%, #343a40 100%);
+}
+
 .fa-spin {
     animation: spin 1s linear infinite;
 }

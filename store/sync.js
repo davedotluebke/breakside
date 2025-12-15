@@ -15,8 +15,18 @@
 // API_BASE_URL can be set via localStorage for multi-device testing
 // e.g., localStorage.setItem('ultistats_api_url', 'http://192.168.1.100:8000')
 function getApiBaseUrl() {
+    // First, check localStorage override (for testing)
     const storedUrl = localStorage.getItem('ultistats_api_url');
     if (storedUrl) return storedUrl;
+    
+    // Check if config is available (set by auth/config.js)
+    if (window.BREAKSIDE_AUTH?.API_BASE_URL) {
+        // In production, use the configured API URL
+        if (window.location.hostname !== 'localhost' && 
+            window.location.hostname !== '127.0.0.1') {
+            return window.BREAKSIDE_AUTH.API_BASE_URL;
+        }
+    }
     
     // Production: use api.breakside.pro (primary domain)
     if (window.location.hostname === 'luebke.us' || 

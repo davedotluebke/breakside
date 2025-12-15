@@ -675,6 +675,15 @@ function buildSyncStatusHTML() {
         ? `<span class="pending-badge">${totalPending} pending</span>` 
         : '<span class="synced-badge">✓ Synced</span>';
     
+    // Check if user is authenticated
+    const isAuthenticated = window.breakside?.auth?.isAuthenticated?.() || false;
+    const userEmail = window.breakside?.auth?.getCurrentUser?.()?.email || '';
+    const signOutButton = isAuthenticated 
+        ? `<button id="signOutBtn" class="sync-btn sign-out-btn" onclick="handleSignOut()" title="${userEmail}">
+               <i class="fas fa-sign-out-alt"></i> Sign Out
+           </button>`
+        : '';
+    
     return `
         <div class="sync-status-info">
             <span class="sync-status-icon">${statusIcon}</span>
@@ -688,6 +697,7 @@ function buildSyncStatusHTML() {
             <button id="pullFromCloudBtn" class="sync-btn" ${!isOnline ? 'disabled' : ''} onclick="pullDataFromCloud()">
                 <i class="fas fa-cloud-download-alt"></i> Pull
             </button>
+            ${signOutButton}
         </div>
     `;
 }
@@ -768,6 +778,46 @@ async function pullDataFromCloud() {
         }
     }
 }
+
+/**
+ * Handle sign out - clears auth state and shows login screen
+ */
+async function handleSignOut() {
+    if (!window.breakside?.auth?.signOut) {
+        alert('Sign out not available');
+        return;
+    }
+    
+    const signOutBtn = document.getElementById('signOutBtn');
+    if (signOutBtn) {
+        signOutBtn.disabled = true;
+        signOutBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing out...';
+    }
+    
+    try {
+        await window.breakside.auth.signOut();
+        console.log('Signed out successfully');
+        
+        // Show the login screen
+        if (window.breakside?.loginScreen?.showAuthScreen) {
+            window.breakside.loginScreen.showAuthScreen();
+        } else {
+            // Fallback: reload the page
+            window.location.reload();
+        }
+    } catch (error) {
+        console.error('Sign out failed:', error);
+        alert('Sign out failed: ' + error.message);
+        
+        if (signOutBtn) {
+            signOutBtn.disabled = false;
+            signOutBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i> Sign Out';
+        }
+    }
+}
+
+// Make handleSignOut available globally for onclick
+window.handleSignOut = handleSignOut;
 
 // Update sync status periodically
 setInterval(() => {

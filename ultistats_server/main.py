@@ -122,7 +122,7 @@ if static_dir.exists():
 # Mount PWA files from parent directory (the main ultistats app)
 pwa_dir = Path(__file__).parent.parent
 pwa_static_files = ["main.css", "main.js", "manifest.json", "service-worker.js", "version.json"]
-pwa_static_dirs = ["data", "game", "playByPlay", "screens", "teams", "ui", "utils", "images", "auth", "landing"]
+pwa_static_dirs = ["data", "game", "playByPlay", "screens", "teams", "ui", "utils", "images", "auth", "landing", "store"]
 
 # Landing page directory
 landing_dir = pwa_dir / "landing"
@@ -138,6 +138,47 @@ async def root():
         "version": "1.0.0",
         "status": "running"
     }
+
+# =============================================================================
+# PWA app routes (primary PWA access point)
+# =============================================================================
+
+@app.get("/app/")
+@app.get("/app/index.html")
+async def app_page():
+    """Serve the PWA at /app/ (main entry point for the app)."""
+    index_file = pwa_dir / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file, media_type="text/html")
+    raise HTTPException(status_code=404, detail="PWA not found")
+
+
+@app.get("/app/{filename:path}")
+async def serve_app_file(filename: str):
+    """Serve PWA files under /app/ path."""
+    file_path = pwa_dir / filename
+    
+    # Check if it's a known static file or in a known directory
+    first_part = filename.split('/')[0] if '/' in filename else filename
+    
+    if first_part in pwa_static_files or first_part in pwa_static_dirs:
+        if file_path.exists() and file_path.is_file():
+            # Determine media type
+            suffix = file_path.suffix.lower()
+            media_types = {
+                '.js': 'application/javascript',
+                '.css': 'text/css',
+                '.json': 'application/json',
+                '.html': 'text/html',
+                '.png': 'image/png',
+                '.ico': 'image/x-icon',
+                '.webmanifest': 'application/manifest+json',
+            }
+            media_type = media_types.get(suffix, 'application/octet-stream')
+            return FileResponse(file_path, media_type=media_type)
+    
+    raise HTTPException(status_code=404, detail="File not found")
+
 
 # =============================================================================
 # Landing page routes
