@@ -1,194 +1,173 @@
-# Breakside Deployment
+# Breakside: Multi-User Rollout
 
-## ✅ Deployment Complete (December 11, 2025)
+This document tracks the implementation of multi-user support, enabling coach handoffs and collaborative game tracking.
 
-Breakside is fully deployed with CloudFront CDN for the PWA and EC2 for the API.
-
-### Architecture
-
-```
-                              USERS
-                                │
-         ┌──────────────────────┼──────────────────────┐
-         ▼                      ▼                      ▼
-   breakside.pro          www.breakside.pro      api.breakside.pro
-   (apex domain)                                        
-         │                      │                      │
-         ▼                      ▼                      ▼
-   EC2 / nginx              CloudFront             EC2 / nginx
-   (301 redirect)             (CDN)                 (proxy)
-         │                      │                      │
-         └──────────────►  S3 Bucket              FastAPI
-                          (PWA + Viewer)         (port 8000)
-```
-
-### Live URLs
-
-| Service | URL | Hosted On |
-|---------|-----|-----------|
-| **PWA** | https://www.breakside.pro | CloudFront → S3 |
-| **PWA (redirect)** | https://breakside.pro | EC2 → www |
-| **Static Viewer** | https://www.breakside.pro/viewer/ | CloudFront → S3 |
-| **API** | https://api.breakside.pro | EC2 → FastAPI |
-| **API (alt)** | https://api.breakside.us | EC2 → FastAPI |
-| **Health Check** | https://api.breakside.pro/health | EC2 |
-
-### Infrastructure
-
-| Component | Details |
-|-----------|---------|
-| **CloudFront** | Distribution `E6M9KCXIU9CKD` (`d17eottm1x91n5.cloudfront.net`) |
-| **S3 Bucket** | `breakside.pro` (us-east-1, static website hosting) |
-| **EC2 Instance** | Amazon Linux 2, IP: 3.212.138.180 |
-| **Python** | 3.8.20 with venv at `/opt/breakside/venv` |
-| **Web Server** | nginx (reverse proxy, SSL termination for API + apex redirect) |
-| **Process Manager** | systemd (`breakside.service`) |
-| **SSL Certificates** | ACM (CloudFront) + Let's Encrypt (EC2) |
-| **Data Storage** | `/var/lib/breakside/data/` on EC2 (JSON files) |
-
-### Data Migrated
-
-- 1 team (CUDO Mixed)
-- 18 players  
-- 4 games (Nov 15-16, 2025 tournament)
+For deployment info and technical architecture, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ---
 
-## Quick Reference Commands
+## Current Status
 
-### EC2 / API Management
+### ✅ Phase 1: Authentication Foundation (Complete)
+
+- [x] Set up Supabase project (email/password auth)
+- [x] Backend: JWT validation module (`auth/jwt_validation.py`)
+- [x] Backend: Auth dependencies (`auth/dependencies.py`)
+- [x] Backend: User storage (`storage/user_storage.py`)
+- [x] Backend: Membership storage (`storage/membership_storage.py`)
+- [x] Backend: Auth API endpoints (`/api/auth/me`, `/api/auth/teams`)
+- [x] Frontend: Auth config and client (`auth/config.js`, `auth/auth.js`)
+- [x] Frontend: Login screen component (`auth/loginScreen.js`)
+- [x] Frontend: Auth headers on all API calls
+- [x] Frontend: Sign out button in PWA
+- [x] Landing page with Supabase auth modal
+- [x] Server routes for `/app/`, `/landing/`, `/view/{hash}`
+
+---
+
+## Next Up
+
+### 🔄 Phase 2: Backend Auth Enforcement
+
+Enable `AUTH_REQUIRED=true` on EC2 and enforce permissions.
+
+- [ ] Deploy auth-enabled API to EC2
+  - Add `SUPABASE_JWT_SECRET` to `/etc/breakside/env`
+  - Set `AUTH_REQUIRED=true`
+  - Restart service
+- [ ] Protect write endpoints with `require_team_coach` dependency
+  - `POST /api/games/{game_id}/sync`
+  - `POST /api/teams/{team_id}/sync`
+  - `POST /api/players/{player_id}/sync`
+  - `DELETE` endpoints
+- [ ] Allow read endpoints for team members (`require_team_access`)
+- [ ] Allow public read for games via share hash (no auth)
+- [ ] Test: Unauthenticated requests return 401
+- [ ] Test: Wrong team returns 403
+
+### 📋 Phase 3: Team Membership Management
+
+- [ ] API: `POST /api/teams/{team_id}/invite` - Generate invite code
+  - Coach invites: single-use, 7-day expiry
+  - Viewer invites: multi-use, permanent
+- [ ] API: `POST /api/invites/{code}/redeem` - Redeem invite code
+- [ ] API: `GET /api/teams/{team_id}/members` - List team members
+- [ ] API: `DELETE /api/teams/{team_id}/members/{user_id}` - Remove member
+- [ ] API: `DELETE /api/invites/{code}` - Revoke invite
+- [ ] Storage: Invite codes with expiry and usage tracking
+- [ ] PWA: Team settings screen showing members
+- [ ] PWA: Generate/display invite QR code and URL
+- [ ] PWA: "Join Team" flow for new users
+
+### 🎮 Phase 4: Game Controller State
+
+- [ ] Data model: Add `controllerState` to game object
+  - `activeCoach`: userId, claimedAt, lastPing
+  - `lineCoach`: userId, claimedAt, lastPing
+  - `pendingHandoff`: role, requesterId, requestedAt, expiresAt
+- [ ] API: `GET /api/games/{game_id}/status` - Controller status
+- [ ] API: `POST /api/games/{game_id}/claim-active` - Request Active Coach
+- [ ] API: `POST /api/games/{game_id}/claim-line` - Request Line Coach
+- [ ] API: `POST /api/games/{game_id}/release` - Release role
+- [ ] API: `POST /api/games/{game_id}/handoff-response` - Accept/deny
+- [ ] Auto-expire stale claims (no ping in 30 seconds)
+
+### 🔄 Phase 5: Multi-User Polling
+
+- [ ] API: `GET /api/games/{game_id}/poll?since={version}` - Optimized poll
+  - Return game state only if version changed
+  - Always return controller status
+  - Return pending handoff requests
+- [ ] PWA: Poll loop with role-based intervals
+  - Active/Line Coach: 2 seconds
+  - Idle Coach: 3 seconds  
+  - Viewer: 5 seconds
+- [ ] PWA: Update UI when remote changes detected
+- [ ] PWA: Merge lineup changes from other coaches
+
+### 🎯 Phase 6: Handoff UI
+
+- [ ] PWA: "Play-by-Play" and "Next Line" buttons in header
+  - Green/checkmark when user has that role
+  - Click to request role if not held
+- [ ] PWA: Handoff confirmation panel
+  - Replaces header when handoff requested
+  - 5-second countdown with progress bar
+  - Confirm/Deny buttons
+  - Auto-confirm on timeout
+- [ ] PWA: Toast notifications for handoff events
+  - "You are now Active Coach"
+  - "Line Coach role transferred to [name]"
+  - "Your handoff request was denied"
+- [ ] PWA: Modal when lineup promoted to current
+  - Informs Line Coach their prepared lineup is now active
+
+### 👁️ Phase 7: Viewer Experience
+
+- [ ] PWA: Read-only mode for Viewers
+  - Hide event buttons
+  - Show "Spectating" badge
+  - Live-update as events come in
+- [ ] PWA: Join game via URL (`/view/{game-hash}`)
+- [ ] Landing page: List recent public games
+- [ ] Viewer: Show live score and play-by-play
+
+---
+
+## Future Enhancements (Post-Rollout)
+
+These are deferred until multi-user basics are stable:
+
+- [ ] Google/Apple OAuth login
+- [ ] Player ↔ User account linking
+- [ ] Player self-service (edit own stats, profile photo)
+- [ ] O-line / D-line presets with auto-promotion
+- [ ] "Publish" games to make them searchable/discoverable
+- [ ] WebSocket upgrade for real-time sync
+- [ ] Git-based backup and version history
+- [ ] Rate limiting and abuse prevention
+
+---
+
+## Quick Reference
+
+### Testing Auth Locally
 
 ```bash
-# SSH into EC2
-ssh -i ~/.ssh/your-key.pem ec2-user@3.212.138.180
+# Start server with auth disabled (default)
+cd ultistats_server && python3 main.py
 
-# Check service status
-sudo systemctl status breakside
+# Test with auth enabled
+AUTH_REQUIRED=true SUPABASE_JWT_SECRET=your-secret python3 main.py
 
-# View live logs
-sudo journalctl -u breakside -f
-
-# Restart service
-sudo systemctl restart breakside
-
-# Deploy API code updates
-cd /opt/breakside && sudo git pull && sudo systemctl restart breakside
-
-# Renew SSL (runs automatically, but manual if needed)
-sudo certbot renew
-
-# Rebuild data index
-curl -X POST https://api.breakside.pro/api/index/rebuild
+# Run auth tests
+pytest test_auth.py -v
 ```
 
-### S3 / PWA Deployment
+### Deploy Commands
 
 ```bash
-# Deploy PWA to S3 (from local machine)
-cd /Users/luebke/src/ultistats
+# Deploy PWA to S3
 aws s3 sync . s3://breakside.pro/ \
   --exclude ".git/*" \
   --exclude "ultistats_server/*" \
   --exclude "data/*" \
-  --exclude "scripts/*" \
-  --exclude "*.py" \
+  --exclude "*.pyc" \
   --exclude "__pycache__/*" \
-  --exclude "*.md" \
   --exclude ".DS_Store" \
-  --exclude "*.wav" \
-  --exclude "*.ogg" \
   --exclude "*.m4a" \
-  --exclude "*.webm"
-# Note: store/ directory is included (contains client-side JS modules)
-# Note: data/ directory is excluded (contains server-side JSON data)
+  --delete
 
-# Upload static viewer
-aws s3 sync ultistats_server/static/viewer/ s3://breakside.pro/viewer/
-
-# Invalidate CloudFront cache (after S3 updates)
+# Invalidate CloudFront cache
 aws cloudfront create-invalidation --distribution-id E6M9KCXIU9CKD --paths "/*"
+
+# Deploy API to EC2
+ssh ec2-user@3.212.138.180
+cd /opt/breakside && sudo git pull && sudo systemctl restart breakside
 ```
 
----
+### Supabase Dashboard
 
-## Configuration Locations
-
-| Component | Location |
-|-----------|----------|
-| **S3 Bucket** | AWS Console → S3 → `breakside.pro` |
-| **CloudFront** | AWS Console → CloudFront → `E6M9KCXIU9CKD` |
-| **ACM Certificate** | AWS Console → ACM (us-east-1) → `breakside.pro` |
-| **EC2 env file** | `/etc/breakside/env` |
-| **Systemd service** | `/etc/systemd/system/breakside.service` |
-| **nginx config** | `/etc/nginx/conf.d/breakside.conf` |
-| **Let's Encrypt certs** | `/etc/letsencrypt/live/api.breakside.us/` |
-| **Certbot cron** | `/etc/cron.d/certbot` |
-
-### DNS (Pair.com)
-
-| Domain | Type | Value |
-|--------|------|-------|
-| `breakside.pro` | A | 3.212.138.180 |
-| `www.breakside.pro` | CNAME | d17eottm1x91n5.cloudfront.net |
-| `api.breakside.pro` | A | 3.212.138.180 |
-| `breakside.us` | A | 3.212.138.180 |
-| `api.breakside.us` | A | 3.212.138.180 |
-
----
-
-## Future Enhancements (Post-Deployment)
-
-After initial deployment is stable, consider:
-
-1. **Automated backups** - Cron job to backup `/var/lib/breakside/data/` to S3
-2. **Basic auth** - Add API key requirement for write operations
-3. **Rate limiting** - nginx rate limiting for API endpoints
-4. **Monitoring** - CloudWatch metrics or simple uptime monitoring
-5. **CI/CD** - GitHub Actions to auto-deploy on push to main
-
----
-
-## Future Phases (Deferred)
-
-### Phase 7: Handoff / "Take Over" Functionality
-
-Target: Allow multiple users to follow a game and transfer write-control.
-
-- [ ] Backend: In-memory state `game_controllers`
-- [ ] Endpoints: `/games/{game_id}/status`, `/request-takeover`, `/approve-takeover`
-- [ ] Frontend: Controller badge, "Request Take Over" button, approval modal
-- [ ] Disable event buttons if not controller
-
-### Phase 8: Git-Based Backup
-
-Target: Robust version history using Git.
-
-- [ ] Verify `ENABLE_GIT_VERSIONING` in config
-- [ ] Test git init and commit on game sync
-- [ ] Add git log viewing endpoint
-
----
-
-## Technical Documentation
-
-For detailed technical documentation, see **[ARCHITECTURE.md](ARCHITECTURE.md)**:
-- System architecture and deployment
-- File structure (frontend and backend)
-- Data model and entity IDs
-- Sync strategy and versioning
-- Quick reference commands
-
----
-
-## Success Criteria
-
-1. ✅ Players exist as independent entities with short, readable IDs
-2. ✅ Teams reference players by ID
-3. ✅ Games reference teams by ID and include roster snapshot
-4. ✅ All data syncs to cloud server
-5. ✅ App works fully offline (create teams, players, games)
-6. ✅ Existing data migrates cleanly *(4 CUDO games migrated via Python script)*
-7. ✅ Stats computed correctly from events
-8. ✅ Server index enables efficient cross-entity queries
-9. ✅ Viewer shows games, teams, and players with navigation
-10. ✅ Viewer updated incrementally with each phase
+- Project: https://mfuziqztsfqaqnnxjcrr.supabase.co
+- Auth settings: Dashboard → Authentication → Settings
+- User management: Dashboard → Authentication → Users
