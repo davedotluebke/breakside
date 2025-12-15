@@ -58,8 +58,78 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// Open up with the "Select Your Team" screen
-showSelectTeamScreen(true);
+/******************************************************************************/
+/********************************** Auth Initialization ***********************/
+/******************************************************************************/
+
+// Initialize authentication
+async function initializeApp() {
+    // Initialize auth module
+    if (window.breakside?.auth?.initializeAuth) {
+        const authInitialized = window.breakside.auth.initializeAuth();
+        
+        if (authInitialized) {
+            // Listen for auth state changes
+            window.breakside.auth.onAuthStateChange(handleAuthStateChange);
+            
+            // Check if user is already logged in
+            const loggedIn = await window.breakside.auth.isLoggedIn();
+            
+            if (loggedIn) {
+                // User is logged in, show the app
+                hideAuthScreenAndShowApp();
+            } else {
+                // User is not logged in, show auth screen
+                if (window.breakside?.loginScreen?.showAuthScreen) {
+                    window.breakside.loginScreen.showAuthScreen();
+                }
+            }
+        } else {
+            // Auth failed to initialize, allow offline mode
+            console.warn('Auth not available, running in offline mode');
+            showSelectTeamScreen(true);
+        }
+    } else {
+        // Auth module not loaded, allow offline mode
+        console.warn('Auth module not loaded, running in offline mode');
+        showSelectTeamScreen(true);
+    }
+}
+
+/**
+ * Handle auth state changes
+ */
+function handleAuthStateChange(event, session) {
+    console.log('Auth state change:', event);
+    
+    switch (event) {
+        case 'SIGNED_IN':
+            hideAuthScreenAndShowApp();
+            break;
+        case 'SIGNED_OUT':
+            if (window.breakside?.loginScreen?.showAuthScreen) {
+                window.breakside.loginScreen.showAuthScreen();
+            }
+            break;
+        case 'TOKEN_REFRESHED':
+            // Token was refreshed, no action needed
+            break;
+    }
+}
+
+/**
+ * Hide auth screen and show the main app
+ */
+function hideAuthScreenAndShowApp() {
+    if (window.breakside?.loginScreen?.hideAuthScreen) {
+        window.breakside.loginScreen.hideAuthScreen();
+    }
+    showSelectTeamScreen(true);
+}
+
+// Initialize the app when DOM is ready
+// Note: We delay this slightly to ensure all modules are loaded
+setTimeout(initializeApp, 100);
 
 // Feedback link handler - opens GitHub issues page
 const feedbackLink = document.getElementById('feedbackLink');
@@ -91,6 +161,11 @@ if (feedbackLink) {
 
 // Initialize header state on page load
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize login screen
+    if (window.breakside?.loginScreen?.initializeLoginScreen) {
+        window.breakside.loginScreen.initializeLoginScreen();
+    }
+    
     // Set initial header state based on starting screen
     const headerElement = document.querySelector('header');
     const simpleModeToggle = document.querySelector('.simple-mode-toggle');
