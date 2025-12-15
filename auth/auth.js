@@ -304,6 +304,7 @@ async function syncUserToBackend() {
 // =============================================================================
 
 // Make functions available globally for vanilla JS
+// Legacy export for compatibility
 window.BreaksideAuth = {
     initializeAuth,
     isAuthenticated,
@@ -318,3 +319,153 @@ window.BreaksideAuth = {
     authFetch,
     syncUserToBackend,
 };
+
+// Primary export used by sync.js, main.js, and loginScreen.js
+window.breakside = window.breakside || {};
+window.breakside.auth = {
+    // Initialization
+    initializeAuth,
+    
+    // State queries
+    isAuthenticated,
+    isLoggedIn: isAuthenticated,  // alias for consistency
+    getCurrentUser,
+    getCurrentSession,
+    getSession: getCurrentSession,  // alias
+    
+    // Event listeners
+    onAuthStateChange,
+    
+    // Token management
+    getAuthHeaders,
+    getAccessToken,
+    
+    // Sign in/up/out
+    signIn,
+    signUp,
+    signOut,
+    resetPassword,
+    signInWithGoogle,
+    
+    // Utilities
+    redirectToLogin,
+    handleLoginRedirect,
+    authFetch,
+    syncUserToBackend,
+};
+
+// =============================================================================
+// Sign In/Up Functions (for loginScreen.js)
+// =============================================================================
+
+/**
+ * Sign in with email and password.
+ * @param {string} email
+ * @param {string} password
+ * @returns {Promise<{user: object|null, error: object|null}>}
+ */
+async function signIn(email, password) {
+    if (!supabaseClient) {
+        return { user: null, error: { message: 'Auth not initialized' } };
+    }
+    
+    try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+            email,
+            password,
+        });
+        
+        if (error) {
+            return { user: null, error };
+        }
+        
+        currentSession = data.session;
+        currentUser = data.user;
+        
+        // Sync user to backend
+        await syncUserToBackend();
+        
+        return { user: data.user, error: null };
+        
+    } catch (error) {
+        console.error('Sign in error:', error);
+        return { user: null, error: { message: error.message || 'Sign in failed' } };
+    }
+}
+
+/**
+ * Sign up with email and password.
+ * @param {string} email
+ * @param {string} password
+ * @returns {Promise<{user: object|null, error: object|null}>}
+ */
+async function signUp(email, password) {
+    if (!supabaseClient) {
+        return { user: null, error: { message: 'Auth not initialized' } };
+    }
+    
+    try {
+        const { data, error } = await supabaseClient.auth.signUp({
+            email,
+            password,
+        });
+        
+        if (error) {
+            return { user: null, error };
+        }
+        
+        return { user: data.user, error: null };
+        
+    } catch (error) {
+        console.error('Sign up error:', error);
+        return { user: null, error: { message: error.message || 'Sign up failed' } };
+    }
+}
+
+/**
+ * Send password reset email.
+ * @param {string} email
+ * @returns {Promise<{error: object|null}>}
+ */
+async function resetPassword(email) {
+    if (!supabaseClient) {
+        return { error: { message: 'Auth not initialized' } };
+    }
+    
+    try {
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}/app/`,
+        });
+        
+        return { error };
+        
+    } catch (error) {
+        console.error('Reset password error:', error);
+        return { error: { message: error.message || 'Password reset failed' } };
+    }
+}
+
+/**
+ * Sign in with Google OAuth.
+ * @returns {Promise<{error: object|null}>}
+ */
+async function signInWithGoogle() {
+    if (!supabaseClient) {
+        return { error: { message: 'Auth not initialized' } };
+    }
+    
+    try {
+        const { error } = await supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: `${window.location.origin}/app/`,
+            },
+        });
+        
+        return { error };
+        
+    } catch (error) {
+        console.error('Google sign in error:', error);
+        return { error: { message: error.message || 'Google sign in failed' } };
+    }
+}

@@ -66,27 +66,30 @@ if ('serviceWorker' in navigator) {
 async function initializeApp() {
     // Initialize auth module
     if (window.breakside?.auth?.initializeAuth) {
-        const authInitialized = window.breakside.auth.initializeAuth();
-        
-        if (authInitialized) {
+        try {
+            // Wait for auth to initialize (async function)
+            await window.breakside.auth.initializeAuth();
+            
             // Listen for auth state changes
             window.breakside.auth.onAuthStateChange(handleAuthStateChange);
             
             // Check if user is already logged in
-            const loggedIn = await window.breakside.auth.isLoggedIn();
+            const loggedIn = window.breakside.auth.isAuthenticated();
             
             if (loggedIn) {
                 // User is logged in, show the app
+                console.log('User is authenticated, showing app');
                 hideAuthScreenAndShowApp();
             } else {
                 // User is not logged in, show auth screen
+                console.log('User not authenticated, showing login screen');
                 if (window.breakside?.loginScreen?.showAuthScreen) {
                     window.breakside.loginScreen.showAuthScreen();
                 }
             }
-        } else {
+        } catch (error) {
             // Auth failed to initialize, allow offline mode
-            console.warn('Auth not available, running in offline mode');
+            console.warn('Auth initialization failed, running in offline mode:', error);
             showSelectTeamScreen(true);
         }
     } else {
