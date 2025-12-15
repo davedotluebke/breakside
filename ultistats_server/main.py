@@ -6,12 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 # Import config - handle both relative and absolute imports
 try:
-    from config import HOST, PORT, DEBUG, ALLOWED_ORIGINS
+    from config import HOST, PORT, DEBUG, ALLOWED_ORIGINS, AUTH_REQUIRED
     from storage import (
         # Game storage
         save_game_version,
@@ -41,10 +41,21 @@ try:
         get_index_status,
         get_player_games,
         get_team_games,
+        # User storage
+        get_user,
+        create_or_update_user,
+        update_user as update_user_storage,
+        list_users,
+        # Membership storage
+        get_user_memberships,
+        get_team_memberships,
+        get_user_team_role,
+        create_membership,
     )
+    from auth import get_current_user, get_optional_user
 except ImportError:
     # Try absolute import (when running as package)
-    from ultistats_server.config import HOST, PORT, DEBUG, ALLOWED_ORIGINS
+    from ultistats_server.config import HOST, PORT, DEBUG, ALLOWED_ORIGINS, AUTH_REQUIRED
     from ultistats_server.storage import (
         # Game storage
         save_game_version,
@@ -74,7 +85,18 @@ except ImportError:
         get_index_status,
         get_player_games,
         get_team_games,
+        # User storage
+        get_user,
+        create_or_update_user,
+        update_user as update_user_storage,
+        list_users,
+        # Membership storage
+        get_user_memberships,
+        get_team_memberships,
+        get_user_team_role,
+        create_membership,
     )
+    from ultistats_server.auth import get_current_user, get_optional_user
 
 # Create FastAPI app
 app = FastAPI(
@@ -169,6 +191,101 @@ async def health():
     return {"status": "healthy"}
 
 
+# =============================================================================
+# Authentication endpoints
+# =============================================================================
+
+@app.get("/api/auth/me")
+async def get_current_user_info(user: dict = Depends(get_current_user)):
+    """
+    Get the current authenticated user's info.
+    
+    This endpoint validates the JWT and returns user information.
+    It also syncs the user to our local storage if they don't exist yet.
+    """
+    # Sync user to our local storage (creates if doesn't exist)
+    local_user = create_or_update_user(
+        user_id=user["id"],
+        email=user["email"],
+        display_name=user.get("user_metadata", {}).get("full_name")
+    )
+    
+    # Get their team memberships
+    memberships = get_user_memberships(user["id"])
+    
+    return {
+        "id": local_user["id"],
+        "email": local_user["email"],
+        "displayName": local_user["displayName"],
+        "isAdmin": local_user.get("isAdmin", False),
+        "createdAt": local_user["createdAt"],
+        "memberships": memberships,
+    }
+
+
+@app.patch("/api/auth/me")
+async def update_current_user(
+    updates: Dict[str, Any] = Body(...),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Update the current user's profile.
+    
+    Allowed fields: displayName
+    """
+    # Only allow updating certain fields
+    allowed_fields = {"displayName"}
+    filtered_updates = {k: v for k, v in updates.items() if k in allowed_fields}
+    
+    if not filtered_updates:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No valid fields to update. Allowed: {allowed_fields}"
+        )
+    
+    updated_user = update_user_storage(user["id"], filtered_updates)
+    if not updated_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "status": "updated",
+        "user": {
+            "id": updated_user["id"],
+            "email": updated_user["email"],
+            "displayName": updated_user["displayName"],
+        }
+    }
+
+
+@app.get("/api/auth/teams")
+async def get_user_teams_endpoint(user: dict = Depends(get_current_user)):
+    """
+    Get all teams the current user has access to.
+    
+    Returns teams with the user's role for each.
+    """
+    memberships = get_user_memberships(user["id"])
+    
+    teams_with_roles = []
+    for membership in memberships:
+        try:
+            team = get_team(membership["teamId"])
+            teams_with_roles.append({
+                "team": team,
+                "role": membership["role"],
+                "joinedAt": membership["joinedAt"],
+            })
+        except (FileNotFoundError, KeyError):
+            # Team may have been deleted
+            continue
+    
+    return {
+        "teams": teams_with_roles,
+        "count": len(teams_with_roles)
+    }
+
+
+# =============================================================================
 # Game endpoints
 # Note: All API routes use /api/ prefix to avoid conflicts with PWA static file serving
 
