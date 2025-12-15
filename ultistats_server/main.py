@@ -122,7 +122,10 @@ if static_dir.exists():
 # Mount PWA files from parent directory (the main ultistats app)
 pwa_dir = Path(__file__).parent.parent
 pwa_static_files = ["main.css", "main.js", "manifest.json", "service-worker.js", "version.json"]
-pwa_static_dirs = ["data", "game", "playByPlay", "screens", "teams", "ui", "utils", "images"]
+pwa_static_dirs = ["data", "game", "playByPlay", "screens", "teams", "ui", "utils", "images", "auth", "landing"]
+
+# Landing page directory
+landing_dir = pwa_dir / "landing"
 
 @app.get("/")
 async def root():
@@ -135,6 +138,53 @@ async def root():
         "version": "1.0.0",
         "status": "running"
     }
+
+# =============================================================================
+# Landing page routes
+# =============================================================================
+
+@app.get("/landing/")
+@app.get("/landing/index.html")
+async def landing_page():
+    """Serve the landing page with login UI."""
+    index_file = landing_dir / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file, media_type="text/html")
+    raise HTTPException(status_code=404, detail="Landing page not found")
+
+
+@app.get("/landing/{filename:path}")
+async def serve_landing_file(filename: str):
+    """Serve landing page static files."""
+    file_path = landing_dir / filename
+    
+    if file_path.exists() and file_path.is_file():
+        suffix = file_path.suffix.lower()
+        media_types = {
+            '.js': 'application/javascript',
+            '.css': 'text/css',
+            '.json': 'application/json',
+            '.html': 'text/html',
+            '.png': 'image/png',
+            '.ico': 'image/x-icon',
+        }
+        media_type = media_types.get(suffix, 'application/octet-stream')
+        return FileResponse(file_path, media_type=media_type)
+    
+    raise HTTPException(status_code=404, detail="File not found")
+
+
+# =============================================================================
+# Viewer redirect (user-friendly URL)
+# =============================================================================
+
+@app.get("/viewer/")
+@app.get("/viewer")
+async def viewer_redirect():
+    """Redirect /viewer/ to the static viewer."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/static/viewer/", status_code=302)
+
 
 # =============================================================================
 # PWA routes under /ultistats/ (matches production path and manifest.json)
