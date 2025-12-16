@@ -25,17 +25,25 @@ from .jwt_validation import (
 )
 
 from .dependencies import (
+    is_admin,
     require_admin,
     require_team_coach,
     require_team_access,
+    require_game_team_coach,
+    require_game_team_access,
+    require_player_edit_access,
 )
 
 __all__ = [
     "get_current_user",
     "get_optional_user", 
     "verify_supabase_token",
+    "is_admin",
     "require_admin",
     "require_team_coach",
     "require_team_access",
+    "require_game_team_coach",
+    "require_game_team_access",
+    "require_player_edit_access",
 ]
 
