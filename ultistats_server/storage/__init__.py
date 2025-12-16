@@ -71,6 +71,18 @@ from .membership_storage import (
     rebuild_membership_index,
 )
 
+from .share_storage import (
+    share_exists,
+    get_share,
+    get_share_by_hash,
+    is_share_valid,
+    create_share_link,
+    list_game_shares,
+    revoke_share,
+    delete_share,
+    rebuild_share_index,
+)
+
 __all__ = [
     # Game storage
     "save_game_version",
@@ -130,4 +142,14 @@ __all__ = [
     "get_team_coaches",
     "get_team_viewers",
     "rebuild_membership_index",
+    # Share storage
+    "share_exists",
+    "get_share",
+    "get_share_by_hash",
+    "is_share_valid",
+    "create_share_link",
+    "list_game_shares",
+    "revoke_share",
+    "delete_share",
+    "rebuild_share_index",
 ]

@@ -1,7 +1,7 @@
 """
 Main FastAPI application for the Ultistats server.
 """
-from fastapi import FastAPI, HTTPException, Body, Depends
+from fastapi import FastAPI, HTTPException, Body, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -50,9 +50,27 @@ try:
         get_user_memberships,
         get_team_memberships,
         get_user_team_role,
+        get_user_teams,
         create_membership,
+        # Share storage
+        get_share,
+        get_share_by_hash,
+        is_share_valid,
+        create_share_link,
+        list_game_shares,
+        revoke_share,
     )
-    from auth import get_current_user, get_optional_user
+    from auth import (
+        get_current_user,
+        get_optional_user,
+        is_admin,
+        require_admin,
+        require_team_coach,
+        require_team_access,
+        require_game_team_coach,
+        require_game_team_access,
+        require_player_edit_access,
+    )
 except ImportError:
     # Try absolute import (when running as package)
     from ultistats_server.config import HOST, PORT, DEBUG, ALLOWED_ORIGINS, AUTH_REQUIRED
@@ -94,9 +112,27 @@ except ImportError:
         get_user_memberships,
         get_team_memberships,
         get_user_team_role,
+        get_user_teams,
         create_membership,
+        # Share storage
+        get_share,
+        get_share_by_hash,
+        is_share_valid,
+        create_share_link,
+        list_game_shares,
+        revoke_share,
     )
-    from ultistats_server.auth import get_current_user, get_optional_user
+    from ultistats_server.auth import (
+        get_current_user,
+        get_optional_user,
+        is_admin,
+        require_admin,
+        require_team_coach,
+        require_team_access,
+        require_game_team_coach,
+        require_game_team_access,
+        require_player_edit_access,
+    )
 
 # Create FastAPI app
 app = FastAPI(
@@ -381,12 +417,18 @@ async def get_user_teams_endpoint(user: dict = Depends(get_current_user)):
 # Note: All API routes use /api/ prefix to avoid conflicts with PWA static file serving
 
 @app.post("/api/games/{game_id}/sync")
-async def sync_game(game_id: str, game_data: Dict[str, Any] = Body(...)):
+async def sync_game(
+    game_id: str,
+    game_data: Dict[str, Any] = Body(...),
+    user: dict = Depends(require_game_team_coach)
+):
     """
     Full game sync - replaces entire game state.
     Idempotent: can be called multiple times safely.
     
     Creates a new version on each sync.
+    
+    Requires: Coach access to the game's team.
     """
     # Basic validation
     if not isinstance(game_data, dict):
@@ -408,8 +450,12 @@ async def sync_game(game_id: str, game_data: Dict[str, Any] = Body(...)):
 
 
 @app.get("/api/games/{game_id}")
-async def get_game(game_id: str):
-    """Get current game state."""
+async def get_game(game_id: str, user: dict = Depends(require_game_team_access)):
+    """
+    Get current game state.
+    
+    Requires: Coach or Viewer access to the game's team.
+    """
     if not game_exists(game_id):
         raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
     
@@ -418,15 +464,36 @@ async def get_game(game_id: str):
 
 
 @app.get("/api/games")
-async def list_games():
-    """List all games with metadata."""
-    games = list_all_games()
-    return {"games": games}
+async def list_games_endpoint(user: Optional[dict] = Depends(get_optional_user)):
+    """
+    List all games with metadata.
+    
+    Returns only games for teams the user has access to.
+    Anonymous users get an empty list.
+    """
+    all_games = list_all_games()
+    
+    if not user:
+        return {"games": [], "count": 0}
+    
+    # Admin sees all
+    if is_admin(user["id"]):
+        return {"games": all_games, "count": len(all_games)}
+    
+    # Filter to accessible teams
+    accessible_teams = set(get_user_teams(user["id"]))
+    filtered = [g for g in all_games if g.get("teamId") in accessible_teams]
+    
+    return {"games": filtered, "count": len(filtered)}
 
 
 @app.delete("/api/games/{game_id}")
-async def delete_game_endpoint(game_id: str):
-    """Delete a game and all its versions."""
+async def delete_game_endpoint(game_id: str, user: dict = Depends(require_game_team_coach)):
+    """
+    Delete a game and all its versions.
+    
+    Requires: Coach access to the game's team.
+    """
     if not game_exists(game_id):
         raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
     
@@ -440,8 +507,12 @@ async def delete_game_endpoint(game_id: str):
 # Version endpoints
 
 @app.get("/api/games/{game_id}/versions")
-async def list_versions(game_id: str):
-    """List all versions of a game."""
+async def list_versions(game_id: str, user: dict = Depends(require_game_team_access)):
+    """
+    List all versions of a game.
+    
+    Requires: Coach or Viewer access to the game's team.
+    """
     if not game_exists(game_id):
         raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
     
@@ -450,8 +521,12 @@ async def list_versions(game_id: str):
 
 
 @app.get("/api/games/{game_id}/versions/{timestamp}")
-async def get_version(game_id: str, timestamp: str):
-    """Get specific version of a game."""
+async def get_version(game_id: str, timestamp: str, user: dict = Depends(require_game_team_access)):
+    """
+    Get specific version of a game.
+    
+    Requires: Coach or Viewer access to the game's team.
+    """
     if not game_exists(game_id):
         raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
     
@@ -463,8 +538,12 @@ async def get_version(game_id: str, timestamp: str):
 
 
 @app.post("/api/games/{game_id}/restore/{timestamp}")
-async def restore_version(game_id: str, timestamp: str):
-    """Restore game to a specific version."""
+async def restore_version(game_id: str, timestamp: str, user: dict = Depends(require_game_team_coach)):
+    """
+    Restore game to a specific version.
+    
+    Requires: Coach access to the game's team.
+    """
     if not game_exists(game_id):
         raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
     
@@ -477,16 +556,143 @@ async def restore_version(game_id: str, timestamp: str):
 
 
 # =============================================================================
+# Share link endpoints
+# =============================================================================
+
+@app.post("/api/games/{game_id}/share")
+async def create_game_share(
+    game_id: str,
+    expires_days: int = Query(default=7, ge=1, le=365),
+    user: dict = Depends(require_game_team_coach)
+):
+    """
+    Create a share link for a game.
+    
+    Share links allow public (no-auth) access to view the game.
+    
+    Args:
+        expires_days: Days until the link expires (1-365, default 7)
+    
+    Requires: Coach access to the game's team.
+    """
+    if not game_exists(game_id):
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+    
+    game = get_game_current(game_id)
+    team_id = game.get("teamId")
+    
+    if not team_id:
+        raise HTTPException(status_code=400, detail="Game has no teamId")
+    
+    share = create_share_link(
+        game_id=game_id,
+        team_id=team_id,
+        created_by=user["id"],
+        expires_days=expires_days
+    )
+    
+    return {
+        "share": share,
+        "url": f"https://www.breakside.pro/share/{share['hash']}"
+    }
+
+
+@app.get("/api/games/{game_id}/shares")
+async def list_game_shares_endpoint(
+    game_id: str,
+    user: dict = Depends(require_game_team_coach)
+):
+    """
+    List all share links for a game.
+    
+    Includes both active and revoked links.
+    
+    Requires: Coach access to the game's team.
+    """
+    if not game_exists(game_id):
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+    
+    shares = list_game_shares(game_id)
+    
+    # Add validity status to each share
+    shares_with_status = []
+    for share in shares:
+        share_copy = dict(share)
+        share_copy["isValid"] = is_share_valid(share)
+        shares_with_status.append(share_copy)
+    
+    return {"shares": shares_with_status, "count": len(shares_with_status)}
+
+
+@app.delete("/api/shares/{share_id}")
+async def revoke_share_endpoint(
+    share_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Revoke a share link.
+    
+    Requires: Admin or Coach access to the share's team.
+    """
+    share = get_share(share_id)
+    if not share:
+        raise HTTPException(status_code=404, detail="Share link not found")
+    
+    # Must be admin or coach of the team
+    if not is_admin(user["id"]):
+        role = get_user_team_role(user["id"], share["teamId"])
+        if role != "coach":
+            raise HTTPException(status_code=403, detail="Coach access required")
+    
+    revoke_share(share_id, user["id"])
+    return {"status": "revoked", "share_id": share_id}
+
+
+@app.get("/api/share/{hash}")
+async def get_game_by_share(hash: str):
+    """
+    Get a game via a share link.
+    
+    This is a public endpoint - no authentication required.
+    """
+    share = get_share_by_hash(hash)
+    
+    if not share:
+        raise HTTPException(status_code=404, detail="Share link not found")
+    
+    if not is_share_valid(share):
+        raise HTTPException(status_code=410, detail="Share link has expired or been revoked")
+    
+    if not game_exists(share["gameId"]):
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    game = get_game_current(share["gameId"])
+    
+    return {
+        "game": game,
+        "shareInfo": {
+            "expiresAt": share["expiresAt"],
+            "createdAt": share["createdAt"]
+        }
+    }
+
+
+# =============================================================================
 # Player endpoints
 # =============================================================================
 
 @app.post("/api/players")
-async def create_player(player_data: Dict[str, Any] = Body(...)):
+async def create_player(
+    player_data: Dict[str, Any] = Body(...),
+    user: dict = Depends(get_current_user)
+):
     """
     Create a new player.
     
     If 'id' is provided in the body, it will be used (for offline-created players).
     Otherwise, an ID will be generated from the name.
+    
+    Requires: Any authenticated user can create players.
     """
     if "name" not in player_data:
         raise HTTPException(status_code=400, detail="Player name is required")
@@ -520,8 +726,16 @@ async def get_player_endpoint(player_id: str):
 
 
 @app.put("/api/players/{player_id}")
-async def update_player_endpoint(player_id: str, player_data: Dict[str, Any] = Body(...)):
-    """Update a player."""
+async def update_player_endpoint(
+    player_id: str,
+    player_data: Dict[str, Any] = Body(...),
+    user: dict = Depends(require_player_edit_access)
+):
+    """
+    Update a player.
+    
+    Requires: Coach access to a team that has this player on the roster.
+    """
     if not player_exists(player_id):
         raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
     
@@ -530,8 +744,12 @@ async def update_player_endpoint(player_id: str, player_data: Dict[str, Any] = B
 
 
 @app.delete("/api/players/{player_id}")
-async def delete_player_endpoint(player_id: str):
-    """Delete a player."""
+async def delete_player_endpoint(player_id: str, user: dict = Depends(require_player_edit_access)):
+    """
+    Delete a player.
+    
+    Requires: Coach access to a team that has this player on the roster.
+    """
     if not player_exists(player_id):
         raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
     
@@ -580,12 +798,17 @@ async def get_player_teams_endpoint(player_id: str):
 # =============================================================================
 
 @app.post("/api/teams")
-async def create_team(team_data: Dict[str, Any] = Body(...)):
+async def create_team(
+    team_data: Dict[str, Any] = Body(...),
+    user: Optional[dict] = Depends(get_optional_user)
+):
     """
     Create a new team.
     
     If 'id' is provided in the body, it will be used (for offline-created teams).
     Otherwise, an ID will be generated from the name.
+    
+    If authenticated, the creator automatically becomes a Coach for the team.
     """
     if "name" not in team_data:
         raise HTTPException(status_code=400, detail="Team name is required")
@@ -598,20 +821,55 @@ async def create_team(team_data: Dict[str, Any] = Body(...)):
         update_team(provided_id, team_data)
         return {"status": "updated", "team_id": provided_id, "team": get_team(provided_id)}
     
+    # Create new team
     team_id = save_team(team_data, provided_id)
+    
+    # If authenticated, make creator a Coach
+    if user:
+        try:
+            create_membership(
+                team_id=team_id,
+                user_id=user["id"],
+                role="coach",
+                invited_by=None  # Creator, not invited
+            )
+        except ValueError:
+            pass  # Membership already exists (shouldn't happen for new teams)
+    
     return {"status": "created", "team_id": team_id, "team": get_team(team_id)}
 
 
 @app.get("/api/teams")
-async def list_teams_endpoint():
-    """List all teams."""
-    teams = list_teams()
-    return {"teams": teams, "count": len(teams)}
+async def list_teams_endpoint(user: Optional[dict] = Depends(get_optional_user)):
+    """
+    List all teams.
+    
+    Returns only teams the user has access to.
+    Anonymous users get an empty list.
+    """
+    all_teams = list_teams()
+    
+    if not user:
+        return {"teams": [], "count": 0}
+    
+    # Admin sees all
+    if is_admin(user["id"]):
+        return {"teams": all_teams, "count": len(all_teams)}
+    
+    # Filter to accessible teams
+    accessible_team_ids = set(get_user_teams(user["id"]))
+    filtered = [t for t in all_teams if t.get("id") in accessible_team_ids]
+    
+    return {"teams": filtered, "count": len(filtered)}
 
 
 @app.get("/api/teams/{team_id}")
-async def get_team_endpoint(team_id: str):
-    """Get a team by ID."""
+async def get_team_endpoint(team_id: str, user: dict = Depends(require_team_access("team_id"))):
+    """
+    Get a team by ID.
+    
+    Requires: Coach or Viewer access to the team.
+    """
     if not team_exists(team_id):
         raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
     
@@ -619,8 +877,16 @@ async def get_team_endpoint(team_id: str):
 
 
 @app.put("/api/teams/{team_id}")
-async def update_team_endpoint(team_id: str, team_data: Dict[str, Any] = Body(...)):
-    """Update a team."""
+async def update_team_endpoint(
+    team_id: str,
+    team_data: Dict[str, Any] = Body(...),
+    user: dict = Depends(require_team_coach("team_id"))
+):
+    """
+    Update a team.
+    
+    Requires: Coach access to the team.
+    """
     if not team_exists(team_id):
         raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
     
@@ -629,8 +895,12 @@ async def update_team_endpoint(team_id: str, team_data: Dict[str, Any] = Body(..
 
 
 @app.delete("/api/teams/{team_id}")
-async def delete_team_endpoint(team_id: str):
-    """Delete a team."""
+async def delete_team_endpoint(team_id: str, user: dict = Depends(require_team_coach("team_id"))):
+    """
+    Delete a team.
+    
+    Requires: Coach access to the team.
+    """
     if not team_exists(team_id):
         raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
     
@@ -639,8 +909,12 @@ async def delete_team_endpoint(team_id: str):
 
 
 @app.get("/api/teams/{team_id}/players")
-async def get_team_players_endpoint(team_id: str):
-    """Get all players for a team (resolved from playerIds)."""
+async def get_team_players_endpoint(team_id: str, user: dict = Depends(require_team_access("team_id"))):
+    """
+    Get all players for a team (resolved from playerIds).
+    
+    Requires: Coach or Viewer access to the team.
+    """
     if not team_exists(team_id):
         raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
     
@@ -649,8 +923,12 @@ async def get_team_players_endpoint(team_id: str):
 
 
 @app.get("/api/teams/{team_id}/games")
-async def get_team_games_endpoint(team_id: str):
-    """Get all games for a team."""
+async def get_team_games_endpoint(team_id: str, user: dict = Depends(require_team_access("team_id"))):
+    """
+    Get all games for a team.
+    
+    Requires: Coach or Viewer access to the team.
+    """
     if not team_exists(team_id):
         raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
     
@@ -663,8 +941,12 @@ async def get_team_games_endpoint(team_id: str):
 # =============================================================================
 
 @app.post("/api/index/rebuild")
-async def rebuild_index_endpoint():
-    """Force rebuild of the index."""
+async def rebuild_index_endpoint(user: dict = Depends(require_admin)):
+    """
+    Force rebuild of the index.
+    
+    Requires: Admin access.
+    """
     index = rebuild_index()
     return {
         "status": "rebuilt",
