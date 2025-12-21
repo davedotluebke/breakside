@@ -1,0 +1,126 @@
+{
+  "id": "2025-12-07_Sample-Team_vs_Bad-Guys_1765123402903",
+  "teamId": "Sample-Team-7y0n",
+  "team": "Sample Team",
+  "opponent": "Bad Guys",
+  "startingPosition": "offense",
+  "scores": {
+    "team": 1,
+    "opponent": 0
+  },
+  "gameStartTimestamp": "2025-12-07T16:03:22.902Z",
+  "gameEndTimestamp": null,
+  "alternateGenderRatio": "No",
+  "alternateGenderPulls": false,
+  "startingGenderRatio": null,
+  "lastLineUsed": null,
+  "rosterSnapshot": {
+    "players": [
+      {
+        "id": "Cesc-exb4",
+        "name": "Cesc",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "Cyrus-J-y5ln",
+        "name": "Cyrus J",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "Soren-hyag",
+        "name": "Soren",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "Walden-07ci",
+        "name": "Walden",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "Abby-7gbk",
+        "name": "Abby",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "Avery-d4bp",
+        "name": "Avery",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "Cyrus-L-bth3",
+        "name": "Cyrus L",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "James-8i4q",
+        "name": "James",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "Leif-zdnj",
+        "name": "Leif",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      },
+      {
+        "id": "Simeon-bzio",
+        "name": "Simeon",
+        "nickname": "",
+        "number": null,
+        "gender": "Unknown"
+      }
+    ],
+    "capturedAt": "2025-12-07T16:03:22.903Z"
+  },
+  "points": [
+    {
+      "players": [
+        "Abby",
+        "Avery",
+        "Cesc",
+        "Cyrus J",
+        "Cyrus L",
+        "James",
+        "Leif"
+      ],
+      "startingPosition": "offense",
+      "winner": "team",
+      "startTimestamp": "2025-12-15T18:08:13.720Z",
+      "endTimestamp": "2025-12-15T18:08:13.720Z",
+      "totalPointTime": 1561,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Abby",
+              "receiver": "Avery",
+              "score_flag": true,
+              "throwerId": "Abby-f1xh",
+              "receiverId": "Avery-35yb"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+{
+  "id": "2025-12-07_Testy_vs_Really-Bad-Guys_1765123228058",
+  "teamId": "Testy-k67z",
+  "team": "Testy",
+  "opponent": "Really Bad Guys",
+  "startingPosition": "offense",
+  "scores": {
+    "team": 0,
+    "opponent": 0
+  },
+  "gameStartTimestamp": "2025-12-07T16:00:28.057Z",
+  "gameEndTimestamp": null,
+  "alternateGenderRatio": "Alternating",
+  "alternateGenderPulls": true,
+  "startingGenderRatio": "FMP",
+  "lastLineUsed": null,
+  "rosterSnapshot": {
+    "players": [
+      {
+        "id": "Jo-6tfu",
+        "name": "Jo",
+        "nickname": "",
+        "number": null,
+        "gender": "FMP"
+      },
+      {
+        "id": "Cy-svze",
+        "name": "Cy",
+        "nickname": "",
+        "number": null,
+        "gender": "MMP"
+      },
+      {
+        "id": "Edwin-wgf9",
+        "name": "Edwin",
+        "nickname": "",
+        "number": null,
+        "gender": "MMP"
+      },
+      {
+        "id": "Dave-hp4j",
+        "name": "Dave",
+        "nickname": "",
+        "number": null,
+        "gender": "MMP"
+      },
+      {
+        "id": "Em-nk61",
+        "name": "Em",
+        "nickname": "",
+        "number": null,
+        "gender": "FMP"
+      },
+      {
+        "id": "Granny-q6d2",
+        "name": "Granny",
+        "nickname": "",
+        "number": null,
+        "gender": "FMP"
+      }
+    ],
+    "capturedAt": "2025-12-07T16:00:28.058Z"
+  },
+  "points": [
+    {
+      "players": [
+        "Cy",
+        "Edwin",
+        "Em",
+        "Granny",
+        "Jo"
+      ],
+      "startingPosition": "offense",
+      "winner": "",
+      "startTimestamp": "2025-12-07T16:00:51.428Z",
+      "endTimestamp": null,
+      "totalPointTime": 0,
+      "lastPauseTime": null,
+      "possessions": [
+        {
+          "offensive": true,
+          "events": [
+            {
+              "type": "Throw",
+              "thrower": "Cy",
+              "receiver": "Edwin",
+              "throwerId": "Cy-svze",
+              "receiverId": "Edwin-wgf9"
+            },
+            {
+              "type": "Throw",
+              "thrower": "Edwin",
+              "receiver": null,
+              "huck_flag": true,
+              "throwerId": "Edwin-wgf9"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

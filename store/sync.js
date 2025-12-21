@@ -922,6 +922,123 @@ async function deleteGameFromCloud(gameId) {
 }
 
 // =============================================================================
+// User Team Sync Functions
+// =============================================================================
+
+/**
+ * Sync teams the user has access to from the server.
+ * Called after login to pull down any teams the user is a member of.
+ * @returns {Promise<object>} Result with synced teams count
+ */
+async function syncUserTeams() {
+    if (!isOnline) {
+        console.log('📴 Cannot sync user teams: Offline');
+        return { success: false, error: 'Offline' };
+    }
+    
+    // Check if user is authenticated
+    if (!window.breakside?.auth?.isAuthenticated?.()) {
+        console.log('👤 Cannot sync user teams: Not authenticated');
+        return { success: false, error: 'Not authenticated' };
+    }
+    
+    console.log('🔄 Syncing user teams from server...');
+    
+    try {
+        // Fetch teams the user has access to
+        const response = await authFetch(`${API_BASE_URL}/api/auth/teams`);
+        
+        if (!response.ok) {
+            if (response.status === 401) {
+                console.log('👤 Auth expired, skipping team sync');
+                return { success: false, error: 'Auth expired' };
+            }
+            throw new Error(`Failed to fetch user teams: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        const serverTeams = data.teams || [];
+        
+        console.log(`📥 Found ${serverTeams.length} teams on server`);
+        
+        let syncedCount = 0;
+        let updatedCount = 0;
+        
+        for (const { team: serverTeam, role } of serverTeams) {
+            if (!serverTeam || !serverTeam.id) continue;
+            
+            // Check if we have this team locally (by ID)
+            const localTeamIndex = teams.findIndex(t => t.id === serverTeam.id);
+            
+            if (localTeamIndex === -1) {
+                // Team doesn't exist locally - create it
+                console.log(`📥 Downloading team: ${serverTeam.name} (${serverTeam.id})`);
+                
+                // Create a new Team object
+                const newTeam = new Team(serverTeam.name, [], serverTeam.id);
+                newTeam.createdAt = serverTeam.createdAt || new Date().toISOString();
+                newTeam.updatedAt = serverTeam.updatedAt || newTeam.createdAt;
+                newTeam.playerIds = serverTeam.playerIds || [];
+                newTeam.lines = serverTeam.lines || [];
+                
+                // If server has embedded roster data, deserialize it
+                if (serverTeam.teamRoster && serverTeam.teamRoster.length > 0) {
+                    newTeam.teamRoster = serverTeam.teamRoster.map(p => deserializePlayer(p));
+                }
+                
+                // Add to local teams array
+                teams.push(newTeam);
+                syncedCount++;
+                
+            } else {
+                // Team exists locally - check if server version is newer
+                const localTeam = teams[localTeamIndex];
+                const serverUpdated = new Date(serverTeam.updatedAt || 0);
+                const localUpdated = new Date(localTeam.updatedAt || 0);
+                
+                if (serverUpdated > localUpdated) {
+                    console.log(`🔄 Updating team: ${serverTeam.name} (server is newer)`);
+                    
+                    // Update local team with server data
+                    localTeam.name = serverTeam.name;
+                    localTeam.updatedAt = serverTeam.updatedAt;
+                    localTeam.playerIds = serverTeam.playerIds || localTeam.playerIds;
+                    localTeam.lines = serverTeam.lines || localTeam.lines;
+                    
+                    // Update roster if provided
+                    if (serverTeam.teamRoster && serverTeam.teamRoster.length > 0) {
+                        localTeam.teamRoster = serverTeam.teamRoster.map(p => deserializePlayer(p));
+                    }
+                    
+                    updatedCount++;
+                }
+            }
+        }
+        
+        // Save to local storage if we made changes
+        if (syncedCount > 0 || updatedCount > 0) {
+            if (typeof saveAllTeamsData === 'function') {
+                saveAllTeamsData();
+            }
+            console.log(`✅ Synced ${syncedCount} new teams, updated ${updatedCount} existing teams`);
+        } else {
+            console.log('✅ All teams already in sync');
+        }
+        
+        return { 
+            success: true, 
+            synced: syncedCount, 
+            updated: updatedCount,
+            total: serverTeams.length 
+        };
+        
+    } catch (error) {
+        console.error('❌ Failed to sync user teams:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// =============================================================================
 // Full Sync Functions
 // =============================================================================
 
@@ -1049,3 +1166,6 @@ window.checkIsOnline = checkIsOnline;
 window.getPendingSyncCount = getPendingSyncCount;
 window.hasPendingSync = hasPendingSync;
 window.processSyncQueue = processSyncQueue;
+
+// User team sync
+window.syncUserTeams = syncUserTeams;

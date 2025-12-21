@@ -1,0 +1,8 @@
+{
+  "id": "test-user-123",
+  "email": "test@example.com",
+  "displayName": "test",
+  "isAdmin": false,
+  "createdAt": "2025-12-14T20:13:47.514483",
+  "updatedAt": "2025-12-14T20:13:47.514483"
+}

@@ -1,0 +1,40 @@
+{
+  "byUser": {
+    "test-coach-001": [
+      "mem_c2917471cb13",
+      "mem_671310149230"
+    ],
+    "test-viewer-001": [
+      "mem_7e1435d7c573"
+    ],
+    "test-game-coach-001": [
+      "mem_8dba26f60448"
+    ],
+    "test-game-viewer-001": [
+      "mem_49cbdf1a550c"
+    ],
+    "test-share-coach-001": [
+      "mem_c347a6aac9c0"
+    ],
+    "test-share-viewer-001": [
+      "mem_0199e4b48df7"
+    ]
+  },
+  "byTeam": {
+    "New-Test-Team-xyz9": [
+      "mem_c2917471cb13"
+    ],
+    "Test-Auth-Team-abc1": [
+      "mem_671310149230",
+      "mem_7e1435d7c573"
+    ],
+    "Test-Game-Team-gm01": [
+      "mem_8dba26f60448",
+      "mem_49cbdf1a550c"
+    ],
+    "Test-Share-Team-sh01": [
+      "mem_c347a6aac9c0",
+      "mem_0199e4b48df7"
+    ]
+  }
+}
