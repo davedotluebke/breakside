@@ -97,7 +97,7 @@ def require_team_coach(team_id_param: str = "team_id") -> Callable:
         
         # Admins have coach access to all teams
         if is_admin(user["id"]):
-            return user
+                return user
         
         # Check team membership
         role = get_user_team_role(user["id"], team_id)
@@ -136,7 +136,7 @@ def require_team_access(team_id_param: str = "team_id") -> Callable:
         
         # Admins have access to all teams
         if is_admin(user["id"]):
-            return user
+                return user
         
         # Check team membership (any role grants access)
         role = get_user_team_role(user["id"], team_id)

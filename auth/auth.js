@@ -71,6 +71,26 @@ async function initializeAuth() {
             currentSession = session;
             currentUser = session.user;
             console.log('Auth: Restored session for', currentUser.email);
+            
+            // Sync user's teams from server on session restore
+            // Use setTimeout to avoid blocking initialization
+            setTimeout(async () => {
+                if (typeof window.syncUserTeams === 'function') {
+                    try {
+                        const result = await window.syncUserTeams();
+                        if (result.synced > 0) {
+                            console.log(`Auth: Synced ${result.synced} teams from server`);
+                            // Refresh the team selection screen if it's visible
+                            if (typeof showSelectTeamScreen === 'function' && 
+                                document.getElementById('selectTeamScreen')?.style.display !== 'none') {
+                                showSelectTeamScreen();
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Failed to sync user teams on session restore:', e);
+                    }
+                }
+            }, 500);
         }
         
         // Listen for auth state changes
@@ -384,6 +404,15 @@ async function signIn(email, password) {
         
         // Sync user to backend
         await syncUserToBackend();
+        
+        // Sync user's teams from server (pull down any teams they have access to)
+        if (typeof window.syncUserTeams === 'function') {
+            try {
+                await window.syncUserTeams();
+            } catch (e) {
+                console.warn('Failed to sync user teams:', e);
+            }
+        }
         
         return { user: data.user, error: null };
         

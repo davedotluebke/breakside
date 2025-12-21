@@ -759,14 +759,27 @@ async function pullDataFromCloud() {
     }
     
     try {
+        // First sync user's teams (this pulls any teams the user has access to)
+        if (typeof syncUserTeams === 'function') {
+            const teamResult = await syncUserTeams();
+            if (teamResult.synced > 0) {
+                console.log(`Synced ${teamResult.synced} teams from server`);
+            }
+        }
+        
+        // Then pull other data
         const result = await pullFromCloud();
         if (result.success) {
             console.log('Pulled data from cloud:', result);
-            // Refresh displays
+            // Refresh displays - reload the whole screen to show new teams
+            showSelectTeamScreen();
+        } else {
+            // Refresh displays even on partial success
             updateSyncStatusDisplay();
             populateCloudGames();
-        } else {
-            alert('Pull failed: ' + (result.error || 'Unknown error'));
+            if (result.error && result.error !== 'Not authenticated') {
+                alert('Pull failed: ' + (result.error || 'Unknown error'));
+            }
         }
     } catch (error) {
         console.error('Pull failed:', error);
