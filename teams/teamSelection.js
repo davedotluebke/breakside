@@ -15,6 +15,17 @@ function showSelectTeamScreen(firsttime = false) {
     }
 
     teamListElement.innerHTML = '';
+    
+    // On first display, trigger a background sync to fetch cloud teams
+    if (firsttime && typeof syncUserTeams === 'function' && window.breakside?.auth?.isAuthenticated?.()) {
+        // Sync in background and refresh display when done
+        syncUserTeams().then(result => {
+            if (result.success && (result.synced > 0 || result.updated > 0 || result.players > 0)) {
+                console.log('📥 Initial sync complete, refreshing display...');
+                showSelectTeamScreen(false);  // Refresh without triggering another sync
+            }
+        }).catch(e => console.warn('Initial sync failed:', e));
+    }
 
     if (teams.length === 0 || (teams.length === 1 && teams[0].name === 'Sample Team')) {
         teamListWarning.style.display = 'block';
