@@ -500,7 +500,13 @@ function initializeTeamSelection() {
 
     const switchTeamsBtn = document.getElementById('switchTeamsBtn');
     if (switchTeamsBtn) {
-        switchTeamsBtn.addEventListener('click', () => showSelectTeamScreen());
+        switchTeamsBtn.addEventListener('click', () => {
+            // Save current team data before switching
+            if (typeof saveAllTeamsData === 'function') {
+                saveAllTeamsData();
+            }
+            showSelectTeamScreen();
+        });
     }
 
     const downloadTeamBtn = document.getElementById('downloadTeamBtn');
