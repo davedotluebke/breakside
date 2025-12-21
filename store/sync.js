@@ -1222,11 +1222,18 @@ function startAutoSync() {
                 console.log('📥 Auto-syncing due to detected updates...');
                 const result = await syncUserTeams();
                 
-                if (result.success && (result.synced > 0 || result.updated > 0 || result.players > 0)) {
+                if (result.success) {
                     // Refresh the team selection screen if visible
                     if (document.getElementById('selectTeamScreen')?.style.display !== 'none') {
                         if (typeof showSelectTeamScreen === 'function') {
                             showSelectTeamScreen();
+                        }
+                    }
+                    
+                    // Refresh the roster screen if visible
+                    if (document.getElementById('teamRosterScreen')?.style.display !== 'none') {
+                        if (typeof updateTeamRosterDisplay === 'function') {
+                            updateTeamRosterDisplay();
                         }
                     }
                     
