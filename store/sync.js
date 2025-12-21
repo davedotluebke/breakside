@@ -1017,9 +1017,8 @@ async function syncUserTeams() {
                 }
             }
             
-            // Fetch players for this team if roster is empty or needs update
-            if (localTeam && (localTeam.teamRoster.length === 0 || 
-                (serverTeam.playerIds && serverTeam.playerIds.length > localTeam.teamRoster.length))) {
+            // Always fetch players for this team to check for updates
+            if (localTeam) {
                 try {
                     const playersResponse = await authFetch(`${API_BASE_URL}/api/teams/${serverTeam.id}/players`);
                     if (playersResponse.ok) {
@@ -1027,7 +1026,7 @@ async function syncUserTeams() {
                         const serverPlayers = playersData.players || [];
                         
                         if (serverPlayers.length > 0) {
-                            console.log(`👥 Syncing ${serverPlayers.length} players for team ${serverTeam.name}`);
+                            let teamPlayersUpdated = 0;
                             
                             // Merge players - add new ones, update existing ones
                             for (const serverPlayer of serverPlayers) {
@@ -1037,7 +1036,7 @@ async function syncUserTeams() {
                                     // New player - add to roster
                                     const player = deserializePlayer(serverPlayer);
                                     localTeam.teamRoster.push(player);
-                                    playersCount++;
+                                    teamPlayersUpdated++;
                                 } else {
                                     // Existing player - update if server is newer
                                     const existingPlayer = localTeam.teamRoster[existingIndex];
@@ -1045,10 +1044,33 @@ async function syncUserTeams() {
                                     const localPlayerUpdated = new Date(existingPlayer.updatedAt || 0);
                                     
                                     if (serverPlayerUpdated > localPlayerUpdated) {
-                                        localTeam.teamRoster[existingIndex] = deserializePlayer(serverPlayer);
-                                        playersCount++;
+                                        // Preserve local stats that aren't synced
+                                        const localStats = {
+                                            totalPointsPlayed: existingPlayer.totalPointsPlayed,
+                                            consecutivePointsPlayed: existingPlayer.consecutivePointsPlayed,
+                                            pointsPlayedPreviousGames: existingPlayer.pointsPlayedPreviousGames,
+                                            totalTimePlayed: existingPlayer.totalTimePlayed,
+                                            completedPasses: existingPlayer.completedPasses,
+                                            turnovers: existingPlayer.turnovers,
+                                            goals: existingPlayer.goals,
+                                            assists: existingPlayer.assists,
+                                            pointsWon: existingPlayer.pointsWon,
+                                            pointsLost: existingPlayer.pointsLost
+                                        };
+                                        
+                                        const updatedPlayer = deserializePlayer(serverPlayer);
+                                        // Restore local stats
+                                        Object.assign(updatedPlayer, localStats);
+                                        
+                                        localTeam.teamRoster[existingIndex] = updatedPlayer;
+                                        teamPlayersUpdated++;
                                     }
                                 }
+                            }
+                            
+                            if (teamPlayersUpdated > 0) {
+                                console.log(`👥 Updated ${teamPlayersUpdated} players for team ${serverTeam.name}`);
+                                playersCount += teamPlayersUpdated;
                             }
                             
                             // Update playerIds to match
@@ -1093,7 +1115,8 @@ async function syncUserTeams() {
 let lastSyncCheck = {
     teamCount: 0,
     playerCount: 0,
-    latestUpdate: null
+    latestUpdate: null,
+    latestPlayerUpdate: null
 };
 
 // Auto-sync interval ID
@@ -1128,21 +1151,24 @@ async function checkForUpdates() {
         const hasUpdates = (
             serverState.teamCount !== lastSyncCheck.teamCount ||
             serverState.playerCount !== lastSyncCheck.playerCount ||
-            serverState.latestUpdate !== lastSyncCheck.latestUpdate
+            serverState.latestUpdate !== lastSyncCheck.latestUpdate ||
+            serverState.latestPlayerUpdate !== lastSyncCheck.latestPlayerUpdate
         );
         
         if (hasUpdates) {
             console.log('🔔 Updates detected on server:', {
                 teams: `${lastSyncCheck.teamCount} → ${serverState.teamCount}`,
                 players: `${lastSyncCheck.playerCount} → ${serverState.playerCount}`,
-                lastUpdate: serverState.latestUpdate
+                lastUpdate: serverState.latestUpdate,
+                lastPlayerUpdate: serverState.latestPlayerUpdate
             });
             
             // Update last known state
             lastSyncCheck = {
                 teamCount: serverState.teamCount,
                 playerCount: serverState.playerCount,
-                latestUpdate: serverState.latestUpdate
+                latestUpdate: serverState.latestUpdate,
+                latestPlayerUpdate: serverState.latestPlayerUpdate
             };
             
             return true;

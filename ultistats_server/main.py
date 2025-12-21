@@ -396,6 +396,7 @@ async def get_sync_status(user: dict = Depends(get_current_user)):
     
     team_count = 0
     latest_team_update = None
+    latest_player_update = None
     total_player_count = 0
     
     for membership in memberships:
@@ -403,23 +404,42 @@ async def get_sync_status(user: dict = Depends(get_current_user)):
             team = get_team(membership["teamId"])
             team_count += 1
             
-            # Track latest update
+            # Track latest team update
             team_updated = team.get("updatedAt")
             if team_updated:
                 if latest_team_update is None or team_updated > latest_team_update:
                     latest_team_update = team_updated
             
-            # Count players
+            # Count players and check their update times
             player_ids = team.get("playerIds", [])
             total_player_count += len(player_ids)
+            
+            # Check player update timestamps
+            for player_id in player_ids:
+                try:
+                    player = get_player(player_id)
+                    player_updated = player.get("updatedAt")
+                    if player_updated:
+                        if latest_player_update is None or player_updated > latest_player_update:
+                            latest_player_update = player_updated
+                except (FileNotFoundError, KeyError):
+                    continue
             
         except (FileNotFoundError, KeyError):
             continue
     
+    # Combine latest updates
+    latest_update = latest_team_update
+    if latest_player_update:
+        if latest_update is None or latest_player_update > latest_update:
+            latest_update = latest_player_update
+    
     return {
         "teamCount": team_count,
         "playerCount": total_player_count,
-        "latestUpdate": latest_team_update,
+        "latestTeamUpdate": latest_team_update,
+        "latestPlayerUpdate": latest_player_update,
+        "latestUpdate": latest_update,
         "serverTime": datetime.now().isoformat(),
     }
 
