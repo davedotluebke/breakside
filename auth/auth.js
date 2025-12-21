@@ -90,6 +90,11 @@ async function initializeAuth() {
                         console.warn('Failed to sync user teams on session restore:', e);
                     }
                 }
+                
+                // Start auto-sync polling
+                if (typeof window.startAutoSync === 'function') {
+                    window.startAutoSync();
+                }
             }, 500);
         }
         
@@ -218,6 +223,11 @@ async function getAccessToken() {
  * Sign out the current user.
  */
 async function signOut() {
+    // Stop auto-sync polling
+    if (typeof window.stopAutoSync === 'function') {
+        window.stopAutoSync();
+    }
+    
     if (!supabaseClient) {
         currentSession = null;
         currentUser = null;
@@ -412,6 +422,11 @@ async function signIn(email, password) {
             } catch (e) {
                 console.warn('Failed to sync user teams:', e);
             }
+        }
+        
+        // Start auto-sync polling
+        if (typeof window.startAutoSync === 'function') {
+            window.startAutoSync();
         }
         
         return { user: data.user, error: null };

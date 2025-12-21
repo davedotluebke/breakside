@@ -1086,6 +1086,148 @@ async function syncUserTeams() {
 }
 
 // =============================================================================
+// Auto-Sync Polling Functions
+// =============================================================================
+
+// Last known sync state from server
+let lastSyncCheck = {
+    teamCount: 0,
+    playerCount: 0,
+    latestUpdate: null
+};
+
+// Auto-sync interval ID
+let autoSyncIntervalId = null;
+const AUTO_SYNC_INTERVAL = 10000;  // 10 seconds
+
+/**
+ * Check if there are updates on the server that need to be synced.
+ * This is a lightweight check that only fetches counts/timestamps.
+ * @returns {Promise<boolean>} True if updates are available
+ */
+async function checkForUpdates() {
+    if (!isOnline) {
+        return false;
+    }
+    
+    // Check if user is authenticated
+    if (!window.breakside?.auth?.isAuthenticated?.()) {
+        return false;
+    }
+    
+    try {
+        const response = await authFetch(`${API_BASE_URL}/api/auth/sync-check`);
+        
+        if (!response.ok) {
+            return false;
+        }
+        
+        const serverState = await response.json();
+        
+        // Compare with last known state
+        const hasUpdates = (
+            serverState.teamCount !== lastSyncCheck.teamCount ||
+            serverState.playerCount !== lastSyncCheck.playerCount ||
+            serverState.latestUpdate !== lastSyncCheck.latestUpdate
+        );
+        
+        if (hasUpdates) {
+            console.log('🔔 Updates detected on server:', {
+                teams: `${lastSyncCheck.teamCount} → ${serverState.teamCount}`,
+                players: `${lastSyncCheck.playerCount} → ${serverState.playerCount}`,
+                lastUpdate: serverState.latestUpdate
+            });
+            
+            // Update last known state
+            lastSyncCheck = {
+                teamCount: serverState.teamCount,
+                playerCount: serverState.playerCount,
+                latestUpdate: serverState.latestUpdate
+            };
+            
+            return true;
+        }
+        
+        return false;
+        
+    } catch (error) {
+        console.warn('Failed to check for updates:', error);
+        return false;
+    }
+}
+
+/**
+ * Start automatic sync polling.
+ * Checks for updates every 10 seconds and syncs if needed.
+ */
+function startAutoSync() {
+    if (autoSyncIntervalId) {
+        return; // Already running
+    }
+    
+    console.log('🔄 Starting auto-sync polling...');
+    
+    // Initialize last known state from local data
+    lastSyncCheck.teamCount = teams.length;
+    lastSyncCheck.playerCount = teams.reduce((sum, t) => sum + (t.teamRoster?.length || 0), 0);
+    
+    autoSyncIntervalId = setInterval(async () => {
+        // Only check if we're online and authenticated
+        if (!isOnline || !window.breakside?.auth?.isAuthenticated?.()) {
+            return;
+        }
+        
+        // Don't poll during active game (to avoid interference)
+        if (typeof currentGame === 'function') {
+            try {
+                const game = currentGame();
+                if (game && !game.gameEndTimestamp) {
+                    return; // Game in progress, skip auto-sync
+                }
+            } catch (e) {
+                // No current game, continue
+            }
+        }
+        
+        try {
+            const hasUpdates = await checkForUpdates();
+            
+            if (hasUpdates) {
+                console.log('📥 Auto-syncing due to detected updates...');
+                const result = await syncUserTeams();
+                
+                if (result.success && (result.synced > 0 || result.updated > 0 || result.players > 0)) {
+                    // Refresh the team selection screen if visible
+                    if (document.getElementById('selectTeamScreen')?.style.display !== 'none') {
+                        if (typeof showSelectTeamScreen === 'function') {
+                            showSelectTeamScreen();
+                        }
+                    }
+                    
+                    // Update sync status display
+                    if (typeof updateSyncStatusDisplay === 'function') {
+                        updateSyncStatusDisplay();
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn('Auto-sync check failed:', error);
+        }
+    }, AUTO_SYNC_INTERVAL);
+}
+
+/**
+ * Stop automatic sync polling.
+ */
+function stopAutoSync() {
+    if (autoSyncIntervalId) {
+        clearInterval(autoSyncIntervalId);
+        autoSyncIntervalId = null;
+        console.log('⏹️ Stopped auto-sync polling');
+    }
+}
+
+// =============================================================================
 // Full Sync Functions
 // =============================================================================
 
@@ -1216,3 +1358,8 @@ window.processSyncQueue = processSyncQueue;
 
 // User team sync
 window.syncUserTeams = syncUserTeams;
+
+// Auto-sync polling
+window.checkForUpdates = checkForUpdates;
+window.startAutoSync = startAutoSync;
+window.stopAutoSync = stopAutoSync;
