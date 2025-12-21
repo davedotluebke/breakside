@@ -928,6 +928,7 @@ async function deleteGameFromCloud(gameId) {
 /**
  * Sync teams the user has access to from the server.
  * Called after login to pull down any teams the user is a member of.
+ * Also syncs players for each team.
  * @returns {Promise<object>} Result with synced teams count
  */
 async function syncUserTeams() {
@@ -963,36 +964,38 @@ async function syncUserTeams() {
         
         let syncedCount = 0;
         let updatedCount = 0;
+        let playersCount = 0;
         
         for (const { team: serverTeam, role } of serverTeams) {
             if (!serverTeam || !serverTeam.id) continue;
             
             // Check if we have this team locally (by ID)
             const localTeamIndex = teams.findIndex(t => t.id === serverTeam.id);
+            let localTeam;
             
             if (localTeamIndex === -1) {
                 // Team doesn't exist locally - create it
                 console.log(`📥 Downloading team: ${serverTeam.name} (${serverTeam.id})`);
                 
                 // Create a new Team object
-                const newTeam = new Team(serverTeam.name, [], serverTeam.id);
-                newTeam.createdAt = serverTeam.createdAt || new Date().toISOString();
-                newTeam.updatedAt = serverTeam.updatedAt || newTeam.createdAt;
-                newTeam.playerIds = serverTeam.playerIds || [];
-                newTeam.lines = serverTeam.lines || [];
+                localTeam = new Team(serverTeam.name, [], serverTeam.id);
+                localTeam.createdAt = serverTeam.createdAt || new Date().toISOString();
+                localTeam.updatedAt = serverTeam.updatedAt || localTeam.createdAt;
+                localTeam.playerIds = serverTeam.playerIds || [];
+                localTeam.lines = serverTeam.lines || [];
                 
                 // If server has embedded roster data, deserialize it
                 if (serverTeam.teamRoster && serverTeam.teamRoster.length > 0) {
-                    newTeam.teamRoster = serverTeam.teamRoster.map(p => deserializePlayer(p));
+                    localTeam.teamRoster = serverTeam.teamRoster.map(p => deserializePlayer(p));
                 }
                 
                 // Add to local teams array
-                teams.push(newTeam);
+                teams.push(localTeam);
                 syncedCount++;
                 
             } else {
                 // Team exists locally - check if server version is newer
-                const localTeam = teams[localTeamIndex];
+                localTeam = teams[localTeamIndex];
                 const serverUpdated = new Date(serverTeam.updatedAt || 0);
                 const localUpdated = new Date(localTeam.updatedAt || 0);
                 
@@ -1013,22 +1016,66 @@ async function syncUserTeams() {
                     updatedCount++;
                 }
             }
+            
+            // Fetch players for this team if roster is empty or needs update
+            if (localTeam && (localTeam.teamRoster.length === 0 || 
+                (serverTeam.playerIds && serverTeam.playerIds.length > localTeam.teamRoster.length))) {
+                try {
+                    const playersResponse = await authFetch(`${API_BASE_URL}/api/teams/${serverTeam.id}/players`);
+                    if (playersResponse.ok) {
+                        const playersData = await playersResponse.json();
+                        const serverPlayers = playersData.players || [];
+                        
+                        if (serverPlayers.length > 0) {
+                            console.log(`👥 Syncing ${serverPlayers.length} players for team ${serverTeam.name}`);
+                            
+                            // Merge players - add new ones, update existing ones
+                            for (const serverPlayer of serverPlayers) {
+                                const existingIndex = localTeam.teamRoster.findIndex(p => p.id === serverPlayer.id);
+                                
+                                if (existingIndex === -1) {
+                                    // New player - add to roster
+                                    const player = deserializePlayer(serverPlayer);
+                                    localTeam.teamRoster.push(player);
+                                    playersCount++;
+                                } else {
+                                    // Existing player - update if server is newer
+                                    const existingPlayer = localTeam.teamRoster[existingIndex];
+                                    const serverPlayerUpdated = new Date(serverPlayer.updatedAt || 0);
+                                    const localPlayerUpdated = new Date(existingPlayer.updatedAt || 0);
+                                    
+                                    if (serverPlayerUpdated > localPlayerUpdated) {
+                                        localTeam.teamRoster[existingIndex] = deserializePlayer(serverPlayer);
+                                        playersCount++;
+                                    }
+                                }
+                            }
+                            
+                            // Update playerIds to match
+                            localTeam.playerIds = localTeam.teamRoster.map(p => p.id);
+                        }
+                    }
+                } catch (playerError) {
+                    console.warn(`Failed to sync players for team ${serverTeam.name}:`, playerError);
+                }
+            }
         }
         
         // Save to local storage if we made changes
-        if (syncedCount > 0 || updatedCount > 0) {
+        if (syncedCount > 0 || updatedCount > 0 || playersCount > 0) {
             if (typeof saveAllTeamsData === 'function') {
                 saveAllTeamsData();
             }
-            console.log(`✅ Synced ${syncedCount} new teams, updated ${updatedCount} existing teams`);
+            console.log(`✅ Synced ${syncedCount} new teams, updated ${updatedCount} teams, ${playersCount} players`);
         } else {
-            console.log('✅ All teams already in sync');
+            console.log('✅ All teams and players already in sync');
         }
         
         return { 
             success: true, 
             synced: syncedCount, 
             updated: updatedCount,
+            players: playersCount,
             total: serverTeams.length 
         };
         
