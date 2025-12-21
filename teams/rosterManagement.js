@@ -1119,12 +1119,13 @@ function startRosterPolling() {
                     console.log('📥 Roster: Updates detected, syncing...');
                     const result = await syncUserTeams();
                     
-                    if (result.success && (result.synced > 0 || result.updated > 0 || result.players > 0)) {
-                        // Refresh roster display
+                    // Always refresh roster display after sync completes
+                    // The sync may have updated player attributes even if counts didn't change
+                    if (result.success) {
                         if (typeof updateTeamRosterDisplay === 'function') {
                             updateTeamRosterDisplay();
                         }
-                        console.log('✅ Roster: Updated display with new data');
+                        console.log('✅ Roster: Refreshed display after sync');
                     }
                 }
             }
