@@ -384,6 +384,46 @@ async def update_current_user(
     }
 
 
+@app.get("/api/auth/sync-check")
+async def get_sync_status(user: dict = Depends(get_current_user)):
+    """
+    Lightweight endpoint to check if there are updates to sync.
+    
+    Returns summary info (counts and latest timestamps) that client can
+    compare with local state to decide whether to do a full sync.
+    """
+    memberships = get_user_memberships(user["id"])
+    
+    team_count = 0
+    latest_team_update = None
+    total_player_count = 0
+    
+    for membership in memberships:
+        try:
+            team = get_team(membership["teamId"])
+            team_count += 1
+            
+            # Track latest update
+            team_updated = team.get("updatedAt")
+            if team_updated:
+                if latest_team_update is None or team_updated > latest_team_update:
+                    latest_team_update = team_updated
+            
+            # Count players
+            player_ids = team.get("playerIds", [])
+            total_player_count += len(player_ids)
+            
+        except (FileNotFoundError, KeyError):
+            continue
+    
+    return {
+        "teamCount": team_count,
+        "playerCount": total_player_count,
+        "latestUpdate": latest_team_update,
+        "serverTime": datetime.now().isoformat(),
+    }
+
+
 @app.get("/api/auth/teams")
 async def get_user_teams_endpoint(user: dict = Depends(get_current_user)):
     """
