@@ -1070,3 +1070,95 @@ function makeRosterColumnsSticky() {
     }
 }
 
+// =============================================================================
+// Roster Screen Polling (for cross-device sync)
+// =============================================================================
+
+let rosterPollIntervalId = null;
+const ROSTER_POLL_INTERVAL = 10000;  // 10 seconds
+
+/**
+ * Start polling for roster updates while on the roster screen
+ */
+function startRosterPolling() {
+    if (rosterPollIntervalId) {
+        return; // Already running
+    }
+    
+    rosterPollIntervalId = setInterval(async () => {
+        // Only poll if we're on the roster screen
+        const rosterScreen = document.getElementById('teamRosterScreen');
+        if (!rosterScreen || rosterScreen.style.display === 'none') {
+            stopRosterPolling();
+            return;
+        }
+        
+        // Check if we're authenticated and online
+        if (!window.breakside?.auth?.isAuthenticated?.() || !navigator.onLine) {
+            return;
+        }
+        
+        // Don't poll during active game
+        if (typeof currentGame === 'function') {
+            try {
+                const game = currentGame();
+                if (game && !game.gameEndTimestamp) {
+                    return;
+                }
+            } catch (e) {
+                // No current game
+            }
+        }
+        
+        try {
+            // Check for updates
+            if (typeof checkForUpdates === 'function') {
+                const hasUpdates = await checkForUpdates();
+                
+                if (hasUpdates && typeof syncUserTeams === 'function') {
+                    console.log('📥 Roster: Updates detected, syncing...');
+                    const result = await syncUserTeams();
+                    
+                    if (result.success && (result.synced > 0 || result.updated > 0 || result.players > 0)) {
+                        // Refresh roster display
+                        if (typeof updateTeamRosterDisplay === 'function') {
+                            updateTeamRosterDisplay();
+                        }
+                        console.log('✅ Roster: Updated display with new data');
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn('Roster poll failed:', error);
+        }
+    }, ROSTER_POLL_INTERVAL);
+    
+    console.log('🔄 Started roster polling');
+}
+
+/**
+ * Stop roster polling
+ */
+function stopRosterPolling() {
+    if (rosterPollIntervalId) {
+        clearInterval(rosterPollIntervalId);
+        rosterPollIntervalId = null;
+        console.log('⏹️ Stopped roster polling');
+    }
+}
+
+// Start polling when roster screen becomes visible
+// Hook into showScreen if available
+const originalShowScreen = window.showScreen;
+if (typeof originalShowScreen === 'function') {
+    window.showScreen = function(screenId) {
+        originalShowScreen(screenId);
+        
+        if (screenId === 'teamRosterScreen') {
+            startRosterPolling();
+        } else {
+            stopRosterPolling();
+        }
+    };
+}
+
