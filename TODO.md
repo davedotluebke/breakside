@@ -27,23 +27,22 @@ For deployment info and technical architecture, see **[ARCHITECTURE.md](ARCHITEC
 
 ## Next Up
 
-### 🔄 Phase 2: Backend Auth Enforcement
+### ✅ Phase 2: Backend Auth Enforcement (Complete)
 
-Enable `AUTH_REQUIRED=true` on EC2 and enforce permissions.
-
-- [ ] Deploy auth-enabled API to EC2
-  - Add `SUPABASE_JWT_SECRET` to `/etc/breakside/env`
-  - Set `AUTH_REQUIRED=true`
+- [x] Deploy auth-enabled API to EC2
+  - Added `SUPABASE_JWT_SECRET` to `/etc/breakside/env`
   - Restart service
-- [ ] Protect write endpoints with `require_team_coach` dependency
-  - `POST /api/games/{game_id}/sync`
-  - `POST /api/teams/{team_id}/sync`
-  - `POST /api/players/{player_id}/sync`
-  - `DELETE` endpoints
-- [ ] Allow read endpoints for team members (`require_team_access`)
-- [ ] Allow public read for games via share hash (no auth)
-- [ ] Test: Unauthenticated requests return 401
-- [ ] Test: Wrong team returns 403
+- [x] Protect write endpoints with auth dependencies
+  - `POST /api/games/{game_id}/sync` → `require_game_team_coach`
+  - `PUT /api/teams/{team_id}` → `require_team_coach`
+  - `PUT/DELETE /api/players/{player_id}` → `require_player_edit_access`
+  - All `DELETE` endpoints protected
+- [x] Allow read endpoints for team members (`require_team_access`)
+- [x] Allow public read for games via share hash (`GET /api/share/{hash}`)
+- [x] Test: Unauthenticated requests return 401 (test_auth.py)
+- [x] Test: Wrong team returns 403 (test_auth.py)
+- [x] Auto-sync polling between browsers (10-second interval)
+- [x] Player/Team attribute changes sync across devices
 
 ### 📋 Phase 3: Team Membership Management
 
