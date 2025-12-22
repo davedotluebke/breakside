@@ -634,6 +634,7 @@ function showDeleteLineDialog() {
 
 // Edit Player Dialog state
 let editPlayerDialogPlayer = null;
+let editPlayerDialogPlayerId = null;  // Store ID separately to handle roster refreshes
 let editPlayerDialogOriginalData = null;
 
 /**
@@ -646,6 +647,7 @@ function showEditPlayerDialog(player) {
     }
 
     editPlayerDialogPlayer = player;
+    editPlayerDialogPlayerId = player.id;  // Store ID for reliable comparison
     // Store original values to detect changes
     editPlayerDialogOriginalData = {
         name: player.name,
@@ -717,6 +719,7 @@ function closeEditPlayerDialog() {
         dialog.style.display = 'none';
     }
     editPlayerDialogPlayer = null;
+    editPlayerDialogPlayerId = null;
     editPlayerDialogOriginalData = null;
 }
 
@@ -764,12 +767,21 @@ function updateEditPlayerDialogState() {
  * Delete the current player with confirmation
  */
 function deletePlayer() {
-    if (!editPlayerDialogPlayer) {
-        console.error('Cannot delete player: no player selected');
+    if (!editPlayerDialogPlayerId) {
+        console.error('Cannot delete player: no player ID');
         return;
     }
 
-    const playerName = editPlayerDialogPlayer.name;
+    // Get the current player from roster by ID (handles roster refresh)
+    const player = currentTeam.teamRoster.find(p => p.id === editPlayerDialogPlayerId);
+    if (!player) {
+        console.error('Cannot delete player: player not found in roster');
+        alert('Error: Player not found. The roster may have been updated.');
+        closeEditPlayerDialog();
+        return;
+    }
+
+    const playerName = player.name;
     
     // Show confirmation alert
     if (!confirm(`Are you sure you want to delete ${playerName}?`)) {
@@ -777,10 +789,10 @@ function deletePlayer() {
     }
 
     // Get player ID before removing
-    const playerId = editPlayerDialogPlayer.id;
+    const playerId = editPlayerDialogPlayerId;
     
-    // Remove player from roster
-    const index = currentTeam.teamRoster.indexOf(editPlayerDialogPlayer);
+    // Remove player from roster by ID
+    const index = currentTeam.teamRoster.findIndex(p => p.id === playerId);
     if (index > -1) {
         currentTeam.teamRoster.splice(index, 1);
     }
@@ -813,8 +825,17 @@ function deletePlayer() {
  * Save the edited player data
  */
 function saveEditedPlayer() {
-    if (!editPlayerDialogPlayer || !editPlayerDialogOriginalData) {
-        console.error('Cannot save edited player: no player or original data');
+    if (!editPlayerDialogPlayerId || !editPlayerDialogOriginalData) {
+        console.error('Cannot save edited player: no player ID or original data');
+        return;
+    }
+
+    // Get the current player from roster by ID (handles roster refresh during edit)
+    const player = currentTeam.teamRoster.find(p => p.id === editPlayerDialogPlayerId);
+    if (!player) {
+        console.error('Cannot save edited player: player not found in roster');
+        alert('Error: Player not found. The roster may have been updated. Please try again.');
+        closeEditPlayerDialog();
         return;
     }
 
@@ -835,8 +856,9 @@ function saveEditedPlayer() {
     }
 
     // Check if name already exists (excluding current player)
+    // Use ID comparison to handle cases where roster was refreshed and object references changed
     const nameExists = currentTeam.teamRoster.some(p => 
-        p !== editPlayerDialogPlayer && p.name === newName
+        p.id !== editPlayerDialogPlayerId && p.name === newName
     );
     if (nameExists) {
         alert('A player with this name already exists');
@@ -860,15 +882,15 @@ function saveEditedPlayer() {
         newGender = Gender.MMP;
     }
 
-    // Update player object
-    editPlayerDialogPlayer.name = newName;
-    editPlayerDialogPlayer.number = newNumberValue;
-    editPlayerDialogPlayer.gender = newGender;
-    editPlayerDialogPlayer.updatedAt = new Date().toISOString();
+    // Update player object (using fresh reference from roster)
+    player.name = newName;
+    player.number = newNumberValue;
+    player.gender = newGender;
+    player.updatedAt = new Date().toISOString();
 
     // Phase 4: Sync player update to cloud
     if (typeof syncPlayerToCloud === 'function') {
-        syncPlayerToCloud(editPlayerDialogPlayer);
+        syncPlayerToCloud(player);
     }
 
     // Save changes
