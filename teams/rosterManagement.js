@@ -439,11 +439,8 @@ function validateJerseyNumber(input) {
     if (playerNameInput) {
         playerNameInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
-                // Default to FMP if Enter is pressed (user can change later if needed)
-                const addFMPPlayerBtn = document.getElementById('addFMPPlayerBtn');
-                if (addFMPPlayerBtn) {
-                    addFMPPlayerBtn.click();
-                }
+                // Default to UNKNOWN gender if Enter is pressed (user can set later)
+                addPlayerWithGender(Gender.UNKNOWN);
             }
         });
     }
