@@ -362,6 +362,22 @@
         </div>
     </div>
 
+    <!-- PWA Install Prompt Modal -->
+    <div id="pwaInstallModal" class="modal" style="display: none;">
+        <div class="modal-content pwa-install-modal">
+            <div class="pwa-install-icon">📱</div>
+            <h3>Breakside is best as an app!</h3>
+            <div id="pwaInstallMessage" class="pwa-install-message">
+                <!-- Content populated by JS based on device -->
+            </div>
+            <div class="pwa-install-actions">
+                <button id="pwaInstallBtn" class="primary-btn" style="display: none;">Install App</button>
+                <a id="pwaInstructionsLink" href="/landing/#install" class="btn btn-secondary" style="display: none;">Installation Instructions</a>
+                <button onclick="closePwaInstallModal()" class="secondary-btn">Continue in Browser</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Simple Mode Screen -->
     <section id="simpleModeScreen" style="display: none;" class="in-game-content">
         <div class="simple-mode-content">
