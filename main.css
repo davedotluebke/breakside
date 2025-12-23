@@ -2296,3 +2296,440 @@ body.next-line-mode #selectNextLineBtn {
     color: #495057;
     user-select: all;
 }
+/* =============================================================================
+   Team Settings Screen
+   ============================================================================= */
+
+#teamSettingsScreen {
+    padding: 10px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.settings-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    padding: 10px 0;
+    border-bottom: 1px solid #ddd;
+}
+
+.settings-header h2 {
+    margin: 0;
+    padding: 0;
+    flex: 1;
+}
+
+.back-button {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+}
+
+.back-button:hover {
+    background: #5a6268;
+}
+
+.settings-content {
+    text-align: left;
+}
+
+.settings-section {
+    background: white;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.settings-section h3 {
+    margin: 0 0 12px 0;
+    padding: 0;
+    font-size: 1rem;
+    color: #333;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 8px;
+}
+
+/* Team Name Edit */
+.team-name-edit {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.team-name-edit span {
+    font-size: 1.25rem;
+    font-weight: 600;
+    flex: 1;
+}
+
+/* Members List */
+.members-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.member-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.member-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.member-icon {
+    font-size: 1.25rem;
+}
+
+.member-details {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.member-name {
+    font-weight: 500;
+    color: #333;
+}
+
+.member-email {
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.member-role {
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.member-role.role-coach {
+    background: #28a745;
+    color: white;
+}
+
+.member-role.role-viewer {
+    background: #17a2b8;
+    color: white;
+}
+
+.remove-member-btn {
+    background: none;
+    border: none;
+    color: #dc3545;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 4px;
+}
+
+.remove-member-btn:hover {
+    background: #f8d7da;
+}
+
+/* Invites List */
+.invites-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.invite-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.invite-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.invite-role-icon {
+    font-size: 1.25rem;
+}
+
+.invite-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.invite-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 1rem;
+    color: #333;
+}
+
+.invite-meta {
+    font-size: 0.75rem;
+    color: #666;
+}
+
+.invite-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.invite-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.invite-btn {
+    flex: 1;
+    min-width: 130px;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.invite-btn.coach-invite {
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    color: white;
+}
+
+.invite-btn.coach-invite:hover {
+    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+}
+
+.invite-btn.viewer-invite {
+    background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+    color: white;
+}
+
+.invite-btn.viewer-invite:hover {
+    background: linear-gradient(135deg, #138496 0%, #117a8b 100%);
+}
+
+/* Join Team Form */
+.join-team-form {
+    display: flex;
+    gap: 10px;
+}
+
+.join-code-input {
+    flex: 1;
+    padding: 10px 15px;
+    font-size: 1.1rem;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    text-align: center;
+    letter-spacing: 3px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+}
+
+.join-code-input:focus {
+    border-color: #007bff;
+    outline: none;
+}
+
+.join-btn {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.join-btn:hover {
+    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+}
+
+/* Loading/Info/Error messages */
+.loading-message,
+.info-message,
+.error-message {
+    padding: 15px;
+    text-align: center;
+    color: #666;
+    font-style: italic;
+}
+
+.error-message {
+    color: #dc3545;
+}
+
+/* Invite Created Modal */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 16px;
+    padding: 25px;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+
+.modal-content h3 {
+    margin: 0 0 15px 0;
+    color: #333;
+}
+
+.invite-modal {
+    text-align: center;
+}
+
+.invite-code-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: #f8f9fa;
+    padding: 15px 20px;
+    border-radius: 12px;
+    margin: 15px 0;
+}
+
+.invite-code-display span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: 5px;
+    color: #333;
+}
+
+.invite-link-text {
+    font-size: 0.9rem;
+    color: #666;
+    margin: 10px 0 5px;
+}
+
+.invite-link-display {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 15px;
+}
+
+.invite-link-display input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.invite-expiry {
+    font-size: 0.85rem;
+    color: #666;
+    margin-bottom: 15px;
+}
+
+.primary-btn {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.primary-btn:hover {
+    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+}
+
+.secondary-btn {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.secondary-btn:hover {
+    background: #5a6268;
+}
+
+/* Join Team Modal */
+.join-modal {
+    text-align: center;
+}
+
+.join-team-preview {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 12px;
+    margin: 15px 0;
+}
+
+.join-team-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.join-team-role {
+    font-size: 1rem;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.join-team-inviter {
+    font-size: 0.9rem;
+    color: #888;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 15px;
+}
