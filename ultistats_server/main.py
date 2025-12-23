@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Literal
 from datetime import datetime
 
 # Import config - handle both relative and absolute imports
@@ -59,6 +59,19 @@ try:
         create_share_link,
         list_game_shares,
         revoke_share,
+        # Invite storage
+        get_invite,
+        get_invite_by_code,
+        is_invite_valid,
+        get_invite_validity_reason,
+        create_invite,
+        list_team_invites,
+        redeem_invite,
+        revoke_invite as revoke_invite_storage,
+        # Membership storage (additional)
+        delete_membership,
+        get_user_team_membership,
+        get_team_coaches,
     )
     from auth import (
         get_current_user,
@@ -121,6 +134,19 @@ except ImportError:
         create_share_link,
         list_game_shares,
         revoke_share,
+        # Invite storage
+        get_invite,
+        get_invite_by_code,
+        is_invite_valid,
+        get_invite_validity_reason,
+        create_invite,
+        list_team_invites,
+        redeem_invite,
+        revoke_invite as revoke_invite_storage,
+        # Membership storage (additional)
+        delete_membership,
+        get_user_team_membership,
+        get_team_coaches,
     )
     from ultistats_server.auth import (
         get_current_user,
@@ -219,6 +245,23 @@ async def serve_app_file(filename: str):
 # =============================================================================
 # Landing page routes
 # =============================================================================
+
+# =============================================================================
+# Join page route (invite redemption)
+# =============================================================================
+
+@app.get("/join/{code}")
+async def join_page(code: str):
+    """
+    Serve the join page for invite redemption.
+    
+    The code is passed via URL path and read by the JavaScript.
+    """
+    join_file = landing_dir / "join.html"
+    if join_file.exists():
+        return FileResponse(join_file, media_type="text/html")
+    raise HTTPException(status_code=404, detail="Join page not found")
+
 
 @app.get("/landing/")
 @app.get("/landing/index.html")
@@ -734,6 +777,245 @@ async def get_game_by_share(hash: str):
             "expiresAt": share["expiresAt"],
             "createdAt": share["createdAt"]
         }
+    }
+
+
+# =============================================================================
+# Invite endpoints
+# =============================================================================
+
+@app.post("/api/teams/{team_id}/invites")
+async def create_team_invite(
+    team_id: str,
+    role: Literal["coach", "viewer"] = Body(...),
+    expires_days: Optional[int] = Body(default=None, ge=1, le=365),
+    user: dict = Depends(require_team_coach("team_id"))
+):
+    """
+    Create an invite code for a team.
+    
+    Coach invites: single-use, default 7-day expiry
+    Viewer invites: unlimited uses, default 30-day expiry
+    
+    Requires: Coach access to the team.
+    """
+    if not team_exists(team_id):
+        raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+    
+    # Set defaults based on role
+    default_expiry = 7 if role == "coach" else 30
+    
+    invite = create_invite(
+        team_id=team_id,
+        role=role,
+        created_by=user["id"],
+        expires_days=expires_days if expires_days is not None else default_expiry,
+    )
+    
+    return {
+        "invite": invite,
+        "url": f"https://www.breakside.pro/join/{invite['code']}",
+        "code": invite["code"]
+    }
+
+
+@app.get("/api/teams/{team_id}/invites")
+async def list_team_invites_endpoint(
+    team_id: str,
+    user: dict = Depends(require_team_coach("team_id"))
+):
+    """
+    List all invites for a team (including expired/revoked).
+    
+    Requires: Coach access to the team.
+    """
+    if not team_exists(team_id):
+        raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+    
+    invites = list_team_invites(team_id)
+    
+    # Add validity status to each invite
+    invites_with_status = []
+    for invite in invites:
+        invite_copy = dict(invite)
+        invite_copy["isValid"] = is_invite_valid(invite)
+        invite_copy["invalidReason"] = get_invite_validity_reason(invite)
+        invites_with_status.append(invite_copy)
+    
+    return {"invites": invites_with_status, "count": len(invites_with_status)}
+
+
+@app.get("/api/invites/{code}/info")
+async def get_invite_info(code: str):
+    """
+    Get public info about an invite (for landing page preview).
+    
+    Returns team name and role, but not internal details.
+    No auth required.
+    """
+    invite = get_invite_by_code(code.upper())
+    
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    
+    if not is_invite_valid(invite):
+        reason = get_invite_validity_reason(invite)
+        error_messages = {
+            "revoked": "This invite has been revoked",
+            "expired": "This invite has expired",
+            "max_uses": "This invite has already been used",
+        }
+        raise HTTPException(
+            status_code=410, 
+            detail=error_messages.get(reason, "This invite is no longer valid")
+        )
+    
+    team = get_team(invite["teamId"])
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    # Get inviter's display name
+    inviter = get_user(invite["createdBy"])
+    inviter_name = inviter.get("displayName", "A coach") if inviter else "A coach"
+    
+    return {
+        "teamName": team["name"],
+        "role": invite["role"],
+        "invitedBy": inviter_name,
+        "expiresAt": invite.get("expiresAt")
+    }
+
+
+@app.post("/api/invites/{code}/redeem")
+async def redeem_invite_endpoint(
+    code: str,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Redeem an invite code.
+    
+    Creates a team membership for the authenticated user.
+    """
+    result = redeem_invite(code.upper(), user["id"])
+    
+    if not result["success"]:
+        status_map = {
+            "not_found": 404,
+            "expired": 410,
+            "revoked": 410,
+            "max_uses": 410,
+            "already_member": 409,
+            "membership_error": 400,
+        }
+        status = status_map.get(result.get("reason"), 400)
+        raise HTTPException(status_code=status, detail=result["error"])
+    
+    team = get_team(result["membership"]["teamId"])
+    
+    return {
+        "status": "joined",
+        "membership": result["membership"],
+        "team": team
+    }
+
+
+@app.delete("/api/invites/{invite_id}")
+async def revoke_invite_endpoint(
+    invite_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Revoke an invite.
+    
+    Requires: Admin or Coach access to the invite's team.
+    """
+    invite = get_invite(invite_id)
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    
+    # Must be admin or coach of the team
+    if not is_admin(user["id"]):
+        role = get_user_team_role(user["id"], invite["teamId"])
+        if role != "coach":
+            raise HTTPException(status_code=403, detail="Coach access required")
+    
+    revoke_invite_storage(invite_id, user["id"])
+    return {"status": "revoked", "invite_id": invite_id}
+
+
+# =============================================================================
+# Team member endpoints
+# =============================================================================
+
+@app.get("/api/teams/{team_id}/members")
+async def list_team_members(
+    team_id: str,
+    user: dict = Depends(require_team_access("team_id"))
+):
+    """
+    List all members of a team with their roles.
+    
+    Requires: Coach or Viewer access to the team.
+    """
+    if not team_exists(team_id):
+        raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+    
+    memberships = get_team_memberships(team_id)
+    
+    # Enrich with user info
+    members = []
+    for membership in memberships:
+        user_info = get_user(membership["userId"])
+        members.append({
+            "userId": membership["userId"],
+            "membershipId": membership["id"],
+            "role": membership["role"],
+            "joinedAt": membership["joinedAt"],
+            "displayName": user_info.get("displayName") if user_info else None,
+            "email": user_info.get("email") if user_info else None,
+        })
+    
+    return {"members": members, "count": len(members)}
+
+
+@app.delete("/api/teams/{team_id}/members/{target_user_id}")
+async def remove_team_member(
+    team_id: str,
+    target_user_id: str,
+    user: dict = Depends(require_team_coach("team_id"))
+):
+    """
+    Remove a member from the team.
+    
+    Rules:
+    - Any coach can remove any member
+    - Coaches can remove themselves (unless they're the last coach)
+    
+    Requires: Coach access to the team.
+    """
+    if not team_exists(team_id):
+        raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+    
+    # Check if target is a member
+    target_membership = get_user_team_membership(target_user_id, team_id)
+    if not target_membership:
+        raise HTTPException(status_code=404, detail="User is not a member of this team")
+    
+    # Last coach protection
+    if target_membership["role"] == "coach":
+        coaches = get_team_coaches(team_id)
+        if len(coaches) == 1 and target_user_id in coaches:
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot remove the last coach. Add another coach first, or delete the team."
+            )
+    
+    delete_membership(target_membership["id"])
+    
+    return {
+        "status": "removed",
+        "userId": target_user_id,
+        "teamId": team_id
     }
 
 
