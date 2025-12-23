@@ -2661,6 +2661,22 @@ body.next-line-mode #selectNextLineBtn {
     color: #666;
 }
 
+/* Copy button styling in invite modals */
+.invite-code-display .icon-button,
+.invite-link-display .icon-button {
+    color: #333;
+    background: #e9ecef;
+    border-radius: 6px;
+    padding: 8px 12px;
+    transition: all 0.2s ease;
+}
+
+.invite-code-display .icon-button:hover,
+.invite-link-display .icon-button:hover {
+    background: #dee2e6;
+    color: #000;
+}
+
 .invite-expiry {
     font-size: 0.85rem;
     color: #666;
