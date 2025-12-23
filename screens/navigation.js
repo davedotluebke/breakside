@@ -5,6 +5,7 @@
 const screens = [
     document.getElementById('selectTeamScreen'),
     document.getElementById('teamRosterScreen'),
+    document.getElementById('teamSettingsScreen'),
     document.getElementById('beforePointScreen'),
     document.getElementById('offensePlayByPlayScreen'),
     document.getElementById('defensePlayByPlayScreen'),
@@ -52,7 +53,7 @@ function showScreen(screenId) {
     const simpleModeToggle = document.querySelector('.simple-mode-toggle');
 
     if (headerElement && simpleModeToggle) {
-        if (screenId === 'selectTeamScreen' || screenId === 'teamRosterScreen') {
+        if (screenId === 'selectTeamScreen' || screenId === 'teamRosterScreen' || screenId === 'teamSettingsScreen') {
             headerElement.classList.remove('header-compact');
             headerElement.classList.add('header-full');
             simpleModeToggle.classList.add('hidden');

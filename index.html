@@ -261,8 +261,106 @@
             <button id="restoreGamesBtn">Restore Saved Games</button>
             <button id="clearGamesBtn">Clear Saved Games</button>
             <hr>
+            <button id="teamSettingsBtn">Team Settings</button>
         </footer>
     </section>
+
+    <!-- Team Settings Screen -->
+    <section id="teamSettingsScreen" style="display: none;">
+        <div class="settings-header">
+            <button id="backFromSettingsBtn" class="back-button">
+                <i class="fas fa-arrow-left"></i> Back
+            </button>
+            <h2>Team Settings</h2>
+        </div>
+        
+        <div class="settings-content">
+            <!-- Team Name Section -->
+            <div class="settings-section">
+                <h3>Team Name</h3>
+                <div class="team-name-edit">
+                    <span id="settingsTeamName">Sample Team</span>
+                    <button id="editTeamNameBtn" class="icon-button" title="Edit Team Name">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Members Section -->
+            <div class="settings-section">
+                <h3>Members (<span id="memberCount">0</span>)</h3>
+                <div id="membersList" class="members-list">
+                    <!-- Members will be populated dynamically -->
+                    <p class="loading-message">Loading members...</p>
+                </div>
+            </div>
+            
+            <!-- Active Invites Section -->
+            <div class="settings-section">
+                <h3>Active Invites</h3>
+                <div id="invitesList" class="invites-list">
+                    <!-- Invites will be populated dynamically -->
+                    <p class="loading-message">Loading invites...</p>
+                </div>
+                <div class="invite-buttons">
+                    <button id="createCoachInviteBtn" class="invite-btn coach-invite">
+                        <i class="fas fa-plus"></i> Invite Coach
+                    </button>
+                    <button id="createViewerInviteBtn" class="invite-btn viewer-invite">
+                        <i class="fas fa-plus"></i> Invite Viewer
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Join Team Section -->
+            <div class="settings-section">
+                <h3>Join a Team</h3>
+                <div class="join-team-form">
+                    <input type="text" id="joinCodeInput" placeholder="Enter 5-character code" maxlength="5" class="join-code-input">
+                    <button id="joinTeamBtn" class="join-btn">Join</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Invite Created Modal -->
+    <div id="inviteCreatedModal" class="modal" style="display: none;">
+        <div class="modal-content invite-modal">
+            <h3>Invite Created!</h3>
+            <p id="inviteRoleText">Share this code with your new coach:</p>
+            <div class="invite-code-display" id="inviteCodeDisplay">
+                <span id="inviteCodeText">XXXXX</span>
+                <button id="copyCodeBtn" class="icon-button" title="Copy code">
+                    <i class="fas fa-copy"></i>
+                </button>
+            </div>
+            <p class="invite-link-text">Or share this link:</p>
+            <div class="invite-link-display">
+                <input type="text" id="inviteLinkText" readonly>
+                <button id="copyLinkBtn" class="icon-button" title="Copy link">
+                    <i class="fas fa-copy"></i>
+                </button>
+            </div>
+            <p class="invite-expiry" id="inviteExpiry">Expires: January 22, 2025</p>
+            <button id="closeInviteModalBtn" class="primary-btn">Done</button>
+        </div>
+    </div>
+
+    <!-- Join Team Confirmation Modal -->
+    <div id="joinTeamModal" class="modal" style="display: none;">
+        <div class="modal-content join-modal">
+            <h3>Join Team?</h3>
+            <div class="join-team-preview">
+                <div class="join-team-name" id="joinTeamName">Sample Team</div>
+                <div class="join-team-role">as a <strong id="joinTeamRole">Coach</strong></div>
+                <div class="join-team-inviter">Invited by <span id="joinTeamInviter">Dave L.</span></div>
+            </div>
+            <div class="modal-buttons">
+                <button id="cancelJoinBtn" class="secondary-btn">Cancel</button>
+                <button id="confirmJoinBtn" class="primary-btn">Join Team</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Simple Mode Screen -->
     <section id="simpleModeScreen" style="display: none;" class="in-game-content">
@@ -602,6 +700,7 @@
     <script src="screens/navigation.js"></script>
     <script src="teams/rosterManagement.js"></script>
     <script src="teams/teamSelection.js"></script>
+    <script src="teams/teamSettings.js"></script>
     
     <!-- Game modules -->
     <script src="game/genderRatioDropdown.js"></script>
