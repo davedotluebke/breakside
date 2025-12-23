@@ -64,6 +64,11 @@ if ('serviceWorker' in navigator) {
 
 // Initialize authentication
 async function initializeApp() {
+    // Check if we're returning from Supabase auth (has hash params like #access_token)
+    const hasAuthCallback = window.location.hash.includes('access_token') || 
+                           window.location.hash.includes('refresh_token') ||
+                           window.location.hash.includes('error_description');
+    
     // Initialize auth module
     if (window.breakside?.auth?.initializeAuth) {
         try {
@@ -80,9 +85,27 @@ async function initializeApp() {
                 // User is logged in, show the app
                 console.log('User is authenticated, showing app');
                 hideAuthScreenAndShowApp();
+                
+                // Show PWA install prompt for newly authenticated users
+                if (hasAuthCallback || sessionStorage.getItem('breakside_just_signed_in')) {
+                    sessionStorage.removeItem('breakside_just_signed_in');
+                    // Clean up the URL hash
+                    if (hasAuthCallback) {
+                        history.replaceState(null, '', window.location.pathname);
+                    }
+                    showPwaInstallPrompt();
+                }
             } else {
-                // User is not logged in, show auth screen
-                console.log('User not authenticated, showing login screen');
+                // User is not logged in
+                // If not returning from auth callback, redirect to landing page
+                if (!hasAuthCallback) {
+                    console.log('User not authenticated, redirecting to landing page');
+                    window.location.href = '/landing/';
+                    return;
+                }
+                // If returning from auth but not logged in, something went wrong
+                // Show auth screen to let them try again
+                console.log('Auth callback but not authenticated, showing login');
                 if (window.breakside?.loginScreen?.showAuthScreen) {
                     window.breakside.loginScreen.showAuthScreen();
                 }
@@ -108,11 +131,12 @@ function handleAuthStateChange(event, session) {
     switch (event) {
         case 'SIGNED_IN':
             hideAuthScreenAndShowApp();
+            // Mark that user just signed in (for PWA prompt)
+            sessionStorage.setItem('breakside_just_signed_in', 'true');
             break;
         case 'SIGNED_OUT':
-            if (window.breakside?.loginScreen?.showAuthScreen) {
-                window.breakside.loginScreen.showAuthScreen();
-            }
+            // Redirect to landing page on sign out
+            window.location.href = '/landing/';
             break;
         case 'TOKEN_REFRESHED':
             // Token was refreshed, no action needed
@@ -129,6 +153,94 @@ function hideAuthScreenAndShowApp() {
     }
     showSelectTeamScreen(true);
 }
+
+/**
+ * Show PWA installation prompt
+ * Different messaging for desktop vs mobile
+ */
+function showPwaInstallPrompt() {
+    // Don't show if already dismissed or if running as installed PWA
+    if (localStorage.getItem('breakside_pwa_prompt_dismissed')) {
+        return;
+    }
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+        return; // Already running as PWA
+    }
+    
+    const modal = document.getElementById('pwaInstallModal');
+    if (!modal) return;
+    
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const messageEl = document.getElementById('pwaInstallMessage');
+    const instructionsLink = document.getElementById('pwaInstructionsLink');
+    const installBtn = document.getElementById('pwaInstallBtn');
+    
+    if (isMobile) {
+        // Mobile: Direct install prompt
+        if (isIOS) {
+            messageEl.innerHTML = `
+                <p>To install: tap <strong>Share</strong> <span style="font-size: 1.2em;">⬆️</span> then <strong>"Add to Home Screen"</strong>.</p>
+                <p>Open from your home screen and sign in again.</p>
+            `;
+            installBtn.style.display = 'none';
+            instructionsLink.style.display = 'none';
+        } else {
+            // Android - can use beforeinstallprompt if available
+            messageEl.innerHTML = `
+                <p>Add Breakside to your home screen for the best experience.</p>
+                <p>After installing, open it and sign in again.</p>
+            `;
+            if (window.deferredInstallPrompt) {
+                installBtn.style.display = 'inline-block';
+                installBtn.onclick = async () => {
+                    window.deferredInstallPrompt.prompt();
+                    const { outcome } = await window.deferredInstallPrompt.userChoice;
+                    if (outcome === 'accepted') {
+                        closePwaInstallModal(true);
+                    }
+                };
+            } else {
+                installBtn.style.display = 'none';
+                messageEl.innerHTML += `
+                    <p style="font-size: 0.9em; color: #666;">Tap your browser's menu (⋮) and select "Add to Home Screen" or "Install App".</p>
+                `;
+            }
+            instructionsLink.style.display = 'none';
+        }
+    } else {
+        // Desktop: Point them to mobile
+        messageEl.innerHTML = `
+            <p>Install Breakside on your phone for the best sideline experience.</p>
+            <p>Visit <strong>breakside.pro</strong> on your mobile device and sign in.</p>
+        `;
+        installBtn.style.display = 'none';
+        instructionsLink.style.display = 'inline-block';
+        instructionsLink.href = '/landing/#install';
+    }
+    
+    modal.style.display = 'flex';
+}
+
+/**
+ * Close PWA install modal
+ */
+function closePwaInstallModal(installed = false) {
+    const modal = document.getElementById('pwaInstallModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    if (!installed) {
+        // Remember they dismissed it (but allow showing again next session)
+        localStorage.setItem('breakside_pwa_prompt_dismissed', 'true');
+    }
+}
+
+// Capture the beforeinstallprompt event for Android
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    window.deferredInstallPrompt = e;
+});
 
 // Initialize the app when DOM is ready
 // Note: We delay this slightly to ensure all modules are loaded

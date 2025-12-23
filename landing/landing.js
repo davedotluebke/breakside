@@ -198,7 +198,7 @@ signupForm?.addEventListener('submit', async (e) => {
             email,
             password,
             options: {
-                emailRedirectTo: window.location.origin + '/landing/',
+                emailRedirectTo: window.location.origin + '/',
             }
         });
         
@@ -264,7 +264,7 @@ googleSignInBtn?.addEventListener('click', async () => {
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: window.location.origin + '/landing/',
+                redirectTo: window.location.origin + '/',
             }
         });
         
@@ -355,7 +355,8 @@ async function initializeAuth() {
             
             // Handle specific events
             if (event === 'SIGNED_IN') {
-                // Could redirect to app or show success message
+                // Redirect to the main app
+                window.location.href = '/';
             } else if (event === 'SIGNED_OUT') {
                 closeModal();
             } else if (event === 'PASSWORD_RECOVERY') {

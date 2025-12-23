@@ -2749,3 +2749,89 @@ body.next-line-mode #selectNextLineBtn {
     justify-content: center;
     margin-top: 15px;
 }
+
+/* =============================================================================
+   PWA Install Prompt Modal
+   ============================================================================= */
+
+.pwa-install-modal {
+    text-align: center;
+    max-width: 380px;
+}
+
+.pwa-install-icon {
+    font-size: 3rem;
+    margin-bottom: 10px;
+}
+
+.pwa-install-modal h3 {
+    margin: 0 0 15px 0;
+    color: #333;
+    font-size: 1.3rem;
+}
+
+.pwa-install-message {
+    color: #555;
+    line-height: 1.6;
+    margin-bottom: 20px;
+}
+
+.pwa-install-message p {
+    margin: 0 0 10px 0;
+}
+
+.pwa-install-message p:last-child {
+    margin-bottom: 0;
+}
+
+.pwa-install-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+
+.pwa-install-actions .primary-btn,
+.pwa-install-actions .btn-secondary,
+.pwa-install-actions .secondary-btn {
+    min-width: 200px;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    text-decoration: none;
+    text-align: center;
+}
+
+.pwa-install-actions .primary-btn {
+    background: linear-gradient(135deg, #e87722 0%, #d35400 100%);
+    color: white;
+    border: none;
+    font-weight: 600;
+}
+
+.pwa-install-actions .primary-btn:hover {
+    background: linear-gradient(135deg, #d35400 0%, #c0392b 100%);
+}
+
+.pwa-install-actions .btn-secondary {
+    background: #f0f0f0;
+    color: #333;
+    border: 1px solid #ddd;
+}
+
+.pwa-install-actions .btn-secondary:hover {
+    background: #e0e0e0;
+}
+
+.pwa-install-actions .secondary-btn {
+    background: transparent;
+    color: #666;
+    border: none;
+    font-size: 0.9rem;
+}
+
+.pwa-install-actions .secondary-btn:hover {
+    color: #333;
+    text-decoration: underline;
+}
