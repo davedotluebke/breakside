@@ -870,13 +870,17 @@ async def get_invite_info(code: str):
             detail=error_messages.get(reason, "This invite is no longer valid")
         )
     
-    team = get_team(invite["teamId"])
-    if not team:
+    try:
+        team = get_team(invite["teamId"])
+    except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Team not found")
     
     # Get inviter's display name
-    inviter = get_user(invite["createdBy"])
-    inviter_name = inviter.get("displayName", "A coach") if inviter else "A coach"
+    try:
+        inviter = get_user(invite["createdBy"])
+        inviter_name = inviter.get("displayName", "A coach") if inviter else "A coach"
+    except (FileNotFoundError, KeyError):
+        inviter_name = "A coach"
     
     return {
         "teamName": team["name"],
