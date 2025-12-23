@@ -1,0 +1,14 @@
+{
+  "id": "inv_2ef39e2ff613",
+  "code": "5TLHX",
+  "teamId": "Test-Team-1234",
+  "role": "coach",
+  "createdBy": "test-user-123",
+  "createdAt": "2025-12-23T02:09:07.096505Z",
+  "expiresAt": "2025-12-30T02:09:07.096505Z",
+  "maxUses": 1,
+  "uses": 0,
+  "usedBy": [],
+  "revokedAt": null,
+  "revokedBy": null
+}

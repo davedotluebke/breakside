@@ -1,0 +1,14 @@
+{
+  "id": "inv_d63a868d4716",
+  "code": "SHCWQ",
+  "teamId": "Test-Warriors-7fun",
+  "role": "coach",
+  "createdBy": "test-user-123",
+  "createdAt": "2025-12-23T02:13:10.347532Z",
+  "expiresAt": "2025-12-30T02:13:10.347532Z",
+  "maxUses": 1,
+  "uses": 0,
+  "usedBy": [],
+  "revokedAt": null,
+  "revokedBy": null
+}

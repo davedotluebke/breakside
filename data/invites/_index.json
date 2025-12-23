@@ -1,4 +1,14 @@
 {
-  "byCode": {},
-  "byTeam": {}
+  "byCode": {
+    "5TLHX": "inv_2ef39e2ff613",
+    "SHCWQ": "inv_d63a868d4716"
+  },
+  "byTeam": {
+    "Test-Team-1234": [
+      "inv_2ef39e2ff613"
+    ],
+    "Test-Warriors-7fun": [
+      "inv_d63a868d4716"
+    ]
+  }
 }
