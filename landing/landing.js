@@ -330,7 +330,7 @@ function updateUIForUser(user) {
         
         // Update nav button
         if (loginBtn) {
-            loginBtn.textContent = 'Sign In';
+            loginBtn.textContent = 'Sign In / Sign Up';
         }
     }
 }
