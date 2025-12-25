@@ -466,6 +466,20 @@ var UNKNOWN_PLAYER_OBJ = new Player(UNKNOWN_PLAYER);
 initializeTeams();
 
 /**
+ * Clear all teams data from memory.
+ * Called on sign out to prevent data leaking between accounts.
+ */
+function clearAllTeamsData() {
+    console.log('Clearing in-memory teams data...');
+    teams = [];
+    currentTeam = null;
+    sampleTeam = null;
+}
+
+// Expose clearAllTeamsData globally for auth module
+window.clearAllTeamsData = clearAllTeamsData;
+
+/**
  * Create a sample team with predefined players
  * Used for initial setup when no teams exist
  */
