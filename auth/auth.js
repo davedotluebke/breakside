@@ -473,17 +473,26 @@ async function signIn(email, password) {
  * Sign up with email and password.
  * @param {string} email
  * @param {string} password
+ * @param {string} [name] - Optional display name
  * @returns {Promise<{user: object|null, error: object|null}>}
  */
-async function signUp(email, password) {
+async function signUp(email, password, name) {
     if (!supabaseClient) {
         return { user: null, error: { message: 'Auth not initialized' } };
     }
     
     try {
+        const options = {};
+        
+        // Include name in user metadata if provided
+        if (name) {
+            options.data = { full_name: name };
+        }
+        
         const { data, error } = await supabaseClient.auth.signUp({
             email,
             password,
+            options,
         });
         
         if (error) {

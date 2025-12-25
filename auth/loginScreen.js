@@ -182,9 +182,16 @@ async function handleSignup(e) {
     clearAuthError();
     clearAuthSuccess();
     
+    const name = document.getElementById('signupName')?.value?.trim();
     const email = document.getElementById('signupEmail').value;
     const password = document.getElementById('signupPassword').value;
     const confirmPassword = document.getElementById('signupConfirmPassword').value;
+    
+    // Validate name is provided
+    if (!name) {
+        showAuthError('Please enter your name');
+        return;
+    }
     
     // Validate passwords match
     if (password !== confirmPassword) {
@@ -201,7 +208,7 @@ async function handleSignup(e) {
     setAuthLoading(true);
     
     try {
-        const { user, error } = await window.breakside.auth.signUp(email, password);
+        const { user, error } = await window.breakside.auth.signUp(email, password, name);
         
         if (error) {
             showAuthError(error.message || 'Failed to create account');
