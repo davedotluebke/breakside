@@ -16,7 +16,7 @@ const API_BASE = window.location.hostname === 'localhost'
     : window.location.origin;
 
 // Initialize Supabase client
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // =============================================================================
 // State
@@ -107,7 +107,7 @@ function formatDate(isoString) {
 }
 
 async function getAuthHeaders() {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await supabaseClient.auth.getSession();
     if (!session?.access_token) {
         throw new Error('Not authenticated');
     }
@@ -299,7 +299,7 @@ signinForm?.addEventListener('submit', async (e) => {
     submitBtn.disabled = true;
     
     try {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
             email,
             password,
         });
@@ -343,7 +343,7 @@ signupForm?.addEventListener('submit', async (e) => {
     submitBtn.disabled = true;
     
     try {
-        const { data, error } = await supabase.auth.signUp({
+        const { data, error } = await supabaseClient.auth.signUp({
             email,
             password,
             options: {
@@ -385,7 +385,7 @@ googleSignInBtn?.addEventListener('click', async () => {
             localStorage.setItem('pendingInviteCode', inviteCode);
         }
         
-        const { error } = await supabase.auth.signInWithOAuth({
+        const { error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
             options: {
                 redirectTo: window.location.href,
@@ -412,7 +412,7 @@ joinTeamBtn?.addEventListener('click', redeemInvite);
 
 switchAccountBtn?.addEventListener('click', async () => {
     try {
-        await supabase.auth.signOut();
+        await supabaseClient.auth.signOut();
         updateUIForUser(null);
     } catch (error) {
         console.error('Sign out error:', error);
@@ -445,7 +445,7 @@ async function initialize() {
         displayInvitePreview(inviteInfo);
         
         // Check if user is already logged in
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await supabaseClient.auth.getSession();
         if (session?.user) {
             updateUIForUser(session.user);
             
@@ -456,7 +456,7 @@ async function initialize() {
         }
         
         // Listen for auth changes
-        supabase.auth.onAuthStateChange((event, session) => {
+        supabaseClient.auth.onAuthStateChange((event, session) => {
             console.log('Auth state changed:', event);
             if (session?.user) {
                 updateUIForUser(session.user);
