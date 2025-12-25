@@ -11,7 +11,7 @@ const SUPABASE_URL = 'https://mfuziqztsfqaqnnxjcrr.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mdXppcXp0c2ZxYXFubnhqY3JyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU3NTkzMDYsImV4cCI6MjA4MTMzNTMwNn0.ofe60cGBIC82rCoynvngiNEnXIKOyhpF_utezC8KG0w';
 
 // Initialize Supabase client
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // =============================================================================
 // DOM Elements
@@ -149,7 +149,7 @@ signinForm?.addEventListener('submit', async (e) => {
     submitBtn.disabled = true;
     
     try {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
             email,
             password,
         });
@@ -194,7 +194,7 @@ signupForm?.addEventListener('submit', async (e) => {
     submitBtn.disabled = true;
     
     try {
-        const { data, error } = await supabase.auth.signUp({
+        const { data, error } = await supabaseClient.auth.signUp({
             email,
             password,
             options: {
@@ -238,7 +238,7 @@ resetForm?.addEventListener('submit', async (e) => {
     submitBtn.disabled = true;
     
     try {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
             redirectTo: window.location.origin + '/landing/?reset=true',
         });
         
@@ -261,7 +261,7 @@ resetForm?.addEventListener('submit', async (e) => {
 
 googleSignInBtn?.addEventListener('click', async () => {
     try {
-        const { error } = await supabase.auth.signInWithOAuth({
+        const { error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
             options: {
                 redirectTo: window.location.origin + '/',
@@ -282,7 +282,7 @@ googleSignInBtn?.addEventListener('click', async () => {
 
 signOutBtn?.addEventListener('click', async () => {
     try {
-        const { error } = await supabase.auth.signOut();
+        const { error } = await supabaseClient.auth.signOut();
         if (error) throw error;
         
         updateUIForUser(null);
@@ -342,14 +342,14 @@ function updateUIForUser(user) {
 async function initializeAuth() {
     try {
         // Get current session
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await supabaseClient.auth.getSession();
         
         if (session?.user) {
             updateUIForUser(session.user);
         }
         
         // Listen for auth changes
-        supabase.auth.onAuthStateChange((event, session) => {
+        supabaseClient.auth.onAuthStateChange((event, session) => {
             console.log('Auth state changed:', event);
             updateUIForUser(session?.user || null);
             
