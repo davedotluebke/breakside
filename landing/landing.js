@@ -178,9 +178,16 @@ signupForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     clearAuthMessage();
     
+    const name = document.getElementById('signupName').value.trim();
     const email = document.getElementById('signupEmail').value;
     const password = document.getElementById('signupPassword').value;
     const passwordConfirm = document.getElementById('signupPasswordConfirm').value;
+    
+    // Validate name provided
+    if (!name) {
+        showAuthMessage('Please enter your name');
+        return;
+    }
     
     // Validate passwords match
     if (password !== passwordConfirm) {
@@ -199,6 +206,9 @@ signupForm?.addEventListener('submit', async (e) => {
             password,
             options: {
                 emailRedirectTo: window.location.origin + '/',
+                data: {
+                    full_name: name
+                }
             }
         });
         
