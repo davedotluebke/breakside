@@ -206,6 +206,11 @@ signupForm?.addEventListener('submit', async (e) => {
         
         if (data.user && !data.user.confirmed_at) {
             showAuthMessage('Check your email to confirm your account!', 'success');
+            // After 10 seconds, switch back to sign-in tab
+            setTimeout(() => {
+                switchAuthTab('signin');
+                clearAuthMessage();
+            }, 10000);
         } else {
             showAuthMessage('Account created successfully!', 'success');
             setTimeout(() => {
