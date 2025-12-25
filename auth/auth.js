@@ -220,6 +220,35 @@ async function getAccessToken() {
 // =============================================================================
 
 /**
+ * Clear all locally stored game/team data.
+ * Called on sign out to prevent data leaking between accounts.
+ */
+function clearLocalData() {
+    console.log('Clearing local data on sign out...');
+    
+    // Clear main teams/games data
+    localStorage.removeItem('teamsData');
+    
+    // Clear sync-related data (also cleared by clearSyncData, but ensure it's done)
+    localStorage.removeItem('ultistats_sync_queue');
+    localStorage.removeItem('ultistats_local_players');
+    localStorage.removeItem('ultistats_local_teams');
+    localStorage.removeItem('ultistats_local_games');
+    
+    // Clear any in-memory state in the store module
+    if (typeof window.clearAllTeamsData === 'function') {
+        window.clearAllTeamsData();
+    }
+    
+    // Clear sync module's in-memory caches
+    if (typeof window.clearSyncData === 'function') {
+        window.clearSyncData();
+    }
+    
+    console.log('Local data cleared');
+}
+
+/**
  * Sign out the current user.
  */
 async function signOut() {
@@ -227,6 +256,9 @@ async function signOut() {
     if (typeof window.stopAutoSync === 'function') {
         window.stopAutoSync();
     }
+    
+    // Clear local data to prevent leaking between accounts
+    clearLocalData();
     
     if (!supabaseClient) {
         currentSession = null;

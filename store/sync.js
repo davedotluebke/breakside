@@ -1355,8 +1355,37 @@ function checkIsOnline() {
 }
 
 // =============================================================================
+// Clear Local Sync Data (for sign out)
+// =============================================================================
+
+/**
+ * Clear all local sync data from memory and storage.
+ * Called on sign out to prevent data leaking between accounts.
+ */
+function clearSyncData() {
+    console.log('Clearing sync data...');
+    
+    // Clear in-memory caches
+    syncQueue = [];
+    localPlayers = {};
+    localTeams = {};
+    localGames = {};
+    
+    // Clear from localStorage
+    localStorage.removeItem(SYNC_QUEUE_KEY);
+    localStorage.removeItem(LOCAL_PLAYERS_KEY);
+    localStorage.removeItem(LOCAL_TEAMS_KEY);
+    localStorage.removeItem(LOCAL_GAMES_KEY);
+    
+    console.log('Sync data cleared');
+}
+
+// =============================================================================
 // Exports
 // =============================================================================
+
+// Clear data (for sign out)
+window.clearSyncData = clearSyncData;
 
 // Game sync (existing)
 window.syncGameToCloud = syncGameToCloud;
