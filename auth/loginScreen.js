@@ -213,7 +213,7 @@ async function handleSignup(e) {
         if (error) {
             showAuthError(error.message || 'Failed to create account');
         } else if (user) {
-            showAuthSuccess('Account created! Please check your email to verify your account.');
+            showAuthSuccess('Account created! Check your email for a message from "Supabase Auth" and click the link to activate your account.');
             // Clear the form
             document.getElementById('signupForm').reset();
         }

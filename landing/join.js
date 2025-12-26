@@ -356,7 +356,7 @@ signupForm?.addEventListener('submit', async (e) => {
         
         if (data.user && !data.user.confirmed_at) {
             // Email confirmation required
-            showAuthMessage('Check your email to confirm your account, then return here to join the team.', 'success');
+            showAuthMessage('Check your email for a message from "Supabase Auth" and click the link, then return here to join the team.', 'success');
             submitBtn.textContent = originalText;
             submitBtn.disabled = false;
         } else {

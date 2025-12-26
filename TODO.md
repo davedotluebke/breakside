@@ -117,6 +117,7 @@ For deployment info and technical architecture, see **[ARCHITECTURE.md](ARCHITEC
 
 These are deferred until multi-user basics are stable:
 
+- [ ] User profile settings (update display name)
 - [ ] Google/Apple OAuth login
 - [ ] Player ↔ User account linking
 - [ ] Player self-service (edit own stats, profile photo)
