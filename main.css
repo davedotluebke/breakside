@@ -1755,6 +1755,26 @@ header {
     max-width: none; /* Ensure the logo can expand to its natural ratio */
 }
 
+/* Version overlay - shown when tapping logo */
+.version-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.85);
+    color: #4ade80;
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 4px;
+    z-index: 10;
+    padding: 4px 8px;
+    white-space: nowrap;
+}
 
 /* Title styling with transition */
 header h1 {
