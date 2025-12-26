@@ -215,7 +215,7 @@ signupForm?.addEventListener('submit', async (e) => {
         if (error) throw error;
         
         if (data.user && !data.user.confirmed_at) {
-            showAuthMessage('Check your email to confirm your account!', 'success');
+            showAuthMessage('Check your email for a message from "Supabase Auth" and click the link to activate your account.', 'success');
             // After 10 seconds, switch back to sign-in tab
             setTimeout(() => {
                 switchAuthTab('signin');
