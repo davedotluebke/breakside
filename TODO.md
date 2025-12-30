@@ -77,20 +77,33 @@ See [PHASE3_TEAM_MGMT_PLAN.md](PHASE3_TEAM_MGMT_PLAN.md) for full implementation
 
 ---
 
+### ✅ Phase 4: Game Controller State (Complete)
+
+See [PHASE4_CONTROLLER_PLAN.md](PHASE4_CONTROLLER_PLAN.md) for full implementation details.
+
+**Backend:**
+- [x] In-memory controller state storage (`controller_storage.py`)
+  - Thread-safe state management
+  - Auto-expire stale claims (30 seconds without ping)
+  - Auto-approve handoffs (5-second timeout)
+- [x] API: `GET /api/games/{game_id}/controller` - Controller status
+- [x] API: `POST /api/games/{game_id}/claim-active` - Request Active Coach
+- [x] API: `POST /api/games/{game_id}/claim-line` - Request Line Coach
+- [x] API: `POST /api/games/{game_id}/release` - Release role
+- [x] API: `POST /api/games/{game_id}/handoff-response` - Accept/deny
+- [x] API: `POST /api/games/{game_id}/ping` - Keep role alive
+- [x] Comprehensive test suite (22 tests)
+
+**Frontend:**
+- [x] Controller state module (`game/controllerState.js`)
+  - Role claiming and handoffs
+  - Polling with adaptive intervals (2s active / 5s idle)
+  - Permission checks (`canEditPlayByPlay`, `canEditLineup`)
+  - UI stubs for Phase 6
+
+---
+
 ## Next Up
-
-### 🎮 Phase 4: Game Controller State
-
-- [ ] Data model: Add `controllerState` to game object
-  - `activeCoach`: userId, claimedAt, lastPing
-  - `lineCoach`: userId, claimedAt, lastPing
-  - `pendingHandoff`: role, requesterId, requestedAt, expiresAt
-- [ ] API: `GET /api/games/{game_id}/status` - Controller status
-- [ ] API: `POST /api/games/{game_id}/claim-active` - Request Active Coach
-- [ ] API: `POST /api/games/{game_id}/claim-line` - Request Line Coach
-- [ ] API: `POST /api/games/{game_id}/release` - Release role
-- [ ] API: `POST /api/games/{game_id}/handoff-response` - Accept/deny
-- [ ] Auto-expire stale claims (no ping in 30 seconds)
 
 ### 🔄 Phase 5: Multi-User Polling
 

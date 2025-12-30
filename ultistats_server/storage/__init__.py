@@ -97,6 +97,17 @@ from .invite_storage import (
     rebuild_invite_index,
 )
 
+from .controller_storage import (
+    get_controller_state,
+    claim_role,
+    request_handoff,
+    respond_to_handoff,
+    release_role,
+    ping_role,
+    clear_game_state,
+    get_active_games,
+)
+
 __all__ = [
     # Game storage
     "save_game_version",
@@ -178,4 +189,13 @@ __all__ = [
     "revoke_invite",
     "delete_invite",
     "rebuild_invite_index",
+    # Controller storage (in-memory)
+    "get_controller_state",
+    "claim_role",
+    "request_handoff",
+    "respond_to_handoff",
+    "release_role",
+    "ping_role",
+    "clear_game_state",
+    "get_active_games",
 ]

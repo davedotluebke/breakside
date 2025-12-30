@@ -72,6 +72,14 @@ try:
         delete_membership,
         get_user_team_membership,
         get_team_coaches,
+        # Controller storage (in-memory)
+        get_controller_state,
+        claim_role,
+        request_handoff,
+        respond_to_handoff,
+        release_role,
+        ping_role,
+        clear_game_state,
     )
     from auth import (
         get_current_user,
@@ -147,6 +155,14 @@ except ImportError:
         delete_membership,
         get_user_team_membership,
         get_team_coaches,
+        # Controller storage (in-memory)
+        get_controller_state,
+        claim_role,
+        request_handoff,
+        respond_to_handoff,
+        release_role,
+        ping_role,
+        clear_game_state,
     )
     from ultistats_server.auth import (
         get_current_user,
@@ -656,6 +672,223 @@ async def restore_version(game_id: str, timestamp: str, user: dict = Depends(req
         return {"status": "restored", "game_id": game_id, "timestamp": timestamp}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Version {timestamp} not found")
+
+
+# =============================================================================
+# Game Controller Endpoints (Active Coach / Line Coach)
+# =============================================================================
+
+@app.get("/api/games/{game_id}/controller")
+async def get_controller_status(
+    game_id: str,
+    user: dict = Depends(require_game_team_access)
+):
+    """
+    Get current controller state for a game.
+    
+    Returns active coach, line coach, and any pending handoff.
+    Cleans up stale claims and expired handoffs automatically.
+    
+    Requires: Coach or Viewer access to the game's team.
+    """
+    if not game_exists(game_id):
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    state = get_controller_state(game_id)
+    
+    # Determine user's role
+    my_role = None
+    if state.get("activeCoach") and state["activeCoach"]["userId"] == user["id"]:
+        my_role = "activeCoach"
+    elif state.get("lineCoach") and state["lineCoach"]["userId"] == user["id"]:
+        my_role = "lineCoach"
+    
+    # Check if there's a pending handoff for this user
+    has_pending_for_me = (
+        state.get("pendingHandoff") and 
+        state["pendingHandoff"]["currentHolderId"] == user["id"]
+    )
+    
+    return {
+        "state": state,
+        "myRole": my_role,
+        "hasPendingHandoffForMe": has_pending_for_me,
+        "serverTime": datetime.now().isoformat()
+    }
+
+
+@app.post("/api/games/{game_id}/claim-active")
+async def claim_active_coach(
+    game_id: str,
+    user: dict = Depends(require_game_team_coach)
+):
+    """
+    Claim the Active Coach role.
+    
+    If role is vacant or stale, claim immediately.
+    If role is occupied, creates a handoff request (5-second timeout).
+    
+    Requires: Coach access to the game's team.
+    """
+    if not game_exists(game_id):
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    # Get user's display name
+    local_user = get_user(user["id"])
+    display_name = local_user.get("displayName") if local_user else user.get("email", "Unknown")
+    
+    result = claim_role(game_id, "activeCoach", user["id"], display_name)
+    
+    if result["success"]:
+        return {"status": "claimed", "role": "activeCoach", **result}
+    
+    # Role is occupied - request handoff
+    handoff_result = request_handoff(game_id, "activeCoach", user["id"], display_name)
+    
+    if handoff_result["success"]:
+        return {"status": "handoff_requested", "role": "activeCoach", **handoff_result}
+    
+    raise HTTPException(
+        status_code=409, 
+        detail=handoff_result.get("reason", "Cannot claim role")
+    )
+
+
+@app.post("/api/games/{game_id}/claim-line")
+async def claim_line_coach(
+    game_id: str,
+    user: dict = Depends(require_game_team_coach)
+):
+    """
+    Claim the Line Coach role.
+    
+    If role is vacant or stale, claim immediately.
+    If role is occupied, creates a handoff request (5-second timeout).
+    
+    Requires: Coach access to the game's team.
+    """
+    if not game_exists(game_id):
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    local_user = get_user(user["id"])
+    display_name = local_user.get("displayName") if local_user else user.get("email", "Unknown")
+    
+    result = claim_role(game_id, "lineCoach", user["id"], display_name)
+    
+    if result["success"]:
+        return {"status": "claimed", "role": "lineCoach", **result}
+    
+    # Role is occupied - request handoff
+    handoff_result = request_handoff(game_id, "lineCoach", user["id"], display_name)
+    
+    if handoff_result["success"]:
+        return {"status": "handoff_requested", "role": "lineCoach", **handoff_result}
+    
+    raise HTTPException(
+        status_code=409, 
+        detail=handoff_result.get("reason", "Cannot claim role")
+    )
+
+
+@app.post("/api/games/{game_id}/release")
+async def release_controller_role(
+    game_id: str,
+    role: Literal["activeCoach", "lineCoach"] = Body(..., embed=True),
+    user: dict = Depends(require_game_team_coach)
+):
+    """
+    Release a controller role.
+    
+    Requires: Coach access to the game's team and currently holding the role.
+    """
+    if not game_exists(game_id):
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    result = release_role(game_id, role, user["id"])
+    
+    if result["success"]:
+        return {"status": "released", "role": role, **result}
+    
+    raise HTTPException(
+        status_code=400, 
+        detail=result.get("reason", "Cannot release role")
+    )
+
+
+@app.post("/api/games/{game_id}/handoff-response")
+async def respond_handoff(
+    game_id: str,
+    accept: bool = Body(..., embed=True),
+    user: dict = Depends(require_game_team_coach)
+):
+    """
+    Accept or deny a pending handoff request.
+    
+    Only the current role holder can respond.
+    If not responded within 5 seconds, the handoff auto-approves.
+    
+    Requires: Coach access and being the current holder of the requested role.
+    """
+    if not game_exists(game_id):
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    result = respond_to_handoff(game_id, user["id"], accept)
+    
+    if result["success"]:
+        action = "accepted" if accept else "denied"
+        return {"status": action, **result}
+    
+    raise HTTPException(
+        status_code=400, 
+        detail=result.get("reason", "Cannot respond to handoff")
+    )
+
+
+@app.post("/api/games/{game_id}/ping")
+async def ping_controller(
+    game_id: str,
+    user: dict = Depends(require_game_team_coach)
+):
+    """
+    Ping to keep controller role(s) alive.
+    
+    Should be called every 2-5 seconds while holding a role.
+    Roles expire after 30 seconds without a ping.
+    
+    Also returns current controller state and pending handoffs.
+    
+    Requires: Coach access to the game's team.
+    """
+    if not game_exists(game_id):
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    state = get_controller_state(game_id)
+    
+    # Ping whichever role(s) the user holds
+    pinged = []
+    if state.get("activeCoach") and state["activeCoach"]["userId"] == user["id"]:
+        ping_role(game_id, "activeCoach", user["id"])
+        pinged.append("activeCoach")
+    if state.get("lineCoach") and state["lineCoach"]["userId"] == user["id"]:
+        ping_role(game_id, "lineCoach", user["id"])
+        pinged.append("lineCoach")
+    
+    # Refresh state after pinging
+    state = get_controller_state(game_id)
+    
+    # Check for pending handoff for this user
+    has_pending_for_me = (
+        state.get("pendingHandoff") and 
+        state["pendingHandoff"]["currentHolderId"] == user["id"]
+    )
+    
+    return {
+        "status": "ok",
+        "pinged": pinged,
+        "controllerState": state,
+        "hasPendingHandoffForMe": has_pending_for_me,
+        "serverTime": datetime.now().isoformat()
+    }
 
 
 # =============================================================================
