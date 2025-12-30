@@ -877,6 +877,7 @@ These are explicitly deferred from Phase 3:
 - [ ] Team admin role (separate from coach)
 - [ ] Invite analytics dashboard
 - [ ] Player ↔ User account linking
+- [ ] Rate-limited invite redemption (see 8.1 above)
 
 ---
 
