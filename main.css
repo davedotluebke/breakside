@@ -1763,8 +1763,8 @@ header {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.9);
-    color: rgba(255, 255, 255, 0.9);
+    background: #EB8232;
+    color: #fff;
     font-size: 0.7rem;
     font-weight: 500;
     border-radius: 4px;
