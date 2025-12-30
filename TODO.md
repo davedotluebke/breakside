@@ -23,10 +23,6 @@ For deployment info and technical architecture, see **[ARCHITECTURE.md](ARCHITEC
 - [x] Landing page with Supabase auth modal
 - [x] Server routes for `/app/`, `/landing/`, `/view/{hash}`
 
----
-
-## Next Up
-
 ### ✅ Phase 2: Backend Auth Enforcement (Complete)
 
 - [x] Deploy auth-enabled API to EC2
@@ -44,19 +40,44 @@ For deployment info and technical architecture, see **[ARCHITECTURE.md](ARCHITEC
 - [x] Auto-sync polling between browsers (10-second interval)
 - [x] Player/Team attribute changes sync across devices
 
-### 📋 Phase 3: Team Membership Management
+### ✅ Phase 3: Team Membership Management (Complete)
 
-- [ ] API: `POST /api/teams/{team_id}/invite` - Generate invite code
-  - Coach invites: single-use, 7-day expiry
-  - Viewer invites: multi-use, permanent
-- [ ] API: `POST /api/invites/{code}/redeem` - Redeem invite code
-- [ ] API: `GET /api/teams/{team_id}/members` - List team members
-- [ ] API: `DELETE /api/teams/{team_id}/members/{user_id}` - Remove member
-- [ ] API: `DELETE /api/invites/{code}` - Revoke invite
-- [ ] Storage: Invite codes with expiry and usage tracking
-- [ ] PWA: Team settings screen showing members
-- [ ] PWA: Generate/display invite QR code and URL
-- [ ] PWA: "Join Team" flow for new users
+See [PHASE3_TEAM_MGMT_PLAN.md](PHASE3_TEAM_MGMT_PLAN.md) for full implementation details.
+
+**Backend:**
+- [x] Storage: `invite_storage.py` with 5-char human-friendly codes
+- [x] API: `POST /api/teams/{team_id}/invites` - Create invite
+  - Coach invites: single-use, 7-day default expiry
+  - Viewer invites: multi-use, 30-day default expiry
+- [x] API: `GET /api/teams/{team_id}/invites` - List team invites
+- [x] API: `GET /api/invites/{code}/info` - Public invite preview
+- [x] API: `POST /api/invites/{code}/redeem` - Redeem invite code
+- [x] API: `DELETE /api/invites/{invite_id}` - Revoke invite
+- [x] API: `GET /api/teams/{team_id}/members` - List team members
+- [x] API: `DELETE /api/teams/{team_id}/members/{user_id}` - Remove member
+- [x] Last-coach protection (cannot remove only coach)
+
+**Landing Page:**
+- [x] `/join/{code}` route with team preview
+- [x] Sign in / Sign up integration
+- [x] Automatic invite redemption after auth
+- [x] Redirect to PWA after joining
+
+**PWA:**
+- [x] Team Settings screen (`teams/teamSettings.js`)
+- [x] Member list with remove functionality
+- [x] Invite creation for coach/viewer roles
+- [x] Invite list with copy link and revoke
+- [x] "Join a Team" manual code entry
+- [x] Name field in signup forms (stored as displayName)
+- [x] Clear local data on sign out (prevents data leaking between accounts)
+- [x] PWA install prompt after first authentication
+- [x] Redirect unauthenticated users to landing page
+- [x] Version display on logo tap
+
+---
+
+## Next Up
 
 ### 🎮 Phase 4: Game Controller State
 
@@ -117,15 +138,33 @@ For deployment info and technical architecture, see **[ARCHITECTURE.md](ARCHITEC
 
 These are deferred until multi-user basics are stable:
 
+### User & Auth
 - [ ] User profile settings (update display name)
 - [ ] Google/Apple OAuth login
+- [ ] Custom SMTP for Supabase emails (branded sender)
+
+### Team Management
+- [ ] QR code generation for invites
+- [ ] Role change (promote viewer to coach)
+- [ ] Invite via email (send directly from app)
+- [ ] Bulk invite (upload CSV of emails)
+- [ ] Team admin role (separate from coach)
+- [ ] Invite analytics dashboard
+
+### Player Features
 - [ ] Player ↔ User account linking
 - [ ] Player self-service (edit own stats, profile photo)
 - [ ] O-line / D-line presets with auto-promotion
-- [ ] "Publish" games to make them searchable/discoverable
+
+### Infrastructure
 - [ ] WebSocket upgrade for real-time sync
-- [ ] Git-based backup and version history
 - [ ] Rate limiting and abuse prevention
+- [ ] "Publish" games to make them searchable/discoverable
+- [ ] Git-based backup and version history
+
+### UI/UX
+- [ ] Comprehensive UI redesign
+- [ ] Dark mode support
 
 ---
 
@@ -147,19 +186,12 @@ pytest test_auth.py -v
 ### Deploy Commands
 
 ```bash
-# Deploy PWA to S3
-aws s3 sync . s3://breakside.pro/ \
-  --exclude ".git/*" \
-  --exclude "ultistats_server/*" \
-  --exclude "data/*" \
-  --exclude "*.pyc" \
-  --exclude "__pycache__/*" \
-  --exclude ".DS_Store" \
-  --exclude "*.m4a" \
-  --delete
+# Deploy PWA to S3 (via GitHub Actions)
+git push origin main
+# GitHub Actions syncs to S3 and invalidates CloudFront
 
-# Invalidate CloudFront cache
-aws cloudfront create-invalidation --distribution-id E6M9KCXIU9CKD --paths "/*"
+# Force PWA cache refresh
+# Edit service-worker.js: increment cacheName (e.g., 'v8' → 'v9')
 
 # Deploy API to EC2
 ssh ec2-user@3.212.138.180
@@ -171,3 +203,4 @@ cd /opt/breakside && sudo git pull && sudo systemctl restart breakside
 - Project: https://mfuziqztsfqaqnnxjcrr.supabase.co
 - Auth settings: Dashboard → Authentication → Settings
 - User management: Dashboard → Authentication → Users
+- **Important:** Set Site URL to `https://www.breakside.pro` for email redirects
