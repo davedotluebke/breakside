@@ -446,16 +446,57 @@ function getControllerState() {
 
 
 // =============================================================================
-// UI Helpers (stubs - to be implemented in Phase 6)
+// UI Helpers (Phase 6 Implementation)
 // =============================================================================
+
+// Handoff countdown state
+let handoffCountdownInterval = null;
+let handoffCountdownSeconds = 5;
 
 /**
  * Show a toast notification for controller events
  * @param {string} message - Message to display
- * @param {string} type - 'success', 'info', 'error'
+ * @param {string} type - 'success', 'info', 'warning', 'error'
+ * @param {number} duration - Duration in ms (default 4000)
  */
-function showControllerToast(message, type = 'info') {
-    // Use existing logEvent for now, will be replaced with proper toast in Phase 6
+function showControllerToast(message, type = 'info', duration = 4000) {
+    const container = document.getElementById('toastContainer');
+    if (!container) {
+        console.log(`🎮 Controller [${type}]: ${message}`);
+        return;
+    }
+    
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    
+    // Icon based on type
+    const icons = {
+        success: 'fa-check-circle',
+        info: 'fa-info-circle',
+        warning: 'fa-exclamation-triangle',
+        error: 'fa-times-circle'
+    };
+    
+    toast.innerHTML = `
+        <i class="fas ${icons[type] || icons.info}"></i>
+        <span class="toast-message">${message}</span>
+        <button class="toast-close" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    
+    container.appendChild(toast);
+    
+    // Auto-remove after duration
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.classList.add('toast-hiding');
+            setTimeout(() => toast.remove(), 300);
+        }
+    }, duration);
+    
+    // Also log to event log if available
     if (typeof logEvent === 'function') {
         logEvent(`🎮 ${message}`);
     }
@@ -463,42 +504,277 @@ function showControllerToast(message, type = 'info') {
 }
 
 /**
- * Update controller UI elements
- * Stub - to be implemented in Phase 6
+ * Update controller UI elements (role buttons in header)
  * @param {object} state - Current controller state
  * @param {object} previousState - Previous controller state
  */
 function updateControllerUI(state, previousState) {
-    // Will be implemented in Phase 6
-    // For now, just log state changes
+    const roleButtonsContainer = document.getElementById('controllerRoleButtons');
+    const activeCoachBtn = document.getElementById('activeCoachBtn');
+    const lineCoachBtn = document.getElementById('lineCoachBtn');
+    const activeCoachHolder = document.getElementById('activeCoachHolder');
+    const lineCoachHolder = document.getElementById('lineCoachHolder');
+    
+    if (!roleButtonsContainer || !activeCoachBtn || !lineCoachBtn) {
+        return;
+    }
+    
+    const myUserId = getCurrentUserId();
+    
+    // Update Active Coach button
+    updateRoleButton(
+        activeCoachBtn, 
+        activeCoachHolder, 
+        state.activeCoach, 
+        myUserId, 
+        state.myRole === 'activeCoach',
+        state.pendingHandoff?.role === 'activeCoach' && state.pendingHandoff?.requesterId === myUserId
+    );
+    
+    // Update Line Coach button
+    updateRoleButton(
+        lineCoachBtn, 
+        lineCoachHolder, 
+        state.lineCoach, 
+        myUserId, 
+        state.myRole === 'lineCoach',
+        state.pendingHandoff?.role === 'lineCoach' && state.pendingHandoff?.requesterId === myUserId
+    );
+    
+    // Log state changes
     if (state.myRole !== previousState?.myRole) {
         console.log(`🎮 Role changed: ${previousState?.myRole || 'none'} → ${state.myRole || 'none'}`);
     }
 }
 
 /**
- * Show handoff request UI
- * Stub - to be implemented in Phase 6
+ * Update a single role button's appearance
+ * @param {HTMLElement} button - The button element
+ * @param {HTMLElement} holderSpan - The span showing who holds the role
+ * @param {object|null} roleHolder - Current holder info { userId, displayName }
+ * @param {string} myUserId - Current user's ID
+ * @param {boolean} iHaveRole - Whether current user has this role
+ * @param {boolean} isPending - Whether there's a pending handoff request from me
+ */
+function updateRoleButton(button, holderSpan, roleHolder, myUserId, iHaveRole, isPending) {
+    // Reset classes
+    button.classList.remove('has-role', 'other-has-role', 'pending-handoff');
+    
+    if (iHaveRole) {
+        // I have this role
+        button.classList.add('has-role');
+        holderSpan.textContent = 'You';
+    } else if (isPending) {
+        // I've requested this role, waiting
+        button.classList.add('pending-handoff');
+        holderSpan.textContent = 'Requesting...';
+    } else if (roleHolder) {
+        // Someone else has this role
+        button.classList.add('other-has-role');
+        holderSpan.textContent = roleHolder.displayName || 'Someone';
+    } else {
+        // Role is available
+        holderSpan.textContent = 'Available';
+    }
+}
+
+/**
+ * Show/hide controller role buttons based on current screen
+ * Should be called when navigating between screens
+ * @param {boolean} show - Whether to show the buttons
+ */
+function setControllerButtonsVisible(show) {
+    const roleButtonsContainer = document.getElementById('controllerRoleButtons');
+    if (roleButtonsContainer) {
+        roleButtonsContainer.style.display = show ? 'flex' : 'none';
+    }
+}
+
+/**
+ * Show handoff request UI with countdown timer
  * @param {object} handoff - Pending handoff data
  */
 function showHandoffRequestUI(handoff) {
-    // Will be implemented in Phase 6 with countdown timer
-    console.log(`🎮 Handoff requested by ${handoff.requesterName} for ${handoff.role}`);
+    const panel = document.getElementById('handoffPanel');
+    const requesterNameSpan = document.getElementById('handoffRequesterName');
+    const roleNameSpan = document.getElementById('handoffRoleName');
+    const countdownSecondsSpan = document.getElementById('countdownSeconds');
+    const countdownBar = document.getElementById('countdownBar');
     
-    // For now, auto-accept after a short delay (simulating user action)
-    // In Phase 6, this will show a UI with countdown
+    if (!panel || !requesterNameSpan || !roleNameSpan) {
+        console.log(`🎮 Handoff requested by ${handoff.requesterName} for ${handoff.role}`);
+        return;
+    }
+    
+    // Set content
+    requesterNameSpan.textContent = handoff.requesterName || 'A coach';
+    roleNameSpan.textContent = handoff.role === 'activeCoach' ? 'Play-by-Play' : 'Next Line';
+    
+    // Calculate remaining time
+    const expiresAt = new Date(handoff.expiresAt);
+    const now = new Date();
+    handoffCountdownSeconds = Math.max(0, Math.ceil((expiresAt - now) / 1000));
+    
+    // Show panel and hide header
+    panel.style.display = 'block';
+    document.body.classList.add('handoff-active');
+    
+    // Start countdown
+    if (handoffCountdownInterval) {
+        clearInterval(handoffCountdownInterval);
+    }
+    
+    const startSeconds = handoffCountdownSeconds;
+    updateCountdownDisplay(countdownSecondsSpan, countdownBar, handoffCountdownSeconds, startSeconds);
+    
+    handoffCountdownInterval = setInterval(() => {
+        handoffCountdownSeconds--;
+        updateCountdownDisplay(countdownSecondsSpan, countdownBar, handoffCountdownSeconds, startSeconds);
+        
+        if (handoffCountdownSeconds <= 0) {
+            clearInterval(handoffCountdownInterval);
+            handoffCountdownInterval = null;
+            // Auto-accept will be handled by server/polling
+        }
+    }, 1000);
+    
     if (typeof logEvent === 'function') {
-        logEvent(`📲 ${handoff.requesterName} is requesting the ${handoff.role === 'activeCoach' ? 'Active Coach' : 'Line Coach'} role...`);
+        logEvent(`📲 ${handoff.requesterName} is requesting the ${handoff.role === 'activeCoach' ? 'Play-by-Play' : 'Next Line'} role...`);
+    }
+}
+
+/**
+ * Update the countdown display
+ * @param {HTMLElement} secondsSpan - The span showing seconds remaining
+ * @param {HTMLElement} bar - The progress bar element
+ * @param {number} seconds - Seconds remaining
+ * @param {number} startSeconds - Starting seconds for percentage calculation
+ */
+function updateCountdownDisplay(secondsSpan, bar, seconds, startSeconds) {
+    if (secondsSpan) {
+        secondsSpan.textContent = seconds;
+    }
+    if (bar) {
+        const percentage = (seconds / startSeconds) * 100;
+        bar.style.width = `${percentage}%`;
     }
 }
 
 /**
  * Hide handoff request UI
- * Stub - to be implemented in Phase 6
  */
 function hideHandoffRequestUI() {
-    // Will be implemented in Phase 6
+    const panel = document.getElementById('handoffPanel');
+    if (panel) {
+        panel.style.display = 'none';
+    }
+    document.body.classList.remove('handoff-active');
+    
+    if (handoffCountdownInterval) {
+        clearInterval(handoffCountdownInterval);
+        handoffCountdownInterval = null;
+    }
+    
     console.log('🎮 Handoff UI hidden');
+}
+
+/**
+ * Handle click on Active Coach button
+ */
+async function handleActiveCoachClick() {
+    const gameId = currentGameIdForPolling;
+    if (!gameId) {
+        showControllerToast('No active game', 'warning');
+        return;
+    }
+    
+    if (controllerState.myRole === 'activeCoach') {
+        // Already have role - offer to release
+        if (confirm('Release Play-by-Play control?')) {
+            await releaseControllerRole(gameId, 'activeCoach');
+        }
+    } else {
+        // Request the role
+        await claimActiveCoach(gameId);
+    }
+}
+
+/**
+ * Handle click on Line Coach button
+ */
+async function handleLineCoachClick() {
+    const gameId = currentGameIdForPolling;
+    if (!gameId) {
+        showControllerToast('No active game', 'warning');
+        return;
+    }
+    
+    if (controllerState.myRole === 'lineCoach') {
+        // Already have role - offer to release
+        if (confirm('Release Next Line control?')) {
+            await releaseControllerRole(gameId, 'lineCoach');
+        }
+    } else {
+        // Request the role
+        await claimLineCoach(gameId);
+    }
+}
+
+/**
+ * Handle Accept button click in handoff panel
+ */
+async function handleHandoffAccept() {
+    const gameId = currentGameIdForPolling;
+    if (gameId) {
+        await respondToHandoff(gameId, true);
+    }
+}
+
+/**
+ * Handle Deny button click in handoff panel
+ */
+async function handleHandoffDeny() {
+    const gameId = currentGameIdForPolling;
+    if (gameId) {
+        await respondToHandoff(gameId, false);
+    }
+}
+
+/**
+ * Initialize controller UI event listeners
+ * Called once when the app loads
+ */
+function initControllerUI() {
+    // Role button click handlers
+    const activeCoachBtn = document.getElementById('activeCoachBtn');
+    const lineCoachBtn = document.getElementById('lineCoachBtn');
+    
+    if (activeCoachBtn) {
+        activeCoachBtn.addEventListener('click', handleActiveCoachClick);
+    }
+    if (lineCoachBtn) {
+        lineCoachBtn.addEventListener('click', handleLineCoachClick);
+    }
+    
+    // Handoff panel button handlers
+    const acceptBtn = document.getElementById('handoffAcceptBtn');
+    const denyBtn = document.getElementById('handoffDenyBtn');
+    
+    if (acceptBtn) {
+        acceptBtn.addEventListener('click', handleHandoffAccept);
+    }
+    if (denyBtn) {
+        denyBtn.addEventListener('click', handleHandoffDeny);
+    }
+    
+    console.log('🎮 Controller UI initialized');
+}
+
+// Initialize UI when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initControllerUI);
+} else {
+    initControllerUI();
 }
 
 
@@ -528,4 +804,9 @@ window.stopControllerPolling = stopControllerPolling;
 window.fetchControllerState = fetchControllerState;
 window.isControllerPollingActive = isControllerPollingActive;
 window.getPollingGameId = getPollingGameId;
+
+// UI (Phase 6)
+window.setControllerButtonsVisible = setControllerButtonsVisible;
+window.showControllerToast = showControllerToast;
+window.hideHandoffRequestUI = hideHandoffRequestUI;
 

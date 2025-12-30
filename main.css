@@ -2852,3 +2852,362 @@ body.next-line-mode #selectNextLineBtn {
     color: #333;
     text-decoration: underline;
 }
+
+/* =============================================================================
+   Phase 6: Controller UI - Role Buttons, Handoff Panel, Toast Notifications
+   ============================================================================= */
+
+/* Controller Role Buttons in Header */
+.controller-role-buttons {
+    display: flex;
+    gap: 8px;
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.role-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    margin: 0;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 70px;
+    font-size: 0.7rem;
+    backdrop-filter: blur(4px);
+}
+
+.role-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: white;
+}
+
+.role-btn i {
+    font-size: 1rem;
+    margin-bottom: 2px;
+}
+
+.role-label {
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.role-holder {
+    font-size: 0.55rem;
+    opacity: 0.8;
+    max-width: 65px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 1px;
+}
+
+/* Role button states */
+.role-btn.has-role {
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    border-color: #28a745;
+    color: white;
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.4);
+}
+
+.role-btn.has-role i {
+    color: white;
+}
+
+.role-btn.has-role .role-holder {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.role-btn.other-has-role {
+    background: rgba(0, 0, 0, 0.2);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.role-btn.other-has-role .role-holder {
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 500;
+}
+
+.role-btn.pending-handoff {
+    animation: pendingPulse 1.5s infinite;
+    border-color: #ffc107;
+    background: rgba(255, 193, 7, 0.2);
+}
+
+/* Handoff Confirmation Panel */
+.handoff-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1001;
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+    padding: 12px 15px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.handoff-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 600px;
+    margin: 0 auto;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.handoff-message {
+    font-size: 0.95rem;
+    font-weight: 500;
+    flex: 1;
+    min-width: 150px;
+}
+
+.handoff-message span {
+    font-weight: 700;
+}
+
+.handoff-countdown {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    min-width: 80px;
+}
+
+.countdown-progress {
+    width: 50px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.countdown-bar {
+    height: 100%;
+    background: white;
+    width: 100%;
+    transition: width 0.1s linear;
+    border-radius: 3px;
+}
+
+.handoff-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.handoff-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s ease;
+    margin: 0;
+}
+
+.handoff-btn.accept {
+    background: white;
+    color: #28a745;
+}
+
+.handoff-btn.accept:hover {
+    background: #f0fff4;
+    transform: scale(1.02);
+}
+
+.handoff-btn.deny {
+    background: rgba(0, 0, 0, 0.2);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.handoff-btn.deny:hover {
+    background: rgba(0, 0, 0, 0.3);
+    transform: scale(1.02);
+}
+
+/* Toast Notification Container */
+.toast-container {
+    position: fixed;
+    bottom: 160px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+    max-width: 90%;
+    width: 350px;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    animation: toastSlideIn 0.3s ease-out;
+    pointer-events: auto;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.toast.toast-success {
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    color: white;
+}
+
+.toast.toast-info {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: white;
+}
+
+.toast.toast-warning {
+    background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+    color: #333;
+}
+
+.toast.toast-error {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+}
+
+.toast i {
+    font-size: 1.1rem;
+}
+
+.toast-message {
+    flex: 1;
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    color: inherit;
+    opacity: 0.7;
+    cursor: pointer;
+    padding: 4px;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.toast-close:hover {
+    opacity: 1;
+}
+
+.toast.toast-hiding {
+    animation: toastSlideOut 0.3s ease-in forwards;
+}
+
+@keyframes toastSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes toastSlideOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+}
+
+/* Adjust header for role buttons on mobile */
+@media (max-width: 480px) {
+    .controller-role-buttons {
+        position: static;
+        transform: none;
+        margin-top: 8px;
+        justify-content: center;
+    }
+    
+    .header-compact .header-content {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .role-btn {
+        padding: 5px 8px;
+        min-width: 60px;
+    }
+    
+    .role-btn i {
+        font-size: 0.9rem;
+    }
+    
+    .role-label {
+        font-size: 0.55rem;
+    }
+    
+    .handoff-content {
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
+    }
+    
+    .handoff-actions {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .toast-container {
+        bottom: 170px;
+        width: 90%;
+    }
+}
+
+/* When handoff panel is showing, hide the header */
+body.handoff-active header {
+    display: none;
+}
+
+/* Line Promoted Modal */
+.line-promoted-modal {
+    text-align: center;
+}
+
+.line-promoted-modal .modal-icon {
+    font-size: 3rem;
+    margin-bottom: 15px;
+}
+
+.line-promoted-modal h3 {
+    color: #28a745;
+    margin-bottom: 10px;
+}
+
+.line-promoted-modal p {
+    color: #666;
+    margin-bottom: 20px;
+}
