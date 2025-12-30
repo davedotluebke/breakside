@@ -19,6 +19,24 @@ const playByPlayScreenIds = [
     'simpleModeScreen'
 ];
 
+// Phase 4: Screens where controller polling should be active
+// These are screens where the game is actively being played/managed
+const activeGameScreenIds = [
+    'beforePointScreen',
+    'offensePlayByPlayScreen',
+    'defensePlayByPlayScreen',
+    'simpleModeScreen'
+];
+
+// Phase 4: Screens where controller polling should stop
+// (game is over or we're not in a game context)
+const nonGameScreenIds = [
+    'selectTeamScreen',
+    'teamRosterScreen',
+    'teamSettingsScreen',
+    'gameSummaryScreen'
+];
+
 function showScreen(screenId) {
     screens.forEach(screen => {
         if (screen) {
@@ -83,5 +101,49 @@ function showScreen(screenId) {
         if (typeof checkPlayerCount === 'function') {
             checkPlayerCount();
         }
+    }
+    
+    // Phase 4: Manage controller polling based on screen
+    manageControllerPolling(screenId);
+}
+
+/**
+ * Phase 4: Manage controller polling based on current screen
+ * 
+ * Starts polling when entering an active game screen (if not already running).
+ * Stops polling when entering a non-game screen (game ended or left).
+ * 
+ * @param {string} screenId - The screen being shown
+ */
+function manageControllerPolling(screenId) {
+    // Check if controller polling functions are available
+    if (typeof startControllerPolling !== 'function' || 
+        typeof stopControllerPolling !== 'function') {
+        return;
+    }
+    
+    if (activeGameScreenIds.includes(screenId)) {
+        // Entering an active game screen - ensure polling is running
+        try {
+            const game = typeof currentGame === 'function' ? currentGame() : null;
+            if (game && game.id) {
+                // Check if polling is already running for this game
+                const alreadyPolling = typeof isControllerPollingActive === 'function' && 
+                                       isControllerPollingActive() &&
+                                       typeof getPollingGameId === 'function' &&
+                                       getPollingGameId() === game.id;
+                if (alreadyPolling) {
+                    // Already polling this game, no action needed
+                    return;
+                }
+                startControllerPolling(game.id);
+            }
+        } catch (e) {
+            // No current game, don't start polling
+            console.log('No active game for controller polling');
+        }
+    } else if (nonGameScreenIds.includes(screenId)) {
+        // Entering a non-game screen - stop polling
+        stopControllerPolling();
     }
 }
