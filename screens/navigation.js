@@ -105,6 +105,27 @@ function showScreen(screenId) {
     
     // Phase 4: Manage controller polling based on screen
     manageControllerPolling(screenId);
+    
+    // Phase 6: Show/hide controller role buttons based on screen
+    manageControllerButtons(screenId);
+}
+
+/**
+ * Phase 6: Show/hide controller role buttons based on current screen
+ * 
+ * Shows buttons on active game screens (where multi-coach collaboration matters).
+ * Hides buttons on non-game screens (roster, settings, etc).
+ * 
+ * @param {string} screenId - The screen being shown
+ */
+function manageControllerButtons(screenId) {
+    if (typeof setControllerButtonsVisible !== 'function') {
+        return;
+    }
+    
+    // Show controller buttons only on active game screens
+    const showButtons = activeGameScreenIds.includes(screenId);
+    setControllerButtonsVisible(showButtons);
 }
 
 /**
