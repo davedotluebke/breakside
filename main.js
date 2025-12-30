@@ -271,34 +271,31 @@ if (feedbackLink) {
 }
 
 // Version display - tap logo to show version for 3 seconds
-const logoContainer = document.getElementById('logoContainer');
+const headerLogo = document.getElementById('headerLogo');
 const versionOverlay = document.getElementById('versionOverlay');
 let versionTimeout = null;
 
-if (logoContainer && versionOverlay) {
-    logoContainer.addEventListener('click', function(e) {
-        // Don't interfere with feedback link - only trigger on logo image tap
-        if (e.target.id === 'headerLogo' || e.target.closest('#headerLogo')) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            // Clear any existing timeout
-            if (versionTimeout) {
-                clearTimeout(versionTimeout);
-            }
-            
-            // Show version
-            const versionText = appVersion 
-                ? `v${appVersion.version} (${appVersion.build})`
-                : 'v?.?.?';
-            versionOverlay.textContent = versionText;
-            versionOverlay.style.display = 'flex';
-            
-            // Hide after 3 seconds
-            versionTimeout = setTimeout(() => {
-                versionOverlay.style.display = 'none';
-            }, 3000);
+if (headerLogo && versionOverlay) {
+    headerLogo.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Clear any existing timeout
+        if (versionTimeout) {
+            clearTimeout(versionTimeout);
         }
+        
+        // Show version
+        const versionText = appVersion 
+            ? `v${appVersion.version} (${appVersion.build})`
+            : 'v?.?.?';
+        versionOverlay.textContent = versionText;
+        versionOverlay.style.display = 'flex';
+        
+        // Hide after 3 seconds
+        versionTimeout = setTimeout(() => {
+            versionOverlay.style.display = 'none';
+        }, 3000);
     });
 }
 
