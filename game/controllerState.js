@@ -371,6 +371,22 @@ function adjustPollingInterval() {
     }, interval);
 }
 
+/**
+ * Check if controller polling is currently active
+ * @returns {boolean} True if polling is running
+ */
+function isControllerPollingActive() {
+    return controllerPollIntervalId !== null;
+}
+
+/**
+ * Get the game ID currently being polled
+ * @returns {string|null} Game ID or null if not polling
+ */
+function getPollingGameId() {
+    return currentGameIdForPolling;
+}
+
 
 // =============================================================================
 // Role Checks
@@ -510,4 +526,6 @@ window.respondToHandoff = respondToHandoff;
 window.startControllerPolling = startControllerPolling;
 window.stopControllerPolling = stopControllerPolling;
 window.fetchControllerState = fetchControllerState;
+window.isControllerPollingActive = isControllerPollingActive;
+window.getPollingGameId = getPollingGameId;
 
