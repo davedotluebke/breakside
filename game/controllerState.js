@@ -33,9 +33,6 @@ const PING_INTERVAL_IDLE = 5000;    // 5 seconds when not holding a role
 let controllerPollIntervalId = null;
 let currentGameIdForPolling = null;
 
-// Track "handoff request sent" toast so we can update it when resolved
-let pendingHandoffRequestToast = null;
-
 
 // =============================================================================
 // API Functions
@@ -91,9 +88,9 @@ async function claimActiveCoach(gameId) {
                     hasPendingHandoffForMe: false
                 });
             } else if (data.status === 'handoff_requested') {
-                // Toast stays visible for full handoff timeout, track it for later update
+                // Toast stays visible for full handoff timeout, track for auto-dismiss
                 const timeoutMs = (data.handoff?.expiresInSeconds ?? handoffTimeoutSeconds) * 1000;
-                pendingHandoffRequestToast = showControllerToast('Handoff request sent...', 'info', timeoutMs);
+                handoffRequestSentToast = showControllerToast('Handoff request sent...', 'info', timeoutMs);
                 updateLocalControllerState({ 
                     state: data.state, 
                     myRole: controllerState.myRole 
@@ -129,15 +126,15 @@ async function claimLineCoach(gameId) {
                 updateLocalControllerState({ 
                     state: data.state, 
                     myRole: 'lineCoach',
-                    hasPendingHandoffForMe: false
+                    hasPendingHandoffForMe: false 
                 });
             } else if (data.status === 'handoff_requested') {
-                // Toast stays visible for full handoff timeout, track it for later update
+                // Toast stays visible for full handoff timeout, track for auto-dismiss
                 const timeoutMs = (data.handoff?.expiresInSeconds ?? handoffTimeoutSeconds) * 1000;
-                pendingHandoffRequestToast = showControllerToast('Handoff request sent...', 'info', timeoutMs);
+                handoffRequestSentToast = showControllerToast('Handoff request sent...', 'info', timeoutMs);
                 updateLocalControllerState({ 
                     state: data.state, 
-                    myRole: controllerState.myRole
+                    myRole: controllerState.myRole 
                 });
             }
             return { success: true, ...data };
@@ -298,26 +295,21 @@ function updateLocalControllerState(data) {
     const requestedRole = previousState.pendingHandoff?.role;
     
     if (wasMyRequest && handoffGone && requestedRole) {
-        // My handoff request was resolved - update the existing toast instead of creating new one
+        // My handoff request was resolved - dismiss the "request sent" toast first
+        if (handoffRequestSentToast && handoffRequestSentToast.parentElement) {
+            dismissToast(handoffRequestSentToast);
+        }
+        handoffRequestSentToast = null;
+        
+        // Check if I got the role
         const iGotTheRole = controllerState.myRole === requestedRole;
         const roleName = requestedRole === 'activeCoach' ? 'Play-by-Play' : 'Next Line';
         
-        if (pendingHandoffRequestToast && pendingHandoffRequestToast.parentElement) {
-            // Update the existing "handoff request sent" toast
-            if (iGotTheRole) {
-                updateToast(pendingHandoffRequestToast, `${roleName} — Accepted!`, 'success');
-            } else {
-                updateToast(pendingHandoffRequestToast, `${roleName} — Denied`, 'error');
-            }
+        if (iGotTheRole) {
+            showControllerToast(`You are now ${roleName}`, 'success');
         } else {
-            // Fallback: create new toast if original is gone
-            if (iGotTheRole) {
-                showControllerToast(`You are now ${roleName}`, 'success');
-            } else {
-                showControllerToast(`Handoff request denied`, 'error');
-            }
+            showControllerToast(`Handoff request for ${roleName} was denied`, 'error');
         }
-        pendingHandoffRequestToast = null;
     }
     
     // Trigger UI update if function exists
@@ -506,6 +498,7 @@ let handoffCountdownInterval = null;
 let handoffToastElement = null;
 let currentHandoffId = null; // Track which handoff we're showing to avoid duplicates
 let handoffResolved = false; // Prevent new toasts after accept/deny until server confirms
+let handoffRequestSentToast = null; // Track "handoff request sent" toast for auto-dismiss
 
 // Handoff timeout - fetched from server, fallback to 10s
 let handoffTimeoutSeconds = 10;
@@ -589,51 +582,6 @@ function dismissToast(toast, wasSwiped = false) {
         toast.classList.add('toast-hiding');
         setTimeout(() => toast.remove(), 300);
     }
-}
-
-/**
- * Update an existing toast with new message, type, and reset timer
- * @param {HTMLElement} toast - The toast element to update
- * @param {string} message - New message
- * @param {string} type - New type (success, info, warning, error)
- * @param {number} duration - New duration in ms (default 4000)
- */
-function updateToast(toast, message, type, duration = 4000) {
-    if (!toast || !toast.parentElement) return;
-    
-    // Cancel existing auto-remove timeout
-    if (toast.dataset.timeoutId) {
-        clearTimeout(parseInt(toast.dataset.timeoutId));
-    }
-    
-    // Update class
-    toast.className = `toast toast-${type}`;
-    
-    // Update icon and message
-    const icons = {
-        success: 'fa-check-circle',
-        info: 'fa-info-circle',
-        warning: 'fa-exclamation-triangle',
-        error: 'fa-times-circle'
-    };
-    
-    const iconEl = toast.querySelector('i:first-child');
-    const messageEl = toast.querySelector('.toast-message');
-    
-    if (iconEl) {
-        iconEl.className = `fas ${icons[type] || icons.info}`;
-    }
-    if (messageEl) {
-        messageEl.innerHTML = message;
-    }
-    
-    // Set new auto-remove timeout
-    const autoRemoveTimeout = setTimeout(() => {
-        dismissToast(toast);
-    }, duration);
-    toast.dataset.timeoutId = autoRemoveTimeout;
-    
-    console.log(`🎮 Controller [${type}]: ${message}`);
 }
 
 /**
@@ -794,7 +742,7 @@ function setControllerButtonsVisible(show) {
 function showHandoffRequestUI(handoff) {
     const container = document.getElementById('toastContainer');
     if (!container) {
-        console.log(`🎮 Handoff requested by ${handoff.requesterName} for ${handoff.role}`);
+    console.log(`🎮 Handoff requested by ${handoff.requesterName} for ${handoff.role}`);
         return;
     }
     
