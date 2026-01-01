@@ -2989,13 +2989,18 @@ body.next-line-mode #selectNextLineBtn {
     box-shadow: 0 2px 6px rgba(0, 123, 255, 0.4);
 }
 
+.handoff-circular-btn.accept-btn i {
+    position: relative;
+    z-index: 2;
+}
+
 .handoff-circular-btn.deny-btn {
     background: #dc3545;
     color: white;
     box-shadow: 0 2px 6px rgba(220, 53, 69, 0.4);
 }
 
-/* Pie chart countdown overlay on accept button */
+/* Countdown overlay on accept button - vertical fill animation */
 .countdown-overlay {
     position: absolute;
     top: 0;
@@ -3004,7 +3009,8 @@ body.next-line-mode #selectNextLineBtn {
     height: 100%;
     border-radius: 50%;
     pointer-events: none;
-    /* Background set via inline style for conic-gradient animation */
+    z-index: 1;
+    /* Background set via inline style for animation */
 }
 
 /* Click animation for auto-accept */

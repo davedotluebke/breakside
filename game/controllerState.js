@@ -453,7 +453,7 @@ function getControllerState() {
 let handoffCountdownInterval = null;
 let handoffToastElement = null;
 let currentHandoffId = null; // Track which handoff we're showing to avoid duplicates
-const HANDOFF_TIMEOUT_SECONDS = 5; // Easy to change
+const HANDOFF_TIMEOUT_SECONDS = 10; // Easy to change
 
 /**
  * Show a toast notification for controller events
@@ -779,9 +779,11 @@ function showHandoffRequestUI(handoff) {
         const remaining = Math.max(0, endTime - now);
         const percent = (remaining / totalMs) * 100;
         
-        // Set conic-gradient directly as inline style (CSS variables don't work well in conic-gradient)
-        // Yellow overlay on blue button for visibility
-        countdownOverlay.style.background = `conic-gradient(rgba(255, 200, 0, 0.7) ${percent}%, transparent ${percent}%)`;
+        // Vertical draining animation: green fills from top to bottom as time passes
+        // percent = remaining time (100% at start, 0% at end)
+        // fillPercent = how much green to show (0% at start, 100% at end)
+        const fillPercent = 100 - percent;
+        countdownOverlay.style.background = `linear-gradient(to bottom, #28a745 0%, #28a745 ${fillPercent}%, transparent ${fillPercent}%, transparent 100%)`;
         
         if (remaining <= 0) {
             // Auto-accept: show click animation then accept
