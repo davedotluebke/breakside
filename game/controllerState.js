@@ -512,8 +512,9 @@ function showControllerToast(message, type = 'info', duration = 4000) {
 /**
  * Dismiss a toast with animation
  * @param {HTMLElement} toast - The toast element to dismiss
+ * @param {boolean} wasSwiped - If true, skip animation (already swiped away)
  */
-function dismissToast(toast) {
+function dismissToast(toast, wasSwiped = false) {
     if (!toast || !toast.parentElement) return;
     
     // Cancel auto-remove timeout
@@ -521,8 +522,14 @@ function dismissToast(toast) {
         clearTimeout(parseInt(toast.dataset.timeoutId));
     }
     
-    toast.classList.add('toast-hiding');
-    setTimeout(() => toast.remove(), 300);
+    if (wasSwiped) {
+        // Already swiped away, just remove immediately
+        toast.remove();
+    } else {
+        // Use animation for non-swiped dismissals
+        toast.classList.add('toast-hiding');
+        setTimeout(() => toast.remove(), 300);
+    }
 }
 
 /**
@@ -563,9 +570,9 @@ function addSwipeToDismiss(toast) {
         
         const deltaY = currentY - startY;
         
-        // If swiped up more than 50px, dismiss
+        // If swiped up more than 50px, dismiss immediately (no animation flicker)
         if (deltaY < -50) {
-            dismissToast(toast);
+            dismissToast(toast, true);
         } else {
             // Reset position
             toast.style.transform = '';
@@ -774,11 +781,12 @@ async function handleActiveCoachClick() {
         return;
     }
     
-    if (controllerState.myRole === 'activeCoach') {
-        // Already have role - offer to release
-        if (confirm('Release Play-by-Play control?')) {
-            await releaseControllerRole(gameId, 'activeCoach');
-        }
+    const myUserId = getCurrentUserId();
+    const iHaveRole = controllerState.activeCoach?.userId === myUserId;
+    
+    if (iHaveRole) {
+        // Already have role - release it (no confirmation needed)
+        await releaseControllerRole(gameId, 'activeCoach');
     } else {
         // Request the role
         await claimActiveCoach(gameId);
@@ -795,11 +803,12 @@ async function handleLineCoachClick() {
         return;
     }
     
-    if (controllerState.myRole === 'lineCoach') {
-        // Already have role - offer to release
-        if (confirm('Release Next Line control?')) {
-            await releaseControllerRole(gameId, 'lineCoach');
-        }
+    const myUserId = getCurrentUserId();
+    const iHaveRole = controllerState.lineCoach?.userId === myUserId;
+    
+    if (iHaveRole) {
+        // Already have role - release it (no confirmation needed)
+        await releaseControllerRole(gameId, 'lineCoach');
     } else {
         // Request the role
         await claimLineCoach(gameId);
