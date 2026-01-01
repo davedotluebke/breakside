@@ -3135,7 +3135,12 @@ body.next-line-mode #selectNextLineBtn {
 }
 
 .toast.toast-swiping {
-    transition: transform 0.05s ease-out, opacity 0.05s ease-out;
+    transition: none; /* No transition during active drag */
+}
+
+/* Disable pointer events on close button during swipe */
+.toast.toast-swiping .toast-close {
+    pointer-events: none;
 }
 
 .toast.toast-swipe-left {

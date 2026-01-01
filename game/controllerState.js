@@ -550,14 +550,16 @@ function addSwipeToDismiss(toast) {
     let isDragging = false;
     let isHorizontalSwipe = null; // null = undecided, true = horizontal, false = vertical
     
+    // Use capture phase so we get events before child elements (like the close button)
     toast.addEventListener('touchstart', (e) => {
+        // Get touch position
         startX = e.touches[0].clientX;
         startY = e.touches[0].clientY;
         currentX = 0;
         isDragging = true;
         isHorizontalSwipe = null;
         toast.classList.add('toast-swiping');
-    }, { passive: true });
+    }, { passive: true, capture: true });
     
     toast.addEventListener('touchmove', (e) => {
         if (!isDragging) return;
@@ -573,15 +575,18 @@ function addSwipeToDismiss(toast) {
         // Only handle horizontal swipes
         if (isHorizontalSwipe) {
             e.preventDefault(); // Prevent page scroll
+            e.stopPropagation(); // Prevent child elements from getting this
             currentX = deltaX;
             const opacity = Math.max(0.3, 1 - Math.abs(deltaX) / 200);
             toast.style.transform = `translateX(${deltaX}px)`;
             toast.style.opacity = opacity;
         }
-    }, { passive: false }); // Must be non-passive to call preventDefault
+    }, { passive: false, capture: true }); // Must be non-passive to call preventDefault
     
-    toast.addEventListener('touchend', () => {
+    toast.addEventListener('touchend', (e) => {
         if (!isDragging) return;
+        
+        const wasSwiping = isHorizontalSwipe;
         isDragging = false;
         isHorizontalSwipe = null;
         toast.classList.remove('toast-swiping');
@@ -589,13 +594,16 @@ function addSwipeToDismiss(toast) {
         // If swiped far enough, dismiss
         const threshold = 80;
         if (Math.abs(currentX) > threshold) {
+            e.preventDefault();
+            e.stopPropagation();
             dismissToast(toast, currentX > 0 ? 'right' : 'left');
-        } else {
-            // Snap back
+        } else if (wasSwiping) {
+            // Snap back (was swiping but didn't meet threshold)
             toast.style.transform = '';
             toast.style.opacity = '';
         }
-    }, { passive: true });
+        // If not swiping, let the event through for close button clicks
+    }, { passive: false, capture: true });
 }
 
 /**
