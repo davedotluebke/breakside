@@ -548,12 +548,14 @@ function addSwipeToDismiss(toast) {
     let startY = 0;
     let currentX = 0;
     let isDragging = false;
+    let isHorizontalSwipe = null; // null = undecided, true = horizontal, false = vertical
     
     toast.addEventListener('touchstart', (e) => {
         startX = e.touches[0].clientX;
         startY = e.touches[0].clientY;
         currentX = 0;
         isDragging = true;
+        isHorizontalSwipe = null;
         toast.classList.add('toast-swiping');
     }, { passive: true });
     
@@ -563,18 +565,25 @@ function addSwipeToDismiss(toast) {
         const deltaX = e.touches[0].clientX - startX;
         const deltaY = e.touches[0].clientY - startY;
         
-        // Only track horizontal swipes (ignore vertical scrolling)
-        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        // Decide direction on first significant movement
+        if (isHorizontalSwipe === null && (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10)) {
+            isHorizontalSwipe = Math.abs(deltaX) > Math.abs(deltaY);
+        }
+        
+        // Only handle horizontal swipes
+        if (isHorizontalSwipe) {
+            e.preventDefault(); // Prevent page scroll
             currentX = deltaX;
             const opacity = Math.max(0.3, 1 - Math.abs(deltaX) / 200);
             toast.style.transform = `translateX(${deltaX}px)`;
             toast.style.opacity = opacity;
         }
-    }, { passive: true });
+    }, { passive: false }); // Must be non-passive to call preventDefault
     
     toast.addEventListener('touchend', () => {
         if (!isDragging) return;
         isDragging = false;
+        isHorizontalSwipe = null;
         toast.classList.remove('toast-swiping');
         
         // If swiped far enough, dismiss
