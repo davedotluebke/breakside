@@ -288,6 +288,24 @@ function updateLocalControllerState(data) {
         lastUpdate: new Date()
     };
     
+    // Check if my handoff request was resolved (I was the requester)
+    const myUserId = getCurrentUserId();
+    const wasMyRequest = previousState.pendingHandoff?.requesterId === myUserId;
+    const handoffGone = !controllerState.pendingHandoff;
+    const requestedRole = previousState.pendingHandoff?.role;
+    
+    if (wasMyRequest && handoffGone && requestedRole) {
+        // My handoff request was resolved - check if I got the role
+        const iGotTheRole = controllerState.myRole === requestedRole;
+        const roleName = requestedRole === 'activeCoach' ? 'Play-by-Play' : 'Next Line';
+        
+        if (iGotTheRole) {
+            showControllerToast(`You are now ${roleName}`, 'success');
+        } else {
+            showControllerToast(`Handoff request for ${roleName} was denied`, 'error');
+        }
+    }
+    
     // Trigger UI update if function exists
     if (typeof updateControllerUI === 'function') {
         updateControllerUI(controllerState, previousState);
