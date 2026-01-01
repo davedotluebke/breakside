@@ -451,7 +451,8 @@ function getControllerState() {
 
 // Handoff countdown state
 let handoffCountdownInterval = null;
-let handoffCountdownSeconds = 5;
+let handoffToastElement = null;
+const HANDOFF_TIMEOUT_SECONDS = 5; // Easy to change
 
 /**
  * Show a toast notification for controller events
@@ -684,89 +685,178 @@ function setControllerButtonsVisible(show) {
 }
 
 /**
- * Show handoff request UI with countdown timer
+ * Show handoff request as a toast notification with countdown
  * @param {object} handoff - Pending handoff data
  */
 function showHandoffRequestUI(handoff) {
-    const panel = document.getElementById('handoffPanel');
-    const requesterNameSpan = document.getElementById('handoffRequesterName');
-    const roleNameSpan = document.getElementById('handoffRoleName');
-    const countdownSecondsSpan = document.getElementById('countdownSeconds');
-    const countdownBar = document.getElementById('countdownBar');
+    // Hide any existing handoff toast
+    hideHandoffRequestUI();
     
-    if (!panel || !requesterNameSpan || !roleNameSpan) {
-    console.log(`🎮 Handoff requested by ${handoff.requesterName} for ${handoff.role}`);
+    const container = document.getElementById('toastContainer');
+    if (!container) {
+        console.log(`🎮 Handoff requested by ${handoff.requesterName} for ${handoff.role}`);
         return;
     }
     
-    // Set content
-    requesterNameSpan.textContent = handoff.requesterName || 'A coach';
-    roleNameSpan.textContent = handoff.role === 'activeCoach' ? 'Play-by-Play' : 'Next Line';
+    const requesterName = handoff.requesterName || 'A coach';
+    const roleName = handoff.role === 'activeCoach' ? 'Play-by-Play' : 'Next Line';
     
-    // Calculate remaining time
+    // Calculate remaining time from server expiry
     const expiresAt = new Date(handoff.expiresAt);
     const now = new Date();
-    handoffCountdownSeconds = Math.max(0, Math.ceil((expiresAt - now) / 1000));
+    const remainingMs = Math.max(0, expiresAt - now);
+    const totalMs = HANDOFF_TIMEOUT_SECONDS * 1000;
     
-    // Show panel and hide header
-    panel.style.display = 'block';
-    document.body.classList.add('handoff-active');
+    // Create handoff toast
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-handoff';
+    toast.innerHTML = `
+        <span class="toast-message"><strong>${requesterName}</strong> wants to take over <strong>${roleName}</strong></span>
+        <div class="handoff-toast-buttons">
+            <button class="handoff-circular-btn accept-btn" title="Accept">
+                <div class="countdown-overlay"></div>
+                <i class="fas fa-check"></i>
+            </button>
+            <button class="handoff-circular-btn deny-btn" title="Deny">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
     
-    // Start countdown
-    if (handoffCountdownInterval) {
+    const acceptBtn = toast.querySelector('.accept-btn');
+    const denyBtn = toast.querySelector('.deny-btn');
+    const countdownOverlay = toast.querySelector('.countdown-overlay');
+    
+    // Accept handler
+    const handleAccept = () => {
         clearInterval(handoffCountdownInterval);
-    }
+        handoffCountdownInterval = null;
+        handleHandoffAccept();
+        toast.remove();
+        handoffToastElement = null;
+    };
     
-    const startSeconds = handoffCountdownSeconds;
-    updateCountdownDisplay(countdownSecondsSpan, countdownBar, handoffCountdownSeconds, startSeconds);
+    // Deny handler
+    const handleDeny = () => {
+        clearInterval(handoffCountdownInterval);
+        handoffCountdownInterval = null;
+        handleHandoffDeny();
+        toast.remove();
+        handoffToastElement = null;
+    };
     
-    handoffCountdownInterval = setInterval(() => {
-        handoffCountdownSeconds--;
-        updateCountdownDisplay(countdownSecondsSpan, countdownBar, handoffCountdownSeconds, startSeconds);
+    acceptBtn.addEventListener('click', handleAccept);
+    denyBtn.addEventListener('click', handleDeny);
+    
+    // Swipe-to-dismiss counts as Accept
+    addHandoffSwipeToDismiss(toast, handleAccept);
+    
+    container.appendChild(toast);
+    handoffToastElement = toast;
+    
+    // Start countdown animation
+    const startTime = Date.now();
+    const endTime = startTime + remainingMs;
+    
+    const updateCountdown = () => {
+        const now = Date.now();
+        const remaining = Math.max(0, endTime - now);
+        const percent = (remaining / totalMs) * 100;
         
-        if (handoffCountdownSeconds <= 0) {
+        countdownOverlay.style.setProperty('--countdown-percent', `${percent}%`);
+        
+        if (remaining <= 0) {
+            // Auto-accept: show click animation then accept
             clearInterval(handoffCountdownInterval);
             handoffCountdownInterval = null;
-            // Auto-accept will be handled by server/polling
+            acceptBtn.classList.add('auto-clicked');
+            setTimeout(() => {
+                handleAccept();
+            }, 200);
         }
-    }, 1000);
+    };
+    
+    // Initial update
+    updateCountdown();
+    
+    // Update every 50ms for smooth animation
+    handoffCountdownInterval = setInterval(updateCountdown, 50);
     
     if (typeof logEvent === 'function') {
-        logEvent(`📲 ${handoff.requesterName} is requesting the ${handoff.role === 'activeCoach' ? 'Play-by-Play' : 'Next Line'} role...`);
+        logEvent(`📲 ${requesterName} is requesting the ${roleName} role...`);
     }
 }
 
 /**
- * Update the countdown display
- * @param {HTMLElement} secondsSpan - The span showing seconds remaining
- * @param {HTMLElement} bar - The progress bar element
- * @param {number} seconds - Seconds remaining
- * @param {number} startSeconds - Starting seconds for percentage calculation
+ * Add swipe-to-dismiss for handoff toast (swipe = accept)
+ * @param {HTMLElement} toast - The toast element
+ * @param {Function} onAccept - Callback when swiped away
  */
-function updateCountdownDisplay(secondsSpan, bar, seconds, startSeconds) {
-    if (secondsSpan) {
-        secondsSpan.textContent = seconds;
-    }
-    if (bar) {
-        const percentage = (seconds / startSeconds) * 100;
-        bar.style.width = `${percentage}%`;
-    }
+function addHandoffSwipeToDismiss(toast, onAccept) {
+    let startY = 0;
+    let currentY = 0;
+    let isDragging = false;
+    
+    const handleStart = (e) => {
+        isDragging = true;
+        startY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+        currentY = startY;
+        toast.classList.add('toast-swiping');
+    };
+    
+    const handleMove = (e) => {
+        if (!isDragging) return;
+        
+        currentY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+        const deltaY = currentY - startY;
+        
+        // Only allow swiping up
+        if (deltaY < 0) {
+            e.preventDefault();
+            toast.style.transform = `translateY(${deltaY}px)`;
+            toast.style.opacity = Math.max(0, 1 + deltaY / 100);
+        }
+    };
+    
+    const handleEnd = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        toast.classList.remove('toast-swiping');
+        
+        const deltaY = currentY - startY;
+        
+        // If swiped up more than 50px, accept
+        if (deltaY < -50) {
+            onAccept();
+        } else {
+            toast.style.transform = '';
+            toast.style.opacity = '';
+        }
+    };
+    
+    toast.addEventListener('touchstart', handleStart, { passive: true });
+    toast.addEventListener('touchmove', handleMove, { passive: false });
+    toast.addEventListener('touchend', handleEnd);
+    toast.addEventListener('touchcancel', handleEnd);
+    
+    toast.addEventListener('mousedown', handleStart);
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleEnd);
 }
 
 /**
  * Hide handoff request UI
  */
 function hideHandoffRequestUI() {
-    const panel = document.getElementById('handoffPanel');
-    if (panel) {
-        panel.style.display = 'none';
-    }
-    document.body.classList.remove('handoff-active');
-    
     if (handoffCountdownInterval) {
         clearInterval(handoffCountdownInterval);
         handoffCountdownInterval = null;
     }
+    
+    if (handoffToastElement && handoffToastElement.parentElement) {
+        handoffToastElement.remove();
+    }
+    handoffToastElement = null;
     
     console.log('🎮 Handoff UI hidden');
 }
@@ -851,16 +941,7 @@ function initControllerUI() {
         lineCoachBtn.addEventListener('click', handleLineCoachClick);
     }
     
-    // Handoff panel button handlers
-    const acceptBtn = document.getElementById('handoffAcceptBtn');
-    const denyBtn = document.getElementById('handoffDenyBtn');
-    
-    if (acceptBtn) {
-        acceptBtn.addEventListener('click', handleHandoffAccept);
-    }
-    if (denyBtn) {
-        denyBtn.addEventListener('click', handleHandoffDeny);
-    }
+    // Handoff accept/deny handlers are attached dynamically to each toast
     
     console.log('🎮 Controller UI initialized');
 }

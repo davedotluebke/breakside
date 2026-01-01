@@ -2936,103 +2936,90 @@ body.next-line-mode #selectNextLineBtn {
     background: #fff3cd;
 }
 
-/* Handoff Confirmation Panel */
-.handoff-panel {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 1001;
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-    color: white;
-    padding: 12px 15px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.handoff-content {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    max-width: 600px;
-    margin: 0 auto;
-    gap: 15px;
-    flex-wrap: wrap;
-}
-
-.handoff-message {
-    font-size: 0.95rem;
-    font-weight: 500;
-    flex: 1;
-    min-width: 150px;
-}
-
-.handoff-message span {
-    font-weight: 700;
-}
-
-.handoff-countdown {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    min-width: 80px;
-}
-
-.countdown-progress {
-    width: 50px;
-    height: 6px;
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 3px;
-    overflow: hidden;
-}
-
-.countdown-bar {
-    height: 100%;
-    background: white;
-    width: 100%;
-    transition: width 0.1s linear;
-    border-radius: 3px;
-}
-
-.handoff-actions {
-    display: flex;
+/* Handoff Toast - special styling for handoff requests */
+.toast.toast-handoff {
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+    color: #721c24;
+    padding: 10px 12px;
     gap: 8px;
 }
 
-.handoff-btn {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 6px;
+.toast.toast-handoff .toast-message {
     font-size: 0.85rem;
+    line-height: 1.3;
+}
+
+.toast.toast-handoff .toast-message strong {
     font-weight: 600;
+}
+
+.handoff-toast-buttons {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.handoff-circular-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 5px;
-    transition: all 0.2s ease;
+    justify-content: center;
+    font-size: 1rem;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    position: relative;
     margin: 0;
+    padding: 0;
 }
 
-.handoff-btn.accept {
-    background: white;
-    color: #28a745;
+.handoff-circular-btn:hover {
+    transform: scale(1.1);
 }
 
-.handoff-btn.accept:hover {
-    background: #f0fff4;
-    transform: scale(1.02);
+.handoff-circular-btn:active {
+    transform: scale(0.95);
 }
 
-.handoff-btn.deny {
-    background: rgba(0, 0, 0, 0.2);
+.handoff-circular-btn.accept-btn {
+    background: #28a745;
     color: white;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 2px 6px rgba(40, 167, 69, 0.4);
 }
 
-.handoff-btn.deny:hover {
-    background: rgba(0, 0, 0, 0.3);
-    transform: scale(1.02);
+.handoff-circular-btn.deny-btn {
+    background: #dc3545;
+    color: white;
+    box-shadow: 0 2px 6px rgba(220, 53, 69, 0.4);
+}
+
+/* Pie chart countdown overlay on accept button */
+.countdown-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    pointer-events: none;
+    background: conic-gradient(
+        rgba(0, 80, 0, 0.4) var(--countdown-percent, 100%),
+        transparent var(--countdown-percent, 100%)
+    );
+    transition: none;
+}
+
+/* Click animation for auto-accept */
+@keyframes buttonClick {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.9); }
+    100% { transform: scale(1); }
+}
+
+.handoff-circular-btn.auto-clicked {
+    animation: buttonClick 0.2s ease;
 }
 
 /* Toast Notification Container - positioned at top of screen */
@@ -3162,26 +3149,11 @@ body.next-line-mode #selectNextLineBtn {
         font-size: 0.65rem;
     }
     
-    .handoff-content {
-        flex-direction: column;
-        text-align: center;
-        gap: 10px;
-    }
-    
-    .handoff-actions {
-        width: 100%;
-        justify-content: center;
-    }
     
     .toast-container {
         top: 8px;
         width: 95%;
     }
-}
-
-/* When handoff panel is showing, hide the header */
-body.handoff-active header {
-    display: none;
 }
 
 /* Line Promoted Modal */
