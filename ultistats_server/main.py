@@ -80,6 +80,7 @@ try:
         release_role,
         ping_role,
         clear_game_state,
+        HANDOFF_EXPIRY_SECONDS,
     )
     from auth import (
         get_current_user,
@@ -163,6 +164,7 @@ except ImportError:
         release_role,
         ping_role,
         clear_game_state,
+        HANDOFF_EXPIRY_SECONDS,
     )
     from ultistats_server.auth import (
         get_current_user,
@@ -713,6 +715,7 @@ async def get_controller_status(
         "state": state,
         "myRole": my_role,
         "hasPendingHandoffForMe": has_pending_for_me,
+        "handoffTimeoutSeconds": HANDOFF_EXPIRY_SECONDS,
         "serverTime": datetime.now().isoformat()
     }
 
@@ -887,6 +890,7 @@ async def ping_controller(
         "pinged": pinged,
         "controllerState": state,
         "hasPendingHandoffForMe": has_pending_for_me,
+        "handoffTimeoutSeconds": HANDOFF_EXPIRY_SECONDS,
         "serverTime": datetime.now().isoformat()
     }
 
