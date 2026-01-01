@@ -3082,6 +3082,9 @@ body.next-line-mode #selectNextLineBtn {
     pointer-events: auto;
     font-size: 0.9rem;
     font-weight: 500;
+    touch-action: pan-y; /* Allow vertical scroll, we handle horizontal */
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .toast.toast-success {
