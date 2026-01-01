@@ -680,6 +680,18 @@ async def restore_version(game_id: str, timestamp: str, user: dict = Depends(req
 # Game Controller Endpoints (Active Coach / Line Coach)
 # =============================================================================
 
+def _get_handoff_expires_in_seconds(handoff: dict) -> float:
+    """
+    Calculate remaining seconds until a handoff expires.
+    """
+    try:
+        expires_at = datetime.fromisoformat(handoff["expiresAt"])
+        remaining = (expires_at - datetime.now()).total_seconds()
+        return round(max(0, remaining), 1)  # Don't return negative
+    except (ValueError, KeyError):
+        return float(HANDOFF_EXPIRY_SECONDS)  # Fallback
+
+
 def _enrich_pending_handoff(state: dict) -> dict:
     """
     Add expiresInSeconds to pendingHandoff for accurate client-side countdown.
@@ -689,17 +701,12 @@ def _enrich_pending_handoff(state: dict) -> dict:
         return state
     
     # Calculate remaining seconds until expiry
-    try:
-        expires_at = datetime.fromisoformat(state["pendingHandoff"]["expiresAt"])
-        remaining = (expires_at - datetime.now()).total_seconds()
-        remaining = max(0, remaining)  # Don't return negative
-    except (ValueError, KeyError):
-        remaining = HANDOFF_EXPIRY_SECONDS  # Fallback
+    remaining = _get_handoff_expires_in_seconds(state["pendingHandoff"])
     
     # Create enriched copy
     enriched_state = dict(state)
     enriched_state["pendingHandoff"] = dict(state["pendingHandoff"])
-    enriched_state["pendingHandoff"]["expiresInSeconds"] = round(remaining, 1)
+    enriched_state["pendingHandoff"]["expiresInSeconds"] = remaining
     
     return enriched_state
 
