@@ -103,7 +103,58 @@ See [PHASE4_CONTROLLER_PLAN.md](PHASE4_CONTROLLER_PLAN.md) for full implementati
 
 ---
 
+### ✅ Phase 6: Handoff UI (Complete)
+
+**Role Buttons (Sub-header):**
+- [x] "Play-by-Play" and "Next Line" buttons below header
+  - Green when user holds that role
+  - Light orange when another coach holds it
+  - Grey when role is available
+  - Tap to claim/request role
+- [x] Role holder name displayed under role label
+
+**Handoff Request Flow:**
+- [x] Toast notification for requester: "Handoff request sent..."
+  - Duration matches server timeout (10s configurable)
+  - Auto-dismissed when result arrives
+- [x] Toast notification for holder with Accept/Deny buttons
+  - Animated countdown on Accept button (vertical drain)
+  - Swipe-to-dismiss counts as Accept
+  - Auto-accepts on timeout
+- [x] Result notifications:
+  - Requester sees "You are now [role]" (success) or "Handoff denied" (error)
+  - Holder sees "Handoff accepted" or "Handoff denied"
+
+**Server Integration:**
+- [x] Server provides `expiresInSeconds` for accurate client countdown
+- [x] Client polls for state changes at 2s (active) / 5s (idle)
+- [x] Handoff timeout configurable via `HANDOFF_EXPIRY_SECONDS` (server)
+
+---
+
 ## Next Up
+
+### 🔄 Phase 6b: Role Enforcement
+
+Tie UI functionality to controller roles:
+
+**Active Coach (Play-by-Play):**
+- [ ] Only Active Coach can enter events in Simple Mode
+- [ ] Only Active Coach can enter events in Offense/Defense screens
+- [ ] Only Active Coach can record pulls, turnovers, scores
+- [ ] Only Active Coach can use Undo
+- [ ] Non-holders see read-only view with "Claim Play-by-Play to edit" prompt
+
+**Line Coach (Next Line):**
+- [ ] Only Line Coach can edit the "next lineup" during a point
+- [ ] Only Line Coach can drag players to/from the field
+- [ ] Active Coach can still set lineup between points (when no point active)
+- [ ] Non-holders see read-only lineup with "Claim Next Line to edit" prompt
+
+**Shared Access:**
+- [ ] Any coach can view current game state
+- [ ] Any coach can claim an available role
+- [ ] Any coach can request handoff from current holder
 
 ### 🔄 Phase 5: Multi-User Polling
 
@@ -117,23 +168,6 @@ See [PHASE4_CONTROLLER_PLAN.md](PHASE4_CONTROLLER_PLAN.md) for full implementati
   - Viewer: 5 seconds
 - [ ] PWA: Update UI when remote changes detected
 - [ ] PWA: Merge lineup changes from other coaches
-
-### 🎯 Phase 6: Handoff UI
-
-- [ ] PWA: "Play-by-Play" and "Next Line" buttons in header
-  - Green/checkmark when user has that role
-  - Click to request role if not held
-- [ ] PWA: Handoff confirmation panel
-  - Replaces header when handoff requested
-  - 5-second countdown with progress bar
-  - Confirm/Deny buttons
-  - Auto-confirm on timeout
-- [ ] PWA: Toast notifications for handoff events
-  - "You are now Active Coach"
-  - "Line Coach role transferred to [name]"
-  - "Your handoff request was denied"
-- [ ] PWA: Modal when lineup promoted to current
-  - Informs Line Coach their prepared lineup is now active
 
 ### 👁️ Phase 7: Viewer Experience
 
