@@ -2857,13 +2857,12 @@ body.next-line-mode #selectNextLineBtn {
    Phase 6: Controller UI - Role Buttons, Handoff Panel, Toast Notifications
    ============================================================================= */
 
-/* Controller Role Sub-Header (below main header) */
+/* Controller Role Button Area (below main header) */
 .controller-sub-header {
     display: flex;
-    gap: 4px;
-    padding: 6px 8px;
-    background: linear-gradient(135deg, #d97530 0%, #c56a2a 100%);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    gap: 6px;
+    padding: 4px 8px;
+    background: #f4f4f4;
 }
 
 .controller-sub-header .role-btn {
@@ -2872,44 +2871,45 @@ body.next-line-mode #selectNextLineBtn {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 8px 12px;
+    padding: 4px 10px;
     margin: 0;
-    border-radius: 8px;
-    border: 2px solid rgba(255, 255, 255, 0.25);
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
+    border-radius: 6px;
+    border: 2px solid #ccc;
+    background: #e8e8e8;
+    color: #444;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .controller-sub-header .role-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.4);
+    background: #ddd;
+    border-color: #aaa;
 }
 
 .controller-sub-header .role-label {
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     font-weight: 600;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.2px;
     white-space: nowrap;
-    margin-bottom: 2px;
+    line-height: 1.2;
 }
 
 .controller-sub-header .role-holder {
-    font-size: 0.75rem;
-    opacity: 0.85;
+    font-size: 0.7rem;
+    color: #666;
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    line-height: 1.2;
 }
 
-/* Role button states */
+/* Role button states - green when YOU have the role */
 .controller-sub-header .role-btn.has-role {
     background: linear-gradient(135deg, #28a745 0%, #218838 100%);
     border-color: #28a745;
     color: white;
-    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.4);
+    box-shadow: 0 2px 6px rgba(40, 167, 69, 0.35);
 }
 
 .controller-sub-header .role-btn.has-role .role-holder {
@@ -2917,20 +2917,23 @@ body.next-line-mode #selectNextLineBtn {
     font-weight: 500;
 }
 
+/* When someone else has the role - still looks unselected but shows their name */
 .controller-sub-header .role-btn.other-has-role {
-    background: rgba(0, 0, 0, 0.15);
-    border-color: rgba(255, 255, 255, 0.15);
+    background: #e8e8e8;
+    border-color: #ccc;
+    color: #444;
 }
 
 .controller-sub-header .role-btn.other-has-role .role-holder {
-    color: rgba(255, 255, 255, 0.95);
+    color: #555;
     font-weight: 500;
 }
 
+/* Pending handoff request animation */
 .controller-sub-header .role-btn.pending-handoff {
     animation: pendingPulse 1.5s infinite;
     border-color: #ffc107;
-    background: rgba(255, 193, 7, 0.3);
+    background: #fff3cd;
 }
 
 /* Handoff Confirmation Panel */
@@ -3143,20 +3146,20 @@ body.next-line-mode #selectNextLineBtn {
 /* Mobile adjustments for controller sub-header */
 @media (max-width: 480px) {
     .controller-sub-header {
-        padding: 4px 6px;
-        gap: 3px;
+        padding: 3px 6px;
+        gap: 4px;
     }
     
     .controller-sub-header .role-btn {
-        padding: 6px 8px;
+        padding: 3px 8px;
     }
     
     .controller-sub-header .role-label {
-        font-size: 0.85rem;
+        font-size: 0.8rem;
     }
     
     .controller-sub-header .role-holder {
-        font-size: 0.7rem;
+        font-size: 0.65rem;
     }
     
     .handoff-content {

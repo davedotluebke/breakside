@@ -543,11 +543,14 @@ function addSwipeToDismiss(toast) {
     
     const handleMove = (e) => {
         if (!isDragging) return;
+        
         currentY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
         const deltaY = currentY - startY;
         
         // Only allow swiping up (negative deltaY)
         if (deltaY < 0) {
+            // Prevent page scroll when swiping toast
+            e.preventDefault();
             toast.style.transform = `translateY(${deltaY}px)`;
             toast.style.opacity = Math.max(0, 1 + deltaY / 100);
         }
@@ -570,9 +573,9 @@ function addSwipeToDismiss(toast) {
         }
     };
     
-    // Touch events
+    // Touch events - use passive: false to allow preventDefault
     toast.addEventListener('touchstart', handleStart, { passive: true });
-    toast.addEventListener('touchmove', handleMove, { passive: true });
+    toast.addEventListener('touchmove', handleMove, { passive: false });
     toast.addEventListener('touchend', handleEnd);
     toast.addEventListener('touchcancel', handleEnd);
     
@@ -600,13 +603,17 @@ function updateControllerUI(state, previousState) {
     
     const myUserId = getCurrentUserId();
     
+    // Check each role independently - user could hold both roles
+    const iAmActiveCoach = state.activeCoach?.userId === myUserId;
+    const iAmLineCoach = state.lineCoach?.userId === myUserId;
+    
     // Update Active Coach button
     updateRoleButton(
         activeCoachBtn, 
         activeCoachHolder, 
         state.activeCoach, 
         myUserId, 
-        state.myRole === 'activeCoach',
+        iAmActiveCoach,
         state.pendingHandoff?.role === 'activeCoach' && state.pendingHandoff?.requesterId === myUserId
     );
     
@@ -616,7 +623,7 @@ function updateControllerUI(state, previousState) {
         lineCoachHolder, 
         state.lineCoach, 
         myUserId, 
-        state.myRole === 'lineCoach',
+        iAmLineCoach,
         state.pendingHandoff?.role === 'lineCoach' && state.pendingHandoff?.requesterId === myUserId
     );
     
