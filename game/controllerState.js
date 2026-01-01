@@ -481,26 +481,112 @@ function showControllerToast(message, type = 'info', duration = 4000) {
     toast.innerHTML = `
         <i class="fas ${icons[type] || icons.info}"></i>
         <span class="toast-message">${message}</span>
-        <button class="toast-close" onclick="this.parentElement.remove()">
+        <button class="toast-close">
             <i class="fas fa-times"></i>
         </button>
     `;
     
+    // Close button handler
+    toast.querySelector('.toast-close').addEventListener('click', () => {
+        dismissToast(toast);
+    });
+    
+    // Add swipe-to-dismiss functionality
+    addSwipeToDismiss(toast);
+    
     container.appendChild(toast);
     
     // Auto-remove after duration
-    setTimeout(() => {
+    const autoRemoveTimeout = setTimeout(() => {
         if (toast.parentElement) {
-            toast.classList.add('toast-hiding');
-            setTimeout(() => toast.remove(), 300);
+            dismissToast(toast);
         }
     }, duration);
+    
+    // Store timeout so we can clear it if manually dismissed
+    toast._autoRemoveTimeout = autoRemoveTimeout;
     
     // Also log to event log if available
     if (typeof logEvent === 'function') {
         logEvent(`🎮 ${message}`);
     }
     console.log(`🎮 Controller [${type}]: ${message}`);
+}
+
+/**
+ * Dismiss a toast with animation
+ * @param {HTMLElement} toast - The toast element
+ * @param {string} direction - 'up', 'left', or 'right'
+ */
+function dismissToast(toast, direction = 'up') {
+    if (!toast || !toast.parentElement) return;
+    
+    // Clear auto-remove timeout
+    if (toast._autoRemoveTimeout) {
+        clearTimeout(toast._autoRemoveTimeout);
+    }
+    
+    // Add appropriate animation class
+    if (direction === 'left') {
+        toast.classList.add('toast-swipe-left');
+    } else if (direction === 'right') {
+        toast.classList.add('toast-swipe-right');
+    } else {
+        toast.classList.add('toast-hiding');
+    }
+    
+    // Remove after animation
+    setTimeout(() => toast.remove(), 300);
+}
+
+/**
+ * Add swipe-to-dismiss touch handlers to a toast
+ * @param {HTMLElement} toast - The toast element
+ */
+function addSwipeToDismiss(toast) {
+    let startX = 0;
+    let startY = 0;
+    let currentX = 0;
+    let isDragging = false;
+    
+    toast.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        currentX = 0;
+        isDragging = true;
+        toast.classList.add('toast-swiping');
+    }, { passive: true });
+    
+    toast.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        
+        const deltaX = e.touches[0].clientX - startX;
+        const deltaY = e.touches[0].clientY - startY;
+        
+        // Only track horizontal swipes (ignore vertical scrolling)
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+            currentX = deltaX;
+            const opacity = Math.max(0.3, 1 - Math.abs(deltaX) / 200);
+            toast.style.transform = `translateX(${deltaX}px)`;
+            toast.style.opacity = opacity;
+        }
+    }, { passive: true });
+    
+    toast.addEventListener('touchend', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        toast.classList.remove('toast-swiping');
+        
+        // If swiped far enough, dismiss
+        const threshold = 80;
+        if (Math.abs(currentX) > threshold) {
+            dismissToast(toast, currentX > 0 ? 'right' : 'left');
+        } else {
+            // Snap back
+            toast.style.transform = '';
+            toast.style.opacity = '';
+        }
+    }, { passive: true });
 }
 
 /**
