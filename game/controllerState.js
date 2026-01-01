@@ -270,6 +270,11 @@ async function pingController(gameId) {
 function updateLocalControllerState(data) {
     const previousState = { ...controllerState };
     
+    // Update handoff timeout from server if provided
+    if (data.handoffTimeoutSeconds) {
+        handoffTimeoutSeconds = data.handoffTimeoutSeconds;
+    }
+    
     controllerState = {
         activeCoach: data.state?.activeCoach || null,
         lineCoach: data.state?.lineCoach || null,
@@ -466,8 +471,8 @@ let handoffToastElement = null;
 let currentHandoffId = null; // Track which handoff we're showing to avoid duplicates
 let handoffResolved = false; // Prevent new toasts after accept/deny until server confirms
 
-// Must match server-side HANDOFF_EXPIRY_SECONDS in controller_storage.py
-const HANDOFF_TIMEOUT_SECONDS = 10;
+// Handoff timeout - fetched from server, fallback to 10s
+let handoffTimeoutSeconds = 10;
 
 /**
  * Show a toast notification for controller events
@@ -732,10 +737,10 @@ function showHandoffRequestUI(handoff) {
     const requesterName = handoff.requesterName || 'A coach';
     const roleName = handoff.role === 'activeCoach' ? 'Play-by-Play' : 'Next Line';
     
-    // Use client-side countdown (server expiry can have timezone issues)
-    const totalMs = HANDOFF_TIMEOUT_SECONDS * 1000;
+    // Use server-provided timeout (with fallback)
+    const totalMs = handoffTimeoutSeconds * 1000;
     
-    console.log(`🎮 Creating handoff toast: ${requesterName} wants ${roleName}, ${totalMs}ms countdown`);
+    console.log(`🎮 Creating handoff toast: ${requesterName} wants ${roleName}, ${handoffTimeoutSeconds}s countdown`);
     
     // Create handoff toast
     const toast = document.createElement('div');
