@@ -284,9 +284,20 @@ function updateLocalControllerState(data) {
         updateControllerUI(controllerState, previousState);
     }
     
-    // Show handoff request UI if there's a pending handoff for this user
+    // Handle handoff UI based on server state
     if (controllerState.hasPendingHandoffForMe && controllerState.pendingHandoff) {
+        // Server says there's a pending handoff for us
         showHandoffRequestUI(controllerState.pendingHandoff);
+    } else {
+        // Server says no pending handoff - clear resolved flag and hide any toast
+        if (handoffResolved) {
+            console.log('🎮 Server confirmed handoff resolved, clearing flag');
+            handoffResolved = false;
+        }
+        // Hide any lingering handoff toast
+        if (handoffToastElement) {
+            hideHandoffRequestUI();
+        }
     }
     
     // Adjust polling interval based on role
@@ -453,6 +464,7 @@ function getControllerState() {
 let handoffCountdownInterval = null;
 let handoffToastElement = null;
 let currentHandoffId = null; // Track which handoff we're showing to avoid duplicates
+let handoffResolved = false; // Prevent new toasts after accept/deny until server confirms
 const HANDOFF_TIMEOUT_SECONDS = 10; // Easy to change
 
 /**
@@ -696,11 +708,17 @@ function showHandoffRequestUI(handoff) {
         return;
     }
     
+    // Don't create new toasts if we just resolved a handoff (wait for server to confirm)
+    if (handoffResolved) {
+        console.log('🎮 Handoff already resolved, waiting for server confirmation');
+        return;
+    }
+    
     // Create unique ID for this handoff to avoid duplicates from polling
     const handoffId = `${handoff.requesterId}-${handoff.role}-${handoff.requestedAt}`;
     
     // If we're already showing this exact handoff, don't recreate
-    if (currentHandoffId === handoffId && handoffToastElement) {
+    if (currentHandoffId === handoffId && handoffToastElement && handoffToastElement.parentElement) {
         return;
     }
     
@@ -718,9 +736,12 @@ function showHandoffRequestUI(handoff) {
     const remainingMs = Math.max(0, expiresAt - now);
     const totalMs = HANDOFF_TIMEOUT_SECONDS * 1000;
     
+    console.log(`🎮 Creating handoff toast: ${requesterName} wants ${roleName}, ${remainingMs}ms remaining`);
+    
     // Create handoff toast
     const toast = document.createElement('div');
     toast.className = 'toast toast-handoff';
+    toast.id = 'handoffToast'; // Add ID for easier debugging
     toast.innerHTML = `
         <span class="toast-message"><strong>${requesterName}</strong> wants to take over <strong>${roleName}</strong></span>
         <div class="handoff-toast-buttons">
@@ -738,8 +759,9 @@ function showHandoffRequestUI(handoff) {
     const denyBtn = toast.querySelector('.deny-btn');
     const countdownOverlay = toast.querySelector('.countdown-overlay');
     
-    // Cleanup function
+    // Cleanup function - marks handoff as resolved to prevent recreation
     const cleanup = () => {
+        console.log('🎮 Cleaning up handoff toast');
         clearInterval(handoffCountdownInterval);
         handoffCountdownInterval = null;
         if (toast.parentElement) {
@@ -747,25 +769,28 @@ function showHandoffRequestUI(handoff) {
         }
         handoffToastElement = null;
         currentHandoffId = null;
+        handoffResolved = true; // Prevent recreation until server confirms no pending handoff
     };
     
     // Accept handler
-    const handleAccept = () => {
+    const handleAcceptLocal = () => {
+        console.log('🎮 Accept clicked/triggered');
         cleanup();
         handleHandoffAccept();
     };
     
     // Deny handler
-    const handleDeny = () => {
+    const handleDenyLocal = () => {
+        console.log('🎮 Deny clicked');
         cleanup();
         handleHandoffDeny();
     };
     
-    acceptBtn.addEventListener('click', handleAccept);
-    denyBtn.addEventListener('click', handleDeny);
+    acceptBtn.addEventListener('click', handleAcceptLocal);
+    denyBtn.addEventListener('click', handleDenyLocal);
     
     // Swipe-to-dismiss counts as Accept
-    addHandoffSwipeToDismiss(toast, handleAccept);
+    addHandoffSwipeToDismiss(toast, handleAcceptLocal);
     
     container.appendChild(toast);
     handoffToastElement = toast;
@@ -775,9 +800,16 @@ function showHandoffRequestUI(handoff) {
     const endTime = startTime + remainingMs;
     
     const updateCountdown = () => {
+        // Safety check: make sure toast still exists
+        if (!toast.parentElement || !countdownOverlay) {
+            clearInterval(handoffCountdownInterval);
+            handoffCountdownInterval = null;
+            return;
+        }
+        
         const now = Date.now();
         const remaining = Math.max(0, endTime - now);
-        const percent = (remaining / totalMs) * 100;
+        const percent = Math.min(100, Math.max(0, (remaining / totalMs) * 100));
         
         // Vertical draining animation: green fills from top to bottom as time passes
         // percent = remaining time (100% at start, 0% at end)
@@ -787,11 +819,12 @@ function showHandoffRequestUI(handoff) {
         
         if (remaining <= 0) {
             // Auto-accept: show click animation then accept
+            console.log('🎮 Countdown complete, auto-accepting');
             clearInterval(handoffCountdownInterval);
             handoffCountdownInterval = null;
             acceptBtn.classList.add('auto-clicked');
             setTimeout(() => {
-                handleAccept();
+                handleAcceptLocal();
             }, 200);
         }
     };
