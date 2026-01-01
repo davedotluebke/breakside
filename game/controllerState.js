@@ -487,9 +487,7 @@ function showControllerToast(message, type = 'info', duration = 4000) {
     `;
     
     // Close button handler
-    toast.querySelector('.toast-close').addEventListener('click', () => {
-        dismissToast(toast);
-    });
+    toast.querySelector('.toast-close').addEventListener('click', () => dismissToast(toast));
     
     // Add swipe-to-dismiss functionality
     addSwipeToDismiss(toast);
@@ -498,13 +496,11 @@ function showControllerToast(message, type = 'info', duration = 4000) {
     
     // Auto-remove after duration
     const autoRemoveTimeout = setTimeout(() => {
-        if (toast.parentElement) {
-            dismissToast(toast);
-        }
+        dismissToast(toast);
     }, duration);
     
-    // Store timeout so we can clear it if manually dismissed
-    toast._autoRemoveTimeout = autoRemoveTimeout;
+    // Store timeout so we can cancel it if manually dismissed
+    toast.dataset.timeoutId = autoRemoveTimeout;
     
     // Also log to event log if available
     if (typeof logEvent === 'function') {
@@ -515,95 +511,75 @@ function showControllerToast(message, type = 'info', duration = 4000) {
 
 /**
  * Dismiss a toast with animation
- * @param {HTMLElement} toast - The toast element
- * @param {string} direction - 'up', 'left', or 'right'
+ * @param {HTMLElement} toast - The toast element to dismiss
  */
-function dismissToast(toast, direction = 'up') {
+function dismissToast(toast) {
     if (!toast || !toast.parentElement) return;
     
-    // Clear auto-remove timeout
-    if (toast._autoRemoveTimeout) {
-        clearTimeout(toast._autoRemoveTimeout);
+    // Cancel auto-remove timeout
+    if (toast.dataset.timeoutId) {
+        clearTimeout(parseInt(toast.dataset.timeoutId));
     }
     
-    // Add appropriate animation class
-    if (direction === 'left') {
-        toast.classList.add('toast-swipe-left');
-    } else if (direction === 'right') {
-        toast.classList.add('toast-swipe-right');
-    } else {
-        toast.classList.add('toast-hiding');
-    }
-    
-    // Remove after animation
+    toast.classList.add('toast-hiding');
     setTimeout(() => toast.remove(), 300);
 }
 
 /**
- * Add swipe-to-dismiss touch handlers to a toast
+ * Add swipe-to-dismiss functionality to a toast
  * @param {HTMLElement} toast - The toast element
  */
 function addSwipeToDismiss(toast) {
-    let startX = 0;
     let startY = 0;
-    let currentX = 0;
+    let currentY = 0;
     let isDragging = false;
-    let isHorizontalSwipe = null; // null = undecided, true = horizontal, false = vertical
     
-    // Use capture phase so we get events before child elements (like the close button)
-    toast.addEventListener('touchstart', (e) => {
-        // Get touch position
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-        currentX = 0;
+    const handleStart = (e) => {
         isDragging = true;
-        isHorizontalSwipe = null;
+        startY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+        currentY = startY;
         toast.classList.add('toast-swiping');
-    }, { passive: true, capture: true });
+    };
     
-    toast.addEventListener('touchmove', (e) => {
+    const handleMove = (e) => {
         if (!isDragging) return;
+        currentY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+        const deltaY = currentY - startY;
         
-        const deltaX = e.touches[0].clientX - startX;
-        const deltaY = e.touches[0].clientY - startY;
-        
-        // Decide direction on first significant movement
-        if (isHorizontalSwipe === null && (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10)) {
-            isHorizontalSwipe = Math.abs(deltaX) > Math.abs(deltaY);
+        // Only allow swiping up (negative deltaY)
+        if (deltaY < 0) {
+            toast.style.transform = `translateY(${deltaY}px)`;
+            toast.style.opacity = Math.max(0, 1 + deltaY / 100);
         }
-        
-        // Only handle horizontal swipes
-        if (isHorizontalSwipe) {
-            e.preventDefault(); // Prevent page scroll
-            e.stopPropagation(); // Prevent child elements from getting this
-            currentX = deltaX;
-            const opacity = Math.max(0.3, 1 - Math.abs(deltaX) / 200);
-            toast.style.transform = `translateX(${deltaX}px)`;
-            toast.style.opacity = opacity;
-        }
-    }, { passive: false, capture: true }); // Must be non-passive to call preventDefault
+    };
     
-    toast.addEventListener('touchend', (e) => {
+    const handleEnd = () => {
         if (!isDragging) return;
-        
-        const wasSwiping = isHorizontalSwipe;
         isDragging = false;
-        isHorizontalSwipe = null;
         toast.classList.remove('toast-swiping');
         
-        // If swiped far enough, dismiss
-        const threshold = 80;
-        if (Math.abs(currentX) > threshold) {
-            e.preventDefault();
-            e.stopPropagation();
-            dismissToast(toast, currentX > 0 ? 'right' : 'left');
-        } else if (wasSwiping) {
-            // Snap back (was swiping but didn't meet threshold)
+        const deltaY = currentY - startY;
+        
+        // If swiped up more than 50px, dismiss
+        if (deltaY < -50) {
+            dismissToast(toast);
+        } else {
+            // Reset position
             toast.style.transform = '';
             toast.style.opacity = '';
         }
-        // If not swiping, let the event through for close button clicks
-    }, { passive: false, capture: true });
+    };
+    
+    // Touch events
+    toast.addEventListener('touchstart', handleStart, { passive: true });
+    toast.addEventListener('touchmove', handleMove, { passive: true });
+    toast.addEventListener('touchend', handleEnd);
+    toast.addEventListener('touchcancel', handleEnd);
+    
+    // Mouse events (for desktop testing)
+    toast.addEventListener('mousedown', handleStart);
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleEnd);
 }
 
 /**
@@ -705,7 +681,7 @@ function showHandoffRequestUI(handoff) {
     const countdownBar = document.getElementById('countdownBar');
     
     if (!panel || !requesterNameSpan || !roleNameSpan) {
-        console.log(`🎮 Handoff requested by ${handoff.requesterName} for ${handoff.role}`);
+    console.log(`🎮 Handoff requested by ${handoff.requesterName} for ${handoff.role}`);
         return;
     }
     

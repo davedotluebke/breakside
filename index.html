@@ -189,22 +189,20 @@
                 <div id="versionOverlay" class="version-overlay" style="display: none;"></div>
             </div>
             <h1>Breakside</h1>
-            
-            <!-- Controller Role Buttons (Phase 6) -->
-            <div id="controllerRoleButtons" class="controller-role-buttons" style="display: none;">
-                <button id="activeCoachBtn" class="role-btn" title="Play-by-Play Control">
-                    <i class="fas fa-clipboard-list"></i>
-                    <span class="role-label">Play-by-Play</span>
-                    <span id="activeCoachHolder" class="role-holder"></span>
-                </button>
-                <button id="lineCoachBtn" class="role-btn" title="Next Line Control">
-                    <i class="fas fa-users"></i>
-                    <span class="role-label">Next Line</span>
-                    <span id="lineCoachHolder" class="role-holder"></span>
-                </button>
-            </div>
         </div>
     </header>
+    
+    <!-- Controller Role Sub-Header (Phase 6) -->
+    <div id="controllerRoleButtons" class="controller-sub-header" style="display: none;">
+        <button id="activeCoachBtn" class="role-btn" title="Play-by-Play Control">
+            <span class="role-label">Play-by-Play</span>
+            <span id="activeCoachHolder" class="role-holder">Available</span>
+        </button>
+        <button id="lineCoachBtn" class="role-btn" title="Next Line Control">
+            <span class="role-label">Next Line</span>
+            <span id="lineCoachHolder" class="role-holder">Available</span>
+        </button>
+    </div>
 
     <!-- Select Your Team Screen -->
         <!-- Add this modal inside the body tag -->
