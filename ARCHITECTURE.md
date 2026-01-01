@@ -409,15 +409,24 @@ Breakside uses **Supabase Auth** for user authentication, providing email/passwo
 When a Coach requests Active Coach or Line Coach status:
 
 ```
-1. Requester clicks "Play-by-Play" or "Next Line" button
-2. Server notifies current holder (if any)
-3. Current holder sees confirmation panel with 5-second countdown
-4. Options: Confirm (immediate), Deny (cancel request), or timeout (auto-confirm)
-5. On confirm: Role transfers, requester gains control
-6. On deny: Request cancelled, requester notified
+1. Requester taps role button in sub-header
+2. If role is vacant: Immediate claim, requester gets role
+3. If role is occupied: Handoff request created
+   - Requester sees "Handoff request sent..." toast (duration = timeout)
+   - Holder sees toast with Accept (✓) and Deny (✗) buttons
+4. Holder response options:
+   - Tap Accept: Immediate transfer
+   - Tap Deny: Request rejected, requester notified
+   - Swipe toast away: Counts as Accept
+   - Do nothing: Auto-accepts after timeout (configurable, default 10s)
+5. Resolution:
+   - On accept: Role transfers, both parties notified
+   - On deny: Request cancelled, requester sees error toast
 ```
 
-This protocol also handles connectivity loss—any Coach can take over within 5 seconds if the current holder loses connection.
+The timeout is configurable via `HANDOFF_EXPIRY_SECONDS` in `controller_storage.py`. The server provides `expiresInSeconds` in API responses so clients can show accurate countdowns despite polling delays.
+
+This protocol also handles connectivity loss—any Coach can take over after the timeout if the current holder loses connection.
 
 ### Team Membership Data Model
 
@@ -441,27 +450,40 @@ This protocol also handles connectivity loss—any Coach can take over within 5 
 
 ### Game Controller State
 
-Per-game controller state (stored in game or in-memory):
+Per-game controller state (in-memory, managed by `controller_storage.py`):
 
 ```json
 {
   "activeCoach": {
     "userId": "user-abc",
+    "displayName": "Alice",
     "claimedAt": "2025-01-15T10:30:00Z",
     "lastPing": "2025-01-15T10:35:00Z"
   },
   "lineCoach": {
     "userId": "user-xyz",
+    "displayName": "Bob",
     "claimedAt": "2025-01-15T10:32:00Z",
     "lastPing": "2025-01-15T10:35:00Z"
   },
   "pendingHandoff": {
     "role": "activeCoach",
     "requesterId": "user-xyz",
+    "requesterName": "Bob",
+    "currentHolderId": "user-abc",
     "requestedAt": "2025-01-15T10:35:30Z",
-    "expiresAt": "2025-01-15T10:35:35Z"
+    "expiresAt": "2025-01-15T10:35:40Z"
   }
 }
+```
+
+**Timeouts:**
+- `STALE_CLAIM_SECONDS` (30s): Role auto-releases if holder stops pinging
+- `HANDOFF_EXPIRY_SECONDS` (10s): Pending handoff auto-accepts if holder doesn't respond
+
+**API Response Enrichment:**
+- `expiresInSeconds`: Server-calculated time remaining for pending handoff
+- `handoffTimeoutSeconds`: Current timeout setting for client reference
 ```
 
 ### Invite Codes
