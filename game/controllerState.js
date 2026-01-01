@@ -780,7 +780,8 @@ function showHandoffRequestUI(handoff) {
         const percent = (remaining / totalMs) * 100;
         
         // Set conic-gradient directly as inline style (CSS variables don't work well in conic-gradient)
-        countdownOverlay.style.background = `conic-gradient(rgba(0, 80, 0, 0.4) ${percent}%, transparent ${percent}%)`;
+        // Yellow overlay on blue button for visibility
+        countdownOverlay.style.background = `conic-gradient(rgba(255, 200, 0, 0.7) ${percent}%, transparent ${percent}%)`;
         
         if (remaining <= 0) {
             // Auto-accept: show click animation then accept

@@ -2984,9 +2984,9 @@ body.next-line-mode #selectNextLineBtn {
 }
 
 .handoff-circular-btn.accept-btn {
-    background: #28a745;
+    background: #007bff;
     color: white;
-    box-shadow: 0 2px 6px rgba(40, 167, 69, 0.4);
+    box-shadow: 0 2px 6px rgba(0, 123, 255, 0.4);
 }
 
 .handoff-circular-btn.deny-btn {
