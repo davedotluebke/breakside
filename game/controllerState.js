@@ -452,6 +452,7 @@ function getControllerState() {
 // Handoff countdown state
 let handoffCountdownInterval = null;
 let handoffToastElement = null;
+let currentHandoffId = null; // Track which handoff we're showing to avoid duplicates
 const HANDOFF_TIMEOUT_SECONDS = 5; // Easy to change
 
 /**
@@ -689,14 +690,24 @@ function setControllerButtonsVisible(show) {
  * @param {object} handoff - Pending handoff data
  */
 function showHandoffRequestUI(handoff) {
-    // Hide any existing handoff toast
-    hideHandoffRequestUI();
-    
     const container = document.getElementById('toastContainer');
     if (!container) {
         console.log(`🎮 Handoff requested by ${handoff.requesterName} for ${handoff.role}`);
         return;
     }
+    
+    // Create unique ID for this handoff to avoid duplicates from polling
+    const handoffId = `${handoff.requesterId}-${handoff.role}-${handoff.requestedAt}`;
+    
+    // If we're already showing this exact handoff, don't recreate
+    if (currentHandoffId === handoffId && handoffToastElement) {
+        return;
+    }
+    
+    // Hide any existing handoff toast (different handoff)
+    hideHandoffRequestUI();
+    
+    currentHandoffId = handoffId;
     
     const requesterName = handoff.requesterName || 'A coach';
     const roleName = handoff.role === 'activeCoach' ? 'Play-by-Play' : 'Next Line';
@@ -727,22 +738,27 @@ function showHandoffRequestUI(handoff) {
     const denyBtn = toast.querySelector('.deny-btn');
     const countdownOverlay = toast.querySelector('.countdown-overlay');
     
-    // Accept handler
-    const handleAccept = () => {
+    // Cleanup function
+    const cleanup = () => {
         clearInterval(handoffCountdownInterval);
         handoffCountdownInterval = null;
-        handleHandoffAccept();
-        toast.remove();
+        if (toast.parentElement) {
+            toast.remove();
+        }
         handoffToastElement = null;
+        currentHandoffId = null;
+    };
+    
+    // Accept handler
+    const handleAccept = () => {
+        cleanup();
+        handleHandoffAccept();
     };
     
     // Deny handler
     const handleDeny = () => {
-        clearInterval(handoffCountdownInterval);
-        handoffCountdownInterval = null;
+        cleanup();
         handleHandoffDeny();
-        toast.remove();
-        handoffToastElement = null;
     };
     
     acceptBtn.addEventListener('click', handleAccept);
@@ -763,7 +779,8 @@ function showHandoffRequestUI(handoff) {
         const remaining = Math.max(0, endTime - now);
         const percent = (remaining / totalMs) * 100;
         
-        countdownOverlay.style.setProperty('--countdown-percent', `${percent}%`);
+        // Set conic-gradient directly as inline style (CSS variables don't work well in conic-gradient)
+        countdownOverlay.style.background = `conic-gradient(rgba(0, 80, 0, 0.4) ${percent}%, transparent ${percent}%)`;
         
         if (remaining <= 0) {
             // Auto-accept: show click animation then accept
@@ -857,6 +874,7 @@ function hideHandoffRequestUI() {
         handoffToastElement.remove();
     }
     handoffToastElement = null;
+    currentHandoffId = null;
     
     console.log('🎮 Handoff UI hidden');
 }

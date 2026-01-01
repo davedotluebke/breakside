@@ -3004,11 +3004,7 @@ body.next-line-mode #selectNextLineBtn {
     height: 100%;
     border-radius: 50%;
     pointer-events: none;
-    background: conic-gradient(
-        rgba(0, 80, 0, 0.4) var(--countdown-percent, 100%),
-        transparent var(--countdown-percent, 100%)
-    );
-    transition: none;
+    /* Background set via inline style for conic-gradient animation */
 }
 
 /* Click animation for auto-accept */
