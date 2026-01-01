@@ -2857,14 +2857,23 @@ body.next-line-mode #selectNextLineBtn {
    Phase 6: Controller UI - Role Buttons, Handoff Panel, Toast Notifications
    ============================================================================= */
 
-/* Controller Role Buttons in Header */
+/* Controller Role Buttons in Header - positioned on either side of logo */
 .controller-role-buttons {
-    display: flex;
-    gap: 8px;
+    display: contents; /* Allow buttons to be positioned independently */
+}
+
+.role-btn {
     position: absolute;
-    right: 1rem;
     top: 50%;
     transform: translateY(-50%);
+}
+
+.role-btn#activeCoachBtn {
+    left: 70px; /* Position to the right of simple mode toggle */
+}
+
+.role-btn#lineCoachBtn {
+    right: 1rem;
 }
 
 .role-btn {
@@ -2883,6 +2892,7 @@ body.next-line-mode #selectNextLineBtn {
     min-width: 70px;
     font-size: 0.7rem;
     backdrop-filter: blur(4px);
+    z-index: 5;
 }
 
 .role-btn:hover {
@@ -3046,10 +3056,10 @@ body.next-line-mode #selectNextLineBtn {
     transform: scale(1.02);
 }
 
-/* Toast Notification Container */
+/* Toast Notification Container - at top of screen */
 .toast-container {
     position: fixed;
-    bottom: 160px;
+    top: 80px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 2000;
@@ -3121,10 +3131,22 @@ body.next-line-mode #selectNextLineBtn {
     animation: toastSlideOut 0.3s ease-in forwards;
 }
 
+.toast.toast-swiping {
+    transition: transform 0.05s ease-out, opacity 0.05s ease-out;
+}
+
+.toast.toast-swipe-left {
+    animation: toastSwipeLeft 0.25s ease-out forwards;
+}
+
+.toast.toast-swipe-right {
+    animation: toastSwipeRight 0.25s ease-out forwards;
+}
+
 @keyframes toastSlideIn {
     from {
         opacity: 0;
-        transform: translateY(20px);
+        transform: translateY(-20px);
     }
     to {
         opacity: 1;
@@ -3143,31 +3165,42 @@ body.next-line-mode #selectNextLineBtn {
     }
 }
 
+@keyframes toastSwipeLeft {
+    to {
+        opacity: 0;
+        transform: translateX(-100%);
+    }
+}
+
+@keyframes toastSwipeRight {
+    to {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+}
+
 /* Adjust header for role buttons on mobile */
 @media (max-width: 480px) {
-    .controller-role-buttons {
-        position: static;
-        transform: none;
-        margin-top: 8px;
-        justify-content: center;
-    }
-    
-    .header-compact .header-content {
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-    
     .role-btn {
-        padding: 5px 8px;
-        min-width: 60px;
+        padding: 4px 6px;
+        min-width: 55px;
+    }
+    
+    .role-btn#activeCoachBtn {
+        left: 60px;
     }
     
     .role-btn i {
-        font-size: 0.9rem;
+        font-size: 0.85rem;
     }
     
     .role-label {
-        font-size: 0.55rem;
+        font-size: 0.5rem;
+    }
+    
+    .role-holder {
+        font-size: 0.5rem;
+        max-width: 50px;
     }
     
     .handoff-content {
@@ -3182,7 +3215,7 @@ body.next-line-mode #selectNextLineBtn {
     }
     
     .toast-container {
-        bottom: 170px;
+        top: 75px;
         width: 90%;
     }
 }
