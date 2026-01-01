@@ -88,7 +88,9 @@ async function claimActiveCoach(gameId) {
                     hasPendingHandoffForMe: false
                 });
             } else if (data.status === 'handoff_requested') {
-                showControllerToast('Handoff request sent...', 'info');
+                // Toast stays visible for full handoff timeout
+                const timeoutMs = (data.handoff?.expiresInSeconds ?? handoffTimeoutSeconds) * 1000;
+                showControllerToast('Handoff request sent...', 'info', timeoutMs);
                 updateLocalControllerState({ 
                     state: data.state, 
                     myRole: controllerState.myRole 
@@ -124,10 +126,12 @@ async function claimLineCoach(gameId) {
                 updateLocalControllerState({ 
                     state: data.state, 
                     myRole: 'lineCoach',
-                    hasPendingHandoffForMe: false 
+                    hasPendingHandoffForMe: false
                 });
             } else if (data.status === 'handoff_requested') {
-                showControllerToast('Handoff request sent...', 'info');
+                // Toast stays visible for full handoff timeout
+                const timeoutMs = (data.handoff?.expiresInSeconds ?? handoffTimeoutSeconds) * 1000;
+                showControllerToast('Handoff request sent...', 'info', timeoutMs);
                 updateLocalControllerState({ 
                     state: data.state, 
                     myRole: controllerState.myRole 

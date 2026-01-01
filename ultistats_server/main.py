@@ -776,6 +776,9 @@ async def claim_active_coach(
     handoff_result = request_handoff(game_id, "activeCoach", user["id"], display_name)
     
     if handoff_result["success"]:
+        # Add expiresInSeconds for client countdown
+        if handoff_result.get("handoff"):
+            handoff_result["handoff"]["expiresInSeconds"] = _get_handoff_expires_in_seconds(handoff_result["handoff"])
         return {"status": "handoff_requested", "role": "activeCoach", **handoff_result}
     
     raise HTTPException(
@@ -812,6 +815,9 @@ async def claim_line_coach(
     handoff_result = request_handoff(game_id, "lineCoach", user["id"], display_name)
     
     if handoff_result["success"]:
+        # Add expiresInSeconds for client countdown
+        if handoff_result.get("handoff"):
+            handoff_result["handoff"]["expiresInSeconds"] = _get_handoff_expires_in_seconds(handoff_result["handoff"])
         return {"status": "handoff_requested", "role": "lineCoach", **handoff_result}
     
     raise HTTPException(
