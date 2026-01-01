@@ -2857,104 +2857,80 @@ body.next-line-mode #selectNextLineBtn {
    Phase 6: Controller UI - Role Buttons, Handoff Panel, Toast Notifications
    ============================================================================= */
 
-/* Controller Role Buttons in Header - positioned on either side of logo */
-.controller-role-buttons {
-    display: contents; /* Allow buttons to be positioned independently */
+/* Controller Role Sub-Header (below main header) */
+.controller-sub-header {
+    display: flex;
+    gap: 4px;
+    padding: 6px 8px;
+    background: linear-gradient(135deg, #d97530 0%, #c56a2a 100%);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
-.role-btn {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-}
-
-.role-btn#activeCoachBtn {
-    left: 70px; /* Position to the right of simple mode toggle */
-}
-
-.role-btn#lineCoachBtn {
-    right: 1rem;
-}
-
-.role-btn {
+.controller-sub-header .role-btn {
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 6px 10px;
+    padding: 8px 12px;
     margin: 0;
     border-radius: 8px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.15);
-    color: rgba(255, 255, 255, 0.8);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
     cursor: pointer;
     transition: all 0.2s ease;
-    min-width: 70px;
-    font-size: 0.7rem;
-    backdrop-filter: blur(4px);
-    z-index: 5;
 }
 
-.role-btn:hover {
-    background: rgba(255, 255, 255, 0.25);
-    border-color: rgba(255, 255, 255, 0.5);
-    color: white;
+.controller-sub-header .role-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
 }
 
-.role-btn i {
-    font-size: 1rem;
+.controller-sub-header .role-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
     margin-bottom: 2px;
 }
 
-.role-label {
-    font-size: 0.6rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    white-space: nowrap;
-}
-
-.role-holder {
-    font-size: 0.55rem;
-    opacity: 0.8;
-    max-width: 65px;
+.controller-sub-header .role-holder {
+    font-size: 0.75rem;
+    opacity: 0.85;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    margin-top: 1px;
 }
 
 /* Role button states */
-.role-btn.has-role {
+.controller-sub-header .role-btn.has-role {
     background: linear-gradient(135deg, #28a745 0%, #218838 100%);
     border-color: #28a745;
     color: white;
     box-shadow: 0 2px 8px rgba(40, 167, 69, 0.4);
 }
 
-.role-btn.has-role i {
-    color: white;
-}
-
-.role-btn.has-role .role-holder {
-    color: rgba(255, 255, 255, 0.9);
-}
-
-.role-btn.other-has-role {
-    background: rgba(0, 0, 0, 0.2);
-    border-color: rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.7);
-}
-
-.role-btn.other-has-role .role-holder {
-    color: rgba(255, 255, 255, 0.9);
+.controller-sub-header .role-btn.has-role .role-holder {
+    color: rgba(255, 255, 255, 0.95);
     font-weight: 500;
 }
 
-.role-btn.pending-handoff {
+.controller-sub-header .role-btn.other-has-role {
+    background: rgba(0, 0, 0, 0.15);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.controller-sub-header .role-btn.other-has-role .role-holder {
+    color: rgba(255, 255, 255, 0.95);
+    font-weight: 500;
+}
+
+.controller-sub-header .role-btn.pending-handoff {
     animation: pendingPulse 1.5s infinite;
     border-color: #ffc107;
-    background: rgba(255, 193, 7, 0.2);
+    background: rgba(255, 193, 7, 0.3);
 }
 
 /* Handoff Confirmation Panel */
@@ -3056,16 +3032,16 @@ body.next-line-mode #selectNextLineBtn {
     transform: scale(1.02);
 }
 
-/* Toast Notification Container - at top of screen */
+/* Toast Notification Container - positioned at top of screen */
 .toast-container {
     position: fixed;
-    top: 80px;
+    top: 10px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 2000;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     pointer-events: none;
     max-width: 90%;
     width: 350px;
@@ -3077,14 +3053,15 @@ body.next-line-mode #selectNextLineBtn {
     gap: 10px;
     padding: 12px 16px;
     border-radius: 10px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-    animation: toastSlideIn 0.3s ease-out;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    animation: toastSlideDown 0.3s ease-out;
     pointer-events: auto;
     font-size: 0.9rem;
     font-weight: 500;
-    touch-action: pan-y; /* Allow vertical scroll, we handle horizontal */
+    cursor: grab;
     user-select: none;
-    -webkit-user-select: none;
+    touch-action: pan-y;
+    transition: transform 0.1s ease-out, opacity 0.1s ease-out;
 }
 
 .toast.toast-success {
@@ -3109,6 +3086,7 @@ body.next-line-mode #selectNextLineBtn {
 
 .toast i {
     font-size: 1.1rem;
+    flex-shrink: 0;
 }
 
 .toast-message {
@@ -3124,37 +3102,26 @@ body.next-line-mode #selectNextLineBtn {
     padding: 4px;
     font-size: 1rem;
     line-height: 1;
+    flex-shrink: 0;
+    margin: 0;
 }
 
 .toast-close:hover {
     opacity: 1;
 }
 
-.toast.toast-hiding {
-    animation: toastSlideOut 0.3s ease-in forwards;
-}
-
 .toast.toast-swiping {
-    transition: none; /* No transition during active drag */
+    transition: none;
 }
 
-/* Disable pointer events on close button during swipe */
-.toast.toast-swiping .toast-close {
-    pointer-events: none;
+.toast.toast-hiding {
+    animation: toastSlideUp 0.3s ease-in forwards;
 }
 
-.toast.toast-swipe-left {
-    animation: toastSwipeLeft 0.25s ease-out forwards;
-}
-
-.toast.toast-swipe-right {
-    animation: toastSwipeRight 0.25s ease-out forwards;
-}
-
-@keyframes toastSlideIn {
+@keyframes toastSlideDown {
     from {
         opacity: 0;
-        transform: translateY(-20px);
+        transform: translateY(-30px);
     }
     to {
         opacity: 1;
@@ -3162,53 +3129,34 @@ body.next-line-mode #selectNextLineBtn {
     }
 }
 
-@keyframes toastSlideOut {
+@keyframes toastSlideUp {
     from {
         opacity: 1;
         transform: translateY(0);
     }
     to {
         opacity: 0;
-        transform: translateY(-20px);
+        transform: translateY(-30px);
     }
 }
 
-@keyframes toastSwipeLeft {
-    to {
-        opacity: 0;
-        transform: translateX(-100%);
-    }
-}
-
-@keyframes toastSwipeRight {
-    to {
-        opacity: 0;
-        transform: translateX(100%);
-    }
-}
-
-/* Adjust header for role buttons on mobile */
+/* Mobile adjustments for controller sub-header */
 @media (max-width: 480px) {
-    .role-btn {
+    .controller-sub-header {
         padding: 4px 6px;
-        min-width: 55px;
+        gap: 3px;
     }
     
-    .role-btn#activeCoachBtn {
-        left: 60px;
+    .controller-sub-header .role-btn {
+        padding: 6px 8px;
     }
     
-    .role-btn i {
+    .controller-sub-header .role-label {
         font-size: 0.85rem;
     }
     
-    .role-label {
-        font-size: 0.5rem;
-    }
-    
-    .role-holder {
-        font-size: 0.5rem;
-        max-width: 50px;
+    .controller-sub-header .role-holder {
+        font-size: 0.7rem;
     }
     
     .handoff-content {
@@ -3223,8 +3171,8 @@ body.next-line-mode #selectNextLineBtn {
     }
     
     .toast-container {
-        top: 75px;
-        width: 90%;
+        top: 8px;
+        width: 95%;
     }
 }
 
