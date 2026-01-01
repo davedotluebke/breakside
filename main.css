@@ -2917,15 +2917,15 @@ body.next-line-mode #selectNextLineBtn {
     font-weight: 500;
 }
 
-/* When someone else has the role - still looks unselected but shows their name */
+/* When someone else has the role - light orange to show it's claimed */
 .controller-sub-header .role-btn.other-has-role {
-    background: #e8e8e8;
-    border-color: #ccc;
-    color: #444;
+    background: linear-gradient(135deg, #fde8d4 0%, #f8dcc4 100%);
+    border-color: #e8a86e;
+    color: #8b5a2b;
 }
 
 .controller-sub-header .role-btn.other-has-role .role-holder {
-    color: #555;
+    color: #a0522d;
     font-weight: 500;
 }
 
