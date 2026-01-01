@@ -680,6 +680,30 @@ async def restore_version(game_id: str, timestamp: str, user: dict = Depends(req
 # Game Controller Endpoints (Active Coach / Line Coach)
 # =============================================================================
 
+def _enrich_pending_handoff(state: dict) -> dict:
+    """
+    Add expiresInSeconds to pendingHandoff for accurate client-side countdown.
+    Returns a copy of state with the enriched handoff.
+    """
+    if not state.get("pendingHandoff"):
+        return state
+    
+    # Calculate remaining seconds until expiry
+    try:
+        expires_at = datetime.fromisoformat(state["pendingHandoff"]["expiresAt"])
+        remaining = (expires_at - datetime.now()).total_seconds()
+        remaining = max(0, remaining)  # Don't return negative
+    except (ValueError, KeyError):
+        remaining = HANDOFF_EXPIRY_SECONDS  # Fallback
+    
+    # Create enriched copy
+    enriched_state = dict(state)
+    enriched_state["pendingHandoff"] = dict(state["pendingHandoff"])
+    enriched_state["pendingHandoff"]["expiresInSeconds"] = round(remaining, 1)
+    
+    return enriched_state
+
+
 @app.get("/api/games/{game_id}/controller")
 async def get_controller_status(
     game_id: str,
@@ -698,6 +722,9 @@ async def get_controller_status(
     
     state = get_controller_state(game_id)
     
+    # Enrich pendingHandoff with expiresInSeconds for accurate client countdown
+    enriched_state = _enrich_pending_handoff(state)
+    
     # Determine user's role
     my_role = None
     if state.get("activeCoach") and state["activeCoach"]["userId"] == user["id"]:
@@ -712,7 +739,7 @@ async def get_controller_status(
     )
     
     return {
-        "state": state,
+        "state": enriched_state,
         "myRole": my_role,
         "hasPendingHandoffForMe": has_pending_for_me,
         "handoffTimeoutSeconds": HANDOFF_EXPIRY_SECONDS,
@@ -879,6 +906,9 @@ async def ping_controller(
     # Refresh state after pinging
     state = get_controller_state(game_id)
     
+    # Enrich pendingHandoff with expiresInSeconds for accurate client countdown
+    enriched_state = _enrich_pending_handoff(state)
+    
     # Check for pending handoff for this user
     has_pending_for_me = (
         state.get("pendingHandoff") and 
@@ -888,7 +918,7 @@ async def ping_controller(
     return {
         "status": "ok",
         "pinged": pinged,
-        "controllerState": state,
+        "controllerState": enriched_state,
         "hasPendingHandoffForMe": has_pending_for_me,
         "handoffTimeoutSeconds": HANDOFF_EXPIRY_SECONDS,
         "serverTime": datetime.now().isoformat()

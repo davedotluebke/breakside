@@ -737,10 +737,13 @@ function showHandoffRequestUI(handoff) {
     const requesterName = handoff.requesterName || 'A coach';
     const roleName = handoff.role === 'activeCoach' ? 'Play-by-Play' : 'Next Line';
     
-    // Use server-provided timeout (with fallback)
+    // Use server-calculated remaining time for accurate countdown
+    // expiresInSeconds is calculated by server at response time
+    const remainingSeconds = handoff.expiresInSeconds ?? handoffTimeoutSeconds;
+    const remainingMs = remainingSeconds * 1000;
     const totalMs = handoffTimeoutSeconds * 1000;
     
-    console.log(`🎮 Creating handoff toast: ${requesterName} wants ${roleName}, ${handoffTimeoutSeconds}s countdown`);
+    console.log(`🎮 Creating handoff toast: ${requesterName} wants ${roleName}, ${remainingSeconds}s remaining`);
     
     // Create handoff toast
     const toast = document.createElement('div');
@@ -799,9 +802,9 @@ function showHandoffRequestUI(handoff) {
     container.appendChild(toast);
     handoffToastElement = toast;
     
-    // Start countdown animation (client-side, starts fresh each time)
+    // Start countdown animation using server's remaining time
     const startTime = Date.now();
-    const endTime = startTime + totalMs;
+    const endTime = startTime + remainingMs;
     
     const updateCountdown = () => {
         // Safety check: make sure toast still exists
