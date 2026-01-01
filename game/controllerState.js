@@ -465,7 +465,9 @@ let handoffCountdownInterval = null;
 let handoffToastElement = null;
 let currentHandoffId = null; // Track which handoff we're showing to avoid duplicates
 let handoffResolved = false; // Prevent new toasts after accept/deny until server confirms
-const HANDOFF_TIMEOUT_SECONDS = 10; // Easy to change
+
+// Must match server-side HANDOFF_EXPIRY_SECONDS in controller_storage.py
+const HANDOFF_TIMEOUT_SECONDS = 10;
 
 /**
  * Show a toast notification for controller events
