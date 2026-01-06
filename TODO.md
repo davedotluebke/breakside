@@ -134,27 +134,121 @@ See [PHASE4_CONTROLLER_PLAN.md](PHASE4_CONTROLLER_PLAN.md) for full implementati
 
 ## Next Up
 
-### 🔄 Phase 6b: Role Enforcement
+### 🔄 Phase 6b: In-Game UI Redesign
 
-Tie UI functionality to controller roles:
+Replace current screen-based navigation with a **panel-based layout** for all in-game functionality.
 
-**Active Coach (Play-by-Play):**
-- [ ] Only Active Coach can enter events in Simple Mode
-- [ ] Only Active Coach can enter events in Offense/Defense screens
-- [ ] Only Active Coach can record pulls, turnovers, scores
-- [ ] Only Active Coach can use Undo
-- [ ] Non-holders see read-only view with "Claim Play-by-Play to edit" prompt
+---
 
-**Line Coach (Next Line):**
-- [ ] Only Line Coach can edit the "next lineup" during a point
-- [ ] Only Line Coach can drag players to/from the field
-- [ ] Active Coach can still set lineup between points (when no point active)
-- [ ] Non-holders see read-only lineup with "Claim Next Line to edit" prompt
+#### Panel Layout (top to bottom)
 
-**Shared Access:**
-- [ ] Any coach can view current game state
-- [ ] Any coach can claim an available role
-- [ ] Any coach can request handoff from current holder
+**1. Header Panel** (always visible, single line)
+- [ ] Hamburger menu (left)
+- [ ] Team logo
+- [ ] Score display (Us vs Them)
+- [ ] Timer display with toggle button
+  - **Game clock**: Total elapsed time, or countdown to cap if `roundEndTime` is set
+    - Turns red and counts negative when cap reached
+    - Cannot be paused
+  - **Point timer**: Countdown between points (with urgency colors), elapsed time during point
+    - Pause/resume button for injuries, discussions, etc.
+    - Auto-unpauses when any play-by-play event is recorded
+  - Small label below digits: "game" or "point"
+- [ ] New game fields: `gameDurationMinutes` (default 50), `roundEndTime` (optional override)
+
+**2. Role Buttons Panel** (coaches only, viewers don't see this)
+- [ ] "Play-by-Play" and "Next Line" role claim buttons
+- [ ] Same styling as current sub-header implementation
+
+**3. "Play-by-Play" Panel** (resizable)
+- [ ] Responsive Simple Mode layout:
+  - **Minimum size**: Single row with "We Score", "They Score", "Key Play", `...` button
+  - **Maximum size**: Full Simple Mode layout with all buttons visible
+  - `...` menu reveals: Undo, Sub Players, Timeout
+- [ ] **Sub Players** button opens modal dialog for mid-point injury substitutions
+  - One-off player selection table (similar to line selection)
+- [ ] Pull Dialog auto-popup for Active Coach at start of defensive points
+- [ ] Panel states:
+  - **Greyed out/disabled**: User is not Active Coach, OR game is between points
+  - **Auto-minimize**: When point ends (unless pinned)
+  - **Auto-maximize**: When point starts, if user is Active Coach (unless pinned)
+- [ ] Pin button in title bar to lock panel size
+- [ ] Key Play dialog still available for detailed event entry
+- [ ] Offense/Defense possession screens deprecated (keep code, remove from main flow)
+
+**4. "Select Next Line" Panel** (resizable)
+- [ ] Replaces the separate Before Point Screen concept
+- [ ] Panel content:
+  - Player selection table (current roster, drag/tap to select)
+  - **"Start Point (Offense/Defense)"** button appears when between points
+- [ ] Panel states:
+  - **Minimized to title bar**: No players selected yet
+  - **Minimized to title bar + player names**: Some players selected
+  - **Maximized**: Full player selection table visible
+- [ ] Auto-behaviors:
+  - **Active Coach**: Auto-minimize when point starts, auto-maximize when point ends
+  - **Line Coach**: Stays maximized during points (their main job)
+  - **Both roles held**: Full access, both panels can be open during point
+- [ ] Pin button to lock panel size
+- [ ] **O/D button** (disabled for Phase 6b, implemented later):
+  - Creates second line selection panel
+  - Retitles to "Select Next O Line" and "Select Next D Line"
+- [ ] **Between points**: Both Active Coach and Line Coach can edit lineup
+  - Toast warning about possible conflicts when both are editing
+- [ ] **During point**: Only Line Coach can edit (preparing next lineup)
+
+**5. "Game Events" Panel** (resizable)
+- [ ] Buttons: End Game, Time Out, Half Time, Switch Sides
+- [ ] Responsive layout:
+  - **Minimum**: Single row with some buttons + `...` menu
+  - **Maximum**: Two rows (enough for all buttons)
+- [ ] Panel states:
+  - **Minimized and disabled**: During points
+  - **Unminimized and enabled**: Between points, for Active Coach only
+- [ ] Half Time / Switch Sides just log events (no special behavior for now)
+
+**6. "Follow" Panel** (resizable, bottom of stack)
+- [ ] Game status: Team names, opponent, current score
+- [ ] Game event log: Large font, scrollable, full event history
+- [ ] Gets remaining vertical space after other panels
+- [ ] Default states:
+  - **Maximized**: For Viewers (only panel they see besides header)
+  - **Maximized**: For Coaches without Active or Line Coach role
+  - **Minimized**: For Active/Line Coach (but always accessible)
+- [ ] Pin button to lock panel size
+
+---
+
+#### Panel Mechanics
+
+- [ ] **Resize**: Drag handle on left side of title bar
+- [ ] **Toggle min/max**: Double-tap title bar
+- [ ] **Pin button**: Lock panel to current size (survives auto-resize behaviors)
+- [ ] **Space allocation**: 
+  - Maximizing a panel minimizes all non-pinned panels
+  - Pinned panels keep their size but may shift position
+  - Follow panel (bottom) gets whatever space remains
+- [ ] **Persistence**: Panel sizes and pin states saved to localStorage (per-client)
+
+---
+
+#### Role-Based Behavior Summary
+
+| Role | Play-by-Play | Select Next Line | Game Events | Follow |
+|------|--------------|------------------|-------------|--------|
+| **Active Coach** | Full access | Edit between points | Full access | Available |
+| **Line Coach** | View only | Edit anytime | View only | Available |
+| **Both roles** | Full access | Edit anytime | Full access | Available |
+| **Coach (no role)** | Disabled | Disabled | Disabled | Maximized |
+| **Viewer** | Hidden | Hidden | Hidden | Maximized |
+
+---
+
+#### Future: O/D Line Selection (Phase 7+)
+- [ ] O/D button splits "Select Next Line" into two panels
+- [ ] "Select Next O Line" — prepare offensive lineup
+- [ ] "Select Next D Line" — prepare defensive lineup
+- [ ] "Start Point" button appears in appropriate panel based on possession
 
 ### 🔄 Phase 5: Multi-User Polling
 
