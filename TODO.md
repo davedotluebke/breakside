@@ -138,6 +138,13 @@ See [PHASE4_CONTROLLER_PLAN.md](PHASE4_CONTROLLER_PLAN.md) for full implementati
 
 Replace current screen-based navigation with a **panel-based layout** for all in-game functionality.
 
+**Implementation Strategy:**
+- Create new `game/gameScreen.js` with full panel container
+- Stub all panels with placeholder content + "Use Old Screen" fallback buttons
+- Implement panels one-by-one, removing fallback buttons as each is completed
+- Mobile-first design throughout
+- This is a new major version (2.0) — no backward compatibility required during development
+
 ---
 
 #### Panel Layout (top to bottom)
@@ -241,6 +248,67 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 | **Both roles** | Full access | Edit anytime | Full access | Available |
 | **Coach (no role)** | Disabled | Disabled | Disabled | Maximized |
 | **Viewer** | Hidden | Hidden | Hidden | Maximized |
+
+---
+
+---
+
+#### Implementation Order
+
+**Step 1: Panel Container Foundation**
+- [ ] Create `game/gameScreen.js` with panel container system
+- [ ] Create `ui/panelSystem.js` for resize/pin/min-max logic
+- [ ] CSS for mobile-first panel stack with drag handles
+- [ ] Stub all 6 panels with placeholder content
+- [ ] Each stub has "Use Old Screen →" button linking to legacy screen
+- [ ] Wire up as new entry point when game starts
+
+**Step 2: Header Panel**
+- [ ] Port existing header (hamburger, logo, score)
+- [ ] Add timer toggle (game clock ↔ point timer)
+- [ ] Add pause/resume for point timer
+- [ ] New fields: `gameDurationMinutes`, `roundEndTime`
+- [ ] Red negative countdown when cap time exceeded
+
+**Step 3: Role Buttons Panel**
+- [ ] Port existing role buttons from sub-header
+- [ ] Ensure handoff flow still works
+
+**Step 4: Follow Panel**
+- [ ] Game status display (teams, score)
+- [ ] Large scrollable event log
+- [ ] Remove "Use Old Screen" button when complete
+
+**Step 5: Game Events Panel**
+- [ ] End Game, Timeout, Half Time, Switch Sides buttons
+- [ ] Responsive 1-row/2-row layout with `...` menu
+- [ ] Enable/disable based on game state and role
+- [ ] Remove "Use Old Screen" button when complete
+
+**Step 6: Play-by-Play Panel**
+- [ ] Responsive Simple Mode layout
+- [ ] We Score / They Score / Key Play / `...`
+- [ ] Sub Players modal for mid-point injury subs
+- [ ] Pull dialog auto-popup (defensive point start)
+- [ ] Key Play dialog integration
+- [ ] Undo functionality
+- [ ] Auto-resize on point start/end
+- [ ] Remove "Use Old Screen" button when complete
+
+**Step 7: Select Next Line Panel**
+- [ ] Player selection table (port from Before Point Screen)
+- [ ] Start Point (Offense/Defense) button
+- [ ] Minimize to title bar / player names / full table
+- [ ] Role-based enable/disable (Active vs Line Coach)
+- [ ] Conflict warning toast when both coaches edit
+- [ ] Auto-resize behaviors
+- [ ] Remove "Use Old Screen" button when complete
+- [ ] O/D button (disabled placeholder for future)
+
+**Step 8: Cleanup**
+- [ ] Remove legacy screen navigation for in-game screens
+- [ ] Update version to 2.0.0
+- [ ] Update ARCHITECTURE.md with new panel system
 
 ---
 
