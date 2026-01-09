@@ -1,6 +1,8 @@
 /*
  * Point Management
  * Handles point creation, transitions, and timing controls.
+ * 
+ * Phase 6b: Added useNewGameScreen toggle to enable panel-based UI
  */
 let countdownInterval = null;
 let countdownSeconds = 90;
@@ -10,6 +12,10 @@ let isPaused = false;
 if (typeof window.isSimpleMode === 'undefined') {
     window.isSimpleMode = true;
 }
+
+// Phase 6b: Toggle to use new panel-based game screen
+// Set to true to use the new UI, false for legacy screens
+window.useNewGameScreen = true;
 
 const pauseResumeBtn = document.getElementById('pauseResumeBtn');
 const pauseResumeText = pauseResumeBtn ? pauseResumeBtn.querySelector('.pause-resume-text') : null;
@@ -73,7 +79,30 @@ function startNextPoint() {
     // Update the simple mode toggle to match isSimpleMode before showing the screen
     document.getElementById('simpleModeToggle').checked = window.isSimpleMode;
 
-    // For defense points, show Pull dialog first (regardless of simple mode)
+    // Phase 6b: Use new panel-based game screen if enabled
+    if (window.useNewGameScreen && typeof enterGameScreen === 'function') {
+        // Start timing
+        if (currentPoint.startTimestamp !== null) {
+            console.warn("Warning: startTimestamp was already set when starting point");
+        }
+        currentPoint.startTimestamp = new Date();
+        
+        // Enter the new game screen
+        enterGameScreen();
+        
+        // For defense points, still show Pull dialog on top of game screen
+        if (startPointOn === 'defense' && typeof showPullDialog === 'function') {
+            showPullDialog();
+        }
+        
+        // Save and Sync on point start
+        if (typeof saveAllTeamsData === 'function') {
+            saveAllTeamsData();
+        }
+        return;
+    }
+
+    // Legacy behavior: For defense points, show Pull dialog first (regardless of simple mode)
     // The dialog will handle proceeding to the appropriate screen
     if (startPointOn === 'defense') {
         if (typeof showPullDialog === 'function') {
