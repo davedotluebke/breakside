@@ -118,6 +118,12 @@ function updateScore(winner) {
         button.classList.remove('selected');
     });
 
+    // Phase 6b: Update game screen score display
+    if (typeof updateGameScreenScore === 'function') {
+        const game = currentGame();
+        updateGameScreenScore(game.scores[Role.TEAM], game.scores[Role.OPPONENT]);
+    }
+
     summarizeGame();
     updateActivePlayersList();  // Update the table with the new point data
     saveAllTeamsData(); // Save and Sync
@@ -127,6 +133,11 @@ document.getElementById('endGameBtn').addEventListener('click', function() {
     if (confirm('Are you sure you want to end the game?')) {
         stopCountdown();
         currentGame().gameEndTimestamp = new Date(); // Set end timestamp (fixed: was incorrectly using endTimestamp)
+
+        // Phase 6b: Exit game screen if visible
+        if (typeof exitGameScreen === 'function') {
+            exitGameScreen();
+        }
 
         // Populate the gameSummaryScreen with statistics, then show it
         document.getElementById('teamName').textContent = currentGame().team;
@@ -257,6 +268,12 @@ document.getElementById('anotherGameBtn').addEventListener('click', function() {
     currentPoint = null;
     currentEvent = null;
     currentPlayer = null;
+    
+    // Phase 6b: Exit game screen if visible
+    if (typeof exitGameScreen === 'function') {
+        exitGameScreen();
+    }
+    
     updateTeamRosterDisplay();
     document.getElementById('continueGameBtn').classList.add('inactive');
     showScreen('teamRosterScreen');

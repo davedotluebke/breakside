@@ -1,0 +1,665 @@
+/* =============================================================================
+   Panel System - Mobile-First In-Game UI Layout
+   Phase 6b: Panel Container Foundation
+   ============================================================================= */
+
+/* Panel Container - Full-screen container for game screen */
+.game-screen-container {
+    display: none;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh; /* Dynamic viewport height for mobile browsers */
+    width: 100%;
+    overflow: hidden;
+    background: #f4f4f4;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+}
+
+.game-screen-container.active {
+    display: flex;
+}
+
+/* =============================================================================
+   Panel Stack - Vertical stack of collapsible panels
+   ============================================================================= */
+
+.panel-stack {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* =============================================================================
+   Individual Panel Base Styles
+   ============================================================================= */
+
+.game-panel {
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    overflow: hidden;
+    transition: flex 0.2s ease-out;
+    min-height: 0;
+}
+
+/* Panel states */
+.game-panel.minimized {
+    flex: 0 0 auto;
+}
+
+.game-panel.maximized {
+    flex: 1 1 auto;
+    min-height: 100px;
+}
+
+.game-panel.fills-remaining {
+    flex: 1 1 auto;
+    min-height: 60px;
+}
+
+.game-panel.pinned {
+    /* Pinned panels keep their current size */
+}
+
+.game-panel.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.game-panel.hidden {
+    display: none;
+}
+
+/* =============================================================================
+   Panel Title Bar (handles resize, pin, collapse)
+   ============================================================================= */
+
+.panel-title-bar {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #ddd;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+    min-height: 36px;
+    flex-shrink: 0;
+}
+
+.panel-title-bar:active {
+    cursor: grabbing;
+}
+
+/* Drag handle (left side of title bar) */
+.panel-drag-handle {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 8px 4px 4px;
+    margin-right: 8px;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+}
+
+.panel-title-bar:hover .panel-drag-handle {
+    opacity: 0.7;
+}
+
+.panel-drag-handle-line {
+    width: 16px;
+    height: 2px;
+    background: #666;
+    border-radius: 1px;
+}
+
+/* Panel title text */
+.panel-title {
+    flex: 1;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Panel subtitle (e.g., player names when minimized) */
+.panel-subtitle {
+    font-size: 0.75rem;
+    color: #666;
+    margin-left: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 50%;
+}
+
+/* Panel action buttons (pin, expand/collapse) */
+.panel-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.panel-action-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    margin: 0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    color: #666;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    transition: all 0.15s;
+}
+
+.panel-action-btn:hover {
+    background: #f0f0f0;
+    border-color: #999;
+    color: #333;
+}
+
+.panel-action-btn.active {
+    background: #007bff;
+    border-color: #007bff;
+    color: #fff;
+}
+
+.panel-action-btn i {
+    font-size: 0.7rem;
+}
+
+/* =============================================================================
+   Panel Content Area
+   ============================================================================= */
+
+.panel-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 12px;
+    min-height: 0;
+}
+
+.game-panel.minimized .panel-content {
+    display: none;
+}
+
+/* Stub panel content (placeholder during development) */
+.panel-stub {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 20px;
+    text-align: center;
+    min-height: 80px;
+}
+
+.panel-stub-icon {
+    font-size: 2rem;
+    color: #aaa;
+}
+
+.panel-stub-text {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.panel-stub-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin: 0;
+}
+
+.panel-stub-action:hover {
+    background: linear-gradient(135deg, #5a6268 0%, #343a40 100%);
+    transform: translateY(-1px);
+}
+
+.panel-stub-action i {
+    font-size: 0.85rem;
+}
+
+/* =============================================================================
+   Header Panel (always visible, fixed height)
+   ============================================================================= */
+
+.panel-header {
+    flex: 0 0 auto;
+    background: #EB8232;
+    color: #fff;
+}
+
+.panel-header .panel-title-bar {
+    background: transparent;
+    border-bottom: none;
+    cursor: default;
+    padding: 10px 12px;
+}
+
+.panel-header .panel-drag-handle {
+    display: none;
+}
+
+.header-content-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 12px;
+}
+
+.header-menu-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    margin: 0;
+    background: rgba(255,255,255,0.15);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    transition: background 0.2s;
+}
+
+.header-menu-btn:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+.header-logo {
+    height: 32px;
+    width: auto;
+    border-radius: 4px;
+}
+
+.header-score-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.header-score-us {
+    color: #fff;
+}
+
+.header-score-separator {
+    color: rgba(255,255,255,0.6);
+    font-weight: 400;
+}
+
+.header-score-them {
+    color: rgba(255,255,255,0.8);
+}
+
+.header-timer-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 6px;
+    cursor: pointer;
+    min-width: 60px;
+}
+
+.header-timer-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.header-timer-label {
+    font-size: 0.6rem;
+    color: rgba(255,255,255,0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.header-timer-value.timer-warning {
+    color: #ffc107;
+}
+
+.header-timer-value.timer-danger {
+    color: #ff6b6b;
+}
+
+.header-timer-value.timer-negative {
+    color: #ff4444;
+}
+
+/* =============================================================================
+   Role Buttons Panel (coaches only)
+   ============================================================================= */
+
+.panel-role-buttons {
+    flex: 0 0 auto;
+    background: #f4f4f4;
+}
+
+.panel-role-buttons .panel-title-bar {
+    display: none;
+}
+
+.panel-role-buttons .panel-content {
+    padding: 6px 8px;
+    display: flex;
+    gap: 6px;
+}
+
+.role-claim-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+    margin: 0;
+    border-radius: 6px;
+    border: 2px solid #ccc;
+    background: #e8e8e8;
+    color: #444;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.role-claim-btn:hover {
+    background: #ddd;
+    border-color: #aaa;
+}
+
+.role-claim-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+.role-claim-holder {
+    font-size: 0.7rem;
+    color: #666;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+/* Role button states - green when YOU have the role */
+.role-claim-btn.has-role {
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    border-color: #28a745;
+    color: white;
+    box-shadow: 0 2px 6px rgba(40, 167, 69, 0.35);
+}
+
+.role-claim-btn.has-role .role-claim-holder {
+    color: rgba(255, 255, 255, 0.95);
+    font-weight: 500;
+}
+
+/* When someone else has the role - light orange */
+.role-claim-btn.other-has-role {
+    background: linear-gradient(135deg, #fde8d4 0%, #f8dcc4 100%);
+    border-color: #e8a86e;
+    color: #8b5a2b;
+}
+
+.role-claim-btn.other-has-role .role-claim-holder {
+    color: #a0522d;
+    font-weight: 500;
+}
+
+/* Pending handoff request animation */
+.role-claim-btn.pending-handoff {
+    animation: pendingPulse 1.5s infinite;
+    border-color: #ffc107;
+    background: #fff3cd;
+}
+
+/* =============================================================================
+   Play-by-Play Panel (resizable)
+   ============================================================================= */
+
+.panel-play-by-play {
+    background: #fff;
+}
+
+.panel-play-by-play .panel-title-bar {
+    background: linear-gradient(135deg, #e8f4e8 0%, #d4edda 100%);
+}
+
+/* =============================================================================
+   Select Next Line Panel (resizable)
+   ============================================================================= */
+
+.panel-select-line {
+    background: #fff;
+}
+
+.panel-select-line .panel-title-bar {
+    background: linear-gradient(135deg, #e8f0f8 0%, #d4e5f7 100%);
+}
+
+/* =============================================================================
+   Game Events Panel (resizable)
+   ============================================================================= */
+
+.panel-game-events {
+    background: #fff;
+}
+
+.panel-game-events .panel-title-bar {
+    background: linear-gradient(135deg, #f8f0e8 0%, #f7e5d4 100%);
+}
+
+/* =============================================================================
+   Follow Panel (fills remaining space)
+   ============================================================================= */
+
+.panel-follow {
+    background: #fff;
+    flex: 1 1 auto;
+    min-height: 80px;
+}
+
+.panel-follow .panel-title-bar {
+    background: linear-gradient(135deg, #f0f0f0 0%, #e8e8e8 100%);
+}
+
+/* Event log in follow panel */
+.follow-event-log {
+    flex: 1;
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    padding: 8px;
+    background: #fafafa;
+    border-radius: 4px;
+}
+
+.follow-event-item {
+    padding: 4px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.follow-event-item:last-child {
+    border-bottom: none;
+}
+
+.follow-game-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+
+.follow-team-name {
+    font-weight: 600;
+    color: #333;
+}
+
+.follow-score {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #EB8232;
+}
+
+/* =============================================================================
+   Mobile Adjustments
+   ============================================================================= */
+
+@media (max-width: 480px) {
+    .panel-title-bar {
+        padding: 6px 10px;
+        min-height: 32px;
+    }
+    
+    .panel-title {
+        font-size: 0.85rem;
+    }
+    
+    .panel-subtitle {
+        font-size: 0.7rem;
+    }
+    
+    .panel-action-btn {
+        width: 26px;
+        height: 26px;
+    }
+    
+    .panel-content {
+        padding: 10px;
+    }
+    
+    .panel-stub {
+        padding: 16px;
+        gap: 12px;
+    }
+    
+    .panel-stub-icon {
+        font-size: 1.5rem;
+    }
+    
+    .panel-stub-action {
+        padding: 8px 16px;
+        font-size: 0.85rem;
+    }
+    
+    .header-score-display {
+        font-size: 1rem;
+    }
+    
+    .header-timer-container {
+        min-width: 50px;
+        padding: 3px 6px;
+    }
+    
+    .header-timer-value {
+        font-size: 0.9rem;
+    }
+    
+    .role-claim-btn {
+        padding: 5px 10px;
+    }
+    
+    .role-claim-label {
+        font-size: 0.8rem;
+    }
+    
+    .role-claim-holder {
+        font-size: 0.65rem;
+    }
+}
+
+/* =============================================================================
+   Resize Handle (between panels)
+   ============================================================================= */
+
+.panel-resize-handle {
+    height: 8px;
+    background: linear-gradient(to bottom, transparent 0%, #ddd 50%, transparent 100%);
+    cursor: ns-resize;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.panel-resize-handle::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 4px;
+    background: #bbb;
+    border-radius: 2px;
+}
+
+.panel-resize-handle:hover::before {
+    background: #999;
+}
+
+/* =============================================================================
+   Animations
+   ============================================================================= */
+
+@keyframes panelExpand {
+    from {
+        max-height: 44px;
+        opacity: 0.8;
+    }
+    to {
+        max-height: 500px;
+        opacity: 1;
+    }
+}
+
+@keyframes panelCollapse {
+    from {
+        max-height: 500px;
+        opacity: 1;
+    }
+    to {
+        max-height: 44px;
+        opacity: 0.8;
+    }
+}
+
