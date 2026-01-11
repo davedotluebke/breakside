@@ -122,11 +122,58 @@
     padding: 4px 8px 4px 4px;
     margin-right: 8px;
     opacity: 0.4;
-    transition: opacity 0.2s;
+    transition: opacity 0.2s, background 0.15s;
+    border-radius: 4px;
 }
 
 .panel-title-bar:hover .panel-drag-handle {
     opacity: 0.7;
+}
+
+/* Resizable drag handles get special styling */
+.panel-drag-handle.resizable {
+    cursor: ns-resize;
+    padding: 6px 10px;
+    margin-left: -6px;
+}
+
+.panel-drag-handle.resizable:hover {
+    opacity: 1;
+    background: rgba(0, 123, 255, 0.1);
+}
+
+.panel-drag-handle.resizable:active {
+    background: rgba(0, 123, 255, 0.2);
+}
+
+/* Pinned panels can't be resized - show locked appearance */
+.game-panel.pinned .panel-drag-handle.resizable {
+    cursor: not-allowed;
+    opacity: 0.25;
+}
+
+.game-panel.pinned .panel-drag-handle.resizable:hover {
+    background: rgba(128, 128, 128, 0.1);
+    opacity: 0.35;
+}
+
+.game-panel.pinned .panel-drag-handle.resizable:hover .panel-drag-handle-line {
+    background: #888;
+}
+
+/* Minimized panels can't be resized */
+.game-panel.minimized .panel-drag-handle.resizable {
+    cursor: default;
+    opacity: 0.25;
+}
+
+.game-panel.minimized .panel-drag-handle.resizable:hover {
+    background: transparent;
+    opacity: 0.25;
+}
+
+.game-panel.minimized .panel-drag-handle.resizable:hover .panel-drag-handle-line {
+    background: #666;
 }
 
 .panel-drag-handle-line {
@@ -134,6 +181,11 @@
     height: 2px;
     background: #666;
     border-radius: 1px;
+    transition: background 0.15s;
+}
+
+.panel-drag-handle.resizable:hover .panel-drag-handle-line {
+    background: #007bff;
 }
 
 /* Panel title text */
@@ -659,6 +711,54 @@
 
 .panel-resize-handle:hover::before {
     background: #999;
+}
+
+/* =============================================================================
+   Drag-to-Resize States
+   ============================================================================= */
+
+/* Body state during resize - prevents text selection and ensures smooth cursor */
+body.panel-resizing {
+    cursor: ns-resize !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+body.panel-resizing * {
+    cursor: ns-resize !important;
+}
+
+/* Panel being actively dragged */
+.game-panel.dragging {
+    z-index: 10;
+}
+
+.game-panel.dragging .panel-title-bar {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
+}
+
+.game-panel.dragging .panel-drag-handle {
+    opacity: 1;
+    background: rgba(0, 123, 255, 0.15);
+}
+
+.game-panel.dragging .panel-drag-handle .panel-drag-handle-line {
+    background: #007bff;
+}
+
+/* Title bar dragging state */
+.panel-title-bar.dragging {
+    cursor: ns-resize;
+}
+
+/* Disable transitions during drag for responsive feel */
+body.panel-resizing .game-panel {
+    transition: none !important;
+}
+
+body.panel-resizing .panel-content {
+    transition: none !important;
 }
 
 /* =============================================================================

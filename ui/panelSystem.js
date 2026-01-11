@@ -198,6 +198,320 @@ function setPanelVisible(panelId, visible) {
 }
 
 // =============================================================================
+// Panel Height State Management
+// =============================================================================
+
+const PANEL_HEIGHTS_KEY = 'breakside_panel_heights';
+
+// Minimum heights for panels (content area, not including title bar)
+const MIN_PANEL_CONTENT_HEIGHT = 60;
+const TITLE_BAR_HEIGHT = 44; // Approximate title bar height
+
+// Panel heights (stored separately from minimized/pinned state)
+let panelHeights = {};
+
+/**
+ * Load panel heights from localStorage
+ */
+function loadPanelHeights() {
+    try {
+        const saved = localStorage.getItem(PANEL_HEIGHTS_KEY);
+        if (saved) {
+            panelHeights = JSON.parse(saved);
+        }
+    } catch (e) {
+        console.warn('Failed to load panel heights:', e);
+        panelHeights = {};
+    }
+}
+
+/**
+ * Save panel heights to localStorage
+ */
+function savePanelHeights() {
+    try {
+        localStorage.setItem(PANEL_HEIGHTS_KEY, JSON.stringify(panelHeights));
+    } catch (e) {
+        console.warn('Failed to save panel heights:', e);
+    }
+}
+
+/**
+ * Get stored height for a panel
+ * @param {string} panelId - Panel identifier
+ * @returns {number|null} - Height in pixels or null if not set
+ */
+function getPanelHeight(panelId) {
+    return panelHeights[panelId] || null;
+}
+
+/**
+ * Set height for a panel
+ * @param {string} panelId - Panel identifier
+ * @param {number} height - Height in pixels
+ */
+function setPanelHeight(panelId, height) {
+    panelHeights[panelId] = height;
+    savePanelHeights();
+}
+
+/**
+ * Apply stored height to a panel element
+ * @param {string} panelId - Panel identifier
+ */
+function applyPanelHeight(panelId) {
+    const panel = getPanelElement(panelId);
+    if (!panel) return;
+    
+    const state = getPanelState(panelId);
+    const height = getPanelHeight(panelId);
+    
+    // Don't apply height if minimized or if it's a fixed panel
+    if (state.minimized || panelId === 'header' || panelId === 'roleButtons' || panelId === 'follow') {
+        panel.style.height = '';
+        panel.style.flex = '';
+        return;
+    }
+    
+    if (height) {
+        panel.style.height = `${height}px`;
+        panel.style.flex = `0 0 ${height}px`;
+    }
+}
+
+/**
+ * Apply all stored panel heights
+ */
+function applyAllPanelHeights() {
+    ['playByPlay', 'selectLine', 'gameEvents'].forEach(panelId => {
+        applyPanelHeight(panelId);
+    });
+}
+
+// =============================================================================
+// Drag-to-Resize System
+// =============================================================================
+
+// Resizable panels in order (top to bottom)
+const RESIZABLE_PANELS = ['playByPlay', 'selectLine', 'gameEvents'];
+
+// Drag state
+let dragState = {
+    active: false,
+    panelId: null,
+    startY: 0,
+    startHeight: 0,
+    belowPanelId: null,
+    belowStartHeight: 0
+};
+
+/**
+ * Get the panel below a given panel (for resize pairing)
+ * @param {string} panelId - Current panel ID
+ * @returns {string|null} - ID of panel below, or null
+ */
+function getPanelBelow(panelId) {
+    const idx = RESIZABLE_PANELS.indexOf(panelId);
+    if (idx >= 0 && idx < RESIZABLE_PANELS.length - 1) {
+        return RESIZABLE_PANELS[idx + 1];
+    }
+    // If it's the last resizable panel, pair with follow
+    if (idx === RESIZABLE_PANELS.length - 1) {
+        return 'follow';
+    }
+    return null;
+}
+
+/**
+ * Check if a panel can be resized
+ * @param {string} panelId - Panel identifier
+ * @returns {boolean}
+ */
+function canResizePanel(panelId) {
+    const state = getPanelState(panelId);
+    // Can't resize pinned panels, minimized panels, or fixed panels
+    if (state.pinned || state.minimized) return false;
+    if (panelId === 'header' || panelId === 'roleButtons') return false;
+    return RESIZABLE_PANELS.includes(panelId);
+}
+
+/**
+ * Get the current height of a panel
+ * @param {string} panelId - Panel identifier
+ * @returns {number} - Height in pixels
+ */
+function getCurrentPanelHeight(panelId) {
+    const panel = getPanelElement(panelId);
+    if (!panel) return 0;
+    return panel.offsetHeight;
+}
+
+/**
+ * Start drag operation
+ * @param {string} panelId - Panel being dragged
+ * @param {number} clientY - Starting Y coordinate
+ */
+function startDrag(panelId, clientY) {
+    if (!canResizePanel(panelId)) return false;
+    
+    const belowPanelId = getPanelBelow(panelId);
+    const belowState = belowPanelId ? getPanelState(belowPanelId) : null;
+    
+    // Can't resize if panel below is pinned (unless it's Follow)
+    if (belowState && belowState.pinned && belowPanelId !== 'follow') return false;
+    
+    dragState = {
+        active: true,
+        panelId,
+        startY: clientY,
+        startHeight: getCurrentPanelHeight(panelId),
+        belowPanelId,
+        belowStartHeight: belowPanelId ? getCurrentPanelHeight(belowPanelId) : 0
+    };
+    
+    // Add dragging class for visual feedback
+    const panel = getPanelElement(panelId);
+    if (panel) {
+        panel.classList.add('dragging');
+        const titleBar = panel.querySelector('.panel-title-bar');
+        if (titleBar) titleBar.classList.add('dragging');
+    }
+    
+    document.body.classList.add('panel-resizing');
+    
+    return true;
+}
+
+/**
+ * Handle drag movement
+ * @param {number} clientY - Current Y coordinate
+ */
+function handleDrag(clientY) {
+    if (!dragState.active) return;
+    
+    const deltaY = clientY - dragState.startY;
+    
+    // Calculate new heights
+    let newHeight = dragState.startHeight + deltaY;
+    let newBelowHeight = dragState.belowStartHeight - deltaY;
+    
+    // Apply minimum constraints
+    const minHeight = TITLE_BAR_HEIGHT + MIN_PANEL_CONTENT_HEIGHT;
+    
+    // Constrain primary panel
+    if (newHeight < minHeight) {
+        const adjustment = minHeight - newHeight;
+        newHeight = minHeight;
+        newBelowHeight += adjustment;
+    }
+    
+    // Constrain panel below (if not Follow)
+    if (dragState.belowPanelId !== 'follow' && newBelowHeight < minHeight) {
+        const adjustment = minHeight - newBelowHeight;
+        newBelowHeight = minHeight;
+        newHeight -= adjustment;
+    }
+    
+    // Apply heights to panels
+    const panel = getPanelElement(dragState.panelId);
+    if (panel) {
+        panel.style.height = `${newHeight}px`;
+        panel.style.flex = `0 0 ${newHeight}px`;
+    }
+    
+    // For panels below that aren't Follow, also set explicit height
+    if (dragState.belowPanelId && dragState.belowPanelId !== 'follow') {
+        const belowPanel = getPanelElement(dragState.belowPanelId);
+        if (belowPanel) {
+            belowPanel.style.height = `${newBelowHeight}px`;
+            belowPanel.style.flex = `0 0 ${newBelowHeight}px`;
+        }
+    }
+}
+
+/**
+ * End drag operation
+ */
+function endDrag() {
+    if (!dragState.active) return;
+    
+    // Save final heights
+    const panel = getPanelElement(dragState.panelId);
+    if (panel) {
+        setPanelHeight(dragState.panelId, panel.offsetHeight);
+        panel.classList.remove('dragging');
+        const titleBar = panel.querySelector('.panel-title-bar');
+        if (titleBar) titleBar.classList.remove('dragging');
+    }
+    
+    // Save below panel height if it's not Follow
+    if (dragState.belowPanelId && dragState.belowPanelId !== 'follow') {
+        const belowPanel = getPanelElement(dragState.belowPanelId);
+        if (belowPanel) {
+            setPanelHeight(dragState.belowPanelId, belowPanel.offsetHeight);
+        }
+    }
+    
+    document.body.classList.remove('panel-resizing');
+    
+    dragState = {
+        active: false,
+        panelId: null,
+        startY: 0,
+        startHeight: 0,
+        belowPanelId: null,
+        belowStartHeight: 0
+    };
+}
+
+/**
+ * Initialize drag handlers on a drag handle element
+ * @param {HTMLElement} dragHandle - The drag handle element
+ * @param {string} panelId - Panel identifier
+ */
+function initDragHandle(dragHandle, panelId) {
+    // Mouse events
+    dragHandle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (startDrag(panelId, e.clientY)) {
+            // Bind move and up to document for reliable tracking
+            const handleMouseMove = (e) => handleDrag(e.clientY);
+            const handleMouseUp = () => {
+                endDrag();
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', handleMouseUp);
+            };
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+        }
+    });
+    
+    // Touch events
+    dragHandle.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const touch = e.touches[0];
+        if (startDrag(panelId, touch.clientY)) {
+            const handleTouchMove = (e) => {
+                if (e.touches.length !== 1) return;
+                handleDrag(e.touches[0].clientY);
+            };
+            const handleTouchEnd = () => {
+                endDrag();
+                document.removeEventListener('touchmove', handleTouchMove);
+                document.removeEventListener('touchend', handleTouchEnd);
+                document.removeEventListener('touchcancel', handleTouchEnd);
+            };
+            document.addEventListener('touchmove', handleTouchMove, { passive: false });
+            document.addEventListener('touchend', handleTouchEnd);
+            document.addEventListener('touchcancel', handleTouchEnd);
+        }
+    }, { passive: false });
+}
+
+// =============================================================================
 // Event Handlers
 // =============================================================================
 
@@ -207,6 +521,9 @@ function setPanelVisible(panelId, visible) {
  */
 let lastTapTime = {};
 function handleTitleBarTap(panelId) {
+    // Ignore if we're dragging
+    if (dragState.active) return;
+    
     const now = Date.now();
     const lastTap = lastTapTime[panelId] || 0;
     
@@ -259,16 +576,27 @@ function createPanelTitleBar(options) {
     const titleBar = document.createElement('div');
     titleBar.className = 'panel-title-bar';
     
+    // Check if this panel is resizable
+    const isResizable = RESIZABLE_PANELS.includes(panelId);
+    
     // Drag handle
     if (showDragHandle) {
         const dragHandle = document.createElement('div');
         dragHandle.className = 'panel-drag-handle';
+        if (isResizable) {
+            dragHandle.classList.add('resizable');
+        }
         dragHandle.innerHTML = `
             <div class="panel-drag-handle-line"></div>
             <div class="panel-drag-handle-line"></div>
             <div class="panel-drag-handle-line"></div>
         `;
         titleBar.appendChild(dragHandle);
+        
+        // Initialize drag handlers for resizable panels
+        if (isResizable) {
+            initDragHandle(dragHandle, panelId);
+        }
     }
     
     // Title
@@ -309,8 +637,12 @@ function createPanelTitleBar(options) {
     
     titleBar.appendChild(actions);
     
-    // Double-tap handler for title bar
-    titleBar.addEventListener('click', () => handleTitleBarTap(panelId));
+    // Double-tap handler for title bar (but not on drag handle)
+    titleBar.addEventListener('click', (e) => {
+        // Don't trigger double-tap if clicking on drag handle
+        if (e.target.closest('.panel-drag-handle')) return;
+        handleTitleBarTap(panelId);
+    });
     
     return titleBar;
 }
@@ -425,7 +757,9 @@ function showGameScreen() {
     if (container) {
         container.classList.add('active');
         loadPanelStates();
+        loadPanelHeights();
         applyAllPanelStates();
+        applyAllPanelHeights();
     }
 }
 
@@ -561,6 +895,7 @@ function setPanelSubtitle(panelId, text) {
  */
 function initPanelSystem() {
     loadPanelStates();
+    loadPanelHeights();
     console.log('🎛️ Panel system initialized');
 }
 
@@ -580,6 +915,14 @@ window.getPanelState = getPanelState;
 window.setPanelState = setPanelState;
 window.loadPanelStates = loadPanelStates;
 window.savePanelStates = savePanelStates;
+
+// Height management
+window.getPanelHeight = getPanelHeight;
+window.setPanelHeight = setPanelHeight;
+window.loadPanelHeights = loadPanelHeights;
+window.savePanelHeights = savePanelHeights;
+window.applyPanelHeight = applyPanelHeight;
+window.applyAllPanelHeights = applyAllPanelHeights;
 
 // Panel actions
 window.togglePanelMinimized = togglePanelMinimized;
