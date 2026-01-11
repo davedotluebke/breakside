@@ -61,6 +61,17 @@
     min-height: 60px;
 }
 
+/* When Follow panel is minimized, it snaps to bottom */
+.game-panel.fills-remaining.minimized {
+    flex: 0 0 auto;
+    margin-top: auto; /* Push to bottom of flex container */
+}
+
+/* When Follow is minimized, the bottommost non-minimized panel expands */
+.game-panel.expands-for-follow {
+    flex: 1 1 auto !important;
+}
+
 .game-panel.pinned {
     /* Pinned panels keep their current size */
 }
