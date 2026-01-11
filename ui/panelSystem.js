@@ -484,9 +484,10 @@ function updatePanelsForRole(role) {
     }
     
     // Follow panel - maximized for viewers or coaches without roles
+    // But respect user's explicit choice if they've minimized or pinned it
     if (!hasRole) {
         const followState = getPanelState('follow');
-        if (!followState.pinned) {
+        if (!followState.pinned && !followState.minimized) {
             maximizePanel('follow', false);
         }
     }
