@@ -127,6 +127,43 @@ function applyPanelState(panelId) {
         }
         expandBtn.title = state.minimized ? 'Expand panel' : 'Collapse panel';
     }
+    
+    // Special handling for Follow panel (Game Log)
+    if (panelId === 'follow') {
+        updateExpandsForFollow();
+    }
+}
+
+/**
+ * Update which panel expands when Follow (Game Log) is minimized
+ * Finds the bottommost non-minimized panel and gives it flex-grow
+ */
+function updateExpandsForFollow() {
+    const followState = getPanelState('follow');
+    const panelStack = document.querySelector('.panel-stack');
+    if (!panelStack) return;
+    
+    // Remove expands-for-follow from all panels first
+    panelStack.querySelectorAll('.expands-for-follow').forEach(el => {
+        el.classList.remove('expands-for-follow');
+    });
+    
+    // If Follow is minimized, find the bottommost non-minimized panel to expand
+    if (followState.minimized) {
+        // Panel order (excluding header and roleButtons which are fixed)
+        const expandablePanelIds = ['gameEvents', 'selectLine', 'playByPlay'];
+        
+        for (const panelId of expandablePanelIds) {
+            const state = getPanelState(panelId);
+            if (!state.minimized && !state.hidden) {
+                const panel = getPanelElement(panelId);
+                if (panel) {
+                    panel.classList.add('expands-for-follow');
+                }
+                break; // Only expand the first (bottommost) non-minimized panel
+            }
+        }
+    }
 }
 
 /**
