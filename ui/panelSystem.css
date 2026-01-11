@@ -59,17 +59,19 @@
 .game-panel.fills-remaining {
     flex: 1 1 auto; /* Only this panel grows to fill remaining space */
     min-height: 60px;
+    transition: flex 0.25s ease-out, margin-top 0.25s ease-out;
 }
 
-/* When Follow panel is minimized, it snaps to bottom */
+/* When Follow panel is "minimized", snap title bar to bottom */
 .game-panel.fills-remaining.minimized {
     flex: 0 0 auto;
     margin-top: auto; /* Push to bottom of flex container */
 }
 
-/* When Follow is minimized, the bottommost non-minimized panel expands */
-.game-panel.expands-for-follow {
+/* When Follow is minimized, expand Game Events panel (second-to-last) */
+.panel-stack:has(.panel-follow.minimized) .panel-gameEvents:not(.minimized) {
     flex: 1 1 auto !important;
+    transition: flex 0.25s ease-out;
 }
 
 .game-panel.pinned {
