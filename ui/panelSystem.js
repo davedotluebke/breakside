@@ -178,50 +178,66 @@ function applyAllPanelStates() {
  */
 function updateExpandingPanel() {
     const followState = getPanelState('follow');
+    const followPanel = getPanelElement('follow');
     
-    // If Follow is not minimized, it handles expansion (via its CSS class)
+    // All resizable panels (excluding fixed header/roleButtons)
+    const resizablePanels = ['playByPlay', 'selectLine', 'gameEvents', 'follow'];
+    
+    // If Follow is not minimized, it handles expansion
     if (!followState.minimized) {
-        // Ensure Follow has flex-grow
-        const followPanel = getPanelElement('follow');
-        if (followPanel && !followPanel.style.height) {
+        // Ensure Follow has flex-grow and expanding class
+        if (followPanel) {
             followPanel.style.flex = '1 1 auto';
+            followPanel.classList.add('expanding');
         }
-        // Remove flex-grow from other panels (unless they have explicit height)
+        // Remove expanding from other panels
         ['playByPlay', 'selectLine', 'gameEvents'].forEach(id => {
             const panel = getPanelElement(id);
             const state = getPanelState(id);
-            if (panel && !state.minimized && !state.height) {
-                panel.style.flex = '0 0 auto';
+            if (panel) {
+                panel.classList.remove('expanding');
+                if (!state.minimized && !state.height) {
+                    panel.style.flex = '0 0 auto';
+                }
             }
         });
         return;
     }
     
-    // Follow is minimized - find the last non-minimized panel to expand
+    // Follow is minimized - remove its expanding class
+    if (followPanel) {
+        followPanel.classList.remove('expanding');
+    }
+    
+    // Find the last non-minimized panel to expand
     // Order from bottom up (excluding Follow): gameEvents, selectLine, playByPlay
     const expandOrder = ['gameEvents', 'selectLine', 'playByPlay'];
-    let expandingPanel = null;
+    let expandingPanelId = null;
     
     for (const panelId of expandOrder) {
         const state = getPanelState(panelId);
         if (!state.minimized && !state.hidden) {
             // This panel should expand (unless it has a saved explicit height)
             if (!state.height) {
-                expandingPanel = panelId;
+                expandingPanelId = panelId;
                 break;
             }
         }
     }
     
-    // Apply flex-grow to the expanding panel, remove from others
+    // Apply expanding class and flex-grow to the expanding panel, remove from others
     expandOrder.forEach(id => {
         const panel = getPanelElement(id);
         const state = getPanelState(id);
-        if (panel && !state.minimized) {
-            if (id === expandingPanel) {
+        if (panel) {
+            if (id === expandingPanelId) {
                 panel.style.flex = '1 1 auto';
-            } else if (!state.height) {
-                panel.style.flex = '0 0 auto';
+                panel.classList.add('expanding');
+            } else {
+                panel.classList.remove('expanding');
+                if (!state.minimized && !state.height) {
+                    panel.style.flex = '0 0 auto';
+                }
             }
         }
     });
@@ -379,7 +395,7 @@ function isPanelDraggable(panelId) {
  * @param {number} clientY - Starting Y coordinate
  */
 function startPanelDrag(panelId, clientY) {
-    // Don't allow dragging if panel is pinned
+    // Don't allow dragging if THIS panel's title bar is pinned
     const state = getPanelState(panelId);
     if (state.pinned) return;
     
@@ -390,9 +406,10 @@ function startPanelDrag(panelId, clientY) {
     const abovePanelId = getPanelAbove(panelId);
     if (!abovePanelId) return;
     
-    // Don't drag if panel above is pinned
-    const aboveState = getPanelState(abovePanelId);
-    if (aboveState.pinned) return;
+    // Note: We DO allow dragging even if panel above is pinned.
+    // Pinning freezes a title bar's position, not the panel's content size.
+    // Dragging this title bar resizes the panel above's content, but doesn't
+    // move the panel above's title bar.
     
     const panelElement = getPanelElement(panelId);
     const aboveElement = getPanelElement(abovePanelId);
