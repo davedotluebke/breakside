@@ -54,12 +54,11 @@
 }
 
 .game-panel.maximized {
-    flex: 1 1 auto;
-    min-height: 100px;
+    flex: 0 0 auto; /* Don't grow - only show content height */
 }
 
 .game-panel.fills-remaining {
-    flex: 1 1 auto;
+    flex: 1 1 auto; /* Only this panel grows to fill remaining space */
     min-height: 60px;
 }
 
