@@ -66,12 +66,7 @@
 .game-panel.fills-remaining.minimized {
     flex: 0 0 auto;
     margin-top: auto; /* Push to bottom of flex container */
-}
-
-/* When Follow is minimized, expand Game Events panel (second-to-last) */
-.panel-stack:has(.panel-follow.minimized) .panel-gameEvents:not(.minimized) {
-    flex: 1 1 auto !important;
-    transition: flex 0.25s ease-out;
+    min-height: auto; /* Override the 60px min-height when minimized */
 }
 
 .game-panel.pinned {
