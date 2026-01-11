@@ -226,6 +226,7 @@
    ============================================================================= */
 
 .panel-content {
+    flex: 1 1 auto; /* Fill available space in panel */
     overflow-y: auto;
     overflow-x: hidden;
     padding: 12px;
@@ -234,6 +235,11 @@
     max-height: 500px;
     opacity: 1;
     transition: max-height 0.25s ease-out, opacity 0.15s ease-out, padding 0.25s ease-out;
+}
+
+/* When panel is expanding to fill space, remove max-height constraint */
+.game-panel.expanding .panel-content {
+    max-height: none;
 }
 
 .game-panel.minimized .panel-content {
