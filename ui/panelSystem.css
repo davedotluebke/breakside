@@ -44,7 +44,6 @@
     background: #fff;
     border-bottom: 1px solid #ddd;
     overflow: hidden;
-    transition: flex 0.2s ease-out;
     min-height: 0;
 }
 
@@ -90,6 +89,12 @@
     touch-action: none;
     min-height: 36px;
     flex-shrink: 0;
+    transition: background 0.2s ease-out;
+}
+
+/* Minimized title bar gets slightly darker to indicate collapsed state */
+.game-panel.minimized .panel-title-bar {
+    background: linear-gradient(135deg, #eef0f2 0%, #e0e3e6 100%);
 }
 
 .panel-title-bar:active {
@@ -185,15 +190,22 @@
    ============================================================================= */
 
 .panel-content {
-    flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 12px;
     min-height: 0;
+    /* Animation for minimize/maximize */
+    max-height: 500px;
+    opacity: 1;
+    transition: max-height 0.25s ease-out, opacity 0.15s ease-out, padding 0.25s ease-out;
 }
 
 .game-panel.minimized .panel-content {
-    display: none;
+    max-height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    overflow: hidden;
 }
 
 /* Stub panel content (placeholder during development) */
