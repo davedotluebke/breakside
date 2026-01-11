@@ -86,6 +86,8 @@ function setPanelState(panelId, state) {
     panelStates[panelId] = { ...getPanelState(panelId), ...state };
     savePanelStates();
     applyPanelState(panelId);
+    // Update which panel should expand (may have changed due to minimize/maximize)
+    updateExpandingPanel();
 }
 
 // =============================================================================
@@ -110,6 +112,7 @@ function applyPanelState(panelId) {
     if (!panel) return;
     
     const state = getPanelState(panelId);
+    const isFollowPanel = panelId === 'follow';
     
     // Apply minimized state
     panel.classList.toggle('minimized', state.minimized);
@@ -121,13 +124,21 @@ function applyPanelState(panelId) {
     // Apply hidden state
     panel.classList.toggle('hidden', state.hidden);
     
-    // Apply saved height (only if not minimized and not the Follow panel)
-    // Follow panel uses flex to fill remaining space
-    if (!state.minimized && state.height && panelId !== 'follow') {
+    // Handle height based on minimized state
+    if (state.minimized) {
+        // When minimized, ALWAYS clear explicit height so flex can collapse to title bar
+        panel.style.height = '';
+        panel.style.flex = '0 0 auto';
+    } else if (isFollowPanel) {
+        // Follow panel: uses flex to fill remaining space, no explicit height
+        panel.style.height = '';
+        panel.style.flex = '1 1 auto';
+    } else if (state.height) {
+        // Non-minimized panel with saved height: apply it
         panel.style.height = `${state.height}px`;
         panel.style.flex = '0 0 auto';
-    } else if (!state.minimized && panelId !== 'follow') {
-        // Clear explicit height to use natural height
+    } else {
+        // Non-minimized panel without saved height: use natural height
         panel.style.height = '';
         panel.style.flex = '0 0 auto';
     }
@@ -156,6 +167,63 @@ function applyPanelState(panelId) {
 function applyAllPanelStates() {
     Object.keys(panelStates).forEach(panelId => {
         applyPanelState(panelId);
+    });
+    // After applying individual states, update which panel should expand
+    updateExpandingPanel();
+}
+
+/**
+ * Determine which panel should expand to fill remaining space
+ * Normally this is Follow, but if Follow is minimized, it's the last non-minimized panel
+ */
+function updateExpandingPanel() {
+    const followState = getPanelState('follow');
+    
+    // If Follow is not minimized, it handles expansion (via its CSS class)
+    if (!followState.minimized) {
+        // Ensure Follow has flex-grow
+        const followPanel = getPanelElement('follow');
+        if (followPanel && !followPanel.style.height) {
+            followPanel.style.flex = '1 1 auto';
+        }
+        // Remove flex-grow from other panels (unless they have explicit height)
+        ['playByPlay', 'selectLine', 'gameEvents'].forEach(id => {
+            const panel = getPanelElement(id);
+            const state = getPanelState(id);
+            if (panel && !state.minimized && !state.height) {
+                panel.style.flex = '0 0 auto';
+            }
+        });
+        return;
+    }
+    
+    // Follow is minimized - find the last non-minimized panel to expand
+    // Order from bottom up (excluding Follow): gameEvents, selectLine, playByPlay
+    const expandOrder = ['gameEvents', 'selectLine', 'playByPlay'];
+    let expandingPanel = null;
+    
+    for (const panelId of expandOrder) {
+        const state = getPanelState(panelId);
+        if (!state.minimized && !state.hidden) {
+            // This panel should expand (unless it has a saved explicit height)
+            if (!state.height) {
+                expandingPanel = panelId;
+                break;
+            }
+        }
+    }
+    
+    // Apply flex-grow to the expanding panel, remove from others
+    expandOrder.forEach(id => {
+        const panel = getPanelElement(id);
+        const state = getPanelState(id);
+        if (panel && !state.minimized) {
+            if (id === expandingPanel) {
+                panel.style.flex = '1 1 auto';
+            } else if (!state.height) {
+                panel.style.flex = '0 0 auto';
+            }
+        }
     });
 }
 
@@ -933,6 +1001,7 @@ window.togglePanelPinned = togglePanelPinned;
 window.setPanelVisible = setPanelVisible;
 window.setPanelSubtitle = setPanelSubtitle;
 window.resetPanelHeights = resetPanelHeights;
+window.updateExpandingPanel = updateExpandingPanel;
 
 // Panel creation
 window.createPanelTitleBar = createPanelTitleBar;
