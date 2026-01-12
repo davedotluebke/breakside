@@ -141,22 +141,43 @@ function applyPanelState(panelId) {
     // Apply hidden state
     panel.classList.toggle('hidden', state.hidden);
     
-    // Apply height
-    // height: null = natural/flexible
-    // height: MIN_PANEL_HEIGHT = minimized (title bar only)
-    // height: number > MIN_PANEL_HEIGHT = explicit expanded height
-    if (state.height !== null) {
-        // Explicit height set
-        panel.style.height = `${state.height}px`;
-        panel.style.flex = '0 0 auto';
-    } else if (isFollowPanel) {
-        // Follow panel with no explicit height: fill remaining space
-        panel.style.height = '';
-        panel.style.flex = '1 1 auto';
+    // Special handling for Follow panel (bottom panel)
+    // When minimized, it snaps to bottom of screen
+    // When expanded, it fills remaining space
+    if (isFollowPanel) {
+        if (isMinimized) {
+            // Snap to bottom: use margin-top: auto to push title bar to bottom
+            panel.style.height = `${MIN_PANEL_HEIGHT}px`;
+            panel.style.flex = '0 0 auto';
+            panel.style.marginTop = 'auto';
+            panel.classList.add('snapped-to-bottom');
+        } else if (state.height !== null && state.height > MIN_PANEL_HEIGHT) {
+            // Explicit expanded height
+            panel.style.height = `${state.height}px`;
+            panel.style.flex = '0 0 auto';
+            panel.style.marginTop = '';
+            panel.classList.remove('snapped-to-bottom');
+        } else {
+            // Fill remaining space (height: null)
+            panel.style.height = '';
+            panel.style.flex = '1 1 auto';
+            panel.style.marginTop = '';
+            panel.classList.remove('snapped-to-bottom');
+        }
     } else {
-        // Other panels with no explicit height: natural height
-        panel.style.height = '';
-        panel.style.flex = '0 0 auto';
+        // Regular panels
+        panel.style.marginTop = '';
+        panel.classList.remove('snapped-to-bottom');
+        
+        if (state.height !== null) {
+            // Explicit height set
+            panel.style.height = `${state.height}px`;
+            panel.style.flex = '0 0 auto';
+        } else {
+            // Natural height
+            panel.style.height = '';
+            panel.style.flex = '0 0 auto';
+        }
     }
     
     // Update pin button appearance
@@ -190,22 +211,28 @@ function applyAllPanelStates() {
 
 /**
  * Determine which panel should expand to fill remaining space
- * Normally this is Follow, but if Follow is minimized, it's the last non-minimized panel
+ * Normally this is Follow, but if Follow is minimized (snapped to bottom), 
+ * it's the last non-minimized panel above it
  */
 function updateExpandingPanel() {
     const followPanel = getPanelElement('follow');
     const followMinimized = isPanelMinimized('follow');
     const followState = getPanelState('follow');
     
-    // If Follow is not minimized and has no explicit height, it handles expansion
-    if (!followMinimized && followState.height === null) {
+    // All potentially expanding panels
+    const expandOrder = ['gameEvents', 'selectLine', 'playByPlay'];
+    
+    // If Follow is not minimized and has no explicit expanded height, it handles expansion
+    if (!followMinimized && (followState.height === null || followState.height > MIN_PANEL_HEIGHT)) {
         // Ensure Follow has flex-grow and expanding class
         if (followPanel) {
-            followPanel.style.flex = '1 1 auto';
+            if (followState.height === null) {
+                followPanel.style.flex = '1 1 auto';
+            }
             followPanel.classList.add('expanding');
         }
         // Remove expanding from other panels
-        ['playByPlay', 'selectLine', 'gameEvents'].forEach(id => {
+        expandOrder.forEach(id => {
             const panel = getPanelElement(id);
             if (panel) {
                 panel.classList.remove('expanding');
@@ -214,26 +241,21 @@ function updateExpandingPanel() {
         return;
     }
     
-    // Follow is minimized or has explicit height - remove its expanding class
+    // Follow is minimized (snapped to bottom) - remove its expanding class
     if (followPanel) {
         followPanel.classList.remove('expanding');
     }
     
-    // Find the last non-minimized panel without explicit height to expand
-    // Order from bottom up (excluding Follow): gameEvents, selectLine, playByPlay
-    const expandOrder = ['gameEvents', 'selectLine', 'playByPlay'];
+    // Find the last non-minimized panel to expand and fill the space above Follow
     let expandingPanelId = null;
     
     for (const panelId of expandOrder) {
         const state = getPanelState(panelId);
         const isMinimized = isPanelMinimized(panelId);
         if (!isMinimized && !state.hidden) {
-            // This panel should expand if it doesn't have explicit height > MIN
-            // (panels with explicit expanded heights keep those heights)
-            if (state.height === null || state.height <= MIN_PANEL_HEIGHT) {
-                expandingPanelId = panelId;
-                break;
-            }
+            // This panel should expand
+            expandingPanelId = panelId;
+            break;
         }
     }
     
@@ -466,12 +488,8 @@ function startPanelDrag(panelId, clientY) {
     const abovePanelId = getPanelAbove(panelId, false);
     if (!abovePanelId) return;
     
-    // If the panel above is minimized, un-minimize it first
-    // This ensures we always have a panel to resize
-    if (isPanelMinimized(abovePanelId)) {
-        // Un-minimize by restoring to expanded height
-        maximizePanel(abovePanelId, false);
-    }
+    // If the panel above is minimized, we'll resize it from MIN_PANEL_HEIGHT
+    // (don't auto-expand to saved height - let the drag control the size)
     
     // Note: We DO allow dragging even if panel above is pinned.
     // Pinning freezes a title bar's position, not the panel's content size.
@@ -1061,7 +1079,8 @@ function resetAllPanelStates() {
         if (panel) {
             panel.style.height = '';
             panel.style.flex = '';
-            panel.classList.remove('expanding', 'dragging', 'minimized', 'maximized');
+            panel.style.marginTop = '';
+            panel.classList.remove('expanding', 'dragging', 'minimized', 'maximized', 'snapped-to-bottom');
         }
     });
     
