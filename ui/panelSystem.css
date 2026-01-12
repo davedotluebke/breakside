@@ -47,26 +47,13 @@
     min-height: 0;
 }
 
-/* Panel states */
-.game-panel.minimized {
-    flex: 0 0 auto;
-}
-
-.game-panel.maximized {
-    flex: 0 0 auto; /* Don't grow - only show content height */
-}
+/* Panel states - height-based (no separate minimized/maximized classes)
+   Panels are minimized by setting height to MIN_PANEL_HEIGHT (44px)
+   Content naturally hides via overflow: hidden */
 
 .game-panel.fills-remaining {
     flex: 1 1 auto; /* Only this panel grows to fill remaining space */
-    min-height: 60px;
-    transition: flex 0.25s ease-out, margin-top 0.25s ease-out;
-}
-
-/* When Follow panel is "minimized", snap title bar to bottom */
-.game-panel.fills-remaining.minimized {
-    flex: 0 0 auto;
-    margin-top: auto; /* Push to bottom of flex container */
-    min-height: auto; /* Override the 60px min-height when minimized */
+    min-height: 44px;
 }
 
 .game-panel.pinned {
@@ -102,11 +89,6 @@
 /* Draggable title bars get special cursor */
 .panel-title-bar.draggable {
     cursor: ns-resize;
-}
-
-/* Minimized title bar gets slightly darker to indicate collapsed state */
-.game-panel.minimized .panel-title-bar {
-    background: linear-gradient(135deg, #eef0f2 0%, #e0e3e6 100%);
 }
 
 /* Drag handle (left side of title bar) */
@@ -225,29 +207,20 @@
    Panel Content Area
    ============================================================================= */
 
+/* Panel content fills available space in panel.
+   When panel height is MIN_PANEL_HEIGHT (44px), there's no room for content
+   and it naturally clips via overflow: hidden on the panel. */
 .panel-content {
-    flex: 1 1 auto; /* Fill available space in panel */
+    flex: 1 1 auto;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 12px;
     min-height: 0;
-    /* Animation for minimize/maximize */
-    max-height: 500px;
-    opacity: 1;
-    transition: max-height 0.25s ease-out, opacity 0.15s ease-out, padding 0.25s ease-out;
 }
 
-/* When panel is expanding to fill space, remove max-height constraint */
+/* When panel is expanding to fill remaining space */
 .game-panel.expanding .panel-content {
-    max-height: none;
-}
-
-.game-panel.minimized .panel-content {
-    max-height: 0;
-    opacity: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-    overflow: hidden;
+    /* No max-height constraint */
 }
 
 /* Stub panel content (placeholder during development) */
@@ -544,8 +517,8 @@
 
 .panel-follow {
     background: #fff;
-    flex: 1 1 auto;
-    min-height: 80px;
+    /* Follow panel's flex is controlled by JS based on state */
+    min-height: 44px;
 }
 
 .panel-follow .panel-title-bar {
@@ -730,25 +703,5 @@ body.panel-dragging .panel-content {
    Animations
    ============================================================================= */
 
-@keyframes panelExpand {
-    from {
-        max-height: 44px;
-        opacity: 0.8;
-    }
-    to {
-        max-height: 500px;
-        opacity: 1;
-    }
-}
-
-@keyframes panelCollapse {
-    from {
-        max-height: 500px;
-        opacity: 1;
-    }
-    to {
-        max-height: 44px;
-        opacity: 0.8;
-    }
-}
+/* Panel animations are now handled via height changes, not max-height animations */
 

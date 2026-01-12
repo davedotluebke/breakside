@@ -18,8 +18,11 @@
 
 const PANEL_STATE_KEY = 'breakside_panel_states';
 
-// Minimum height for panels (title bar height)
+// Minimum height for panels (title bar height only)
 const MIN_PANEL_HEIGHT = 44;
+
+// Default expanded height when un-minimizing a panel that has no saved height
+const DEFAULT_EXPANDED_HEIGHT = 150;
 
 // Panel IDs in order (top to bottom)
 const PANEL_ORDER = ['header', 'roleButtons', 'playByPlay', 'selectLine', 'gameEvents', 'follow'];
@@ -32,13 +35,17 @@ const DRAGGABLE_PANELS = ['selectLine', 'gameEvents', 'follow'];
 const RESIZABLE_PANELS = ['playByPlay', 'selectLine', 'gameEvents', 'follow'];
 
 // Default panel states
+// height: null = natural/flexible height
+// height: MIN_PANEL_HEIGHT = "minimized" (title bar only)
+// height: number > MIN_PANEL_HEIGHT = explicit expanded height
+// expandedHeight: saved height to restore when un-minimizing
 const DEFAULT_PANEL_STATES = {
-    header: { minimized: false, pinned: true, hidden: false, height: null },
-    roleButtons: { minimized: false, pinned: true, hidden: false, height: null },
-    playByPlay: { minimized: true, pinned: false, hidden: false, height: null },
-    selectLine: { minimized: false, pinned: false, hidden: false, height: null },
-    gameEvents: { minimized: true, pinned: false, hidden: false, height: null },
-    follow: { minimized: false, pinned: false, hidden: false, height: null }
+    header: { pinned: true, hidden: false, height: null, expandedHeight: null },
+    roleButtons: { pinned: true, hidden: false, height: null, expandedHeight: null },
+    playByPlay: { pinned: false, hidden: false, height: MIN_PANEL_HEIGHT, expandedHeight: null },
+    selectLine: { pinned: false, hidden: false, height: null, expandedHeight: null },
+    gameEvents: { pinned: false, hidden: false, height: MIN_PANEL_HEIGHT, expandedHeight: null },
+    follow: { pinned: false, hidden: false, height: null, expandedHeight: null }
 };
 
 // Current panel states
@@ -77,7 +84,17 @@ function savePanelStates() {
  * @returns {object} Panel state
  */
 function getPanelState(panelId) {
-    return panelStates[panelId] || { minimized: false, pinned: false, hidden: false };
+    return panelStates[panelId] || { pinned: false, hidden: false, height: null, expandedHeight: null };
+}
+
+/**
+ * Check if a panel is currently minimized (height = title bar only)
+ * @param {string} panelId - Panel identifier
+ * @returns {boolean}
+ */
+function isPanelMinimized(panelId) {
+    const state = getPanelState(panelId);
+    return state.height !== null && state.height <= MIN_PANEL_HEIGHT;
 }
 
 /**
@@ -116,10 +133,7 @@ function applyPanelState(panelId) {
     
     const state = getPanelState(panelId);
     const isFollowPanel = panelId === 'follow';
-    
-    // Apply minimized state
-    panel.classList.toggle('minimized', state.minimized);
-    panel.classList.toggle('maximized', !state.minimized);
+    const isMinimized = isPanelMinimized(panelId);
     
     // Apply pinned state
     panel.classList.toggle('pinned', state.pinned);
@@ -127,21 +141,20 @@ function applyPanelState(panelId) {
     // Apply hidden state
     panel.classList.toggle('hidden', state.hidden);
     
-    // Handle height based on minimized state
-    if (state.minimized) {
-        // When minimized, ALWAYS clear explicit height so flex can collapse to title bar
-        panel.style.height = '';
-        panel.style.flex = '0 0 auto';
-    } else if (isFollowPanel) {
-        // Follow panel: uses flex to fill remaining space, no explicit height
-        panel.style.height = '';
-        panel.style.flex = '1 1 auto';
-    } else if (state.height) {
-        // Non-minimized panel with saved height: apply it
+    // Apply height
+    // height: null = natural/flexible
+    // height: MIN_PANEL_HEIGHT = minimized (title bar only)
+    // height: number > MIN_PANEL_HEIGHT = explicit expanded height
+    if (state.height !== null) {
+        // Explicit height set
         panel.style.height = `${state.height}px`;
         panel.style.flex = '0 0 auto';
+    } else if (isFollowPanel) {
+        // Follow panel with no explicit height: fill remaining space
+        panel.style.height = '';
+        panel.style.flex = '1 1 auto';
     } else {
-        // Non-minimized panel without saved height: use natural height
+        // Other panels with no explicit height: natural height
         panel.style.height = '';
         panel.style.flex = '0 0 auto';
     }
@@ -153,14 +166,14 @@ function applyPanelState(panelId) {
         pinBtn.title = state.pinned ? 'Unpin panel' : 'Pin panel';
     }
     
-    // Update expand/collapse button
+    // Update expand/collapse button icon based on minimized state
     const expandBtn = panel.querySelector('.panel-expand-btn');
     if (expandBtn) {
         const icon = expandBtn.querySelector('i');
         if (icon) {
-            icon.className = state.minimized ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+            icon.className = isMinimized ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
         }
-        expandBtn.title = state.minimized ? 'Expand panel' : 'Collapse panel';
+        expandBtn.title = isMinimized ? 'Expand panel' : 'Collapse panel';
     }
 }
 
@@ -180,14 +193,12 @@ function applyAllPanelStates() {
  * Normally this is Follow, but if Follow is minimized, it's the last non-minimized panel
  */
 function updateExpandingPanel() {
-    const followState = getPanelState('follow');
     const followPanel = getPanelElement('follow');
+    const followMinimized = isPanelMinimized('follow');
+    const followState = getPanelState('follow');
     
-    // All resizable panels (excluding fixed header/roleButtons)
-    const resizablePanels = ['playByPlay', 'selectLine', 'gameEvents', 'follow'];
-    
-    // If Follow is not minimized, it handles expansion
-    if (!followState.minimized) {
+    // If Follow is not minimized and has no explicit height, it handles expansion
+    if (!followMinimized && followState.height === null) {
         // Ensure Follow has flex-grow and expanding class
         if (followPanel) {
             followPanel.style.flex = '1 1 auto';
@@ -196,32 +207,30 @@ function updateExpandingPanel() {
         // Remove expanding from other panels
         ['playByPlay', 'selectLine', 'gameEvents'].forEach(id => {
             const panel = getPanelElement(id);
-            const state = getPanelState(id);
             if (panel) {
                 panel.classList.remove('expanding');
-                if (!state.minimized && !state.height) {
-                    panel.style.flex = '0 0 auto';
-                }
             }
         });
         return;
     }
     
-    // Follow is minimized - remove its expanding class
+    // Follow is minimized or has explicit height - remove its expanding class
     if (followPanel) {
         followPanel.classList.remove('expanding');
     }
     
-    // Find the last non-minimized panel to expand
+    // Find the last non-minimized panel without explicit height to expand
     // Order from bottom up (excluding Follow): gameEvents, selectLine, playByPlay
     const expandOrder = ['gameEvents', 'selectLine', 'playByPlay'];
     let expandingPanelId = null;
     
     for (const panelId of expandOrder) {
         const state = getPanelState(panelId);
-        if (!state.minimized && !state.hidden) {
-            // This panel should expand (unless it has a saved explicit height)
-            if (!state.height) {
+        const isMinimized = isPanelMinimized(panelId);
+        if (!isMinimized && !state.hidden) {
+            // This panel should expand if it doesn't have explicit height > MIN
+            // (panels with explicit expanded heights keep those heights)
+            if (state.height === null || state.height <= MIN_PANEL_HEIGHT) {
                 expandingPanelId = panelId;
                 break;
             }
@@ -231,16 +240,13 @@ function updateExpandingPanel() {
     // Apply expanding class and flex-grow to the expanding panel, remove from others
     expandOrder.forEach(id => {
         const panel = getPanelElement(id);
-        const state = getPanelState(id);
         if (panel) {
             if (id === expandingPanelId) {
                 panel.style.flex = '1 1 auto';
+                panel.style.height = ''; // Clear explicit height to allow flex
                 panel.classList.add('expanding');
             } else {
                 panel.classList.remove('expanding');
-                if (!state.minimized && !state.height) {
-                    panel.style.flex = '0 0 auto';
-                }
             }
         }
     });
@@ -252,39 +258,76 @@ function updateExpandingPanel() {
 
 /**
  * Toggle panel minimized state
+ * Minimized = height set to MIN_PANEL_HEIGHT (title bar only)
+ * Expanded = height restored to expandedHeight or default
  * @param {string} panelId - Panel identifier
  */
 function togglePanelMinimized(panelId) {
-    const state = getPanelState(panelId);
-    setPanelState(panelId, { minimized: !state.minimized });
+    if (isPanelMinimized(panelId)) {
+        maximizePanel(panelId, false);
+    } else {
+        minimizePanel(panelId);
+    }
 }
 
 /**
- * Minimize a panel
+ * Minimize a panel (set height to title bar only)
  * @param {string} panelId - Panel identifier
  */
 function minimizePanel(panelId) {
-    setPanelState(panelId, { minimized: true });
+    const panel = getPanelElement(panelId);
+    const state = getPanelState(panelId);
+    
+    // Save current height before minimizing (so we can restore it later)
+    let currentHeight = state.height;
+    if (currentHeight === null && panel) {
+        // Measure actual height if not explicitly set
+        currentHeight = panel.getBoundingClientRect().height;
+    }
+    
+    // Only save expandedHeight if current height is actually expanded
+    const expandedHeight = (currentHeight && currentHeight > MIN_PANEL_HEIGHT) 
+        ? currentHeight 
+        : state.expandedHeight;
+    
+    setPanelState(panelId, { 
+        height: MIN_PANEL_HEIGHT,
+        expandedHeight: expandedHeight
+    });
 }
 
 /**
- * Maximize a panel
+ * Maximize a panel (restore to expanded height)
  * @param {string} panelId - Panel identifier
  * @param {boolean} minimizeOthers - If true, minimize non-pinned panels
  */
 function maximizePanel(panelId, minimizeOthers = true) {
     if (minimizeOthers) {
-        // Minimize all non-pinned panels except the one being maximized
-        Object.keys(panelStates).forEach(id => {
-            if (id !== panelId && id !== 'header' && id !== 'roleButtons') {
+        // Minimize all non-pinned resizable panels except the one being maximized
+        RESIZABLE_PANELS.forEach(id => {
+            if (id !== panelId) {
                 const state = getPanelState(id);
-                if (!state.pinned) {
-                    setPanelState(id, { minimized: true });
+                if (!state.pinned && !isPanelMinimized(id)) {
+                    minimizePanel(id);
                 }
             }
         });
     }
-    setPanelState(panelId, { minimized: false });
+    
+    const state = getPanelState(panelId);
+    
+    // Restore to expandedHeight, or default, or null (natural height)
+    // For Follow panel, use null to let it flex-fill
+    let newHeight;
+    if (panelId === 'follow') {
+        newHeight = null; // Follow uses flex to fill space
+    } else if (state.expandedHeight && state.expandedHeight > MIN_PANEL_HEIGHT) {
+        newHeight = state.expandedHeight;
+    } else {
+        newHeight = DEFAULT_EXPANDED_HEIGHT;
+    }
+    
+    setPanelState(panelId, { height: newHeight });
 }
 
 /**
@@ -388,7 +431,7 @@ function getPanelAbove(panelId, mustBeExpanded = false) {
         }
         
         // If we require expanded panels, skip minimized ones
-        if (mustBeExpanded && aboveState.minimized) {
+        if (mustBeExpanded && isPanelMinimized(aboveId)) {
             continue;
         }
         
@@ -425,10 +468,9 @@ function startPanelDrag(panelId, clientY) {
     
     // If the panel above is minimized, un-minimize it first
     // This ensures we always have a panel to resize
-    const aboveState = getPanelState(abovePanelId);
-    if (aboveState.minimized) {
-        // Un-minimize without triggering the "minimize others" behavior
-        setPanelState(abovePanelId, { minimized: false });
+    if (isPanelMinimized(abovePanelId)) {
+        // Un-minimize by restoring to expanded height
+        maximizePanel(abovePanelId, false);
     }
     
     // Note: We DO allow dragging even if panel above is pinned.
@@ -916,7 +958,7 @@ function updatePanelsForRole(role) {
     // But respect user's explicit choice if they've minimized or pinned it
     if (!hasRole) {
         const followState = getPanelState('follow');
-        if (!followState.pinned && !followState.minimized) {
+        if (!followState.pinned && !isPanelMinimized('follow')) {
             maximizePanel('follow', false);
         }
     }
@@ -958,7 +1000,8 @@ function updatePanelsForGameState(duringPoint) {
     const gameEventsPanel = getPanelElement('gameEvents');
     if (gameEventsPanel) {
         gameEventsPanel.classList.toggle('disabled', duringPoint);
-        if (duringPoint && !getPanelState('gameEvents').pinned) {
+        const gameEventsState = getPanelState('gameEvents');
+        if (duringPoint && !gameEventsState.pinned) {
             minimizePanel('gameEvents');
         }
     }
@@ -1018,7 +1061,7 @@ function resetAllPanelStates() {
         if (panel) {
             panel.style.height = '';
             panel.style.flex = '';
-            panel.classList.remove('expanding', 'dragging');
+            panel.classList.remove('expanding', 'dragging', 'minimized', 'maximized');
         }
     });
     
@@ -1056,6 +1099,7 @@ window.getPanelState = getPanelState;
 window.setPanelState = setPanelState;
 window.loadPanelStates = loadPanelStates;
 window.savePanelStates = savePanelStates;
+window.isPanelMinimized = isPanelMinimized;
 
 // Panel actions
 window.togglePanelMinimized = togglePanelMinimized;
