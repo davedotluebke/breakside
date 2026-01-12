@@ -521,6 +521,11 @@
     min-height: 44px;
 }
 
+/* When Follow panel is snapped to bottom (minimized), push title bar to bottom */
+.panel-follow.snapped-to-bottom {
+    /* margin-top: auto is set by JS */
+}
+
 .panel-follow .panel-title-bar {
     background: linear-gradient(135deg, #f0f0f0 0%, #e8e8e8 100%);
 }
