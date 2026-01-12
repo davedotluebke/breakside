@@ -28,6 +28,9 @@ const PANEL_ORDER = ['header', 'roleButtons', 'playByPlay', 'selectLine', 'gameE
 // Dragging a title bar resizes that panel and the one above it
 const DRAGGABLE_PANELS = ['selectLine', 'gameEvents', 'follow'];
 
+// Panels that CAN be resized (excludes fixed-height header and roleButtons)
+const RESIZABLE_PANELS = ['playByPlay', 'selectLine', 'gameEvents', 'follow'];
+
 // Default panel states
 const DEFAULT_PANEL_STATES = {
     header: { minimized: false, pinned: true, hidden: false, height: null },
@@ -361,21 +364,35 @@ let dragState = {
 };
 
 /**
- * Get the panel above a given panel in the stack
+ * Get the panel above a given panel that can be resized
  * @param {string} panelId - Current panel identifier
+ * @param {boolean} mustBeExpanded - If true, only return non-minimized panels
  * @returns {string|null} Panel ID above, or null if none
  */
-function getPanelAbove(panelId) {
+function getPanelAbove(panelId, mustBeExpanded = false) {
     const index = PANEL_ORDER.indexOf(panelId);
     if (index <= 0) return null;
     
-    // Find the nearest visible, non-minimized panel above
+    // Find the nearest visible, RESIZABLE panel above
     for (let i = index - 1; i >= 0; i--) {
         const aboveId = PANEL_ORDER[i];
-        const aboveState = getPanelState(aboveId);
-        if (!aboveState.hidden && !aboveState.minimized) {
-            return aboveId;
+        
+        // Skip non-resizable panels (header, roleButtons)
+        if (!RESIZABLE_PANELS.includes(aboveId)) {
+            continue;
         }
+        
+        const aboveState = getPanelState(aboveId);
+        if (aboveState.hidden) {
+            continue;
+        }
+        
+        // If we require expanded panels, skip minimized ones
+        if (mustBeExpanded && aboveState.minimized) {
+            continue;
+        }
+        
+        return aboveId;
     }
     return null;
 }
@@ -402,9 +419,17 @@ function startPanelDrag(panelId, clientY) {
     // Don't allow dragging if this panel is not draggable
     if (!isPanelDraggable(panelId)) return;
     
-    // Find panel above to resize
-    const abovePanelId = getPanelAbove(panelId);
+    // Find the nearest RESIZABLE panel above (may be minimized)
+    const abovePanelId = getPanelAbove(panelId, false);
     if (!abovePanelId) return;
+    
+    // If the panel above is minimized, un-minimize it first
+    // This ensures we always have a panel to resize
+    const aboveState = getPanelState(abovePanelId);
+    if (aboveState.minimized) {
+        // Un-minimize without triggering the "minimize others" behavior
+        setPanelState(abovePanelId, { minimized: false });
+    }
     
     // Note: We DO allow dragging even if panel above is pinned.
     // Pinning freezes a title bar's position, not the panel's content size.
@@ -979,6 +1004,28 @@ function resetPanelHeights() {
     console.log('🎛️ Panel heights reset');
 }
 
+/**
+ * Reset all panel states to defaults (nuclear option)
+ * Clears everything from localStorage and reloads defaults
+ */
+function resetAllPanelStates() {
+    localStorage.removeItem(PANEL_STATE_KEY);
+    panelStates = JSON.parse(JSON.stringify(DEFAULT_PANEL_STATES));
+    
+    // Clear all inline styles from panels
+    Object.keys(panelStates).forEach(panelId => {
+        const panel = getPanelElement(panelId);
+        if (panel) {
+            panel.style.height = '';
+            panel.style.flex = '';
+            panel.classList.remove('expanding', 'dragging');
+        }
+    });
+    
+    applyAllPanelStates();
+    console.log('🎛️ All panel states reset to defaults');
+}
+
 // =============================================================================
 // Initialize Panel System
 // =============================================================================
@@ -1018,6 +1065,7 @@ window.togglePanelPinned = togglePanelPinned;
 window.setPanelVisible = setPanelVisible;
 window.setPanelSubtitle = setPanelSubtitle;
 window.resetPanelHeights = resetPanelHeights;
+window.resetAllPanelStates = resetAllPanelStates;
 window.updateExpandingPanel = updateExpandingPanel;
 
 // Panel creation
@@ -1028,6 +1076,7 @@ window.createPanel = createPanel;
 // Drag handling (exposed for testing/debugging)
 window.isPanelDraggable = isPanelDraggable;
 window.DRAGGABLE_PANELS = DRAGGABLE_PANELS;
+window.RESIZABLE_PANELS = RESIZABLE_PANELS;
 
 // Game screen management
 window.showGameScreen = showGameScreen;
