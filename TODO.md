@@ -207,7 +207,8 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 **5. "Game Events" Modal** (accessed from Play-by-Play panel)
 - [ ] Triggered by "Game Events" button in Play-by-Play panel (add to `...` menu or dedicated button)
 - [ ] Modal popup with buttons: End Game, Time Out, Half Time, Switch Sides
-- [ ] Modal disabled/hidden during points (only available between points)
+- [ ] **Time Out**: Available during AND between points
+- [ ] **End Game, Half Time, Switch Sides**: Only available between points
 - [ ] Active Coach only
 - [ ] Half Time / Switch Sides just log events (no special behavior for now)
 
@@ -284,7 +285,9 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [ ] We Score / They Score / Key Play / `...`
 - [ ] **Game Events modal** (End Game, Timeout, Half Time, Switch Sides)
   - Triggered by button in Play-by-Play `...` menu
-  - Only available between points, Active Coach only
+  - **Timeout**: available during AND between points
+  - **End Game, Half Time, Switch Sides**: only between points
+  - Active Coach only
 - [ ] Sub Players modal for mid-point injury subs
 - [ ] Pull dialog auto-popup (defensive point start)
 - [ ] Key Play dialog integration
