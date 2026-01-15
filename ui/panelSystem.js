@@ -25,14 +25,15 @@ const MIN_PANEL_HEIGHT = 44;
 const DEFAULT_EXPANDED_HEIGHT = 150;
 
 // Panel IDs in order (top to bottom)
-const PANEL_ORDER = ['header', 'roleButtons', 'playByPlay', 'selectLine', 'gameEvents', 'follow'];
+// Note: gameEvents removed - now a modal popup from Play-by-Play
+const PANEL_ORDER = ['header', 'roleButtons', 'playByPlay', 'selectLine', 'follow'];
 
 // Panels that can be resized via drag (these have draggable title bars)
 // Dragging a title bar resizes that panel and the one above it
-const DRAGGABLE_PANELS = ['selectLine', 'gameEvents', 'follow'];
+const DRAGGABLE_PANELS = ['selectLine', 'follow'];
 
 // Panels that CAN be resized (excludes fixed-height header and roleButtons)
-const RESIZABLE_PANELS = ['playByPlay', 'selectLine', 'gameEvents', 'follow'];
+const RESIZABLE_PANELS = ['playByPlay', 'selectLine', 'follow'];
 
 // Default panel states
 // height: null = natural/flexible height
@@ -44,7 +45,6 @@ const DEFAULT_PANEL_STATES = {
     roleButtons: { pinned: true, hidden: false, height: null, expandedHeight: null },
     playByPlay: { pinned: false, hidden: false, height: MIN_PANEL_HEIGHT, expandedHeight: null },
     selectLine: { pinned: false, hidden: false, height: null, expandedHeight: null },
-    gameEvents: { pinned: false, hidden: false, height: MIN_PANEL_HEIGHT, expandedHeight: null },
     follow: { pinned: false, hidden: false, height: null, expandedHeight: null }
 };
 
@@ -219,8 +219,8 @@ function updateExpandingPanel() {
     const followMinimized = isPanelMinimized('follow');
     const followState = getPanelState('follow');
     
-    // All potentially expanding panels
-    const expandOrder = ['gameEvents', 'selectLine', 'playByPlay'];
+    // All potentially expanding panels (bottom-up order, excluding Follow)
+    const expandOrder = ['selectLine', 'playByPlay'];
     
     // If Follow is not minimized and has no explicit expanded height, it handles expansion
     if (!followMinimized && (followState.height === null || followState.height > MIN_PANEL_HEIGHT)) {
@@ -966,12 +966,6 @@ function updatePanelsForRole(role) {
     // Select Line panel - Line Coach keeps it open during points
     // (This auto-behavior will be implemented in Step 7)
     
-    // Game Events panel disabled during points, enabled between points for Active Coach
-    const gameEventsPanel = getPanelElement('gameEvents');
-    if (gameEventsPanel) {
-        gameEventsPanel.classList.toggle('disabled', !isActiveCoach && hasRole);
-    }
-    
     // Follow panel - maximized for viewers or coaches without roles
     // But respect user's explicit choice if they've minimized or pinned it
     if (!hasRole) {
@@ -1014,15 +1008,7 @@ function updatePanelsForGameState(duringPoint) {
         }
     }
     
-    // Game Events panel - disabled during points
-    const gameEventsPanel = getPanelElement('gameEvents');
-    if (gameEventsPanel) {
-        gameEventsPanel.classList.toggle('disabled', duringPoint);
-        const gameEventsState = getPanelState('gameEvents');
-        if (duringPoint && !gameEventsState.pinned) {
-            minimizePanel('gameEvents');
-        }
-    }
+    // Note: Game Events is now a modal popup from Play-by-Play, not a panel
 }
 
 // =============================================================================
