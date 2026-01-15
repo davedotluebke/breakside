@@ -204,17 +204,14 @@ Replace current screen-based navigation with a **panel-based layout** for all in
   - Toast warning about possible conflicts when both are editing
 - [ ] **During point**: Only Line Coach can edit (preparing next lineup)
 
-**5. "Game Events" Panel** (resizable)
-- [ ] Buttons: End Game, Time Out, Half Time, Switch Sides
-- [ ] Responsive layout:
-  - **Minimum**: Single row with some buttons + `...` menu
-  - **Maximum**: Two rows (enough for all buttons)
-- [ ] Panel states:
-  - **Minimized and disabled**: During points
-  - **Unminimized and enabled**: Between points, for Active Coach only
+**5. "Game Events" Modal** (accessed from Play-by-Play panel)
+- [ ] Triggered by "Game Events" button in Play-by-Play panel (add to `...` menu or dedicated button)
+- [ ] Modal popup with buttons: End Game, Time Out, Half Time, Switch Sides
+- [ ] Modal disabled/hidden during points (only available between points)
+- [ ] Active Coach only
 - [ ] Half Time / Switch Sides just log events (no special behavior for now)
 
-**6. "Follow" Panel** (resizable, bottom of stack)
+**6. "Game Log" Panel** (resizable, bottom of stack)
 - [ ] Game status: Team names, opponent, current score
 - [ ] Game event log: Large font, scrollable, full event history
 - [ ] Gets remaining vertical space after other panels
@@ -241,8 +238,8 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 
 #### Role-Based Behavior Summary
 
-| Role | Play-by-Play | Select Next Line | Game Events | Follow |
-|------|--------------|------------------|-------------|--------|
+| Role | Play-by-Play | Select Next Line | Game Events Modal | Game Log |
+|------|--------------|------------------|-------------------|----------|
 | **Active Coach** | Full access | Edit between points | Full access | Available |
 | **Line Coach** | View only | Edit anytime | View only | Available |
 | **Both roles** | Full access | Edit anytime | Full access | Available |
@@ -255,13 +252,16 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 
 #### Implementation Order
 
-**Step 1: Panel Container Foundation**
-- [ ] Create `game/gameScreen.js` with panel container system
-- [ ] Create `ui/panelSystem.js` for resize/pin/min-max logic
-- [ ] CSS for mobile-first panel stack with drag handles
-- [ ] Stub all 6 panels with placeholder content
-- [ ] Each stub has "Use Old Screen →" button linking to legacy screen
-- [ ] Wire up as new entry point when game starts
+**Step 1: Panel Container Foundation** ✅
+- [x] Create `game/gameScreen.js` with panel container system
+- [x] Create `ui/panelSystem.js` for resize/pin/min-max logic
+- [x] CSS for mobile-first panel stack with drag handles
+- [x] Stub panels with placeholder content (5 panels: Header, Role Buttons, Play-by-Play, Select Line, Game Log)
+- [x] Each stub has "Use Old Screen →" button linking to legacy screen
+- [x] Wire up as new entry point when game starts
+- [x] Draggable title bars for panel resizing
+- [x] Height-based minimize/maximize (no separate CSS states)
+- [x] Game Log panel snaps to bottom when minimized
 
 **Step 2: Header Panel**
 - [ ] Port existing header (hamburger, logo, score)
@@ -274,20 +274,17 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [ ] Port existing role buttons from sub-header
 - [ ] Ensure handoff flow still works
 
-**Step 4: Follow Panel**
+**Step 4: Game Log Panel**
 - [ ] Game status display (teams, score)
 - [ ] Large scrollable event log
 - [ ] Remove "Use Old Screen" button when complete
 
-**Step 5: Game Events Panel**
-- [ ] End Game, Timeout, Half Time, Switch Sides buttons
-- [ ] Responsive 1-row/2-row layout with `...` menu
-- [ ] Enable/disable based on game state and role
-- [ ] Remove "Use Old Screen" button when complete
-
-**Step 6: Play-by-Play Panel**
+**Step 5: Play-by-Play Panel**
 - [ ] Responsive Simple Mode layout
 - [ ] We Score / They Score / Key Play / `...`
+- [ ] **Game Events modal** (End Game, Timeout, Half Time, Switch Sides)
+  - Triggered by button in Play-by-Play `...` menu
+  - Only available between points, Active Coach only
 - [ ] Sub Players modal for mid-point injury subs
 - [ ] Pull dialog auto-popup (defensive point start)
 - [ ] Key Play dialog integration
@@ -295,7 +292,7 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [ ] Auto-resize on point start/end
 - [ ] Remove "Use Old Screen" button when complete
 
-**Step 7: Select Next Line Panel**
+**Step 6: Select Next Line Panel**
 - [ ] Player selection table (port from Before Point Screen)
 - [ ] Start Point (Offense/Defense) button
 - [ ] Minimize to title bar / player names / full table
@@ -305,7 +302,7 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [ ] Remove "Use Old Screen" button when complete
 - [ ] O/D button (disabled placeholder for future)
 
-**Step 8: Cleanup**
+**Step 7: Cleanup**
 - [ ] Remove legacy screen navigation for in-game screens
 - [ ] Update version to 2.0.0
 - [ ] Update ARCHITECTURE.md with new panel system

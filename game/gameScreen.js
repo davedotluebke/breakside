@@ -152,22 +152,8 @@ function createSelectLinePanel() {
     });
 }
 
-/**
- * Create the Game Events panel with stub content
- * @returns {HTMLElement}
- */
-function createGameEventsPanel() {
-    return createPanel({
-        id: 'gameEvents',
-        title: 'Game Events',
-        stubOptions: {
-            icon: 'fa-flag',
-            text: 'End Game, Timeout, Half Time, and other game controls.',
-            legacyScreen: 'beforePointScreen',
-            legacyLabel: 'Use Game Controls'
-        }
-    });
-}
+// Game Events panel removed - will be a modal popup from Play-by-Play panel
+// See TODO.md for implementation plan
 
 /**
  * Create the Follow panel with stub content
@@ -205,11 +191,11 @@ function buildGameScreenContainer() {
     stack.className = 'panel-stack';
     
     // Add all panels in order
+    // Note: Game Events is now a modal popup from Play-by-Play, not a panel
     stack.appendChild(createHeaderPanel());
     stack.appendChild(createRoleButtonsPanel());
     stack.appendChild(createPlayByPlayPanel());
     stack.appendChild(createSelectLinePanel());
-    stack.appendChild(createGameEventsPanel());
     stack.appendChild(createFollowPanel());
     
     container.appendChild(stack);
