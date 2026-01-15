@@ -86,12 +86,13 @@
     transition: background 0.2s ease-out;
 }
 
-/* Draggable title bars get special cursor */
+/* Draggable title bars get special cursor and touch handling */
 .panel-title-bar.draggable {
     cursor: ns-resize;
+    touch-action: none; /* Prevent browser handling of touch for drag */
 }
 
-/* Drag handle (left side of title bar) */
+/* Drag handle (left side of title bar) - visual indicator only */
 .panel-drag-handle {
     display: flex;
     flex-direction: column;
@@ -100,7 +101,6 @@
     margin-right: 8px;
     opacity: 0.3;
     transition: opacity 0.2s, transform 0.1s;
-    touch-action: none; /* Prevent browser handling of touch */
 }
 
 /* Draggable title bars - visual indicators */
