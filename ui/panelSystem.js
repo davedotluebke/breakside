@@ -19,7 +19,7 @@
 const PANEL_STATE_KEY = 'breakside_panel_states';
 
 // Minimum height for panels (title bar height only)
-const MIN_PANEL_HEIGHT = 44;
+const MIN_PANEL_HEIGHT = 36;
 
 // Default expanded height when un-minimizing a panel that has no saved height
 const DEFAULT_EXPANDED_HEIGHT = 150;
@@ -471,9 +471,7 @@ function startPanelDrag(panelId, clientY) {
         startY: clientY,
         startPanelHeight: startHeights[panelId] || 0,
         panelElement,
-        startHeights,
-        // Ratchet: track minimum height follow panel has reached (one-way push)
-        followMinHeight: startHeights['follow'] || MIN_PANEL_HEIGHT
+        startHeights
     };
     
     // Add dragging class for visual feedback
@@ -487,9 +485,7 @@ function startPanelDrag(panelId, clientY) {
 
 /**
  * Update drag operation with "shoving" behavior
- * - Dragging up: shrink panels above, grow dragged panel
- * - Dragging down: grow panels above, shrink dragged panel (and follow if needed)
- * - Ratchet: pushed panels stay pushed (one-way shove)
+ * When a panel above reaches MIN_PANEL_HEIGHT, continue pushing panels above it
  * @param {number} clientY - Current Y coordinate
  */
 function updatePanelDrag(clientY) {
@@ -497,70 +493,94 @@ function updatePanelDrag(clientY) {
     
     const deltaY = clientY - dragState.startY;
     
-    // Get the panel above (the one that grows/shrinks with this drag)
+    // Dragging up (negative delta) = make panels above smaller, this panel bigger
+    // Dragging down (positive delta) = make panels above bigger, this panel smaller
+    
+    // Calculate how much space we need to take from/give to panels above
+    let spaceNeeded = -deltaY; // Positive = need space from above, Negative = giving space to above
+    
+    // Get all resizable panels above the dragged panel (using STORED starting heights)
     const draggedPanelIndex = PANEL_ORDER.indexOf(dragState.panelId);
-    let panelAbove = null;
+    const panelsAbove = [];
     for (let i = draggedPanelIndex - 1; i >= 0; i--) {
         const id = PANEL_ORDER[i];
         if (RESIZABLE_PANELS.includes(id)) {
             const el = getPanelElement(id);
             const startHeight = dragState.startHeights[id];
             if (el && startHeight !== undefined) {
-                panelAbove = { id, element: el, startHeight };
-                break;
+                panelsAbove.push({ id, element: el, startHeight });
             }
         }
     }
     
-    if (!panelAbove) return;
+    if (panelsAbove.length === 0) return;
     
-    // Calculate target height for panel above based on delta from start
-    // Dragging down (positive deltaY) = panel above grows
-    // Dragging up (negative deltaY) = panel above shrinks
-    let aboveTargetHeight = panelAbove.startHeight + deltaY;
+    // Calculate target heights based on STARTING heights (not current)
+    const targetHeights = new Map();
     
-    // Clamp: panel above can't go below MIN_PANEL_HEIGHT
-    aboveTargetHeight = Math.max(MIN_PANEL_HEIGHT, aboveTargetHeight);
+    // Initialize all panels to their starting height
+    panelsAbove.forEach(p => targetHeights.set(p.id, p.startHeight));
     
-    // Clamp: panel above can't grow beyond what's available
-    // Available space = dragged panel can shrink + follow panel can shrink (ratcheted)
-    const draggedCanGive = Math.max(0, dragState.startPanelHeight - MIN_PANEL_HEIGHT);
-    const followCanGive = dragState.panelId !== 'follow' 
-        ? Math.max(0, dragState.followMinHeight - MIN_PANEL_HEIGHT) 
-        : 0;
-    const maxAboveHeight = panelAbove.startHeight + draggedCanGive + followCanGive;
-    aboveTargetHeight = Math.min(aboveTargetHeight, maxAboveHeight);
+    let remainingSpace = spaceNeeded;
     
-    // Apply height to panel above
-    panelAbove.element.style.height = `${aboveTargetHeight}px`;
-    panelAbove.element.style.flex = '0 0 auto';
+    if (spaceNeeded > 0) {
+        // Taking space from above (dragging up) - shrink panels from bottom to top
+        for (const panel of panelsAbove) {
+            if (remainingSpace <= 0) break;
+            
+            const startHeight = panel.startHeight;
+            const availableSpace = startHeight - MIN_PANEL_HEIGHT;
+            
+            if (availableSpace > 0) {
+                const spaceToTake = Math.min(availableSpace, remainingSpace);
+                targetHeights.set(panel.id, startHeight - spaceToTake);
+                remainingSpace -= spaceToTake;
+            } else {
+                // Panel was already at minimum, keep it there
+                targetHeights.set(panel.id, MIN_PANEL_HEIGHT);
+            }
+        }
+    } else {
+        // Giving space to above (dragging down) - expand first panel above
+        // Space can come from: 1) the dragged panel, 2) follow panel (if not already at bottom)
+        let spaceToGive = -remainingSpace;
+        
+        // Calculate available space from dragged panel
+        const draggedCanGive = Math.max(0, dragState.startPanelHeight - MIN_PANEL_HEIGHT);
+        
+        // Calculate available space from follow panel (if we're not dragging it)
+        let followCanGive = 0;
+        if (dragState.panelId !== 'follow') {
+            const followStartHeight = dragState.startHeights['follow'] || 0;
+            followCanGive = Math.max(0, followStartHeight - MIN_PANEL_HEIGHT);
+        }
+        
+        // Total available space to give
+        const totalAvailable = draggedCanGive + followCanGive;
+        spaceToGive = Math.min(spaceToGive, totalAvailable);
+        
+        if (panelsAbove.length > 0 && spaceToGive > 0) {
+            const firstAbove = panelsAbove[0];
+            targetHeights.set(firstAbove.id, firstAbove.startHeight + spaceToGive);
+        }
+        remainingSpace = 0;
+    }
     
-    // Calculate how much space changed for the panel above
-    const aboveGrowth = aboveTargetHeight - panelAbove.startHeight;
+    // Apply target heights to panels above
+    panelsAbove.forEach(panel => {
+        const targetHeight = targetHeights.get(panel.id);
+        panel.element.style.height = `${targetHeight}px`;
+        panel.element.style.flex = '0 0 auto';
+    });
     
-    // Update the dragged panel's height (unless it's Follow)
+    // Calculate actual space taken/given
+    const actualSpaceChanged = spaceNeeded - remainingSpace;
+    
+    // Update the dragged panel's height (unless it's Follow which fills remaining)
     if (dragState.panelId !== 'follow') {
-        // Dragged panel shrinks/grows opposite to above
-        const newDraggedHeight = Math.max(MIN_PANEL_HEIGHT, dragState.startPanelHeight - aboveGrowth);
-        dragState.panelElement.style.height = `${newDraggedHeight}px`;
+        const newPanelHeight = Math.max(MIN_PANEL_HEIGHT, dragState.startPanelHeight + actualSpaceChanged);
+        dragState.panelElement.style.height = `${newPanelHeight}px`;
         dragState.panelElement.style.flex = '0 0 auto';
-        
-        // Calculate how much growth came from follow (beyond what dragged could give)
-        const fromDragged = Math.min(draggedCanGive, Math.max(0, aboveGrowth));
-        const fromFollow = Math.max(0, aboveGrowth - fromDragged);
-        
-        if (fromFollow > 0) {
-            // Update ratchet: follow's minimum only ever decreases
-            const newFollowHeight = dragState.startHeights['follow'] - fromFollow;
-            dragState.followMinHeight = Math.min(dragState.followMinHeight, newFollowHeight);
-        }
-        
-        // Lock follow panel at its ratcheted minimum height
-        const followElement = getPanelElement('follow');
-        if (followElement) {
-            followElement.style.height = `${dragState.followMinHeight}px`;
-            followElement.style.flex = '0 0 auto';
-        }
     }
 }
 
