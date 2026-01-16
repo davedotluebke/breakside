@@ -515,7 +515,9 @@ function updatePanelDrag(clientY) {
     if (!panelAbove) return;
     
     // Calculate target height for panel above based on delta from start
-    let aboveTargetHeight = panelAbove.startHeight - deltaY;
+    // Dragging down (positive deltaY) = panel above grows
+    // Dragging up (negative deltaY) = panel above shrinks
+    let aboveTargetHeight = panelAbove.startHeight + deltaY;
     
     // Clamp: panel above can't go below MIN_PANEL_HEIGHT
     aboveTargetHeight = Math.max(MIN_PANEL_HEIGHT, aboveTargetHeight);
