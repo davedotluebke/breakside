@@ -73,6 +73,7 @@
 .panel-title-bar {
     display: flex;
     align-items: center;
+    justify-content: center; /* Center content by default */
     padding: 8px 12px;
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border-bottom: 1px solid #ddd;
@@ -81,6 +82,7 @@
     min-height: 36px;
     flex-shrink: 0;
     transition: background 0.2s ease-out;
+    position: relative; /* For absolute positioning of icons */
 }
 
 /* Draggable title bars get special cursor and touch handling */
@@ -91,11 +93,12 @@
 
 /* Drag handle (left side of title bar) - visual indicator only */
 .panel-drag-handle {
+    position: absolute;
+    left: 12px;
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 4px 8px 4px 4px;
-    margin-right: 8px;
+    padding: 4px;
     opacity: 0.3;
     transition: opacity 0.2s, transform 0.1s;
 }
@@ -138,15 +141,12 @@
     background: #007bff;
 }
 
-/* Panel title text */
+/* Panel title text - centered in title bar */
 .panel-title {
-    flex: 1;
     font-weight: 600;
     font-size: 0.9rem;
     color: #333;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 /* Panel subtitle (e.g., player names when minimized) */
@@ -162,9 +162,10 @@
 
 /* Panel action buttons (expand/collapse) */
 .panel-actions {
+    position: absolute;
+    right: 12px;
     display: flex;
     gap: 4px;
-    margin-left: auto;
 }
 
 .panel-action-btn {
