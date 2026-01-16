@@ -542,11 +542,22 @@ function updatePanelDrag(clientY) {
         }
     } else {
         // Giving space to above (dragging down) - expand first panel above
+        // Space can come from: 1) the dragged panel, 2) follow panel (if not already at bottom)
         let spaceToGive = -remainingSpace;
         
-        // Clamp: don't let the dragged panel shrink below MIN_PANEL_HEIGHT
-        const maxSpaceToGive = dragState.startPanelHeight - MIN_PANEL_HEIGHT;
-        spaceToGive = Math.min(spaceToGive, Math.max(0, maxSpaceToGive));
+        // Calculate available space from dragged panel
+        const draggedCanGive = Math.max(0, dragState.startPanelHeight - MIN_PANEL_HEIGHT);
+        
+        // Calculate available space from follow panel (if we're not dragging it)
+        let followCanGive = 0;
+        if (dragState.panelId !== 'follow') {
+            const followStartHeight = dragState.startHeights['follow'] || 0;
+            followCanGive = Math.max(0, followStartHeight - MIN_PANEL_HEIGHT);
+        }
+        
+        // Total available space to give
+        const totalAvailable = draggedCanGive + followCanGive;
+        spaceToGive = Math.min(spaceToGive, totalAvailable);
         
         if (panelsAbove.length > 0 && spaceToGive > 0) {
             const firstAbove = panelsAbove[0];
