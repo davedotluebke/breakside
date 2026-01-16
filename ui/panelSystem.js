@@ -471,7 +471,8 @@ function startPanelDrag(panelId, clientY) {
         startY: clientY,
         startPanelHeight: startHeights[panelId] || 0,
         panelElement,
-        startHeights
+        startHeights,
+        followPushedAmount: 0  // Track how much follow panel has been "shoved" (one-way)
     };
     
     // Add dragging class for visual feedback
@@ -549,15 +550,23 @@ function updatePanelDrag(clientY) {
         const draggedCanGive = Math.max(0, dragState.startPanelHeight - MIN_PANEL_HEIGHT);
         
         // Calculate available space from follow panel (if we're not dragging it)
+        // Account for any amount already "pushed" - follow can't recover that space
         let followCanGive = 0;
         if (dragState.panelId !== 'follow') {
             const followStartHeight = dragState.startHeights['follow'] || 0;
-            followCanGive = Math.max(0, followStartHeight - MIN_PANEL_HEIGHT);
+            const followEffectiveStart = followStartHeight - dragState.followPushedAmount;
+            followCanGive = Math.max(0, followEffectiveStart - MIN_PANEL_HEIGHT);
         }
         
         // Total available space to give
         const totalAvailable = draggedCanGive + followCanGive;
         spaceToGive = Math.min(spaceToGive, totalAvailable);
+        
+        // Calculate how much is coming from follow (anything beyond what dragged can give)
+        const fromFollow = Math.max(0, spaceToGive - draggedCanGive);
+        
+        // Update the "pushed" amount - this only ever increases (one-way shove)
+        dragState.followPushedAmount = Math.max(dragState.followPushedAmount, fromFollow);
         
         if (panelsAbove.length > 0 && spaceToGive > 0) {
             const firstAbove = panelsAbove[0];
@@ -581,6 +590,18 @@ function updatePanelDrag(clientY) {
         const newPanelHeight = Math.max(MIN_PANEL_HEIGHT, dragState.startPanelHeight + actualSpaceChanged);
         dragState.panelElement.style.height = `${newPanelHeight}px`;
         dragState.panelElement.style.flex = '0 0 auto';
+        
+        // Set explicit height on follow to prevent it expanding back when dragging reverses
+        // Follow's height = start height - pushed amount (locked at maximum push)
+        if (dragState.followPushedAmount > 0) {
+            const followElement = getPanelElement('follow');
+            const followStartHeight = dragState.startHeights['follow'] || 0;
+            const followHeight = Math.max(MIN_PANEL_HEIGHT, followStartHeight - dragState.followPushedAmount);
+            if (followElement) {
+                followElement.style.height = `${followHeight}px`;
+                followElement.style.flex = '0 0 auto';
+            }
+        }
     }
 }
 
