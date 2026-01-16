@@ -542,8 +542,13 @@ function updatePanelDrag(clientY) {
         }
     } else {
         // Giving space to above (dragging down) - expand first panel above
-        const spaceToGive = -remainingSpace;
-        if (panelsAbove.length > 0) {
+        let spaceToGive = -remainingSpace;
+        
+        // Clamp: don't let the dragged panel shrink below MIN_PANEL_HEIGHT
+        const maxSpaceToGive = dragState.startPanelHeight - MIN_PANEL_HEIGHT;
+        spaceToGive = Math.min(spaceToGive, Math.max(0, maxSpaceToGive));
+        
+        if (panelsAbove.length > 0 && spaceToGive > 0) {
             const firstAbove = panelsAbove[0];
             targetHeights.set(firstAbove.id, firstAbove.startHeight + spaceToGive);
         }
