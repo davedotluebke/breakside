@@ -51,6 +51,13 @@ const DEFAULT_PANEL_STATES = {
 // Current panel states
 let panelStates = { ...DEFAULT_PANEL_STATES };
 
+// Track which panel is currently "full screen maximized" (others minimized)
+// null = no panel maximized, panelId = that panel is maximized
+let maximizedPanelId = null;
+
+// Store panel heights before maximize for restoration
+let preMaximizeHeights = {};
+
 /**
  * Load panel states from localStorage
  */
@@ -351,12 +358,107 @@ function setPanelVisible(panelId, visible) {
     setPanelState(panelId, { hidden: !visible });
 }
 
+/**
+ * Toggle full-screen maximize for a panel
+ * - If this panel is not maximized: minimize all other resizable panels, giving
+ *   maximum space to this panel. Save current heights for restoration.
+ * - If this panel IS maximized: restore all panels to their pre-maximize heights.
+ * @param {string} panelId - Panel identifier
+ */
+function toggleFullScreenPanel(panelId) {
+    // Only resizable panels can be full-screen maximized
+    if (!RESIZABLE_PANELS.includes(panelId)) return;
+    
+    if (maximizedPanelId === panelId) {
+        // This panel is already maximized - restore all panels
+        restoreFromFullScreen();
+    } else {
+        // Maximize this panel (minimize others)
+        enterFullScreenPanel(panelId);
+    }
+}
+
+/**
+ * Enter full-screen mode for a panel
+ * Saves current heights and minimizes all other resizable panels
+ * @param {string} panelId - Panel to maximize
+ */
+function enterFullScreenPanel(panelId) {
+    // Save current heights of all resizable panels for restoration
+    preMaximizeHeights = {};
+    RESIZABLE_PANELS.forEach(id => {
+        const panel = getPanelElement(id);
+        if (panel) {
+            const state = getPanelState(id);
+            // Store either explicit height or measured height
+            preMaximizeHeights[id] = state.height !== null 
+                ? state.height 
+                : panel.getBoundingClientRect().height;
+        }
+    });
+    
+    // Minimize all other resizable panels
+    RESIZABLE_PANELS.forEach(id => {
+        if (id !== panelId && !isPanelMinimized(id)) {
+            minimizePanel(id);
+        }
+    });
+    
+    // Make sure the target panel is NOT minimized
+    if (isPanelMinimized(panelId)) {
+        maximizePanel(panelId, false); // false = don't minimize others (we already did)
+    }
+    
+    // Track which panel is maximized
+    maximizedPanelId = panelId;
+    
+    // Update expanding panel assignment
+    updateExpandingPanel();
+    savePanelStates();
+}
+
+/**
+ * Restore all panels from full-screen mode
+ * Restores heights saved before maximize
+ */
+function restoreFromFullScreen() {
+    if (!maximizedPanelId) return;
+    
+    // Restore all panels to their pre-maximize heights
+    RESIZABLE_PANELS.forEach(id => {
+        const savedHeight = preMaximizeHeights[id];
+        if (savedHeight !== undefined) {
+            // Restore the height
+            if (savedHeight <= MIN_PANEL_HEIGHT) {
+                // Was minimized before
+                setPanelState(id, { height: MIN_PANEL_HEIGHT });
+            } else {
+                // Was expanded - set height and expandedHeight
+                setPanelState(id, { 
+                    height: id === 'follow' ? null : savedHeight,
+                    expandedHeight: savedHeight
+                });
+            }
+        }
+    });
+    
+    // Clear maximized state
+    maximizedPanelId = null;
+    preMaximizeHeights = {};
+    
+    // Update expanding panel assignment
+    updateExpandingPanel();
+    savePanelStates();
+}
+
 // =============================================================================
 // Event Handlers
 // =============================================================================
 
 /**
- * Handle double-tap on title bar to toggle min/max
+ * Handle double-tap on title bar to toggle full-screen maximize
+ * Double-tap maximizes the panel (minimizes others)
+ * Double-tap again restores all panels to previous state
  * @param {string} panelId - Panel identifier
  */
 let lastTapTime = {};
@@ -365,8 +467,8 @@ function handleTitleBarTap(panelId) {
     const lastTap = lastTapTime[panelId] || 0;
     
     if (now - lastTap < 300) {
-        // Double tap detected
-        togglePanelMinimized(panelId);
+        // Double tap detected - toggle full-screen maximize
+        toggleFullScreenPanel(panelId);
         lastTapTime[panelId] = 0;
     } else {
         lastTapTime[panelId] = now;
@@ -1155,6 +1257,8 @@ window.setPanelSubtitle = setPanelSubtitle;
 window.resetPanelHeights = resetPanelHeights;
 window.resetAllPanelStates = resetAllPanelStates;
 window.updateExpandingPanel = updateExpandingPanel;
+window.toggleFullScreenPanel = toggleFullScreenPanel;
+window.restoreFromFullScreen = restoreFromFullScreen;
 
 // Panel creation
 window.createPanelTitleBar = createPanelTitleBar;
