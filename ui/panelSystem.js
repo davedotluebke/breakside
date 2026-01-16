@@ -397,16 +397,31 @@ function enterFullScreenPanel(panelId) {
         }
     });
     
-    // Minimize all other resizable panels
+    // Minimize all other resizable panels and add visual indicator
     RESIZABLE_PANELS.forEach(id => {
-        if (id !== panelId && !isPanelMinimized(id)) {
-            minimizePanel(id);
+        const panel = getPanelElement(id);
+        if (id !== panelId) {
+            if (!isPanelMinimized(id)) {
+                minimizePanel(id);
+            }
+            // Add class to indicate this panel is minimized for full-screen mode
+            if (panel) {
+                panel.classList.add('minimized-for-fullscreen');
+                panel.classList.remove('full-screen-maximized');
+            }
         }
     });
     
     // Make sure the target panel is NOT minimized
     if (isPanelMinimized(panelId)) {
         maximizePanel(panelId, false); // false = don't minimize others (we already did)
+    }
+    
+    // Add visual indicator to maximized panel
+    const maximizedPanel = getPanelElement(panelId);
+    if (maximizedPanel) {
+        maximizedPanel.classList.add('full-screen-maximized');
+        maximizedPanel.classList.remove('minimized-for-fullscreen');
     }
     
     // Track which panel is maximized
@@ -423,6 +438,14 @@ function enterFullScreenPanel(panelId) {
  */
 function restoreFromFullScreen() {
     if (!maximizedPanelId) return;
+    
+    // Remove visual indicator classes from all panels
+    RESIZABLE_PANELS.forEach(id => {
+        const panel = getPanelElement(id);
+        if (panel) {
+            panel.classList.remove('full-screen-maximized', 'minimized-for-fullscreen');
+        }
+    });
     
     // Restore all panels to their pre-maximize heights
     RESIZABLE_PANELS.forEach(id => {

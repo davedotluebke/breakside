@@ -44,6 +44,7 @@
     background: #fff;
     overflow: hidden;
     min-height: 0;
+    transition: height 0.25s ease-out, flex 0.25s ease-out;
 }
 
 /* Panel states - height-based (no separate minimized/maximized classes)
@@ -213,6 +214,7 @@
     overflow-x: hidden;
     padding: 12px;
     min-height: 0;
+    transition: opacity 0.2s ease-out;
 }
 
 /* When panel is expanding to fill remaining space */
@@ -705,5 +707,16 @@ body.panel-dragging .panel-content {
    Animations
    ============================================================================= */
 
-/* Panel animations are now handled via height changes, not max-height animations */
+/* Panel animations are now handled via height changes with CSS transitions */
+
+/* Visual feedback for full-screen maximized panel */
+.game-panel.full-screen-maximized .panel-title-bar {
+    background: linear-gradient(135deg, #e8f4fc 0%, #d4e8f7 100%);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Subtle indicator that other panels are minimized due to full-screen mode */
+.game-panel.minimized-for-fullscreen .panel-title-bar {
+    opacity: 0.85;
+}
 
