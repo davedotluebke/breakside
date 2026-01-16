@@ -422,7 +422,8 @@ let dragState = {
     panelId: null,
     startY: 0,
     startPanelHeight: 0,
-    panelElement: null
+    panelElement: null,
+    startHeights: {} // Store starting heights of all panels for absolute positioning
 };
 
 /**
@@ -488,15 +489,22 @@ function startPanelDrag(panelId, clientY) {
     const panelElement = getPanelElement(panelId);
     if (!panelElement) return;
     
-    // Get current height
-    const panelRect = panelElement.getBoundingClientRect();
+    // Store starting heights of ALL resizable panels for absolute positioning
+    const startHeights = {};
+    RESIZABLE_PANELS.forEach(id => {
+        const el = getPanelElement(id);
+        if (el) {
+            startHeights[id] = el.getBoundingClientRect().height;
+        }
+    });
     
     dragState = {
         active: true,
         panelId,
         startY: clientY,
-        startPanelHeight: panelRect.height,
-        panelElement
+        startPanelHeight: startHeights[panelId] || 0,
+        panelElement,
+        startHeights
     };
     
     // Add dragging class for visual feedback
@@ -524,59 +532,61 @@ function updatePanelDrag(clientY) {
     // Calculate how much space we need to take from/give to panels above
     let spaceNeeded = -deltaY; // Positive = need space from above, Negative = giving space to above
     
-    // Get all resizable panels above the dragged panel
+    // Get all resizable panels above the dragged panel (using STORED starting heights)
     const draggedPanelIndex = PANEL_ORDER.indexOf(dragState.panelId);
     const panelsAbove = [];
     for (let i = draggedPanelIndex - 1; i >= 0; i--) {
         const id = PANEL_ORDER[i];
         if (RESIZABLE_PANELS.includes(id)) {
             const el = getPanelElement(id);
-            if (el) {
-                const rect = el.getBoundingClientRect();
-                panelsAbove.push({ id, element: el, currentHeight: rect.height });
+            const startHeight = dragState.startHeights[id];
+            if (el && startHeight !== undefined) {
+                panelsAbove.push({ id, element: el, startHeight });
             }
         }
     }
     
     if (panelsAbove.length === 0) return;
     
-    // Distribute space changes across panels above (shoving behavior)
-    let remainingSpace = spaceNeeded;
-    const heightChanges = new Map();
+    // Calculate target heights based on STARTING heights (not current)
+    const targetHeights = new Map();
     
-    // Initialize all panels to their current height
-    panelsAbove.forEach(p => heightChanges.set(p.id, p.currentHeight));
+    // Initialize all panels to their starting height
+    panelsAbove.forEach(p => targetHeights.set(p.id, p.startHeight));
+    
+    let remainingSpace = spaceNeeded;
     
     if (spaceNeeded > 0) {
         // Taking space from above (dragging up) - shrink panels from bottom to top
         for (const panel of panelsAbove) {
             if (remainingSpace <= 0) break;
             
-            const currentHeight = heightChanges.get(panel.id);
-            const availableSpace = currentHeight - MIN_PANEL_HEIGHT;
+            const startHeight = panel.startHeight;
+            const availableSpace = startHeight - MIN_PANEL_HEIGHT;
             
             if (availableSpace > 0) {
                 const spaceToTake = Math.min(availableSpace, remainingSpace);
-                heightChanges.set(panel.id, currentHeight - spaceToTake);
+                targetHeights.set(panel.id, startHeight - spaceToTake);
                 remainingSpace -= spaceToTake;
+            } else {
+                // Panel was already at minimum, keep it there
+                targetHeights.set(panel.id, MIN_PANEL_HEIGHT);
             }
         }
     } else {
-        // Giving space to above (dragging down) - expand panels from bottom to top
+        // Giving space to above (dragging down) - expand first panel above
         const spaceToGive = -remainingSpace;
-        // First panel above gets the space
         if (panelsAbove.length > 0) {
             const firstAbove = panelsAbove[0];
-            const currentHeight = heightChanges.get(firstAbove.id);
-            heightChanges.set(firstAbove.id, currentHeight + spaceToGive);
+            targetHeights.set(firstAbove.id, firstAbove.startHeight + spaceToGive);
         }
         remainingSpace = 0;
     }
     
-    // Apply height changes to panels above
+    // Apply target heights to panels above
     panelsAbove.forEach(panel => {
-        const newHeight = heightChanges.get(panel.id);
-        panel.element.style.height = `${newHeight}px`;
+        const targetHeight = targetHeights.get(panel.id);
+        panel.element.style.height = `${targetHeight}px`;
         panel.element.style.flex = '0 0 auto';
     });
     
@@ -623,7 +633,8 @@ function endPanelDrag() {
         panelId: null,
         startY: 0,
         startPanelHeight: 0,
-        panelElement: null
+        panelElement: null,
+        startHeights: {}
     };
 }
 
