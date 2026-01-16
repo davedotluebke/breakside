@@ -56,9 +56,6 @@
     min-height: 44px;
 }
 
-.game-panel.pinned {
-    /* Pinned panels keep their current size */
-}
 
 .game-panel.disabled {
     opacity: 0.5;
@@ -70,7 +67,7 @@
 }
 
 /* =============================================================================
-   Panel Title Bar (handles resize, pin, collapse)
+   Panel Title Bar (handles resize and collapse)
    ============================================================================= */
 
 .panel-title-bar {
@@ -163,7 +160,7 @@
     max-width: 50%;
 }
 
-/* Panel action buttons (pin, expand/collapse) */
+/* Panel action buttons (expand/collapse) */
 .panel-actions {
     display: flex;
     gap: 4px;

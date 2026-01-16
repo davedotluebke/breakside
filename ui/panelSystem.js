@@ -41,11 +41,11 @@ const RESIZABLE_PANELS = ['playByPlay', 'selectLine', 'follow'];
 // height: number > MIN_PANEL_HEIGHT = explicit expanded height
 // expandedHeight: saved height to restore when un-minimizing
 const DEFAULT_PANEL_STATES = {
-    header: { pinned: true, hidden: false, height: null, expandedHeight: null },
-    roleButtons: { pinned: true, hidden: false, height: null, expandedHeight: null },
-    playByPlay: { pinned: false, hidden: false, height: MIN_PANEL_HEIGHT, expandedHeight: null },
-    selectLine: { pinned: false, hidden: false, height: null, expandedHeight: null },
-    follow: { pinned: false, hidden: false, height: null, expandedHeight: null }
+    header: { hidden: false, height: null, expandedHeight: null },
+    roleButtons: { hidden: false, height: null, expandedHeight: null },
+    playByPlay: { hidden: false, height: MIN_PANEL_HEIGHT, expandedHeight: null },
+    selectLine: { hidden: false, height: null, expandedHeight: null },
+    follow: { hidden: false, height: null, expandedHeight: null }
 };
 
 // Current panel states
@@ -84,7 +84,7 @@ function savePanelStates() {
  * @returns {object} Panel state
  */
 function getPanelState(panelId) {
-    return panelStates[panelId] || { pinned: false, hidden: false, height: null, expandedHeight: null };
+    return panelStates[panelId] || { hidden: false, height: null, expandedHeight: null };
 }
 
 /**
@@ -135,9 +135,6 @@ function applyPanelState(panelId) {
     const isFollowPanel = panelId === 'follow';
     const isMinimized = isPanelMinimized(panelId);
     
-    // Apply pinned state
-    panel.classList.toggle('pinned', state.pinned);
-    
     // Apply hidden state
     panel.classList.toggle('hidden', state.hidden);
     
@@ -178,13 +175,6 @@ function applyPanelState(panelId) {
             panel.style.height = '';
             panel.style.flex = '0 0 auto';
         }
-    }
-    
-    // Update pin button appearance
-    const pinBtn = panel.querySelector('.panel-pin-btn');
-    if (pinBtn) {
-        pinBtn.classList.toggle('active', state.pinned);
-        pinBtn.title = state.pinned ? 'Unpin panel' : 'Pin panel';
     }
     
     // Update expand/collapse button icon based on minimized state
@@ -334,8 +324,8 @@ function maximizePanel(panelId, minimizeOthers = true) {
                 }
             }
         });
-    }
-    
+}
+
     const state = getPanelState(panelId);
     
     // Restore to expandedHeight, or default, or null (natural height)
@@ -350,15 +340,6 @@ function maximizePanel(panelId, minimizeOthers = true) {
     }
     
     setPanelState(panelId, { height: newHeight });
-}
-
-/**
- * Toggle panel pinned state
- * @param {string} panelId - Panel identifier
- */
-function togglePanelPinned(panelId) {
-    const state = getPanelState(panelId);
-    setPanelState(panelId, { pinned: !state.pinned });
 }
 
 /**
@@ -390,16 +371,6 @@ function handleTitleBarTap(panelId) {
     } else {
         lastTapTime[panelId] = now;
     }
-}
-
-/**
- * Handle pin button click
- * @param {Event} e - Click event
- * @param {string} panelId - Panel identifier
- */
-function handlePinClick(e, panelId) {
-    e.stopPropagation();
-    togglePanelPinned(panelId);
 }
 
 /**
@@ -475,10 +446,6 @@ function isPanelDraggable(panelId) {
  * @param {number} clientY - Starting Y coordinate
  */
 function startPanelDrag(panelId, clientY) {
-    // Don't allow dragging if THIS panel's title bar is pinned
-    const state = getPanelState(panelId);
-    if (state.pinned) return;
-    
     // Don't allow dragging if this panel is not draggable
     if (!isPanelDraggable(panelId)) return;
     
@@ -766,12 +733,11 @@ function initDragListeners() {
  * @param {string} options.panelId - Panel identifier
  * @param {string} options.title - Panel title text
  * @param {boolean} options.showDragHandle - Show drag handle
- * @param {boolean} options.showPinBtn - Show pin button
  * @param {boolean} options.showExpandBtn - Show expand/collapse button
  * @returns {HTMLElement}
  */
 function createPanelTitleBar(options) {
-    const { panelId, title, showDragHandle = true, showPinBtn = true, showExpandBtn = true } = options;
+    const { panelId, title, showDragHandle = true, showExpandBtn = true } = options;
     
     const titleBar = document.createElement('div');
     titleBar.className = 'panel-title-bar';
@@ -804,16 +770,6 @@ function createPanelTitleBar(options) {
     // Actions container
     const actions = document.createElement('div');
     actions.className = 'panel-actions';
-    
-    // Pin button
-    if (showPinBtn) {
-        const pinBtn = document.createElement('button');
-        pinBtn.className = 'panel-action-btn panel-pin-btn';
-        pinBtn.title = 'Pin panel';
-        pinBtn.innerHTML = '<i class="fas fa-thumbtack"></i>';
-        pinBtn.onclick = (e) => handlePinClick(e, panelId);
-        actions.appendChild(pinBtn);
-    }
     
     // Expand/collapse button
     if (showExpandBtn) {
@@ -891,7 +847,6 @@ function createPanelStub(options) {
  * @param {string} options.className - Additional class names
  * @param {string} options.title - Panel title
  * @param {boolean} options.showDragHandle - Show drag handle in title bar
- * @param {boolean} options.showPinBtn - Show pin button
  * @param {boolean} options.showExpandBtn - Show expand/collapse button
  * @param {HTMLElement|null} options.content - Content element (or null for stub)
  * @param {object} options.stubOptions - Options for stub if no content provided
@@ -903,7 +858,6 @@ function createPanel(options) {
         className = '',
         title,
         showDragHandle = true,
-        showPinBtn = true,
         showExpandBtn = true,
         content = null,
         stubOptions = {}
@@ -918,7 +872,6 @@ function createPanel(options) {
         panelId: id,
         title,
         showDragHandle,
-        showPinBtn,
         showExpandBtn
     });
     panel.appendChild(titleBar);
@@ -1044,10 +997,8 @@ function updatePanelsForRole(role) {
     // (This auto-behavior will be implemented in Step 7)
     
     // Follow panel - maximized for viewers or coaches without roles
-    // But respect user's explicit choice if they've minimized or pinned it
     if (!hasRole) {
-        const followState = getPanelState('follow');
-        if (!followState.pinned && !isPanelMinimized('follow')) {
+        if (!isPanelMinimized('follow')) {
             maximizePanel('follow', false);
         }
     }
@@ -1062,20 +1013,16 @@ function updatePanelsForGameState(duringPoint) {
     const isActiveCoach = role === 'activeCoach';
     
     // Play-by-Play panel
-    const playByPlayState = getPanelState('playByPlay');
-    if (!playByPlayState.pinned) {
         if (duringPoint && isActiveCoach) {
             // Auto-maximize when point starts, if Active Coach
             maximizePanel('playByPlay', false);
         } else if (!duringPoint) {
             // Auto-minimize when point ends
             minimizePanel('playByPlay');
-        }
     }
     
     // Select Line panel
-    const selectLineState = getPanelState('selectLine');
-    if (!selectLineState.pinned && isActiveCoach) {
+    if (isActiveCoach) {
         if (duringPoint) {
             // Auto-minimize when point starts for Active Coach
             minimizePanel('selectLine');
@@ -1143,7 +1090,7 @@ function resetAllPanelStates() {
             panel.style.height = '';
             panel.style.flex = '';
             panel.style.marginTop = '';
-            panel.classList.remove('expanding', 'dragging', 'minimized', 'maximized', 'snapped-to-bottom');
+            panel.classList.remove('expanding', 'dragging', 'minimized', 'maximized', 'snapped-to-bottom', 'pinned');
         }
     });
     
@@ -1187,7 +1134,6 @@ window.isPanelMinimized = isPanelMinimized;
 window.togglePanelMinimized = togglePanelMinimized;
 window.minimizePanel = minimizePanel;
 window.maximizePanel = maximizePanel;
-window.togglePanelPinned = togglePanelPinned;
 window.setPanelVisible = setPanelVisible;
 window.setPanelSubtitle = setPanelSubtitle;
 window.resetPanelHeights = resetPanelHeights;

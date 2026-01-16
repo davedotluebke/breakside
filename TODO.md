@@ -177,9 +177,8 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [ ] Pull Dialog auto-popup for Active Coach at start of defensive points
 - [ ] Panel states:
   - **Greyed out/disabled**: User is not Active Coach, OR game is between points
-  - **Auto-minimize**: When point ends (unless pinned)
-  - **Auto-maximize**: When point starts, if user is Active Coach (unless pinned)
-- [ ] Pin button in title bar to lock panel size
+  - **Auto-minimize**: When point ends
+  - **Auto-maximize**: When point starts, if user is Active Coach
 - [ ] Key Play dialog still available for detailed event entry
 - [ ] Offense/Defense possession screens deprecated (keep code, remove from main flow)
 
@@ -196,7 +195,6 @@ Replace current screen-based navigation with a **panel-based layout** for all in
   - **Active Coach**: Auto-minimize when point starts, auto-maximize when point ends
   - **Line Coach**: Stays maximized during points (their main job)
   - **Both roles held**: Full access, both panels can be open during point
-- [ ] Pin button to lock panel size
 - [ ] **O/D button** (disabled for Phase 6b, implemented later):
   - Creates second line selection panel
   - Retitles to "Select Next O Line" and "Select Next D Line"
@@ -220,20 +218,17 @@ Replace current screen-based navigation with a **panel-based layout** for all in
   - **Maximized**: For Viewers (only panel they see besides header)
   - **Maximized**: For Coaches without Active or Line Coach role
   - **Minimized**: For Active/Line Coach (but always accessible)
-- [ ] Pin button to lock panel size
 
 ---
 
 #### Panel Mechanics
 
-- [ ] **Resize**: Drag handle on left side of title bar
-- [ ] **Toggle min/max**: Double-tap title bar
-- [ ] **Pin button**: Lock panel to current size (survives auto-resize behaviors)
-- [ ] **Space allocation**: 
-  - Maximizing a panel minimizes all non-pinned panels
-  - Pinned panels keep their size but may shift position
-  - Follow panel (bottom) gets whatever space remains
-- [ ] **Persistence**: Panel sizes and pin states saved to localStorage (per-client)
+- [x] **Resize**: Drag entire title bar up/down
+- [x] **Toggle min/max**: Double-tap title bar
+- [x] **Space allocation**: 
+  - Maximizing a panel minimizes other panels
+  - Game Log panel (bottom) gets remaining space, snaps to bottom when minimized
+- [x] **Persistence**: Panel sizes saved to localStorage (per-client)
 
 ---
 
@@ -255,7 +250,7 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 
 **Step 1: Panel Container Foundation** ✅
 - [x] Create `game/gameScreen.js` with panel container system
-- [x] Create `ui/panelSystem.js` for resize/pin/min-max logic
+- [x] Create `ui/panelSystem.js` for resize/min-max logic
 - [x] CSS for mobile-first panel stack with drag handles
 - [x] Stub panels with placeholder content (5 panels: Header, Role Buttons, Play-by-Play, Select Line, Game Log)
 - [x] Each stub has "Use Old Screen →" button linking to legacy screen

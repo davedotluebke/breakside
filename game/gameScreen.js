@@ -120,12 +120,14 @@ function createRoleButtonsPanel() {
 
 /**
  * Create the Play-by-Play panel with stub content
+ * Note: No drag handle - this panel's title bar is not draggable
  * @returns {HTMLElement}
  */
 function createPlayByPlayPanel() {
     return createPanel({
         id: 'playByPlay',
         title: 'Play-by-Play',
+        showDragHandle: false,  // Not draggable - no panels above to resize
         stubOptions: {
             icon: 'fa-futbol',
             text: 'Score tracking and play-by-play controls will appear here.',
