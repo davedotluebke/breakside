@@ -718,6 +718,169 @@
 }
 
 /* =============================================================================
+   Game Log Panel Content
+   ============================================================================= */
+
+.game-log-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* Game status bar at top of Game Log */
+.game-log-status {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #dee2e6;
+    flex-shrink: 0;
+}
+
+.game-log-teams {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+}
+
+.game-log-team-us {
+    font-weight: 600;
+    color: #28a745;
+}
+
+.game-log-vs {
+    color: #6c757d;
+    font-size: 0.8rem;
+}
+
+.game-log-team-them {
+    font-weight: 600;
+    color: #dc3545;
+}
+
+.game-log-score {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: #333;
+    margin-top: 4px;
+}
+
+/* Event log area - scrollable */
+.game-log-events {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    background: #fff;
+}
+
+/* Placeholder when no events */
+.game-log-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #adb5bd;
+    gap: 8px;
+}
+
+.game-log-placeholder i {
+    font-size: 2rem;
+    opacity: 0.5;
+}
+
+.game-log-placeholder span {
+    font-size: 0.85rem;
+}
+
+/* Individual event lines */
+.game-log-line {
+    padding: 4px 0;
+    border-bottom: 1px solid #f1f3f5;
+}
+
+.game-log-line:last-child {
+    border-bottom: none;
+}
+
+/* Header lines (version, game summary header) */
+.game-log-header {
+    color: #6c757d;
+    font-size: 0.8rem;
+    font-style: italic;
+}
+
+/* Point headers */
+.game-log-point-header {
+    font-weight: 600;
+    color: #495057;
+    background: #f8f9fa;
+    padding: 6px 8px;
+    margin: 8px -12px 4px -12px;
+    padding-left: 12px;
+    padding-right: 12px;
+    border-top: 1px solid #dee2e6;
+}
+
+/* Roster lines */
+.game-log-roster {
+    color: #6c757d;
+    font-size: 0.85rem;
+    padding-left: 8px;
+}
+
+/* Pull events */
+.game-log-pull {
+    color: #6c757d;
+    font-style: italic;
+    padding-left: 8px;
+}
+
+/* Score events - highlighted */
+.game-log-score-event {
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin: 4px 0;
+}
+
+.game-log-us-scores {
+    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+    color: #155724;
+}
+
+.game-log-them-scores {
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+    color: #721c24;
+}
+
+/* Current score display */
+.game-log-current-score {
+    font-weight: 600;
+    color: #495057;
+    text-align: center;
+    padding: 4px 8px;
+    background: #e9ecef;
+    border-radius: 4px;
+    margin: 4px 0;
+}
+
+/* Panel content needs to fill height */
+.panel-follow .panel-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* =============================================================================
    Mobile Adjustments
    ============================================================================= */
 

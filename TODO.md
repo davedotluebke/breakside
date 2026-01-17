@@ -290,10 +290,10 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [x] Ensure handoff flow still works
 - [x] Hide legacy role buttons when panel UI is active
 
-**Step 4: Game Log Panel**
-- [ ] Game status display (teams, score)
-- [ ] Large scrollable event log
-- [ ] Remove "Use Old Screen" button when complete
+**Step 4: Game Log Panel** ✅
+- [x] Game status display (teams, score)
+- [x] Large scrollable event log
+- [x] Remove "Use Old Screen" button when complete (no stub, real content)
 
 **Step 5: Play-by-Play Panel**
 - [ ] Responsive Simple Mode layout

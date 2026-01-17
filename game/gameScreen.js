@@ -252,19 +252,57 @@ function createSelectLinePanel() {
 // See TODO.md for implementation plan
 
 /**
- * Create the Follow panel with stub content
+ * Create the Game Log panel content
+ * @returns {HTMLElement}
+ */
+function createGameLogContent() {
+    const content = document.createElement('div');
+    content.className = 'game-log-content';
+    
+    content.innerHTML = `
+        <div class="game-log-status" id="gameLogStatus">
+            <div class="game-log-teams">
+                <span class="game-log-team-us" id="gameLogTeamUs">Us</span>
+                <span class="game-log-vs">vs</span>
+                <span class="game-log-team-them" id="gameLogTeamThem">Them</span>
+            </div>
+            <div class="game-log-score" id="gameLogScore">0 – 0</div>
+        </div>
+        <div class="game-log-events" id="gameLogEvents">
+            <div class="game-log-placeholder">
+                <i class="fas fa-list"></i>
+                <span>Game events will appear here</span>
+            </div>
+        </div>
+    `;
+    
+    return content;
+}
+
+/**
+ * Create the Game Log (Follow) panel with actual content
  * @returns {HTMLElement}
  */
 function createFollowPanel() {
-    const panel = createPanel({
-        id: 'follow',
-        className: 'fills-remaining',
+    const panel = document.createElement('div');
+    panel.id = 'panel-follow';
+    panel.className = 'game-panel panel-follow fills-remaining';
+    
+    // Create title bar
+    const titleBar = createPanelTitleBar({
+        panelId: 'follow',
         title: 'Game Log',
-        stubOptions: {
-            icon: 'fa-list',
-            text: 'Live game event log will appear here. Viewers and idle coaches see this panel maximized.'
-        }
+        showDragHandle: true,
+        showExpandBtn: true
     });
+    panel.appendChild(titleBar);
+    
+    // Create content area
+    const contentArea = document.createElement('div');
+    contentArea.className = 'panel-content';
+    contentArea.id = 'panel-follow-content';
+    contentArea.appendChild(createGameLogContent());
+    panel.appendChild(contentArea);
     
     return panel;
 }
@@ -543,6 +581,157 @@ function updateGameScreenScore(usScore, themScore) {
     
     if (usEl) usEl.textContent = usScore;
     if (themEl) themEl.textContent = themScore;
+    
+    // Also update game log score
+    updateGameLogScore(usScore, themScore);
+}
+
+// =============================================================================
+// Game Log Panel Updates
+// =============================================================================
+
+/**
+ * Update the Game Log panel status (teams and score)
+ */
+function updateGameLogStatus() {
+    const teamUsEl = document.getElementById('gameLogTeamUs');
+    const teamThemEl = document.getElementById('gameLogTeamThem');
+    const scoreEl = document.getElementById('gameLogScore');
+    
+    let game;
+    if (typeof currentGame === 'function') {
+        game = currentGame();
+    } else if (typeof currentGame !== 'undefined') {
+        game = currentGame;
+    }
+    
+    if (!game) return;
+    
+    // Update team names
+    const teamName = game.team || 'Us';
+    const opponentName = game.opponent || 'Them';
+    
+    if (teamUsEl) teamUsEl.textContent = teamName;
+    if (teamThemEl) teamThemEl.textContent = opponentName;
+    
+    // Update score
+    const usScore = game.scores ? game.scores[Role.TEAM] : 0;
+    const themScore = game.scores ? game.scores[Role.OPPONENT] : 0;
+    
+    if (scoreEl) scoreEl.textContent = `${usScore} – ${themScore}`;
+}
+
+/**
+ * Update just the score in the Game Log panel
+ * @param {number} usScore - Our team's score
+ * @param {number} themScore - Opponent's score
+ */
+function updateGameLogScore(usScore, themScore) {
+    const scoreEl = document.getElementById('gameLogScore');
+    if (scoreEl) {
+        scoreEl.textContent = `${usScore} – ${themScore}`;
+    }
+}
+
+/**
+ * Update the Game Log panel event list
+ * Uses summarizeGame() to get the game summary text
+ */
+function updateGameLogEvents() {
+    const eventsEl = document.getElementById('gameLogEvents');
+    if (!eventsEl) return;
+    
+    // Check if game screen is visible
+    if (!isGameScreenVisible()) return;
+    
+    // Get game summary
+    let summary = '';
+    if (typeof summarizeGame === 'function') {
+        summary = summarizeGame();
+    }
+    
+    if (!summary || summary.trim() === '') {
+        // Show placeholder when no events
+        eventsEl.innerHTML = `
+            <div class="game-log-placeholder">
+                <i class="fas fa-list"></i>
+                <span>Game events will appear here</span>
+            </div>
+        `;
+        return;
+    }
+    
+    // Format the summary for display
+    // Split into lines and wrap each in a div for styling
+    const lines = summary.split('\n');
+    let html = '';
+    
+    for (const line of lines) {
+        if (!line.trim()) continue;
+        
+        // Add CSS class based on line content
+        let lineClass = 'game-log-line';
+        
+        if (line.includes(' scores!')) {
+            lineClass += ' game-log-score-event';
+            if (line.includes(getTeamName())) {
+                lineClass += ' game-log-us-scores';
+            } else {
+                lineClass += ' game-log-them-scores';
+            }
+        } else if (line.startsWith('Point ') && line.includes('roster:')) {
+            lineClass += ' game-log-point-header';
+        } else if (line.includes('Current score:')) {
+            lineClass += ' game-log-current-score';
+        } else if (line.includes('pulls to')) {
+            lineClass += ' game-log-pull';
+        } else if (line.startsWith('App Version:') || line.startsWith('Game Summary:')) {
+            lineClass += ' game-log-header';
+        } else if (line.includes('roster:')) {
+            lineClass += ' game-log-roster';
+        }
+        
+        html += `<div class="${lineClass}">${escapeHtml(line)}</div>`;
+    }
+    
+    eventsEl.innerHTML = html;
+    
+    // Auto-scroll to bottom
+    eventsEl.scrollTop = eventsEl.scrollHeight;
+}
+
+/**
+ * Get the team name for display
+ * @returns {string}
+ */
+function getTeamName() {
+    let game;
+    if (typeof currentGame === 'function') {
+        game = currentGame();
+    } else if (typeof currentGame !== 'undefined') {
+        game = currentGame;
+    }
+    return game?.team || 'Us';
+}
+
+/**
+ * Escape HTML entities to prevent XSS
+ * @param {string} text - Text to escape
+ * @returns {string}
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
+ * Full update of the Game Log panel
+ * Call this when entering game screen or when game changes significantly
+ */
+function updateGameLogPanel() {
+    updateGameLogStatus();
+    updateGameLogEvents();
 }
 
 /**
@@ -841,6 +1030,9 @@ function enterGameScreen() {
     // Start timer updates
     startGameScreenTimerLoop();
     
+    // Update game log panel
+    updateGameLogPanel();
+    
     // Update role buttons from controller state
     if (typeof getControllerState === 'function') {
         const state = getControllerState();
@@ -892,4 +1084,9 @@ window.updateGameScreenRoleButtons = updateGameScreenRoleButtons;
 window.isGameScreenVisible = isGameScreenVisible;
 window.updateHeaderTeamIdentities = updateHeaderTeamIdentities;
 window.autoResumePointTimer = autoResumePointTimer;
+
+// Game Log panel
+window.updateGameLogPanel = updateGameLogPanel;
+window.updateGameLogEvents = updateGameLogEvents;
+window.updateGameLogStatus = updateGameLogStatus;
 
