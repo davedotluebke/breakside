@@ -2626,6 +2626,8 @@ body.next-line-mode #selectNextLineBtn {
     border: 2px solid #ddd;
     border-radius: 8px;
     width: 100px;
+    background: #fff;
+    color: #333;
 }
 
 .symbol-input:focus {
@@ -2644,6 +2646,8 @@ body.next-line-mode #selectNextLineBtn {
     font-size: 0.9rem;
     border: 2px solid #ddd;
     border-radius: 8px;
+    background: #fff;
+    color: #333;
 }
 
 .url-input:focus {
