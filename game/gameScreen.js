@@ -40,7 +40,10 @@ function createHeaderContent() {
             <i class="fas fa-bars"></i>
         </button>
         
-        <img src="images/logo.disc.only.png" alt="Breakside" class="header-logo" id="gameScreenLogo">
+        <div class="header-logo-container">
+            <img src="images/logo.disc.only.png" alt="Breakside" class="header-logo" id="gameScreenLogo">
+            <span class="header-version-overlay" id="gameVersionOverlay"></span>
+        </div>
         
         <div class="header-score-display">
             <div class="header-team-identity header-team-us" id="headerTeamUs">
@@ -321,6 +324,9 @@ function initGameScreen() {
 // Event Wiring
 // =============================================================================
 
+// Version overlay timeout
+let gameVersionTimeout = null;
+
 /**
  * Wire up all game screen event handlers
  */
@@ -329,6 +335,33 @@ function wireGameScreenEvents() {
     const menuBtn = document.getElementById('gameMenuBtn');
     if (menuBtn) {
         menuBtn.addEventListener('click', handleGameMenuClick);
+    }
+    
+    // Logo tap - show version
+    const logo = document.getElementById('gameScreenLogo');
+    const versionOverlay = document.getElementById('gameVersionOverlay');
+    if (logo && versionOverlay) {
+        logo.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Clear any existing timeout
+            if (gameVersionTimeout) {
+                clearTimeout(gameVersionTimeout);
+            }
+            
+            // Show version
+            const versionText = typeof appVersion !== 'undefined' && appVersion
+                ? `v${appVersion.version} (${appVersion.build})`
+                : 'v?.?.?';
+            versionOverlay.textContent = versionText;
+            versionOverlay.classList.add('visible');
+            
+            // Hide after 3 seconds
+            gameVersionTimeout = setTimeout(() => {
+                versionOverlay.classList.remove('visible');
+            }, 3000);
+        });
     }
     
     // Timer toggle (clicking on timer value/label area)
