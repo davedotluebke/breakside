@@ -24,6 +24,9 @@ let gameScreenInitialized = false;
 // Header Panel Content
 // =============================================================================
 
+// Max team name length that fits in the score display
+const MAX_TEAM_NAME_LENGTH = 6;
+
 /**
  * Create the header panel content
  * @returns {HTMLElement}
@@ -37,21 +40,78 @@ function createHeaderContent() {
             <i class="fas fa-bars"></i>
         </button>
         
-        <img src="images/logo.disc.only.png" alt="Breakside" class="header-logo" id="gameScreenLogo">
-        
         <div class="header-score-display">
-            <span class="header-score-us" id="gameScoreUs">0</span>
-            <span class="header-score-separator">-</span>
-            <span class="header-score-them" id="gameScoreThem">0</span>
+            <div class="header-team-identity header-team-us" id="headerTeamUs">
+                <span class="team-identity-text">Us</span>
+            </div>
+            <span class="header-score-value header-score-us" id="gameScoreUs">0</span>
+            <span class="header-score-separator">–</span>
+            <span class="header-score-value header-score-them" id="gameScoreThem">0</span>
+            <div class="header-team-identity header-team-them" id="headerTeamThem">
+                <span class="team-identity-text">Them</span>
+            </div>
         </div>
         
         <div class="header-timer-container" id="gameTimerContainer" title="Toggle timer mode">
             <span class="header-timer-value" id="gameTimerValue">0:00</span>
             <span class="header-timer-label" id="gameTimerLabel">point</span>
+            <button class="header-timer-pause-btn" id="gameTimerPauseBtn" title="Pause/Resume">
+                <i class="fas fa-pause"></i>
+            </button>
         </div>
     `;
     
     return content;
+}
+
+/**
+ * Get the team identity display for the header
+ * Priority: (1) Icon over small-font symbol, (2) Team name if ≤6 chars, (3) large-font symbol, (4) "Us"/"Them"
+ * @param {Object} team - Team object (may have name, teamSymbol, iconUrl)
+ * @param {string} fallback - Fallback text ("Us" or "Them")
+ * @returns {Object} { html: string, hasIcon: boolean }
+ */
+function getTeamIdentityDisplay(team, fallback) {
+    if (!team) {
+        return { html: `<span class="team-identity-text team-identity-fallback">${fallback}</span>`, hasIcon: false };
+    }
+    
+    // Priority 1: Icon + small symbol (if both available)
+    if (team.iconUrl && team.teamSymbol) {
+        return {
+            html: `
+                <img src="${team.iconUrl}" alt="${team.name}" class="team-identity-icon" onerror="this.style.display='none'">
+                <span class="team-identity-symbol team-identity-symbol-small">${team.teamSymbol}</span>
+            `,
+            hasIcon: true
+        };
+    }
+    
+    // Priority 2: Team name if short enough (≤6 chars)
+    if (team.name && team.name.length <= MAX_TEAM_NAME_LENGTH) {
+        return { html: `<span class="team-identity-text">${team.name}</span>`, hasIcon: false };
+    }
+    
+    // Priority 3: Large symbol only
+    if (team.teamSymbol) {
+        return { html: `<span class="team-identity-symbol">${team.teamSymbol}</span>`, hasIcon: false };
+    }
+    
+    // Priority 4: Fallback
+    return { html: `<span class="team-identity-text team-identity-fallback">${fallback}</span>`, hasIcon: false };
+}
+
+/**
+ * Get opponent identity display for the header
+ * Opponent doesn't have icon, so: (1) Name if ≤6 chars, (2) "Them"
+ * @param {string} opponentName - Opponent name from game
+ * @returns {Object} { html: string }
+ */
+function getOpponentIdentityDisplay(opponentName) {
+    if (opponentName && opponentName.length <= MAX_TEAM_NAME_LENGTH) {
+        return { html: `<span class="team-identity-text">${opponentName}</span>` };
+    }
+    return { html: `<span class="team-identity-text team-identity-fallback">Them</span>` };
 }
 
 /**
@@ -240,10 +300,21 @@ function wireGameScreenEvents() {
         menuBtn.addEventListener('click', handleGameMenuClick);
     }
     
-    // Timer toggle
+    // Timer toggle (clicking on timer value/label area)
     const timerContainer = document.getElementById('gameTimerContainer');
     if (timerContainer) {
-        timerContainer.addEventListener('click', handleTimerToggle);
+        timerContainer.addEventListener('click', (e) => {
+            // Only toggle if not clicking the pause button
+            if (!e.target.closest('.header-timer-pause-btn')) {
+                handleTimerToggle();
+            }
+        });
+    }
+    
+    // Timer pause button
+    const pauseBtn = document.getElementById('gameTimerPauseBtn');
+    if (pauseBtn) {
+        pauseBtn.addEventListener('click', handleTimerPauseClick);
     }
     
     // Role buttons
@@ -279,13 +350,119 @@ function handleGameMenuClick() {
 }
 
 /**
- * Handle timer toggle click
+ * Handle timer toggle click (tapping on timer value)
  */
 let timerMode = 'point'; // 'point' or 'game'
+let pointTimerPaused = false;
+let pointPausedAt = null;  // When the timer was paused
+
 function handleTimerToggle() {
     timerMode = timerMode === 'point' ? 'game' : 'point';
     updateTimerDisplay();
+    updateTimerPauseButton();
 }
+
+/**
+ * Handle timer pause/resume button click
+ */
+function handleTimerPauseClick(e) {
+    e.stopPropagation(); // Don't trigger timer mode toggle
+    
+    if (timerMode !== 'point') {
+        // Game clock cannot be paused
+        return;
+    }
+    
+    const point = getCurrentPoint();
+    if (!point || !point.startTimestamp) {
+        // No active point, nothing to pause
+        return;
+    }
+    
+    if (pointTimerPaused) {
+        // Resume: add paused duration to totalPointTime
+        if (pointPausedAt && point.lastPauseTime) {
+            const pausedDuration = Date.now() - new Date(point.lastPauseTime).getTime();
+            point.totalPointTime = (point.totalPointTime || 0) + pausedDuration;
+        }
+        point.lastPauseTime = null;
+        pointTimerPaused = false;
+        pointPausedAt = null;
+    } else {
+        // Pause: record pause time
+        point.lastPauseTime = new Date().toISOString();
+        pointTimerPaused = true;
+        pointPausedAt = Date.now();
+    }
+    
+    updateTimerPauseButton();
+    updateTimerDisplay();
+    
+    // Save the change
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
+}
+
+/**
+ * Update pause button visibility and state
+ */
+function updateTimerPauseButton() {
+    const pauseBtn = document.getElementById('gameTimerPauseBtn');
+    if (!pauseBtn) return;
+    
+    // Only show pause button for point timer
+    if (timerMode !== 'point') {
+        pauseBtn.style.display = 'none';
+        return;
+    }
+    
+    pauseBtn.style.display = 'flex';
+    const icon = pauseBtn.querySelector('i');
+    if (icon) {
+        icon.className = pointTimerPaused ? 'fas fa-play' : 'fas fa-pause';
+    }
+    pauseBtn.classList.toggle('paused', pointTimerPaused);
+}
+
+/**
+ * Get the current point from the game
+ * @returns {Point|null}
+ */
+function getCurrentPoint() {
+    let game;
+    if (typeof currentGame === 'function') {
+        game = currentGame();
+    } else if (typeof currentGame !== 'undefined') {
+        game = currentGame;
+    }
+    
+    if (game && game.points && game.points.length > 0) {
+        return game.points[game.points.length - 1];
+    }
+    return null;
+}
+
+/**
+ * Auto-resume point timer when a play-by-play event is recorded
+ * Call this from event handlers
+ */
+function autoResumePointTimer() {
+    if (pointTimerPaused) {
+        const point = getCurrentPoint();
+        if (point && point.lastPauseTime) {
+            const pausedDuration = Date.now() - new Date(point.lastPauseTime).getTime();
+            point.totalPointTime = (point.totalPointTime || 0) + pausedDuration;
+            point.lastPauseTime = null;
+        }
+        pointTimerPaused = false;
+        pointPausedAt = null;
+        updateTimerPauseButton();
+    }
+}
+
+// Export for use by play-by-play handlers
+window.autoResumePointTimer = autoResumePointTimer;
 
 // =============================================================================
 // UI Updates
@@ -305,34 +482,131 @@ function updateGameScreenScore(usScore, themScore) {
 }
 
 /**
+ * Update the team identity displays in the header
+ * Call this when entering game screen or when team data changes
+ */
+function updateHeaderTeamIdentities() {
+    const usContainer = document.getElementById('headerTeamUs');
+    const themContainer = document.getElementById('headerTeamThem');
+    
+    if (!usContainer || !themContainer) return;
+    
+    // Get current team and game
+    let team = null;
+    let game = null;
+    
+    if (typeof currentTeam !== 'undefined' && currentTeam) {
+        team = currentTeam;
+    }
+    
+    if (typeof currentGame === 'function') {
+        game = currentGame();
+    } else if (typeof currentGame !== 'undefined') {
+        game = currentGame;
+    }
+    
+    // Update our team identity
+    const usDisplay = getTeamIdentityDisplay(team, 'Us');
+    usContainer.innerHTML = usDisplay.html;
+    usContainer.classList.toggle('has-icon', usDisplay.hasIcon);
+    
+    // Update opponent identity
+    const opponentName = game ? game.opponent : null;
+    const themDisplay = getOpponentIdentityDisplay(opponentName);
+    themContainer.innerHTML = themDisplay.html;
+}
+
+/**
  * Update the timer display
+ * Shows either point timer or game clock (with cap countdown)
  */
 function updateTimerDisplay() {
     const valueEl = document.getElementById('gameTimerValue');
     const labelEl = document.getElementById('gameTimerLabel');
+    const containerEl = document.getElementById('gameTimerContainer');
     
     if (!valueEl || !labelEl) return;
     
-    labelEl.textContent = timerMode;
+    // Remove all timer state classes
+    valueEl.classList.remove('timer-warning', 'timer-danger', 'timer-negative', 'timer-paused');
     
-    // Get appropriate time value based on mode
+    // Get game for cap calculation
+    let game;
+    if (typeof currentGame === 'function') {
+        game = currentGame();
+    } else if (typeof currentGame !== 'undefined') {
+        game = currentGame;
+    }
+    
     if (timerMode === 'point') {
         // Show point timer
-        if (typeof currentPoint !== 'undefined' && currentPoint && currentPoint.startTimestamp) {
-            const elapsed = Math.floor((Date.now() - new Date(currentPoint.startTimestamp).getTime()) / 1000);
+        labelEl.textContent = 'point';
+        
+        const point = getCurrentPoint();
+        if (point && point.startTimestamp) {
+            let elapsed;
+            if (pointTimerPaused && pointPausedAt) {
+                // Show time when paused
+                elapsed = Math.floor((pointPausedAt - new Date(point.startTimestamp).getTime()) / 1000);
+                valueEl.classList.add('timer-paused');
+            } else {
+                // Active timer - subtract any accumulated pause time
+                const now = Date.now();
+                const startTime = new Date(point.startTimestamp).getTime();
+                const pausedTime = point.totalPointTime || 0;
+                elapsed = Math.floor((now - startTime - pausedTime) / 1000);
+            }
             valueEl.textContent = formatTime(elapsed);
+            
+            // Add warning colors for long points
+            if (elapsed > 180) { // 3+ minutes
+                valueEl.classList.add('timer-danger');
+            } else if (elapsed > 120) { // 2+ minutes
+                valueEl.classList.add('timer-warning');
+            }
         } else {
             valueEl.textContent = '0:00';
         }
     } else {
-        // Show game timer
-        if (typeof currentGame !== 'undefined' && currentGame && typeof currentGame === 'function') {
-            const game = currentGame();
-            if (game && game.startTimestamp) {
-                const elapsed = Math.floor((Date.now() - new Date(game.startTimestamp).getTime()) / 1000);
-                valueEl.textContent = formatTime(elapsed);
+        // Show game clock (with cap countdown if applicable)
+        labelEl.textContent = 'game';
+        
+        if (game && game.gameStartTimestamp) {
+            const startTime = new Date(game.gameStartTimestamp).getTime();
+            const now = Date.now();
+            const elapsedMs = now - startTime;
+            
+            // Check if we should show countdown to cap
+            let capTime = null;
+            if (game.roundEndTime) {
+                capTime = new Date(game.roundEndTime).getTime();
+            } else if (game.gameDurationMinutes) {
+                capTime = startTime + (game.gameDurationMinutes * 60 * 1000);
+            }
+            
+            if (capTime) {
+                const remainingMs = capTime - now;
+                const remainingSeconds = Math.floor(remainingMs / 1000);
+                
+                if (remainingSeconds <= 0) {
+                    // Cap exceeded - show negative time in red
+                    valueEl.textContent = formatTime(remainingSeconds);
+                    valueEl.classList.add('timer-negative');
+                } else if (remainingSeconds <= 300) { // Under 5 minutes
+                    // Show countdown
+                    valueEl.textContent = formatTime(remainingSeconds);
+                    if (remainingSeconds <= 60) {
+                        valueEl.classList.add('timer-danger');
+                    } else if (remainingSeconds <= 180) {
+                        valueEl.classList.add('timer-warning');
+                    }
+                } else {
+                    // Show elapsed time
+                    valueEl.textContent = formatTime(Math.floor(elapsedMs / 1000));
+                }
             } else {
-                valueEl.textContent = '0:00';
+                // No cap - just show elapsed time
+                valueEl.textContent = formatTime(Math.floor(elapsedMs / 1000));
             }
         } else {
             valueEl.textContent = '0:00';
@@ -448,18 +722,31 @@ function enterGameScreen() {
     // Show the game screen
     showGameScreen();
     
+    // Reset timer pause state when entering
+    pointTimerPaused = false;
+    pointPausedAt = null;
+    
     // Update displays
-    if (typeof currentGame !== 'undefined') {
-        let game;
-        if (typeof currentGame === 'function') {
-            game = currentGame();
-        } else {
-            game = currentGame;
-        }
-        if (game) {
-            updateGameScreenScore(game.teamScore || 0, game.opponentScore || 0);
-        }
+    let game;
+    if (typeof currentGame === 'function') {
+        game = currentGame();
+    } else if (typeof currentGame !== 'undefined') {
+        game = currentGame;
     }
+    
+    if (game) {
+        // Update score
+        const usScore = game.scores ? game.scores[Role.TEAM] : 0;
+        const themScore = game.scores ? game.scores[Role.OPPONENT] : 0;
+        updateGameScreenScore(usScore, themScore);
+    }
+    
+    // Update team identities in header
+    updateHeaderTeamIdentities();
+    
+    // Update timer display and pause button
+    updateTimerDisplay();
+    updateTimerPauseButton();
     
     // Start timer updates
     startGameScreenTimerLoop();
@@ -513,4 +800,6 @@ window.exitGameScreen = exitGameScreen;
 window.updateGameScreenScore = updateGameScreenScore;
 window.updateGameScreenRoleButtons = updateGameScreenRoleButtons;
 window.isGameScreenVisible = isGameScreenVisible;
+window.updateHeaderTeamIdentities = updateHeaderTeamIdentities;
+window.autoResumePointTimer = autoResumePointTimer;
 

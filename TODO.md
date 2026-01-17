@@ -269,12 +269,16 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [x] Compact title bars for more content space
 - [x] Hide legacy screens when panel UI is active
 
-**Step 2: Header Panel**
-- [ ] Port existing header (hamburger, logo, score)
-- [ ] Add timer toggle (game clock ↔ point timer)
-- [ ] Add pause/resume for point timer
-- [ ] New fields: `gameDurationMinutes`, `roundEndTime`
-- [ ] Red negative countdown when cap time exceeded
+**Step 2: Header Panel** ✅
+- [x] Port existing header (hamburger, logo, score)
+- [x] Smart score display with team identity:
+  - New optional Team fields: `teamSymbol` (4-char max), `iconUrl` (URL or data URL to PNG)
+  - Display priority: (1) Icon over small-font symbol, (2) Team name if ≤6 chars, (3) large-font symbol, (4) "Us"/"Them"
+  - Opponent name also respects priority (entered at game start, no icon)
+- [x] Add timer toggle (game clock ↔ point timer)
+- [x] Add pause/resume for point timer
+- [x] New game fields: `gameDurationMinutes`, `roundEndTime`
+- [x] Red negative countdown when cap time exceeded
 
 **Step 3: Role Buttons Panel**
 - [ ] Port existing role buttons from sub-header
