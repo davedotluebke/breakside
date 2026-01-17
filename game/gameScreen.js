@@ -125,13 +125,14 @@ function getTeamIdentityDisplay(team, fallback) {
 
 /**
  * Get opponent identity display for the header
- * Opponent doesn't have icon, so: (1) Name if ≤6 chars, (2) "Them"
+ * Opponent doesn't have icon, so: (1) Name if ≤6 chars (large), (2) "Them" (small fallback)
  * @param {string} opponentName - Opponent name from game
  * @returns {Object} { html: string }
  */
 function getOpponentIdentityDisplay(opponentName) {
     if (opponentName && opponentName.length <= MAX_TEAM_NAME_LENGTH) {
-        return { html: `<span class="team-identity-text">${opponentName}</span>` };
+        // Use large symbol style for short opponent names to match team symbol size
+        return { html: `<span class="team-identity-symbol-large">${opponentName}</span>` };
     }
     return { html: `<span class="team-identity-text team-identity-fallback">Them</span>` };
 }
