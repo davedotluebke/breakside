@@ -547,16 +547,17 @@ function updateTimerDisplay() {
         const point = getCurrentPoint();
         if (point && point.startTimestamp) {
             let elapsed;
+            const startTime = new Date(point.startTimestamp).getTime();
+            const previousPausedTime = point.totalPointTime || 0;
+            
             if (pointTimerPaused && pointPausedAt) {
-                // Show time when paused
-                elapsed = Math.floor((pointPausedAt - new Date(point.startTimestamp).getTime()) / 1000);
+                // Show time when paused - subtract accumulated pause time from previous cycles
+                elapsed = Math.floor((pointPausedAt - startTime - previousPausedTime) / 1000);
                 valueEl.classList.add('timer-paused');
             } else {
                 // Active timer - subtract any accumulated pause time
                 const now = Date.now();
-                const startTime = new Date(point.startTimestamp).getTime();
-                const pausedTime = point.totalPointTime || 0;
-                elapsed = Math.floor((now - startTime - pausedTime) / 1000);
+                elapsed = Math.floor((now - startTime - previousPausedTime) / 1000);
             }
             valueEl.textContent = formatTime(elapsed);
             
