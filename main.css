@@ -2610,10 +2610,29 @@ body.next-line-mode #selectNextLineBtn {
     gap: 6px;
 }
 
-.identity-form label {
+.identity-form .form-group label {
     font-size: 0.85rem;
     font-weight: 500;
     color: #555;
+}
+
+/* Override auth.css form-group input styles for identity form */
+.identity-form .form-group input,
+.identity-form .form-group input[type="text"],
+.identity-form .form-group input[type="url"] {
+    background: #fff !important;
+    color: #333 !important;
+    border: 2px solid #ddd !important;
+}
+
+.identity-form .form-group input:focus {
+    border-color: #EB8232 !important;
+    outline: none;
+    box-shadow: none !important;
+}
+
+.identity-form .form-group input::placeholder {
+    color: #999 !important;
 }
 
 .symbol-input {
@@ -2623,16 +2642,8 @@ body.next-line-mode #selectNextLineBtn {
     text-transform: uppercase;
     text-align: center;
     letter-spacing: 2px;
-    border: 2px solid #ddd;
     border-radius: 8px;
     width: 100px;
-    background: #fff;
-    color: #333;
-}
-
-.symbol-input:focus {
-    border-color: #EB8232;
-    outline: none;
 }
 
 .icon-url-row {
@@ -2644,15 +2655,7 @@ body.next-line-mode #selectNextLineBtn {
     flex: 1;
     padding: 10px 12px;
     font-size: 0.9rem;
-    border: 2px solid #ddd;
     border-radius: 8px;
-    background: #fff;
-    color: #333;
-}
-
-.url-input:focus {
-    border-color: #EB8232;
-    outline: none;
 }
 
 .fetch-icon-btn {
