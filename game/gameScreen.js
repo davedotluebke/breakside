@@ -40,6 +40,8 @@ function createHeaderContent() {
             <i class="fas fa-bars"></i>
         </button>
         
+        <img src="images/logo.disc.only.png" alt="Breakside" class="header-logo" id="gameScreenLogo">
+        
         <div class="header-score-display">
             <div class="header-team-identity header-team-us" id="headerTeamUs">
                 <span class="team-identity-text">Us</span>

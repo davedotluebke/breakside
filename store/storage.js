@@ -121,7 +121,7 @@ function serializeGame(game) {
             startTimestamp: point.startTimestamp ? point.startTimestamp.toISOString() : null,
             endTimestamp: point.endTimestamp ? point.endTimestamp.toISOString() : null,
             totalPointTime: point.totalPointTime,
-            lastPauseTime: point.lastPauseTime ? point.lastPauseTime.toISOString() : null,
+            lastPauseTime: point.lastPauseTime ? (typeof point.lastPauseTime === 'string' ? point.lastPauseTime : point.lastPauseTime.toISOString()) : null,
             possessions: point.possessions.map(possession => ({
                 offensive: possession.offensive,
                 events: possession.events.map(event => serializeEvent(event))
