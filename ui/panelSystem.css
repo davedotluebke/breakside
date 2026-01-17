@@ -319,10 +319,38 @@
     background: rgba(255,255,255,0.25);
 }
 
+.header-logo-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
 .header-logo {
     height: 32px;
     width: auto;
     border-radius: 4px;
+    cursor: pointer;
+}
+
+.header-version-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-family: 'JetBrains Mono', monospace;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.header-version-overlay.visible {
+    opacity: 1;
 }
 
 /* Score display container - holds team identities and scores */
