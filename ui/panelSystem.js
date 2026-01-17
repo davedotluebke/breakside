@@ -1097,6 +1097,13 @@ function hideLegacyScreens() {
     if (bottomPanel) {
         bottomPanel.style.display = 'none';
     }
+    
+    // Hide the legacy controller role buttons (Phase 6 sub-header)
+    // The new panel-based role buttons are used instead
+    const legacyRoleButtons = document.getElementById('controllerRoleButtons');
+    if (legacyRoleButtons) {
+        legacyRoleButtons.style.display = 'none';
+    }
 }
 
 /**
