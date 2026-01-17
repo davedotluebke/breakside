@@ -66,41 +66,61 @@ function createHeaderContent() {
     return content;
 }
 
+// Track whether to show icon or symbol for our team (tap to toggle)
+let showTeamIcon = true;
+
 /**
  * Get the team identity display for the header
- * Priority: (1) Icon over small-font symbol, (2) Team name if ≤6 chars, (3) large-font symbol, (4) "Us"/"Them"
+ * Shows EITHER icon OR symbol (tappable to toggle between them)
+ * Fallback priority: icon > symbol > short name > "Us"
  * @param {Object} team - Team object (may have name, teamSymbol, iconUrl)
  * @param {string} fallback - Fallback text ("Us" or "Them")
- * @returns {Object} { html: string, hasIcon: boolean }
+ * @returns {Object} { html: string, canToggle: boolean }
  */
 function getTeamIdentityDisplay(team, fallback) {
     if (!team) {
-        return { html: `<span class="team-identity-text team-identity-fallback">${fallback}</span>`, hasIcon: false };
+        return { html: `<span class="team-identity-text team-identity-fallback">${fallback}</span>`, canToggle: false };
     }
     
-    // Priority 1: Icon + small symbol (if both available)
-    if (team.iconUrl && team.teamSymbol) {
-        return {
-            html: `
-                <img src="${team.iconUrl}" alt="${team.name}" class="team-identity-icon" onerror="this.style.display='none'">
-                <span class="team-identity-symbol team-identity-symbol-small">${team.teamSymbol}</span>
-            `,
-            hasIcon: true
+    const hasIcon = !!team.iconUrl;
+    const hasSymbol = !!team.teamSymbol;
+    const hasShortName = team.name && team.name.length <= MAX_TEAM_NAME_LENGTH;
+    
+    // If we have both icon and symbol, show based on toggle state
+    if (hasIcon && hasSymbol) {
+        if (showTeamIcon) {
+            return {
+                html: `<img src="${team.iconUrl}" alt="${team.name}" class="team-identity-icon-large" onerror="this.parentElement.click()">`,
+                canToggle: true
+            };
+        } else {
+            return {
+                html: `<span class="team-identity-symbol-large">${team.teamSymbol}</span>`,
+                canToggle: true
+            };
+        }
+    }
+    
+    // Only icon available
+    if (hasIcon) {
+        return { 
+            html: `<img src="${team.iconUrl}" alt="${team.name}" class="team-identity-icon-large" onerror="this.style.display='none'">`,
+            canToggle: false 
         };
     }
     
-    // Priority 2: Team name if short enough (≤6 chars)
-    if (team.name && team.name.length <= MAX_TEAM_NAME_LENGTH) {
-        return { html: `<span class="team-identity-text">${team.name}</span>`, hasIcon: false };
+    // Only symbol available
+    if (hasSymbol) {
+        return { html: `<span class="team-identity-symbol-large">${team.teamSymbol}</span>`, canToggle: false };
     }
     
-    // Priority 3: Large symbol only
-    if (team.teamSymbol) {
-        return { html: `<span class="team-identity-symbol">${team.teamSymbol}</span>`, hasIcon: false };
+    // Short team name
+    if (hasShortName) {
+        return { html: `<span class="team-identity-text">${team.name}</span>`, canToggle: false };
     }
     
-    // Priority 4: Fallback
-    return { html: `<span class="team-identity-text team-identity-fallback">${fallback}</span>`, hasIcon: false };
+    // Fallback
+    return { html: `<span class="team-identity-text team-identity-fallback">${fallback}</span>`, canToggle: false };
 }
 
 /**
@@ -114,6 +134,14 @@ function getOpponentIdentityDisplay(opponentName) {
         return { html: `<span class="team-identity-text">${opponentName}</span>` };
     }
     return { html: `<span class="team-identity-text team-identity-fallback">Them</span>` };
+}
+
+/**
+ * Toggle between icon and symbol display for our team
+ */
+function toggleTeamIdentityDisplay() {
+    showTeamIcon = !showTeamIcon;
+    updateHeaderTeamIdentities();
 }
 
 /**
@@ -510,7 +538,16 @@ function updateHeaderTeamIdentities() {
     // Update our team identity
     const usDisplay = getTeamIdentityDisplay(team, 'Us');
     usContainer.innerHTML = usDisplay.html;
-    usContainer.classList.toggle('has-icon', usDisplay.hasIcon);
+    usContainer.classList.toggle('can-toggle', usDisplay.canToggle);
+    
+    // Add click handler for toggling if we can toggle
+    if (usDisplay.canToggle) {
+        usContainer.onclick = toggleTeamIdentityDisplay;
+        usContainer.style.cursor = 'pointer';
+    } else {
+        usContainer.onclick = null;
+        usContainer.style.cursor = 'default';
+    }
     
     // Update opponent identity
     const opponentName = game ? game.opponent : null;

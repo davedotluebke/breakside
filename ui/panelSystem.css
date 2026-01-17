@@ -329,7 +329,7 @@
 .header-score-display {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     font-size: 1.4rem;
     font-weight: 700;
     font-family: 'JetBrains Mono', monospace;
@@ -361,9 +361,17 @@
 .header-team-identity {
     display: flex;
     align-items: center;
-    gap: 3px;
-    max-width: 70px;
-    overflow: hidden;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+}
+
+.header-team-identity.can-toggle {
+    cursor: pointer;
+}
+
+.header-team-identity.can-toggle:active {
+    opacity: 0.8;
 }
 
 .header-team-us {
@@ -392,39 +400,23 @@
     font-weight: 500;
 }
 
-/* Team symbol (4-char abbreviation) */
-.team-identity-symbol {
-    font-size: 0.8rem;
+/* Large team icon (main display) */
+.team-identity-icon-large {
+    width: 34px;
+    height: 34px;
+    border-radius: 6px;
+    object-fit: contain;
+    background: rgba(255,255,255,0.15);
+}
+
+/* Large team symbol (4-char abbreviation, main display) */
+.team-identity-symbol-large {
+    font-size: 1rem;
     font-weight: 700;
     color: #fff;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
     font-family: 'JetBrains Mono', monospace;
-}
-
-.team-identity-symbol-small {
-    font-size: 0.6rem;
-    font-weight: 600;
-    color: rgba(255,255,255,0.85);
-}
-
-/* Team icon */
-.team-identity-icon {
-    width: 20px;
-    height: 20px;
-    border-radius: 3px;
-    object-fit: contain;
-    background: rgba(255,255,255,0.1);
-}
-
-.header-team-identity.has-icon {
-    flex-direction: column;
-    gap: 1px;
-}
-
-.header-team-identity.has-icon .team-identity-icon {
-    width: 22px;
-    height: 22px;
 }
 
 /* Timer container */
@@ -741,33 +733,25 @@
     /* Header score display - tighter on mobile */
     .header-score-display {
         font-size: 1.2rem;
-        gap: 4px;
+        gap: 3px;
     }
     
     .header-team-identity {
-        max-width: 50px;
+        min-width: 32px;
+        height: 32px;
     }
     
     .team-identity-text {
         font-size: 0.6rem;
     }
     
-    .team-identity-symbol {
-        font-size: 0.7rem;
+    .team-identity-icon-large {
+        width: 30px;
+        height: 30px;
     }
     
-    .team-identity-symbol-small {
-        font-size: 0.55rem;
-    }
-    
-    .team-identity-icon {
-        width: 18px;
-        height: 18px;
-    }
-    
-    .header-team-identity.has-icon .team-identity-icon {
-        width: 18px;
-        height: 18px;
+    .team-identity-symbol-large {
+        font-size: 0.9rem;
     }
     
     .header-timer-container {
@@ -803,15 +787,25 @@
 @media (max-width: 360px) {
     .header-score-display {
         font-size: 1rem;
-        gap: 3px;
+        gap: 2px;
     }
     
     .header-team-identity {
-        max-width: 40px;
+        min-width: 28px;
+        height: 28px;
     }
     
     .team-identity-text {
         font-size: 0.55rem;
+    }
+    
+    .team-identity-icon-large {
+        width: 26px;
+        height: 26px;
+    }
+    
+    .team-identity-symbol-large {
+        font-size: 0.8rem;
     }
     
     .header-menu-btn {
