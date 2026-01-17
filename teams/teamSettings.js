@@ -721,6 +721,7 @@ function saveOriginalIconUrl(teamId, url) {
 
 /**
  * Fetch, resize, and cache team icon from URL
+ * Uses server-side proxy to bypass CORS restrictions
  */
 async function fetchAndCacheIcon() {
     const urlInput = document.getElementById('teamIconUrlInput');
@@ -756,20 +757,34 @@ async function fetchAndCacheIcon() {
         fetchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     }
     if (iconStatus) {
-        iconStatus.textContent = 'Fetching image...';
+        iconStatus.textContent = 'Fetching image via server...';
         iconStatus.className = 'icon-status';
     }
     
     try {
-        const dataUrl = await loadAndResizeImage(url);
+        // Use server-side proxy to fetch and resize image
+        const response = await fetch(`${getApiBaseUrl()}/api/proxy-image`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ url })
+        });
         
-        if (dataUrl) {
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || `Server error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.dataUrl) {
             // Save to team and update preview
-            currentTeam.iconUrl = dataUrl;
+            currentTeam.iconUrl = data.dataUrl;
             saveOriginalIconUrl(currentTeam.id, url);
             
             if (iconPreview) {
-                iconPreview.src = dataUrl;
+                iconPreview.src = data.dataUrl;
             }
             if (iconPreviewContainer) {
                 iconPreviewContainer.style.display = 'flex';
@@ -778,6 +793,8 @@ async function fetchAndCacheIcon() {
                 iconStatus.textContent = 'Icon loaded and cached!';
                 iconStatus.className = 'icon-status success';
             }
+        } else {
+            throw new Error('No image data returned');
         }
     } catch (error) {
         console.error('Error fetching icon:', error);
@@ -791,97 +808,6 @@ async function fetchAndCacheIcon() {
             fetchBtn.innerHTML = '<i class="fas fa-download"></i>';
         }
     }
-}
-
-/**
- * Load an image from URL and resize it to a reasonable size
- * Returns a data URL of the resized image
- */
-function loadAndResizeImage(url) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        
-        img.onload = function() {
-            try {
-                // Calculate new dimensions
-                let width = img.width;
-                let height = img.height;
-                
-                if (width > MAX_ICON_SIZE || height > MAX_ICON_SIZE) {
-                    if (width > height) {
-                        height = Math.round(height * MAX_ICON_SIZE / width);
-                        width = MAX_ICON_SIZE;
-                    } else {
-                        width = Math.round(width * MAX_ICON_SIZE / height);
-                        height = MAX_ICON_SIZE;
-                    }
-                }
-                
-                // Create canvas and resize
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                
-                // Convert to data URL (PNG for transparency support)
-                const dataUrl = canvas.toDataURL('image/png', 0.9);
-                
-                // Check size - warn if too large
-                const sizeKB = Math.round(dataUrl.length / 1024);
-                if (sizeKB > 100) {
-                    console.warn(`Icon data URL is ${sizeKB}KB - consider using a smaller image`);
-                }
-                
-                resolve(dataUrl);
-            } catch (e) {
-                reject(new Error('Failed to process image'));
-            }
-        };
-        
-        img.onerror = function() {
-            reject(new Error('Failed to load image. Check URL and CORS permissions.'));
-        };
-        
-        // Set a timeout for slow loads
-        const timeout = setTimeout(() => {
-            reject(new Error('Image load timed out'));
-        }, 10000);
-        
-        img.onload = function() {
-            clearTimeout(timeout);
-            try {
-                let width = img.width;
-                let height = img.height;
-                
-                if (width > MAX_ICON_SIZE || height > MAX_ICON_SIZE) {
-                    if (width > height) {
-                        height = Math.round(height * MAX_ICON_SIZE / width);
-                        width = MAX_ICON_SIZE;
-                    } else {
-                        width = Math.round(width * MAX_ICON_SIZE / height);
-                        height = MAX_ICON_SIZE;
-                    }
-                }
-                
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                
-                const dataUrl = canvas.toDataURL('image/png', 0.9);
-                resolve(dataUrl);
-            } catch (e) {
-                reject(new Error('Failed to process image'));
-            }
-        };
-        
-        img.src = url;
-    });
 }
 
 /**

@@ -380,6 +380,119 @@ async def health():
 
 
 # =============================================================================
+# Image Proxy endpoint
+# =============================================================================
+
+@app.post("/api/proxy-image")
+async def proxy_image(body: dict = Body(...)):
+    """
+    Proxy and resize an image from a URL.
+    
+    This endpoint fetches an image from a URL (bypassing CORS),
+    resizes it to max 128x128, and returns it as a base64 data URL.
+    
+    Request body:
+        url: str - The image URL to fetch
+    
+    Returns:
+        dataUrl: str - The resized image as a data URL (PNG format)
+        originalUrl: str - The original URL that was fetched
+    """
+    import httpx
+    import base64
+    from io import BytesIO
+    
+    url = body.get("url")
+    if not url:
+        raise HTTPException(status_code=400, detail="Missing 'url' in request body")
+    
+    # Validate URL format
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Invalid URL format")
+    
+    MAX_SIZE = 128
+    MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB max download
+    
+    try:
+        # Fetch the image
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            response = await client.get(url, headers={
+                "User-Agent": "Breakside/1.0 (Team Icon Fetcher)"
+            })
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Failed to fetch image: HTTP {response.status_code}"
+                )
+            
+            content_type = response.headers.get("content-type", "")
+            if not content_type.startswith("image/"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"URL does not point to an image (got {content_type})"
+                )
+            
+            if len(response.content) > MAX_FILE_SIZE:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Image too large (max 5MB)"
+                )
+            
+            image_data = response.content
+        
+        # Resize the image using Pillow
+        try:
+            from PIL import Image
+        except ImportError:
+            # Pillow not installed - return original image as base64
+            data_url = f"data:{content_type};base64,{base64.b64encode(image_data).decode()}"
+            return {"dataUrl": data_url, "originalUrl": url}
+        
+        # Open and resize the image
+        img = Image.open(BytesIO(image_data))
+        
+        # Convert to RGBA if necessary (for PNG transparency support)
+        if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+            img = img.convert("RGBA")
+        else:
+            img = img.convert("RGB")
+        
+        # Calculate new dimensions maintaining aspect ratio
+        width, height = img.size
+        if width > MAX_SIZE or height > MAX_SIZE:
+            if width > height:
+                new_height = int(height * MAX_SIZE / width)
+                new_width = MAX_SIZE
+            else:
+                new_width = int(width * MAX_SIZE / height)
+                new_height = MAX_SIZE
+            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        # Save to bytes
+        output = BytesIO()
+        if img.mode == "RGBA":
+            img.save(output, format="PNG", optimize=True)
+            mime_type = "image/png"
+        else:
+            img.save(output, format="PNG", optimize=True)
+            mime_type = "image/png"
+        
+        output.seek(0)
+        encoded = base64.b64encode(output.read()).decode()
+        data_url = f"data:{mime_type};base64,{encoded}"
+        
+        return {"dataUrl": data_url, "originalUrl": url}
+        
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=408, detail="Timeout fetching image")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch image: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
+
+
+# =============================================================================
 # Authentication endpoints
 # =============================================================================
 
