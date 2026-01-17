@@ -15,6 +15,13 @@ function logEvent(description) {
         eventLog.value = summarizeGame();           // Replace log with the new game summary
         eventLog.scrollTop = eventLog.scrollHeight; // Auto-scroll to the bottom
     }
+    
+    // Also update the new game screen Game Log panel if visible
+    if (typeof updateGameLogEvents === 'function' && typeof isGameScreenVisible === 'function') {
+        if (isGameScreenVisible()) {
+            updateGameLogEvents();
+        }
+    }
 }
 
 /**
