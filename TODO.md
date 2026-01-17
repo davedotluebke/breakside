@@ -149,19 +149,18 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 
 #### Panel Layout (top to bottom)
 
-**1. Header Panel** (always visible, single line)
-- [ ] Hamburger menu (left)
-- [ ] Team logo
-- [ ] Score display (Us vs Them)
-- [ ] Timer display with toggle button
+**1. Header Panel** ✅ (always visible, single line)
+- [x] Hamburger menu (left)
+- [x] Team logo (tap for version display)
+- [x] Score display with team identity (icon OR symbol, tap to toggle)
+- [x] Timer display with toggle button
   - **Game clock**: Total elapsed time, or countdown to cap if `roundEndTime` is set
     - Turns red and counts negative when cap reached
     - Cannot be paused
-  - **Point timer**: Countdown between points (with urgency colors), elapsed time during point
+  - **Point timer**: Elapsed time during point (with urgency colors)
     - Pause/resume button for injuries, discussions, etc.
-    - Auto-unpauses when any play-by-play event is recorded
   - Small label below digits: "game" or "point"
-- [ ] New game fields: `gameDurationMinutes` (default 50), `roundEndTime` (optional override)
+- [x] New game fields: `gameDurationMinutes` (default 50), `roundEndTime` (optional override)
 
 **2. Role Buttons Panel** (coaches only, viewers don't see this)
 - [ ] "Play-by-Play" and "Next Line" role claim buttons
@@ -272,13 +271,19 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 **Step 2: Header Panel** ✅
 - [x] Port existing header (hamburger, logo, score)
 - [x] Smart score display with team identity:
-  - New optional Team fields: `teamSymbol` (4-char max), `iconUrl` (URL or data URL to PNG)
-  - Display priority: (1) Icon over small-font symbol, (2) Team name if ≤6 chars, (3) large-font symbol, (4) "Us"/"Them"
-  - Opponent name also respects priority (entered at game start, no icon)
+  - New optional Team fields: `teamSymbol` (4-char max), `iconUrl` (data URL to PNG)
+  - Display shows icon OR symbol (tap to toggle between them)
+  - Fallback priority: icon > symbol > short name (≤6 chars) > "Us"/"Them"
+  - Opponent uses same large font as team symbol
 - [x] Add timer toggle (game clock ↔ point timer)
 - [x] Add pause/resume for point timer
 - [x] New game fields: `gameDurationMinutes`, `roundEndTime`
 - [x] Red negative countdown when cap time exceeded
+- [x] Logo tap shows version/build for 3 seconds
+- [x] **Team Settings UI**: Team Identity section for setting symbol and icon
+  - Server-side image proxy (`POST /api/proxy-image`) to bypass CORS
+  - Fetches, resizes to 256×256 max, returns as base64 data URL
+  - Icon cached locally for offline use
 
 **Step 3: Role Buttons Panel**
 - [ ] Port existing role buttons from sub-header
