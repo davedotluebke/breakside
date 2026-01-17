@@ -50,6 +50,9 @@ function showTeamSettingsScreen() {
         teamNameElement.textContent = currentTeam.name;
     }
     
+    // Load team identity fields
+    loadTeamIdentity();
+    
     // Load data
     loadTeamMembers();
     loadTeamInvites();
@@ -143,6 +146,9 @@ function initializeTeamSettings() {
             if (e.target === joinModal) hideJoinModal();
         });
     }
+    
+    // Initialize team identity handlers
+    initializeTeamIdentityHandlers();
 }
 
 // =============================================================================
@@ -640,6 +646,356 @@ async function confirmJoinTeam() {
             confirmBtn.disabled = false;
             confirmBtn.textContent = 'Join Team';
         }
+    }
+}
+
+// =============================================================================
+// Team Identity Management
+// =============================================================================
+
+const ICON_CACHE_KEY = 'breakside_team_icons';
+const MAX_ICON_SIZE = 128; // Maximum dimension for cached icons
+
+/**
+ * Load team identity fields into the form
+ */
+function loadTeamIdentity() {
+    const symbolInput = document.getElementById('teamSymbolInput');
+    const iconUrlInput = document.getElementById('teamIconUrlInput');
+    const iconPreviewContainer = document.getElementById('iconPreviewContainer');
+    const iconPreview = document.getElementById('iconPreview');
+    const iconStatus = document.getElementById('iconStatus');
+    
+    if (symbolInput) {
+        symbolInput.value = currentTeam.teamSymbol || '';
+    }
+    
+    if (iconUrlInput) {
+        // Show the original URL, not the cached data URL
+        const originalUrl = getOriginalIconUrl(currentTeam.id);
+        iconUrlInput.value = originalUrl || '';
+    }
+    
+    // Show icon preview if we have a cached icon
+    if (currentTeam.iconUrl && iconPreviewContainer && iconPreview) {
+        iconPreview.src = currentTeam.iconUrl;
+        iconPreviewContainer.style.display = 'flex';
+        if (iconStatus) {
+            iconStatus.textContent = 'Icon cached locally';
+            iconStatus.className = 'icon-status success';
+        }
+    } else if (iconPreviewContainer) {
+        iconPreviewContainer.style.display = 'none';
+        if (iconStatus) {
+            iconStatus.textContent = '';
+            iconStatus.className = 'icon-status';
+        }
+    }
+}
+
+/**
+ * Get the original URL for a cached icon
+ */
+function getOriginalIconUrl(teamId) {
+    try {
+        const cache = JSON.parse(localStorage.getItem(ICON_CACHE_KEY) || '{}');
+        return cache[teamId]?.originalUrl || null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Save the original URL when caching an icon
+ */
+function saveOriginalIconUrl(teamId, url) {
+    try {
+        const cache = JSON.parse(localStorage.getItem(ICON_CACHE_KEY) || '{}');
+        if (!cache[teamId]) cache[teamId] = {};
+        cache[teamId].originalUrl = url;
+        localStorage.setItem(ICON_CACHE_KEY, JSON.stringify(cache));
+    } catch (e) {
+        console.warn('Failed to save original icon URL:', e);
+    }
+}
+
+/**
+ * Fetch, resize, and cache team icon from URL
+ */
+async function fetchAndCacheIcon() {
+    const urlInput = document.getElementById('teamIconUrlInput');
+    const fetchBtn = document.getElementById('fetchIconBtn');
+    const iconStatus = document.getElementById('iconStatus');
+    const iconPreviewContainer = document.getElementById('iconPreviewContainer');
+    const iconPreview = document.getElementById('iconPreview');
+    
+    if (!urlInput || !urlInput.value.trim()) {
+        if (iconStatus) {
+            iconStatus.textContent = 'Please enter a URL';
+            iconStatus.className = 'icon-status error';
+        }
+        return;
+    }
+    
+    const url = urlInput.value.trim();
+    
+    // Validate URL format
+    try {
+        new URL(url);
+    } catch (e) {
+        if (iconStatus) {
+            iconStatus.textContent = 'Invalid URL format';
+            iconStatus.className = 'icon-status error';
+        }
+        return;
+    }
+    
+    // Update UI for loading state
+    if (fetchBtn) {
+        fetchBtn.disabled = true;
+        fetchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    }
+    if (iconStatus) {
+        iconStatus.textContent = 'Fetching image...';
+        iconStatus.className = 'icon-status';
+    }
+    
+    try {
+        const dataUrl = await loadAndResizeImage(url);
+        
+        if (dataUrl) {
+            // Save to team and update preview
+            currentTeam.iconUrl = dataUrl;
+            saveOriginalIconUrl(currentTeam.id, url);
+            
+            if (iconPreview) {
+                iconPreview.src = dataUrl;
+            }
+            if (iconPreviewContainer) {
+                iconPreviewContainer.style.display = 'flex';
+            }
+            if (iconStatus) {
+                iconStatus.textContent = 'Icon loaded and cached!';
+                iconStatus.className = 'icon-status success';
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching icon:', error);
+        if (iconStatus) {
+            iconStatus.textContent = error.message || 'Failed to load image';
+            iconStatus.className = 'icon-status error';
+        }
+    } finally {
+        if (fetchBtn) {
+            fetchBtn.disabled = false;
+            fetchBtn.innerHTML = '<i class="fas fa-download"></i>';
+        }
+    }
+}
+
+/**
+ * Load an image from URL and resize it to a reasonable size
+ * Returns a data URL of the resized image
+ */
+function loadAndResizeImage(url) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        
+        img.onload = function() {
+            try {
+                // Calculate new dimensions
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > MAX_ICON_SIZE || height > MAX_ICON_SIZE) {
+                    if (width > height) {
+                        height = Math.round(height * MAX_ICON_SIZE / width);
+                        width = MAX_ICON_SIZE;
+                    } else {
+                        width = Math.round(width * MAX_ICON_SIZE / height);
+                        height = MAX_ICON_SIZE;
+                    }
+                }
+                
+                // Create canvas and resize
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Convert to data URL (PNG for transparency support)
+                const dataUrl = canvas.toDataURL('image/png', 0.9);
+                
+                // Check size - warn if too large
+                const sizeKB = Math.round(dataUrl.length / 1024);
+                if (sizeKB > 100) {
+                    console.warn(`Icon data URL is ${sizeKB}KB - consider using a smaller image`);
+                }
+                
+                resolve(dataUrl);
+            } catch (e) {
+                reject(new Error('Failed to process image'));
+            }
+        };
+        
+        img.onerror = function() {
+            reject(new Error('Failed to load image. Check URL and CORS permissions.'));
+        };
+        
+        // Set a timeout for slow loads
+        const timeout = setTimeout(() => {
+            reject(new Error('Image load timed out'));
+        }, 10000);
+        
+        img.onload = function() {
+            clearTimeout(timeout);
+            try {
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > MAX_ICON_SIZE || height > MAX_ICON_SIZE) {
+                    if (width > height) {
+                        height = Math.round(height * MAX_ICON_SIZE / width);
+                        width = MAX_ICON_SIZE;
+                    } else {
+                        width = Math.round(width * MAX_ICON_SIZE / height);
+                        height = MAX_ICON_SIZE;
+                    }
+                }
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                const dataUrl = canvas.toDataURL('image/png', 0.9);
+                resolve(dataUrl);
+            } catch (e) {
+                reject(new Error('Failed to process image'));
+            }
+        };
+        
+        img.src = url;
+    });
+}
+
+/**
+ * Clear the team icon
+ */
+function clearTeamIcon() {
+    const iconPreviewContainer = document.getElementById('iconPreviewContainer');
+    const iconUrlInput = document.getElementById('teamIconUrlInput');
+    const iconStatus = document.getElementById('iconStatus');
+    
+    currentTeam.iconUrl = null;
+    
+    // Clear the cached original URL
+    try {
+        const cache = JSON.parse(localStorage.getItem(ICON_CACHE_KEY) || '{}');
+        if (cache[currentTeam.id]) {
+            delete cache[currentTeam.id];
+            localStorage.setItem(ICON_CACHE_KEY, JSON.stringify(cache));
+        }
+    } catch (e) {
+        // Ignore
+    }
+    
+    if (iconPreviewContainer) {
+        iconPreviewContainer.style.display = 'none';
+    }
+    if (iconUrlInput) {
+        iconUrlInput.value = '';
+    }
+    if (iconStatus) {
+        iconStatus.textContent = 'Icon removed';
+        iconStatus.className = 'icon-status';
+    }
+}
+
+/**
+ * Save team identity (symbol and icon)
+ */
+function saveTeamIdentity() {
+    const symbolInput = document.getElementById('teamSymbolInput');
+    const saveBtn = document.getElementById('saveIdentityBtn');
+    
+    if (!currentTeam) {
+        alert('No team selected');
+        return;
+    }
+    
+    // Update symbol (uppercase, max 4 chars)
+    if (symbolInput) {
+        const symbol = symbolInput.value.trim().toUpperCase().substring(0, 4);
+        currentTeam.teamSymbol = symbol || null;
+        symbolInput.value = symbol;
+    }
+    
+    // Icon is already saved when fetched, just update timestamp
+    currentTeam.updatedAt = new Date().toISOString();
+    
+    // Save to local storage
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
+    
+    // Update header if visible
+    if (typeof updateHeaderTeamIdentities === 'function') {
+        updateHeaderTeamIdentities();
+    }
+    
+    // Visual feedback
+    if (saveBtn) {
+        const originalHtml = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+        saveBtn.disabled = true;
+        setTimeout(() => {
+            saveBtn.innerHTML = originalHtml;
+            saveBtn.disabled = false;
+        }, 1500);
+    }
+}
+
+/**
+ * Initialize team identity event handlers
+ */
+function initializeTeamIdentityHandlers() {
+    const fetchIconBtn = document.getElementById('fetchIconBtn');
+    if (fetchIconBtn) {
+        fetchIconBtn.addEventListener('click', fetchAndCacheIcon);
+    }
+    
+    const clearIconBtn = document.getElementById('clearIconBtn');
+    if (clearIconBtn) {
+        clearIconBtn.addEventListener('click', clearTeamIcon);
+    }
+    
+    const saveIdentityBtn = document.getElementById('saveIdentityBtn');
+    if (saveIdentityBtn) {
+        saveIdentityBtn.addEventListener('click', saveTeamIdentity);
+    }
+    
+    // Auto-uppercase symbol input
+    const symbolInput = document.getElementById('teamSymbolInput');
+    if (symbolInput) {
+        symbolInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.toUpperCase();
+        });
+    }
+    
+    // Allow Enter to fetch icon
+    const iconUrlInput = document.getElementById('teamIconUrlInput');
+    if (iconUrlInput) {
+        iconUrlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                fetchAndCacheIcon();
+            }
+        });
     }
 }
 

@@ -305,6 +305,40 @@
                 </div>
             </div>
             
+            <!-- Team Identity Section -->
+            <div class="settings-section">
+                <h3>Team Identity</h3>
+                <p class="section-description">Customize how your team appears in the game header</p>
+                
+                <div class="identity-form">
+                    <div class="form-group">
+                        <label for="teamSymbolInput">Team Symbol (4 chars max)</label>
+                        <input type="text" id="teamSymbolInput" maxlength="4" placeholder="e.g. CUDO" class="symbol-input">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="teamIconUrlInput">Team Icon URL</label>
+                        <div class="icon-url-row">
+                            <input type="url" id="teamIconUrlInput" placeholder="https://example.com/icon.png" class="url-input">
+                            <button id="fetchIconBtn" class="fetch-icon-btn" title="Fetch and cache icon">
+                                <i class="fas fa-download"></i>
+                            </button>
+                        </div>
+                        <div id="iconPreviewContainer" class="icon-preview-container" style="display: none;">
+                            <img id="iconPreview" class="icon-preview" alt="Team icon preview">
+                            <button id="clearIconBtn" class="clear-icon-btn" title="Remove icon">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <p id="iconStatus" class="icon-status"></p>
+                    </div>
+                    
+                    <button id="saveIdentityBtn" class="save-identity-btn">
+                        <i class="fas fa-save"></i> Save Identity
+                    </button>
+                </div>
+            </div>
+            
             <!-- Members Section -->
             <div class="settings-section">
                 <h3>Members (<span id="memberCount">0</span>)</h3>

@@ -2591,6 +2591,157 @@ body.next-line-mode #selectNextLineBtn {
     background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
 }
 
+/* Team Identity Section */
+.section-description {
+    font-size: 0.85rem;
+    color: #666;
+    margin: -8px 0 15px 0;
+}
+
+.identity-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.identity-form .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.identity-form label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #555;
+}
+
+.symbol-input {
+    padding: 10px 15px;
+    font-size: 1.1rem;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    text-align: center;
+    letter-spacing: 2px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    width: 100px;
+}
+
+.symbol-input:focus {
+    border-color: #EB8232;
+    outline: none;
+}
+
+.icon-url-row {
+    display: flex;
+    gap: 8px;
+}
+
+.url-input {
+    flex: 1;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+}
+
+.url-input:focus {
+    border-color: #EB8232;
+    outline: none;
+}
+
+.fetch-icon-btn {
+    padding: 10px 15px;
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.fetch-icon-btn:hover {
+    background: linear-gradient(135deg, #5a6268 0%, #343a40 100%);
+}
+
+.fetch-icon-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.icon-preview-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-top: 8px;
+}
+
+.icon-preview {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    object-fit: contain;
+    background: white;
+    border: 1px solid #ddd;
+}
+
+.clear-icon-btn {
+    padding: 6px 10px;
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.clear-icon-btn:hover {
+    background: #c82333;
+}
+
+.icon-status {
+    font-size: 0.8rem;
+    color: #666;
+    margin: 4px 0 0 0;
+}
+
+.icon-status.success {
+    color: #28a745;
+}
+
+.icon-status.error {
+    color: #dc3545;
+}
+
+.save-identity-btn {
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #EB8232 0%, #d06e1f 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.save-identity-btn:hover {
+    background: linear-gradient(135deg, #d06e1f 0%, #b85a10 100%);
+}
+
+.save-identity-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 /* Loading/Info/Error messages */
 .loading-message,
 .info-message,
