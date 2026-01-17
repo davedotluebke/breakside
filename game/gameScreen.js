@@ -577,38 +577,54 @@ function updateTimerDisplay() {
             const startTime = new Date(game.gameStartTimestamp).getTime();
             const now = Date.now();
             const elapsedMs = now - startTime;
+            const elapsedSeconds = Math.floor(elapsedMs / 1000);
             
-            // Check if we should show countdown to cap
-            let capTime = null;
-            if (game.roundEndTime) {
-                capTime = new Date(game.roundEndTime).getTime();
-            } else if (game.gameDurationMinutes) {
-                capTime = startTime + (game.gameDurationMinutes * 60 * 1000);
-            }
-            
-            if (capTime) {
-                const remainingMs = capTime - now;
-                const remainingSeconds = Math.floor(remainingMs / 1000);
+            // If game has ended, just show total game time
+            if (game.gameEndTimestamp) {
+                const endTime = new Date(game.gameEndTimestamp).getTime();
+                const totalSeconds = Math.floor((endTime - startTime) / 1000);
+                valueEl.textContent = formatTime(totalSeconds);
+            } else {
+                // Check if we should show countdown to cap
+                // Only use cap countdown for active games (started within last 3 hours)
+                const threeHoursMs = 3 * 60 * 60 * 1000;
+                let capTime = null;
                 
-                if (remainingSeconds <= 0) {
-                    // Cap exceeded - show negative time in red
-                    valueEl.textContent = formatTime(remainingSeconds);
-                    valueEl.classList.add('timer-negative');
-                } else if (remainingSeconds <= 300) { // Under 5 minutes
-                    // Show countdown
-                    valueEl.textContent = formatTime(remainingSeconds);
-                    if (remainingSeconds <= 60) {
-                        valueEl.classList.add('timer-danger');
-                    } else if (remainingSeconds <= 180) {
-                        valueEl.classList.add('timer-warning');
+                if (elapsedMs < threeHoursMs) {
+                    if (game.roundEndTime) {
+                        capTime = new Date(game.roundEndTime).getTime();
+                    } else if (game.gameDurationMinutes) {
+                        capTime = startTime + (game.gameDurationMinutes * 60 * 1000);
+                    }
+                }
+                
+                if (capTime) {
+                    const remainingMs = capTime - now;
+                    const remainingSeconds = Math.floor(remainingMs / 1000);
+                    
+                    if (remainingSeconds <= -1800) {
+                        // More than 30 min past cap - just show elapsed time
+                        valueEl.textContent = formatTime(elapsedSeconds);
+                    } else if (remainingSeconds <= 0) {
+                        // Cap exceeded but within 30 min - show negative time in red
+                        valueEl.textContent = formatTime(remainingSeconds);
+                        valueEl.classList.add('timer-negative');
+                    } else if (remainingSeconds <= 300) { // Under 5 minutes
+                        // Show countdown
+                        valueEl.textContent = formatTime(remainingSeconds);
+                        if (remainingSeconds <= 60) {
+                            valueEl.classList.add('timer-danger');
+                        } else if (remainingSeconds <= 180) {
+                            valueEl.classList.add('timer-warning');
+                        }
+                    } else {
+                        // Show elapsed time
+                        valueEl.textContent = formatTime(elapsedSeconds);
                     }
                 } else {
-                    // Show elapsed time
-                    valueEl.textContent = formatTime(Math.floor(elapsedMs / 1000));
+                    // No cap or old game - just show elapsed time
+                    valueEl.textContent = formatTime(elapsedSeconds);
                 }
-            } else {
-                // No cap - just show elapsed time
-                valueEl.textContent = formatTime(Math.floor(elapsedMs / 1000));
             }
         } else {
             valueEl.textContent = '0:00';
