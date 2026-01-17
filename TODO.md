@@ -333,8 +333,9 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [ ] "Select Next D Line" — prepare defensive lineup
 - [ ] "Start Point" button appears in appropriate panel based on possession
 
-### 🔄 Phase 5: Multi-User Polling
+### 🔄 Phase 5: Multi-User Game Sync
 
+**Game State Synchronization:**
 - [ ] API: `GET /api/games/{game_id}/poll?since={version}` - Optimized poll
   - Return game state only if version changed
   - Always return controller status
@@ -345,6 +346,25 @@ Replace current screen-based navigation with a **panel-based layout** for all in
   - Viewer: 5 seconds
 - [ ] PWA: Update UI when remote changes detected
 - [ ] PWA: Merge lineup changes from other coaches
+
+**Conflict Resolution:**
+- [ ] Server tracks game version number (increments on each save)
+- [ ] Client sends version number with sync requests
+- [ ] Server detects when client has stale data
+- [ ] Conflict resolution strategy: latest-wins with notification
+  - If server version is newer, return updated state and flag "stale"
+  - Client shows toast: "Game updated by another coach" and refreshes
+- [ ] Optionally: event-level conflict resolution (merge non-overlapping events)
+
+**Auto-Join Active Games:**
+- [ ] API: `GET /api/teams/{team_id}/active-game` - Get currently active game for a team
+  - Returns game ID and basic info if a game is in progress
+  - "In progress" = has points, no gameEndTimestamp, started within last 6 hours
+- [ ] PWA: On team roster screen, show "Join Active Game" button if one exists
+- [ ] PWA: Auto-join prompt when another coach starts/resumes a game
+  - Toast notification: "[Coach] started a game vs [Opponent]. Join?"
+  - Tap to enter game screen for that game
+- [ ] Consider WebSocket for instant notifications (future enhancement)
 
 ### 👁️ Phase 7: Viewer Experience
 

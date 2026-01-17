@@ -1047,6 +1047,9 @@ function showGameScreen() {
         // Hide all legacy screens to prevent them from showing through
         hideLegacyScreens();
         
+        // Add body class to override any !important rules on legacy screens
+        document.body.classList.add('game-screen-active');
+        
         container.classList.add('active');
         loadPanelStates();
         applyAllPanelStates();
@@ -1060,6 +1063,8 @@ function hideGameScreen() {
     const container = document.getElementById('gameScreenContainer');
     if (container) {
         container.classList.remove('active');
+        // Remove body class to restore normal behavior
+        document.body.classList.remove('game-screen-active');
         // Note: Legacy screens will be shown by showScreen() when navigating
     }
 }

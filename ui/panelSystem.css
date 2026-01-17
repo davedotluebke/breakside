@@ -16,10 +16,35 @@
     top: 0;
     left: 0;
     z-index: 100;
+    /* Cover the safe area (notch/dynamic island) */
+    padding-top: env(safe-area-inset-top, 0);
+    padding-left: env(safe-area-inset-left, 0);
+    padding-right: env(safe-area-inset-right, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    /* Extend background behind safe area */
+    box-sizing: border-box;
 }
 
 .game-screen-container.active {
     display: flex;
+}
+
+/* When game screen is active, prevent body scroll and override next-line-mode */
+body.game-screen-active {
+    overflow: hidden !important;
+}
+
+body.game-screen-active #beforePointScreen,
+body.game-screen-active #simpleModeScreen,
+body.game-screen-active #offensePlayByPlayScreen,
+body.game-screen-active #defensePlayByPlayScreen {
+    display: none !important;
+}
+
+body.game-screen-active header,
+body.game-screen-active #bottomPanel,
+body.game-screen-active #controllerRoleButtons {
+    display: none !important;
 }
 
 /* =============================================================================
