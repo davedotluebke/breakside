@@ -285,9 +285,10 @@ Replace current screen-based navigation with a **panel-based layout** for all in
   - Fetches, resizes to 256×256 max, returns as base64 data URL
   - Icon cached locally for offline use
 
-**Step 3: Role Buttons Panel**
-- [ ] Port existing role buttons from sub-header
-- [ ] Ensure handoff flow still works
+**Step 3: Role Buttons Panel** ✅
+- [x] Port existing role buttons from sub-header
+- [x] Ensure handoff flow still works
+- [x] Hide legacy role buttons when panel UI is active
 
 **Step 4: Game Log Panel**
 - [ ] Game status display (teams, score)
