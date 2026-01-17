@@ -223,10 +223,15 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 
 #### Panel Mechanics
 
-- [x] **Resize**: Drag entire title bar up/down
-- [x] **Toggle min/max**: Double-tap title bar
+- [x] **Resize**: Drag entire title bar up/down (draggable panels only)
+  - "Shoving" behavior: dragging into another panel pushes it too
+  - Bottom panel clamped to screen edge
+- [x] **Chevron button**: Toggle individual panel minimize/expand
+- [x] **Double-tap title bar**: Full-screen maximize
+  - Minimizes all other resizable panels
+  - Double-tap again restores all panels to previous state
+  - Smooth 0.25s animated transitions
 - [x] **Space allocation**: 
-  - Maximizing a panel minimizes other panels
   - Game Log panel (bottom) gets remaining space, snaps to bottom when minimized
 - [x] **Persistence**: Panel sizes saved to localStorage (per-client)
 
@@ -252,12 +257,17 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [x] Create `game/gameScreen.js` with panel container system
 - [x] Create `ui/panelSystem.js` for resize/min-max logic
 - [x] CSS for mobile-first panel stack with drag handles
-- [x] Stub panels with placeholder content (5 panels: Header, Role Buttons, Play-by-Play, Select Line, Game Log)
+- [x] Stub panels with placeholder content (4 panels: Header, Role Buttons, Play-by-Play, Select Line, Game Log)
 - [x] Each stub has "Use Old Screen →" button linking to legacy screen
 - [x] Wire up as new entry point when game starts
-- [x] Draggable title bars for panel resizing
+- [x] Draggable title bars for panel resizing (full title bar is drag surface)
 - [x] Height-based minimize/maximize (no separate CSS states)
 - [x] Game Log panel snaps to bottom when minimized
+- [x] Chevron button toggles individual panel min/max
+- [x] Double-tap for full-screen maximize with restore
+- [x] Smooth animated transitions (0.25s)
+- [x] Compact title bars for more content space
+- [x] Hide legacy screens when panel UI is active
 
 **Step 2: Header Panel**
 - [ ] Port existing header (hamburger, logo, score)
