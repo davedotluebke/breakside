@@ -410,7 +410,7 @@ async def proxy_image(body: dict = Body(...)):
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Invalid URL format")
     
-    MAX_SIZE = 128
+    MAX_SIZE = 256
     MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB max download
     
     try:
