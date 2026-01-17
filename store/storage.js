@@ -94,6 +94,7 @@ function serializePlayer(player) {
 
 /**
  * Serialize a single game to a plain object
+ * Phase 6b update: includes gameDurationMinutes, roundEndTime
  */
 function serializeGame(game) {
     return {
@@ -110,6 +111,9 @@ function serializeGame(game) {
         startingGenderRatio: game.startingGenderRatio,
         lastLineUsed: game.lastLineUsed,
         rosterSnapshot: game.rosterSnapshot,  // New: snapshot of player data at game time
+        // Phase 6b: Timer/cap settings
+        gameDurationMinutes: game.gameDurationMinutes ?? 50,
+        roundEndTime: game.roundEndTime || null,
         points: game.points.map(point => ({
             players: point.players,
             startingPosition: point.startingPosition,
@@ -129,6 +133,7 @@ function serializeGame(game) {
 /**
  * Simplify the team & game objects into serializable objects and output JSON
  * Phase 2 update: includes id, playerIds, createdAt, updatedAt
+ * Phase 6b update: includes teamSymbol, iconUrl
  */
 function serializeTeam(team) {
     const serializedTeam = {
@@ -137,6 +142,10 @@ function serializeTeam(team) {
         createdAt: team.createdAt,
         updatedAt: team.updatedAt,
         playerIds: team.playerIds || [],
+        
+        // Phase 6b: Team identity for header display
+        teamSymbol: team.teamSymbol || null,
+        iconUrl: team.iconUrl || null,
         
         // Existing fields
         name: team.name,
@@ -353,6 +362,10 @@ function deserializeGame(gameData) {
     game.lastLineUsed = gameData.lastLineUsed || null;
     game.rosterSnapshot = gameData.rosterSnapshot || null;  // New: roster snapshot
     
+    // Phase 6b: Timer/cap settings
+    game.gameDurationMinutes = gameData.gameDurationMinutes ?? 50;
+    game.roundEndTime = gameData.roundEndTime || null;
+    
     game.points = gameData.points.map(pointData => {
         const point = new Point(pointData.players, pointData.startingPosition);
         point.startTimestamp = pointData.startTimestamp ? new Date(pointData.startTimestamp) : null;
@@ -385,6 +398,10 @@ function deserializeTeams(serializedData) {
         // Restore metadata
         team.createdAt = teamData.createdAt || new Date().toISOString();
         team.updatedAt = teamData.updatedAt || team.createdAt;
+        
+        // Phase 6b: Restore team identity fields
+        team.teamSymbol = teamData.teamSymbol || null;
+        team.iconUrl = teamData.iconUrl || null;
         
         // Deserialize the roster
         team.teamRoster = teamData.teamRoster.map(playerData => deserializePlayer(playerData));

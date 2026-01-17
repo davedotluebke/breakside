@@ -325,13 +325,22 @@
     border-radius: 4px;
 }
 
+/* Score display container - holds team identities and scores */
 .header-score-display {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 1.2rem;
+    gap: 6px;
+    font-size: 1.4rem;
     font-weight: 700;
     font-family: 'JetBrains Mono', monospace;
+    flex: 1;
+    justify-content: center;
+}
+
+/* Score numbers */
+.header-score-value {
+    min-width: 1.2em;
+    text-align: center;
 }
 
 .header-score-us {
@@ -339,14 +348,86 @@
 }
 
 .header-score-separator {
-    color: rgba(255,255,255,0.6);
+    color: rgba(255,255,255,0.5);
     font-weight: 400;
+    font-size: 1.1rem;
 }
 
 .header-score-them {
-    color: rgba(255,255,255,0.8);
+    color: rgba(255,255,255,0.85);
 }
 
+/* Team identity containers */
+.header-team-identity {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    max-width: 70px;
+    overflow: hidden;
+}
+
+.header-team-us {
+    justify-content: flex-end;
+}
+
+.header-team-them {
+    justify-content: flex-start;
+}
+
+/* Team identity text (name or fallback) */
+.team-identity-text {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.team-identity-fallback {
+    color: rgba(255,255,255,0.6);
+    font-weight: 500;
+}
+
+/* Team symbol (4-char abbreviation) */
+.team-identity-symbol {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.team-identity-symbol-small {
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.85);
+}
+
+/* Team icon */
+.team-identity-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    object-fit: contain;
+    background: rgba(255,255,255,0.1);
+}
+
+.header-team-identity.has-icon {
+    flex-direction: column;
+    gap: 1px;
+}
+
+.header-team-identity.has-icon .team-identity-icon {
+    width: 22px;
+    height: 22px;
+}
+
+/* Timer container */
 .header-timer-container {
     display: flex;
     flex-direction: column;
@@ -356,6 +437,7 @@
     border-radius: 6px;
     cursor: pointer;
     min-width: 60px;
+    position: relative;
 }
 
 .header-timer-value {
@@ -363,6 +445,7 @@
     font-size: 1rem;
     font-weight: 700;
     color: #fff;
+    transition: color 0.3s;
 }
 
 .header-timer-label {
@@ -372,16 +455,58 @@
     letter-spacing: 0.5px;
 }
 
+/* Timer pause button */
+.header-timer-pause-btn {
+    position: absolute;
+    right: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    margin: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    color: #fff;
+    cursor: pointer;
+    display: none; /* Hidden by default, shown for point timer */
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    transition: all 0.2s;
+}
+
+.header-timer-pause-btn:hover {
+    background: rgba(255,255,255,0.4);
+}
+
+.header-timer-pause-btn.paused {
+    background: rgba(40, 167, 69, 0.8);
+}
+
+/* Timer state colors */
 .header-timer-value.timer-warning {
     color: #ffc107;
 }
 
 .header-timer-value.timer-danger {
     color: #ff6b6b;
+    animation: timerPulse 1s infinite;
 }
 
 .header-timer-value.timer-negative {
     color: #ff4444;
+    animation: timerPulse 0.5s infinite;
+}
+
+.header-timer-value.timer-paused {
+    opacity: 0.7;
+}
+
+@keyframes timerPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
 }
 
 /* =============================================================================
@@ -613,8 +738,36 @@
         font-size: 0.85rem;
     }
     
+    /* Header score display - tighter on mobile */
     .header-score-display {
-        font-size: 1rem;
+        font-size: 1.2rem;
+        gap: 4px;
+    }
+    
+    .header-team-identity {
+        max-width: 50px;
+    }
+    
+    .team-identity-text {
+        font-size: 0.6rem;
+    }
+    
+    .team-identity-symbol {
+        font-size: 0.7rem;
+    }
+    
+    .team-identity-symbol-small {
+        font-size: 0.55rem;
+    }
+    
+    .team-identity-icon {
+        width: 18px;
+        height: 18px;
+    }
+    
+    .header-team-identity.has-icon .team-identity-icon {
+        width: 18px;
+        height: 18px;
     }
     
     .header-timer-container {
@@ -624,6 +777,13 @@
     
     .header-timer-value {
         font-size: 0.9rem;
+    }
+    
+    .header-timer-pause-btn {
+        width: 20px;
+        height: 20px;
+        right: -6px;
+        font-size: 0.55rem;
     }
     
     .role-claim-btn {
@@ -636,6 +796,27 @@
     
     .role-claim-holder {
         font-size: 0.65rem;
+    }
+}
+
+/* Very small screens */
+@media (max-width: 360px) {
+    .header-score-display {
+        font-size: 1rem;
+        gap: 3px;
+    }
+    
+    .header-team-identity {
+        max-width: 40px;
+    }
+    
+    .team-identity-text {
+        font-size: 0.55rem;
+    }
+    
+    .header-menu-btn {
+        width: 32px;
+        height: 32px;
     }
 }
 

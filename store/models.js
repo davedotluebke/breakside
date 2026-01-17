@@ -100,6 +100,7 @@ function Player(name, nickname = "", gender = Gender.UNKNOWN, number = null, id 
 
 // Game data structure; includes a list of 'points'
 // Phase 2 update: Added teamId, rosterSnapshot for cloud-first architecture
+// Phase 6b update: Added gameDurationMinutes, roundEndTime for cap countdown
 function Game(teamName, opponentName, startOn, teamId = null) {
     // New model: reference team by ID
     this.teamId = teamId || null;  // Team ID like "Sample-Team-b2c4"
@@ -128,6 +129,10 @@ function Game(teamName, opponentName, startOn, teamId = null) {
     // New model: Snapshot of player info at game time for historical accuracy
     // This preserves player data (id, name, nickname, number, gender) at the time of the game
     this.rosterSnapshot = null;  // { players: [{id, name, nickname, number, gender}, ...], capturedAt: ISO timestamp }
+    
+    // Phase 6b: Timer/cap settings
+    this.gameDurationMinutes = 50;  // Default game length in minutes
+    this.roundEndTime = null;       // ISO timestamp override for cap (e.g., from tournament schedule)
 }
 
 /**
@@ -155,6 +160,7 @@ function createRosterSnapshot(team) {
 
 // Team data structure
 // Phase 2 update: Added id, playerIds, createdAt, updatedAt
+// Phase 6b update: Added teamSymbol, iconUrl for header display
 // In the new model: games are separate entities, players are referenced by ID
 // During transition: teamRoster and games are kept for backward compatibility
 function Team(name = "My Team", initialRoster = [], id = null) {
@@ -162,6 +168,10 @@ function Team(name = "My Team", initialRoster = [], id = null) {
     this.name = name;
     this.createdAt = new Date().toISOString();
     this.updatedAt = new Date().toISOString();
+    
+    // Team identity for header display (optional)
+    this.teamSymbol = null;  // 4-char max abbreviation (e.g., "CUDO", "FGC")
+    this.iconUrl = null;     // URL or data URL to team icon PNG
     
     // New model: array of player IDs (references to Player entities)
     this.playerIds = [];
