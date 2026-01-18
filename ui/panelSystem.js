@@ -21,6 +21,10 @@ const PANEL_STATE_KEY = 'breakside_panel_states';
 // Minimum height for panels (title bar height only)
 const MIN_PANEL_HEIGHT = 36;
 
+// Minimum height for Play-by-Play panel (title bar + compact button row)
+// This ensures the buttons are always visible unless explicitly minimized
+const PBP_MIN_CONTENT_HEIGHT = 96;
+
 // Default expanded height when un-minimizing a panel that has no saved height
 const DEFAULT_EXPANDED_HEIGHT = 150;
 
@@ -43,7 +47,7 @@ const RESIZABLE_PANELS = ['playByPlay', 'selectLine', 'follow'];
 const DEFAULT_PANEL_STATES = {
     header: { hidden: false, height: null, expandedHeight: null },
     roleButtons: { hidden: false, height: null, expandedHeight: null },
-    playByPlay: { hidden: false, height: MIN_PANEL_HEIGHT, expandedHeight: null },
+    playByPlay: { hidden: false, height: PBP_MIN_CONTENT_HEIGHT, expandedHeight: 250 },
     selectLine: { hidden: false, height: null, expandedHeight: null },
     follow: { hidden: false, height: null, expandedHeight: null }
 };
@@ -566,6 +570,19 @@ function isPanelDraggable(panelId) {
 }
 
 /**
+ * Get the minimum height for a panel during drag operations
+ * (different from MIN_PANEL_HEIGHT which is for explicit minimize)
+ * @param {string} panelId - Panel identifier
+ * @returns {number}
+ */
+function getDragMinHeight(panelId) {
+    if (panelId === 'playByPlay') {
+        return PBP_MIN_CONTENT_HEIGHT;
+    }
+    return MIN_PANEL_HEIGHT;
+}
+
+/**
  * Start drag operation on a panel title bar
  * @param {string} panelId - Panel being dragged
  * @param {number} clientY - Starting Y coordinate
@@ -654,7 +671,8 @@ function updatePanelDrag(clientY) {
             if (remainingSpace <= 0) break;
             
             const startHeight = panel.startHeight;
-            const availableSpace = startHeight - MIN_PANEL_HEIGHT;
+            const minHeight = getDragMinHeight(panel.id);
+            const availableSpace = startHeight - minHeight;
             
             if (availableSpace > 0) {
                 const spaceToTake = Math.min(availableSpace, remainingSpace);
@@ -662,7 +680,7 @@ function updatePanelDrag(clientY) {
                 remainingSpace -= spaceToTake;
             } else {
                 // Panel was already at minimum, keep it there
-                targetHeights.set(panel.id, MIN_PANEL_HEIGHT);
+                targetHeights.set(panel.id, minHeight);
             }
         }
     } else {
@@ -671,7 +689,8 @@ function updatePanelDrag(clientY) {
         let spaceToGive = -remainingSpace;
         
         // Calculate available space from dragged panel
-        const draggedCanGive = Math.max(0, dragState.startPanelHeight - MIN_PANEL_HEIGHT);
+        const draggedMinHeight = getDragMinHeight(dragState.panelId);
+        const draggedCanGive = Math.max(0, dragState.startPanelHeight - draggedMinHeight);
         
         // Calculate available space from follow panel (if we're not dragging it)
         let followCanGive = 0;
@@ -703,7 +722,8 @@ function updatePanelDrag(clientY) {
     
     // Update the dragged panel's height (unless it's Follow which fills remaining)
     if (dragState.panelId !== 'follow') {
-        const newPanelHeight = Math.max(MIN_PANEL_HEIGHT, dragState.startPanelHeight + actualSpaceChanged);
+        const minHeight = getDragMinHeight(dragState.panelId);
+        const newPanelHeight = Math.max(minHeight, dragState.startPanelHeight + actualSpaceChanged);
         dragState.panelElement.style.height = `${newPanelHeight}px`;
         dragState.panelElement.style.flex = '0 0 auto';
     }
@@ -1302,8 +1322,10 @@ window.createPanel = createPanel;
 
 // Drag handling (exposed for testing/debugging)
 window.isPanelDraggable = isPanelDraggable;
+window.getDragMinHeight = getDragMinHeight;
 window.DRAGGABLE_PANELS = DRAGGABLE_PANELS;
 window.RESIZABLE_PANELS = RESIZABLE_PANELS;
+window.PBP_MIN_CONTENT_HEIGHT = PBP_MIN_CONTENT_HEIGHT;
 
 // Game screen management
 window.showGameScreen = showGameScreen;
