@@ -212,23 +212,83 @@ function createRoleButtonsPanel() {
 // Stub Panels with Legacy Screen Links
 // =============================================================================
 
+// =============================================================================
+// Play-by-Play Panel Content
+// =============================================================================
+
 /**
- * Create the Play-by-Play panel with stub content
+ * Create the Play-by-Play panel content
+ * Responsive layout: minimum shows single row, expandable for more options
+ * @returns {HTMLElement}
+ */
+function createPlayByPlayContent() {
+    const content = document.createElement('div');
+    content.className = 'pbp-panel-content';
+    
+    content.innerHTML = `
+        <div class="pbp-main-row">
+            <button id="pbpWeScoreBtn" class="pbp-btn pbp-btn-score pbp-btn-us" title="We Score">
+                <i class="fas fa-plus-circle"></i>
+                <span>We Score</span>
+            </button>
+            <button id="pbpTheyScoreBtn" class="pbp-btn pbp-btn-score pbp-btn-them" title="They Score">
+                <i class="fas fa-minus-circle"></i>
+                <span>They Score</span>
+            </button>
+            <button id="pbpKeyPlayBtn" class="pbp-btn pbp-btn-secondary" title="Key Play">
+                <i class="fas fa-star"></i>
+                <span>Key Play</span>
+            </button>
+            <button id="pbpMoreBtn" class="pbp-btn pbp-btn-more" title="More Options">
+                <i class="fas fa-ellipsis-h"></i>
+            </button>
+        </div>
+        <div class="pbp-expanded-row" id="pbpExpandedRow">
+            <button id="pbpUndoBtn" class="pbp-btn pbp-btn-action" title="Undo">
+                <i class="fas fa-undo"></i>
+                <span>Undo</span>
+            </button>
+            <button id="pbpSubPlayersBtn" class="pbp-btn pbp-btn-action" title="Sub Players">
+                <i class="fas fa-exchange-alt"></i>
+                <span>Sub</span>
+            </button>
+            <button id="pbpGameEventsBtn" class="pbp-btn pbp-btn-action" title="Game Events">
+                <i class="fas fa-flag"></i>
+                <span>Events</span>
+            </button>
+        </div>
+    `;
+    
+    return content;
+}
+
+/**
+ * Create the Play-by-Play panel with actual content
  * Note: No drag handle - this panel's title bar is not draggable
  * @returns {HTMLElement}
  */
 function createPlayByPlayPanel() {
-    return createPanel({
-        id: 'playByPlay',
+    const panel = document.createElement('div');
+    panel.id = 'panel-playByPlay';
+    panel.className = 'game-panel panel-playByPlay';
+    
+    // Create title bar (no drag handle - panels above aren't resizable)
+    const titleBar = createPanelTitleBar({
+        panelId: 'playByPlay',
         title: 'Play-by-Play',
-        showDragHandle: false,  // Not draggable - no panels above to resize
-        stubOptions: {
-            icon: 'fa-futbol',
-            text: 'Score tracking and play-by-play controls will appear here.',
-            legacyScreen: 'simpleModeScreen',
-            legacyLabel: 'Use Simple Mode'
-        }
+        showDragHandle: false,
+        showExpandBtn: true
     });
+    panel.appendChild(titleBar);
+    
+    // Create content area
+    const contentArea = document.createElement('div');
+    contentArea.className = 'panel-content';
+    contentArea.id = 'panel-playByPlay-content';
+    contentArea.appendChild(createPlayByPlayContent());
+    panel.appendChild(contentArea);
+    
+    return panel;
 }
 
 /**
@@ -374,6 +434,9 @@ function wireGameScreenEvents() {
     if (menuBtn) {
         menuBtn.addEventListener('click', handleGameMenuClick);
     }
+    
+    // Wire up Play-by-Play panel events
+    wirePlayByPlayEvents();
     
     // Logo tap - show version
     const logo = document.getElementById('gameScreenLogo');
@@ -565,6 +628,458 @@ function autoResumePointTimer() {
 
 // Export for use by play-by-play handlers
 window.autoResumePointTimer = autoResumePointTimer;
+
+// =============================================================================
+// Play-by-Play Panel Events
+// =============================================================================
+
+// Track expanded state of Play-by-Play panel
+let pbpExpandedRowVisible = false;
+
+/**
+ * Wire up Play-by-Play panel event handlers
+ */
+function wirePlayByPlayEvents() {
+    // We Score button
+    const weScoreBtn = document.getElementById('pbpWeScoreBtn');
+    if (weScoreBtn) {
+        weScoreBtn.addEventListener('click', handlePbpWeScore);
+    }
+    
+    // They Score button
+    const theyScoreBtn = document.getElementById('pbpTheyScoreBtn');
+    if (theyScoreBtn) {
+        theyScoreBtn.addEventListener('click', handlePbpTheyScore);
+    }
+    
+    // Key Play button
+    const keyPlayBtn = document.getElementById('pbpKeyPlayBtn');
+    if (keyPlayBtn) {
+        keyPlayBtn.addEventListener('click', handlePbpKeyPlay);
+    }
+    
+    // More button (toggle expanded row)
+    const moreBtn = document.getElementById('pbpMoreBtn');
+    if (moreBtn) {
+        moreBtn.addEventListener('click', togglePbpExpandedRow);
+    }
+    
+    // Undo button
+    const undoBtn = document.getElementById('pbpUndoBtn');
+    if (undoBtn) {
+        undoBtn.addEventListener('click', handlePbpUndo);
+    }
+    
+    // Sub Players button
+    const subPlayersBtn = document.getElementById('pbpSubPlayersBtn');
+    if (subPlayersBtn) {
+        subPlayersBtn.addEventListener('click', handlePbpSubPlayers);
+    }
+    
+    // Game Events button
+    const gameEventsBtn = document.getElementById('pbpGameEventsBtn');
+    if (gameEventsBtn) {
+        gameEventsBtn.addEventListener('click', handlePbpGameEvents);
+    }
+}
+
+/**
+ * Toggle the expanded row visibility
+ */
+function togglePbpExpandedRow() {
+    const expandedRow = document.getElementById('pbpExpandedRow');
+    const moreBtn = document.getElementById('pbpMoreBtn');
+    
+    if (expandedRow) {
+        pbpExpandedRowVisible = !pbpExpandedRowVisible;
+        expandedRow.classList.toggle('visible', pbpExpandedRowVisible);
+    }
+    
+    if (moreBtn) {
+        moreBtn.classList.toggle('active', pbpExpandedRowVisible);
+        const icon = moreBtn.querySelector('i');
+        if (icon) {
+            icon.className = pbpExpandedRowVisible ? 'fas fa-chevron-up' : 'fas fa-ellipsis-h';
+        }
+    }
+}
+
+/**
+ * Handle "We Score" button click
+ * Shows score attribution dialog from existing simpleModeScreen.js
+ */
+function handlePbpWeScore() {
+    // Check if user has Active Coach role
+    if (!canEditPlayByPlay()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('You need Play-by-Play control to record scores', 'warning');
+        }
+        return;
+    }
+    
+    // Auto-resume timer if paused
+    autoResumePointTimer();
+    
+    // Stop the point timer
+    const point = getCurrentPoint();
+    if (point && point.startTimestamp) {
+        point.totalPointTime = (point.totalPointTime || 0) + (Date.now() - new Date(point.startTimestamp).getTime());
+        point.startTimestamp = null;
+    }
+    
+    // Use the existing score attribution dialog from simpleModeScreen.js
+    if (typeof showScoreAttributionDialog === 'function') {
+        showScoreAttributionDialog();
+    } else {
+        console.warn('showScoreAttributionDialog not available');
+    }
+}
+
+/**
+ * Handle "They Score" button click
+ */
+function handlePbpTheyScore() {
+    // Check if user has Active Coach role
+    if (!canEditPlayByPlay()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('You need Play-by-Play control to record scores', 'warning');
+        }
+        return;
+    }
+    
+    // Auto-resume timer if paused
+    autoResumePointTimer();
+    
+    // Stop the point timer
+    const point = getCurrentPoint();
+    if (point && point.startTimestamp) {
+        point.totalPointTime = (point.totalPointTime || 0) + (Date.now() - new Date(point.startTimestamp).getTime());
+        point.startTimestamp = null;
+    }
+    
+    // Update score and move to next point
+    if (typeof updateScore === 'function' && typeof Role !== 'undefined') {
+        updateScore(Role.OPPONENT);
+    }
+    
+    if (typeof moveToNextPoint === 'function') {
+        moveToNextPoint();
+    }
+}
+
+/**
+ * Handle "Key Play" button click
+ * Opens the existing key play dialog
+ */
+function handlePbpKeyPlay() {
+    // Check if user has Active Coach role
+    if (!canEditPlayByPlay()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('You need Play-by-Play control to record key plays', 'warning');
+        }
+        return;
+    }
+    
+    // Use existing key play dialog from keyPlayDialog.js
+    if (typeof showKeyPlayDialog === 'function') {
+        showKeyPlayDialog();
+    } else {
+        console.warn('showKeyPlayDialog not available');
+    }
+}
+
+/**
+ * Handle "Undo" button click
+ */
+function handlePbpUndo() {
+    // Check if user has Active Coach role
+    if (!canEditPlayByPlay()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('You need Play-by-Play control to undo', 'warning');
+        }
+        return;
+    }
+    
+    // Use existing undo functionality
+    if (typeof handleUndo === 'function') {
+        handleUndo();
+    } else {
+        console.warn('handleUndo not available');
+    }
+}
+
+/**
+ * Handle "Sub Players" button click
+ * Opens modal for mid-point injury substitutions
+ */
+function handlePbpSubPlayers() {
+    // Check if user has Active Coach role
+    if (!canEditPlayByPlay()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('You need Play-by-Play control to sub players', 'warning');
+        }
+        return;
+    }
+    
+    // TODO: Implement mid-point substitution modal
+    if (typeof showControllerToast === 'function') {
+        showControllerToast('Mid-point substitutions coming soon', 'info');
+    }
+}
+
+/**
+ * Handle "Game Events" button click
+ * Opens modal with End Game, Timeout, Half Time, Switch Sides
+ */
+function handlePbpGameEvents() {
+    // Check if user has Active Coach role
+    if (!canEditPlayByPlay()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('You need Play-by-Play control to manage game events', 'warning');
+        }
+        return;
+    }
+    
+    showGameEventsModal();
+}
+
+/**
+ * Check if current user can edit play-by-play
+ * @returns {boolean}
+ */
+function canEditPlayByPlay() {
+    if (typeof getMyControllerRole === 'function') {
+        const role = getMyControllerRole();
+        return role === 'activeCoach';
+    }
+    // If controller system not available, allow (offline mode)
+    return true;
+}
+
+/**
+ * Show the Game Events modal
+ */
+function showGameEventsModal() {
+    // Check if modal already exists
+    let modal = document.getElementById('gameEventsModal');
+    if (!modal) {
+        modal = createGameEventsModal();
+        document.body.appendChild(modal);
+    }
+    
+    // Update button states based on game state
+    updateGameEventsModalState();
+    
+    // Show modal
+    modal.style.display = 'flex';
+}
+
+/**
+ * Create the Game Events modal
+ * @returns {HTMLElement}
+ */
+function createGameEventsModal() {
+    const modal = document.createElement('div');
+    modal.id = 'gameEventsModal';
+    modal.className = 'modal game-events-modal';
+    
+    modal.innerHTML = `
+        <div class="modal-content game-events-modal-content">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Game Events</h2>
+                <span class="close" id="gameEventsModalClose">&times;</span>
+            </div>
+            <div class="game-events-buttons">
+                <button id="geTimeoutBtn" class="ge-btn ge-btn-timeout">
+                    <i class="fas fa-hand-paper"></i>
+                    <span>Timeout</span>
+                </button>
+                <button id="geHalfTimeBtn" class="ge-btn ge-btn-halftime">
+                    <i class="fas fa-pause-circle"></i>
+                    <span>Half Time</span>
+                </button>
+                <button id="geSwitchSidesBtn" class="ge-btn ge-btn-switch">
+                    <i class="fas fa-exchange-alt"></i>
+                    <span>Switch Sides</span>
+                </button>
+                <button id="geEndGameBtn" class="ge-btn ge-btn-endgame">
+                    <i class="fas fa-flag-checkered"></i>
+                    <span>End Game</span>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // Wire up modal events
+    const closeBtn = modal.querySelector('#gameEventsModalClose');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', hideGameEventsModal);
+    }
+    
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            hideGameEventsModal();
+        }
+    });
+    
+    // Timeout button
+    const timeoutBtn = modal.querySelector('#geTimeoutBtn');
+    if (timeoutBtn) {
+        timeoutBtn.addEventListener('click', handleGameEventTimeout);
+    }
+    
+    // Half Time button
+    const halfTimeBtn = modal.querySelector('#geHalfTimeBtn');
+    if (halfTimeBtn) {
+        halfTimeBtn.addEventListener('click', handleGameEventHalfTime);
+    }
+    
+    // Switch Sides button
+    const switchSidesBtn = modal.querySelector('#geSwitchSidesBtn');
+    if (switchSidesBtn) {
+        switchSidesBtn.addEventListener('click', handleGameEventSwitchSides);
+    }
+    
+    // End Game button
+    const endGameBtn = modal.querySelector('#geEndGameBtn');
+    if (endGameBtn) {
+        endGameBtn.addEventListener('click', handleGameEventEndGame);
+    }
+    
+    return modal;
+}
+
+/**
+ * Hide the Game Events modal
+ */
+function hideGameEventsModal() {
+    const modal = document.getElementById('gameEventsModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Update Game Events modal button states based on current game state
+ */
+function updateGameEventsModalState() {
+    const point = getCurrentPoint();
+    const duringPoint = point && point.startTimestamp && !point.endTimestamp;
+    
+    // Timeout: available anytime
+    const timeoutBtn = document.getElementById('geTimeoutBtn');
+    if (timeoutBtn) {
+        timeoutBtn.disabled = false;
+        timeoutBtn.classList.remove('disabled');
+    }
+    
+    // Half Time, Switch Sides, End Game: only between points
+    const halfTimeBtn = document.getElementById('geHalfTimeBtn');
+    const switchSidesBtn = document.getElementById('geSwitchSidesBtn');
+    const endGameBtn = document.getElementById('geEndGameBtn');
+    
+    [halfTimeBtn, switchSidesBtn, endGameBtn].forEach(btn => {
+        if (btn) {
+            btn.disabled = duringPoint;
+            btn.classList.toggle('disabled', duringPoint);
+        }
+    });
+}
+
+/**
+ * Handle Timeout game event
+ */
+function handleGameEventTimeout() {
+    if (typeof showControllerToast === 'function') {
+        showControllerToast('Timeout called', 'info');
+    }
+    
+    // Log the event (future: add to game log)
+    console.log('Game Event: Timeout');
+    
+    hideGameEventsModal();
+}
+
+/**
+ * Handle Half Time game event
+ */
+function handleGameEventHalfTime() {
+    if (typeof showControllerToast === 'function') {
+        showControllerToast('Half Time', 'info');
+    }
+    
+    // Log the event
+    console.log('Game Event: Half Time');
+    
+    hideGameEventsModal();
+}
+
+/**
+ * Handle Switch Sides game event
+ */
+function handleGameEventSwitchSides() {
+    if (typeof showControllerToast === 'function') {
+        showControllerToast('Switching sides', 'info');
+    }
+    
+    // Log the event
+    console.log('Game Event: Switch Sides');
+    
+    hideGameEventsModal();
+}
+
+/**
+ * Handle End Game game event
+ */
+function handleGameEventEndGame() {
+    hideGameEventsModal();
+    
+    // Use existing end game functionality
+    if (typeof endGameConfirm === 'function') {
+        endGameConfirm();
+    } else if (typeof showScreen === 'function') {
+        // Fallback: go to game summary
+        exitGameScreen();
+        showScreen('gameSummaryScreen');
+    }
+}
+
+/**
+ * Update Play-by-Play panel state based on game state and role
+ * @param {boolean} duringPoint - Whether a point is currently in progress
+ */
+function updatePlayByPlayPanelState(duringPoint) {
+    const panel = document.getElementById('panel-playByPlay');
+    if (!panel) return;
+    
+    const hasActiveCoachRole = canEditPlayByPlay();
+    
+    // Disable panel if not Active Coach
+    panel.classList.toggle('disabled', !hasActiveCoachRole);
+    
+    // Disable score buttons between points (can only score during a point)
+    const weScoreBtn = document.getElementById('pbpWeScoreBtn');
+    const theyScoreBtn = document.getElementById('pbpTheyScoreBtn');
+    
+    [weScoreBtn, theyScoreBtn].forEach(btn => {
+        if (btn) {
+            btn.disabled = !duringPoint || !hasActiveCoachRole;
+            btn.classList.toggle('disabled', !duringPoint || !hasActiveCoachRole);
+        }
+    });
+    
+    // Key play and other buttons are always available during game
+    const keyPlayBtn = document.getElementById('pbpKeyPlayBtn');
+    const undoBtn = document.getElementById('pbpUndoBtn');
+    
+    [keyPlayBtn, undoBtn].forEach(btn => {
+        if (btn) {
+            btn.disabled = !hasActiveCoachRole;
+            btn.classList.toggle('disabled', !hasActiveCoachRole);
+        }
+    });
+}
 
 // =============================================================================
 // UI Updates
@@ -1040,6 +1555,11 @@ function enterGameScreen() {
         updatePanelsForRole(state.myRole);
     }
     
+    // Update Play-by-Play panel state
+    const point = getCurrentPoint();
+    const duringPoint = point && point.startTimestamp && !point.endTimestamp;
+    updatePlayByPlayPanelState(duringPoint);
+    
     console.log('🎮 Entered game screen');
 }
 
@@ -1089,4 +1609,9 @@ window.autoResumePointTimer = autoResumePointTimer;
 window.updateGameLogPanel = updateGameLogPanel;
 window.updateGameLogEvents = updateGameLogEvents;
 window.updateGameLogStatus = updateGameLogStatus;
+
+// Play-by-Play panel
+window.updatePlayByPlayPanelState = updatePlayByPlayPanelState;
+window.showGameEventsModal = showGameEventsModal;
+window.hideGameEventsModal = hideGameEventsModal;
 
