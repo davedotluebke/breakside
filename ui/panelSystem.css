@@ -651,6 +651,8 @@ body.game-screen-active #controllerRoleButtons {
 .panel-playByPlay {
     background: #fff;
     flex: 0 0 auto;
+    /* Minimum height: title bar (36px) + compact content (~60px) */
+    min-height: 96px;
 }
 
 .panel-playByPlay .panel-title-bar {
@@ -659,35 +661,59 @@ body.game-screen-active #controllerRoleButtons {
 
 .panel-playByPlay .panel-content {
     padding: 8px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }
 
-/* Play-by-Play Panel Content */
+/* Role-disabled state - visual indicator but don't block all interaction */
+.panel-playByPlay.role-disabled .pbp-panel-content {
+    opacity: 0.6;
+}
+
+/* =============================================================================
+   Play-by-Play Panel Content - Layout Modes
+   ============================================================================= */
+
 .pbp-panel-content {
     display: flex;
     flex-direction: column;
     gap: 6px;
+    height: 100%;
 }
 
-/* Main row: We Score, They Score, Key Play, ... button */
-.pbp-main-row {
+/* Buttons container - changes layout based on mode */
+.pbp-buttons-container {
     display: flex;
     gap: 6px;
-    width: 100%;
+    flex: 1;
+    min-height: 0;
 }
 
-/* Expanded row: Undo, Sub, Events (hidden by default) */
+/* Expanded row: Undo, Sub, Events (hidden by default in compact mode) */
 .pbp-expanded-row {
     display: none;
     gap: 6px;
     width: 100%;
+    flex-shrink: 0;
 }
 
 .pbp-expanded-row.visible {
     display: flex;
 }
 
-/* Base button styles */
-.pbp-btn {
+/* =============================================================================
+   COMPACT LAYOUT (horizontal single row)
+   ============================================================================= */
+
+.pbp-panel-content.layout-compact .pbp-buttons-container {
+    flex-direction: row;
+    align-items: stretch;
+}
+
+.pbp-panel-content.layout-compact .pbp-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -703,6 +729,133 @@ body.game-screen-active #controllerRoleButtons {
     white-space: nowrap;
 }
 
+.pbp-panel-content.layout-compact .pbp-btn-score {
+    flex: 1;
+    min-width: 0;
+}
+
+.pbp-panel-content.layout-compact .pbp-btn-secondary {
+    flex: 0 0 auto;
+}
+
+.pbp-panel-content.layout-compact .pbp-btn-more {
+    flex: 0 0 40px;
+}
+
+/* In compact mode, show labels when there's enough horizontal space */
+.pbp-panel-content.layout-compact .pbp-btn-label {
+    display: none;
+}
+
+@media (min-width: 380px) {
+    .pbp-panel-content.layout-compact .pbp-btn-score .pbp-btn-label {
+        display: inline;
+    }
+}
+
+@media (min-width: 460px) {
+    .pbp-panel-content.layout-compact .pbp-btn-secondary .pbp-btn-label {
+        display: inline;
+    }
+}
+
+/* =============================================================================
+   EXPANDED LAYOUT (vertical, large buttons like legacy Simple Mode)
+   ============================================================================= */
+
+.pbp-panel-content.layout-expanded .pbp-buttons-container {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 8px;
+}
+
+.pbp-panel-content.layout-expanded .pbp-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin: 0;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+/* Score buttons - large, full width */
+.pbp-panel-content.layout-expanded .pbp-btn-score {
+    width: 85%;
+    max-width: 400px;
+    padding: 24px 20px;
+    font-size: 1.8rem;
+    border-radius: 16px;
+}
+
+.pbp-panel-content.layout-expanded .pbp-btn-score .pbp-btn-label {
+    display: inline;
+}
+
+.pbp-panel-content.layout-expanded .pbp-btn-score i {
+    display: none; /* Hide icons in expanded mode, show text only */
+}
+
+/* Key Play button - smaller but still prominent */
+.pbp-panel-content.layout-expanded .pbp-btn-secondary {
+    width: 60%;
+    max-width: 250px;
+    padding: 14px 20px;
+    font-size: 1.1rem;
+}
+
+.pbp-panel-content.layout-expanded .pbp-btn-secondary .pbp-btn-label {
+    display: inline;
+}
+
+.pbp-panel-content.layout-expanded .pbp-btn-secondary i {
+    display: none;
+}
+
+/* Hide the "more" button in expanded mode - show expanded row always */
+.pbp-panel-content.layout-expanded .pbp-btn-more {
+    display: none;
+}
+
+/* Always show expanded row in expanded layout */
+.pbp-panel-content.layout-expanded .pbp-expanded-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.pbp-panel-content.layout-expanded .pbp-btn-action {
+    flex: 0 0 auto;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+}
+
+/* =============================================================================
+   Base Button Styles (shared)
+   ============================================================================= */
+
+.pbp-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 12px;
+    margin: 0;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
 .pbp-btn:active:not(:disabled) {
     transform: scale(0.97);
 }
@@ -714,83 +867,57 @@ body.game-screen-active #controllerRoleButtons {
 }
 
 .pbp-btn i {
-    font-size: 0.85rem;
-}
-
-/* Score buttons - larger, take equal space */
-.pbp-btn-score {
-    flex: 1;
-    padding: 12px 10px;
-    font-size: 0.95rem;
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-}
-
-.pbp-btn-score span {
-    display: none;
-}
-
-@media (min-width: 400px) {
-    .pbp-btn-score span {
-        display: inline;
-    }
+    font-size: 0.9rem;
 }
 
 /* We Score - green */
 .pbp-btn-us {
-    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    background: linear-gradient(135deg, #4CAF50 0%, #43A047 100%);
+    color: #fff;
+    box-shadow: 0 3px 8px rgba(76, 175, 80, 0.3);
 }
 
 .pbp-btn-us:hover:not(:disabled) {
-    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+    background: linear-gradient(135deg, #43A047 0%, #388E3C 100%);
 }
 
 /* They Score - red */
 .pbp-btn-them {
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    background: linear-gradient(135deg, #EF5350 0%, #E53935 100%);
+    color: #fff;
+    box-shadow: 0 3px 8px rgba(239, 83, 80, 0.3);
 }
 
 .pbp-btn-them:hover:not(:disabled) {
-    background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+    background: linear-gradient(135deg, #E53935 0%, #D32F2F 100%);
 }
 
-/* Key Play button - orange/warning */
+/* Key Play button - blue */
 .pbp-btn-secondary {
-    flex: 0 0 auto;
-    background: linear-gradient(135deg, #fd7e14 0%, #e96d0c 100%);
+    background: linear-gradient(135deg, #2196F3 0%, #1E88E5 100%);
     color: #fff;
-    padding: 10px 14px;
+    box-shadow: 0 2px 6px rgba(33, 150, 243, 0.3);
 }
 
 .pbp-btn-secondary:hover:not(:disabled) {
-    background: linear-gradient(135deg, #e96d0c 0%, #d45d00 100%);
+    background: linear-gradient(135deg, #1E88E5 0%, #1976D2 100%);
 }
 
-.pbp-btn-secondary span {
-    display: none;
-}
-
-@media (min-width: 440px) {
-    .pbp-btn-secondary span {
-        display: inline;
-    }
-}
-
-/* More button (...) - compact */
+/* More button (...) - gray */
 .pbp-btn-more {
     flex: 0 0 40px;
     width: 40px;
     padding: 10px;
-    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+    background: linear-gradient(135deg, #78909C 0%, #607D8B 100%);
     color: #fff;
 }
 
 .pbp-btn-more:hover:not(:disabled) {
-    background: linear-gradient(135deg, #5a6268 0%, #495057 100%);
+    background: linear-gradient(135deg, #607D8B 0%, #546E7A 100%);
 }
 
 .pbp-btn-more.active {
-    background: linear-gradient(135deg, #495057 0%, #343a40 100%);
+    background: linear-gradient(135deg, #546E7A 0%, #455A64 100%);
 }
 
 /* Action buttons in expanded row */
@@ -810,12 +937,6 @@ body.game-screen-active #controllerRoleButtons {
 
 .pbp-btn-action i {
     color: #6c757d;
-}
-
-/* Disabled panel state */
-.panel-playByPlay.disabled .pbp-btn {
-    opacity: 0.5;
-    cursor: not-allowed;
 }
 
 /* =============================================================================
@@ -927,26 +1048,24 @@ body.game-screen-active #controllerRoleButtons {
         gap: 5px;
     }
     
-    .pbp-main-row,
+    .pbp-buttons-container {
+        gap: 5px;
+    }
+    
     .pbp-expanded-row {
         gap: 5px;
     }
     
-    .pbp-btn {
+    .pbp-panel-content.layout-compact .pbp-btn {
         padding: 8px 10px;
         font-size: 0.85rem;
     }
     
-    .pbp-btn i {
+    .pbp-panel-content.layout-compact .pbp-btn i {
         font-size: 0.8rem;
     }
     
-    .pbp-btn-score {
-        padding: 10px 8px;
-        font-size: 0.9rem;
-    }
-    
-    .pbp-btn-more {
+    .pbp-panel-content.layout-compact .pbp-btn-more {
         flex: 0 0 36px;
         width: 36px;
         padding: 8px;
@@ -955,6 +1074,19 @@ body.game-screen-active #controllerRoleButtons {
     .pbp-btn-action {
         padding: 6px 8px;
         font-size: 0.8rem;
+    }
+    
+    /* Expanded layout on mobile - slightly smaller */
+    .pbp-panel-content.layout-expanded .pbp-btn-score {
+        padding: 18px 16px;
+        font-size: 1.5rem;
+        width: 90%;
+    }
+    
+    .pbp-panel-content.layout-expanded .pbp-btn-secondary {
+        padding: 12px 16px;
+        font-size: 1rem;
+        width: 65%;
     }
     
     .ge-btn {
@@ -968,19 +1100,24 @@ body.game-screen-active #controllerRoleButtons {
 }
 
 @media (max-width: 360px) {
-    .pbp-btn-score {
+    .pbp-panel-content.layout-compact .pbp-btn-score {
         padding: 8px 6px;
     }
     
-    .pbp-btn-secondary {
+    .pbp-panel-content.layout-compact .pbp-btn-secondary {
         padding: 8px 10px;
+    }
+    
+    /* Expanded layout on very small screens */
+    .pbp-panel-content.layout-expanded .pbp-btn-score {
+        padding: 14px 12px;
+        font-size: 1.3rem;
     }
 }
 
-/* Hide text labels on very small screens, show icons only */
+/* Hide text labels on very small screens in compact mode, show icons only */
 @media (max-width: 340px) {
-    .pbp-btn-score span,
-    .pbp-btn-secondary span {
+    .pbp-panel-content.layout-compact .pbp-btn-label {
         display: none !important;
     }
 }

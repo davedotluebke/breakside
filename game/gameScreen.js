@@ -218,26 +218,28 @@ function createRoleButtonsPanel() {
 
 /**
  * Create the Play-by-Play panel content
- * Responsive layout: minimum shows single row, expandable for more options
+ * Two layouts:
+ * - Expanded (vertical): Large buttons stacked vertically, like legacy Simple Mode
+ * - Compact (horizontal): Single row with smaller buttons
  * @returns {HTMLElement}
  */
 function createPlayByPlayContent() {
     const content = document.createElement('div');
-    content.className = 'pbp-panel-content';
+    content.className = 'pbp-panel-content layout-compact';
     
     content.innerHTML = `
-        <div class="pbp-main-row">
+        <div class="pbp-buttons-container">
             <button id="pbpWeScoreBtn" class="pbp-btn pbp-btn-score pbp-btn-us" title="We Score">
                 <i class="fas fa-plus-circle"></i>
-                <span>We Score</span>
+                <span class="pbp-btn-label">We Score</span>
             </button>
             <button id="pbpTheyScoreBtn" class="pbp-btn pbp-btn-score pbp-btn-them" title="They Score">
                 <i class="fas fa-minus-circle"></i>
-                <span>They Score</span>
+                <span class="pbp-btn-label">They Score</span>
             </button>
             <button id="pbpKeyPlayBtn" class="pbp-btn pbp-btn-secondary" title="Key Play">
                 <i class="fas fa-star"></i>
-                <span>Key Play</span>
+                <span class="pbp-btn-label">Key Play</span>
             </button>
             <button id="pbpMoreBtn" class="pbp-btn pbp-btn-more" title="More Options">
                 <i class="fas fa-ellipsis-h"></i>
@@ -1046,39 +1048,87 @@ function handleGameEventEndGame() {
 }
 
 /**
- * Update Play-by-Play panel state based on game state and role
- * @param {boolean} duringPoint - Whether a point is currently in progress
+ * Update Play-by-Play panel state based on role
+ * Buttons are enabled as long as user has Active Coach role
+ * (Score buttons are used to END a point, so they should be available anytime)
  */
-function updatePlayByPlayPanelState(duringPoint) {
+function updatePlayByPlayPanelState() {
     const panel = document.getElementById('panel-playByPlay');
     if (!panel) return;
     
     const hasActiveCoachRole = canEditPlayByPlay();
     
-    // Disable panel if not Active Coach
-    panel.classList.toggle('disabled', !hasActiveCoachRole);
+    // Disable panel visually if not Active Coach (but don't block pointer events on whole panel)
+    panel.classList.toggle('role-disabled', !hasActiveCoachRole);
     
-    // Disable score buttons between points (can only score during a point)
-    const weScoreBtn = document.getElementById('pbpWeScoreBtn');
-    const theyScoreBtn = document.getElementById('pbpTheyScoreBtn');
-    
-    [weScoreBtn, theyScoreBtn].forEach(btn => {
-        if (btn) {
-            btn.disabled = !duringPoint || !hasActiveCoachRole;
-            btn.classList.toggle('disabled', !duringPoint || !hasActiveCoachRole);
-        }
+    // All buttons are enabled if user has Active Coach role
+    const allButtons = panel.querySelectorAll('.pbp-btn');
+    allButtons.forEach(btn => {
+        btn.disabled = !hasActiveCoachRole;
+        btn.classList.toggle('disabled', !hasActiveCoachRole);
     });
     
-    // Key play and other buttons are always available during game
-    const keyPlayBtn = document.getElementById('pbpKeyPlayBtn');
-    const undoBtn = document.getElementById('pbpUndoBtn');
+    // Update panel layout based on height
+    updatePlayByPlayLayout();
+}
+
+/**
+ * Update Play-by-Play panel layout based on available height
+ * - Expanded: vertical layout with large buttons (when panel is tall)
+ * - Compact: horizontal single-line layout (when panel is short)
+ */
+function updatePlayByPlayLayout() {
+    const panel = document.getElementById('panel-playByPlay');
+    const content = panel?.querySelector('.pbp-panel-content');
+    if (!panel || !content) return;
     
-    [keyPlayBtn, undoBtn].forEach(btn => {
-        if (btn) {
-            btn.disabled = !hasActiveCoachRole;
-            btn.classList.toggle('disabled', !hasActiveCoachRole);
-        }
+    // Get the content area height (panel height minus title bar)
+    const panelRect = panel.getBoundingClientRect();
+    const titleBar = panel.querySelector('.panel-title-bar');
+    const titleBarHeight = titleBar ? titleBar.getBoundingClientRect().height : 36;
+    const contentHeight = panelRect.height - titleBarHeight;
+    
+    // Threshold for switching layouts:
+    // - Below 120px content: compact (single row)
+    // - Above 200px content: expanded (vertical layout like legacy Simple Mode)
+    const EXPANDED_THRESHOLD = 200;
+    
+    if (contentHeight >= EXPANDED_THRESHOLD) {
+        content.classList.add('layout-expanded');
+        content.classList.remove('layout-compact');
+    } else {
+        content.classList.remove('layout-expanded');
+        content.classList.add('layout-compact');
+    }
+}
+
+// ResizeObserver instance for Play-by-Play panel
+let pbpResizeObserver = null;
+
+/**
+ * Set up ResizeObserver to update layout when panel is resized
+ */
+function setupPlayByPlayResizeObserver() {
+    const panel = document.getElementById('panel-playByPlay');
+    if (!panel) return;
+    
+    // Clean up existing observer
+    if (pbpResizeObserver) {
+        pbpResizeObserver.disconnect();
+    }
+    
+    // Create new observer
+    pbpResizeObserver = new ResizeObserver((entries) => {
+        // Debounce layout updates during drag
+        requestAnimationFrame(() => {
+            updatePlayByPlayLayout();
+        });
     });
+    
+    pbpResizeObserver.observe(panel);
+    
+    // Initial layout update
+    updatePlayByPlayLayout();
 }
 
 // =============================================================================
@@ -1555,10 +1605,11 @@ function enterGameScreen() {
         updatePanelsForRole(state.myRole);
     }
     
-    // Update Play-by-Play panel state
-    const point = getCurrentPoint();
-    const duringPoint = point && point.startTimestamp && !point.endTimestamp;
-    updatePlayByPlayPanelState(duringPoint);
+    // Update Play-by-Play panel state (based on role only)
+    updatePlayByPlayPanelState();
+    
+    // Set up ResizeObserver for Play-by-Play panel layout
+    setupPlayByPlayResizeObserver();
     
     console.log('🎮 Entered game screen');
 }
