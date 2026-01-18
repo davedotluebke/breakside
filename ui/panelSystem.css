@@ -648,12 +648,341 @@ body.game-screen-active #controllerRoleButtons {
    Play-by-Play Panel (resizable)
    ============================================================================= */
 
-.panel-play-by-play {
+.panel-playByPlay {
     background: #fff;
+    flex: 0 0 auto;
 }
 
-.panel-play-by-play .panel-title-bar {
+.panel-playByPlay .panel-title-bar {
     background: linear-gradient(135deg, #e8f4e8 0%, #d4edda 100%);
+}
+
+.panel-playByPlay .panel-content {
+    padding: 8px;
+}
+
+/* Play-by-Play Panel Content */
+.pbp-panel-content {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Main row: We Score, They Score, Key Play, ... button */
+.pbp-main-row {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+}
+
+/* Expanded row: Undo, Sub, Events (hidden by default) */
+.pbp-expanded-row {
+    display: none;
+    gap: 6px;
+    width: 100%;
+}
+
+.pbp-expanded-row.visible {
+    display: flex;
+}
+
+/* Base button styles */
+.pbp-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 12px;
+    margin: 0;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.pbp-btn:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+.pbp-btn:disabled,
+.pbp-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pbp-btn i {
+    font-size: 0.85rem;
+}
+
+/* Score buttons - larger, take equal space */
+.pbp-btn-score {
+    flex: 1;
+    padding: 12px 10px;
+    font-size: 0.95rem;
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.pbp-btn-score span {
+    display: none;
+}
+
+@media (min-width: 400px) {
+    .pbp-btn-score span {
+        display: inline;
+    }
+}
+
+/* We Score - green */
+.pbp-btn-us {
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+}
+
+.pbp-btn-us:hover:not(:disabled) {
+    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+}
+
+/* They Score - red */
+.pbp-btn-them {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+}
+
+.pbp-btn-them:hover:not(:disabled) {
+    background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+}
+
+/* Key Play button - orange/warning */
+.pbp-btn-secondary {
+    flex: 0 0 auto;
+    background: linear-gradient(135deg, #fd7e14 0%, #e96d0c 100%);
+    color: #fff;
+    padding: 10px 14px;
+}
+
+.pbp-btn-secondary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #e96d0c 0%, #d45d00 100%);
+}
+
+.pbp-btn-secondary span {
+    display: none;
+}
+
+@media (min-width: 440px) {
+    .pbp-btn-secondary span {
+        display: inline;
+    }
+}
+
+/* More button (...) - compact */
+.pbp-btn-more {
+    flex: 0 0 40px;
+    width: 40px;
+    padding: 10px;
+    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+    color: #fff;
+}
+
+.pbp-btn-more:hover:not(:disabled) {
+    background: linear-gradient(135deg, #5a6268 0%, #495057 100%);
+}
+
+.pbp-btn-more.active {
+    background: linear-gradient(135deg, #495057 0%, #343a40 100%);
+}
+
+/* Action buttons in expanded row */
+.pbp-btn-action {
+    flex: 1;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    color: #495057;
+    border: 1px solid #dee2e6;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+}
+
+.pbp-btn-action:hover:not(:disabled) {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    border-color: #ced4da;
+}
+
+.pbp-btn-action i {
+    color: #6c757d;
+}
+
+/* Disabled panel state */
+.panel-playByPlay.disabled .pbp-btn {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* =============================================================================
+   Game Events Modal
+   ============================================================================= */
+
+.game-events-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.game-events-modal-content {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    width: 90%;
+    max-width: 360px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.game-events-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.ge-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px 12px;
+    margin: 0;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.ge-btn:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+.ge-btn:disabled,
+.ge-btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.ge-btn i {
+    font-size: 1.4rem;
+}
+
+/* Timeout - blue (available anytime) */
+.ge-btn-timeout {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+}
+
+.ge-btn-timeout:hover:not(:disabled) {
+    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+}
+
+/* Half Time - purple */
+.ge-btn-halftime {
+    background: linear-gradient(135deg, #6f42c1 0%, #5a32a3 100%);
+}
+
+.ge-btn-halftime:hover:not(:disabled) {
+    background: linear-gradient(135deg, #5a32a3 0%, #4a2885 100%);
+}
+
+/* Switch Sides - teal */
+.ge-btn-switch {
+    background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+}
+
+.ge-btn-switch:hover:not(:disabled) {
+    background: linear-gradient(135deg, #138496 0%, #117a8b 100%);
+}
+
+/* End Game - dark/warning */
+.ge-btn-endgame {
+    background: linear-gradient(135deg, #343a40 0%, #212529 100%);
+}
+
+.ge-btn-endgame:hover:not(:disabled) {
+    background: linear-gradient(135deg, #212529 0%, #1a1d20 100%);
+}
+
+/* =============================================================================
+   Mobile Adjustments for Play-by-Play Panel
+   ============================================================================= */
+
+@media (max-width: 480px) {
+    .pbp-panel-content {
+        gap: 5px;
+    }
+    
+    .pbp-main-row,
+    .pbp-expanded-row {
+        gap: 5px;
+    }
+    
+    .pbp-btn {
+        padding: 8px 10px;
+        font-size: 0.85rem;
+    }
+    
+    .pbp-btn i {
+        font-size: 0.8rem;
+    }
+    
+    .pbp-btn-score {
+        padding: 10px 8px;
+        font-size: 0.9rem;
+    }
+    
+    .pbp-btn-more {
+        flex: 0 0 36px;
+        width: 36px;
+        padding: 8px;
+    }
+    
+    .pbp-btn-action {
+        padding: 6px 8px;
+        font-size: 0.8rem;
+    }
+    
+    .ge-btn {
+        padding: 14px 10px;
+        font-size: 0.85rem;
+    }
+    
+    .ge-btn i {
+        font-size: 1.2rem;
+    }
+}
+
+@media (max-width: 360px) {
+    .pbp-btn-score {
+        padding: 8px 6px;
+    }
+    
+    .pbp-btn-secondary {
+        padding: 8px 10px;
+    }
+}
+
+/* Hide text labels on very small screens, show icons only */
+@media (max-width: 340px) {
+    .pbp-btn-score span,
+    .pbp-btn-secondary span {
+        display: none !important;
+    }
 }
 
 /* =============================================================================
