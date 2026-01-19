@@ -21,7 +21,9 @@ let controllerState = {
     activeCoach: null,      // { userId, displayName, claimedAt, lastPing }
     lineCoach: null,        // { userId, displayName, claimedAt, lastPing }
     pendingHandoff: null,   // { role, requesterId, requesterName, currentHolderId, requestedAt, expiresAt }
-    myRole: null,           // 'activeCoach' | 'lineCoach' | null
+    myRole: null,           // 'activeCoach' | 'lineCoach' | 'both' | null
+    isActiveCoach: false,   // Track each role separately
+    isLineCoach: false,     // Track each role separately
     hasPendingHandoffForMe: false,
     lastUpdate: null
 };
@@ -279,11 +281,49 @@ function updateLocalControllerState(data) {
         handoffTimeoutSeconds = data.handoffTimeoutSeconds;
     }
     
+    // Determine which roles this user holds
+    const myUserId = getCurrentUserId();
+    const newActiveCoach = data.state?.activeCoach || null;
+    const newLineCoach = data.state?.lineCoach || null;
+    
+    const iAmActiveCoach = newActiveCoach?.userId === myUserId;
+    const iAmLineCoach = newLineCoach?.userId === myUserId;
+    
+    // Compute myRole - can be 'activeCoach', 'lineCoach', 'both', or null
+    let myRole;
+    if (iAmActiveCoach && iAmLineCoach) {
+        myRole = 'both';
+    } else if (iAmActiveCoach) {
+        myRole = 'activeCoach';
+    } else if (iAmLineCoach) {
+        myRole = 'lineCoach';
+    } else {
+        myRole = null;
+    }
+    
+    // If data.myRole is explicitly provided (from claim/release), use it to override
+    // but only if it's consistent with the actual state
+    if (data.myRole !== undefined) {
+        // Trust explicit myRole from claim operations
+        if (data.myRole === 'activeCoach' && iAmActiveCoach) {
+            myRole = iAmLineCoach ? 'both' : 'activeCoach';
+        } else if (data.myRole === 'lineCoach' && iAmLineCoach) {
+            myRole = iAmActiveCoach ? 'both' : 'lineCoach';
+        } else if (data.myRole === null) {
+            // Explicit release - recalculate based on state
+            myRole = iAmActiveCoach && iAmLineCoach ? 'both' : 
+                     iAmActiveCoach ? 'activeCoach' : 
+                     iAmLineCoach ? 'lineCoach' : null;
+        }
+    }
+    
     controllerState = {
-        activeCoach: data.state?.activeCoach || null,
-        lineCoach: data.state?.lineCoach || null,
+        activeCoach: newActiveCoach,
+        lineCoach: newLineCoach,
         pendingHandoff: data.state?.pendingHandoff || null,
-        myRole: data.myRole !== undefined ? data.myRole : controllerState.myRole,
+        myRole: myRole,
+        isActiveCoach: iAmActiveCoach,
+        isLineCoach: iAmLineCoach,
         hasPendingHandoffForMe: data.hasPendingHandoffForMe || false,
         lastUpdate: new Date()
     };
@@ -301,8 +341,9 @@ function updateLocalControllerState(data) {
         }
         handoffRequestSentToast = null;
         
-        // Check if I got the role
-        const iGotTheRole = controllerState.myRole === requestedRole;
+        // Check if I got the role (also true if I now have 'both' and requested either)
+        const iGotTheRole = (requestedRole === 'activeCoach' && controllerState.isActiveCoach) ||
+                           (requestedRole === 'lineCoach' && controllerState.isLineCoach);
         const roleName = requestedRole === 'activeCoach' ? 'Play-by-Play' : 'Next Line';
         
         if (iGotTheRole) {
@@ -449,7 +490,7 @@ function getMyControllerRole() {
  * @returns {boolean}
  */
 function isActiveCoach() {
-    return controllerState.myRole === 'activeCoach';
+    return controllerState.isActiveCoach;
 }
 
 /**
@@ -457,7 +498,7 @@ function isActiveCoach() {
  * @returns {boolean}
  */
 function isLineCoach() {
-    return controllerState.myRole === 'lineCoach';
+    return controllerState.isLineCoach;
 }
 
 /**
@@ -466,7 +507,7 @@ function isLineCoach() {
  * @returns {boolean}
  */
 function canEditPlayByPlay() {
-    return controllerState.myRole === 'activeCoach' || !controllerState.activeCoach;
+    return controllerState.isActiveCoach || !controllerState.activeCoach;
 }
 
 /**
@@ -475,8 +516,8 @@ function canEditPlayByPlay() {
  * @returns {boolean}
  */
 function canEditLineup() {
-    return controllerState.myRole === 'lineCoach' || 
-           controllerState.myRole === 'activeCoach' || 
+    return controllerState.isLineCoach || 
+           controllerState.isActiveCoach || 
            (!controllerState.lineCoach && !controllerState.activeCoach);
 }
 
