@@ -569,7 +569,10 @@ async function syncTeamToCloud(team) {
         playerIds: team.playerIds || [],
         lines: team.lines || [],
         createdAt: team.createdAt,
-        updatedAt: team.updatedAt
+        updatedAt: team.updatedAt,
+        // Phase 6b: Team identity fields (synced when team settings change)
+        teamSymbol: team.teamSymbol || null,
+        iconUrl: team.iconUrl || null
     };
     
     // Queue for sync
@@ -984,6 +987,10 @@ async function syncUserTeams() {
                 localTeam.playerIds = serverTeam.playerIds || [];
                 localTeam.lines = serverTeam.lines || [];
                 
+                // Phase 6b: Restore team identity fields
+                localTeam.teamSymbol = serverTeam.teamSymbol || null;
+                localTeam.iconUrl = serverTeam.iconUrl || null;
+                
                 // If server has embedded roster data, deserialize it
                 if (serverTeam.teamRoster && serverTeam.teamRoster.length > 0) {
                     localTeam.teamRoster = serverTeam.teamRoster.map(p => deserializePlayer(p));
@@ -1007,6 +1014,10 @@ async function syncUserTeams() {
                     localTeam.updatedAt = serverTeam.updatedAt;
                     localTeam.playerIds = serverTeam.playerIds || localTeam.playerIds;
                     localTeam.lines = serverTeam.lines || localTeam.lines;
+                    
+                    // Phase 6b: Update team identity fields
+                    localTeam.teamSymbol = serverTeam.teamSymbol || null;
+                    localTeam.iconUrl = serverTeam.iconUrl || null;
                     
                     // Update roster if provided
                     if (serverTeam.teamRoster && serverTeam.teamRoster.length > 0) {

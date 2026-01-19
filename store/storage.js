@@ -181,8 +181,8 @@ function saveAllTeamsData() {
     // Save the serialized array to local storage
     localStorage.setItem('teamsData', JSON.stringify(serializedTeams));
 
-    // Log each team's data
-    teams.forEach(team => logTeamData(team));
+    // Note: Team data logging disabled to reduce console noise
+    // Uncomment for debugging: teams.forEach(team => logTeamData(team));
 
     // SYNC: Attempt to sync current game to cloud if available
     if (typeof syncGameToCloud === 'function' && typeof currentGame === 'function') {

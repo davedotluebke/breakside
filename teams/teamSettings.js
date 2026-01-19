@@ -870,6 +870,11 @@ function saveTeamIdentity() {
         saveAllTeamsData();
     }
     
+    // Sync team to cloud (includes teamSymbol and iconUrl)
+    if (typeof syncTeamToCloud === 'function' && currentTeam.id) {
+        syncTeamToCloud(currentTeam);
+    }
+    
     // Update header if visible
     if (typeof updateHeaderTeamIdentities === 'function') {
         updateHeaderTeamIdentities();
