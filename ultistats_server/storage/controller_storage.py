@@ -152,6 +152,55 @@ def get_controller_state(game_id: str) -> ControllerState:
         return dict(state)  # Return a copy
 
 
+def auto_assign_roles_if_unclaimed(
+    game_id: str,
+    user_id: str,
+    display_name: str
+) -> ControllerState:
+    """
+    Auto-assign both roles to a user if they are currently unclaimed.
+    
+    Called when a coach first enters a game - the first coach to enter
+    automatically gets both roles. Subsequent coaches see those roles
+    as occupied and must request a handoff.
+    
+    Args:
+        game_id: The game identifier
+        user_id: The user to assign roles to
+        display_name: The user's display name
+        
+    Returns:
+        Current controller state after any assignments
+    """
+    with _lock:
+        state = _controller_states.get(game_id, _get_empty_state())
+        
+        # Clean up stale claims first
+        for role in ["activeCoach", "lineCoach"]:
+            if _is_stale(state.get(role)):
+                state[role] = None
+        
+        # Handle expired handoffs
+        if _is_handoff_expired(state.get("pendingHandoff")):
+            _auto_approve_handoff(state)
+        
+        # If BOTH roles are unclaimed, assign both to this user
+        # This makes the first coach to enter the game the default holder
+        if state.get("activeCoach") is None and state.get("lineCoach") is None:
+            now = datetime.now().isoformat()
+            role_holder: RoleHolder = {
+                "userId": user_id,
+                "displayName": display_name,
+                "claimedAt": now,
+                "lastPing": now
+            }
+            state["activeCoach"] = dict(role_holder)
+            state["lineCoach"] = dict(role_holder)
+        
+        _controller_states[game_id] = state
+        return dict(state)
+
+
 def claim_role(
     game_id: str, 
     role: RoleType, 
