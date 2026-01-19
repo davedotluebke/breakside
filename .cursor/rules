@@ -1,0 +1,47 @@
+# Breakside Deployment Rules
+
+## Project Overview
+Breakside is a Progressive Web App (PWA) for tracking ultimate frisbee statistics.
+- **Frontend**: Static files (HTML, CSS, JS) served from AWS S3 via CloudFront
+- **Backend**: FastAPI Python server running on EC2
+
+## Git Push Requirements
+When pushing to GitHub, use `required_permissions: ["all"]` to allow credential access:
+```
+git push origin main
+required_permissions: ["all"]
+```
+
+## Deployment Flow
+
+### Client-Side Changes (Automatic)
+Files: `*.js`, `*.css`, `*.html`, `images/`, etc. (anything outside `ultistats_server/`)
+
+1. Push to GitHub triggers GitHub Actions
+2. Actions sync files to S3 and invalidate CloudFront cache
+3. **No server restart needed** - changes are live after CDN invalidation (~1-2 min)
+
+### Server-Side Changes (Manual Restart Required)
+Files: `ultistats_server/*.py`, `ultistats_server/storage/`, `ultistats_server/auth/`
+
+1. Push to GitHub (same as above)
+2. **Remind user** to pull and restart on EC2:
+   ```bash
+   ssh ec2-user@3.212.138.180
+   cd /opt/breakside && sudo git pull && sudo systemctl restart breakside
+   ```
+
+## When to Remind About Server Restart
+Only remind about EC2 restart when commits include changes to:
+- `ultistats_server/**/*.py`
+- Server configuration files
+- Any backend/API changes
+
+Do NOT remind for:
+- Frontend JS/CSS/HTML changes
+- Static assets (images, fonts)
+- Client-side only features
+
+## Version Tracking
+The project has a pre-commit hook that auto-increments the build number in `version.json`.
+Current format: `1.x.0 (Build N)`
