@@ -906,6 +906,113 @@ body.game-screen-active #controllerRoleButtons {
 }
 
 /* =============================================================================
+   FULL LAYOUT (maximum vertical space - square buttons, spread vertically)
+   Square-ish buttons with wrapped text, spread to fill entire panel height
+   Used when panel height > 500px content
+   ============================================================================= */
+
+.pbp-panel-content.layout-full {
+    flex-direction: column;
+    justify-content: space-between; /* Spread items from top to bottom */
+    align-items: center;
+    padding: 16px 12px;
+    height: 100%;
+}
+
+.pbp-panel-content.layout-full .pbp-main-buttons {
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    flex: 1;
+    justify-content: flex-start; /* Start at top */
+    padding-top: 8px;
+}
+
+/* Square-ish score buttons with wrapped text */
+.pbp-panel-content.layout-full .pbp-btn-score {
+    width: 140px;
+    height: 120px;
+    max-width: 160px;
+    padding: 16px;
+    font-size: 1.8rem;
+    border-radius: 20px;
+    flex: 0 0 auto;
+    flex-direction: column;
+    line-height: 1.1;
+}
+
+/* Stack the words vertically in full layout */
+.pbp-panel-content.layout-full .pbp-btn-score .pbp-btn-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+}
+
+.pbp-panel-content.layout-full .pbp-btn-score .pbp-label-word {
+    display: block;
+}
+
+.pbp-panel-content.layout-full .pbp-btn-score i {
+    display: none; /* Hide icons, show text only */
+}
+
+/* Key Play button in full layout */
+.pbp-panel-content.layout-full .pbp-btn-keyplay {
+    width: 120px;
+    height: 80px;
+    max-width: 140px;
+    padding: 12px 16px;
+    font-size: 1.1rem;
+    border-radius: 16px;
+    flex-direction: column;
+}
+
+.pbp-panel-content.layout-full .pbp-btn-keyplay .pbp-btn-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+}
+
+.pbp-panel-content.layout-full .pbp-btn-keyplay .pbp-label-word {
+    display: block;
+}
+
+.pbp-panel-content.layout-full .pbp-btn-keyplay i {
+    display: none;
+}
+
+/* Action buttons row - stays at bottom */
+.pbp-panel-content.layout-full .pbp-action-buttons {
+    flex-direction: row;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    flex: 0 0 auto;
+    margin-top: auto; /* Push to bottom */
+    padding-bottom: 8px;
+}
+
+/* Action buttons in full layout */
+.pbp-panel-content.layout-full .pbp-btn-action {
+    display: flex;
+    padding: 12px 18px;
+    font-size: 0.95rem;
+    flex: 0 0 auto;
+}
+
+.pbp-panel-content.layout-full .pbp-btn-action .pbp-btn-label {
+    display: inline;
+}
+
+/* Hide "more" button in full mode */
+.pbp-panel-content.layout-full .pbp-btn-more {
+    display: none;
+}
+
+/* =============================================================================
    Base Button Styles (shared)
    ============================================================================= */
 
@@ -936,6 +1043,11 @@ body.game-screen-active #controllerRoleButtons {
 
 .pbp-btn i {
     font-size: 0.9rem;
+}
+
+/* Label words - inline by default, stacked only in full layout */
+.pbp-label-word {
+    display: inline;
 }
 
 /* We Score - green */
@@ -1141,6 +1253,20 @@ body.game-screen-active #controllerRoleButtons {
         font-size: 0.8rem;
     }
     
+    /* Full layout on mobile - slightly smaller squares */
+    .pbp-panel-content.layout-full .pbp-btn-score {
+        width: 120px;
+        height: 100px;
+        font-size: 1.5rem;
+        border-radius: 16px;
+    }
+    
+    .pbp-panel-content.layout-full .pbp-btn-keyplay {
+        width: 100px;
+        height: 70px;
+        font-size: 1rem;
+    }
+    
     /* Expanded layout on mobile - slightly smaller */
     .pbp-panel-content.layout-expanded .pbp-btn-score {
         padding: 18px 16px;
@@ -1170,6 +1296,19 @@ body.game-screen-active #controllerRoleButtons {
     
     .pbp-btn-keyplay {
         padding: 8px 10px;
+    }
+    
+    /* Full layout on very small screens */
+    .pbp-panel-content.layout-full .pbp-btn-score {
+        width: 100px;
+        height: 85px;
+        font-size: 1.3rem;
+    }
+    
+    .pbp-panel-content.layout-full .pbp-btn-keyplay {
+        width: 85px;
+        height: 60px;
+        font-size: 0.9rem;
     }
     
     /* Expanded layout on very small screens */
