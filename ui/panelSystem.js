@@ -598,6 +598,20 @@ function startPanelDrag(panelId, clientY) {
     const panelElement = getPanelElement(panelId);
     if (!panelElement) return;
     
+    // If the follow panel is minimized (snapped to bottom), un-minimize it first
+    // so that dragging works intuitively
+    if (panelId === 'follow' && isPanelMinimized('follow')) {
+        // Remove the snapped-to-bottom state
+        panelElement.classList.remove('snapped-to-bottom');
+        panelElement.style.marginTop = '';
+        // Set to a reasonable starting height for dragging
+        const startingHeight = 150;
+        panelElement.style.height = `${startingHeight}px`;
+        panelElement.style.flex = '0 0 auto';
+        // Update state
+        setPanelState('follow', { height: startingHeight, expandedHeight: startingHeight });
+    }
+    
     // Store starting heights of ALL resizable panels for absolute positioning
     const startHeights = {};
     RESIZABLE_PANELS.forEach(id => {
