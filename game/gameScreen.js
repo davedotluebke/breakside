@@ -1108,8 +1108,9 @@ function updatePlayByPlayLayout() {
     const titleBarHeight = titleBar ? titleBar.getBoundingClientRect().height : 36;
     const contentHeight = panelRect.height - titleBarHeight;
     
-    // Thresholds for switching layouts
-    const EXPANDED_THRESHOLD = 250;  // Above this: expanded vertical layout
+    // Thresholds for switching layouts (content height, excludes title bar)
+    // Expanded needs ~350px+ for 3 large buttons stacked + action row
+    const EXPANDED_THRESHOLD = 350;  // Above this: expanded vertical layout
     const MEDIUM_THRESHOLD = 120;    // Above this: two-row layout
     
     // Remove all layout classes first
