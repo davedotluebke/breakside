@@ -741,6 +741,9 @@ function handlePbpWeScore() {
         point.startTimestamp = null;
     }
     
+    // Ensure the dialog is visible by moving it to body if needed
+    ensureDialogVisible('scoreAttributionDialog');
+    
     // Use the existing score attribution dialog from simpleModeScreen.js
     if (typeof showScoreAttributionDialog === 'function') {
         showScoreAttributionDialog();
@@ -779,6 +782,9 @@ function handlePbpTheyScore() {
     if (typeof moveToNextPoint === 'function') {
         moveToNextPoint();
     }
+    
+    // Update UI for between-points state
+    transitionToBetweenPoints();
 }
 
 /**
@@ -793,6 +799,9 @@ function handlePbpKeyPlay() {
         }
         return;
     }
+    
+    // Ensure the dialog is visible by moving it to body if needed
+    ensureDialogVisible('keyPlayDialog');
     
     // Use existing key play dialog from keyPlayDialog.js
     if (typeof showKeyPlayDialog === 'function') {
@@ -814,11 +823,13 @@ function handlePbpUndo() {
         return;
     }
     
-    // Use existing undo functionality
-    if (typeof handleUndo === 'function') {
-        handleUndo();
+    // Use existing undo functionality from gameLogic.js
+    if (typeof undoEvent === 'function') {
+        undoEvent();
+        // Update the game log after undo
+        updateGameLogEvents();
     } else {
-        console.warn('handleUndo not available');
+        console.warn('undoEvent not available');
     }
 }
 
@@ -875,6 +886,64 @@ function canEditPlayByPlayPanel() {
     }
     // If controller system not available, allow (offline mode)
     return true;
+}
+
+/**
+ * Ensure a dialog element is visible by moving it to body if needed.
+ * This fixes the issue where dialogs inside simpleModeScreen are hidden
+ * when the game screen container is active (parent has display: none !important).
+ * @param {string} dialogId - The ID of the dialog element
+ */
+function ensureDialogVisible(dialogId) {
+    const dialog = document.getElementById(dialogId);
+    if (!dialog) return;
+    
+    // If dialog's parent is not body, move it to body
+    // This ensures it can be displayed above all other content
+    if (dialog.parentElement !== document.body) {
+        document.body.appendChild(dialog);
+        console.log(`📦 Moved ${dialogId} to body for visibility`);
+    }
+}
+
+/**
+ * Transition UI to "between points" state after a score.
+ * - Update the score display and game log
+ * - Maximize the Select Next Line panel
+ * - Minimize the Play-by-Play panel
+ */
+function transitionToBetweenPoints() {
+    // Update score display
+    let game;
+    if (typeof currentGame === 'function') {
+        game = currentGame();
+    } else if (typeof currentGame !== 'undefined') {
+        game = currentGame;
+    }
+    
+    if (game) {
+        const usScore = game.scores ? game.scores[Role.TEAM] : 0;
+        const themScore = game.scores ? game.scores[Role.OPPONENT] : 0;
+        updateGameScreenScore(usScore, themScore);
+    }
+    
+    // Update game log
+    updateGameLogEvents();
+    
+    // Maximize Select Next Line panel (for line selection)
+    if (typeof maximizePanel === 'function') {
+        maximizePanel('selectLine', false);
+    }
+    
+    // Minimize Play-by-Play panel (point is over)
+    if (typeof minimizePanel === 'function') {
+        minimizePanel('playByPlay');
+    }
+    
+    // Save data
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
 }
 
 /**
@@ -1604,6 +1673,11 @@ function enterGameScreen() {
         initGameScreen();
     }
     
+    // Move dialogs to body so they can be displayed above the game screen
+    // These dialogs are children of simpleModeScreen which gets hidden
+    ensureDialogVisible('scoreAttributionDialog');
+    ensureDialogVisible('keyPlayDialog');
+    
     // Show the game screen
     showGameScreen();
     
@@ -1685,6 +1759,25 @@ window.updateControllerUI = function(state, previousState) {
 };
 
 // =============================================================================
+// Integration with moveToNextPoint
+// =============================================================================
+
+// Hook into moveToNextPoint to handle panel UI transitions
+// This is called after a score event to prepare for the next point
+const originalMoveToNextPoint = window.moveToNextPoint;
+window.moveToNextPoint = function() {
+    // Call original if it exists
+    if (typeof originalMoveToNextPoint === 'function') {
+        originalMoveToNextPoint();
+    }
+    
+    // If game screen is visible, transition to between-points state
+    if (isGameScreenVisible()) {
+        transitionToBetweenPoints();
+    }
+};
+
+// =============================================================================
 // Exports
 // =============================================================================
 
@@ -1706,4 +1799,8 @@ window.updateGameLogStatus = updateGameLogStatus;
 window.updatePlayByPlayPanelState = updatePlayByPlayPanelState;
 window.showGameEventsModal = showGameEventsModal;
 window.hideGameEventsModal = hideGameEventsModal;
+
+// Between-points transition
+window.transitionToBetweenPoints = transitionToBetweenPoints;
+window.ensureDialogVisible = ensureDialogVisible;
 
