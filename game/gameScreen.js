@@ -218,9 +218,10 @@ function createRoleButtonsPanel() {
 
 /**
  * Create the Play-by-Play panel content
- * Two layouts:
+ * Three layout modes (based on panel height):
  * - Expanded (vertical): Large buttons stacked vertically, like legacy Simple Mode
- * - Compact (horizontal): Single row with smaller buttons
+ * - Medium: Score buttons row + Key Play with action buttons row
+ * - Compact (horizontal): Single row with all buttons
  * @returns {HTMLElement}
  */
 function createPlayByPlayContent() {
@@ -228,7 +229,7 @@ function createPlayByPlayContent() {
     content.className = 'pbp-panel-content layout-compact';
     
     content.innerHTML = `
-        <div class="pbp-buttons-container">
+        <div class="pbp-score-row">
             <button id="pbpWeScoreBtn" class="pbp-btn pbp-btn-score pbp-btn-us" title="We Score">
                 <i class="fas fa-plus-circle"></i>
                 <span class="pbp-btn-label">We Score</span>
@@ -237,26 +238,26 @@ function createPlayByPlayContent() {
                 <i class="fas fa-minus-circle"></i>
                 <span class="pbp-btn-label">They Score</span>
             </button>
+        </div>
+        <div class="pbp-secondary-row">
             <button id="pbpKeyPlayBtn" class="pbp-btn pbp-btn-secondary" title="Key Play">
                 <i class="fas fa-star"></i>
                 <span class="pbp-btn-label">Key Play</span>
             </button>
-            <button id="pbpMoreBtn" class="pbp-btn pbp-btn-more" title="More Options">
-                <i class="fas fa-ellipsis-h"></i>
-            </button>
-        </div>
-        <div class="pbp-expanded-row" id="pbpExpandedRow">
             <button id="pbpUndoBtn" class="pbp-btn pbp-btn-action" title="Undo">
                 <i class="fas fa-undo"></i>
-                <span>Undo</span>
+                <span class="pbp-btn-label">Undo</span>
             </button>
             <button id="pbpSubPlayersBtn" class="pbp-btn pbp-btn-action" title="Sub Players">
                 <i class="fas fa-exchange-alt"></i>
-                <span>Sub</span>
+                <span class="pbp-btn-label">Sub</span>
             </button>
             <button id="pbpGameEventsBtn" class="pbp-btn pbp-btn-action" title="Game Events">
                 <i class="fas fa-flag"></i>
-                <span>Events</span>
+                <span class="pbp-btn-label">Events</span>
+            </button>
+            <button id="pbpMoreBtn" class="pbp-btn pbp-btn-more" title="More Options">
+                <i class="fas fa-ellipsis-h"></i>
             </button>
         </div>
     `;
@@ -686,15 +687,16 @@ function wirePlayByPlayEvents() {
 }
 
 /**
- * Toggle the expanded row visibility
+ * Toggle the action buttons visibility in compact mode
+ * In compact mode, the "..." button shows/hides the action buttons
  */
 function togglePbpExpandedRow() {
-    const expandedRow = document.getElementById('pbpExpandedRow');
+    const content = document.querySelector('.pbp-panel-content');
     const moreBtn = document.getElementById('pbpMoreBtn');
     
-    if (expandedRow) {
+    if (content) {
         pbpExpandedRowVisible = !pbpExpandedRowVisible;
-        expandedRow.classList.toggle('visible', pbpExpandedRowVisible);
+        content.classList.toggle('show-actions', pbpExpandedRowVisible);
     }
     
     if (moreBtn) {
@@ -712,7 +714,7 @@ function togglePbpExpandedRow() {
  */
 function handlePbpWeScore() {
     // Check if user has Active Coach role
-    if (!canEditPlayByPlay()) {
+    if (!canEditPlayByPlayPanel()) {
         if (typeof showControllerToast === 'function') {
             showControllerToast('You need Play-by-Play control to record scores', 'warning');
         }
@@ -742,7 +744,7 @@ function handlePbpWeScore() {
  */
 function handlePbpTheyScore() {
     // Check if user has Active Coach role
-    if (!canEditPlayByPlay()) {
+    if (!canEditPlayByPlayPanel()) {
         if (typeof showControllerToast === 'function') {
             showControllerToast('You need Play-by-Play control to record scores', 'warning');
         }
@@ -775,7 +777,7 @@ function handlePbpTheyScore() {
  */
 function handlePbpKeyPlay() {
     // Check if user has Active Coach role
-    if (!canEditPlayByPlay()) {
+    if (!canEditPlayByPlayPanel()) {
         if (typeof showControllerToast === 'function') {
             showControllerToast('You need Play-by-Play control to record key plays', 'warning');
         }
@@ -795,7 +797,7 @@ function handlePbpKeyPlay() {
  */
 function handlePbpUndo() {
     // Check if user has Active Coach role
-    if (!canEditPlayByPlay()) {
+    if (!canEditPlayByPlayPanel()) {
         if (typeof showControllerToast === 'function') {
             showControllerToast('You need Play-by-Play control to undo', 'warning');
         }
@@ -816,7 +818,7 @@ function handlePbpUndo() {
  */
 function handlePbpSubPlayers() {
     // Check if user has Active Coach role
-    if (!canEditPlayByPlay()) {
+    if (!canEditPlayByPlayPanel()) {
         if (typeof showControllerToast === 'function') {
             showControllerToast('You need Play-by-Play control to sub players', 'warning');
         }
@@ -835,7 +837,7 @@ function handlePbpSubPlayers() {
  */
 function handlePbpGameEvents() {
     // Check if user has Active Coach role
-    if (!canEditPlayByPlay()) {
+    if (!canEditPlayByPlayPanel()) {
         if (typeof showControllerToast === 'function') {
             showControllerToast('You need Play-by-Play control to manage game events', 'warning');
         }
@@ -847,12 +849,19 @@ function handlePbpGameEvents() {
 
 /**
  * Check if current user can edit play-by-play
+ * Uses the global canEditPlayByPlay from controllerState.js if available
  * @returns {boolean}
  */
-function canEditPlayByPlay() {
+function canEditPlayByPlayPanel() {
+    // Use the global canEditPlayByPlay from controllerState.js
+    if (typeof window.canEditPlayByPlay === 'function') {
+        return window.canEditPlayByPlay();
+    }
+    // Fallback: check if we have Active Coach role
     if (typeof getMyControllerRole === 'function') {
         const role = getMyControllerRole();
-        return role === 'activeCoach';
+        // Note: role could be 'activeCoach', 'lineCoach', or 'both'
+        return role === 'activeCoach' || role === 'both';
     }
     // If controller system not available, allow (offline mode)
     return true;
@@ -1056,7 +1065,7 @@ function updatePlayByPlayPanelState() {
     const panel = document.getElementById('panel-playByPlay');
     if (!panel) return;
     
-    const hasActiveCoachRole = canEditPlayByPlay();
+    const hasActiveCoachRole = canEditPlayByPlayPanel();
     
     // Disable panel visually if not Active Coach (but don't block pointer events on whole panel)
     panel.classList.toggle('role-disabled', !hasActiveCoachRole);
@@ -1074,8 +1083,10 @@ function updatePlayByPlayPanelState() {
 
 /**
  * Update Play-by-Play panel layout based on available height
- * - Expanded: vertical layout with large buttons (when panel is tall)
- * - Compact: horizontal single-line layout (when panel is short)
+ * Three layout modes:
+ * - Expanded (>250px): vertical layout with large buttons (like legacy Simple Mode)
+ * - Medium (120-250px): two rows (score buttons + secondary row)
+ * - Compact (<120px): single row
  */
 function updatePlayByPlayLayout() {
     const panel = document.getElementById('panel-playByPlay');
@@ -1088,16 +1099,18 @@ function updatePlayByPlayLayout() {
     const titleBarHeight = titleBar ? titleBar.getBoundingClientRect().height : 36;
     const contentHeight = panelRect.height - titleBarHeight;
     
-    // Threshold for switching layouts:
-    // - Below 120px content: compact (single row)
-    // - Above 200px content: expanded (vertical layout like legacy Simple Mode)
-    const EXPANDED_THRESHOLD = 200;
+    // Thresholds for switching layouts
+    const EXPANDED_THRESHOLD = 250;  // Above this: expanded vertical layout
+    const MEDIUM_THRESHOLD = 120;    // Above this: two-row layout
+    
+    // Remove all layout classes first
+    content.classList.remove('layout-expanded', 'layout-medium', 'layout-compact');
     
     if (contentHeight >= EXPANDED_THRESHOLD) {
         content.classList.add('layout-expanded');
-        content.classList.remove('layout-compact');
+    } else if (contentHeight >= MEDIUM_THRESHOLD) {
+        content.classList.add('layout-medium');
     } else {
-        content.classList.remove('layout-expanded');
         content.classList.add('layout-compact');
     }
 }
