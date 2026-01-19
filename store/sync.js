@@ -575,6 +575,13 @@ async function syncTeamToCloud(team) {
         iconUrl: team.iconUrl || null
     };
     
+    console.log('📤 Queueing team sync:', {
+        id: teamData.id,
+        name: teamData.name,
+        teamSymbol: teamData.teamSymbol,
+        iconUrl: teamData.iconUrl ? `${teamData.iconUrl.substring(0, 50)}... (${teamData.iconUrl.length} chars)` : null
+    });
+    
     // Queue for sync
     addToSyncQueue('team', 'update', team.id, teamData);
     
@@ -978,7 +985,10 @@ async function syncUserTeams() {
             
             if (localTeamIndex === -1) {
                 // Team doesn't exist locally - create it
-                console.log(`📥 Downloading team: ${serverTeam.name} (${serverTeam.id})`);
+                console.log(`📥 Downloading team: ${serverTeam.name} (${serverTeam.id})`, {
+                    teamSymbol: serverTeam.teamSymbol,
+                    iconUrl: serverTeam.iconUrl ? `${serverTeam.iconUrl.substring(0, 50)}...` : null
+                });
                 
                 // Create a new Team object
                 localTeam = new Team(serverTeam.name, [], serverTeam.id);
@@ -1006,6 +1016,14 @@ async function syncUserTeams() {
                 const serverUpdated = new Date(serverTeam.updatedAt || 0);
                 const localUpdated = new Date(localTeam.updatedAt || 0);
                 
+                // Debug: Log what we received from server
+                console.log(`📥 Server team data for ${serverTeam.name}:`, {
+                    teamSymbol: serverTeam.teamSymbol,
+                    iconUrl: serverTeam.iconUrl ? `${serverTeam.iconUrl.substring(0, 50)}...` : null,
+                    serverUpdated: serverTeam.updatedAt,
+                    localUpdated: localTeam.updatedAt
+                });
+                
                 if (serverUpdated > localUpdated) {
                     console.log(`🔄 Updating team: ${serverTeam.name} (server is newer)`);
                     
@@ -1025,6 +1043,8 @@ async function syncUserTeams() {
                     }
                     
                     updatedCount++;
+                } else {
+                    console.log(`⏭️ Skipping team ${serverTeam.name}: local is same or newer`);
                 }
             }
             

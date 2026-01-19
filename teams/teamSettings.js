@@ -872,7 +872,14 @@ function saveTeamIdentity() {
     
     // Sync team to cloud (includes teamSymbol and iconUrl)
     if (typeof syncTeamToCloud === 'function' && currentTeam.id) {
+        console.log('🔄 Syncing team identity to cloud:', {
+            id: currentTeam.id,
+            teamSymbol: currentTeam.teamSymbol,
+            iconUrl: currentTeam.iconUrl ? `${currentTeam.iconUrl.substring(0, 50)}...` : null
+        });
         syncTeamToCloud(currentTeam);
+    } else {
+        console.warn('⚠️ Cannot sync team: syncTeamToCloud=', typeof syncTeamToCloud, 'teamId=', currentTeam?.id);
     }
     
     // Update header if visible
