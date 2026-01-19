@@ -231,19 +231,20 @@ function createPlayByPlayContent() {
     // Structure: 
     // - Main row: We Score, They Score, Key Play (Key Play hidden in compact via CSS)
     // - Action row: Undo, Sub, Events, More (hidden in expanded/medium via CSS)
+    // Note: Score button labels use separate spans for wrapping in "full" layout
     content.innerHTML = `
         <div class="pbp-main-buttons">
             <button id="pbpWeScoreBtn" class="pbp-btn pbp-btn-score pbp-btn-us" title="We Score">
                 <i class="fas fa-plus-circle"></i>
-                <span class="pbp-btn-label">We Score</span>
+                <span class="pbp-btn-label"><span class="pbp-label-word">We</span> <span class="pbp-label-word">Score</span></span>
             </button>
             <button id="pbpTheyScoreBtn" class="pbp-btn pbp-btn-score pbp-btn-them" title="They Score">
                 <i class="fas fa-minus-circle"></i>
-                <span class="pbp-btn-label">They Score</span>
+                <span class="pbp-btn-label"><span class="pbp-label-word">They</span> <span class="pbp-label-word">Score</span></span>
             </button>
             <button id="pbpKeyPlayBtn" class="pbp-btn pbp-btn-keyplay" title="Key Play">
                 <i class="fas fa-star"></i>
-                <span class="pbp-btn-label">Key Play</span>
+                <span class="pbp-btn-label"><span class="pbp-label-word">Key</span> <span class="pbp-label-word">Play</span></span>
             </button>
         </div>
         <div class="pbp-action-buttons">
@@ -1092,9 +1093,10 @@ function updatePlayByPlayPanelState() {
 
 /**
  * Update Play-by-Play panel layout based on available height
- * Three layout modes:
- * - Expanded (>250px): vertical layout with large buttons (like legacy Simple Mode)
- * - Medium (120-250px): two rows (score buttons + secondary row)
+ * Four layout modes:
+ * - Full (>500px): square buttons with wrapped text, spread vertically
+ * - Expanded (350-500px): vertical layout with wide horizontal buttons
+ * - Medium (120-350px): two rows (score buttons + secondary row)
  * - Compact (<120px): single row
  */
 function updatePlayByPlayLayout() {
@@ -1109,14 +1111,16 @@ function updatePlayByPlayLayout() {
     const contentHeight = panelRect.height - titleBarHeight;
     
     // Thresholds for switching layouts (content height, excludes title bar)
-    // Expanded needs ~350px+ for 3 large buttons stacked + action row
+    const FULL_THRESHOLD = 500;      // Above this: full layout with square buttons
     const EXPANDED_THRESHOLD = 350;  // Above this: expanded vertical layout
     const MEDIUM_THRESHOLD = 120;    // Above this: two-row layout
     
     // Remove all layout classes first
-    content.classList.remove('layout-expanded', 'layout-medium', 'layout-compact');
+    content.classList.remove('layout-full', 'layout-expanded', 'layout-medium', 'layout-compact');
     
-    if (contentHeight >= EXPANDED_THRESHOLD) {
+    if (contentHeight >= FULL_THRESHOLD) {
+        content.classList.add('layout-full');
+    } else if (contentHeight >= EXPANDED_THRESHOLD) {
         content.classList.add('layout-expanded');
     } else if (contentHeight >= MEDIUM_THRESHOLD) {
         content.classList.add('layout-medium');
