@@ -329,7 +329,7 @@ function updateLocalControllerState(data) {
     };
     
     // Check if my handoff request was resolved (I was the requester)
-    const myUserId = getCurrentUserId();
+    // Note: myUserId already declared above
     const wasMyRequest = previousState.pendingHandoff?.requesterId === myUserId;
     const handoffGone = !controllerState.pendingHandoff;
     const requestedRole = previousState.pendingHandoff?.role;
@@ -731,6 +731,11 @@ function updateControllerUI(state, previousState) {
     if (state.myRole !== previousState?.myRole) {
         console.log(`🎮 Role changed: ${previousState?.myRole || 'none'} → ${state.myRole || 'none'}`);
     }
+    
+    // Update Play-by-Play panel state when roles change
+    if (typeof window.updatePlayByPlayPanelState === 'function') {
+        window.updatePlayByPlayPanelState();
+    }
 }
 
 /**
@@ -747,7 +752,7 @@ function updateRoleButton(button, holderSpan, roleHolder, myUserId, iHaveRole, i
     button.classList.remove('has-role', 'other-has-role', 'pending-handoff');
     
     if (iHaveRole) {
-        // I have this role
+        // I explicitly have this role
         button.classList.add('has-role');
         holderSpan.textContent = 'You';
     } else if (isPending) {
@@ -759,8 +764,10 @@ function updateRoleButton(button, holderSpan, roleHolder, myUserId, iHaveRole, i
         button.classList.add('other-has-role');
         holderSpan.textContent = roleHolder.displayName || 'Someone';
     } else {
-        // Role is available
-        holderSpan.textContent = 'Available';
+        // Role is available (unclaimed) - the current user has implicit access
+        // Show as "You" with green styling since no one needs to claim it
+        button.classList.add('has-role');
+        holderSpan.textContent = 'You';
     }
 }
 

@@ -677,8 +677,8 @@ body.game-screen-active #controllerRoleButtons {
    Play-by-Play Panel Content - Layout Modes
    Three modes based on panel height:
    - Expanded (>250px): Vertical layout like legacy Simple Mode
-   - Medium (120-250px): Two rows (score buttons + secondary buttons)
-   - Compact (<120px): Single row with all buttons
+   - Medium (120-250px): We Score | They Score | Key Play row, then Undo | Sub | Events
+   - Compact (<120px): Single compact row with "..." to expand
    ============================================================================= */
 
 .pbp-panel-content {
@@ -688,96 +688,111 @@ body.game-screen-active #controllerRoleButtons {
     height: 100%;
 }
 
-/* Score row - always contains We Score and They Score */
-.pbp-score-row {
+/* Main buttons row - We Score, They Score, Key Play */
+.pbp-main-buttons {
     display: flex;
     gap: 6px;
     flex: 1;
     min-height: 0;
 }
 
-/* Secondary row - contains Key Play, Undo, Sub, Events, More */
-.pbp-secondary-row {
+/* Action buttons row - Undo, Sub, Events, More */
+.pbp-action-buttons {
     display: flex;
     gap: 6px;
     flex-shrink: 0;
 }
 
 /* =============================================================================
-   COMPACT LAYOUT (single row - all buttons in one line)
+   COMPACT LAYOUT (single row - minimal height)
+   All buttons in one row, action buttons hidden behind "..." 
    Used when panel height < 120px
    ============================================================================= */
 
 .pbp-panel-content.layout-compact {
     flex-direction: row;
     align-items: stretch;
+    gap: 4px;
 }
 
-.pbp-panel-content.layout-compact .pbp-score-row {
-    flex: 2;
+.pbp-panel-content.layout-compact .pbp-main-buttons {
+    flex: 1;
+    gap: 4px;
 }
 
-.pbp-panel-content.layout-compact .pbp-secondary-row {
+.pbp-panel-content.layout-compact .pbp-action-buttons {
+    flex: 0 0 auto;
+    gap: 4px;
+}
+
+/* Hide Key Play in main row for compact (it's squeezed) - wait, we want it */
+/* Actually show Key Play but make it smaller */
+.pbp-panel-content.layout-compact .pbp-btn-keyplay {
     flex: 0 0 auto;
 }
 
-/* Hide action buttons in compact mode (shown via "..." toggle) */
+/* Hide action buttons in compact mode */
 .pbp-panel-content.layout-compact .pbp-btn-action {
     display: none;
 }
 
-/* Show action buttons when toggled */
-.pbp-panel-content.layout-compact.show-actions .pbp-btn-action {
+/* Show "more" button in compact mode */
+.pbp-panel-content.layout-compact .pbp-btn-more {
     display: flex;
 }
 
-/* Hide "more" button when actions are visible */
-.pbp-panel-content.layout-compact.show-actions .pbp-btn-more {
-    display: none;
-}
-
-/* Labels hidden by default in compact */
+/* Labels - show text when there's room */
 .pbp-panel-content.layout-compact .pbp-btn-label {
     display: none;
 }
 
-/* Show labels on wider screens */
-@media (min-width: 400px) {
+@media (min-width: 380px) {
     .pbp-panel-content.layout-compact .pbp-btn-score .pbp-btn-label {
         display: inline;
     }
 }
 
-@media (min-width: 500px) {
-    .pbp-panel-content.layout-compact .pbp-btn-secondary .pbp-btn-label {
+@media (min-width: 480px) {
+    .pbp-panel-content.layout-compact .pbp-btn-keyplay .pbp-btn-label {
         display: inline;
     }
 }
 
 /* =============================================================================
    MEDIUM LAYOUT (two rows)
+   Row 1: We Score | They Score | Key Play (evenly spaced)
+   Row 2: Undo | Sub | Events
    Used when panel height 120-250px
    ============================================================================= */
 
 .pbp-panel-content.layout-medium {
     flex-direction: column;
+    gap: 8px;
 }
 
-.pbp-panel-content.layout-medium .pbp-score-row {
+.pbp-panel-content.layout-medium .pbp-main-buttons {
+    flex: 1;
+    gap: 8px;
+}
+
+/* All three main buttons share space equally */
+.pbp-panel-content.layout-medium .pbp-main-buttons .pbp-btn {
     flex: 1;
 }
 
-.pbp-panel-content.layout-medium .pbp-secondary-row {
+/* Action buttons row */
+.pbp-panel-content.layout-medium .pbp-action-buttons {
     flex: 0 0 auto;
+    gap: 8px;
 }
 
-/* Show all buttons in secondary row */
+/* Show action buttons in medium layout */
 .pbp-panel-content.layout-medium .pbp-btn-action {
     display: flex;
     flex: 1;
 }
 
-/* Hide "more" button in medium mode - all buttons visible */
+/* Hide "more" button in medium mode */
 .pbp-panel-content.layout-medium .pbp-btn-more {
     display: none;
 }
@@ -787,7 +802,7 @@ body.game-screen-active #controllerRoleButtons {
     display: inline;
 }
 
-/* Hide labels on narrower screens */
+/* Hide action labels on narrow screens */
 @media (max-width: 400px) {
     .pbp-panel-content.layout-medium .pbp-btn-action .pbp-btn-label {
         display: none;
@@ -795,7 +810,9 @@ body.game-screen-active #controllerRoleButtons {
 }
 
 /* =============================================================================
-   EXPANDED LAYOUT (vertical, large buttons like legacy Simple Mode)
+   EXPANDED LAYOUT (vertical, large squarish buttons like legacy Simple Mode)
+   We Score, They Score, Key Play stacked vertically with spacing
+   Then Undo | Sub | Events on a single line below
    Used when panel height > 250px
    ============================================================================= */
 
@@ -803,32 +820,24 @@ body.game-screen-active #controllerRoleButtons {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    padding: 8px;
+    gap: 16px;
+    padding: 16px 12px;
 }
 
-.pbp-panel-content.layout-expanded .pbp-score-row {
+.pbp-panel-content.layout-expanded .pbp-main-buttons {
     flex-direction: column;
     align-items: center;
-    gap: 12px;
+    gap: 16px;
     width: 100%;
     flex: 0 0 auto;
 }
 
-.pbp-panel-content.layout-expanded .pbp-secondary-row {
-    flex-direction: row;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 8px;
-    width: 100%;
-}
-
-/* Score buttons - large, full width */
+/* Score buttons - large, squarish */
 .pbp-panel-content.layout-expanded .pbp-btn-score {
-    width: 85%;
+    width: 80%;
     max-width: 400px;
-    padding: 24px 20px;
-    font-size: 1.8rem;
+    padding: 28px 24px;
+    font-size: 2rem;
     border-radius: 16px;
     flex: 0 0 auto;
 }
@@ -841,21 +850,38 @@ body.game-screen-active #controllerRoleButtons {
     display: none; /* Hide icons in expanded mode, show text only */
 }
 
-/* Key Play button - prominent */
-.pbp-panel-content.layout-expanded .pbp-btn-secondary {
-    padding: 14px 24px;
-    font-size: 1.1rem;
+/* Key Play button - similar style but slightly smaller */
+.pbp-panel-content.layout-expanded .pbp-btn-keyplay {
+    width: 60%;
+    max-width: 280px;
+    padding: 18px 24px;
+    font-size: 1.2rem;
+    border-radius: 12px;
 }
 
-.pbp-panel-content.layout-expanded .pbp-btn-secondary .pbp-btn-label {
+.pbp-panel-content.layout-expanded .pbp-btn-keyplay .pbp-btn-label {
     display: inline;
 }
 
-/* Show action buttons in expanded layout */
+.pbp-panel-content.layout-expanded .pbp-btn-keyplay i {
+    display: none;
+}
+
+/* Action buttons row - single line */
+.pbp-panel-content.layout-expanded .pbp-action-buttons {
+    flex-direction: row;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    margin-top: 8px;
+}
+
+/* Action buttons in expanded layout */
 .pbp-panel-content.layout-expanded .pbp-btn-action {
     display: flex;
-    padding: 10px 16px;
-    font-size: 0.9rem;
+    padding: 12px 18px;
+    font-size: 0.95rem;
+    flex: 0 0 auto;
 }
 
 .pbp-panel-content.layout-expanded .pbp-btn-action .pbp-btn-label {
@@ -923,13 +949,13 @@ body.game-screen-active #controllerRoleButtons {
 }
 
 /* Key Play button - blue */
-.pbp-btn-secondary {
+.pbp-btn-keyplay {
     background: linear-gradient(135deg, #2196F3 0%, #1E88E5 100%);
     color: #fff;
     box-shadow: 0 2px 6px rgba(33, 150, 243, 0.3);
 }
 
-.pbp-btn-secondary:hover:not(:disabled) {
+.pbp-btn-keyplay:hover:not(:disabled) {
     background: linear-gradient(135deg, #1E88E5 0%, #1976D2 100%);
 }
 
@@ -1110,7 +1136,7 @@ body.game-screen-active #controllerRoleButtons {
         width: 90%;
     }
     
-    .pbp-panel-content.layout-expanded .pbp-btn-secondary {
+    .pbp-panel-content.layout-expanded .pbp-btn-keyplay {
         padding: 12px 16px;
         font-size: 1rem;
     }
@@ -1130,7 +1156,7 @@ body.game-screen-active #controllerRoleButtons {
         padding: 8px 6px;
     }
     
-    .pbp-btn-secondary {
+    .pbp-btn-keyplay {
         padding: 8px 10px;
     }
     

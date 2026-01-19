@@ -220,16 +220,19 @@ function createRoleButtonsPanel() {
  * Create the Play-by-Play panel content
  * Three layout modes (based on panel height):
  * - Expanded (vertical): Large buttons stacked vertically, like legacy Simple Mode
- * - Medium: Score buttons row + Key Play with action buttons row
- * - Compact (horizontal): Single row with all buttons
+ * - Medium: We Score | They Score | Key Play row, then Undo | Sub | Events row
+ * - Compact (horizontal): Single row with "..." to expand
  * @returns {HTMLElement}
  */
 function createPlayByPlayContent() {
     const content = document.createElement('div');
     content.className = 'pbp-panel-content layout-compact';
     
+    // Structure: 
+    // - Main row: We Score, They Score, Key Play (Key Play hidden in compact via CSS)
+    // - Action row: Undo, Sub, Events, More (hidden in expanded/medium via CSS)
     content.innerHTML = `
-        <div class="pbp-score-row">
+        <div class="pbp-main-buttons">
             <button id="pbpWeScoreBtn" class="pbp-btn pbp-btn-score pbp-btn-us" title="We Score">
                 <i class="fas fa-plus-circle"></i>
                 <span class="pbp-btn-label">We Score</span>
@@ -238,12 +241,12 @@ function createPlayByPlayContent() {
                 <i class="fas fa-minus-circle"></i>
                 <span class="pbp-btn-label">They Score</span>
             </button>
-        </div>
-        <div class="pbp-secondary-row">
-            <button id="pbpKeyPlayBtn" class="pbp-btn pbp-btn-secondary" title="Key Play">
+            <button id="pbpKeyPlayBtn" class="pbp-btn pbp-btn-keyplay" title="Key Play">
                 <i class="fas fa-star"></i>
                 <span class="pbp-btn-label">Key Play</span>
             </button>
+        </div>
+        <div class="pbp-action-buttons">
             <button id="pbpUndoBtn" class="pbp-btn pbp-btn-action" title="Undo">
                 <i class="fas fa-undo"></i>
                 <span class="pbp-btn-label">Undo</span>
@@ -687,24 +690,30 @@ function wirePlayByPlayEvents() {
 }
 
 /**
- * Toggle the action buttons visibility in compact mode
- * In compact mode, the "..." button shows/hides the action buttons
+ * Toggle the Play-by-Play panel to medium layout when "..." is clicked
+ * This expands the panel to show all action buttons
  */
 function togglePbpExpandedRow() {
-    const content = document.querySelector('.pbp-panel-content');
-    const moreBtn = document.getElementById('pbpMoreBtn');
+    // Expand the Play-by-Play panel to medium layout height
+    // This uses the panelSystem API to resize the panel
+    const panel = document.querySelector('.panel-playByPlay');
+    if (!panel) return;
     
-    if (content) {
-        pbpExpandedRowVisible = !pbpExpandedRowVisible;
-        content.classList.toggle('show-actions', pbpExpandedRowVisible);
-    }
+    const currentHeight = panel.getBoundingClientRect().height;
+    const MEDIUM_MIN_HEIGHT = 150; // Enough for two rows of buttons
     
-    if (moreBtn) {
-        moreBtn.classList.toggle('active', pbpExpandedRowVisible);
-        const icon = moreBtn.querySelector('i');
-        if (icon) {
-            icon.className = pbpExpandedRowVisible ? 'fas fa-chevron-up' : 'fas fa-ellipsis-h';
+    if (currentHeight < MEDIUM_MIN_HEIGHT) {
+        // Expand to medium height
+        panel.style.height = `${MEDIUM_MIN_HEIGHT}px`;
+        panel.style.flex = '0 0 auto';
+        
+        // Try to use panelSystem API if available
+        if (typeof window.setPanelState === 'function') {
+            window.setPanelState('playByPlay', { height: MEDIUM_MIN_HEIGHT, expandedHeight: MEDIUM_MIN_HEIGHT });
         }
+        
+        // Trigger layout update
+        updatePlayByPlayLayout();
     }
 }
 
