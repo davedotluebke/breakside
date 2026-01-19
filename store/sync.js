@@ -1024,6 +1024,12 @@ async function syncUserTeams() {
                     localUpdated: localTeam.updatedAt
                 });
                 
+                // Check if server has identity fields that local is missing
+                const localMissingIdentity = (
+                    (!localTeam.teamSymbol && serverTeam.teamSymbol) ||
+                    (!localTeam.iconUrl && serverTeam.iconUrl)
+                );
+                
                 if (serverUpdated > localUpdated) {
                     console.log(`🔄 Updating team: ${serverTeam.name} (server is newer)`);
                     
@@ -1040,6 +1046,18 @@ async function syncUserTeams() {
                     // Update roster if provided
                     if (serverTeam.teamRoster && serverTeam.teamRoster.length > 0) {
                         localTeam.teamRoster = serverTeam.teamRoster.map(p => deserializePlayer(p));
+                    }
+                    
+                    updatedCount++;
+                } else if (localMissingIdentity) {
+                    // Timestamps equal/local newer, but server has identity fields we're missing
+                    console.log(`🔄 Updating team: ${serverTeam.name} (filling missing identity fields)`);
+                    
+                    if (!localTeam.teamSymbol && serverTeam.teamSymbol) {
+                        localTeam.teamSymbol = serverTeam.teamSymbol;
+                    }
+                    if (!localTeam.iconUrl && serverTeam.iconUrl) {
+                        localTeam.iconUrl = serverTeam.iconUrl;
                     }
                     
                     updatedCount++;
