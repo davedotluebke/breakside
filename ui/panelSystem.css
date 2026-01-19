@@ -732,15 +732,26 @@ body.game-screen-active #controllerRoleButtons {
     gap: 4px;
 }
 
+/* All main buttons share space equally */
+.pbp-panel-content.layout-compact .pbp-main-buttons .pbp-btn {
+    flex: 1;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+/* Hide icons in compact layout - show text only */
+.pbp-panel-content.layout-compact .pbp-main-buttons .pbp-btn i {
+    display: none;
+}
+
+/* Labels always visible in compact */
+.pbp-panel-content.layout-compact .pbp-btn-label {
+    display: inline;
+}
+
 .pbp-panel-content.layout-compact .pbp-action-buttons {
     flex: 0 0 auto;
     gap: 4px;
-}
-
-/* Hide Key Play in main row for compact (it's squeezed) - wait, we want it */
-/* Actually show Key Play but make it smaller */
-.pbp-panel-content.layout-compact .pbp-btn-keyplay {
-    flex: 0 0 auto;
 }
 
 /* Hide action buttons in compact mode */
@@ -753,20 +764,11 @@ body.game-screen-active #controllerRoleButtons {
     display: flex;
 }
 
-/* Labels - show text when there's room */
-.pbp-panel-content.layout-compact .pbp-btn-label {
-    display: none;
-}
-
-@media (min-width: 380px) {
-    .pbp-panel-content.layout-compact .pbp-btn-score .pbp-btn-label {
-        display: inline;
-    }
-}
-
-@media (min-width: 480px) {
-    .pbp-panel-content.layout-compact .pbp-btn-keyplay .pbp-btn-label {
-        display: inline;
+/* On very narrow screens, abbreviate text */
+@media (max-width: 340px) {
+    .pbp-panel-content.layout-compact .pbp-main-buttons .pbp-btn {
+        font-size: 0.8rem;
+        padding: 6px 4px;
     }
 }
 
@@ -1349,13 +1351,7 @@ body.game-screen-active #controllerRoleButtons {
     }
 }
 
-/* Hide text labels on very small screens, show icons only */
-@media (max-width: 340px) {
-    .pbp-panel-content.layout-compact .pbp-btn-label,
-    .pbp-panel-content.layout-medium .pbp-btn-label {
-        display: none !important;
-    }
-}
+/* Very small screens - handled by layout-specific media queries above */
 
 /* =============================================================================
    Select Next Line Panel (resizable)
