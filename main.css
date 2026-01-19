@@ -3087,6 +3087,18 @@ body.next-line-mode #selectNextLineBtn {
     font-weight: 500;
 }
 
+/* Role is available/unclaimed - grey, claimable */
+.controller-sub-header .role-btn.role-available {
+    background: linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%);
+    border-color: #999;
+    color: #666;
+}
+
+.controller-sub-header .role-btn.role-available .role-holder {
+    color: #888;
+    font-weight: 400;
+}
+
 /* Pending handoff request animation */
 .controller-sub-header .role-btn.pending-handoff {
     animation: pendingPulse 1.5s infinite;

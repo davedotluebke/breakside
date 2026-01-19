@@ -1510,7 +1510,7 @@ function updateGameScreenRoleButtons(state) {
     
     // Update Active Coach button
     const iAmActiveCoach = state.activeCoach?.userId === myUserId;
-    activeBtn.classList.remove('has-role', 'other-has-role', 'pending-handoff');
+    activeBtn.classList.remove('has-role', 'other-has-role', 'pending-handoff', 'role-available');
     
     if (iAmActiveCoach) {
         // I explicitly have this role
@@ -1525,14 +1525,14 @@ function updateGameScreenRoleButtons(state) {
         activeBtn.classList.add('other-has-role');
         if (activeHolder) activeHolder.textContent = state.activeCoach.displayName || 'Someone';
     } else {
-        // Role is unclaimed - user has implicit access, show as "You"
-        activeBtn.classList.add('has-role');
-        if (activeHolder) activeHolder.textContent = 'You';
+        // Role is truly unclaimed (rare - only after timeout)
+        activeBtn.classList.add('role-available');
+        if (activeHolder) activeHolder.textContent = 'Available';
     }
     
     // Update Line Coach button
     const iAmLineCoach = state.lineCoach?.userId === myUserId;
-    lineBtn.classList.remove('has-role', 'other-has-role', 'pending-handoff');
+    lineBtn.classList.remove('has-role', 'other-has-role', 'pending-handoff', 'role-available');
     
     if (iAmLineCoach) {
         // I explicitly have this role
@@ -1547,9 +1547,9 @@ function updateGameScreenRoleButtons(state) {
         lineBtn.classList.add('other-has-role');
         if (lineHolder) lineHolder.textContent = state.lineCoach.displayName || 'Someone';
     } else {
-        // Role is unclaimed - user has implicit access, show as "You"
-        lineBtn.classList.add('has-role');
-        if (lineHolder) lineHolder.textContent = 'You';
+        // Role is truly unclaimed (rare - only after timeout)
+        lineBtn.classList.add('role-available');
+        if (lineHolder) lineHolder.textContent = 'Available';
     }
 }
 

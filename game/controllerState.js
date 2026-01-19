@@ -749,7 +749,7 @@ function updateControllerUI(state, previousState) {
  */
 function updateRoleButton(button, holderSpan, roleHolder, myUserId, iHaveRole, isPending) {
     // Reset classes
-    button.classList.remove('has-role', 'other-has-role', 'pending-handoff');
+    button.classList.remove('has-role', 'other-has-role', 'pending-handoff', 'role-available');
     
     if (iHaveRole) {
         // I explicitly have this role
@@ -764,10 +764,10 @@ function updateRoleButton(button, holderSpan, roleHolder, myUserId, iHaveRole, i
         button.classList.add('other-has-role');
         holderSpan.textContent = roleHolder.displayName || 'Someone';
     } else {
-        // Role is available (unclaimed) - the current user has implicit access
-        // Show as "You" with green styling since no one needs to claim it
-        button.classList.add('has-role');
-        holderSpan.textContent = 'You';
+        // Role is truly unclaimed (rare - only after timeout)
+        // Show as available/claimable, not as "You"
+        button.classList.add('role-available');
+        holderSpan.textContent = 'Available';
     }
 }
 

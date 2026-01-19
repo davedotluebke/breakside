@@ -74,6 +74,7 @@ try:
         get_team_coaches,
         # Controller storage (in-memory)
         get_controller_state,
+        auto_assign_roles_if_unclaimed,
         claim_role,
         request_handoff,
         respond_to_handoff,
@@ -158,6 +159,7 @@ except ImportError:
         get_team_coaches,
         # Controller storage (in-memory)
         get_controller_state,
+        auto_assign_roles_if_unclaimed,
         claim_role,
         request_handoff,
         respond_to_handoff,
@@ -1011,6 +1013,9 @@ async def ping_controller(
     Should be called every 2-5 seconds while holding a role.
     Roles expire after 30 seconds without a ping.
     
+    If BOTH roles are unclaimed, auto-assigns both to this user.
+    This makes the first coach to enter a game the default holder.
+    
     Also returns current controller state and pending handoffs.
     
     Requires: Coach access to the game's team.
@@ -1018,7 +1023,12 @@ async def ping_controller(
     if not game_exists(game_id):
         raise HTTPException(status_code=404, detail="Game not found")
     
-    state = get_controller_state(game_id)
+    # Get user's display name for potential auto-assignment
+    local_user = get_user(user["id"])
+    display_name = local_user.get("displayName") if local_user else user.get("email", "Unknown")
+    
+    # Auto-assign roles if both are unclaimed (first coach to enter gets both)
+    state = auto_assign_roles_if_unclaimed(game_id, user["id"], display_name)
     
     # Ping whichever role(s) the user holds
     pinged = []

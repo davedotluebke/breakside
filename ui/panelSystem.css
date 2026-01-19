@@ -637,6 +637,18 @@ body.game-screen-active #controllerRoleButtons {
     font-weight: 500;
 }
 
+/* Role is available/unclaimed - grey, claimable */
+.role-claim-btn.role-available {
+    background: linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%);
+    border-color: #999;
+    color: #666;
+}
+
+.role-claim-btn.role-available .role-claim-holder {
+    color: #888;
+    font-weight: 400;
+}
+
 /* Pending handoff request animation */
 .role-claim-btn.pending-handoff {
     animation: pendingPulse 1.5s infinite;

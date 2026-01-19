@@ -99,6 +99,7 @@ from .invite_storage import (
 
 from .controller_storage import (
     get_controller_state,
+    auto_assign_roles_if_unclaimed,
     claim_role,
     request_handoff,
     respond_to_handoff,
@@ -192,6 +193,7 @@ __all__ = [
     "rebuild_invite_index",
     # Controller storage (in-memory)
     "get_controller_state",
+    "auto_assign_roles_if_unclaimed",
     "claim_role",
     "request_handoff",
     "respond_to_handoff",
