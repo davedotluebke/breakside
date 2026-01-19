@@ -103,13 +103,13 @@ See [PHASE4_CONTROLLER_PLAN.md](PHASE4_CONTROLLER_PLAN.md) for full implementati
 
 ---
 
-### 🔄 Phase 6: Handoff UI (In Progress - Role Button Fix Needed)
+### ✅ Phase 6: Handoff UI (Complete)
 
 **Role Buttons (Sub-header):**
 - [x] "Play-by-Play" and "Next Line" buttons below header
 - [x] Role holder name displayed under role label
 - [x] Tap to claim/request role
-- [ ] **Fix role button display logic** (see below)
+- [x] Role button display logic fixed (see below)
 
 **Handoff Request Flow:**
 - [x] Toast notification for requester: "Handoff request sent..."
@@ -127,37 +127,20 @@ See [PHASE4_CONTROLLER_PLAN.md](PHASE4_CONTROLLER_PLAN.md) for full implementati
 - [x] Server provides `expiresInSeconds` for accurate client countdown
 - [x] Client polls for state changes at 2s (active) / 5s (idle)
 - [x] Handoff timeout configurable via `HANDOFF_EXPIRY_SECONDS` (server)
-- [ ] **Auto-assign roles to first coach** (see below)
+- [x] Auto-assign roles to first coach who enters game
 
----
+**Role Button Display (Fixed):**
+- Server auto-assigns both roles to first coach who pings a game
+- Client mirrors server state exactly:
+  - Green / "You" — only if `roleHolder.userId === myUserId`
+  - Orange / `<name>` — if someone else holds the role
+  - Grey / "Available" — if role is truly unclaimed (after timeout)
+- Role timeout: 30s without ping → role auto-releases (becomes claimable)
 
-#### Role Button Display Fix
-
-**Current bug:** Any coach joining a game sees green "You" buttons, assuming implicit access. Should only show green if they actually hold the role.
-
-**Correct behavior:**
-
-1. **Server: Auto-assign on game entry**
-   - When a coach first enters a game (first ping or controller fetch), server checks if roles are unclaimed
-   - If both roles are null, auto-assign both to that coach
-   - This makes the "game starter" the default holder of both roles
-
-2. **Client: Mirror server state exactly**
-   - Green / "You" — only if `roleHolder.userId === myUserId`
-   - Orange / `<name>` — if someone else holds the role
-   - Grey / "Available" — if role is truly unclaimed (rare, only after timeout)
-   - Remove the concept of "implicit access when unclaimed"
-
-3. **Role timeout behavior**
-   - When a role holder stops pinging for 30s, their role auto-releases (becomes null)
-   - Role becomes "claimable" (grey for everyone until someone claims)
-   - Does NOT auto-transfer to another coach
-
-4. **Single coach optimization** (TODO - defer until after debugging)
-   - [ ] When only one coach is on the team, OR only one coach is actively polling:
-     - Hide role buttons entirely (more room for panels)
-     - That coach has full access regardless of server state
-   - Implement AFTER handoff debugging is complete
+**Future optimization:**
+- [ ] When only one coach is on the team, OR only one coach is actively polling:
+  - Hide role buttons entirely (more room for panels)
+  - That coach has full access regardless of server state
 
 ---
 
@@ -316,11 +299,11 @@ Replace current screen-based navigation with a **panel-based layout** for all in
   - Fetches, resizes to 256×256 max, returns as base64 data URL
   - Icon cached locally for offline use
 
-**Step 3: Role Buttons Panel** 🔄
+**Step 3: Role Buttons Panel** ✅
 - [x] Port existing role buttons from sub-header
 - [x] Ensure handoff flow still works
 - [x] Hide legacy role buttons when panel UI is active
-- [ ] Fix display logic per "Role Button Display Fix" in Phase 6 section
+- [x] Fix display logic (first coach auto-assigned, mirror server state)
 - [ ] (Future) Hide panel for single-coach case
 
 **Step 4: Game Log Panel** ✅
@@ -398,6 +381,13 @@ Replace current screen-based navigation with a **panel-based layout** for all in
   - Toast notification: "[Coach] started a game vs [Opponent]. Join?"
   - Tap to enter game screen for that game
 - [ ] Consider WebSocket for instant notifications (future enhancement)
+
+**Improve Game Discovery UI:**
+- [ ] Make it easier for coaches to find and join games in progress
+  - Clear visual indicator when a game is active for the current team
+  - Prominent "Join Game" button on roster screen
+  - List of recent/active games accessible from team view
+- [ ] Consider dedicated "Active Games" section or tab
 
 ### 👁️ Phase 7: Viewer Experience
 
