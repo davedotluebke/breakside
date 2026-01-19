@@ -774,7 +774,7 @@ body.game-screen-active #controllerRoleButtons {
    MEDIUM LAYOUT (two rows)
    Row 1: We Score | They Score | Key Play (evenly spaced)
    Row 2: Undo | Sub | Events
-   Used when panel height 120-250px
+   Used when panel height 120-350px
    ============================================================================= */
 
 .pbp-panel-content.layout-medium {
@@ -785,11 +785,19 @@ body.game-screen-active #controllerRoleButtons {
 .pbp-panel-content.layout-medium .pbp-main-buttons {
     flex: 1;
     gap: 8px;
+    min-height: 0; /* Allow shrinking */
 }
 
 /* All three main buttons share space equally */
 .pbp-panel-content.layout-medium .pbp-main-buttons .pbp-btn {
     flex: 1;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+/* Hide icons in medium layout - more room for text */
+.pbp-panel-content.layout-medium .pbp-main-buttons .pbp-btn i {
+    display: none;
 }
 
 /* Action buttons row */
@@ -812,6 +820,31 @@ body.game-screen-active #controllerRoleButtons {
 /* Labels visible in medium mode */
 .pbp-panel-content.layout-medium .pbp-btn-label {
     display: inline;
+}
+
+/* =============================================================================
+   MEDIUM-TALL LAYOUT (modifier for medium when buttons are tall)
+   Wraps text to two lines for larger font when there's vertical room
+   Applied alongside layout-medium when content height 200-350px
+   ============================================================================= */
+
+.pbp-panel-content.layout-medium-tall .pbp-main-buttons .pbp-btn {
+    font-size: 1.4rem;
+    flex-direction: column;
+    justify-content: center;
+    line-height: 1.2;
+}
+
+/* Stack the words vertically in medium-tall */
+.pbp-panel-content.layout-medium-tall .pbp-main-buttons .pbp-btn-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+}
+
+.pbp-panel-content.layout-medium-tall .pbp-main-buttons .pbp-label-word {
+    display: block;
 }
 
 /* Hide action labels on narrow screens */

@@ -1093,10 +1093,11 @@ function updatePlayByPlayPanelState() {
 
 /**
  * Update Play-by-Play panel layout based on available height
- * Four layout modes:
+ * Layout modes:
  * - Full (>500px): square buttons with wrapped text, spread vertically
  * - Expanded (350-500px): vertical layout with wide horizontal buttons
- * - Medium (120-350px): two rows (score buttons + secondary row)
+ * - Medium-tall (200-350px): two rows, tall buttons with wrapped text
+ * - Medium (120-200px): two rows, shorter buttons with single-line text
  * - Compact (<120px): single row
  */
 function updatePlayByPlayLayout() {
@@ -1111,17 +1112,20 @@ function updatePlayByPlayLayout() {
     const contentHeight = panelRect.height - titleBarHeight;
     
     // Thresholds for switching layouts (content height, excludes title bar)
-    const FULL_THRESHOLD = 500;      // Above this: full layout with square buttons
-    const EXPANDED_THRESHOLD = 350;  // Above this: expanded vertical layout
-    const MEDIUM_THRESHOLD = 120;    // Above this: two-row layout
+    const FULL_THRESHOLD = 500;         // Above this: full layout with square buttons
+    const EXPANDED_THRESHOLD = 350;     // Above this: expanded vertical layout
+    const MEDIUM_TALL_THRESHOLD = 200;  // Above this: medium with wrapped text
+    const MEDIUM_THRESHOLD = 120;       // Above this: medium with single-line text
     
     // Remove all layout classes first
-    content.classList.remove('layout-full', 'layout-expanded', 'layout-medium', 'layout-compact');
+    content.classList.remove('layout-full', 'layout-expanded', 'layout-medium', 'layout-medium-tall', 'layout-compact');
     
     if (contentHeight >= FULL_THRESHOLD) {
         content.classList.add('layout-full');
     } else if (contentHeight >= EXPANDED_THRESHOLD) {
         content.classList.add('layout-expanded');
+    } else if (contentHeight >= MEDIUM_TALL_THRESHOLD) {
+        content.classList.add('layout-medium', 'layout-medium-tall');
     } else if (contentHeight >= MEDIUM_THRESHOLD) {
         content.classList.add('layout-medium');
     } else {
