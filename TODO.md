@@ -312,13 +312,20 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [x] Remove "Use Old Screen" button when complete (no stub, real content)
 
 **Step 5: Play-by-Play Panel**
-- [ ] Responsive Simple Mode layout
-- [ ] We Score / They Score / Key Play / `...`
-- [ ] **Game Events modal** (End Game, Timeout, Half Time, Switch Sides)
-  - Triggered by button in Play-by-Play `...` menu
+- [x] Responsive Simple Mode layout
+  - Full (>500px): Large square buttons, wrapped text, evenly spaced vertically
+  - Expanded (350-500px): Wide horizontal buttons stacked vertically
+  - Medium-tall (200-350px): Two rows, tall buttons with wrapped text
+  - Medium (120-200px): Two rows, shorter buttons with single-line text
+  - Compact (<120px): Single row with `...` more button
+- [x] We Score / They Score / Key Play buttons (icons hidden, text-only)
+- [x] `...` more button expands panel to show action row
+- [x] **Game Events modal** (End Game, Timeout, Half Time, Switch Sides)
+  - Triggered by Events button in action row
   - **Timeout**: available during AND between points
   - **End Game, Half Time, Switch Sides**: only between points
   - Active Coach only
+- [ ] Wire up score buttons to existing scoring logic
 - [ ] Sub Players modal for mid-point injury subs
 - [ ] Pull dialog auto-popup (defensive point start)
 - [ ] Key Play dialog integration
