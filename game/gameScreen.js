@@ -1513,16 +1513,21 @@ function updateGameScreenRoleButtons(state) {
     activeBtn.classList.remove('has-role', 'other-has-role', 'pending-handoff');
     
     if (iAmActiveCoach) {
+        // I explicitly have this role
         activeBtn.classList.add('has-role');
         if (activeHolder) activeHolder.textContent = 'You';
     } else if (state.pendingHandoff?.role === 'activeCoach' && state.pendingHandoff?.requesterId === myUserId) {
+        // I've requested this role
         activeBtn.classList.add('pending-handoff');
         if (activeHolder) activeHolder.textContent = 'Requesting...';
     } else if (state.activeCoach) {
+        // Someone else has this role
         activeBtn.classList.add('other-has-role');
         if (activeHolder) activeHolder.textContent = state.activeCoach.displayName || 'Someone';
     } else {
-        if (activeHolder) activeHolder.textContent = 'Available';
+        // Role is unclaimed - user has implicit access, show as "You"
+        activeBtn.classList.add('has-role');
+        if (activeHolder) activeHolder.textContent = 'You';
     }
     
     // Update Line Coach button
@@ -1530,16 +1535,21 @@ function updateGameScreenRoleButtons(state) {
     lineBtn.classList.remove('has-role', 'other-has-role', 'pending-handoff');
     
     if (iAmLineCoach) {
+        // I explicitly have this role
         lineBtn.classList.add('has-role');
         if (lineHolder) lineHolder.textContent = 'You';
     } else if (state.pendingHandoff?.role === 'lineCoach' && state.pendingHandoff?.requesterId === myUserId) {
+        // I've requested this role
         lineBtn.classList.add('pending-handoff');
         if (lineHolder) lineHolder.textContent = 'Requesting...';
     } else if (state.lineCoach) {
+        // Someone else has this role
         lineBtn.classList.add('other-has-role');
         if (lineHolder) lineHolder.textContent = state.lineCoach.displayName || 'Someone';
     } else {
-        if (lineHolder) lineHolder.textContent = 'Available';
+        // Role is unclaimed - user has implicit access, show as "You"
+        lineBtn.classList.add('has-role');
+        if (lineHolder) lineHolder.textContent = 'You';
     }
 }
 
