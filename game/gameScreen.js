@@ -1681,6 +1681,14 @@ function enterGameScreen() {
     // Show the game screen
     showGameScreen();
     
+    // Un-minimize the Play-by-Play panel when a point starts
+    // (it's typically minimized between points when Select Next Line is maximized)
+    if (typeof maximizePanel === 'function' && typeof isPanelMinimized === 'function') {
+        if (isPanelMinimized('playByPlay')) {
+            maximizePanel('playByPlay', false); // false = don't minimize other panels
+        }
+    }
+    
     // Reset timer pause state when entering
     pointTimerPaused = false;
     pointPausedAt = null;
