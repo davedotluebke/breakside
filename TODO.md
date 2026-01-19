@@ -330,7 +330,7 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [ ] Pull dialog auto-popup (defensive point start)
 - [ ] Key Play dialog integration
 - [ ] Undo functionality
-- [ ] Auto-resize on point start/end
+- [x] Auto-resize on point start/end
 - [ ] Remove "Use Old Screen" button when complete
 
 **Step 6: Select Next Line Panel**
