@@ -180,51 +180,52 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [ ] Fix display logic per "Role Button Display Fix" section above
 - [ ] (Future) Hide panel entirely when single coach — defer until after handoff debugging
 
-**3. "Play-by-Play" Panel** (resizable)
-- [ ] Responsive Simple Mode layout:
+**3. "Play-by-Play" Panel** ✅ (resizable)
+- [x] Responsive Simple Mode layout:
   - **Minimum size**: Single row with "We Score", "They Score", "Key Play", `...` button
   - **Maximum size**: Full Simple Mode layout with all buttons visible
-  - `...` menu reveals: Undo, Sub Players, Timeout
+  - `...` menu reveals: Undo, Events
+- [x] Panel states:
+  - **Greyed out/disabled**: User is not Active Coach
+  - **Score buttons disabled**: When between points (no point in progress)
+  - **Auto-minimize**: When point ends
+  - **Auto-maximize**: When point starts, if user is Active Coach
+- [x] Key Play dialog still available for detailed event entry
 - [ ] **Sub Players** button opens modal dialog for mid-point injury substitutions
   - One-off player selection table (similar to line selection)
 - [ ] Pull Dialog auto-popup for Active Coach at start of defensive points
-- [ ] Panel states:
-  - **Greyed out/disabled**: User is not Active Coach, OR game is between points
-  - **Auto-minimize**: When point ends
-  - **Auto-maximize**: When point starts, if user is Active Coach
-- [ ] Key Play dialog still available for detailed event entry
 - [ ] Offense/Defense possession screens deprecated (keep code, remove from main flow)
 
-**4. "Select Next Line" Panel** (resizable)
-- [ ] Replaces the separate Before Point Screen concept
-- [ ] Panel content:
-  - Player selection table (current roster, drag/tap to select)
-  - **"Start Point (Offense/Defense)"** button appears when between points
-- [ ] Panel states:
-  - **Minimized to title bar**: No players selected yet
-  - **Minimized to title bar + player names**: Some players selected
+**4. "Select Next Line" Panel** ✅ (resizable)
+- [x] Replaces the separate Before Point Screen concept
+- [x] Panel content:
+  - Player selection table (sorted roster, time/points columns)
+  - **"Start Point (Offense/Defense)"** button with feedback colors
+- [x] Panel states:
   - **Maximized**: Full player selection table visible
-- [ ] Auto-behaviors:
+  - **Minimized**: Title bar only (compact player names layout pending)
+- [x] Auto-behaviors:
   - **Active Coach**: Auto-minimize when point starts, auto-maximize when point ends
-  - **Line Coach**: Stays maximized during points (their main job)
-  - **Both roles held**: Full access, both panels can be open during point
+  - **Line Coach**: Can edit during points (their main job)
+  - **Both roles held**: Full access
 - [x] **O/D toggle button**: Cycles between O/D, O, and D line modes
   - Auto-selects appropriate line at point end based on who scored
   - O/D line prioritized if modified during the point
+  - Single-line workflow: stays on O/D if O/D lines never modified
 - [ ] **O/D split panels** (future enhancement):
   - Creates second line selection panel
   - Retitles to "Select Next O Line" and "Select Next D Line"
-- [ ] **Between points**: Both Active Coach and Line Coach can edit lineup
-  - Toast warning about possible conflicts when both are editing
-- [ ] **During point**: Only Line Coach can edit (preparing next lineup)
+- [x] **Between points**: Both Active Coach and Line Coach can edit lineup
+- [x] **During point**: Only Line Coach can edit (preparing next lineup)
+- [ ] Conflict warning toast when both coaches edit simultaneously
 
-**5. "Game Events" Modal** (accessed from Play-by-Play panel)
-- [ ] Triggered by "Game Events" button in Play-by-Play panel (add to `...` menu or dedicated button)
-- [ ] Modal popup with buttons: End Game, Time Out, Half Time, Switch Sides
-- [ ] **Time Out**: Available during AND between points
-- [ ] **End Game, Half Time, Switch Sides**: Only available between points
-- [ ] Active Coach only
-- [ ] Half Time / Switch Sides just log events (no special behavior for now)
+**5. "Game Events" Modal** ✅ (accessed from Play-by-Play panel)
+- [x] Triggered by "Events" button in Play-by-Play action row
+- [x] Modal popup with buttons: Timeout, Half Time, Switch Sides, End Game
+- [x] **Timeout**: Available during AND between points
+- [x] **End Game, Half Time, Switch Sides**: Only available between points
+- [x] Active Coach only (buttons disabled if not Active Coach)
+- [x] Half Time / Switch Sides log events (no special behavior)
 
 **6. "Game Log" Panel** (resizable, bottom of stack)
 - [ ] Game status: Team names, opponent, current score
@@ -314,7 +315,7 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [x] Large scrollable event log
 - [x] Remove "Use Old Screen" button when complete (no stub, real content)
 
-**Step 5: Play-by-Play Panel**
+**Step 5: Play-by-Play Panel** ✅
 - [x] Responsive Simple Mode layout
   - Full (>500px): Large square buttons, wrapped text, evenly spaced vertically
   - Expanded (350-500px): Wide horizontal buttons stacked vertically
@@ -329,22 +330,39 @@ Replace current screen-based navigation with a **panel-based layout** for all in
   - **End Game, Half Time, Switch Sides**: only between points
   - Active Coach only
 - [x] Wire up score buttons to existing scoring logic
-- [ ] Sub Players modal for mid-point injury subs
-- [ ] Pull dialog auto-popup (defensive point start)
 - [x] Key Play dialog integration
 - [x] Undo functionality
 - [x] Auto-resize on point start/end
+- [x] **Point-aware button states**:
+  - Score buttons (We/They Score, Key Play) disabled between points
+  - Undo, Events, More enabled anytime if Active Coach
+- [ ] Sub Players modal for mid-point injury subs
+- [ ] Pull dialog auto-popup (defensive point start)
 - [ ] Remove "Use Old Screen" button when complete
 
-**Step 6: Select Next Line Panel**
-- [ ] Player selection table (port from Before Point Screen)
-- [ ] Start Point (Offense/Defense) button
-- [ ] Minimize to title bar / player names / full table
-- [ ] Role-based enable/disable (Active vs Line Coach)
-- [ ] Conflict warning toast when both coaches edit
-- [ ] Auto-resize behaviors
-- [ ] Remove "Use Old Screen" button when complete
+**Step 6: Select Next Line Panel** ✅
+- [x] Player selection table (ported from Before Point Screen)
+  - Sorted roster (played last point first)
+  - Gender color coding
+  - Time column with auto-update during point
+  - Point participation columns with score headers
+- [x] Start Point (Offense/Defense) button
+  - Disabled during point with "Point in progress" text
+  - Feedback colors: green (ok), red (wrong count), orange (wrong gender ratio)
+  - Desaturated feedback colors when point in progress
+- [x] Role-based enable/disable (Active vs Line Coach)
+  - Between points: Both can edit
+  - During point: Only Line Coach can edit
+  - View-only overlay for non-permitted users
 - [x] O/D toggle button (cycles O/D → O → D)
+  - Saves/loads separate line selections
+  - Auto-selects appropriate line at point end
+  - Single-line workflow supported (stays on O/D if O/D lines never modified)
+  - Timestamp only updated on actual player changes, not toggle view
+- [x] Auto-resize behaviors (maximize on point end, minimize on point start for Active Coach)
+- [ ] Minimize to title bar showing selected player names (compact layout)
+- [ ] Conflict warning toast when both coaches edit
+- [ ] Remove "Use Old Screen" button when complete
 
 **Step 7: Cleanup**
 - [ ] Remove legacy screen navigation for in-game screens
