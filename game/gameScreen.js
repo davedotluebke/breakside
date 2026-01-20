@@ -1451,8 +1451,8 @@ function handleODToggle() {
         return;
     }
     
-    // Save current selections before switching
-    savePanelSelectionsToPendingNextLine();
+    // Save current selections before switching (don't update timestamp - just viewing)
+    savePanelSelectionsToPendingNextLine(false);
     
     // Cycle to next type: od → o → d → od
     const currentType = game.pendingNextLine.activeType || 'od';
@@ -1689,7 +1689,12 @@ function getSelectedPlayersFromPanel() {
 /**
  * Save panel selections to the game's pendingNextLine
  */
-function savePanelSelectionsToPendingNextLine() {
+/**
+ * Save panel selections to pending next line
+ * @param {boolean} updateTimestamp - Whether to update the modification timestamp (default: true)
+ *   Set to false when just switching views (toggle), true when actually changing selections
+ */
+function savePanelSelectionsToPendingNextLine(updateTimestamp = true) {
     const game = typeof currentGame === 'function' ? currentGame() : null;
     if (!game || !game.pendingNextLine) return;
     
@@ -1699,8 +1704,11 @@ function savePanelSelectionsToPendingNextLine() {
     // Update the appropriate line array
     game.pendingNextLine[activeType + 'Line'] = selectedPlayers;
     
-    // Update the modification timestamp
-    game.pendingNextLine[activeType + 'LineModifiedAt'] = new Date().toISOString();
+    // Only update the modification timestamp if actual selections changed
+    // (not just viewing via toggle)
+    if (updateTimestamp) {
+        game.pendingNextLine[activeType + 'LineModifiedAt'] = new Date().toISOString();
+    }
     
     // Save (triggers sync)
     if (typeof saveAllTeamsData === 'function') {
