@@ -1470,6 +1470,11 @@ body.game-screen-active #controllerRoleButtons {
     cursor: not-allowed;
 }
 
+.select-line-start-btn.point-in-progress {
+    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+    opacity: 0.7;
+}
+
 .select-line-lines-btn {
     padding: 12px 16px;
     font-size: 0.9rem;
