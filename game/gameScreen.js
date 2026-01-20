@@ -1020,6 +1020,9 @@ function transitionToBetweenPoints() {
         minimizePanel('playByPlay');
     }
     
+    // Update Play-by-Play button states (disable scoring buttons between points)
+    updatePlayByPlayPanelState();
+    
     // Save data
     if (typeof saveAllTeamsData === 'function') {
         saveAllTeamsData();
@@ -1216,25 +1219,51 @@ function handleGameEventEndGame() {
 }
 
 /**
- * Update Play-by-Play panel state based on role
- * Buttons are enabled as long as user has Active Coach role
- * (Score buttons are used to END a point, so they should be available anytime)
+ * Update Play-by-Play panel state based on role and point status
+ * - During point: Score, Key Play, Sub buttons enabled (for Active Coach)
+ * - Between points: Score, Key Play, Sub buttons disabled
+ * - Events button always enabled (modal handles its own button states)
  */
 function updatePlayByPlayPanelState() {
     const panel = document.getElementById('panel-playByPlay');
     if (!panel) return;
     
     const hasActiveCoachRole = canEditPlayByPlayPanel();
+    const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
     
-    // Disable panel visually if not Active Coach (but don't block pointer events on whole panel)
+    // Disable panel visually if not Active Coach
     panel.classList.toggle('role-disabled', !hasActiveCoachRole);
     
-    // All buttons are enabled if user has Active Coach role
-    const allButtons = panel.querySelectorAll('.pbp-btn');
-    allButtons.forEach(btn => {
-        btn.disabled = !hasActiveCoachRole;
-        btn.classList.toggle('disabled', !hasActiveCoachRole);
+    // Point-action buttons: only enabled during a point AND with Active Coach role
+    const pointActionButtons = [
+        document.getElementById('pbpWeScoreBtn'),
+        document.getElementById('pbpTheyScoreBtn'),
+        document.getElementById('pbpKeyPlayBtn'),
+        document.getElementById('pbpSubPlayersBtn'),
+        document.getElementById('pbpUndoBtn')
+    ];
+    
+    pointActionButtons.forEach(btn => {
+        if (btn) {
+            const enabled = hasActiveCoachRole && pointInProgress;
+            btn.disabled = !enabled;
+            btn.classList.toggle('disabled', !enabled);
+        }
     });
+    
+    // Events button: enabled if Active Coach (modal handles point-specific states)
+    const eventsBtn = document.getElementById('pbpGameEventsBtn');
+    if (eventsBtn) {
+        eventsBtn.disabled = !hasActiveCoachRole;
+        eventsBtn.classList.toggle('disabled', !hasActiveCoachRole);
+    }
+    
+    // More button: enabled if Active Coach
+    const moreBtn = document.getElementById('pbpMoreBtn');
+    if (moreBtn) {
+        moreBtn.disabled = !hasActiveCoachRole;
+        moreBtn.classList.toggle('disabled', !hasActiveCoachRole);
+    }
     
     // Update panel layout based on height
     updatePlayByPlayLayout();
@@ -1731,15 +1760,6 @@ function updateStartPointButtonState() {
     
     // Check if point is in progress
     const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
-    
-    // Debug logging
-    const latestPoint = typeof getLatestPoint === 'function' ? getLatestPoint() : null;
-    console.log('📍 updateStartPointButtonState:', {
-        pointInProgress,
-        latestPointWinner: latestPoint?.winner,
-        latestPointStartTimestamp: latestPoint?.startTimestamp,
-        latestPointPossessionsLength: latestPoint?.possessions?.length
-    });
     
     // Reset all states
     btn.classList.remove('warning', 'inactive', 'point-in-progress', 
