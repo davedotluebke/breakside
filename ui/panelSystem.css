@@ -1733,9 +1733,12 @@ body.game-screen-active #controllerRoleButtons {
     padding: 8px 12px;
     font-size: 14px;
     line-height: 1.4;
-    white-space: nowrap;
+    text-align: left;
+    /* Allow wrapping to 2 lines, clip overflow beyond that */
+    white-space: normal;
     overflow: hidden;
-    text-overflow: ellipsis;
+    /* Limit to roughly 2 lines of text */
+    max-height: 2.8em;
 }
 
 /* Tappable line type link */
