@@ -1606,17 +1606,22 @@ function updateStartPointButtonState() {
     // Check if point is in progress
     const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
     
-    // Set button text
+    // Reset states
+    btn.classList.remove('warning', 'inactive', 'point-in-progress');
+    btn.style.backgroundColor = '';
+    btn.disabled = false;
+    
+    // If point is in progress, disable button and show different text
     if (pointInProgress) {
-        btn.textContent = 'Continue Point';
-    } else {
-        const startOnLabel = startOn.charAt(0).toUpperCase() + startOn.slice(1);
-        btn.textContent = `Start Point (${startOnLabel})`;
+        btn.textContent = 'Point in progress';
+        btn.classList.add('point-in-progress');
+        btn.disabled = true;
+        return; // Skip all other state checks
     }
     
-    // Reset states
-    btn.classList.remove('warning', 'inactive');
-    btn.style.backgroundColor = '';
+    // Set button text for between-points state
+    const startOnLabel = startOn.charAt(0).toUpperCase() + startOn.slice(1);
+    btn.textContent = `Start Point (${startOnLabel})`;
     
     // Check gender ratio
     const game = typeof currentGame === 'function' ? currentGame() : null;
