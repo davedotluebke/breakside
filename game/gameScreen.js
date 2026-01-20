@@ -1952,19 +1952,32 @@ function selectAppropriateLineAtPointEnd() {
         ? new Date(latestPoint.startTimestamp).getTime() 
         : 0;
     
-    // Check if O/D line was modified after the point started
+    // Get modification timestamps for all line types
     const odLineModTime = game.pendingNextLine.odLineModifiedAt
         ? new Date(game.pendingNextLine.odLineModifiedAt).getTime()
+        : 0;
+    const oLineModTime = game.pendingNextLine.oLineModifiedAt
+        ? new Date(game.pendingNextLine.oLineModifiedAt).getTime()
+        : 0;
+    const dLineModTime = game.pendingNextLine.dLineModifiedAt
+        ? new Date(game.pendingNextLine.dLineModifiedAt).getTime()
         : 0;
     
     let selectedType;
     
+    // Priority 1: If O/D line was modified DURING this point, use it
     if (odLineModTime > pointStartTime) {
-        // O/D line was modified during this point - use it
         selectedType = 'od';
         console.log('📋 Auto-selecting O/D line (modified during point)');
-    } else {
-        // Use O or D line based on who scored
+    }
+    // Priority 2: If O and D lines have NEVER been modified, stay on O/D
+    // (user is using single-line workflow)
+    else if (oLineModTime === 0 && dLineModTime === 0) {
+        selectedType = 'od';
+        console.log('📋 Staying on O/D line (O and D lines never modified - single-line workflow)');
+    }
+    // Priority 3: Use O or D line based on who scored
+    else {
         if (latestPoint.winner === 'team') {
             // Team scored - will be on defense next
             selectedType = 'd';
