@@ -1602,6 +1602,7 @@ function syncPanelSelectionsToLegacy(selectedPlayers) {
 
 /**
  * Update the Start Point button state (text and warning states)
+ * Shows feedback colors (desaturated when point in progress)
  */
 function updateStartPointButtonState() {
     const btn = document.getElementById('panelStartPointBtn');
@@ -1613,29 +1614,12 @@ function updateStartPointButtonState() {
     // Check if point is in progress
     const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
     
-    // Reset states
-    btn.classList.remove('warning', 'inactive', 'point-in-progress');
-    btn.style.backgroundColor = '';
+    // Reset all states
+    btn.classList.remove('warning', 'inactive', 'point-in-progress', 
+        'feedback-ok', 'feedback-count-warning', 'feedback-gender-warning');
     btn.disabled = false;
     
-    // If point is in progress, disable button and show different text
-    if (pointInProgress) {
-        btn.textContent = 'Point in progress';
-        btn.classList.add('point-in-progress');
-        btn.disabled = true;
-        return;
-    }
-    
-    // Determine starting position
-    const startOn = typeof determineStartingPosition === 'function' 
-        ? determineStartingPosition() 
-        : 'offense';
-    
-    // Set button text
-    const startOnLabel = startOn.charAt(0).toUpperCase() + startOn.slice(1);
-    btn.textContent = `Start Point (${startOnLabel})`;
-    
-    // Check gender ratio
+    // Calculate feedback state regardless of point status
     const game = typeof currentGame === 'function' ? currentGame() : null;
     let genderRatioWarning = false;
     let startingRatioRequired = false;
@@ -1648,16 +1632,44 @@ function updateStartPointButtonState() {
         }
     }
     
-    // Apply button states
+    // Determine feedback class
+    let feedbackClass = '';
     if (selectedPlayers.length === 0) {
-        btn.classList.add('inactive');
+        feedbackClass = 'inactive';
     } else if (startingRatioRequired) {
-        btn.classList.add('inactive');
+        feedbackClass = 'inactive';
     } else if (selectedPlayers.length !== expectedCount) {
-        btn.classList.add('warning');
+        feedbackClass = 'feedback-count-warning';  // Wrong player count (red)
     } else if (genderRatioWarning) {
-        btn.classList.add('warning');
-        btn.style.backgroundColor = '#ff8800';
+        feedbackClass = 'feedback-gender-warning';  // Wrong gender ratio (orange)
+    } else {
+        feedbackClass = 'feedback-ok';  // All good (green)
+    }
+    
+    // If point is in progress, disable button but show feedback
+    if (pointInProgress) {
+        btn.textContent = 'Point in progress';
+        btn.classList.add('point-in-progress');
+        if (feedbackClass) {
+            btn.classList.add(feedbackClass);
+        }
+        btn.disabled = true;
+        return;
+    }
+    
+    // Point not in progress - normal behavior
+    // Determine starting position
+    const startOn = typeof determineStartingPosition === 'function' 
+        ? determineStartingPosition() 
+        : 'offense';
+    
+    // Set button text
+    const startOnLabel = startOn.charAt(0).toUpperCase() + startOn.slice(1);
+    btn.textContent = `Start Point (${startOnLabel})`;
+    
+    // Apply the feedback class (will show saturated colors when not point-in-progress)
+    if (feedbackClass) {
+        btn.classList.add(feedbackClass);
     }
 }
 
@@ -1887,6 +1899,53 @@ function updateSelectLineTable() {
     // Apply sticky columns
     requestAnimationFrame(() => {
         makePanelColumnsSticky();
+    });
+}
+
+/**
+ * Update only the time cells in the Select Line table
+ * Lightweight function called every second during a point
+ */
+function updateSelectLineTimeCells() {
+    const table = document.getElementById('panelActivePlayersTable');
+    if (!table) return;
+    
+    const timeCells = table.querySelectorAll('.active-time-column');
+    if (timeCells.length === 0) return;
+    
+    // Get all checkboxes to map cells to players
+    const checkboxes = table.querySelectorAll('.active-checkbox');
+    
+    timeCells.forEach((cell, index) => {
+        const checkbox = checkboxes[index];
+        if (!checkbox) return;
+        
+        const playerName = checkbox.dataset.playerName;
+        if (!playerName) return;
+        
+        // Find the player in the roster
+        const player = currentTeam?.teamRoster?.find(p => p.name === playerName);
+        if (!player) return;
+        
+        // Calculate time based on current display mode
+        if (panelShowingTotalStats) {
+            // Total stats: player's total time + current game time
+            const gameTime = typeof getPlayerGameTime === 'function'
+                ? getPlayerGameTime(playerName)
+                : 0;
+            const totalTime = (player.totalTimePlayed || 0) + gameTime;
+            cell.textContent = typeof formatPlayTime === 'function'
+                ? formatPlayTime(totalTime)
+                : '0:00';
+        } else {
+            // Game stats: just game time (includes current point if playing)
+            const gameTime = typeof getPlayerGameTime === 'function'
+                ? getPlayerGameTime(playerName)
+                : 0;
+            cell.textContent = typeof formatPlayTime === 'function'
+                ? formatPlayTime(gameTime)
+                : '0:00';
+        }
     });
 }
 
@@ -2375,6 +2434,8 @@ function startGameScreenTimerLoop() {
     timerUpdateInterval = setInterval(() => {
         if (isGameScreenVisible()) {
             updateTimerDisplay();
+            // Also update player time cells in Select Line panel
+            updateSelectLineTimeCells();
         }
     }, 1000);
 }
