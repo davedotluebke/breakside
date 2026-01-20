@@ -1547,11 +1547,9 @@ function getSelectedPlayersFromPanel() {
     const checkboxes = document.querySelectorAll('#panelActivePlayersTable input[type="checkbox"]');
     const selectedPlayers = [];
     
-    if (!currentTeam || !currentTeam.teamRoster) return selectedPlayers;
-    
-    checkboxes.forEach((checkbox, index) => {
-        if (checkbox.checked && index < currentTeam.teamRoster.length) {
-            selectedPlayers.push(currentTeam.teamRoster[index].name);
+    checkboxes.forEach(checkbox => {
+        if (checkbox.checked && checkbox.dataset.playerName) {
+            selectedPlayers.push(checkbox.dataset.playerName);
         }
     });
     
@@ -1601,6 +1599,58 @@ function syncPanelSelectionsToLegacy(selectedPlayers) {
 }
 
 /**
+ * Check gender ratio for panel-selected players
+ * Returns true if ratio is correct, false if wrong
+ * @param {string[]} selectedPlayerNames - Array of selected player names
+ * @param {number} expectedCount - Expected player count
+ */
+function checkPanelGenderRatio(selectedPlayerNames, expectedCount) {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !game.alternateGenderRatio || game.alternateGenderRatio === 'No') {
+        return true; // Not checking gender ratio
+    }
+    
+    if (selectedPlayerNames.length !== expectedCount) {
+        return true; // Wrong count, handled elsewhere
+    }
+    
+    // Get player objects and count genders
+    let fmpCount = 0;
+    let mmpCount = 0;
+    selectedPlayerNames.forEach(name => {
+        const player = currentTeam?.teamRoster?.find(p => p.name === name);
+        if (player) {
+            if (player.gender === Gender.FMP) fmpCount++;
+            else if (player.gender === Gender.MMP) mmpCount++;
+        }
+    });
+    
+    // Handle fixed ratio (e.g., "4:3", "3:2")
+    if (game.alternateGenderRatio !== 'Alternating') {
+        const ratioParts = game.alternateGenderRatio.split(':');
+        if (ratioParts.length === 2) {
+            const expectedFmp = parseInt(ratioParts[0], 10);
+            const expectedMmp = parseInt(ratioParts[1], 10);
+            return fmpCount === expectedFmp && mmpCount === expectedMmp;
+        }
+    }
+    
+    // Handle alternating ratio
+    const expectedRatio = typeof getExpectedGenderRatio === 'function' 
+        ? getExpectedGenderRatio(game) 
+        : null;
+    if (!expectedRatio) return true; // No ratio set yet
+    
+    // Determine expected counts based on player count and ratio
+    const expectedCounts = typeof getExpectedGenderCounts === 'function'
+        ? getExpectedGenderCounts(expectedCount, expectedRatio)
+        : null;
+    if (!expectedCounts) return true;
+    
+    return fmpCount === expectedCounts.fmp && mmpCount === expectedCounts.mmp;
+}
+
+/**
  * Update the Start Point button state (text and warning states)
  * Shows feedback colors (desaturated when point in progress)
  */
@@ -1628,7 +1678,8 @@ function updateStartPointButtonState() {
         if (game.alternateGenderRatio === 'Alternating' && !game.startingGenderRatio && game.points.length === 0) {
             startingRatioRequired = true;
         } else if (selectedPlayers.length === expectedCount) {
-            genderRatioWarning = typeof checkGenderRatio === 'function' && !checkGenderRatio();
+            // Use panel-specific gender ratio check
+            genderRatioWarning = !checkPanelGenderRatio(selectedPlayers, expectedCount);
         }
     }
     
