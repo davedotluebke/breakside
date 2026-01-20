@@ -1389,6 +1389,14 @@ function handleODToggle() {
  * Validates selection and starts the point with role-aware panel transitions
  */
 function handlePanelStartPoint() {
+    console.log('🏃 handlePanelStartPoint called');
+    
+    // Check if point is already in progress
+    if (typeof isPointInProgress === 'function' && isPointInProgress()) {
+        console.log('🏃 Point already in progress, ignoring');
+        return;
+    }
+    
     // Check if we can edit (need role permission to start point)
     if (!canEditSelectLinePanel()) {
         if (typeof showControllerToast === 'function') {
@@ -1399,6 +1407,7 @@ function handlePanelStartPoint() {
     
     // Get selected players
     const selectedPlayers = getSelectedPlayersFromPanel();
+    console.log('🏃 Selected players:', selectedPlayers);
     
     // Get expected player count
     const expectedCount = parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
@@ -1416,33 +1425,36 @@ function handlePanelStartPoint() {
         console.warn(`Starting point with ${selectedPlayers.length} players (expected ${expectedCount})`);
     }
     
-    // Use existing startPoint logic from gameLogic.js
-    if (typeof startPoint === 'function') {
-        // Update the legacy activePlayersTable checkboxes to match panel selections
-        syncPanelSelectionsToLegacy(selectedPlayers);
+    // Update the legacy activePlayersTable checkboxes to match panel selections
+    syncPanelSelectionsToLegacy(selectedPlayers);
+    
+    // Use existing startNextPoint logic from pointManagement.js
+    if (typeof startNextPoint === 'function') {
+        console.log('🏃 Calling startNextPoint()');
+        startNextPoint();
         
-        // Start the point (this uses the legacy checkbox-based player detection)
-        startPoint();
-        
-        // Role-aware panel transitions
-        const state = typeof getControllerState === 'function' ? getControllerState() : {};
-        const hasActiveCoach = state.isActiveCoach;
-        
-        if (hasActiveCoach) {
-            // Active Coach: minimize Select Line, maximize Play-by-Play
-            if (typeof minimizePanel === 'function') {
-                minimizePanel('selectLine');
+        // Role-aware panel transitions (only if we didn't navigate away)
+        // startNextPoint may have called enterGameScreen which handles this
+        if (isGameScreenVisible()) {
+            const state = typeof getControllerState === 'function' ? getControllerState() : {};
+            const hasActiveCoach = state.isActiveCoach;
+            
+            if (hasActiveCoach) {
+                // Active Coach: minimize Select Line, maximize Play-by-Play
+                if (typeof minimizePanel === 'function') {
+                    minimizePanel('selectLine');
+                }
+                if (typeof maximizePanel === 'function') {
+                    maximizePanel('playByPlay', false);
+                }
             }
-            if (typeof maximizePanel === 'function') {
-                maximizePanel('playByPlay', false);
-            }
+            // If only Line Coach: leave panels unchanged so they can work on next line
+            
+            // Update displays
+            updateSelectLinePanelState();
         }
-        // If only Line Coach: leave panels unchanged so they can work on next line
-        
-        // Update displays
-        updateSelectLinePanelState();
     } else {
-        console.warn('startPoint function not available');
+        console.warn('🏃 startNextPoint function not available');
     }
 }
 
@@ -1598,11 +1610,6 @@ function updateStartPointButtonState() {
     const selectedPlayers = getSelectedPlayersFromPanel();
     const expectedCount = parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
     
-    // Determine starting position
-    const startOn = typeof determineStartingPosition === 'function' 
-        ? determineStartingPosition() 
-        : 'offense';
-    
     // Check if point is in progress
     const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
     
@@ -1616,10 +1623,15 @@ function updateStartPointButtonState() {
         btn.textContent = 'Point in progress';
         btn.classList.add('point-in-progress');
         btn.disabled = true;
-        return; // Skip all other state checks
+        return;
     }
     
-    // Set button text for between-points state
+    // Determine starting position
+    const startOn = typeof determineStartingPosition === 'function' 
+        ? determineStartingPosition() 
+        : 'offense';
+    
+    // Set button text
     const startOnLabel = startOn.charAt(0).toUpperCase() + startOn.slice(1);
     btn.textContent = `Start Point (${startOnLabel})`;
     
