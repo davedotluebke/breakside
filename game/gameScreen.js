@@ -920,9 +920,293 @@ function handlePbpSubPlayers() {
         return;
     }
     
-    // TODO: Implement mid-point substitution modal
+    // Check if point is in progress
+    if (typeof isPointInProgress !== 'function' || !isPointInProgress()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('No point in progress - use Select Next Line instead', 'info');
+        }
+        return;
+    }
+    
+    showSubPlayersModal();
+}
+
+// =============================================================================
+// Sub Players Modal for Mid-Point Injury Substitutions
+// =============================================================================
+
+/**
+ * Create the Sub Players modal HTML structure
+ * @returns {HTMLElement}
+ */
+function createSubPlayersModal() {
+    const modal = document.createElement('div');
+    modal.id = 'subPlayersModal';
+    modal.className = 'modal sub-players-modal';
+    
+    modal.innerHTML = `
+        <div class="modal-content sub-players-modal-content">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Substitute Players</h2>
+                <span class="close" id="subPlayersModalClose">&times;</span>
+            </div>
+            <div class="sub-players-info">
+                <span id="subPlayersCount">0 selected</span>
+            </div>
+            <div class="sub-players-table-container" id="subPlayersTableContainer">
+                <table class="panel-player-table" id="subPlayersTable">
+                    <tbody>
+                        <!-- Player rows populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="sub-players-buttons">
+                <button id="subPlayersCancelBtn" class="ge-btn">Cancel</button>
+                <button id="subPlayersConfirmBtn" class="ge-btn ge-btn-confirm">Confirm</button>
+            </div>
+        </div>
+    `;
+    
+    // Wire up modal events
+    const closeBtn = modal.querySelector('#subPlayersModalClose');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', hideSubPlayersModal);
+    }
+    
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            hideSubPlayersModal();
+        }
+    });
+    
+    // Cancel button
+    const cancelBtn = modal.querySelector('#subPlayersCancelBtn');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', hideSubPlayersModal);
+    }
+    
+    // Confirm button
+    const confirmBtn = modal.querySelector('#subPlayersConfirmBtn');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', confirmSubstitution);
+    }
+    
+    return modal;
+}
+
+/**
+ * Show the Sub Players modal
+ */
+function showSubPlayersModal() {
+    // Check if modal already exists
+    let modal = document.getElementById('subPlayersModal');
+    if (!modal) {
+        modal = createSubPlayersModal();
+        document.body.appendChild(modal);
+    }
+    
+    // Populate the player table
+    populateSubPlayersTable();
+    
+    // Show modal
+    modal.style.display = 'flex';
+}
+
+/**
+ * Hide the Sub Players modal
+ */
+function hideSubPlayersModal() {
+    const modal = document.getElementById('subPlayersModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Populate the Sub Players table with current roster
+ * Players in the current point are checked
+ */
+function populateSubPlayersTable() {
+    const tableBody = document.querySelector('#subPlayersTable tbody');
+    if (!tableBody) return;
+    
+    tableBody.innerHTML = '';
+    
+    const point = getCurrentPoint();
+    if (!currentTeam || !currentTeam.teamRoster || !point) return;
+    
+    // Get current point players
+    const currentPlayers = point.players || [];
+    
+    // Sort roster: current players first, then alphabetical
+    const sortedRoster = [...currentTeam.teamRoster].sort((a, b) => {
+        const aInPoint = currentPlayers.includes(a.name);
+        const bInPoint = currentPlayers.includes(b.name);
+        if (aInPoint && !bInPoint) return -1;
+        if (!aInPoint && bInPoint) return 1;
+        return a.name.localeCompare(b.name);
+    });
+    
+    sortedRoster.forEach(player => {
+        const row = document.createElement('tr');
+        
+        // Checkbox
+        const checkboxCell = document.createElement('td');
+        checkboxCell.classList.add('sub-checkbox-column');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = currentPlayers.includes(player.name);
+        checkbox.dataset.playerName = player.name;
+        checkbox.addEventListener('change', updateSubPlayersCount);
+        checkboxCell.appendChild(checkbox);
+        row.appendChild(checkboxCell);
+        
+        // Name with gender color
+        const nameCell = document.createElement('td');
+        nameCell.classList.add('sub-name-column');
+        nameCell.textContent = typeof formatPlayerName === 'function' 
+            ? formatPlayerName(player) 
+            : player.name;
+        if (player.gender === Gender.FMP) nameCell.classList.add('player-fmp');
+        else if (player.gender === Gender.MMP) nameCell.classList.add('player-mmp');
+        nameCell.style.cursor = 'pointer';
+        nameCell.addEventListener('click', () => checkbox.click());
+        row.appendChild(nameCell);
+        
+        tableBody.appendChild(row);
+    });
+    
+    updateSubPlayersCount();
+}
+
+/**
+ * Update the selected player count display in the modal
+ */
+function updateSubPlayersCount() {
+    const countEl = document.getElementById('subPlayersCount');
+    if (!countEl) return;
+    
+    const checkboxes = document.querySelectorAll('#subPlayersTable input[type="checkbox"]');
+    let count = 0;
+    checkboxes.forEach(cb => {
+        if (cb.checked) count++;
+    });
+    
+    const expectedCount = parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
+    
+    countEl.textContent = `${count} selected`;
+    
+    // Add warning class if count doesn't match expected
+    if (count !== expectedCount) {
+        countEl.classList.add('count-warning');
+    } else {
+        countEl.classList.remove('count-warning');
+    }
+}
+
+/**
+ * Confirm the substitution and apply changes
+ */
+function confirmSubstitution() {
+    const point = getCurrentPoint();
+    if (!point) {
+        hideSubPlayersModal();
+        return;
+    }
+    
+    const checkboxes = document.querySelectorAll('#subPlayersTable input[type="checkbox"]');
+    const newPlayers = [];
+    
+    checkboxes.forEach(cb => {
+        if (cb.checked) {
+            newPlayers.push(cb.dataset.playerName);
+        }
+    });
+    
+    // Determine who came in and who went out
+    const previousPlayers = point.players || [];
+    const playersOut = previousPlayers.filter(p => !newPlayers.includes(p));
+    const playersIn = newPlayers.filter(p => !previousPlayers.includes(p));
+    
+    // If no changes, just close the modal
+    if (playersOut.length === 0 && playersIn.length === 0) {
+        hideSubPlayersModal();
+        return;
+    }
+    
+    // Track substituted-out players for points-played counting
+    // Both outgoing and incoming players should get credit for this point
+    if (!point.substitutedOutPlayers) {
+        point.substitutedOutPlayers = [];
+    }
+    playersOut.forEach(p => {
+        if (!point.substitutedOutPlayers.includes(p)) {
+            point.substitutedOutPlayers.push(p);
+        }
+    });
+    
+    // Update current point players
+    point.players = newPlayers;
+    
+    // Log substitution event(s)
+    playersOut.forEach((outPlayer, index) => {
+        const inPlayer = playersIn[index] || 'Unknown';
+        
+        // Create Other event for substitution
+        if (typeof Other !== 'undefined') {
+            const subEvent = new Other({
+                description: `Substitution: ${inPlayer} in for ${outPlayer}`
+            });
+            
+            // Add to current possession
+            const currentPossession = point.possessions.length > 0
+                ? point.possessions[point.possessions.length - 1]
+                : null;
+            if (currentPossession) {
+                currentPossession.events.push(subEvent);
+            }
+            
+            if (typeof logEvent === 'function') {
+                logEvent(subEvent.summarize());
+            }
+        }
+    });
+    
+    // Log any additional players who came in (more in than out)
+    for (let i = playersOut.length; i < playersIn.length; i++) {
+        if (typeof Other !== 'undefined') {
+            const subEvent = new Other({
+                description: `Substitution: ${playersIn[i]} added to field`
+            });
+            
+            const currentPossession = point.possessions.length > 0
+                ? point.possessions[point.possessions.length - 1]
+                : null;
+            if (currentPossession) {
+                currentPossession.events.push(subEvent);
+            }
+            
+            if (typeof logEvent === 'function') {
+                logEvent(subEvent.summarize());
+            }
+        }
+    }
+    
+    // Save and update UI
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
+    
+    hideSubPlayersModal();
+    updateGameLogEvents();
+    
+    // Show confirmation
     if (typeof showControllerToast === 'function') {
-        showControllerToast('Mid-point substitutions coming soon', 'info');
+        const msg = playersIn.length > 0 
+            ? `Substitution: ${playersIn.join(', ')} in`
+            : `Substitution: ${playersOut.join(', ')} out`;
+        showControllerToast(msg, 'success');
     }
 }
 
@@ -987,6 +1271,9 @@ function ensureDialogVisible(dialogId) {
  * - Minimize the Play-by-Play panel
  */
 function transitionToBetweenPoints() {
+    // Reset conflict tracking for new between-points phase
+    resetConflictTracking();
+    
     // Update score display
     let game;
     if (typeof currentGame === 'function') {
@@ -1377,6 +1664,86 @@ function setupPlayByPlayResizeObserver() {
 // Track stats display mode for panel (Game vs Total)
 let panelShowingTotalStats = false;
 
+// =============================================================================
+// Conflict Detection for Line Editing
+// =============================================================================
+
+// Track local line edit timestamps (when WE last edited each line type)
+let localLineEditTimestamps = {
+    odLine: 0,
+    oLine: 0,
+    dLine: 0
+};
+
+// Track which point we last showed a conflict toast for (avoid spam)
+let lastConflictToastPointIndex = -1;
+
+/**
+ * Check for conflicts when editing the Select Line panel
+ * Warns if another coach edited the same line type within the last 5 seconds
+ */
+function checkForLineEditConflict() {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !game.pendingNextLine) return;
+    
+    // Only check between points (during points, only Line Coach can edit)
+    if (typeof isPointInProgress === 'function' && isPointInProgress()) return;
+    
+    // Check if controller system is active
+    const state = typeof getControllerState === 'function' ? getControllerState() : {};
+    if (!state.activeCoach && !state.lineCoach) {
+        // No controller system active, no conflict possible
+        return;
+    }
+    
+    // Check if we already showed a toast for this point
+    const currentPointIndex = game.points.length;
+    if (lastConflictToastPointIndex === currentPointIndex) return;
+    
+    const activeType = game.pendingNextLine.activeType || 'od';
+    const lineKey = activeType + 'Line';
+    
+    // Get the modification timestamp for the current line type
+    const modTimestampKey = activeType + 'LineModifiedAt';
+    const remoteModTimestamp = game.pendingNextLine[modTimestampKey];
+    
+    if (!remoteModTimestamp) return;
+    
+    const remoteTime = new Date(remoteModTimestamp).getTime();
+    const now = Date.now();
+    const fiveSecondsAgo = now - 5000;
+    const localEditTime = localLineEditTimestamps[lineKey] || 0;
+    
+    // Check if remote timestamp is newer than our last edit AND within 5 seconds
+    // This means someone else edited after our last edit
+    if (remoteTime > localEditTime && remoteTime > fiveSecondsAgo) {
+        // Get the other coach's name from controller state
+        let otherCoachName = null;
+        
+        if (state.isActiveCoach && state.lineCoach) {
+            otherCoachName = state.lineCoach.displayName || 'Line Coach';
+        } else if (state.isLineCoach && state.activeCoach) {
+            otherCoachName = state.activeCoach.displayName || 'Active Coach';
+        }
+        
+        if (otherCoachName) {
+            if (typeof showControllerToast === 'function') {
+                const lineTypeLabels = { od: 'O/D', o: 'Offense', d: 'Defense' };
+                const lineLabel = lineTypeLabels[activeType] || activeType;
+                showControllerToast(`Warning: ${otherCoachName} also editing ${lineLabel} line`, 'warning');
+            }
+            lastConflictToastPointIndex = currentPointIndex;
+        }
+    }
+}
+
+/**
+ * Reset conflict tracking when transitioning between points
+ */
+function resetConflictTracking() {
+    lastConflictToastPointIndex = -1;
+}
+
 /**
  * Wire up Select Next Line panel event handlers
  */
@@ -1524,10 +1891,14 @@ function handlePanelStartPoint() {
         return;
     }
     
-    // Check if we can edit (need role permission to start point)
-    if (!canEditSelectLinePanel()) {
+    // Starting a point is an Active Coach action
+    // Check if controller system is active and if user has Active Coach role
+    const state = typeof getControllerState === 'function' ? getControllerState() : {};
+    const controllerActive = state.activeCoach || state.lineCoach;
+    
+    if (controllerActive && !canEditPlayByPlayPanel()) {
         if (typeof showControllerToast === 'function') {
-            showControllerToast('You need a coach role to start the point', 'warning');
+            showControllerToast('Only the Active Coach can start a new point', 'warning');
         }
         return;
     }
@@ -1617,11 +1988,17 @@ function handlePanelCheckboxChange(e) {
         return;
     }
     
+    // Check for conflicts with other coach (before saving our edit)
+    checkForLineEditConflict();
+    
     // Save to pending next line
     savePanelSelectionsToPendingNextLine();
     
     // Update Start Point button state
     updateStartPointButtonState();
+    
+    // Update compact subtitle with selected players
+    updateSelectLinePanelSubtitle();
     
     // Sync to legacy table for compatibility
     const selectedPlayers = getSelectedPlayersFromPanel();
@@ -1700,14 +2077,18 @@ function savePanelSelectionsToPendingNextLine(updateTimestamp = true) {
     
     const selectedPlayers = getSelectedPlayersFromPanel();
     const activeType = game.pendingNextLine.activeType || 'od';
+    const lineKey = activeType + 'Line';
     
     // Update the appropriate line array
-    game.pendingNextLine[activeType + 'Line'] = selectedPlayers;
+    game.pendingNextLine[lineKey] = selectedPlayers;
     
     // Only update the modification timestamp if actual selections changed
     // (not just viewing via toggle)
     if (updateTimestamp) {
         game.pendingNextLine[activeType + 'LineModifiedAt'] = new Date().toISOString();
+        
+        // Track local edit time for conflict detection
+        localLineEditTimestamps[lineKey] = Date.now();
     }
     
     // Save (triggers sync)
@@ -2158,6 +2539,9 @@ function updateSelectLineTable() {
     requestAnimationFrame(() => {
         makePanelColumnsSticky();
     });
+    
+    // Update subtitle with selected players (for minimized state)
+    updateSelectLinePanelSubtitle();
 }
 
 /**
@@ -2277,6 +2661,77 @@ function updateSelectLinePanel() {
     updateSelectLineTable();
     updateSelectLinePanelState();
     updateODToggleButton();
+    updateSelectLinePanelSubtitle();
+}
+
+// =============================================================================
+// Compact Layout for Minimized Select Line Panel
+// =============================================================================
+
+/**
+ * Generate compact player names string for panel subtitle
+ * Truncates individual names to fit within available width
+ * @param {string[]} playerNames - Array of player names
+ * @param {number} maxChars - Maximum total characters (approximate)
+ * @returns {string} Formatted string like "Al..., Bob, Cy..."
+ */
+function getCompactPlayerNames(playerNames, maxChars = 40) {
+    if (!playerNames || playerNames.length === 0) return 'No players selected';
+    
+    const SEPARATOR = ', ';
+    const ELLIPSIS = '...';
+    
+    // Get short names (first name only, or first part before space)
+    const shortNames = playerNames.map(name => {
+        const parts = name.split(' ');
+        return parts[0]; // Use first name only
+    });
+    
+    // Try full short names first
+    let result = shortNames.join(SEPARATOR);
+    if (result.length <= maxChars) {
+        return result;
+    }
+    
+    // Calculate target length per name
+    const separatorOverhead = (shortNames.length - 1) * SEPARATOR.length;
+    const availableChars = maxChars - separatorOverhead;
+    const charsPerName = Math.max(2, Math.floor(availableChars / shortNames.length));
+    
+    // Truncate names
+    const truncatedNames = shortNames.map(name => {
+        if (name.length <= charsPerName) return name;
+        // Leave room for ellipsis
+        const truncateLength = Math.max(1, charsPerName - ELLIPSIS.length);
+        return name.substring(0, truncateLength) + ELLIPSIS;
+    });
+    
+    return truncatedNames.join(SEPARATOR);
+}
+
+/**
+ * Update the Select Line panel subtitle to show selected player names
+ * This is shown when the panel is minimized for quick reference
+ */
+function updateSelectLinePanelSubtitle() {
+    const selectedPlayers = getSelectedPlayersFromPanel();
+    
+    if (selectedPlayers.length === 0) {
+        if (typeof setPanelSubtitle === 'function') {
+            setPanelSubtitle('selectLine', '');
+        }
+        return;
+    }
+    
+    // Generate compact text
+    const compactText = getCompactPlayerNames(selectedPlayers, 35);
+    
+    // Add player count prefix
+    const countText = `(${selectedPlayers.length}) ${compactText}`;
+    
+    if (typeof setPanelSubtitle === 'function') {
+        setPanelSubtitle('selectLine', countText);
+    }
 }
 
 // =============================================================================
@@ -2723,6 +3178,26 @@ function enterGameScreen() {
         initGameScreen();
     }
     
+    // Ensure pendingNextLine is initialized on the game
+    let game;
+    if (typeof currentGame === 'function') {
+        game = currentGame();
+    } else if (typeof currentGame !== 'undefined') {
+        game = currentGame;
+    }
+    
+    if (game && !game.pendingNextLine) {
+        game.pendingNextLine = {
+            activeType: 'od',
+            odLine: [],
+            oLine: [],
+            dLine: [],
+            odLineModifiedAt: null,
+            oLineModifiedAt: null,
+            dLineModifiedAt: null
+        };
+    }
+    
     // Move dialogs to body so they can be displayed above the game screen
     // These dialogs are children of simpleModeScreen which gets hidden
     ensureDialogVisible('scoreAttributionDialog');
@@ -2874,4 +3349,10 @@ window.updateSelectLinePanelState = updateSelectLinePanelState;
 window.canEditSelectLinePanel = canEditSelectLinePanel;
 window.getSelectedPlayersFromPanel = getSelectedPlayersFromPanel;
 window.savePanelSelectionsToPendingNextLine = savePanelSelectionsToPendingNextLine;
+window.updateSelectLinePanelSubtitle = updateSelectLinePanelSubtitle;
+window.getCompactPlayerNames = getCompactPlayerNames;
+
+// Sub Players modal (mid-point injury subs)
+window.showSubPlayersModal = showSubPlayersModal;
+window.hideSubPlayersModal = hideSubPlayersModal;
 
