@@ -40,6 +40,17 @@ function startNewGame(startingPosition, seconds) {
     
     currentTeam.games.push(newGame);
     
+    // Initialize pendingNextLine for panel UI
+    newGame.pendingNextLine = {
+        activeType: 'od',
+        odLine: [],
+        oLine: [],
+        dLine: [],
+        odLineModifiedAt: null,
+        oLineModifiedAt: null,
+        dLineModifiedAt: null
+    };
+    
     // Save and Sync Immediately
     if (typeof saveAllTeamsData === 'function') {
         saveAllTeamsData();
@@ -50,7 +61,21 @@ function startNewGame(startingPosition, seconds) {
     // Set countdown seconds before moving to next point
     countdownSeconds = seconds;
 
-    moveToNextPoint();
+    // Phase 6b: Use panel-based game screen if enabled
+    if (window.useNewGameScreen && typeof enterGameScreen === 'function') {
+        // Enter the panel-based game screen
+        enterGameScreen();
+        
+        // Transition to between-points state (no point started yet)
+        if (typeof transitionToBetweenPoints === 'function') {
+            transitionToBetweenPoints();
+        }
+        
+        console.log('🎮 New game started with panel UI');
+    } else {
+        // Legacy: use beforePointScreen
+        moveToNextPoint();
+    }
 }
 
 document.getElementById('startGameOnOBtn').addEventListener('click', function() {
