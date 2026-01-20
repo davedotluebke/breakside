@@ -54,16 +54,31 @@ function startNextPoint() {
     // Stop the countdown when point starts
     stopCountdown();
 
-    // Get the checkboxes and player names
-    const checkboxes = [...document.querySelectorAll('#activePlayersTable input[type="checkbox"]')];
-
-    const activePlayersForThisPoint = [];
-    checkboxes.forEach((checkbox, index) => {
-        if (checkbox.checked) {
-            const player = currentTeam.teamRoster[index];
-            activePlayersForThisPoint.push(player.name);
-        }
-    });
+    // Get selected players - prefer panel UI if active, fallback to legacy table
+    let activePlayersForThisPoint = [];
+    
+    // Try panel table first (new UI)
+    const panelCheckboxes = document.querySelectorAll('#panelActivePlayersTable input[type="checkbox"]');
+    if (panelCheckboxes.length > 0) {
+        panelCheckboxes.forEach(checkbox => {
+            if (checkbox.checked && checkbox.dataset.playerName) {
+                activePlayersForThisPoint.push(checkbox.dataset.playerName);
+            }
+        });
+        console.log('📋 Got players from panel table:', activePlayersForThisPoint);
+    }
+    
+    // Fallback to legacy table if panel didn't have selections
+    if (activePlayersForThisPoint.length === 0) {
+        const legacyCheckboxes = [...document.querySelectorAll('#activePlayersTable input[type="checkbox"]')];
+        legacyCheckboxes.forEach((checkbox, index) => {
+            if (checkbox.checked) {
+                const player = currentTeam.teamRoster[index];
+                activePlayersForThisPoint.push(player.name);
+            }
+        });
+        console.log('📋 Got players from legacy table:', activePlayersForThisPoint);
+    }
 
     // Clear the stored next line selections since we're now using them
     console.log('About to clear next line selections in startNextPoint after using them');
