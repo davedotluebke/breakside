@@ -59,7 +59,14 @@ async function initializeAuth() {
         // Initialize client
         supabaseClient = window.supabase.createClient(
             config.SUPABASE_URL,
-            config.SUPABASE_ANON_KEY
+            config.SUPABASE_ANON_KEY,
+            {
+                auth: {
+                    // Disable Navigator Locks API to prevent Chrome debugger pausing
+                    // on internal promise rejections during page reload
+                    lock: 'no-op',
+                }
+            }
         );
         
         // Get existing session
