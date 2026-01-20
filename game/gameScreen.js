@@ -1004,6 +1004,9 @@ function transitionToBetweenPoints() {
     // Update game log
     updateGameLogEvents();
     
+    // Auto-select appropriate line type based on who scored
+    selectAppropriateLineAtPointEnd();
+    
     // Update Select Next Line panel with latest data
     updateSelectLinePanel();
     
@@ -1325,7 +1328,7 @@ function wireSelectLineEvents() {
         statsToggle.addEventListener('click', handlePanelStatsToggle);
     }
     
-    // O/D toggle button (placeholder - no-op for now)
+    // O/D toggle button - cycles between O/D, O, and D lines
     const odToggle = document.getElementById('panelODToggle');
     if (odToggle) {
         odToggle.addEventListener('click', handleODToggle);
@@ -1374,14 +1377,79 @@ function handlePanelStatsToggle() {
 }
 
 /**
- * Handle O/D toggle button click (placeholder)
- * Future: cycles between 'od', 'o', 'd'
+ * Handle O/D toggle button click
+ * Cycles between 'od' → 'o' → 'd' → 'od'
  */
 function handleODToggle() {
-    // Placeholder - will be implemented after single line works
-    if (typeof showControllerToast === 'function') {
-        showControllerToast('O/D line toggle coming soon', 'info');
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !game.pendingNextLine) return;
+    
+    // Check if user can edit
+    if (!canEditSelectLinePanel()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('You need a coach role to change line type', 'warning');
+        }
+        return;
     }
+    
+    // Save current selections before switching
+    savePanelSelectionsToPendingNextLine();
+    
+    // Cycle to next type: od → o → d → od
+    const currentType = game.pendingNextLine.activeType || 'od';
+    let nextType;
+    switch (currentType) {
+        case 'od': nextType = 'o'; break;
+        case 'o': nextType = 'd'; break;
+        case 'd': nextType = 'od'; break;
+        default: nextType = 'od';
+    }
+    
+    // Update active type
+    game.pendingNextLine.activeType = nextType;
+    
+    // Save game state
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
+    
+    // Refresh the table to show the new line's selections
+    updateSelectLineTable();
+    
+    // Update button text
+    updateODToggleButton();
+    
+    // Update start point button state (in case player count changed)
+    updateStartPointButtonState();
+    
+    // Show feedback
+    const typeLabels = { od: 'O/D', o: 'Offense', d: 'Defense' };
+    if (typeof showControllerToast === 'function') {
+        showControllerToast(`Switched to ${typeLabels[nextType]} line`, 'info');
+    }
+}
+
+/**
+ * Update the O/D toggle button text to show current mode
+ */
+function updateODToggleButton() {
+    const btn = document.getElementById('panelODToggle');
+    if (!btn) return;
+    
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    const activeType = game?.pendingNextLine?.activeType || 'od';
+    
+    // Update button text
+    const typeLabels = { od: 'O/D', o: 'O', d: 'D' };
+    btn.textContent = typeLabels[activeType] || 'O/D';
+    
+    // Update title/tooltip
+    const typeDescriptions = { 
+        od: 'General line (tap to switch to Offense)', 
+        o: 'Offense line (tap to switch to Defense)', 
+        d: 'Defense line (tap to switch to O/D)' 
+    };
+    btn.title = typeDescriptions[activeType] || 'Toggle O/D/O-D line';
 }
 
 /**
@@ -1802,6 +1870,59 @@ function updatePanelGenderRatioDisplay() {
 }
 
 /**
+ * Select the appropriate line type at the end of a point
+ * Logic:
+ * - If O/D line was modified after the point started, use O/D line
+ * - Otherwise, use O line (if team will be on offense) or D line (if team will be on defense)
+ */
+function selectAppropriateLineAtPointEnd() {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !game.pendingNextLine) return;
+    
+    // Get the last completed point
+    const latestPoint = typeof getLatestPoint === 'function' ? getLatestPoint() : null;
+    if (!latestPoint || !latestPoint.winner) return; // No completed point yet
+    
+    const pointStartTime = latestPoint.startTimestamp 
+        ? new Date(latestPoint.startTimestamp).getTime() 
+        : 0;
+    
+    // Check if O/D line was modified after the point started
+    const odLineModTime = game.pendingNextLine.odLineModifiedAt
+        ? new Date(game.pendingNextLine.odLineModifiedAt).getTime()
+        : 0;
+    
+    let selectedType;
+    
+    if (odLineModTime > pointStartTime) {
+        // O/D line was modified during this point - use it
+        selectedType = 'od';
+        console.log('📋 Auto-selecting O/D line (modified during point)');
+    } else {
+        // Use O or D line based on who scored
+        if (latestPoint.winner === 'team') {
+            // Team scored - will be on defense next
+            selectedType = 'd';
+            console.log('📋 Auto-selecting D line (team scored, will be on defense)');
+        } else {
+            // Opponent scored - will be on offense next
+            selectedType = 'o';
+            console.log('📋 Auto-selecting O line (opponent scored, will be on offense)');
+        }
+    }
+    
+    // Only update if different from current
+    if (game.pendingNextLine.activeType !== selectedType) {
+        game.pendingNextLine.activeType = selectedType;
+        
+        // Save game state
+        if (typeof saveAllTeamsData === 'function') {
+            saveAllTeamsData();
+        }
+    }
+}
+
+/**
  * Update the Select Line panel table with current roster and selections
  */
 function updateSelectLineTable() {
@@ -2069,6 +2190,7 @@ function makePanelColumnsSticky() {
 function updateSelectLinePanel() {
     updateSelectLineTable();
     updateSelectLinePanelState();
+    updateODToggleButton();
 }
 
 // =============================================================================
