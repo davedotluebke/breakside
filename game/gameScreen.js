@@ -2236,7 +2236,7 @@ let selectLinePanelResizeObserver = null;
 /**
  * Update the compact view display with current line selection
  * Shows line type prefix and comma-separated player names with gender colors
- * Truncates names only as needed to fit within available space
+ * Truncates names only as needed to fit all players on one line
  */
 function updateSelectLineCompactView() {
     const compactView = document.getElementById('selectLineCompactView');
@@ -2274,76 +2274,74 @@ function updateSelectLineCompactView() {
     // Get first names for all selected players
     const firstNames = selectedNames.map(name => name.split(' ')[0]);
     
-    // Calculate available width (approximate - compact view minus link width)
-    const compactWidth = compactView.clientWidth || 300;
+    // Calculate available width for player names
+    // Account for the line type link width and some padding
+    const containerWidth = compactView.clientWidth;
     const linkWidth = linkEl ? linkEl.offsetWidth : 40;
-    const availableWidth = compactWidth - linkWidth - 24; // 24px for padding
+    const padding = 24; // Left + right padding
+    const availableWidth = containerWidth - linkWidth - padding;
     
-    // Estimate character width (approximate for typical font)
-    const charWidth = 8;
-    const separatorWidth = 16; // ", " width
-    const maxChars = Math.floor(availableWidth / charWidth);
+    // Build the display with smart truncation
+    // Start with full first names and progressively truncate if needed
+    const displayNames = renderCompactPlayerNames(firstNames, selectedNames, roster, listEl, availableWidth);
+}
+
+/**
+ * Render player names with smart truncation to fit available width
+ * @param {string[]} firstNames - Array of first names
+ * @param {string[]} fullNames - Array of full names (for roster lookup)
+ * @param {Array} roster - Team roster for gender lookup
+ * @param {HTMLElement} container - Container element to render into
+ * @param {number} availableWidth - Available width in pixels
+ */
+function renderCompactPlayerNames(firstNames, fullNames, roster, container, availableWidth) {
+    const SEPARATOR = ', ';
+    const ELLIPSIS = '…';
+    const CHAR_WIDTH_ESTIMATE = 8; // Approximate pixels per character
     
-    // Calculate total characters needed for full names
-    const separatorChars = (firstNames.length - 1) * 2; // ", " = 2 chars
-    const totalFullChars = firstNames.reduce((sum, name) => sum + name.length, 0) + separatorChars;
+    // Calculate total length with full first names
+    const separatorLength = (firstNames.length - 1) * SEPARATOR.length;
+    const totalChars = firstNames.reduce((sum, name) => sum + name.length, 0) + separatorLength;
+    const estimatedWidth = totalChars * CHAR_WIDTH_ESTIMATE;
     
-    // Determine display names - truncate only if needed
-    let displayNames;
-    if (totalFullChars <= maxChars) {
-        // All names fit without truncation
-        displayNames = firstNames;
-    } else {
-        // Need to truncate - progressively shorten longest names first
-        displayNames = [...firstNames];
-        let currentTotal = totalFullChars;
+    let displayNames = [...firstNames];
+    
+    // If estimated width exceeds available, progressively truncate longest names
+    if (estimatedWidth > availableWidth) {
+        const targetChars = Math.floor(availableWidth / CHAR_WIDTH_ESTIMATE) - separatorLength;
+        const charsPerName = Math.max(2, Math.floor(targetChars / firstNames.length));
         
-        while (currentTotal > maxChars) {
-            // Find the longest name that's longer than 3 chars
-            let longestIdx = -1;
-            let longestLen = 3; // Don't truncate below 3 chars
+        // Sort names by length (longest first) to truncate them first
+        const namesByLength = firstNames
+            .map((name, idx) => ({ name, idx, len: name.length }))
+            .sort((a, b) => b.len - a.len);
+        
+        let totalUsed = firstNames.reduce((sum, n) => sum + n.length, 0);
+        
+        // Truncate longest names first until we fit
+        for (const item of namesByLength) {
+            if (totalUsed <= targetChars) break;
             
-            displayNames.forEach((name, idx) => {
-                // Only consider names that haven't been truncated yet or are still long
-                const baseLen = name.endsWith('…') ? name.length : name.length;
-                if (baseLen > longestLen) {
-                    longestLen = baseLen;
-                    longestIdx = idx;
-                }
-            });
-            
-            if (longestIdx === -1) {
-                // Can't truncate further
-                break;
+            const maxLen = Math.max(2, charsPerName);
+            if (item.name.length > maxLen) {
+                const truncatedLen = maxLen - 1; // Leave room for ellipsis
+                const savings = item.name.length - truncatedLen;
+                displayNames[item.idx] = item.name.substring(0, truncatedLen) + ELLIPSIS;
+                totalUsed -= savings;
             }
-            
-            // Truncate the longest name by 1 char (plus ellipsis if not already)
-            const name = displayNames[longestIdx];
-            if (name.endsWith('…')) {
-                // Already has ellipsis, just shorten
-                displayNames[longestIdx] = name.slice(0, -2) + '…';
-                currentTotal -= 1;
-            } else {
-                // Add ellipsis
-                displayNames[longestIdx] = name.slice(0, -1) + '…';
-                // No change in total since we replaced 1 char with ellipsis
-            }
-            
-            // Recalculate total
-            currentTotal = displayNames.reduce((sum, n) => sum + n.length, 0) + separatorChars;
         }
     }
     
-    // Build player name spans with gender colors
-    selectedNames.forEach((fullName, index) => {
+    // Render the names with gender colors
+    displayNames.forEach((displayName, index) => {
         if (index > 0) {
-            listEl.appendChild(document.createTextNode(', '));
+            container.appendChild(document.createTextNode(SEPARATOR));
         }
         
         const span = document.createElement('span');
-        const player = roster.find(p => p.name === fullName);
+        const player = roster.find(p => p.name === fullNames[index]);
         
-        span.textContent = displayNames[index];
+        span.textContent = displayName;
         
         // Apply gender color
         if (player) {
@@ -2351,7 +2349,7 @@ function updateSelectLineCompactView() {
             else if (player.gender === Gender.MMP) span.classList.add('player-mmp');
         }
         
-        listEl.appendChild(span);
+        container.appendChild(span);
     });
 }
 
