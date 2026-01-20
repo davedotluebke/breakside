@@ -38,17 +38,6 @@ function startNewGame(startingPosition, seconds) {
     newGame.alternateGenderRatio = enforceGenderRatioSelect ? enforceGenderRatioSelect.value : 'No';
     newGame.alternateGenderPulls = alternateGenderPullsCheckbox ? alternateGenderPullsCheckbox.checked : false;
     
-    // Phase 6b: Initialize pendingNextLine for panel UI
-    newGame.pendingNextLine = {
-        activeType: 'od',
-        odLine: [],
-        oLine: [],
-        dLine: [],
-        odLineModifiedAt: null,
-        oLineModifiedAt: null,
-        dLineModifiedAt: null
-    };
-    
     currentTeam.games.push(newGame);
     
     // Save and Sync Immediately
@@ -61,23 +50,6 @@ function startNewGame(startingPosition, seconds) {
     // Set countdown seconds before moving to next point
     countdownSeconds = seconds;
 
-    // Phase 6b: Use panel-based game screen if enabled
-    if (window.useNewGameScreen && typeof enterGameScreen === 'function') {
-        // Enter the panel UI directly for new games
-        enterGameScreen();
-        
-        // Update displays for the new game
-        if (typeof updateSelectLinePanel === 'function') {
-            updateSelectLinePanel();
-        }
-        if (typeof updateGameLogPanel === 'function') {
-            updateGameLogPanel();
-        }
-        
-        return;
-    }
-    
-    // Legacy behavior
     moveToNextPoint();
 }
 
@@ -117,12 +89,8 @@ function updateScore(winner) {
     logEvent(`${currentPoint.winner} scores!`);
 
     // Update player stats for those who played this point
-    // Phase 6b: Include substituted-out players (injury subs) in points-played count
     currentTeam.teamRoster.forEach(player => {
-        const playedPoint = currentPoint.players.includes(player.name) ||
-            (currentPoint.substitutedOutPlayers && currentPoint.substitutedOutPlayers.includes(player.name));
-        
-        if (playedPoint) { // the player played this point (or was subbed out during it)
+        if (currentPoint.players.includes(player.name)) { // the player played this point
             player.totalPointsPlayed++;
             player.consecutivePointsPlayed++;
             player.totalTimePlayed += currentPoint.totalPointTime;

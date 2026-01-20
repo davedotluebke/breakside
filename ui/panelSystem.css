@@ -183,6 +183,12 @@ body.game-screen-active #controllerRoleButtons {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 50%;
+    display: none; /* Hidden by default, shown via JS when minimized */
+}
+
+/* Show subtitle when panel is minimized (content hidden) */
+.panel-subtitle.visible {
+    display: inline;
 }
 
 /* Panel action buttons (expand/collapse) */
