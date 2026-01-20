@@ -56,15 +56,19 @@ async function initializeAuth() {
     }
     
     try {
+        // No-op lock function to disable Navigator Locks API
+        // Prevents Chrome debugger pausing on internal promise rejections during page reload
+        const noOpLock = async (name, acquireTimeout, fn) => {
+            return await fn();
+        };
+        
         // Initialize client
         supabaseClient = window.supabase.createClient(
             config.SUPABASE_URL,
             config.SUPABASE_ANON_KEY,
             {
                 auth: {
-                    // Disable Navigator Locks API to prevent Chrome debugger pausing
-                    // on internal promise rejections during page reload
-                    lock: 'no-op',
+                    lock: noOpLock,
                 }
             }
         );
