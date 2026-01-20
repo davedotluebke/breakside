@@ -2885,14 +2885,18 @@ function updateGameScreenRoleButtons(state) {
     
     const myUserId = typeof getCurrentUserId === 'function' ? getCurrentUserId() : null;
     
+    // Check if we're in "local mode" - no roles claimed by anyone
+    // In this case, the user has implicit control of both roles
+    const isLocalMode = !state.activeCoach && !state.lineCoach;
+    
     // Update Active Coach button
     const iAmActiveCoach = state.activeCoach?.userId === myUserId;
     activeBtn.classList.remove('has-role', 'other-has-role', 'pending-handoff', 'role-available');
     
-    if (iAmActiveCoach) {
-        // I explicitly have this role
+    if (iAmActiveCoach || isLocalMode) {
+        // I explicitly have this role OR local mode (no server/sharing)
         activeBtn.classList.add('has-role');
-        if (activeHolder) activeHolder.textContent = 'You';
+        if (activeHolder) activeHolder.textContent = isLocalMode ? 'You (local)' : 'You';
     } else if (state.pendingHandoff?.role === 'activeCoach' && state.pendingHandoff?.requesterId === myUserId) {
         // I've requested this role
         activeBtn.classList.add('pending-handoff');
@@ -2911,10 +2915,10 @@ function updateGameScreenRoleButtons(state) {
     const iAmLineCoach = state.lineCoach?.userId === myUserId;
     lineBtn.classList.remove('has-role', 'other-has-role', 'pending-handoff', 'role-available');
     
-    if (iAmLineCoach) {
-        // I explicitly have this role
+    if (iAmLineCoach || isLocalMode) {
+        // I explicitly have this role OR local mode (no server/sharing)
         lineBtn.classList.add('has-role');
-        if (lineHolder) lineHolder.textContent = 'You';
+        if (lineHolder) lineHolder.textContent = isLocalMode ? 'You (local)' : 'You';
     } else if (state.pendingHandoff?.role === 'lineCoach' && state.pendingHandoff?.requesterId === myUserId) {
         // I've requested this role
         lineBtn.classList.add('pending-handoff');
