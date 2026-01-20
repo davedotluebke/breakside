@@ -2,9 +2,9 @@
 
 This document details the remaining work for Phase 6b of the Breakside panel-based UI redesign.
 
-**Status**: Implemented  
-**Created**: 2026-01-20  
-**Implemented**: 2026-01-20
+**Status**: In Progress  
+**Created**: 2026-01-20
+**Last Updated**: 2026-01-20
 
 ---
 
@@ -725,11 +725,11 @@ After testing and debugging, update `version.json`:
 - [ ] Toast shows other coach's name
 - [ ] Works correctly with O, D, and O/D lines
 
-### Compact Layout
-- [ ] Subtitle shows player names when panel minimized
-- [ ] Names truncate with ellipsis when too long
-- [ ] Subtitle updates when selections change
-- [ ] Subtitle hidden when panel expanded
+### Compact Layout ✅
+- [x] Subtitle shows player names when panel minimized
+- [x] Names truncate with ellipsis when too long
+- [x] Subtitle updates when selections change
+- [x] Subtitle hidden when panel expanded
 
 ### Panel UI Entry
 - [ ] New game goes directly to panel UI
@@ -765,7 +765,7 @@ After testing and debugging, update `version.json`:
 
 Recommended order for implementation:
 
-1. **Compact Layout** (simplest, no new logic)
+1. **Compact Layout** (simplest, no new logic) ✅ COMPLETE
 2. **Panel UI Entry for New Games** (enables testing other features)
 3. **Pull Dialog Role Check** (simple guard clause)
 4. **Conflict Warning Toast** (medium complexity)

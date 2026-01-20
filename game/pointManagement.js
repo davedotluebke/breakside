@@ -51,22 +51,6 @@ function moveToNextPoint() {
 }
 
 function startNextPoint() {
-    // Phase 6b: Check if user has permission to start a point
-    // Only Active Coach (or someone with both roles, or when no controller system) can start points
-    if (typeof window.canEditPlayByPlay === 'function' && !window.canEditPlayByPlay()) {
-        // Check if controller system is active (someone has claimed roles)
-        const state = typeof getControllerState === 'function' ? getControllerState() : {};
-        if (state.activeCoach || state.lineCoach) {
-            // Controller system is active and user doesn't have Active Coach role
-            console.warn('User does not have Active Coach role - cannot start point');
-            if (typeof showControllerToast === 'function') {
-                showControllerToast('Only the Active Coach can start a new point', 'warning');
-            }
-            return;
-        }
-        // No one has claimed any roles yet, allow starting
-    }
-    
     // Stop the countdown when point starts
     stopCountdown();
 
