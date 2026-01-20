@@ -1631,11 +1631,11 @@ body.game-screen-active #controllerRoleButtons {
 
 /* Score cell gender ratio colors */
 .panel-player-table .score-cell-fmp {
-    background-color: rgba(156, 39, 176, 0.15);
+    background-color: rgba(125, 60, 152, 0.2);
 }
 
 .panel-player-table .score-cell-mmp {
-    background-color: rgba(25, 118, 210, 0.15);
+    background-color: rgba(45, 134, 89, 0.2);
 }
 
 /* Readonly overlay */
