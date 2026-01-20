@@ -208,7 +208,10 @@ Replace current screen-based navigation with a **panel-based layout** for all in
   - **Active Coach**: Auto-minimize when point starts, auto-maximize when point ends
   - **Line Coach**: Stays maximized during points (their main job)
   - **Both roles held**: Full access, both panels can be open during point
-- [ ] **O/D button** (disabled for Phase 6b, implemented later):
+- [x] **O/D toggle button**: Cycles between O/D, O, and D line modes
+  - Auto-selects appropriate line at point end based on who scored
+  - O/D line prioritized if modified during the point
+- [ ] **O/D split panels** (future enhancement):
   - Creates second line selection panel
   - Retitles to "Select Next O Line" and "Select Next D Line"
 - [ ] **Between points**: Both Active Coach and Line Coach can edit lineup
@@ -341,7 +344,7 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [ ] Conflict warning toast when both coaches edit
 - [ ] Auto-resize behaviors
 - [ ] Remove "Use Old Screen" button when complete
-- [ ] O/D button (disabled placeholder for future)
+- [x] O/D toggle button (cycles O/D → O → D)
 
 **Step 7: Cleanup**
 - [ ] Remove legacy screen navigation for in-game screens
