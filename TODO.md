@@ -429,6 +429,10 @@ These are deferred until multi-user basics are stable:
 - [ ] Player ↔ User account linking
 - [ ] Player self-service (edit own stats, profile photo)
 - [ ] O-line / D-line presets with auto-promotion
+- [ ] Refactor player references to use ID instead of name
+  - Currently `Point.players`, `pendingNextLine`, etc. store player names
+  - Using `player.id` (e.g., "Alice-7f3a") would handle duplicate names
+  - Requires updating all `includes(playerName)` checks, serialization, data migration
 
 ### Infrastructure
 - [ ] WebSocket upgrade for real-time sync
