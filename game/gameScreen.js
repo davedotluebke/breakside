@@ -997,6 +997,9 @@ function ensureDialogVisible(dialogId) {
  * - Minimize the Play-by-Play panel
  */
 function transitionToBetweenPoints() {
+    // Reset conflict tracking for new between-points phase
+    lastConflictToastPointIndex = -1;
+    
     // Update score display
     let game;
     if (typeof currentGame === 'function') {
@@ -1387,6 +1390,14 @@ function setupPlayByPlayResizeObserver() {
 // Track stats display mode for panel (Game vs Total)
 let panelShowingTotalStats = false;
 
+// Track conflict detection state
+let lastConflictToastPointIndex = -1;  // Prevent multiple toasts per point
+let localLineEditTimestamps = {
+    oLine: 0,
+    dLine: 0,
+    odLine: 0
+};
+
 /**
  * Wire up Select Next Line panel event handlers
  */
@@ -1611,6 +1622,57 @@ function handlePanelLinesClick() {
 }
 
 /**
+ * Check for conflicts when editing the line
+ * Warns if another coach edited the same line type within the last 5 seconds
+ */
+function checkForLineEditConflict() {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !game.pendingNextLine) return;
+    
+    // Only check between points
+    if (typeof isPointInProgress === 'function' && isPointInProgress()) return;
+    
+    // Check if we already showed a toast for this point
+    const currentPointIndex = game.points.length;
+    if (lastConflictToastPointIndex === currentPointIndex) return;
+    
+    const activeType = game.pendingNextLine.activeType || 'od';
+    const lineKey = activeType + 'Line';
+    
+    // Get the modification timestamp for the current line type
+    const modTimestampKey = activeType + 'LineModifiedAt';
+    const remoteModTimestamp = game.pendingNextLine[modTimestampKey];
+    
+    if (!remoteModTimestamp) return;
+    
+    const remoteTime = new Date(remoteModTimestamp).getTime();
+    const now = Date.now();
+    const fiveSecondsAgo = now - 5000;
+    const localEditTime = localLineEditTimestamps[lineKey] || 0;
+    
+    // If remote timestamp is newer than our last edit AND within 5 seconds,
+    // someone else edited after us
+    if (remoteTime > localEditTime && remoteTime > fiveSecondsAgo) {
+        // Get the other coach's name from controller state
+        const state = typeof getControllerState === 'function' ? getControllerState() : {};
+        let otherCoachName = null;
+        
+        if (state.isActiveCoach && state.lineCoach) {
+            otherCoachName = state.lineCoach.displayName;
+        } else if (state.isLineCoach && state.activeCoach) {
+            otherCoachName = state.activeCoach.displayName;
+        }
+        
+        if (otherCoachName) {
+            if (typeof showControllerToast === 'function') {
+                showControllerToast(`Warning: ${otherCoachName} is also editing this line`, 'warning');
+            }
+            lastConflictToastPointIndex = currentPointIndex;
+        }
+    }
+}
+
+/**
  * Handle checkbox change in the player selection table
  * @param {Event} e - Change event
  */
@@ -1626,6 +1688,9 @@ function handlePanelCheckboxChange(e) {
         }
         return;
     }
+    
+    // Check for conflicts with other coach before saving
+    checkForLineEditConflict();
     
     // Save to pending next line
     savePanelSelectionsToPendingNextLine();
@@ -1721,6 +1786,8 @@ function savePanelSelectionsToPendingNextLine(updateTimestamp = true) {
     // (not just viewing via toggle)
     if (updateTimestamp) {
         game.pendingNextLine[activeType + 'LineModifiedAt'] = new Date().toISOString();
+        // Track our local edit time for conflict detection
+        localLineEditTimestamps[activeType + 'Line'] = Date.now();
     }
     
     // Save (triggers sync)
