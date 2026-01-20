@@ -2,9 +2,8 @@
 
 This document details the remaining work for Phase 6b of the Breakside panel-based UI redesign.
 
-**Status**: In Progress  
+**Status**: Planning  
 **Created**: 2026-01-20
-**Last Updated**: 2026-01-20
 
 ---
 
@@ -454,129 +453,279 @@ function checkForLineEditConflict() {
 
 ---
 
-## 4. Compact Layout for Minimized Select Line Panel
+## 4. Compact Layout for Small Select Line Panel
 
 ### Purpose
-When the Select Next Line panel is minimized, show the selected player names in the title bar subtitle area.
+When the Select Next Line panel is manually resized to a very small height (approximately two lines of text), replace the full table UI with a compact, read-only text display showing the selected players. This allows the user to see at a glance who is selected while maximizing screen space for other panels.
 
 ### Design
-- Comma-separated player names
-- Truncate individual names with ellipsis ("...") to fit on one line
-- Example: "Al..., Bob, Cy..., Da..., Ev..."
+- **Trigger**: Panel height falls below a threshold (roughly 2 lines of text, ~60px content area)
+- **Layout**: Replaces the entire table and buttons with a single text element
+- **Format**: A tappable line-type prefix (`O: `, `D: `, or `O/D: `) followed by comma-separated player names
+- **Interaction**: Read-only; tapping the prefix cycles through O → D → O/D → O... (starting with whatever the full table view is or would be showing)
+- **Name display**: 
+  - Use first names, with FMP/MMP gender color coding
+  - Truncate with ellipsis only if names would overflow the available space
+  - Truncate as few player names as needed to avoid overflow
+- **Empty/partial states**:
+  - No players selected: `"D: (none selected yet)"`
+  - Fewer than required players: Show selected names plus `<TBD>` placeholders for missing slots
+  - Example with 5 of 7: `"O: Alice, Bob, Carol, Dave, Eve, <TBD>, <TBD>"`
+- **Transition**: 250ms CSS transition when switching between compact and full views
 
 ### Implementation
 
-#### A. Create Compact Name Display Function
+#### A. Add Compact View Container to Panel
+
+In `gameScreen.js`, modify `createSelectLinePanel()` to include a compact view element:
+
+```javascript
+// Inside createSelectLinePanel(), after creating the table container:
+const compactView = document.createElement('div');
+compactView.className = 'select-line-compact-view';
+compactView.innerHTML = `
+    <span class="compact-line-type-link" id="compactLineTypeLink">O/D: </span>
+    <span class="compact-player-list" id="compactPlayerList"></span>
+`;
+compactView.style.display = 'none'; // Hidden by default
+panelContent.appendChild(compactView);
+```
+
+#### B. Create Compact View Update Function
 
 ```javascript
 /**
- * Generate compact player names string for panel subtitle
- * Truncates individual names to fit within available width
- * @param {string[]} playerNames - Array of player names
- * @param {number} maxWidth - Maximum width in pixels (approximate)
- * @returns {string} Formatted string like "Al..., Bob, Cy..."
+ * Update the compact view display with current line selection
  */
-function getCompactPlayerNames(playerNames, maxWidth = 200) {
-    if (!playerNames || playerNames.length === 0) return 'No players selected';
+function updateSelectLineCompactView() {
+    const compactView = document.querySelector('.select-line-compact-view');
+    if (!compactView) return;
     
-    // Start with full names, progressively truncate if needed
-    const CHAR_WIDTH = 7; // Approximate pixels per character
-    const SEPARATOR = ', ';
-    const ELLIPSIS = '...';
+    const game = currentGame();
+    if (!game || !game.pendingNextLine) return;
     
-    // Try full names first
-    let result = playerNames.join(SEPARATOR);
-    if (result.length * CHAR_WIDTH <= maxWidth) {
-        return result;
+    const activeType = game.pendingNextLine.activeType || 'od';
+    const lineKey = activeType + 'Line';
+    const selectedNames = game.pendingNextLine[lineKey] || [];
+    
+    // Update line type link
+    const linkEl = document.getElementById('compactLineTypeLink');
+    if (linkEl) {
+        const typeLabels = { o: 'O: ', d: 'D: ', od: 'O/D: ' };
+        linkEl.textContent = typeLabels[activeType] || 'O/D: ';
     }
     
-    // Calculate target length per name
-    const separatorOverhead = (playerNames.length - 1) * SEPARATOR.length;
-    const availableChars = Math.floor(maxWidth / CHAR_WIDTH) - separatorOverhead;
-    const charsPerName = Math.max(3, Math.floor(availableChars / playerNames.length));
+    // Update player list
+    const listEl = document.getElementById('compactPlayerList');
+    if (!listEl) return;
     
-    // Truncate names
-    const truncatedNames = playerNames.map(name => {
-        if (name.length <= charsPerName) return name;
-        return name.substring(0, charsPerName - ELLIPSIS.length) + ELLIPSIS;
+    listEl.innerHTML = ''; // Clear existing
+    
+    if (selectedNames.length === 0) {
+        listEl.textContent = '(none selected yet)';
+        return;
+    }
+    
+    // Determine required player count (typically 7)
+    const requiredCount = 7;
+    const roster = currentTeam?.teamRoster || [];
+    
+    // Build player name spans with gender colors
+    selectedNames.forEach((name, index) => {
+        if (index > 0) {
+            listEl.appendChild(document.createTextNode(', '));
+        }
+        
+        const span = document.createElement('span');
+        const player = roster.find(p => p.name === name);
+        const firstName = name.split(' ')[0];
+        span.textContent = firstName;
+        
+        // Apply gender color
+        if (player) {
+            if (player.gender === Gender.FMP) span.classList.add('player-fmp');
+            else if (player.gender === Gender.MMP) span.classList.add('player-mmp');
+        }
+        
+        listEl.appendChild(span);
     });
     
-    return truncatedNames.join(SEPARATOR);
+    // Add <TBD> placeholders for missing players
+    const missing = requiredCount - selectedNames.length;
+    for (let i = 0; i < missing; i++) {
+        listEl.appendChild(document.createTextNode(', '));
+        const tbdSpan = document.createElement('span');
+        tbdSpan.className = 'compact-tbd';
+        tbdSpan.textContent = '<TBD>';
+        listEl.appendChild(tbdSpan);
+    }
 }
 ```
 
-#### B. Update Panel Subtitle on Selection Change
-
-Add function to update subtitle:
+#### C. Handle Line Type Cycling
 
 ```javascript
-function updateSelectLinePanelSubtitle() {
+/**
+ * Cycle through line types when compact view link is tapped
+ */
+function handleCompactLineTypeTap() {
     const game = currentGame();
-    const selectedPlayers = getSelectedPlayersFromPanel();
+    if (!game || !game.pendingNextLine) return;
     
-    // Get short names (first name or nickname)
-    const shortNames = selectedPlayers.map(name => {
-        // Use first word of name, or first 6 chars
-        const parts = name.split(' ');
-        return parts[0].length <= 8 ? parts[0] : parts[0].substring(0, 6);
-    });
+    const currentType = game.pendingNextLine.activeType || 'od';
+    const cycleOrder = ['o', 'd', 'od'];
+    const currentIndex = cycleOrder.indexOf(currentType);
+    const nextIndex = (currentIndex + 1) % cycleOrder.length;
     
-    const compactText = getCompactPlayerNames(shortNames, 250);
+    game.pendingNextLine.activeType = cycleOrder[nextIndex];
     
-    if (typeof setPanelSubtitle === 'function') {
-        setPanelSubtitle('selectLine', compactText);
+    // Update compact view to show new line
+    updateSelectLineCompactView();
+    
+    // Also update the full view so it's in sync when panel expands
+    updateSelectLineTable();
+}
+
+// Wire up click handler (in panel initialization):
+document.getElementById('compactLineTypeLink')?.addEventListener('click', handleCompactLineTypeTap);
+```
+
+#### D. Height-Based View Switching
+
+```javascript
+/**
+ * Check panel height and switch between compact/full views
+ * Called on panel resize
+ */
+function checkSelectLinePanelCompactMode() {
+    const panel = document.getElementById('selectLinePanel');
+    if (!panel) return;
+    
+    const content = panel.querySelector('.panel-content');
+    if (!content) return;
+    
+    const COMPACT_THRESHOLD = 60; // pixels - roughly 2 lines of text
+    const contentHeight = content.clientHeight;
+    
+    const compactView = panel.querySelector('.select-line-compact-view');
+    const fullView = panel.querySelector('.select-line-full-view'); // Table + buttons container
+    
+    if (!compactView || !fullView) return;
+    
+    const isCompact = contentHeight < COMPACT_THRESHOLD;
+    
+    if (isCompact) {
+        compactView.style.display = 'block';
+        fullView.style.display = 'none';
+        updateSelectLineCompactView();
+    } else {
+        compactView.style.display = 'none';
+        fullView.style.display = 'block';
     }
 }
 ```
 
-#### C. Call on State Changes
+#### E. Hook Into Panel Resize
 
-Update these functions to call `updateSelectLinePanelSubtitle()`:
+In `panelSystem.js`, add a resize callback mechanism:
 
-1. `handlePanelCheckboxChange()` - after selection changes
-2. `updateSelectLineTable()` - after table is populated
-3. `updateSelectLinePanelState()` - after state updates
+```javascript
+// In the panel resize handler (ResizeObserver or drag handler):
+function onPanelResize(panelId) {
+    // Notify panel-specific resize handlers
+    if (panelId === 'selectLinePanel' && typeof checkSelectLinePanelCompactMode === 'function') {
+        checkSelectLinePanelCompactMode();
+    }
+}
+```
+
+#### F. CSS Styling
+
+Add to `ui/panelSystem.css`:
+
+```css
+/* Compact view container */
+.select-line-compact-view {
+    padding: 8px 12px;
+    font-size: 14px;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Tappable line type link */
+.compact-line-type-link {
+    font-weight: bold;
+    color: #007AFF;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.compact-line-type-link:active {
+    opacity: 0.7;
+}
+
+/* Player list */
+.compact-player-list {
+    color: #333;
+}
+
+/* TBD placeholder styling */
+.compact-tbd {
+    color: #999;
+    font-style: italic;
+}
+
+/* Smooth transition between views */
+.select-line-compact-view,
+.select-line-full-view {
+    transition: opacity 250ms ease-in-out;
+}
+
+/* Gender colors (same as table view) */
+.select-line-compact-view .player-fmp {
+    color: #D63384; /* Pink for FMP */
+}
+
+.select-line-compact-view .player-mmp {
+    color: #0D6EFD; /* Blue for MMP */
+}
+```
+
+#### G. Wrap Existing Table UI
+
+Modify `createSelectLinePanel()` to wrap the existing table and buttons in a container:
+
+```javascript
+// Wrap existing table, toggle buttons, and action buttons in a container
+const fullView = document.createElement('div');
+fullView.className = 'select-line-full-view';
+// Move existing elements into fullView...
+fullView.appendChild(toggleContainer);
+fullView.appendChild(tableContainer);
+fullView.appendChild(buttonContainer);
+panelContent.appendChild(fullView);
+```
+
+#### H. Keep Compact View in Sync
+
+Call `updateSelectLineCompactView()` whenever selections change:
 
 ```javascript
 // In handlePanelCheckboxChange():
 function handlePanelCheckboxChange(e) {
     // ... existing code ...
     
-    // Update compact subtitle
-    updateSelectLinePanelSubtitle();
+    // Keep compact view in sync
+    updateSelectLineCompactView();
 }
 
 // In updateSelectLineTable():
 function updateSelectLineTable() {
-    // ... existing code at end ...
+    // ... existing code ...
     
-    // Update subtitle after table is populated
-    updateSelectLinePanelSubtitle();
-}
-```
-
-#### D. CSS for Subtitle
-
-The subtitle element already exists in `panelSystem.js`. Ensure proper styling in `panelSystem.css`:
-
-```css
-.panel-subtitle {
-    font-size: 12px;
-    color: #888;
-    margin-left: 8px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 60%;
-}
-
-/* Only show subtitle when panel is minimized */
-.game-panel:not(.expanding) .panel-subtitle {
-    display: inline;
-}
-
-.game-panel.expanding .panel-subtitle {
-    display: none;
+    // Keep compact view in sync
+    updateSelectLineCompactView();
 }
 ```
 
@@ -725,11 +874,11 @@ After testing and debugging, update `version.json`:
 - [ ] Toast shows other coach's name
 - [ ] Works correctly with O, D, and O/D lines
 
-### Compact Layout ✅
-- [x] Subtitle shows player names when panel minimized
-- [x] Names truncate with ellipsis when too long
-- [x] Subtitle updates when selections change
-- [x] Subtitle hidden when panel expanded
+### Compact Layout
+- [ ] Subtitle shows player names when panel minimized
+- [ ] Names truncate with ellipsis when too long
+- [ ] Subtitle updates when selections change
+- [ ] Subtitle hidden when panel expanded
 
 ### Panel UI Entry
 - [ ] New game goes directly to panel UI
@@ -765,7 +914,7 @@ After testing and debugging, update `version.json`:
 
 Recommended order for implementation:
 
-1. **Compact Layout** (simplest, no new logic) ✅ COMPLETE
+1. **Compact Layout** (simplest, no new logic)
 2. **Panel UI Entry for New Games** (enables testing other features)
 3. **Pull Dialog Role Check** (simple guard clause)
 4. **Conflict Warning Toast** (medium complexity)

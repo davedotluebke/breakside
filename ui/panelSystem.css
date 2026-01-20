@@ -183,12 +183,6 @@ body.game-screen-active #controllerRoleButtons {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 50%;
-    display: none; /* Hidden by default, shown via JS when minimized */
-}
-
-/* Show subtitle when panel is minimized (content hidden) */
-.panel-subtitle.visible {
-    display: inline;
 }
 
 /* Panel action buttons (expand/collapse) */
@@ -1727,6 +1721,73 @@ body.game-screen-active #controllerRoleButtons {
         padding: 8px 10px;
         font-size: 0.8rem;
     }
+}
+
+/* =============================================================================
+   Select Line Panel - Compact View
+   Shown when panel is resized to very small height (~60px content area)
+   ============================================================================= */
+
+/* Compact view container */
+.select-line-compact-view {
+    padding: 8px 12px;
+    font-size: 14px;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Tappable line type link */
+.compact-line-type-link {
+    font-weight: bold;
+    color: #007AFF;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.compact-line-type-link:hover {
+    color: #0056b3;
+}
+
+.compact-line-type-link:active {
+    opacity: 0.7;
+}
+
+/* Player list */
+.compact-player-list {
+    color: #333;
+}
+
+/* TBD placeholder styling */
+.compact-tbd {
+    color: #999;
+    font-style: italic;
+}
+
+/* Gender colors in compact view (same as table view) */
+.select-line-compact-view .player-fmp {
+    color: #9c27b0;
+}
+
+.select-line-compact-view .player-mmp {
+    color: #1976d2;
+}
+
+/* Full view container - uses flex for table layout */
+.select-line-full-view {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Smooth transition between views */
+.select-line-compact-view,
+.select-line-full-view {
+    transition: opacity 250ms ease-in-out;
 }
 
 /* =============================================================================

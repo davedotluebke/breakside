@@ -306,6 +306,7 @@ function createPlayByPlayPanel() {
  * Create the Select Next Line panel content
  * Contains: header row with toggles, Start Point button, Lines button, 
  * gender ratio display, and player selection table
+ * Also includes a compact view for when panel is very small
  * @returns {HTMLElement}
  */
 function createSelectLineContent() {
@@ -313,42 +314,51 @@ function createSelectLineContent() {
     content.className = 'select-line-content';
     
     content.innerHTML = `
-        <div class="select-line-header-row">
-            <span class="select-line-stats-toggle" id="panelStatsToggle">(Game)</span>
-            <button class="select-line-od-toggle" id="panelODToggle" title="Toggle O/D/O-D line (coming soon)">
-                O/D
-            </button>
+        <!-- Compact view - shown when panel is very small -->
+        <div class="select-line-compact-view" id="selectLineCompactView" style="display: none;">
+            <span class="compact-line-type-link" id="compactLineTypeLink">O/D: </span>
+            <span class="compact-player-list" id="compactPlayerList"></span>
         </div>
-        <div class="select-line-top-row">
-            <button class="select-line-start-btn" id="panelStartPointBtn">
-                Start Point
-            </button>
-            <button class="select-line-lines-btn" id="panelLinesBtn">
-                Lines...
-            </button>
-        </div>
-        <div class="select-line-gender-ratio" id="panelGenderRatioDisplay" style="display: none;">
-            <span>Gender Ratio: </span><span id="panelGenderRatioText"></span>
-        </div>
-        <div class="select-line-starting-ratio" id="panelStartingRatioSelection" style="display: none;">
-            <label>Starting Ratio: </label>
-            <input type="radio" id="panelStartingRatioFMP" name="panelStartingRatio" value="FMP">
-            <label for="panelStartingRatioFMP">FMP</label>
-            <input type="radio" id="panelStartingRatioMMP" name="panelStartingRatio" value="MMP">
-            <label for="panelStartingRatioMMP">MMP</label>
-        </div>
-        <div class="select-line-table-container" id="panelTableContainer">
-            <table class="panel-player-table" id="panelActivePlayersTable">
-                <thead>
-                    <tr>
-                        <th></th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- Player rows will be dynamically added here -->
-                </tbody>
-            </table>
+        
+        <!-- Full view - normal table UI -->
+        <div class="select-line-full-view" id="selectLineFullView">
+            <div class="select-line-header-row">
+                <span class="select-line-stats-toggle" id="panelStatsToggle">(Game)</span>
+                <button class="select-line-od-toggle" id="panelODToggle" title="Toggle O/D/O-D line (coming soon)">
+                    O/D
+                </button>
+            </div>
+            <div class="select-line-top-row">
+                <button class="select-line-start-btn" id="panelStartPointBtn">
+                    Start Point
+                </button>
+                <button class="select-line-lines-btn" id="panelLinesBtn">
+                    Lines...
+                </button>
+            </div>
+            <div class="select-line-gender-ratio" id="panelGenderRatioDisplay" style="display: none;">
+                <span>Gender Ratio: </span><span id="panelGenderRatioText"></span>
+            </div>
+            <div class="select-line-starting-ratio" id="panelStartingRatioSelection" style="display: none;">
+                <label>Starting Ratio: </label>
+                <input type="radio" id="panelStartingRatioFMP" name="panelStartingRatio" value="FMP">
+                <label for="panelStartingRatioFMP">FMP</label>
+                <input type="radio" id="panelStartingRatioMMP" name="panelStartingRatio" value="MMP">
+                <label for="panelStartingRatioMMP">MMP</label>
+            </div>
+            <div class="select-line-table-container" id="panelTableContainer">
+                <table class="panel-player-table" id="panelActivePlayersTable">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Player rows will be dynamically added here -->
+                    </tbody>
+                </table>
+            </div>
         </div>
         <div class="select-line-readonly-overlay" id="panelReadonlyOverlay" style="display: none;">
             <span class="readonly-badge">View Only</span>
@@ -1623,12 +1633,12 @@ function handlePanelCheckboxChange(e) {
     // Update Start Point button state
     updateStartPointButtonState();
     
-    // Update compact subtitle for minimized state
-    updateSelectLinePanelSubtitle();
-    
     // Sync to legacy table for compatibility
     const selectedPlayers = getSelectedPlayersFromPanel();
     syncPanelSelectionsToLegacy(selectedPlayers);
+    
+    // Keep compact view in sync
+    updateSelectLineCompactView();
 }
 
 /**
@@ -2162,8 +2172,8 @@ function updateSelectLineTable() {
         makePanelColumnsSticky();
     });
     
-    // Update subtitle for minimized state
-    updateSelectLinePanelSubtitle();
+    // Keep compact view in sync
+    updateSelectLineCompactView();
 }
 
 /**
@@ -2211,6 +2221,194 @@ function updateSelectLineTimeCells() {
                 : '0:00';
         }
     });
+}
+
+// =============================================================================
+// Select Line Panel - Compact View
+// =============================================================================
+
+// Height threshold for compact mode (in pixels)
+const COMPACT_VIEW_THRESHOLD = 60;
+
+// ResizeObserver for detecting panel height changes
+let selectLinePanelResizeObserver = null;
+
+/**
+ * Update the compact view display with current line selection
+ * Shows line type prefix and comma-separated player names with gender colors
+ */
+function updateSelectLineCompactView() {
+    const compactView = document.getElementById('selectLineCompactView');
+    if (!compactView) return;
+    
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game) return;
+    
+    // Get current pending selections
+    const pendingLine = game.pendingNextLine || {};
+    const activeType = pendingLine.activeType || 'od';
+    const lineKey = activeType + 'Line';
+    const selectedNames = pendingLine[lineKey] || [];
+    
+    // Update line type link
+    const linkEl = document.getElementById('compactLineTypeLink');
+    if (linkEl) {
+        const typeLabels = { o: 'O: ', d: 'D: ', od: 'O/D: ' };
+        linkEl.textContent = typeLabels[activeType] || 'O/D: ';
+    }
+    
+    // Update player list
+    const listEl = document.getElementById('compactPlayerList');
+    if (!listEl) return;
+    
+    listEl.innerHTML = ''; // Clear existing
+    
+    if (selectedNames.length === 0) {
+        listEl.textContent = '(none selected yet)';
+        return;
+    }
+    
+    // Determine required player count (typically 7)
+    const requiredCount = 7;
+    const roster = currentTeam?.teamRoster || [];
+    
+    // Build player name spans with gender colors
+    selectedNames.forEach((name, index) => {
+        if (index > 0) {
+            listEl.appendChild(document.createTextNode(', '));
+        }
+        
+        const span = document.createElement('span');
+        const player = roster.find(p => p.name === name);
+        
+        // Use first name only for compact display
+        const firstName = name.split(' ')[0];
+        span.textContent = firstName;
+        
+        // Apply gender color
+        if (player) {
+            if (player.gender === Gender.FMP) span.classList.add('player-fmp');
+            else if (player.gender === Gender.MMP) span.classList.add('player-mmp');
+        }
+        
+        listEl.appendChild(span);
+    });
+    
+    // Add <TBD> placeholders for missing players
+    const missing = requiredCount - selectedNames.length;
+    for (let i = 0; i < missing; i++) {
+        listEl.appendChild(document.createTextNode(', '));
+        const tbdSpan = document.createElement('span');
+        tbdSpan.className = 'compact-tbd';
+        tbdSpan.textContent = '<TBD>';
+        listEl.appendChild(tbdSpan);
+    }
+}
+
+/**
+ * Cycle through line types when compact view link is tapped
+ * Cycles: O → D → O/D → O...
+ */
+function handleCompactLineTypeTap() {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game) return;
+    
+    // Initialize pendingNextLine if needed
+    if (!game.pendingNextLine) {
+        game.pendingNextLine = {
+            activeType: 'od',
+            odLine: [],
+            oLine: [],
+            dLine: []
+        };
+    }
+    
+    const currentType = game.pendingNextLine.activeType || 'od';
+    const cycleOrder = ['o', 'd', 'od'];
+    const currentIndex = cycleOrder.indexOf(currentType);
+    const nextIndex = (currentIndex + 1) % cycleOrder.length;
+    
+    game.pendingNextLine.activeType = cycleOrder[nextIndex];
+    
+    // Update compact view to show new line
+    updateSelectLineCompactView();
+    
+    // Also update the full view so it's in sync when panel expands
+    // Update the O/D toggle button
+    updateODToggleButton();
+    updateSelectLineTable();
+    
+    // Save changes
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
+}
+
+/**
+ * Check panel content height and switch between compact/full views
+ * Called when panel is resized
+ */
+function checkSelectLinePanelCompactMode() {
+    const panel = document.getElementById('panel-selectLine');
+    if (!panel) return;
+    
+    const contentArea = panel.querySelector('.panel-content');
+    if (!contentArea) return;
+    
+    const compactView = document.getElementById('selectLineCompactView');
+    const fullView = document.getElementById('selectLineFullView');
+    
+    if (!compactView || !fullView) return;
+    
+    // Get the content area height (excludes title bar)
+    const contentHeight = contentArea.clientHeight;
+    
+    const isCompact = contentHeight < COMPACT_VIEW_THRESHOLD;
+    
+    if (isCompact) {
+        compactView.style.display = 'block';
+        fullView.style.display = 'none';
+        updateSelectLineCompactView();
+    } else {
+        compactView.style.display = 'none';
+        fullView.style.display = 'flex';
+    }
+}
+
+/**
+ * Initialize the compact view resize observer
+ * Sets up a ResizeObserver to detect when the panel content area changes size
+ */
+function initSelectLineCompactViewObserver() {
+    const panel = document.getElementById('panel-selectLine');
+    if (!panel) return;
+    
+    const contentArea = panel.querySelector('.panel-content');
+    if (!contentArea) return;
+    
+    // Clean up any existing observer
+    if (selectLinePanelResizeObserver) {
+        selectLinePanelResizeObserver.disconnect();
+    }
+    
+    // Create new observer
+    selectLinePanelResizeObserver = new ResizeObserver((entries) => {
+        // Debounce check to avoid excessive updates during drag
+        requestAnimationFrame(() => {
+            checkSelectLinePanelCompactMode();
+        });
+    });
+    
+    selectLinePanelResizeObserver.observe(contentArea);
+    
+    // Wire up click handler for line type cycling
+    const linkEl = document.getElementById('compactLineTypeLink');
+    if (linkEl) {
+        linkEl.addEventListener('click', handleCompactLineTypeTap);
+    }
+    
+    // Do initial check
+    checkSelectLinePanelCompactMode();
 }
 
 /**
@@ -2283,84 +2481,6 @@ function updateSelectLinePanel() {
     updateSelectLineTable();
     updateSelectLinePanelState();
     updateODToggleButton();
-    updateSelectLinePanelSubtitle();
-}
-
-// =============================================================================
-// Compact Subtitle for Minimized Select Line Panel
-// =============================================================================
-
-/**
- * Generate compact player names string for panel subtitle
- * Truncates individual names to fit within available width
- * @param {string[]} playerNames - Array of player names
- * @param {number} maxWidth - Maximum width in pixels (approximate)
- * @returns {string} Formatted string like "Al..., Bob, Cy..."
- */
-function getCompactPlayerNames(playerNames, maxWidth = 200) {
-    if (!playerNames || playerNames.length === 0) return 'No players selected';
-    
-    // Start with full names, progressively truncate if needed
-    const CHAR_WIDTH = 7; // Approximate pixels per character
-    const SEPARATOR = ', ';
-    const ELLIPSIS = '...';
-    
-    // Try full names first
-    let result = playerNames.join(SEPARATOR);
-    if (result.length * CHAR_WIDTH <= maxWidth) {
-        return result;
-    }
-    
-    // Calculate target length per name
-    const separatorOverhead = (playerNames.length - 1) * SEPARATOR.length;
-    const availableChars = Math.floor(maxWidth / CHAR_WIDTH) - separatorOverhead;
-    const charsPerName = Math.max(3, Math.floor(availableChars / playerNames.length));
-    
-    // Truncate names
-    const truncatedNames = playerNames.map(name => {
-        if (name.length <= charsPerName) return name;
-        return name.substring(0, charsPerName - ELLIPSIS.length) + ELLIPSIS;
-    });
-    
-    return truncatedNames.join(SEPARATOR);
-}
-
-/**
- * Update the Select Line panel subtitle with selected player names
- * Shows compact player list when panel is minimized
- */
-function updateSelectLinePanelSubtitle() {
-    const selectedPlayers = getSelectedPlayersFromPanel();
-    const subtitleEl = document.getElementById('panel-selectLine-subtitle');
-    
-    if (!subtitleEl) return;
-    
-    // Get short names (first name or first word)
-    const shortNames = selectedPlayers.map(name => {
-        // Use first word of name, or first 8 chars if single word is long
-        const parts = name.split(' ');
-        return parts[0].length <= 8 ? parts[0] : parts[0].substring(0, 6);
-    });
-    
-    // Generate compact text
-    let compactText;
-    if (shortNames.length === 0) {
-        compactText = 'No players selected';
-    } else {
-        compactText = getCompactPlayerNames(shortNames, 250);
-        // Add count suffix
-        compactText = `(${shortNames.length}) ${compactText}`;
-    }
-    
-    // Set the subtitle text
-    if (typeof setPanelSubtitle === 'function') {
-        setPanelSubtitle('selectLine', compactText);
-    }
-    
-    // Toggle visibility based on panel state
-    // Show subtitle when panel is minimized, hide when expanded
-    const isMinimized = typeof isPanelMinimized === 'function' && isPanelMinimized('selectLine');
-    subtitleEl.classList.toggle('visible', isMinimized);
 }
 
 // =============================================================================
@@ -2871,6 +2991,9 @@ function enterGameScreen() {
     // Set up ResizeObserver for Play-by-Play panel layout
     setupPlayByPlayResizeObserver();
     
+    // Set up ResizeObserver for Select Line panel compact view
+    initSelectLineCompactViewObserver();
+    
     console.log('🎮 Entered game screen');
 }
 
@@ -2882,24 +3005,6 @@ function exitGameScreen() {
     hideGameScreen();
     stopGameScreenTimerLoop();
     console.log('🎮 Exited game screen');
-}
-
-// =============================================================================
-// Integration with Panel System
-// =============================================================================
-
-// Hook into panel state changes to update subtitle visibility
-const originalApplyPanelState = window.applyPanelState;
-if (typeof originalApplyPanelState === 'function') {
-    window.applyPanelState = function(panelId) {
-        // Call original
-        originalApplyPanelState(panelId);
-        
-        // Update subtitle visibility for selectLine panel
-        if (panelId === 'selectLine') {
-            updateSelectLinePanelSubtitle();
-        }
-    };
 }
 
 // =============================================================================
@@ -2976,8 +3081,4 @@ window.updateSelectLinePanelState = updateSelectLinePanelState;
 window.canEditSelectLinePanel = canEditSelectLinePanel;
 window.getSelectedPlayersFromPanel = getSelectedPlayersFromPanel;
 window.savePanelSelectionsToPendingNextLine = savePanelSelectionsToPendingNextLine;
-
-// Compact subtitle for minimized panel
-window.getCompactPlayerNames = getCompactPlayerNames;
-window.updateSelectLinePanelSubtitle = updateSelectLinePanelSubtitle;
 
