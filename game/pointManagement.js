@@ -51,6 +51,18 @@ function moveToNextPoint() {
 }
 
 function startNextPoint() {
+    // Check if user has permission to start a point
+    // Only Active Coach (or local user with implicit control) can start points
+    if (typeof canEditPlayByPlay === 'function' && !canEditPlayByPlay()) {
+        console.warn('User does not have Active Coach role - cannot start point');
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('Only the Active Coach can start a new point', 'warning');
+        } else {
+            alert('Only the Active Coach can start a new point.');
+        }
+        return;
+    }
+    
     // Stop the countdown when point starts
     stopCountdown();
 

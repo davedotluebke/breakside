@@ -1534,10 +1534,10 @@ function handlePanelStartPoint() {
         return;
     }
     
-    // Check if we can edit (need role permission to start point)
-    if (!canEditSelectLinePanel()) {
+    // Check if we can start a point (need Active Coach role, not just lineup edit)
+    if (!canEditPlayByPlayPanel()) {
         if (typeof showControllerToast === 'function') {
-            showControllerToast('You need a coach role to start the point', 'warning');
+            showControllerToast('Only the Active Coach can start a new point', 'warning');
         }
         return;
     }
