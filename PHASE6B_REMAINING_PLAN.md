@@ -9,16 +9,165 @@ This document details the remaining work for Phase 6b of the Breakside panel-bas
 
 ## Overview
 
-Six items remain to complete Phase 6b:
+Items remaining to complete Phase 6b:
 
-| # | Feature | Complexity | Files Affected |
-|---|---------|------------|----------------|
-| 1 | Sub Players modal for mid-point injury subs | Medium | `game/gameScreen.js`, `main.css` |
-| 2 | Pull dialog auto-popup (Active Coach only) | Low | `game/pointManagement.js` |
-| 3 | Conflict warning toast | Medium | `game/gameScreen.js`, `game/controllerState.js` |
-| 4 | Compact layout for minimized Select Line panel | Low | `game/gameScreen.js`, `main.css` |
-| 5 | New games start with panel UI | Low | `game/gameLogic.js`, `game/pointManagement.js` |
-| 6 | Final cleanup | Low | Various |
+| # | Feature | Complexity | Status |
+|---|---------|------------|--------|
+| 1 | Compact layout for minimized Select Line panel | Low | ✅ Done |
+| 2 | New games start with panel UI | Low | ✅ Done |
+| 3 | Pull dialog auto-popup (Active Coach only) | Low | ✅ Done |
+| 4 | Conflict warning toast | Medium | ✅ Done |
+| 5 | **"Active Game" indicator on team selection screen** | Medium | **NEXT** |
+| 6 | Sub Players modal for mid-point injury subs | Medium | Pending |
+| 7 | Final cleanup | Low | Pending |
+
+---
+
+## 5. "Active Game" Indicator on Team Selection Screen
+
+### Purpose
+Show an "Active" or "In Progress" tag on games in the team selection screen when any user (the current user or another coach) has been active in the game within the last 5 minutes. This helps coaches identify which games are currently being worked on, making it easier to join ongoing games during multi-coach workflows.
+
+### Current Behavior
+- The team selection screen (`teams/teamSelection.js`) already shows "[In Progress]" for games without `gameEndTimestamp`
+- This is a local-only check - it doesn't know if other coaches are actively working on the game
+- Controller state tracks `lastPing` for each role holder, but this isn't exposed to the game listing
+
+### Design
+- **Visual indicator**: Add a colored badge/tag next to games that have recent activity
+  - Green "🟢 Active" = activity within last 5 minutes
+  - The existing "[In Progress]" text remains for games without `gameEndTimestamp`
+- **Data source**: Use the controller state's `lastPing` timestamps from the server
+- **Scope**: Both local games list and cloud games list should show this indicator
+
+### Implementation
+
+#### A. Server-Side: Add Activity Info to Games List Endpoint
+
+Modify `list_all_games` in `ultistats_server/storage/game_storage.py` or the endpoint in `main.py` to include activity info:
+
+```python
+# In list_games_endpoint or a new helper function
+def get_game_activity(game_id: str) -> Optional[str]:
+    """Get the most recent activity timestamp for a game."""
+    from storage.controller_storage import get_controller_state
+    state = get_controller_state(game_id)
+    if not state:
+        return None
+    
+    # Find the most recent lastPing from any role
+    last_pings = []
+    if state.get("activeCoach") and state["activeCoach"].get("lastPing"):
+        last_pings.append(state["activeCoach"]["lastPing"])
+    if state.get("lineCoach") and state["lineCoach"].get("lastPing"):
+        last_pings.append(state["lineCoach"]["lastPing"])
+    
+    if not last_pings:
+        return None
+    
+    return max(last_pings)  # Most recent activity
+
+# Add to game metadata in list response
+for game in games:
+    game["lastActivity"] = get_game_activity(game["game_id"])
+```
+
+#### B. Client-Side: Fetch Activity and Display Indicator
+
+In `teams/teamSelection.js`, update `showSelectTeamScreen()` to fetch activity info:
+
+```javascript
+// After fetching games, check activity status
+async function getGameActivityStatus(gameId) {
+    try {
+        const response = await authFetch(`${API_BASE_URL}/api/games/${gameId}/controller`);
+        if (!response.ok) return null;
+        
+        const state = await response.json();
+        const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+        
+        // Check lastPing for each role
+        const activeCoachPing = state.activeCoach?.lastPing 
+            ? new Date(state.activeCoach.lastPing).getTime() 
+            : 0;
+        const lineCoachPing = state.lineCoach?.lastPing 
+            ? new Date(state.lineCoach.lastPing).getTime() 
+            : 0;
+        
+        const lastActivity = Math.max(activeCoachPing, lineCoachPing);
+        return lastActivity > fiveMinutesAgo;
+    } catch (e) {
+        console.warn('Failed to get activity status for', gameId, e);
+        return null;
+    }
+}
+```
+
+#### C. UI: Add Activity Badge
+
+```javascript
+// In the game listing loop
+const gameText = document.createElement('span');
+gameText.textContent = `vs ${game.opponent} (${game.scores[Role.TEAM]}-${game.scores[Role.OPPONENT]})`;
+
+// Check for active indicator (from server response)
+if (game.lastActivity) {
+    const lastActivityTime = new Date(game.lastActivity).getTime();
+    const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+    
+    if (lastActivityTime > fiveMinutesAgo) {
+        const activeBadge = document.createElement('span');
+        activeBadge.className = 'game-active-badge';
+        activeBadge.textContent = '🟢 Active';
+        activeBadge.title = 'A coach is currently working on this game';
+        gameItem.appendChild(activeBadge);
+    }
+}
+
+if (!game.gameEndTimestamp) {
+    gameText.textContent += ' [In Progress]';
+}
+```
+
+#### D. CSS Styling
+
+```css
+.game-active-badge {
+    display: inline-block;
+    background: #d4edda;
+    color: #155724;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-left: 8px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+```
+
+### Files Affected
+| File | Changes |
+|------|---------|
+| `ultistats_server/main.py` | Add `lastActivity` to games list response |
+| `ultistats_server/storage/game_storage.py` | Helper to get activity from controller state |
+| `teams/teamSelection.js` | Display activity badge, optionally fetch per-game status |
+| `main.css` or inline styles | Badge styling |
+
+### Testing
+- [ ] Start a game on device A, verify "Active" badge appears
+- [ ] On device B, check team selection - should see "Active" badge for that game
+- [ ] Wait 5+ minutes without activity, badge should disappear
+- [ ] Resume an old game, badge should appear again after claiming role
+
+### Notes
+- **Performance consideration**: Fetching controller state per-game could be slow with many games. Better to include activity in the main games list response.
+- **Alternative approach**: Could use WebSocket to push activity updates, but that's more complex.
+- **Future enhancement**: Show WHO is active (e.g., "🟢 John is coaching")
 
 ---
 
@@ -914,11 +1063,12 @@ After testing and debugging, update `version.json`:
 
 Recommended order for implementation:
 
-1. **Compact Layout** (simplest, no new logic)
-2. **Panel UI Entry for New Games** (enables testing other features)
-3. **Pull Dialog Role Check** (simple guard clause)
-4. **Conflict Warning Toast** (medium complexity)
-5. **Sub Players Modal** (most complex, depends on testing other features)
-6. **Final Cleanup & Testing**
+1. ~~**Compact Layout**~~ ✅ Done
+2. ~~**Panel UI Entry for New Games**~~ ✅ Done
+3. ~~**Pull Dialog Role Check**~~ ✅ Done
+4. ~~**Conflict Warning Toast**~~ ✅ Done
+5. **"Active Game" Indicator** (helps with multi-coach testing) ← NEXT
+6. **Sub Players Modal** (most complex feature)
+7. **Final Cleanup & Testing**
 
 Each section can be implemented independently and tested before moving to the next.
