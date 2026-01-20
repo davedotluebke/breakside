@@ -1732,6 +1732,15 @@ function updateStartPointButtonState() {
     // Check if point is in progress
     const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
     
+    // Debug logging
+    const latestPoint = typeof getLatestPoint === 'function' ? getLatestPoint() : null;
+    console.log('📍 updateStartPointButtonState:', {
+        pointInProgress,
+        latestPointWinner: latestPoint?.winner,
+        latestPointStartTimestamp: latestPoint?.startTimestamp,
+        latestPointPossessionsLength: latestPoint?.possessions?.length
+    });
+    
     // Reset all states
     btn.classList.remove('warning', 'inactive', 'point-in-progress', 
         'feedback-ok', 'feedback-count-warning', 'feedback-gender-warning');
@@ -1816,13 +1825,7 @@ function updateSelectLinePanelState() {
         cb.disabled = !canEdit;
     });
     
-    // Update Start Point button
-    const startBtn = document.getElementById('panelStartPointBtn');
-    if (startBtn) {
-        startBtn.disabled = !canEdit;
-    }
-    
-    // Update button state text
+    // Update Start Point button state (handles disabled state based on point status)
     updateStartPointButtonState();
     
     // Update gender ratio display
