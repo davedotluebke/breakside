@@ -1268,8 +1268,8 @@ function updatePlayByPlayPanelState() {
 
 /**
  * Update Game Events modal button states based on point status
- * - Timeout: enabled DURING a point
- * - Halftime, Switch Sides, End Game: enabled BETWEEN points
+ * - Timeout: enabled anytime (can be called during or between points)
+ * - Halftime, Switch Sides, End Game: enabled BETWEEN points only
  */
 function updateGameEventsModalState() {
     const modal = document.getElementById('gameEventsModal');
@@ -1278,15 +1278,14 @@ function updateGameEventsModalState() {
     const hasActiveCoachRole = canEditPlayByPlayPanel();
     const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
     
-    // Timeout - enabled DURING a point
+    // Timeout - enabled anytime (can be called during or between points)
     const timeoutBtn = modal.querySelector('#geTimeoutBtn');
     if (timeoutBtn) {
-        const enabled = hasActiveCoachRole && pointInProgress;
-        timeoutBtn.disabled = !enabled;
-        timeoutBtn.classList.toggle('disabled', !enabled);
+        timeoutBtn.disabled = !hasActiveCoachRole;
+        timeoutBtn.classList.toggle('disabled', !hasActiveCoachRole);
     }
     
-    // Halftime, Switch Sides, End Game - enabled BETWEEN points
+    // Halftime, Switch Sides, End Game - enabled BETWEEN points only
     const halfTimeBtn = modal.querySelector('#geHalfTimeBtn');
     const switchSidesBtn = modal.querySelector('#geSwitchSidesBtn');
     const endGameBtn = modal.querySelector('#geEndGameBtn');
