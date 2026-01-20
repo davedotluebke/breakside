@@ -1370,6 +1370,7 @@ body.game-screen-active #controllerRoleButtons {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-height: 0; /* Allow flex children to shrink below content size */
 }
 
 /* Select Line panel content container */
@@ -1377,8 +1378,10 @@ body.game-screen-active #controllerRoleButtons {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    height: 100%;
+    flex: 1;
+    min-height: 0; /* Critical for nested flex scroll containers */
     position: relative;
+    overflow: hidden;
 }
 
 /* Header row with stats toggle and O/D toggle */
@@ -1472,7 +1475,7 @@ body.game-screen-active #controllerRoleButtons {
 
 .select-line-start-btn.point-in-progress {
     background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
-    opacity: 0.7;
+    cursor: not-allowed;
 }
 
 .select-line-lines-btn {

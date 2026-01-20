@@ -325,11 +325,11 @@ Replace current screen-based navigation with a **panel-based layout** for all in
   - **Timeout**: available during AND between points
   - **End Game, Half Time, Switch Sides**: only between points
   - Active Coach only
-- [ ] Wire up score buttons to existing scoring logic
+- [x] Wire up score buttons to existing scoring logic
 - [ ] Sub Players modal for mid-point injury subs
 - [ ] Pull dialog auto-popup (defensive point start)
-- [ ] Key Play dialog integration
-- [ ] Undo functionality
+- [x] Key Play dialog integration
+- [x] Undo functionality
 - [x] Auto-resize on point start/end
 - [ ] Remove "Use Old Screen" button when complete
 
