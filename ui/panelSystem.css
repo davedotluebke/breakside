@@ -1459,8 +1459,17 @@ body.game-screen-active #controllerRoleButtons {
     transform: scale(0.98);
 }
 
-.select-line-start-btn.warning {
+/* Feedback states when point NOT in progress (saturated colors) */
+.select-line-start-btn.feedback-ok {
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+}
+
+.select-line-start-btn.feedback-count-warning {
     background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+}
+
+.select-line-start-btn.feedback-gender-warning {
+    background: linear-gradient(135deg, #ff8800 0%, #e67700 100%);
 }
 
 .select-line-start-btn.inactive {
@@ -1468,14 +1477,37 @@ body.game-screen-active #controllerRoleButtons {
     cursor: not-allowed;
 }
 
+/* Legacy warning class (keep for backwards compatibility) */
+.select-line-start-btn.warning {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+}
+
 .select-line-start-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
 }
 
+/* Point in progress base state (gray) */
 .select-line-start-btn.point-in-progress {
     background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
     cursor: not-allowed;
+}
+
+/* Point in progress with feedback (desaturated colors) */
+.select-line-start-btn.point-in-progress.feedback-ok {
+    background: linear-gradient(135deg, #6b9b7a 0%, #5a8a6a 100%);
+}
+
+.select-line-start-btn.point-in-progress.feedback-count-warning {
+    background: linear-gradient(135deg, #a87a7f 0%, #987075 100%);
+}
+
+.select-line-start-btn.point-in-progress.feedback-gender-warning {
+    background: linear-gradient(135deg, #b89060 0%, #a88055 100%);
+}
+
+.select-line-start-btn.point-in-progress.inactive {
+    background: linear-gradient(135deg, #8a9098 0%, #7a8088 100%);
 }
 
 .select-line-lines-btn {
