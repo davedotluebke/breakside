@@ -417,6 +417,10 @@ class Point {
         this.endTimestamp = null;
         this.totalPointTime = 0;  // Accumulated time tracking
         this.lastPauseTime = null;  // Track when the point was last paused
+        
+        // Phase 6b: Track players who were substituted out mid-point (for injury subs)
+        // Both current players and substituted-out players should get credit for playing this point
+        this.substitutedOutPlayers = [];
     }
 
     addPossession(possession) {

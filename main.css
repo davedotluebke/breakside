@@ -3347,3 +3347,114 @@ body.next-line-mode #selectNextLineBtn {
     color: #666;
     margin-bottom: 20px;
 }
+
+/* =============================================================================
+   Sub Players Modal (Mid-Point Injury Substitutions)
+   ============================================================================= */
+
+.sub-players-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.sub-players-modal-content {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    width: 90%;
+    max-width: 400px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.sub-players-info {
+    padding: 8px 16px;
+    font-size: 14px;
+    color: #666;
+    text-align: center;
+}
+
+.sub-players-info .count-warning {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+.sub-players-table-container {
+    flex: 1;
+    max-height: 50vh;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    margin: 0 0 12px 0;
+}
+
+#subPlayersTable {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#subPlayersTable td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #eee;
+}
+
+#subPlayersTable tr:last-child td {
+    border-bottom: none;
+}
+
+.sub-checkbox-column {
+    width: 40px;
+    text-align: center;
+}
+
+.sub-checkbox-column input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.sub-name-column {
+    font-size: 1rem;
+}
+
+.sub-players-buttons {
+    display: flex;
+    gap: 12px;
+    padding: 8px 0 0 0;
+    justify-content: flex-end;
+}
+
+.ge-btn-confirm {
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important;
+    color: white !important;
+}
+
+.ge-btn-confirm:hover:not(:disabled) {
+    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%) !important;
+}
+
+/* Mobile adjustments for Sub Players modal */
+@media (max-width: 480px) {
+    .sub-players-modal-content {
+        width: 95%;
+        padding: 12px;
+    }
+    
+    #subPlayersTable td {
+        padding: 8px 10px;
+    }
+    
+    .sub-name-column {
+        font-size: 0.9rem;
+    }
+}
