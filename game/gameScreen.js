@@ -1020,7 +1020,7 @@ function transitionToBetweenPoints() {
         minimizePanel('playByPlay');
     }
     
-    // Update Play-by-Play button states (disable scoring buttons between points)
+    // Update Play-by-Play panel state (buttons now disabled since point ended)
     updatePlayByPlayPanelState();
     
     // Save data
@@ -1220,9 +1220,9 @@ function handleGameEventEndGame() {
 
 /**
  * Update Play-by-Play panel state based on role and point status
- * - During point: Score, Key Play, Sub buttons enabled (for Active Coach)
- * - Between points: Score, Key Play, Sub buttons disabled
- * - Events button always enabled (modal handles its own button states)
+ * - Score buttons (We Score, They Score): enabled only DURING a point
+ * - Key Play: enabled only DURING a point
+ * - Undo, Events, More: enabled anytime (if Active Coach)
  */
 function updatePlayByPlayPanelState() {
     const panel = document.getElementById('panel-playByPlay');
@@ -1231,42 +1231,73 @@ function updatePlayByPlayPanelState() {
     const hasActiveCoachRole = canEditPlayByPlayPanel();
     const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
     
-    // Disable panel visually if not Active Coach
+    // Disable panel visually if not Active Coach (but don't block pointer events on whole panel)
     panel.classList.toggle('role-disabled', !hasActiveCoachRole);
     
-    // Point-action buttons: only enabled during a point AND with Active Coach role
-    const pointActionButtons = [
-        document.getElementById('pbpWeScoreBtn'),
-        document.getElementById('pbpTheyScoreBtn'),
-        document.getElementById('pbpKeyPlayBtn'),
-        document.getElementById('pbpSubPlayersBtn'),
-        document.getElementById('pbpUndoBtn')
-    ];
+    // Score buttons - only enabled DURING a point
+    const weScoreBtn = document.getElementById('pbpWeScoreBtn');
+    const theyScoreBtn = document.getElementById('pbpTheyScoreBtn');
+    const keyPlayBtn = document.getElementById('pbpKeyPlayBtn');
     
-    pointActionButtons.forEach(btn => {
+    const scoreButtonsEnabled = hasActiveCoachRole && pointInProgress;
+    [weScoreBtn, theyScoreBtn, keyPlayBtn].forEach(btn => {
         if (btn) {
-            const enabled = hasActiveCoachRole && pointInProgress;
-            btn.disabled = !enabled;
-            btn.classList.toggle('disabled', !enabled);
+            btn.disabled = !scoreButtonsEnabled;
+            btn.classList.toggle('disabled', !scoreButtonsEnabled);
         }
     });
     
-    // Events button: enabled if Active Coach (modal handles point-specific states)
-    const eventsBtn = document.getElementById('pbpGameEventsBtn');
-    if (eventsBtn) {
-        eventsBtn.disabled = !hasActiveCoachRole;
-        eventsBtn.classList.toggle('disabled', !hasActiveCoachRole);
-    }
-    
-    // More button: enabled if Active Coach
+    // Action buttons (Undo, Events, More) - enabled anytime if Active Coach
+    const undoBtn = document.getElementById('pbpUndoBtn');
+    const eventsBtn = document.getElementById('pbpEventsBtn');
     const moreBtn = document.getElementById('pbpMoreBtn');
-    if (moreBtn) {
-        moreBtn.disabled = !hasActiveCoachRole;
-        moreBtn.classList.toggle('disabled', !hasActiveCoachRole);
-    }
+    
+    [undoBtn, eventsBtn, moreBtn].forEach(btn => {
+        if (btn) {
+            btn.disabled = !hasActiveCoachRole;
+            btn.classList.toggle('disabled', !hasActiveCoachRole);
+        }
+    });
     
     // Update panel layout based on height
     updatePlayByPlayLayout();
+    
+    // Update Game Events modal buttons if it's open
+    updateGameEventsModalState();
+}
+
+/**
+ * Update Game Events modal button states based on point status
+ * - Timeout: enabled DURING a point
+ * - Halftime, Switch Sides, End Game: enabled BETWEEN points
+ */
+function updateGameEventsModalState() {
+    const modal = document.getElementById('gameEventsModal');
+    if (!modal || modal.style.display === 'none') return;
+    
+    const hasActiveCoachRole = canEditPlayByPlayPanel();
+    const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
+    
+    // Timeout - enabled DURING a point
+    const timeoutBtn = modal.querySelector('#geTimeoutBtn');
+    if (timeoutBtn) {
+        const enabled = hasActiveCoachRole && pointInProgress;
+        timeoutBtn.disabled = !enabled;
+        timeoutBtn.classList.toggle('disabled', !enabled);
+    }
+    
+    // Halftime, Switch Sides, End Game - enabled BETWEEN points
+    const halfTimeBtn = modal.querySelector('#geHalfTimeBtn');
+    const switchSidesBtn = modal.querySelector('#geSwitchSidesBtn');
+    const endGameBtn = modal.querySelector('#geEndGameBtn');
+    
+    const betweenPointsEnabled = hasActiveCoachRole && !pointInProgress;
+    [halfTimeBtn, switchSidesBtn, endGameBtn].forEach(btn => {
+        if (btn) {
+            btn.disabled = !betweenPointsEnabled;
+            btn.classList.toggle('disabled', !betweenPointsEnabled);
+        }
+    });
 }
 
 /**
@@ -1549,6 +1580,9 @@ function handlePanelStartPoint() {
             
             // Update displays
             updateSelectLinePanelState();
+            
+            // Update Play-by-Play panel state (buttons now enabled since point started)
+            updatePlayByPlayPanelState();
         }
     } else {
         console.warn('🏃 startNextPoint function not available');
@@ -1760,6 +1794,15 @@ function updateStartPointButtonState() {
     
     // Check if point is in progress
     const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
+    
+    // Debug logging
+    const latestPoint = typeof getLatestPoint === 'function' ? getLatestPoint() : null;
+    console.log('📍 updateStartPointButtonState:', {
+        pointInProgress,
+        latestPointWinner: latestPoint?.winner,
+        latestPointStartTimestamp: latestPoint?.startTimestamp,
+        latestPointPossessionsLength: latestPoint?.possessions?.length
+    });
     
     // Reset all states
     btn.classList.remove('warning', 'inactive', 'point-in-progress', 
