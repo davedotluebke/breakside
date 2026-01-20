@@ -298,21 +298,92 @@ function createPlayByPlayPanel() {
     return panel;
 }
 
+// =============================================================================
+// Select Next Line Panel Content
+// =============================================================================
+
 /**
- * Create the Select Next Line panel with stub content
+ * Create the Select Next Line panel content
+ * Contains: header row with toggles, Start Point button, Lines button, 
+ * gender ratio display, and player selection table
+ * @returns {HTMLElement}
+ */
+function createSelectLineContent() {
+    const content = document.createElement('div');
+    content.className = 'select-line-content';
+    
+    content.innerHTML = `
+        <div class="select-line-header-row">
+            <span class="select-line-stats-toggle" id="panelStatsToggle">(Game)</span>
+            <button class="select-line-od-toggle" id="panelODToggle" title="Toggle O/D/O-D line (coming soon)">
+                O/D
+            </button>
+        </div>
+        <div class="select-line-top-row">
+            <button class="select-line-start-btn" id="panelStartPointBtn">
+                Start Point
+            </button>
+            <button class="select-line-lines-btn" id="panelLinesBtn">
+                Lines...
+            </button>
+        </div>
+        <div class="select-line-gender-ratio" id="panelGenderRatioDisplay" style="display: none;">
+            <span>Gender Ratio: </span><span id="panelGenderRatioText"></span>
+        </div>
+        <div class="select-line-starting-ratio" id="panelStartingRatioSelection" style="display: none;">
+            <label>Starting Ratio: </label>
+            <input type="radio" id="panelStartingRatioFMP" name="panelStartingRatio" value="FMP">
+            <label for="panelStartingRatioFMP">FMP</label>
+            <input type="radio" id="panelStartingRatioMMP" name="panelStartingRatio" value="MMP">
+            <label for="panelStartingRatioMMP">MMP</label>
+        </div>
+        <div class="select-line-table-container" id="panelTableContainer">
+            <table class="panel-player-table" id="panelActivePlayersTable">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Player rows will be dynamically added here -->
+                </tbody>
+            </table>
+        </div>
+        <div class="select-line-readonly-overlay" id="panelReadonlyOverlay" style="display: none;">
+            <span class="readonly-badge">View Only</span>
+        </div>
+    `;
+    
+    return content;
+}
+
+/**
+ * Create the Select Next Line panel with actual content
  * @returns {HTMLElement}
  */
 function createSelectLinePanel() {
-    return createPanel({
-        id: 'selectLine',
+    const panel = document.createElement('div');
+    panel.id = 'panel-selectLine';
+    panel.className = 'game-panel panel-selectLine';
+    
+    // Create title bar
+    const titleBar = createPanelTitleBar({
+        panelId: 'selectLine',
         title: 'Select Next Line',
-        stubOptions: {
-            icon: 'fa-users',
-            text: 'Player selection table will appear here.',
-            legacyScreen: 'beforePointScreen',
-            legacyLabel: 'Use Player Selection'
-        }
+        showDragHandle: true,
+        showExpandBtn: true
     });
+    panel.appendChild(titleBar);
+    
+    // Create content area with actual content
+    const contentArea = document.createElement('div');
+    contentArea.className = 'panel-content';
+    contentArea.id = 'panel-selectLine-content';
+    contentArea.appendChild(createSelectLineContent());
+    panel.appendChild(contentArea);
+    
+    return panel;
 }
 
 // Game Events panel removed - will be a modal popup from Play-by-Play panel
@@ -444,6 +515,9 @@ function wireGameScreenEvents() {
     
     // Wire up Play-by-Play panel events
     wirePlayByPlayEvents();
+    
+    // Wire up Select Next Line panel events
+    wireSelectLineEvents();
     
     // Logo tap - show version
     const logo = document.getElementById('gameScreenLogo');
@@ -930,6 +1004,9 @@ function transitionToBetweenPoints() {
     // Update game log
     updateGameLogEvents();
     
+    // Update Select Next Line panel with latest data
+    updateSelectLinePanel();
+    
     // Maximize Select Next Line panel (for line selection)
     if (typeof maximizePanel === 'function') {
         maximizePanel('selectLine', false);
@@ -1229,6 +1306,642 @@ function setupPlayByPlayResizeObserver() {
     
     // Initial layout update
     updatePlayByPlayLayout();
+}
+
+// =============================================================================
+// Select Next Line Panel
+// =============================================================================
+
+// Track stats display mode for panel (Game vs Total)
+let panelShowingTotalStats = false;
+
+/**
+ * Wire up Select Next Line panel event handlers
+ */
+function wireSelectLineEvents() {
+    // Stats toggle (Game/Total)
+    const statsToggle = document.getElementById('panelStatsToggle');
+    if (statsToggle) {
+        statsToggle.addEventListener('click', handlePanelStatsToggle);
+    }
+    
+    // O/D toggle button (placeholder - no-op for now)
+    const odToggle = document.getElementById('panelODToggle');
+    if (odToggle) {
+        odToggle.addEventListener('click', handleODToggle);
+    }
+    
+    // Start Point button
+    const startPointBtn = document.getElementById('panelStartPointBtn');
+    if (startPointBtn) {
+        startPointBtn.addEventListener('click', handlePanelStartPoint);
+    }
+    
+    // Lines button
+    const linesBtn = document.getElementById('panelLinesBtn');
+    if (linesBtn) {
+        linesBtn.addEventListener('click', handlePanelLinesClick);
+    }
+    
+    // Player table checkbox changes (delegated)
+    const tableContainer = document.getElementById('panelTableContainer');
+    if (tableContainer) {
+        tableContainer.addEventListener('change', handlePanelCheckboxChange);
+    }
+    
+    // Starting gender ratio radio buttons
+    const fmpRadio = document.getElementById('panelStartingRatioFMP');
+    const mmpRadio = document.getElementById('panelStartingRatioMMP');
+    if (fmpRadio) {
+        fmpRadio.addEventListener('change', handlePanelStartingRatioChange);
+    }
+    if (mmpRadio) {
+        mmpRadio.addEventListener('change', handlePanelStartingRatioChange);
+    }
+}
+
+/**
+ * Handle stats toggle click (Game/Total)
+ */
+function handlePanelStatsToggle() {
+    panelShowingTotalStats = !panelShowingTotalStats;
+    const toggle = document.getElementById('panelStatsToggle');
+    if (toggle) {
+        toggle.textContent = panelShowingTotalStats ? '(Total)' : '(Game)';
+    }
+    // Refresh table to show correct stats
+    updateSelectLineTable();
+}
+
+/**
+ * Handle O/D toggle button click (placeholder)
+ * Future: cycles between 'od', 'o', 'd'
+ */
+function handleODToggle() {
+    // Placeholder - will be implemented after single line works
+    if (typeof showControllerToast === 'function') {
+        showControllerToast('O/D line toggle coming soon', 'info');
+    }
+}
+
+/**
+ * Handle Start Point button click
+ * Validates selection and starts the point with role-aware panel transitions
+ */
+function handlePanelStartPoint() {
+    // Check if we can edit (need role permission to start point)
+    if (!canEditSelectLinePanel()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('You need a coach role to start the point', 'warning');
+        }
+        return;
+    }
+    
+    // Get selected players
+    const selectedPlayers = getSelectedPlayersFromPanel();
+    
+    // Get expected player count
+    const expectedCount = parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
+    
+    // Validate player count
+    if (selectedPlayers.length === 0) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('Please select players for the point', 'warning');
+        }
+        return;
+    }
+    
+    // Warn but allow if count is wrong
+    if (selectedPlayers.length !== expectedCount) {
+        console.warn(`Starting point with ${selectedPlayers.length} players (expected ${expectedCount})`);
+    }
+    
+    // Use existing startPoint logic from gameLogic.js
+    if (typeof startPoint === 'function') {
+        // Update the legacy activePlayersTable checkboxes to match panel selections
+        syncPanelSelectionsToLegacy(selectedPlayers);
+        
+        // Start the point (this uses the legacy checkbox-based player detection)
+        startPoint();
+        
+        // Role-aware panel transitions
+        const state = typeof getControllerState === 'function' ? getControllerState() : {};
+        const hasActiveCoach = state.isActiveCoach;
+        
+        if (hasActiveCoach) {
+            // Active Coach: minimize Select Line, maximize Play-by-Play
+            if (typeof minimizePanel === 'function') {
+                minimizePanel('selectLine');
+            }
+            if (typeof maximizePanel === 'function') {
+                maximizePanel('playByPlay', false);
+            }
+        }
+        // If only Line Coach: leave panels unchanged so they can work on next line
+        
+        // Update displays
+        updateSelectLinePanelState();
+    } else {
+        console.warn('startPoint function not available');
+    }
+}
+
+/**
+ * Handle Lines button click
+ * Opens the line selection dialog
+ */
+function handlePanelLinesClick() {
+    if (typeof showLineSelectionDialog === 'function') {
+        showLineSelectionDialog();
+    } else {
+        console.warn('showLineSelectionDialog not available');
+    }
+}
+
+/**
+ * Handle checkbox change in the player selection table
+ * @param {Event} e - Change event
+ */
+function handlePanelCheckboxChange(e) {
+    if (!e.target || !e.target.matches('input[type="checkbox"]')) return;
+    
+    // Check permission
+    if (!canEditSelectLinePanel()) {
+        // Revert the change
+        e.target.checked = !e.target.checked;
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('Only the Line Coach can edit during a point', 'warning');
+        }
+        return;
+    }
+    
+    // Save to pending next line
+    savePanelSelectionsToPendingNextLine();
+    
+    // Update Start Point button state
+    updateStartPointButtonState();
+    
+    // Sync to legacy table for compatibility
+    const selectedPlayers = getSelectedPlayersFromPanel();
+    syncPanelSelectionsToLegacy(selectedPlayers);
+}
+
+/**
+ * Handle starting gender ratio selection change
+ */
+function handlePanelStartingRatioChange(e) {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game) return;
+    
+    game.startingGenderRatio = e.target.value;
+    
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
+    
+    // Refresh display
+    updateSelectLinePanel();
+}
+
+/**
+ * Check if user can edit the Select Line panel
+ * During point: Only Line Coach
+ * Between points: Line Coach OR Active Coach
+ * @returns {boolean}
+ */
+function canEditSelectLinePanel() {
+    const state = typeof getControllerState === 'function' ? getControllerState() : {};
+    const duringPoint = typeof isPointInProgress === 'function' ? isPointInProgress() : false;
+    
+    // If no controller system, allow editing
+    if (!state.activeCoach && !state.lineCoach) {
+        return true;
+    }
+    
+    if (duringPoint) {
+        // During point: Line Coach only
+        return state.isLineCoach;
+    } else {
+        // Between points: Either coach
+        return state.isLineCoach || state.isActiveCoach;
+    }
+}
+
+/**
+ * Get selected player names from the panel table
+ * @returns {string[]} Array of player names
+ */
+function getSelectedPlayersFromPanel() {
+    const checkboxes = document.querySelectorAll('#panelActivePlayersTable input[type="checkbox"]');
+    const selectedPlayers = [];
+    
+    if (!currentTeam || !currentTeam.teamRoster) return selectedPlayers;
+    
+    checkboxes.forEach((checkbox, index) => {
+        if (checkbox.checked && index < currentTeam.teamRoster.length) {
+            selectedPlayers.push(currentTeam.teamRoster[index].name);
+        }
+    });
+    
+    return selectedPlayers;
+}
+
+/**
+ * Save panel selections to the game's pendingNextLine
+ */
+function savePanelSelectionsToPendingNextLine() {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !game.pendingNextLine) return;
+    
+    const selectedPlayers = getSelectedPlayersFromPanel();
+    const activeType = game.pendingNextLine.activeType || 'od';
+    
+    // Update the appropriate line array
+    game.pendingNextLine[activeType + 'Line'] = selectedPlayers;
+    
+    // Update the modification timestamp
+    game.pendingNextLine[activeType + 'LineModifiedAt'] = new Date().toISOString();
+    
+    // Save (triggers sync)
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
+}
+
+/**
+ * Sync panel selections to the legacy activePlayersTable
+ * @param {string[]} selectedPlayers - Array of player names
+ */
+function syncPanelSelectionsToLegacy(selectedPlayers) {
+    const legacyCheckboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
+    if (!currentTeam || !currentTeam.teamRoster) return;
+    
+    legacyCheckboxes.forEach((checkbox, index) => {
+        if (index < currentTeam.teamRoster.length) {
+            checkbox.checked = selectedPlayers.includes(currentTeam.teamRoster[index].name);
+        }
+    });
+    
+    // Update legacy button state
+    if (typeof checkPlayerCount === 'function') {
+        checkPlayerCount();
+    }
+}
+
+/**
+ * Update the Start Point button state (text and warning states)
+ */
+function updateStartPointButtonState() {
+    const btn = document.getElementById('panelStartPointBtn');
+    if (!btn) return;
+    
+    const selectedPlayers = getSelectedPlayersFromPanel();
+    const expectedCount = parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
+    
+    // Determine starting position
+    const startOn = typeof determineStartingPosition === 'function' 
+        ? determineStartingPosition() 
+        : 'offense';
+    
+    // Check if point is in progress
+    const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
+    
+    // Set button text
+    if (pointInProgress) {
+        btn.textContent = 'Continue Point';
+    } else {
+        const startOnLabel = startOn.charAt(0).toUpperCase() + startOn.slice(1);
+        btn.textContent = `Start Point (${startOnLabel})`;
+    }
+    
+    // Reset states
+    btn.classList.remove('warning', 'inactive');
+    btn.style.backgroundColor = '';
+    
+    // Check gender ratio
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    let genderRatioWarning = false;
+    let startingRatioRequired = false;
+    
+    if (game && game.alternateGenderRatio && game.alternateGenderRatio !== 'No') {
+        if (game.alternateGenderRatio === 'Alternating' && !game.startingGenderRatio && game.points.length === 0) {
+            startingRatioRequired = true;
+        } else if (selectedPlayers.length === expectedCount) {
+            genderRatioWarning = typeof checkGenderRatio === 'function' && !checkGenderRatio();
+        }
+    }
+    
+    // Apply button states
+    if (selectedPlayers.length === 0) {
+        btn.classList.add('inactive');
+    } else if (startingRatioRequired) {
+        btn.classList.add('inactive');
+    } else if (selectedPlayers.length !== expectedCount) {
+        btn.classList.add('warning');
+    } else if (genderRatioWarning) {
+        btn.classList.add('warning');
+        btn.style.backgroundColor = '#ff8800';
+    }
+}
+
+/**
+ * Update the Select Line panel based on game state and permissions
+ */
+function updateSelectLinePanelState() {
+    const canEdit = canEditSelectLinePanel();
+    const panel = document.getElementById('panel-selectLine');
+    const readonlyOverlay = document.getElementById('panelReadonlyOverlay');
+    
+    // Update readonly overlay
+    if (readonlyOverlay) {
+        readonlyOverlay.style.display = canEdit ? 'none' : 'flex';
+    }
+    
+    // Update panel visual state
+    if (panel) {
+        panel.classList.toggle('readonly', !canEdit);
+    }
+    
+    // Disable/enable checkboxes
+    const checkboxes = document.querySelectorAll('#panelActivePlayersTable input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+        cb.disabled = !canEdit;
+    });
+    
+    // Update Start Point button
+    const startBtn = document.getElementById('panelStartPointBtn');
+    if (startBtn) {
+        startBtn.disabled = !canEdit;
+    }
+    
+    // Update button state text
+    updateStartPointButtonState();
+    
+    // Update gender ratio display
+    updatePanelGenderRatioDisplay();
+}
+
+/**
+ * Update gender ratio display in the panel
+ */
+function updatePanelGenderRatioDisplay() {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    const display = document.getElementById('panelGenderRatioDisplay');
+    const text = document.getElementById('panelGenderRatioText');
+    const ratioSelection = document.getElementById('panelStartingRatioSelection');
+    
+    if (!game || !game.alternateGenderRatio || game.alternateGenderRatio === 'No') {
+        if (display) display.style.display = 'none';
+        if (ratioSelection) ratioSelection.style.display = 'none';
+        return;
+    }
+    
+    // Show gender ratio display
+    if (display) display.style.display = 'block';
+    
+    // Fixed ratio (e.g., "4:3")
+    if (game.alternateGenderRatio !== 'Alternating') {
+        if (text) text.textContent = `${game.alternateGenderRatio} FMP:MMP`;
+        if (ratioSelection) ratioSelection.style.display = 'none';
+        return;
+    }
+    
+    // Alternating ratio
+    const expectedRatio = typeof getExpectedGenderRatio === 'function' 
+        ? getExpectedGenderRatio(game) 
+        : null;
+    
+    if (expectedRatio) {
+        if (text) text.textContent = `+${expectedRatio} point`;
+        if (ratioSelection) ratioSelection.style.display = 'none';
+    } else {
+        // Need to select starting ratio
+        if (text) text.textContent = 'Select starting ratio';
+        if (ratioSelection) ratioSelection.style.display = 'block';
+    }
+}
+
+/**
+ * Update the Select Line panel table with current roster and selections
+ */
+function updateSelectLineTable() {
+    const table = document.getElementById('panelActivePlayersTable');
+    if (!table) return;
+    
+    const tableBody = table.querySelector('tbody');
+    const tableHead = table.querySelector('thead');
+    if (!tableBody || !tableHead) return;
+    
+    // Clear existing content
+    tableBody.innerHTML = '';
+    tableHead.innerHTML = '';
+    
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !currentTeam || !currentTeam.teamRoster) return;
+    
+    // Get current pending selections
+    const pendingLine = game.pendingNextLine || {};
+    const activeType = pendingLine.activeType || 'od';
+    const selectedPlayers = pendingLine[activeType + 'Line'] || [];
+    
+    // Create header rows (score display)
+    const runningScores = typeof getRunningScores === 'function' 
+        ? getRunningScores() 
+        : { team: [0], opponent: [0] };
+    
+    const teamScoreRow = document.createElement('tr');
+    const opponentScoreRow = document.createElement('tr');
+    
+    // Add score cells helper
+    const addScoreCells = (row, teamName, scores) => {
+        const nameCell = document.createElement('th');
+        nameCell.textContent = teamName;
+        nameCell.setAttribute('colspan', '3');
+        nameCell.classList.add('active-header-teams');
+        row.appendChild(nameCell);
+        
+        scores.forEach((score, index) => {
+            const scoreCell = document.createElement('th');
+            scoreCell.textContent = score;
+            
+            // Color score cells based on gender ratio
+            if (game.alternateGenderRatio === 'Alternating' && game.startingGenderRatio) {
+                const genderRatio = typeof getGenderRatioForPoint === 'function'
+                    ? getGenderRatioForPoint(game, index)
+                    : null;
+                if (genderRatio === 'FMP') scoreCell.classList.add('score-cell-fmp');
+                else if (genderRatio === 'MMP') scoreCell.classList.add('score-cell-mmp');
+            }
+            
+            row.appendChild(scoreCell);
+        });
+    };
+    
+    addScoreCells(teamScoreRow, game.team, runningScores.team);
+    addScoreCells(opponentScoreRow, game.opponent, runningScores.opponent);
+    
+    tableHead.appendChild(teamScoreRow);
+    tableHead.appendChild(opponentScoreRow);
+    
+    // Get last point players for sorting
+    const lastPointPlayers = game.points.length > 0
+        ? game.points[game.points.length - 1].players
+        : [];
+    
+    // Sort roster (played last point, played any points, not played)
+    const sortedRoster = [...currentTeam.teamRoster].sort((a, b) => {
+        const aLastPoint = lastPointPlayers.includes(a.name);
+        const bLastPoint = lastPointPlayers.includes(b.name);
+        const aPlayedAny = game.points.some(p => p.players.includes(a.name));
+        const bPlayedAny = game.points.some(p => p.players.includes(b.name));
+        
+        if (aLastPoint && !bLastPoint) return -1;
+        if (!aLastPoint && bLastPoint) return 1;
+        if (aPlayedAny && !bPlayedAny) return -1;
+        if (!aPlayedAny && bPlayedAny) return 1;
+        return a.name.localeCompare(b.name);
+    });
+    
+    // Create player rows
+    sortedRoster.forEach((player, idx) => {
+        const row = document.createElement('tr');
+        
+        // Checkbox column
+        const checkboxCell = document.createElement('td');
+        checkboxCell.classList.add('active-checkbox-column');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.classList.add('active-checkbox');
+        checkbox.checked = selectedPlayers.includes(player.name);
+        checkbox.dataset.playerName = player.name;
+        checkboxCell.appendChild(checkbox);
+        row.appendChild(checkboxCell);
+        
+        // Name column
+        const nameCell = document.createElement('td');
+        nameCell.classList.add('active-name-column');
+        nameCell.textContent = typeof formatPlayerName === 'function' 
+            ? formatPlayerName(player) 
+            : player.name;
+        
+        // Gender color coding
+        if (player.gender === Gender.FMP) nameCell.classList.add('player-fmp');
+        else if (player.gender === Gender.MMP) nameCell.classList.add('player-mmp');
+        
+        // Click name to toggle checkbox
+        nameCell.style.cursor = 'pointer';
+        nameCell.addEventListener('click', () => checkbox.click());
+        row.appendChild(nameCell);
+        
+        // Time column
+        const timeCell = document.createElement('td');
+        timeCell.classList.add('active-time-column');
+        if (panelShowingTotalStats) {
+            timeCell.textContent = typeof formatPlayTime === 'function'
+                ? formatPlayTime(player.totalTimePlayed || 0)
+                : '0:00';
+        } else {
+            const gameTime = typeof getPlayerGameTime === 'function'
+                ? getPlayerGameTime(player.name)
+                : 0;
+            timeCell.textContent = typeof formatPlayTime === 'function'
+                ? formatPlayTime(gameTime)
+                : '0:00';
+        }
+        row.appendChild(timeCell);
+        
+        // Point participation columns
+        let runningPointTotal = panelShowingTotalStats ? (player.pointsPlayedPreviousGames || 0) : 0;
+        game.points.forEach(point => {
+            const pointCell = document.createElement('td');
+            pointCell.classList.add('active-points-columns');
+            if (point.players.includes(player.name)) {
+                runningPointTotal++;
+                pointCell.textContent = `${runningPointTotal}`;
+            } else {
+                pointCell.textContent = '-';
+            }
+            row.appendChild(pointCell);
+        });
+        
+        tableBody.appendChild(row);
+    });
+    
+    // Apply sticky columns
+    requestAnimationFrame(() => {
+        makePanelColumnsSticky();
+    });
+}
+
+/**
+ * Make panel table columns sticky (similar to legacy makeColumnsSticky)
+ */
+function makePanelColumnsSticky() {
+    const checkboxCells = document.querySelectorAll('#panelActivePlayersTable .active-checkbox-column');
+    const nameCells = document.querySelectorAll('#panelActivePlayersTable .active-name-column');
+    const timeCells = document.querySelectorAll('#panelActivePlayersTable .active-time-column');
+    const headerCells = document.querySelectorAll('#panelActivePlayersTable .active-header-teams');
+    
+    if (checkboxCells.length === 0) return;
+    
+    // Get widths
+    const checkboxWidth = checkboxCells[0].getBoundingClientRect().width || 30;
+    const nameWidth = nameCells.length > 0 ? nameCells[0].getBoundingClientRect().width : 0;
+    
+    // Apply sticky styles to checkbox column
+    checkboxCells.forEach(cell => {
+        cell.style.position = 'sticky';
+        cell.style.left = '0';
+        cell.style.zIndex = '4';
+        cell.style.backgroundColor = '#fafafa';
+        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
+        cell.style.border = 'none';
+    });
+    
+    // Apply sticky styles to name column
+    nameCells.forEach(cell => {
+        cell.style.position = 'sticky';
+        cell.style.left = `${checkboxWidth}px`;
+        cell.style.zIndex = '3';
+        cell.style.backgroundColor = '#fafafa';
+        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
+        cell.style.border = 'none';
+    });
+    
+    // Apply sticky styles to time column
+    timeCells.forEach(cell => {
+        cell.style.position = 'sticky';
+        cell.style.left = `${checkboxWidth + nameWidth}px`;
+        cell.style.zIndex = '3';
+        cell.style.backgroundColor = '#fafafa';
+        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
+        cell.style.border = 'none';
+    });
+    
+    // Apply sticky styles to header cells
+    headerCells.forEach(cell => {
+        cell.style.position = 'sticky';
+        cell.style.left = '0';
+        cell.style.zIndex = '5';
+        cell.style.backgroundColor = '#fafafa';
+        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
+        cell.style.border = 'none';
+    });
+    
+    // Scroll to right (show most recent points)
+    const tableContainer = document.getElementById('panelTableContainer');
+    if (tableContainer) {
+        tableContainer.scrollLeft = tableContainer.scrollWidth;
+    }
+}
+
+/**
+ * Full update of the Select Line panel
+ * Called when entering game screen or game state changes
+ */
+function updateSelectLinePanel() {
+    updateSelectLineTable();
+    updateSelectLinePanelState();
 }
 
 // =============================================================================
@@ -1731,6 +2444,9 @@ function enterGameScreen() {
     // Update Play-by-Play panel state (based on role only)
     updatePlayByPlayPanelState();
     
+    // Update Select Next Line panel
+    updateSelectLinePanel();
+    
     // Set up ResizeObserver for Play-by-Play panel layout
     setupPlayByPlayResizeObserver();
     
@@ -1763,6 +2479,8 @@ window.updateControllerUI = function(state, previousState) {
     if (isGameScreenVisible()) {
         updateGameScreenRoleButtons(state);
         updatePanelsForRole(state.myRole);
+        // Update Select Line panel permissions when roles change
+        updateSelectLinePanelState();
     }
 };
 
@@ -1811,4 +2529,12 @@ window.hideGameEventsModal = hideGameEventsModal;
 // Between-points transition
 window.transitionToBetweenPoints = transitionToBetweenPoints;
 window.ensureDialogVisible = ensureDialogVisible;
+
+// Select Next Line panel
+window.updateSelectLinePanel = updateSelectLinePanel;
+window.updateSelectLineTable = updateSelectLineTable;
+window.updateSelectLinePanelState = updateSelectLinePanelState;
+window.canEditSelectLinePanel = canEditSelectLinePanel;
+window.getSelectedPlayersFromPanel = getSelectedPlayersFromPanel;
+window.savePanelSelectionsToPendingNextLine = savePanelSelectionsToPendingNextLine;
 

@@ -133,6 +133,19 @@ function Game(teamName, opponentName, startOn, teamId = null) {
     // Phase 6b: Timer/cap settings
     this.gameDurationMinutes = 50;  // Default game length in minutes
     this.roundEndTime = null;       // ISO timestamp override for cap (e.g., from tournament schedule)
+    
+    // Phase 6b: Pending next line selections (for multi-coach sync)
+    // Tracks three separate lines: O (offense), D (defense), O/D (unified/must-win)
+    // Timestamps track when each line was last modified for auto-selection logic
+    this.pendingNextLine = {
+        oLine: [],              // Player names for O line (used when team loses)
+        dLine: [],              // Player names for D line (used when team wins)
+        odLine: [],             // Player names for O/D (must-win) line
+        oLineModifiedAt: null,  // ISO timestamp of last modification
+        dLineModifiedAt: null,  // ISO timestamp of last modification
+        odLineModifiedAt: null, // ISO timestamp of last modification
+        activeType: 'od'        // Currently displayed line type: 'o', 'd', or 'od'
+    };
 }
 
 /**

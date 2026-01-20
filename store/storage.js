@@ -366,6 +366,20 @@ function deserializeGame(gameData) {
     game.gameDurationMinutes = gameData.gameDurationMinutes ?? 50;
     game.roundEndTime = gameData.roundEndTime || null;
     
+    // Phase 6b: Pending next line selections (migrate from existing games)
+    if (gameData.pendingNextLine) {
+        game.pendingNextLine = {
+            oLine: gameData.pendingNextLine.oLine || [],
+            dLine: gameData.pendingNextLine.dLine || [],
+            odLine: gameData.pendingNextLine.odLine || [],
+            oLineModifiedAt: gameData.pendingNextLine.oLineModifiedAt || null,
+            dLineModifiedAt: gameData.pendingNextLine.dLineModifiedAt || null,
+            odLineModifiedAt: gameData.pendingNextLine.odLineModifiedAt || null,
+            activeType: gameData.pendingNextLine.activeType || 'od'
+        };
+    }
+    // If no pendingNextLine, the default from Game constructor is used
+    
     game.points = gameData.points.map(pointData => {
         const point = new Point(pointData.players, pointData.startingPosition);
         point.startTimestamp = pointData.startTimestamp ? new Date(pointData.startTimestamp) : null;
