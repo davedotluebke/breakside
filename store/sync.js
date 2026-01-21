@@ -114,77 +114,6 @@ window.addEventListener('offline', () => {
 // Sync Queue Management
 // =============================================================================
 
-// Blocked entities - items that failed with permanent errors (e.g., 403)
-// These won't be re-queued until the block is cleared
-const SYNC_BLOCKED_KEY = 'breakside_sync_blocked';
-let syncBlocked = loadSyncBlocked();
-
-/**
- * Load blocked entities list from local storage
- * Format: { "game:gameId": { reason, blockedAt }, ... }
- */
-function loadSyncBlocked() {
-    try {
-        const stored = localStorage.getItem(SYNC_BLOCKED_KEY);
-        return stored ? JSON.parse(stored) : {};
-    } catch (e) {
-        return {};
-    }
-}
-
-/**
- * Save blocked entities list to local storage
- */
-function saveSyncBlocked() {
-    localStorage.setItem(SYNC_BLOCKED_KEY, JSON.stringify(syncBlocked));
-}
-
-/**
- * Block an entity from syncing (due to permanent error like 403)
- * @param {string} type - Entity type
- * @param {string} id - Entity ID
- * @param {string} reason - Reason for blocking
- */
-function blockFromSync(type, id, reason) {
-    const key = `${type}:${id}`;
-    syncBlocked[key] = {
-        reason: reason,
-        blockedAt: Date.now()
-    };
-    saveSyncBlocked();
-}
-
-/**
- * Check if an entity is blocked from syncing
- * @param {string} type - Entity type
- * @param {string} id - Entity ID
- * @returns {boolean}
- */
-function isSyncBlocked(type, id) {
-    const key = `${type}:${id}`;
-    return !!syncBlocked[key];
-}
-
-/**
- * Unblock an entity (e.g., after user gets permissions)
- * @param {string} type - Entity type
- * @param {string} id - Entity ID
- */
-function unblockFromSync(type, id) {
-    const key = `${type}:${id}`;
-    delete syncBlocked[key];
-    saveSyncBlocked();
-}
-
-/**
- * Clear all sync blocks (useful when user logs in or changes teams)
- */
-function clearAllSyncBlocks() {
-    syncBlocked = {};
-    saveSyncBlocked();
-    console.log('🔓 Cleared all sync blocks');
-}
-
 /**
  * Load sync queue from local storage
  * Queue items have structure: { type, action, id, data, timestamp, retryCount }
@@ -214,12 +143,6 @@ function saveSyncQueue() {
  * @param {object} data - Entity data
  */
 function addToSyncQueue(type, action, id, data) {
-    // Check if this entity is blocked from syncing (e.g., 403 permission error)
-    if (isSyncBlocked(type, id)) {
-        // Silently skip - don't spam console
-        return;
-    }
-    
     // Remove any existing pending sync for this entity
     syncQueue = syncQueue.filter(item => !(item.type === type && item.id === id));
     
@@ -288,39 +211,12 @@ async function processSyncQueue() {
         } catch (error) {
             console.error(`❌ Failed to sync ${item.type} ${item.id}:`, error);
             
-            // Check for permission errors (403) - these are permanent, don't retry
-            const is403Error = error.message && error.message.includes('403');
-            if (is403Error) {
-                console.warn(`🚫 Permission denied for ${item.type} ${item.id} - blocking from future sync attempts`);
-                console.warn(`   This usually means you don't have coach access to this team on the server.`);
-                console.warn(`   To retry, call clearAllSyncBlocks() or unblockFromSync('${item.type}', '${item.id}')`);
-                
-                // Block this entity from future sync attempts
-                blockFromSync(item.type, item.id, 'Permission denied (403)');
-                
-                // Remove from queue - retrying won't help
-                syncQueue = syncQueue.filter(qItem => 
-                    !(qItem.type === item.type && qItem.id === item.id)
-                );
-                saveSyncQueue();
-                continue;
-            }
-            
-            // Increment retry count for other errors
+            // Increment retry count
             const queueItem = syncQueue.find(q => q.type === item.type && q.id === item.id);
             if (queueItem) {
                 queueItem.retryCount = (queueItem.retryCount || 0) + 1;
                 queueItem.lastError = error.message;
                 saveSyncQueue();
-                
-                // If too many retries, remove from queue
-                if (queueItem.retryCount >= 10) {
-                    console.warn(`⏹️ Giving up on ${item.type} ${item.id} after ${queueItem.retryCount} retries`);
-                    syncQueue = syncQueue.filter(qItem => 
-                        !(qItem.type === item.type && qItem.id === item.id)
-                    );
-                    saveSyncQueue();
-                }
             }
             
             // If it's a network error, stop processing
@@ -1570,11 +1466,6 @@ window.checkIsOnline = checkIsOnline;
 window.getPendingSyncCount = getPendingSyncCount;
 window.hasPendingSync = hasPendingSync;
 window.processSyncQueue = processSyncQueue;
-
-// Sync block management (for permission errors)
-window.clearAllSyncBlocks = clearAllSyncBlocks;
-window.unblockFromSync = unblockFromSync;
-window.isSyncBlocked = isSyncBlocked;
 
 // User team sync
 window.syncUserTeams = syncUserTeams;
