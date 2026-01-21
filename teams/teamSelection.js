@@ -3,10 +3,11 @@
  * Handles team switching, loading, and creation
  * 
  * Phase 4 update: Cloud team fetching, sync status indicator
+ * Phase 6b update: Cloud-only UI - all teams and games are stored in the cloud
  */
 
 function showSelectTeamScreen(firsttime = false) {
-    console.trace('showSelectTeamScreen called');
+    console.log('showSelectTeamScreen called (cloud-only mode)');
     const teamListElement = document.getElementById('teamList');
     const teamListWarning = document.getElementById('teamListWarning');
     if (!teamListElement || !teamListWarning) {
@@ -16,22 +17,18 @@ function showSelectTeamScreen(firsttime = false) {
 
     teamListElement.innerHTML = '';
     
-    // On first display, trigger a background sync to fetch cloud teams
-    if (firsttime && typeof syncUserTeams === 'function' && window.breakside?.auth?.isAuthenticated?.()) {
-        // Sync in background and refresh display when done
-        syncUserTeams().then(result => {
-            if (result.success && (result.synced > 0 || result.updated > 0 || result.players > 0)) {
-                console.log('📥 Initial sync complete, refreshing display...');
-                showSelectTeamScreen(false);  // Refresh without triggering another sync
-            }
-        }).catch(e => console.warn('Initial sync failed:', e));
-    }
-
-    if (teams.length === 0 || (teams.length === 1 && teams[0].name === 'Sample Team')) {
+    // Check if user is authenticated
+    const isAuthenticated = window.breakside?.auth?.isAuthenticated?.() || false;
+    
+    if (!isAuthenticated) {
+        // Show login prompt instead of team list
         teamListWarning.style.display = 'block';
-    } else {
-        teamListWarning.style.display = 'none';
+        teamListWarning.innerHTML = '<p>Please sign in to access your teams and games.</p>';
+        showScreen('selectTeamScreen');
+        return;
     }
+    
+    teamListWarning.style.display = 'none';
 
     // Add sync status indicator at the top
     const syncStatusContainer = document.createElement('div');
@@ -40,145 +37,30 @@ function showSelectTeamScreen(firsttime = false) {
     syncStatusContainer.innerHTML = buildSyncStatusHTML();
     teamListElement.appendChild(syncStatusContainer);
 
-    const table = document.createElement('table');
-    table.classList.add('team-selection-table');
-
-    teams.forEach((team, teamIndex) => {
-        const teamRow = document.createElement('tr');
-        teamRow.classList.add('team-row');
-
-        const teamNameCell = document.createElement('td');
-        teamNameCell.textContent = team.name;
-        teamNameCell.classList.add('team-name');
-        teamNameCell.onclick = () => selectTeam(teamIndex);
-        teamRow.appendChild(teamNameCell);
-
-        const deleteTeamCell = document.createElement('td');
-        deleteTeamCell.style.width = '40px';
-        deleteTeamCell.style.textAlign = 'center';
-        const deleteTeamBtn = document.createElement('button');
-        deleteTeamBtn.innerHTML = '<i class="fas fa-trash" style="color: #dc3545;"></i>';
-        deleteTeamBtn.classList.add('icon-button');
-        deleteTeamBtn.title = 'Delete Team';
-        deleteTeamBtn.onclick = (e) => {
-            e.stopPropagation();
-            // Prevent deletion if it's the last team
-            if (teams.length === 1) {
-                alert('Cannot delete the last team. Please create another team first.');
-                return;
-            }
-            if (confirm(`Are you sure you want to delete "${team.name}"? This will permanently delete the team and all its game data. This cannot be undone.`)) {
-                // If deleting the current team, switch to another team
-                if (currentTeam === team) {
-                    // Switch to the first team if deleting index 0, otherwise switch to index 0
-                    // (We know teams.length > 1 because of the check above)
-                    const newTeamIndex = teamIndex === 0 ? 1 : 0;
-                    currentTeam = teams[newTeamIndex];
-                }
-                // Remove the team from the array
-                teams.splice(teamIndex, 1);
-                // Save the updated data
-                if (typeof saveAllTeamsData === 'function') {
-                    saveAllTeamsData();
-                }
-                // Refresh the display
-                showSelectTeamScreen();
-            }
-        };
-        deleteTeamCell.appendChild(deleteTeamBtn);
-        teamRow.appendChild(deleteTeamCell);
-
-        const gamesCell = document.createElement('td');
-        const gamesList = document.createElement('ul');
-        gamesList.classList.add('games-list');
-
-        team.games.forEach((game, gameIndex) => {
-            const gameItem = document.createElement('li');
-            const gameText = document.createElement('span');
-            gameText.textContent = `vs ${game.opponent} (${game.scores[Role.TEAM]}-${game.scores[Role.OPPONENT]})`;
-            if (!game.gameEndTimestamp) {
-                gameText.textContent += ' [In Progress]';
-            }
-            gameItem.appendChild(gameText);
-
-            if (!game.gameEndTimestamp) {
-                const resumeBtn = document.createElement('button');
-                resumeBtn.textContent = '↪️';
-                resumeBtn.classList.add('icon-button');
-                resumeBtn.title = 'Resume Game';
-                resumeBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    if (confirm('Resume this game?')) {
-                        currentTeam = team;
-                        if (isPointInProgress()) {
-                            const latestPossession = getLatestPossession();
-                            if (latestPossession && latestPossession.offensive) {
-                                updateOffensivePossessionScreen();
-                                showScreen('offensePlayByPlayScreen');
-                            } else {
-                                updateDefensivePossessionScreen();
-                                showScreen('defensePlayByPlayScreen');
-                            }
-                        } else {
-                            if (typeof updateActivePlayersList === 'function') {
-                                updateActivePlayersList();
-                            }
-                            showScreen('beforePointScreen');
-                        }
-                    }
-                };
-                gameItem.appendChild(resumeBtn);
-            }
-
-            const deleteBtn = document.createElement('button');
-            deleteBtn.innerHTML = '<i class="fas fa-trash" style="color: #dc3545;"></i>';
-            deleteBtn.classList.add('icon-button');
-            deleteBtn.title = 'Delete Game';
-            deleteBtn.onclick = (e) => {
-                e.stopPropagation();
-                if (confirm('Delete this game? This cannot be undone.')) {
-                    removeGameStatsFromRoster(team, game);
-                    team.games.splice(gameIndex, 1);
-                    showSelectTeamScreen();
-                    if (typeof saveAllTeamsData === 'function') {
-                        saveAllTeamsData();
-                    }
-                }
-            };
-            gameItem.appendChild(deleteBtn);
-
-            gamesList.appendChild(gameItem);
-        });
-
-        gamesCell.appendChild(gamesList);
-        teamRow.appendChild(gamesCell);
-        table.appendChild(teamRow);
-    });
-
-    teamListElement.appendChild(table);
-
-    // Cloud Games Section
-    const cloudGamesContainer = document.createElement('div');
-    cloudGamesContainer.id = 'cloudGamesContainer';
+    // Teams & Games Section (cloud-only)
+    const teamsContainer = document.createElement('div');
+    teamsContainer.id = 'cloudTeamsContainer';
     
-    // Build Cloud Games header with buttons
-    const cloudHeader = document.createElement('h3');
-    cloudHeader.style.display = 'flex';
-    cloudHeader.style.alignItems = 'center';
-    cloudHeader.style.gap = '10px';
-    cloudHeader.style.flexWrap = 'wrap';
+    // Build header with refresh and server buttons
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.alignItems = 'center';
+    header.style.gap = '10px';
+    header.style.flexWrap = 'wrap';
+    header.style.marginBottom = '10px';
     
-    const cloudTitle = document.createElement('span');
-    cloudTitle.textContent = 'Cloud Games';
-    cloudHeader.appendChild(cloudTitle);
+    const title = document.createElement('h3');
+    title.textContent = 'Teams & Games';
+    title.style.margin = '0';
+    header.appendChild(title);
     
     const refreshBtn = document.createElement('button');
     refreshBtn.id = 'refreshCloudGamesBtn';
     refreshBtn.className = 'icon-button';
     refreshBtn.innerHTML = '<i class="fas fa-sync" style="color: #333;"></i>';
-    refreshBtn.title = 'Refresh Cloud Games';
-    refreshBtn.onclick = populateCloudGames;
-    cloudHeader.appendChild(refreshBtn);
+    refreshBtn.title = 'Refresh';
+    refreshBtn.onclick = () => populateCloudTeamsAndGames();
+    header.appendChild(refreshBtn);
     
     const setServerBtn = document.createElement('button');
     setServerBtn.id = 'setServerBtn';
@@ -188,7 +70,7 @@ function showSelectTeamScreen(firsttime = false) {
     setServerBtn.style.width = 'auto';
     setServerBtn.style.padding = '5px 10px';
     setServerBtn.onclick = showSetServerDialog;
-    cloudHeader.appendChild(setServerBtn);
+    header.appendChild(setServerBtn);
     
     // Server URL display
     const serverUrlDisplay = document.createElement('span');
@@ -197,19 +79,19 @@ function showSelectTeamScreen(firsttime = false) {
     serverUrlDisplay.style.color = '#666';
     serverUrlDisplay.style.marginLeft = 'auto';
     serverUrlDisplay.textContent = `Server: ${typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'Not configured'}`;
-    cloudHeader.appendChild(serverUrlDisplay);
+    header.appendChild(serverUrlDisplay);
     
-    cloudGamesContainer.appendChild(cloudHeader);
+    teamsContainer.appendChild(header);
     
-    const cloudGamesList = document.createElement('div');
-    cloudGamesList.id = 'cloudGamesList';
-    cloudGamesList.textContent = 'Loading...';
-    cloudGamesContainer.appendChild(cloudGamesList);
+    const teamsList = document.createElement('div');
+    teamsList.id = 'cloudTeamsList';
+    teamsList.textContent = 'Loading...';
+    teamsContainer.appendChild(teamsList);
     
-    teamListElement.appendChild(cloudGamesContainer);
+    teamListElement.appendChild(teamsContainer);
 
-    // Populate cloud games asynchronously
-    populateCloudGames();
+    // Populate teams and games asynchronously
+    populateCloudTeamsAndGames();
 
     showScreen('selectTeamScreen');
 }
@@ -255,106 +137,194 @@ function showSetServerDialog() {
     }
 }
 
-async function populateCloudGames() {
-    const listElement = document.getElementById('cloudGamesList');
+/**
+ * Populate the cloud-only teams and games list
+ * This is the primary UI for selecting teams and games (Phase 6b)
+ */
+async function populateCloudTeamsAndGames() {
+    const listElement = document.getElementById('cloudTeamsList');
     if (!listElement) return;
 
-    if (typeof listServerGames !== 'function') {
-        listElement.innerHTML = '<p>Cloud sync not available.</p>';
+    // Check if user is authenticated
+    if (!window.breakside?.auth?.isAuthenticated?.()) {
+        listElement.innerHTML = '<p>Please sign in to view your teams.</p>';
         return;
     }
 
     try {
-        const games = await listServerGames();
+        // Fetch teams the user has access to
+        const response = await authFetch(`${API_BASE_URL}/api/auth/teams`);
+        if (!response.ok) {
+            if (response.status === 401) {
+                listElement.innerHTML = '<p>Session expired. Please sign in again.</p>';
+                return;
+            }
+            throw new Error(`Failed to fetch teams: ${response.statusText}`);
+        }
         
-        if (games.length === 0) {
-            listElement.innerHTML = '<p>No games found on server.</p>';
+        const data = await response.json();
+        const userTeams = data.teams || [];
+        
+        // Also fetch games
+        let allGames = [];
+        if (typeof listServerGames === 'function') {
+            allGames = await listServerGames();
+        }
+        
+        if (userTeams.length === 0) {
+            listElement.innerHTML = `
+                <p>No teams yet. Create your first team to get started!</p>
+                <p style="font-size: 0.9em; color: #666;">
+                    Teams and games are stored in the cloud for multi-device access and coach collaboration.
+                </p>
+            `;
             return;
         }
 
         const table = document.createElement('table');
         table.classList.add('team-selection-table');
-        table.style.marginTop = '10px';
 
-        // Group by team
-        const gamesByTeam = {};
-        games.forEach(game => {
-            const teamName = game.team || 'Unknown Team';
-            if (!gamesByTeam[teamName]) {
-                gamesByTeam[teamName] = [];
+        // Group games by teamId
+        const gamesByTeamId = {};
+        allGames.forEach(game => {
+            const teamId = game.teamId || null;
+            if (!gamesByTeamId[teamId]) {
+                gamesByTeamId[teamId] = [];
             }
-            gamesByTeam[teamName].push(game);
+            gamesByTeamId[teamId].push(game);
         });
 
-        Object.keys(gamesByTeam).sort().forEach(teamName => {
+        userTeams.forEach(({ team, role }) => {
             const teamRow = document.createElement('tr');
             teamRow.classList.add('team-row');
             
+            // Team name cell (clickable to go to roster)
             const teamNameCell = document.createElement('td');
-            teamNameCell.textContent = teamName;
             teamNameCell.classList.add('team-name');
+            teamNameCell.style.cursor = 'pointer';
+            
+            // Show team symbol/icon if available
+            const teamDisplay = document.createElement('span');
+            if (team.teamSymbol) {
+                teamDisplay.textContent = `${team.teamSymbol} ${team.name}`;
+            } else {
+                teamDisplay.textContent = team.name;
+            }
+            teamNameCell.appendChild(teamDisplay);
+            
+            // Show role badge
+            const roleBadge = document.createElement('span');
+            roleBadge.className = 'role-badge';
+            roleBadge.textContent = role === 'coach' ? '🏈' : '👁️';
+            roleBadge.title = role === 'coach' ? 'Coach' : 'Viewer';
+            roleBadge.style.marginLeft = '8px';
+            roleBadge.style.fontSize = '0.8em';
+            teamNameCell.appendChild(roleBadge);
+            
+            teamNameCell.onclick = () => selectCloudTeam(team);
             teamRow.appendChild(teamNameCell);
 
-            // Spacer for delete button column to match above table
-            const spacerCell = document.createElement('td');
-            teamRow.appendChild(spacerCell);
+            // Delete team button (coaches only)
+            const deleteTeamCell = document.createElement('td');
+            deleteTeamCell.style.width = '40px';
+            deleteTeamCell.style.textAlign = 'center';
+            if (role === 'coach') {
+                const deleteTeamBtn = document.createElement('button');
+                deleteTeamBtn.innerHTML = '<i class="fas fa-trash" style="color: #dc3545;"></i>';
+                deleteTeamBtn.classList.add('icon-button');
+                deleteTeamBtn.title = 'Delete Team';
+                deleteTeamBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    deleteCloudTeam(team);
+                };
+                deleteTeamCell.appendChild(deleteTeamBtn);
+            }
+            teamRow.appendChild(deleteTeamCell);
 
+            // Games cell
             const gamesCell = document.createElement('td');
             const gamesList = document.createElement('ul');
             gamesList.classList.add('games-list');
 
-            gamesByTeam[teamName].forEach(game => {
-                const gameItem = document.createElement('li');
-                // Style fix: Flex layout for alignment
-                gameItem.style.display = 'flex';
-                gameItem.style.justifyContent = 'space-between';
-                gameItem.style.alignItems = 'center';
-                gameItem.style.padding = '5px 0';
+            const teamGames = gamesByTeamId[team.id] || [];
+            
+            if (teamGames.length === 0) {
+                const noGamesItem = document.createElement('li');
+                noGamesItem.style.color = '#888';
+                noGamesItem.style.fontStyle = 'italic';
+                noGamesItem.textContent = 'No games yet';
+                gamesList.appendChild(noGamesItem);
+            } else {
+                // Sort games by date (newest first)
+                teamGames.sort((a, b) => {
+                    const dateA = new Date(a.game_start_timestamp || 0);
+                    const dateB = new Date(b.game_start_timestamp || 0);
+                    return dateB - dateA;
+                });
                 
-                const dateStr = game.game_start_timestamp ? new Date(game.game_start_timestamp).toLocaleDateString() : 'Unknown Date';
-                
-                const gameText = document.createElement('span');
-                gameText.textContent = `${dateStr}: vs ${game.opponent} (${game.scores.team}-${game.scores.opponent})`;
-                gameItem.appendChild(gameText);
+                teamGames.forEach(game => {
+                    const gameItem = document.createElement('li');
+                    gameItem.style.display = 'flex';
+                    gameItem.style.justifyContent = 'space-between';
+                    gameItem.style.alignItems = 'center';
+                    gameItem.style.padding = '5px 0';
+                    
+                    const dateStr = game.game_start_timestamp 
+                        ? new Date(game.game_start_timestamp).toLocaleDateString() 
+                        : 'Unknown Date';
+                    
+                    const gameText = document.createElement('span');
+                    const scoreText = `${game.scores?.team || 0}-${game.scores?.opponent || 0}`;
+                    gameText.textContent = `${dateStr}: vs ${game.opponent} (${scoreText})`;
+                    
+                    // Show [In Progress] for games without end timestamp
+                    if (!game.game_end_timestamp) {
+                        const inProgressBadge = document.createElement('span');
+                        inProgressBadge.textContent = ' [In Progress]';
+                        inProgressBadge.style.color = '#007bff';
+                        inProgressBadge.style.fontWeight = 'bold';
+                        gameText.appendChild(inProgressBadge);
+                    }
+                    
+                    gameItem.appendChild(gameText);
 
-                // Buttons Container
-                const buttonsDiv = document.createElement('div');
-                buttonsDiv.style.display = 'flex';
-                buttonsDiv.style.gap = '5px';
+                    // Buttons Container
+                    const buttonsDiv = document.createElement('div');
+                    buttonsDiv.style.display = 'flex';
+                    buttonsDiv.style.gap = '5px';
 
-                // Load Button
-                const loadBtn = document.createElement('button');
-                // Style fix: Use dark color for text/icon
-                loadBtn.innerHTML = '<i class="fas fa-download" style="color: #333;"></i> Load';
-                loadBtn.classList.add('icon-button');
-                loadBtn.title = 'Download to Device';
-                loadBtn.style.color = '#333'; // Ensure text is visible
-                loadBtn.style.width = 'auto'; // Allow width to fit text
-                loadBtn.style.padding = '5px 10px';
-                loadBtn.onclick = () => importCloudGame(game.game_id);
-                
-                // Check if we already have this game locally (by ID or roughly by timestamp/opponent)
-                const isLocal = teams.some(t => t.games.some(g => g.id === game.game_id));
-                if (isLocal) {
-                    loadBtn.innerHTML = '<i class="fas fa-check" style="color: green;"></i> Local';
-                    loadBtn.disabled = true;
-                    loadBtn.style.opacity = '0.7';
-                    loadBtn.style.color = '#333';
-                }
+                    // Resume/Open button for in-progress games
+                    if (!game.game_end_timestamp && role === 'coach') {
+                        const resumeBtn = document.createElement('button');
+                        resumeBtn.innerHTML = '↪️ Resume';
+                        resumeBtn.classList.add('icon-button');
+                        resumeBtn.title = 'Resume Game';
+                        resumeBtn.style.width = 'auto';
+                        resumeBtn.style.padding = '5px 10px';
+                        resumeBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            resumeCloudGame(team, game.game_id);
+                        };
+                        buttonsDiv.appendChild(resumeBtn);
+                    }
 
-                // Delete Button
-                const deleteBtn = document.createElement('button');
-                deleteBtn.innerHTML = '<i class="fas fa-trash" style="color: #dc3545;"></i>';
-                deleteBtn.classList.add('icon-button');
-                deleteBtn.title = 'Delete from Cloud';
-                deleteBtn.onclick = () => deleteCloudGame(game.game_id);
+                    // Delete Button (coaches only)
+                    if (role === 'coach') {
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.innerHTML = '<i class="fas fa-trash" style="color: #dc3545;"></i>';
+                        deleteBtn.classList.add('icon-button');
+                        deleteBtn.title = 'Delete Game';
+                        deleteBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            deleteCloudGameWithConfirm(game.game_id);
+                        };
+                        buttonsDiv.appendChild(deleteBtn);
+                    }
 
-                buttonsDiv.appendChild(loadBtn);
-                buttonsDiv.appendChild(deleteBtn);
-                gameItem.appendChild(buttonsDiv);
-                
-                gamesList.appendChild(gameItem);
-            });
+                    gameItem.appendChild(buttonsDiv);
+                    gamesList.appendChild(gameItem);
+                });
+            }
 
             gamesCell.appendChild(gamesList);
             teamRow.appendChild(gamesCell);
@@ -364,18 +334,15 @@ async function populateCloudGames() {
         listElement.innerHTML = '';
         listElement.appendChild(table);
         
-        // Re-attach refresh listener
-        const refreshBtn = document.getElementById('refreshCloudGamesBtn');
-        if (refreshBtn) {
-            // Style fix: Ensure refresh icon is visible
-            refreshBtn.innerHTML = '<i class="fas fa-sync" style="color: #333;"></i>';
-            refreshBtn.onclick = populateCloudGames;
-        }
-
     } catch (error) {
-        console.error('Error populating cloud games:', error);
-        listElement.innerHTML = '<p>Error loading cloud games. Check connection.</p>';
+        console.error('Error populating cloud teams:', error);
+        listElement.innerHTML = '<p>Error loading teams. Check connection and try again.</p>';
     }
+}
+
+// Keep old function name for backwards compatibility
+async function populateCloudGames() {
+    return populateCloudTeamsAndGames();
 }
 
 async function deleteCloudGame(gameId) {
@@ -383,73 +350,229 @@ async function deleteCloudGame(gameId) {
     
     try {
         await deleteGameFromCloud(gameId);
-        populateCloudGames(); // Refresh list
+        populateCloudTeamsAndGames(); // Refresh list
     } catch (error) {
         alert('Failed to delete game: ' + error.message);
     }
 }
 
-async function importCloudGame(gameId) {
-    if (!confirm('Download this game from the cloud?')) return;
-
+/**
+ * Delete a cloud game with confirmation (used by new UI)
+ */
+async function deleteCloudGameWithConfirm(gameId) {
+    if (!confirm('Are you sure you want to delete this game? This cannot be undone.')) return;
+    
     try {
-        const game = await loadGameFromCloud(gameId);
-        if (!game) throw new Error('Failed to load game data');
+        await deleteGameFromCloud(gameId);
+        populateCloudTeamsAndGames(); // Refresh list
+    } catch (error) {
+        alert('Failed to delete game: ' + error.message);
+    }
+}
 
-        console.log('Importing game:', game);
-
-        // Find or create team
-        let team = teams.find(t => t.name === game.team);
-        if (!team) {
-            if (confirm(`Team "${game.team}" does not exist locally. Create it?`)) {
-                team = new Team(game.team);
-                teams.push(team);
-            } else {
-                return;
+/**
+ * Select a cloud team and navigate to roster screen
+ * Ensures the team is loaded into local state for the app to work with
+ */
+async function selectCloudTeam(cloudTeam) {
+    console.log('📥 Selecting cloud team:', cloudTeam.name);
+    
+    try {
+        // Check if we already have this team in local state
+        let localTeam = teams.find(t => t.id === cloudTeam.id);
+        
+        if (!localTeam) {
+            // Team not in local state - sync it
+            console.log('📥 Team not in local state, syncing...');
+            if (typeof syncUserTeams === 'function') {
+                await syncUserTeams();
+                localTeam = teams.find(t => t.id === cloudTeam.id);
             }
         }
-
-        // Check if game already exists in team (by ID)
-        const existingIndex = team.games.findIndex(g => g.id === game.id);
-        if (existingIndex !== -1) {
-            if (!confirm('This game already exists locally. Overwrite it?')) {
-                return;
+        
+        if (!localTeam) {
+            // Still not found - create it from cloud data
+            console.log('📥 Creating local team from cloud data...');
+            localTeam = new Team(cloudTeam.name, [], cloudTeam.id);
+            localTeam.createdAt = cloudTeam.createdAt || new Date().toISOString();
+            localTeam.updatedAt = cloudTeam.updatedAt || localTeam.createdAt;
+            localTeam.playerIds = cloudTeam.playerIds || [];
+            localTeam.lines = cloudTeam.lines || [];
+            localTeam.teamSymbol = cloudTeam.teamSymbol || null;
+            localTeam.iconUrl = cloudTeam.iconUrl || null;
+            
+            // Fetch players for the team
+            try {
+                const playersResponse = await authFetch(`${API_BASE_URL}/api/teams/${cloudTeam.id}/players`);
+                if (playersResponse.ok) {
+                    const playersData = await playersResponse.json();
+                    localTeam.teamRoster = (playersData.players || []).map(p => {
+                        if (typeof deserializePlayer === 'function') {
+                            return deserializePlayer(p);
+                        }
+                        return p;
+                    });
+                }
+            } catch (e) {
+                console.warn('Failed to fetch team players:', e);
             }
-            // Replace existing
-            team.games[existingIndex] = game;
+            
+            teams.push(localTeam);
+            if (typeof saveAllTeamsData === 'function') {
+                saveAllTeamsData();
+            }
+        }
+        
+        currentTeam = localTeam;
+        
+        if (typeof updateTeamRosterDisplay === 'function') {
+            updateTeamRosterDisplay();
+        }
+        showScreen('teamRosterScreen');
+        
+    } catch (error) {
+        console.error('Error selecting cloud team:', error);
+        alert('Failed to load team: ' + error.message);
+    }
+}
+
+/**
+ * Delete a team from the cloud
+ */
+async function deleteCloudTeam(team) {
+    if (!confirm(`Are you sure you want to delete "${team.name}"?\n\nThis will permanently delete the team and all its games. This cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        // Delete from cloud
+        if (typeof deleteTeamFromCloud === 'function') {
+            await deleteTeamFromCloud(team.id);
         } else {
-            // Add new
-            team.games.push(game);
-        }
-        
-        // Ensure players from the game are in the roster
-        // Game points contain player names. We need to make sure they exist in team.teamRoster
-        const playerNames = new Set();
-        if (game.points) {
-            game.points.forEach(p => {
-                if (p.players) p.players.forEach(name => playerNames.add(name));
+            // Direct API call if sync function not available
+            const response = await authFetch(`${API_BASE_URL}/api/teams/${team.id}`, {
+                method: 'DELETE'
             });
+            if (!response.ok) {
+                throw new Error(`Failed to delete team: ${response.statusText}`);
+            }
         }
         
-        playerNames.forEach(name => {
-            if (!team.teamRoster.find(p => p.name === name)) {
-                // Add new player to roster
-                // We don't know gender/number so use defaults
-                const newPlayer = new Player(name);
-                // Try to guess gender from name using existing helper if possible, or just default
-                team.teamRoster.push(newPlayer);
+        // Remove from local state
+        const localIndex = teams.findIndex(t => t.id === team.id);
+        if (localIndex !== -1) {
+            teams.splice(localIndex, 1);
+            
+            // If we deleted the current team, switch to another
+            if (currentTeam && currentTeam.id === team.id) {
+                currentTeam = teams.length > 0 ? teams[0] : null;
             }
-        });
-
-        // Update storage
-        saveAllTeamsData();
+            
+            if (typeof saveAllTeamsData === 'function') {
+                saveAllTeamsData();
+            }
+        }
         
-        alert('Game imported successfully!');
-        showSelectTeamScreen(); // Refresh UI
+        // Refresh the display
+        populateCloudTeamsAndGames();
+        
+    } catch (error) {
+        console.error('Error deleting team:', error);
+        alert('Failed to delete team: ' + error.message);
+    }
+}
 
+/**
+ * Resume a game from the cloud
+ * Loads the game data and enters the appropriate screen
+ */
+async function resumeCloudGame(cloudTeam, gameId) {
+    console.log('📥 Resuming cloud game:', gameId);
+    
+    try {
+        // First ensure the team is loaded
+        await selectCloudTeam(cloudTeam);
+        
+        // Load the game from cloud
+        if (typeof loadGameFromCloud !== 'function') {
+            throw new Error('Game loading not available');
+        }
+        
+        const game = await loadGameFromCloud(gameId);
+        if (!game) {
+            throw new Error('Failed to load game data');
+        }
+        
+        // Check if this game already exists in the local team
+        const existingIndex = currentTeam.games.findIndex(g => g.id === gameId);
+        if (existingIndex !== -1) {
+            // Replace existing game with fresh cloud data
+            currentTeam.games[existingIndex] = game;
+        } else {
+            // Add game to local team
+            currentTeam.games.push(game);
+        }
+        
+        // Save local state
+        if (typeof saveAllTeamsData === 'function') {
+            saveAllTeamsData();
+        }
+        
+        // Navigate to appropriate screen based on game state
+        if (typeof isPointInProgress === 'function' && isPointInProgress()) {
+            const latestPossession = typeof getLatestPossession === 'function' ? getLatestPossession() : null;
+            if (latestPossession && latestPossession.offensive) {
+                if (typeof updateOffensivePossessionScreen === 'function') {
+                    updateOffensivePossessionScreen();
+                }
+                showScreen('offensePlayByPlayScreen');
+            } else {
+                if (typeof updateDefensivePossessionScreen === 'function') {
+                    updateDefensivePossessionScreen();
+                }
+                showScreen('defensePlayByPlayScreen');
+            }
+        } else {
+            // Phase 6b: Use panel-based game screen if enabled
+            if (window.useNewGameScreen && typeof enterGameScreen === 'function') {
+                enterGameScreen();
+                if (typeof transitionToBetweenPoints === 'function') {
+                    transitionToBetweenPoints();
+                }
+            } else {
+                if (typeof updateActivePlayersList === 'function') {
+                    updateActivePlayersList();
+                }
+                showScreen('beforePointScreen');
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error resuming cloud game:', error);
+        alert('Failed to resume game: ' + error.message);
+    }
+}
+
+// importCloudGame is no longer needed - games are accessed directly from the cloud
+// Keeping a stub for backwards compatibility
+async function importCloudGame(gameId) {
+    console.warn('importCloudGame is deprecated - use resumeCloudGame instead');
+    // Find the team for this game and resume it
+    try {
+        const games = await listServerGames();
+        const game = games.find(g => g.game_id === gameId);
+        if (game && game.teamId) {
+            const response = await authFetch(`${API_BASE_URL}/api/teams/${game.teamId}`);
+            if (response.ok) {
+                const team = await response.json();
+                await resumeCloudGame(team, gameId);
+                return;
+            }
+        }
+        alert('Could not find team for this game');
     } catch (error) {
         console.error('Import failed:', error);
-        alert('Failed to import game: ' + error.message);
+        alert('Failed to load game: ' + error.message);
     }
 }
 
@@ -471,12 +594,18 @@ function removeGameStatsFromRoster(team, game) {
     });
 }
 
+/**
+ * Select a team by index (legacy function - kept for backwards compatibility)
+ * Use selectCloudTeam() for cloud-first workflow
+ */
 function selectTeam(index) {
-    currentTeam = teams[index];
-    if (typeof updateTeamRosterDisplay === 'function') {
-        updateTeamRosterDisplay();
+    if (index >= 0 && index < teams.length) {
+        currentTeam = teams[index];
+        if (typeof updateTeamRosterDisplay === 'function') {
+            updateTeamRosterDisplay();
+        }
+        showScreen('teamRosterScreen');
     }
-    showScreen('teamRosterScreen');
 }
 
 function initializeTeamSelection() {
@@ -555,33 +684,61 @@ function initializeTeamSelection() {
 
     const saveNewTeamBtn = document.getElementById('saveNewTeamBtn');
     if (saveNewTeamBtn) {
-        saveNewTeamBtn.addEventListener('click', () => {
+        saveNewTeamBtn.addEventListener('click', async () => {
             const input = document.getElementById('newTeamNameInput');
             const newTeamName = input ? input.value.trim() : '';
-            if (newTeamName) {
-                // Phase 4: Create team with ID, queue for cloud sync
+            
+            if (!newTeamName) {
+                alert('Please enter a team name.');
+                return;
+            }
+            
+            // Check if user is authenticated
+            if (!window.breakside?.auth?.isAuthenticated?.()) {
+                alert('Please sign in to create a team.');
+                return;
+            }
+            
+            // Disable button while creating
+            saveNewTeamBtn.disabled = true;
+            saveNewTeamBtn.textContent = 'Creating...';
+            
+            try {
+                // Phase 6b: Create team on cloud first
                 const newTeam = new Team(newTeamName);
+                
+                // Create on server
+                const response = await authFetch(`${API_BASE_URL}/api/teams`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        id: newTeam.id,
+                        name: newTeam.name,
+                        playerIds: newTeam.playerIds || [],
+                        lines: newTeam.lines || []
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || `Server error: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                console.log('✅ Team created on server:', result);
+                
+                // Add to local state
                 teams.push(newTeam);
                 currentTeam = newTeam;
                 
-                // Queue team for cloud sync if sync functions available
-                if (typeof createTeamOffline === 'function') {
-                    // Create the team offline (marks as _localOnly, queues for sync)
-                    createTeamOffline({
-                        id: newTeam.id,
-                        name: newTeam.name,
-                        playerIds: newTeam.playerIds,
-                        lines: newTeam.lines
-                    });
+                if (typeof saveAllTeamsData === 'function') {
+                    saveAllTeamsData();
                 }
                 
                 if (typeof updateTeamRosterDisplay === 'function') {
                     updateTeamRosterDisplay();
                 }
-                if (typeof saveAllTeamsData === 'function') {
-                    saveAllTeamsData();
-                }
-                showScreen('teamRosterScreen');
+                
+                // Close modal and navigate
                 const modal = document.getElementById('createTeamModal');
                 if (modal) {
                     modal.style.display = 'none';
@@ -589,8 +746,51 @@ function initializeTeamSelection() {
                 if (input) {
                     input.value = '';
                 }
-            } else {
-                alert('Please enter a team name.');
+                
+                showScreen('teamRosterScreen');
+                
+            } catch (error) {
+                console.error('Failed to create team:', error);
+                
+                // If offline or network error, queue for later sync
+                if (!navigator.onLine || error.message.includes('Failed to fetch')) {
+                    console.log('📴 Offline - creating team locally and queueing for sync');
+                    const newTeam = new Team(newTeamName);
+                    teams.push(newTeam);
+                    currentTeam = newTeam;
+                    
+                    if (typeof createTeamOffline === 'function') {
+                        createTeamOffline({
+                            id: newTeam.id,
+                            name: newTeam.name,
+                            playerIds: newTeam.playerIds || [],
+                            lines: newTeam.lines || []
+                        });
+                    }
+                    
+                    if (typeof saveAllTeamsData === 'function') {
+                        saveAllTeamsData();
+                    }
+                    if (typeof updateTeamRosterDisplay === 'function') {
+                        updateTeamRosterDisplay();
+                    }
+                    
+                    const modal = document.getElementById('createTeamModal');
+                    if (modal) {
+                        modal.style.display = 'none';
+                    }
+                    if (input) {
+                        input.value = '';
+                    }
+                    
+                    showScreen('teamRosterScreen');
+                    alert('Team created locally. It will sync to the cloud when you\'re back online.');
+                } else {
+                    alert('Failed to create team: ' + error.message);
+                }
+            } finally {
+                saveNewTeamBtn.disabled = false;
+                saveNewTeamBtn.textContent = 'Create Team';
             }
         });
     }
@@ -614,9 +814,20 @@ function initializeTeamSelection() {
 
     const restoreGamesBtn = document.getElementById('restoreGamesBtn');
     if (restoreGamesBtn) {
-        restoreGamesBtn.addEventListener('click', () => {
-            if (confirm('Restore saved games from storage? This will overwrite any unsaved changes.')) {
-                loadTeams(false);
+        restoreGamesBtn.addEventListener('click', async () => {
+            // In cloud-only mode, "restore" means re-sync from cloud
+            if (!confirm('Re-sync all data from the cloud? This will refresh your local cache with the latest cloud data.')) {
+                return;
+            }
+            
+            restoreGamesBtn.disabled = true;
+            restoreGamesBtn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Syncing...';
+            
+            try {
+                if (typeof syncUserTeams === 'function') {
+                    await syncUserTeams();
+                }
+                
                 // Set currentTeam to the first team if teams were loaded
                 if (teams.length > 0) {
                     currentTeam = teams[0];
@@ -625,46 +836,47 @@ function initializeTeamSelection() {
                     updateTeamRosterDisplay();
                 }
                 showSelectTeamScreen();
+                
+            } catch (error) {
+                console.error('Sync failed:', error);
+                alert('Failed to sync from cloud: ' + error.message);
+            } finally {
+                restoreGamesBtn.disabled = false;
+                restoreGamesBtn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Re-sync from Cloud';
             }
         });
+        
+        // Update button text to reflect cloud-only model
+        restoreGamesBtn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Re-sync';
+        restoreGamesBtn.title = 'Re-sync all data from the cloud';
     }
 
     const clearGamesBtn = document.getElementById('clearGamesBtn');
     if (clearGamesBtn) {
         clearGamesBtn.addEventListener('click', () => {
-            if (confirm('Are you sure you want to clear all saved games? This will delete all game data for all teams. This cannot be undone.')) {
-                // Clear all games from all teams
-                teams.forEach(team => {
-                    // Reset player stats that came from games
-                    team.teamRoster.forEach(player => {
-                        player.totalPointsPlayed = 0;
-                        player.totalTimePlayed = 0;
-                        player.completedPasses = 0;
-                        player.turnovers = 0;
-                        player.goals = 0;
-                        player.assists = 0;
-                        player.pointsWon = 0;
-                        player.pointsLost = 0;
-                        player.consecutivePointsPlayed = 0;
-                        player.pointsPlayedPreviousGames = 0;
-                    });
-                    team.games = [];
-                });
+            if (confirm('Clear local cache? This will remove all locally cached data. Your data on the cloud will NOT be affected.\n\nYou will need to re-sync from the cloud after clearing.')) {
+                // Clear local teams array
+                teams.length = 0;
+                currentTeam = null;
                 
-                // Save the updated data
-                if (typeof saveAllTeamsData === 'function') {
-                    saveAllTeamsData();
+                // Clear local storage caches
+                if (typeof clearSyncData === 'function') {
+                    clearSyncData();
                 }
                 
-                // Update displays
-                if (currentTeam && typeof updateTeamRosterDisplay === 'function') {
-                    updateTeamRosterDisplay();
-                }
+                // Clear teams from localStorage
+                localStorage.removeItem('ultistats_teams');
+                
+                // Refresh the display
                 showSelectTeamScreen();
                 
-                alert('All saved games have been cleared.');
+                alert('Local cache cleared. Use "Re-sync" or refresh the page to reload data from the cloud.');
             }
         });
+        
+        // Update button text to reflect cloud-only model
+        clearGamesBtn.innerHTML = '<i class="fas fa-eraser"></i> Clear Cache';
+        clearGamesBtn.title = 'Clear local cache (cloud data is not affected)';
     }
 }
 
