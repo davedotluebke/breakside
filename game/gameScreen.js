@@ -3079,6 +3079,11 @@ function enterGameScreen() {
         const usScore = game.scores ? game.scores[Role.TEAM] : 0;
         const themScore = game.scores ? game.scores[Role.OPPONENT] : 0;
         updateGameScreenScore(usScore, themScore);
+        
+        // Start controller polling for this game
+        if (game.id && typeof startControllerPolling === 'function') {
+            startControllerPolling(game.id);
+        }
     }
     
     // Update team identities in header
