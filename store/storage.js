@@ -114,6 +114,16 @@ function serializeGame(game) {
         // Phase 6b: Timer/cap settings
         gameDurationMinutes: game.gameDurationMinutes ?? 50,
         roundEndTime: game.roundEndTime || null,
+        // Phase 6b: Pending next line selections for multi-device sync
+        pendingNextLine: game.pendingNextLine ? {
+            oLine: game.pendingNextLine.oLine || [],
+            dLine: game.pendingNextLine.dLine || [],
+            odLine: game.pendingNextLine.odLine || [],
+            oLineModifiedAt: game.pendingNextLine.oLineModifiedAt || null,
+            dLineModifiedAt: game.pendingNextLine.dLineModifiedAt || null,
+            odLineModifiedAt: game.pendingNextLine.odLineModifiedAt || null,
+            activeType: game.pendingNextLine.activeType || 'od'
+        } : null,
         points: game.points.map(point => ({
             players: point.players,
             startingPosition: point.startingPosition,
