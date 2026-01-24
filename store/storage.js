@@ -122,7 +122,8 @@ function serializeGame(game) {
             oLineModifiedAt: game.pendingNextLine.oLineModifiedAt || null,
             dLineModifiedAt: game.pendingNextLine.dLineModifiedAt || null,
             odLineModifiedAt: game.pendingNextLine.odLineModifiedAt || null,
-            activeType: game.pendingNextLine.activeType || 'od'
+            activeType: game.pendingNextLine.activeType || 'od',
+            activeTypeModifiedAt: game.pendingNextLine.activeTypeModifiedAt || null
         } : null,
         points: game.points.map(point => ({
             players: point.players,
@@ -385,7 +386,8 @@ function deserializeGame(gameData) {
             oLineModifiedAt: gameData.pendingNextLine.oLineModifiedAt || null,
             dLineModifiedAt: gameData.pendingNextLine.dLineModifiedAt || null,
             odLineModifiedAt: gameData.pendingNextLine.odLineModifiedAt || null,
-            activeType: gameData.pendingNextLine.activeType || 'od'
+            activeType: gameData.pendingNextLine.activeType || 'od',
+            activeTypeModifiedAt: gameData.pendingNextLine.activeTypeModifiedAt || null
         };
     }
     // If no pendingNextLine, the default from Game constructor is used
