@@ -506,12 +506,11 @@ async function resumeCloudGame(cloudTeam, gameId) {
         // Check if this game already exists in the local team
         const existingIndex = currentTeam.games.findIndex(g => g.id === gameId);
         if (existingIndex !== -1) {
-            // Replace existing game with fresh cloud data
-            currentTeam.games[existingIndex] = game;
-        } else {
-            // Add game to local team
-            currentTeam.games.push(game);
+            // Remove existing game from its current position
+            currentTeam.games.splice(existingIndex, 1);
         }
+        // Add game to end of array so currentGame() returns it
+        currentTeam.games.push(game);
         
         // Save local state
         if (typeof saveAllTeamsData === 'function') {
