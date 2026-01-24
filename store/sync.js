@@ -916,6 +916,70 @@ async function loadGameFromCloud(gameId) {
 }
 
 /**
+ * Refresh pending line selections from the cloud for the current game.
+ * Used during active games to sync line selections between coaches.
+ * Only updates pendingNextLine, not points or other game data.
+ * @param {string} gameId - Game ID to refresh
+ * @returns {Promise<object|null>} Updated pendingNextLine or null if failed
+ */
+async function refreshPendingLineFromCloud(gameId) {
+    if (!isOnline || !gameId) {
+        return null;
+    }
+    
+    try {
+        const response = await authFetch(`${API_BASE_URL}/api/games/${gameId}`);
+        if (!response.ok) {
+            console.warn('Failed to refresh pending line from cloud');
+            return null;
+        }
+        
+        const gameData = await response.json();
+        
+        if (!gameData.pendingNextLine) {
+            return null;
+        }
+        
+        // Get the current game
+        const game = typeof currentGame === 'function' ? currentGame() : null;
+        if (!game || game.id !== gameId) {
+            return null;
+        }
+        
+        // Merge pendingNextLine - use server data if it's newer
+        const serverPending = gameData.pendingNextLine;
+        const localPending = game.pendingNextLine || {};
+        
+        // Check each line type and use whichever is newer
+        ['oLine', 'dLine', 'odLine'].forEach(lineKey => {
+            const modKey = lineKey.replace('Line', 'LineModifiedAt');
+            const serverModTime = serverPending[modKey] ? new Date(serverPending[modKey]).getTime() : 0;
+            const localModTime = localPending[modKey] ? new Date(localPending[modKey]).getTime() : 0;
+            
+            if (serverModTime > localModTime) {
+                // Server has newer data for this line type
+                localPending[lineKey] = serverPending[lineKey] || [];
+                localPending[modKey] = serverPending[modKey];
+            }
+        });
+        
+        // Always sync activeType from server (it's not timestamp-protected)
+        if (serverPending.activeType) {
+            localPending.activeType = serverPending.activeType;
+        }
+        
+        game.pendingNextLine = localPending;
+        
+        console.log('📥 Refreshed pending line from cloud');
+        return localPending;
+        
+    } catch (error) {
+        console.error('Error refreshing pending line:', error);
+        return null;
+    }
+}
+
+/**
  * Delete a game from the cloud
  * @param {string} gameId - Game ID
  */
@@ -1441,6 +1505,7 @@ window.syncGameToCloud = syncGameToCloud;
 window.generateGameId = generateGameId;
 window.listServerGames = listServerGames;
 window.loadGameFromCloud = loadGameFromCloud;
+window.refreshPendingLineFromCloud = refreshPendingLineFromCloud;
 window.deleteGameFromCloud = deleteGameFromCloud;
 window.createGameOffline = createGameOffline;
 

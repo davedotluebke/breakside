@@ -1012,6 +1012,19 @@ function transitionToBetweenPoints() {
         const usScore = game.scores ? game.scores[Role.TEAM] : 0;
         const themScore = game.scores ? game.scores[Role.OPPONENT] : 0;
         updateGameScreenScore(usScore, themScore);
+        
+        // Refresh pending line selections from cloud (for multi-device sync)
+        // This ensures Active Coach sees Line Coach's selections after point ends
+        if (game.id && typeof refreshPendingLineFromCloud === 'function') {
+            refreshPendingLineFromCloud(game.id).then(updated => {
+                if (updated) {
+                    // Re-update the panel with fresh data
+                    updateSelectLinePanel();
+                }
+            }).catch(err => {
+                console.warn('Failed to refresh pending line:', err);
+            });
+        }
     }
     
     // Update game log
@@ -1575,6 +1588,9 @@ function handlePanelStartPoint() {
     
     // Update the legacy activePlayersTable checkboxes to match panel selections
     syncPanelSelectionsToLegacy(selectedPlayers);
+    
+    // Stop pending line refresh since point is starting
+    stopPendingLineRefresh();
     
     // Use existing startNextPoint logic from pointManagement.js
     if (typeof startNextPoint === 'function') {
@@ -3128,12 +3144,68 @@ function enterGameScreen() {
 function exitGameScreen() {
     hideGameScreen();
     stopGameScreenTimerLoop();
+    stopPendingLineRefresh();
     console.log('🎮 Exited game screen');
 }
 
 // =============================================================================
 // Integration with Controller State
 // =============================================================================
+
+// Track pending line refresh interval
+let pendingLineRefreshIntervalId = null;
+
+/**
+ * Start periodic refresh of pending line data from cloud
+ * Called when between points to keep Select Line panel in sync
+ */
+function startPendingLineRefresh() {
+    if (pendingLineRefreshIntervalId) {
+        return; // Already running
+    }
+    
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !game.id) {
+        return;
+    }
+    
+    const gameId = game.id;
+    
+    // Refresh every 3 seconds while between points
+    pendingLineRefreshIntervalId = setInterval(async () => {
+        // Stop if no longer visible or point started
+        if (!isGameScreenVisible()) {
+            stopPendingLineRefresh();
+            return;
+        }
+        
+        if (typeof isPointInProgress === 'function' && isPointInProgress()) {
+            stopPendingLineRefresh();
+            return;
+        }
+        
+        // Refresh from cloud
+        if (typeof refreshPendingLineFromCloud === 'function') {
+            const updated = await refreshPendingLineFromCloud(gameId);
+            if (updated) {
+                updateSelectLinePanel();
+            }
+        }
+    }, 3000);
+    
+    console.log('🔄 Started pending line refresh polling');
+}
+
+/**
+ * Stop periodic refresh of pending line data
+ */
+function stopPendingLineRefresh() {
+    if (pendingLineRefreshIntervalId) {
+        clearInterval(pendingLineRefreshIntervalId);
+        pendingLineRefreshIntervalId = null;
+        console.log('⏹️ Stopped pending line refresh polling');
+    }
+}
 
 // Hook into controller state updates if available
 const originalUpdateControllerUI = window.updateControllerUI;
@@ -3149,6 +3221,13 @@ window.updateControllerUI = function(state, previousState) {
         updatePanelsForRole(state.myRole);
         // Update Select Line panel permissions when roles change
         updateSelectLinePanelState();
+        
+        // Start/stop pending line refresh based on point state
+        if (typeof isPointInProgress === 'function' && !isPointInProgress()) {
+            startPendingLineRefresh();
+        } else {
+            stopPendingLineRefresh();
+        }
     }
 };
 
