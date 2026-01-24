@@ -978,6 +978,111 @@ async function refreshPendingLineFromCloud(gameId) {
 }
 
 /**
+ * Refresh full game state from the cloud (points, scores, events).
+ * Used by non-Active-Coach users to see game updates in real-time.
+ * Active Coach should NOT call this - they are the authoritative source.
+ * @param {string} gameId - Game ID to refresh
+ * @returns {Promise<boolean>} True if game was updated
+ */
+async function refreshGameStateFromCloud(gameId) {
+    if (!isOnline || !gameId) {
+        return false;
+    }
+    
+    try {
+        const response = await authFetch(`${API_BASE_URL}/api/games/${gameId}`);
+        if (!response.ok) {
+            console.warn('Failed to refresh game state from cloud');
+            return false;
+        }
+        
+        const gameData = await response.json();
+        
+        // Get the current game
+        const game = typeof currentGame === 'function' ? currentGame() : null;
+        if (!game || game.id !== gameId) {
+            return false;
+        }
+        
+        // Update scores
+        if (gameData.scores) {
+            game.scores = gameData.scores;
+        }
+        
+        // Update points array (the main game data)
+        if (gameData.points && Array.isArray(gameData.points)) {
+            // Deserialize points from server format
+            game.points = gameData.points.map(pointData => {
+                const point = new Point(pointData.players || [], pointData.startingPosition);
+                point.startTimestamp = pointData.startTimestamp ? new Date(pointData.startTimestamp) : null;
+                point.endTimestamp = pointData.endTimestamp ? new Date(pointData.endTimestamp) : null;
+                point.winner = pointData.winner;
+                point.totalPointTime = pointData.totalPointTime || 0;
+                point.lastPauseTime = pointData.lastPauseTime ? new Date(pointData.lastPauseTime) : null;
+                
+                if (pointData.possessions && Array.isArray(pointData.possessions)) {
+                    point.possessions = pointData.possessions.map(possessionData => {
+                        const possession = new Possession(possessionData.offensive);
+                        if (possessionData.events && Array.isArray(possessionData.events)) {
+                            possession.events = possessionData.events.map(eventData => {
+                                // Use deserializeEvent if available
+                                if (typeof deserializeEvent === 'function') {
+                                    return deserializeEvent(eventData);
+                                }
+                                // Fallback: create basic event
+                                const event = new Event(eventData.type, eventData.timestamp ? new Date(eventData.timestamp) : null);
+                                event.player = eventData.player;
+                                event.possession = eventData.possession;
+                                event.disc = eventData.disc;
+                                event.xCoord = eventData.xCoord;
+                                event.yCoord = eventData.yCoord;
+                                return event;
+                            });
+                        }
+                        return possession;
+                    });
+                }
+                return point;
+            });
+        }
+        
+        // Update other game metadata
+        if (gameData.gameEndTimestamp) {
+            game.gameEndTimestamp = new Date(gameData.gameEndTimestamp);
+        }
+        if (gameData.lastLineUsed) {
+            game.lastLineUsed = gameData.lastLineUsed;
+        }
+        
+        // Also update pendingNextLine (line selections) using same logic
+        if (gameData.pendingNextLine) {
+            const serverPending = gameData.pendingNextLine;
+            const localPending = game.pendingNextLine || {};
+            
+            ['oLine', 'dLine', 'odLine'].forEach(lineKey => {
+                const modKey = lineKey.replace('Line', 'LineModifiedAt');
+                const serverModTime = serverPending[modKey] ? new Date(serverPending[modKey]).getTime() : 0;
+                const localModTime = localPending[modKey] ? new Date(localPending[modKey]).getTime() : 0;
+                
+                if (serverModTime > localModTime) {
+                    localPending[lineKey] = serverPending[lineKey] || [];
+                    localPending[modKey] = serverPending[modKey];
+                }
+            });
+            
+            game.pendingNextLine = localPending;
+        }
+        
+        console.log('📥 Refreshed full game state from cloud');
+        return true;
+        
+    } catch (error) {
+        console.error('Error refreshing game state:', error);
+        return false;
+    }
+}
+
+/**
  * Delete a game from the cloud
  * @param {string} gameId - Game ID
  */
@@ -1504,6 +1609,7 @@ window.generateGameId = generateGameId;
 window.listServerGames = listServerGames;
 window.loadGameFromCloud = loadGameFromCloud;
 window.refreshPendingLineFromCloud = refreshPendingLineFromCloud;
+window.refreshGameStateFromCloud = refreshGameStateFromCloud;
 window.deleteGameFromCloud = deleteGameFromCloud;
 window.createGameOffline = createGameOffline;
 
