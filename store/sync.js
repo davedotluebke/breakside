@@ -963,9 +963,15 @@ async function refreshPendingLineFromCloud(gameId) {
             }
         });
         
-        // Always sync activeType from server (it's not timestamp-protected)
-        if (serverPending.activeType) {
-            localPending.activeType = serverPending.activeType;
+        // Sync activeType using timestamp comparison
+        const serverActiveTypeTime = serverPending.activeTypeModifiedAt 
+            ? new Date(serverPending.activeTypeModifiedAt).getTime() : 0;
+        const localActiveTypeTime = localPending.activeTypeModifiedAt 
+            ? new Date(localPending.activeTypeModifiedAt).getTime() : 0;
+        
+        if (serverActiveTypeTime > localActiveTypeTime) {
+            localPending.activeType = serverPending.activeType || 'od';
+            localPending.activeTypeModifiedAt = serverPending.activeTypeModifiedAt;
         }
         
         game.pendingNextLine = localPending;

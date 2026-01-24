@@ -1498,8 +1498,9 @@ function handleODToggle() {
         default: nextType = 'od';
     }
     
-    // Update active type
+    // Update active type with timestamp
     game.pendingNextLine.activeType = nextType;
+    game.pendingNextLine.activeTypeModifiedAt = new Date().toISOString();
     
     // Save game state
     if (typeof saveAllTeamsData === 'function') {
@@ -2096,6 +2097,7 @@ function selectAppropriateLineAtPointEnd() {
     // Only update if different from current
     if (game.pendingNextLine.activeType !== selectedType) {
         game.pendingNextLine.activeType = selectedType;
+        game.pendingNextLine.activeTypeModifiedAt = new Date().toISOString();
         
         // Save game state
         if (typeof saveAllTeamsData === 'function') {
@@ -2460,6 +2462,7 @@ function handleCompactLineTypeTap() {
     const nextIndex = (currentIndex + 1) % cycleOrder.length;
     
     game.pendingNextLine.activeType = cycleOrder[nextIndex];
+    game.pendingNextLine.activeTypeModifiedAt = new Date().toISOString();
     
     // Update compact view to show new line
     updateSelectLineCompactView();
