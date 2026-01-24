@@ -115,15 +115,14 @@ function serializeGame(game) {
         gameDurationMinutes: game.gameDurationMinutes ?? 50,
         roundEndTime: game.roundEndTime || null,
         // Phase 6b: Pending next line selections for multi-device sync
+        // Note: activeType is local-only (not synced) - each user views/edits independently
         pendingNextLine: game.pendingNextLine ? {
             oLine: game.pendingNextLine.oLine || [],
             dLine: game.pendingNextLine.dLine || [],
             odLine: game.pendingNextLine.odLine || [],
             oLineModifiedAt: game.pendingNextLine.oLineModifiedAt || null,
             dLineModifiedAt: game.pendingNextLine.dLineModifiedAt || null,
-            odLineModifiedAt: game.pendingNextLine.odLineModifiedAt || null,
-            activeType: game.pendingNextLine.activeType || 'od',
-            activeTypeModifiedAt: game.pendingNextLine.activeTypeModifiedAt || null
+            odLineModifiedAt: game.pendingNextLine.odLineModifiedAt || null
         } : null,
         points: game.points.map(point => ({
             players: point.players,
@@ -378,6 +377,7 @@ function deserializeGame(gameData) {
     game.roundEndTime = gameData.roundEndTime || null;
     
     // Phase 6b: Pending next line selections (migrate from existing games)
+    // Note: activeType is local-only - each user manages their own view state
     if (gameData.pendingNextLine) {
         game.pendingNextLine = {
             oLine: gameData.pendingNextLine.oLine || [],
@@ -386,8 +386,7 @@ function deserializeGame(gameData) {
             oLineModifiedAt: gameData.pendingNextLine.oLineModifiedAt || null,
             dLineModifiedAt: gameData.pendingNextLine.dLineModifiedAt || null,
             odLineModifiedAt: gameData.pendingNextLine.odLineModifiedAt || null,
-            activeType: gameData.pendingNextLine.activeType || 'od',
-            activeTypeModifiedAt: gameData.pendingNextLine.activeTypeModifiedAt || null
+            activeType: 'od'  // Local-only, always starts at 'od'
         };
     }
     // If no pendingNextLine, the default from Game constructor is used

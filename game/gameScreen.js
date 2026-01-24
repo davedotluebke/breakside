@@ -1498,9 +1498,8 @@ function handleODToggle() {
         default: nextType = 'od';
     }
     
-    // Update active type with timestamp
+    // Update active type (local-only, not synced)
     game.pendingNextLine.activeType = nextType;
-    game.pendingNextLine.activeTypeModifiedAt = new Date().toISOString();
     
     // Save game state
     if (typeof saveAllTeamsData === 'function') {
@@ -2094,12 +2093,11 @@ function selectAppropriateLineAtPointEnd() {
         }
     }
     
-    // Only update if different from current
+    // Only update if different from current (local-only, not synced)
     if (game.pendingNextLine.activeType !== selectedType) {
         game.pendingNextLine.activeType = selectedType;
-        game.pendingNextLine.activeTypeModifiedAt = new Date().toISOString();
         
-        // Save game state
+        // Save game state (activeType won't be synced to cloud)
         if (typeof saveAllTeamsData === 'function') {
             saveAllTeamsData();
         }
@@ -2461,8 +2459,8 @@ function handleCompactLineTypeTap() {
     const currentIndex = cycleOrder.indexOf(currentType);
     const nextIndex = (currentIndex + 1) % cycleOrder.length;
     
+    // Update active type (local-only, not synced)
     game.pendingNextLine.activeType = cycleOrder[nextIndex];
-    game.pendingNextLine.activeTypeModifiedAt = new Date().toISOString();
     
     // Update compact view to show new line
     updateSelectLineCompactView();
