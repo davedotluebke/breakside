@@ -963,16 +963,8 @@ async function refreshPendingLineFromCloud(gameId) {
             }
         });
         
-        // Sync activeType using timestamp comparison
-        const serverActiveTypeTime = serverPending.activeTypeModifiedAt 
-            ? new Date(serverPending.activeTypeModifiedAt).getTime() : 0;
-        const localActiveTypeTime = localPending.activeTypeModifiedAt 
-            ? new Date(localPending.activeTypeModifiedAt).getTime() : 0;
-        
-        if (serverActiveTypeTime > localActiveTypeTime) {
-            localPending.activeType = serverPending.activeType || 'od';
-            localPending.activeTypeModifiedAt = serverPending.activeTypeModifiedAt;
-        }
+        // Note: activeType is intentionally NOT synced - it's local UI state
+        // Each user independently chooses which line type to view/edit
         
         game.pendingNextLine = localPending;
         
