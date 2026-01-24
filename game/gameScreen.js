@@ -1589,8 +1589,8 @@ function handlePanelStartPoint() {
     // Update the legacy activePlayersTable checkboxes to match panel selections
     syncPanelSelectionsToLegacy(selectedPlayers);
     
-    // Stop pending line refresh since point is starting
-    stopPendingLineRefresh();
+    // Note: Don't stop game state refresh - viewers need updates during points
+    // The refresh logic handles Active Coach differently (no full refresh during point)
     
     // Use existing startNextPoint logic from pointManagement.js
     if (typeof startNextPoint === 'function') {
@@ -3113,6 +3113,9 @@ function enterGameScreen() {
     // Start timer updates
     startGameScreenTimerLoop();
     
+    // Start game state refresh for syncing with other clients
+    startGameStateRefresh();
+    
     // Update game log panel
     updateGameLogPanel();
     
@@ -3145,7 +3148,7 @@ function enterGameScreen() {
 function exitGameScreen() {
     hideGameScreen();
     stopGameScreenTimerLoop();
-    stopPendingLineRefresh();
+    stopGameStateRefresh();
     console.log('🎮 Exited game screen');
 }
 
@@ -3153,15 +3156,16 @@ function exitGameScreen() {
 // Integration with Controller State
 // =============================================================================
 
-// Track pending line refresh interval
-let pendingLineRefreshIntervalId = null;
+// Track game state refresh interval
+let gameStateRefreshIntervalId = null;
 
 /**
- * Start periodic refresh of pending line data from cloud
- * Called when between points to keep Select Line panel in sync
+ * Start periodic refresh of game state from cloud.
+ * - Active Coach: Only refresh pending line (they push game data, not pull)
+ * - Everyone else: Refresh full game state (scores, points, events)
  */
-function startPendingLineRefresh() {
-    if (pendingLineRefreshIntervalId) {
+function startGameStateRefresh() {
+    if (gameStateRefreshIntervalId) {
         return; // Already running
     }
     
@@ -3172,40 +3176,83 @@ function startPendingLineRefresh() {
     
     const gameId = game.id;
     
-    // Refresh every 3 seconds while between points
-    pendingLineRefreshIntervalId = setInterval(async () => {
-        // Stop if no longer visible or point started
+    // Refresh every 3 seconds
+    gameStateRefreshIntervalId = setInterval(async () => {
+        // Stop if no longer visible
         if (!isGameScreenVisible()) {
-            stopPendingLineRefresh();
+            stopGameStateRefresh();
             return;
         }
         
-        if (typeof isPointInProgress === 'function' && isPointInProgress()) {
-            stopPendingLineRefresh();
-            return;
-        }
+        // Check if we're the Active Coach
+        const state = typeof getControllerState === 'function' ? getControllerState() : {};
+        const isActiveCoach = state.isActiveCoach;
         
-        // Refresh from cloud
-        if (typeof refreshPendingLineFromCloud === 'function') {
-            const updated = await refreshPendingLineFromCloud(gameId);
-            if (updated) {
-                updateSelectLinePanel();
+        if (isActiveCoach) {
+            // Active Coach: Only refresh pending line (between points)
+            // They are the authoritative source for game data
+            if (typeof isPointInProgress === 'function' && !isPointInProgress()) {
+                if (typeof refreshPendingLineFromCloud === 'function') {
+                    const updated = await refreshPendingLineFromCloud(gameId);
+                    if (updated) {
+                        updateSelectLinePanel();
+                    }
+                }
+            }
+        } else {
+            // Line Coach / Viewer: Refresh full game state
+            if (typeof refreshGameStateFromCloud === 'function') {
+                const updated = await refreshGameStateFromCloud(gameId);
+                if (updated) {
+                    // Update all UI elements
+                    updateGameScreenAfterRefresh();
+                }
             }
         }
     }, 3000);
     
-    console.log('🔄 Started pending line refresh polling');
+    console.log('🔄 Started game state refresh polling');
 }
 
 /**
- * Stop periodic refresh of pending line data
+ * Stop periodic refresh of game state
  */
-function stopPendingLineRefresh() {
-    if (pendingLineRefreshIntervalId) {
-        clearInterval(pendingLineRefreshIntervalId);
-        pendingLineRefreshIntervalId = null;
-        console.log('⏹️ Stopped pending line refresh polling');
+function stopGameStateRefresh() {
+    if (gameStateRefreshIntervalId) {
+        clearInterval(gameStateRefreshIntervalId);
+        gameStateRefreshIntervalId = null;
+        console.log('⏹️ Stopped game state refresh polling');
     }
+}
+
+// Aliases for backwards compatibility
+function startPendingLineRefresh() { startGameStateRefresh(); }
+function stopPendingLineRefresh() { stopGameStateRefresh(); }
+
+/**
+ * Update all game screen UI elements after a game state refresh
+ */
+function updateGameScreenAfterRefresh() {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game) return;
+    
+    // Update score display
+    const usScore = game.scores ? game.scores[Role.TEAM] : 0;
+    const themScore = game.scores ? game.scores[Role.OPPONENT] : 0;
+    updateGameScreenScore(usScore, themScore);
+    
+    // Update game log panel
+    updateGameLogPanel();
+    updateGameLogEvents();
+    
+    // Update Select Line panel (player stats, etc.)
+    updateSelectLinePanel();
+    updateSelectLineTable();
+    
+    // Update Play-by-Play panel state
+    updatePlayByPlayPanelState();
+    
+    console.log('🔄 Updated UI after game state refresh');
 }
 
 // Hook into controller state updates if available
@@ -3223,12 +3270,8 @@ window.updateControllerUI = function(state, previousState) {
         // Update Select Line panel permissions when roles change
         updateSelectLinePanelState();
         
-        // Start/stop pending line refresh based on point state
-        if (typeof isPointInProgress === 'function' && !isPointInProgress()) {
-            startPendingLineRefresh();
-        } else {
-            stopPendingLineRefresh();
-        }
+        // Always keep game state refresh running (for viewers to see updates)
+        startGameStateRefresh();
     }
 };
 
