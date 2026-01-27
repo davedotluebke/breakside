@@ -359,7 +359,9 @@ Replace current screen-based navigation with a **panel-based layout** for all in
   - Auto-selects appropriate line at point end
   - Single-line workflow supported (stays on O/D if O/D lines never modified)
   - Timestamp only updated on actual player changes, not toggle view
+  - activeType is local-only (each user controls own view)
 - [x] Auto-resize behaviors (maximize on point end, minimize on point start for Active Coach)
+- [x] Multi-device sync: Line selections sync between coaches (timestamp merge)
 - [ ] Minimize to title bar showing selected player names (compact layout)
 - [ ] Conflict warning toast when both coaches edit
 - [ ] Remove "Use Old Screen" button when complete
@@ -377,28 +379,25 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [ ] "Select Next D Line" — prepare defensive lineup
 - [ ] "Start Point" button appears in appropriate panel based on possession
 
-### 🔄 Phase 5: Multi-User Game Sync
+### 🔄 Phase 5: Multi-User Game Sync (In Progress)
 
 **Game State Synchronization:**
-- [ ] API: `GET /api/games/{game_id}/poll?since={version}` - Optimized poll
-  - Return game state only if version changed
-  - Always return controller status
-  - Return pending handoff requests
-- [ ] PWA: Poll loop with role-based intervals
-  - Active/Line Coach: 2 seconds
-  - Idle Coach: 3 seconds  
-  - Viewer: 5 seconds
-- [ ] PWA: Update UI when remote changes detected
-- [ ] PWA: Merge lineup changes from other coaches
+- [x] Cloud-only team/game UI (local storage only for offline queue)
+- [x] Active Coach pushes game data via `syncGameToCloud()`
+- [x] Line Coach/Viewers pull full game state via `refreshGameStateFromCloud()`
+  - Scores, points, events refresh every 3 seconds
+  - UI auto-updates (game log, score display, player stats)
+- [x] Pending line selections sync between coaches (`pendingNextLine`)
+  - Timestamp-based merge (newer wins)
+  - `activeType` (O/D toggle) is local-only per user
+- [ ] **Optimization**: API poll endpoint with version check (avoid fetching unchanged data)
+- [ ] **Optimization**: Role-based polling intervals (Active Coach: push-only, Viewer: 5s)
 
 **Conflict Resolution:**
-- [ ] Server tracks game version number (increments on each save)
-- [ ] Client sends version number with sync requests
-- [ ] Server detects when client has stale data
-- [ ] Conflict resolution strategy: latest-wins with notification
-  - If server version is newer, return updated state and flag "stale"
-  - Client shows toast: "Game updated by another coach" and refreshes
-- [ ] Optionally: event-level conflict resolution (merge non-overlapping events)
+- [x] Line selection: timestamp-based merge (newer wins)
+- [x] Game state: Active Coach is authoritative source
+- [ ] Server-side version tracking for optimized polling
+- [ ] Conflict notification toast: "Game updated by another coach"
 
 **Auto-Join Active Games:**
 - [ ] API: `GET /api/teams/{team_id}/active-game` - Get currently active game for a team
