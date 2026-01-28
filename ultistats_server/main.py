@@ -706,11 +706,63 @@ async def list_games_endpoint(user: Optional[dict] = Depends(get_optional_user))
     
     Returns only games for teams the user has access to.
     Anonymous users get an empty list.
+    
+    Includes activity info: lastActivity timestamp and activeCoaches list
+    for games with recent controller activity (within 5 minutes).
     """
     all_games = list_all_games()
     
     if not user:
         return {"games": [], "count": 0}
+    
+    # Enrich games with activity info from controller state
+    five_minutes_ago = datetime.now().timestamp() - (5 * 60)
+    
+    for game in all_games:
+        game_id = game.get("game_id")
+        if not game_id:
+            continue
+            
+        # Get controller state for this game (in-memory, fast)
+        state = get_controller_state(game_id)
+        
+        # Find the most recent lastPing from any role
+        last_pings = []
+        active_coaches = []
+        
+        if state.get("activeCoach") and state["activeCoach"].get("lastPing"):
+            ping_time = state["activeCoach"]["lastPing"]
+            last_pings.append(ping_time)
+            # Check if this coach is active (within 5 minutes)
+            try:
+                ping_ts = datetime.fromisoformat(ping_time).timestamp()
+                if ping_ts > five_minutes_ago:
+                    active_coaches.append(state["activeCoach"].get("displayName", "Unknown"))
+            except (ValueError, TypeError):
+                pass
+                
+        if state.get("lineCoach") and state["lineCoach"].get("lastPing"):
+            ping_time = state["lineCoach"]["lastPing"]
+            last_pings.append(ping_time)
+            # Check if this coach is active (within 5 minutes)
+            # Only add if different from activeCoach
+            try:
+                ping_ts = datetime.fromisoformat(ping_time).timestamp()
+                if ping_ts > five_minutes_ago:
+                    line_coach_name = state["lineCoach"].get("displayName", "Unknown")
+                    if line_coach_name not in active_coaches:
+                        active_coaches.append(line_coach_name)
+            except (ValueError, TypeError):
+                pass
+        
+        # Set lastActivity to the most recent ping
+        if last_pings:
+            game["lastActivity"] = max(last_pings)
+        else:
+            game["lastActivity"] = None
+            
+        # Set active coaches list (only those active within 5 minutes)
+        game["activeCoaches"] = active_coaches
     
     # Admin sees all
     if is_admin(user["id"]):

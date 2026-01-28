@@ -138,8 +138,44 @@ function showSetServerDialog() {
 }
 
 /**
+ * Check if a game has active coaches (activity within last 5 minutes)
+ * @param {Object} game - Game object with activeCoaches array
+ * @returns {boolean}
+ */
+function isGameActive(game) {
+    return game.activeCoaches && game.activeCoaches.length > 0;
+}
+
+/**
+ * Get the most recent game timestamp for a team
+ * @param {Array} games - Array of games
+ * @returns {number} - Timestamp in ms (0 if no games)
+ */
+function getMostRecentGameTimestamp(games) {
+    if (!games || games.length === 0) return 0;
+    return Math.max(...games.map(g => new Date(g.game_start_timestamp || 0).getTime()));
+}
+
+/**
+ * Check if a team has any active games
+ * @param {Array} games - Array of games for the team
+ * @returns {boolean}
+ */
+function teamHasActiveGames(games) {
+    if (!games || games.length === 0) return false;
+    return games.some(g => isGameActive(g));
+}
+
+/**
  * Populate the cloud-only teams and games list
  * This is the primary UI for selecting teams and games (Phase 6b)
+ * 
+ * Features:
+ * - Collapsible team sections (click to expand/collapse)
+ * - Teams sorted by most recent game
+ * - Games sorted by most recent within each team
+ * - Active game indicator showing coaching names
+ * - Teams with active games are auto-expanded
  */
 async function populateCloudTeamsAndGames() {
     const listElement = document.getElementById('cloudTeamsList');
@@ -165,7 +201,7 @@ async function populateCloudTeamsAndGames() {
         const data = await response.json();
         const userTeams = data.teams || [];
         
-        // Also fetch games
+        // Also fetch games (includes activeCoaches from server)
         let allGames = [];
         if (typeof listServerGames === 'function') {
             allGames = await listServerGames();
@@ -181,9 +217,6 @@ async function populateCloudTeamsAndGames() {
             return;
         }
 
-        const table = document.createElement('table');
-        table.classList.add('team-selection-table');
-
         // Group games by teamId
         const gamesByTeamId = {};
         allGames.forEach(game => {
@@ -194,40 +227,97 @@ async function populateCloudTeamsAndGames() {
             gamesByTeamId[teamId].push(game);
         });
 
-        userTeams.forEach(({ team, role }) => {
-            const teamRow = document.createElement('tr');
-            teamRow.classList.add('team-row');
+        // Sort games within each team by date (newest first)
+        for (const teamId in gamesByTeamId) {
+            gamesByTeamId[teamId].sort((a, b) => {
+                const dateA = new Date(a.game_start_timestamp || 0);
+                const dateB = new Date(b.game_start_timestamp || 0);
+                return dateB - dateA;
+            });
+        }
+
+        // Sort teams by most recent game (newest first)
+        const sortedTeams = [...userTeams].sort((a, b) => {
+            const aGames = gamesByTeamId[a.team.id] || [];
+            const bGames = gamesByTeamId[b.team.id] || [];
+            const aRecent = getMostRecentGameTimestamp(aGames);
+            const bRecent = getMostRecentGameTimestamp(bGames);
+            return bRecent - aRecent;
+        });
+
+        // Build the collapsible team list
+        const container = document.createElement('div');
+        container.className = 'teams-list-container';
+
+        sortedTeams.forEach(({ team, role }) => {
+            const teamGames = gamesByTeamId[team.id] || [];
+            const hasActiveGames = teamHasActiveGames(teamGames);
             
-            // Team name cell (clickable to go to roster)
-            const teamNameCell = document.createElement('td');
-            teamNameCell.classList.add('team-name');
-            teamNameCell.style.cursor = 'pointer';
-            
-            // Show team symbol/icon if available
-            const teamDisplay = document.createElement('span');
-            if (team.teamSymbol) {
-                teamDisplay.textContent = `${team.teamSymbol} ${team.name}`;
-            } else {
-                teamDisplay.textContent = team.name;
+            // Team section container
+            const teamSection = document.createElement('div');
+            teamSection.className = 'team-section';
+            if (hasActiveGames) {
+                teamSection.classList.add('has-active-games');
             }
-            teamNameCell.appendChild(teamDisplay);
+
+            // Team header (collapsible)
+            const teamHeader = document.createElement('div');
+            teamHeader.className = 'team-header';
             
-            // Show role badge
+            // Expand/collapse arrow
+            const expandArrow = document.createElement('span');
+            expandArrow.className = 'expand-arrow';
+            expandArrow.textContent = hasActiveGames ? '▼' : '▶';
+            teamHeader.appendChild(expandArrow);
+            
+            // Team name
+            const teamNameSpan = document.createElement('span');
+            teamNameSpan.className = 'team-header-name';
+            if (team.teamSymbol) {
+                teamNameSpan.textContent = `${team.teamSymbol} ${team.name}`;
+            } else {
+                teamNameSpan.textContent = team.name;
+            }
+            teamHeader.appendChild(teamNameSpan);
+            
+            // Role badge
             const roleBadge = document.createElement('span');
             roleBadge.className = 'role-badge';
             roleBadge.textContent = role === 'coach' ? '🏈' : '👁️';
             roleBadge.title = role === 'coach' ? 'Coach' : 'Viewer';
-            roleBadge.style.marginLeft = '8px';
-            roleBadge.style.fontSize = '0.8em';
-            teamNameCell.appendChild(roleBadge);
+            teamHeader.appendChild(roleBadge);
             
-            teamNameCell.onclick = () => selectCloudTeam(team);
-            teamRow.appendChild(teamNameCell);
-
+            // Game count
+            const gameCount = document.createElement('span');
+            gameCount.className = 'game-count';
+            gameCount.textContent = `(${teamGames.length} game${teamGames.length !== 1 ? 's' : ''})`;
+            teamHeader.appendChild(gameCount);
+            
+            // Active indicator on team header if any game is active
+            if (hasActiveGames) {
+                const activeIndicator = document.createElement('span');
+                activeIndicator.className = 'team-active-indicator';
+                activeIndicator.textContent = '🟢';
+                activeIndicator.title = 'Has active games';
+                teamHeader.appendChild(activeIndicator);
+            }
+            
+            // Team actions (roster, delete)
+            const teamActions = document.createElement('div');
+            teamActions.className = 'team-header-actions';
+            
+            // Roster button
+            const rosterBtn = document.createElement('button');
+            rosterBtn.innerHTML = '<i class="fas fa-users"></i>';
+            rosterBtn.classList.add('icon-button');
+            rosterBtn.title = 'View Roster';
+            rosterBtn.onclick = (e) => {
+                e.stopPropagation();
+                selectCloudTeam(team);
+            };
+            teamActions.appendChild(rosterBtn);
+            
             // Delete team button (coaches only)
-            const deleteTeamCell = document.createElement('td');
-            deleteTeamCell.style.width = '40px';
-            deleteTeamCell.style.textAlign = 'center';
             if (role === 'coach') {
                 const deleteTeamBtn = document.createElement('button');
                 deleteTeamBtn.innerHTML = '<i class="fas fa-trash" style="color: #dc3545;"></i>';
@@ -237,70 +327,76 @@ async function populateCloudTeamsAndGames() {
                     e.stopPropagation();
                     deleteCloudTeam(team);
                 };
-                deleteTeamCell.appendChild(deleteTeamBtn);
+                teamActions.appendChild(deleteTeamBtn);
             }
-            teamRow.appendChild(deleteTeamCell);
+            
+            teamHeader.appendChild(teamActions);
+            teamSection.appendChild(teamHeader);
 
-            // Games cell
-            const gamesCell = document.createElement('td');
-            const gamesList = document.createElement('ul');
-            gamesList.classList.add('games-list');
-
-            const teamGames = gamesByTeamId[team.id] || [];
+            // Games list (collapsible content)
+            const gamesContainer = document.createElement('div');
+            gamesContainer.className = 'team-games-container';
+            // Start expanded if team has active games, collapsed otherwise
+            gamesContainer.style.display = hasActiveGames ? 'block' : 'none';
             
             if (teamGames.length === 0) {
-                const noGamesItem = document.createElement('li');
-                noGamesItem.style.color = '#888';
-                noGamesItem.style.fontStyle = 'italic';
-                noGamesItem.textContent = 'No games yet';
-                gamesList.appendChild(noGamesItem);
+                const noGamesMsg = document.createElement('div');
+                noGamesMsg.className = 'no-games-message';
+                noGamesMsg.textContent = 'No games yet';
+                gamesContainer.appendChild(noGamesMsg);
             } else {
-                // Sort games by date (newest first)
-                teamGames.sort((a, b) => {
-                    const dateA = new Date(a.game_start_timestamp || 0);
-                    const dateB = new Date(b.game_start_timestamp || 0);
-                    return dateB - dateA;
-                });
+                const gamesList = document.createElement('ul');
+                gamesList.className = 'games-list';
                 
                 teamGames.forEach(game => {
                     const gameItem = document.createElement('li');
-                    gameItem.style.display = 'flex';
-                    gameItem.style.justifyContent = 'space-between';
-                    gameItem.style.alignItems = 'center';
-                    gameItem.style.padding = '5px 0';
+                    gameItem.className = 'game-item';
+                    if (isGameActive(game)) {
+                        gameItem.classList.add('game-active');
+                    }
+                    
+                    // Game info container
+                    const gameInfo = document.createElement('div');
+                    gameInfo.className = 'game-info';
                     
                     const dateStr = game.game_start_timestamp 
                         ? new Date(game.game_start_timestamp).toLocaleDateString() 
                         : 'Unknown Date';
                     
                     const gameText = document.createElement('span');
+                    gameText.className = 'game-text';
                     const scoreText = `${game.scores?.team || 0}-${game.scores?.opponent || 0}`;
                     gameText.textContent = `${dateStr}: vs ${game.opponent} (${scoreText})`;
+                    gameInfo.appendChild(gameText);
                     
-                    // Show [In Progress] for games without end timestamp
-                    if (!game.game_end_timestamp) {
+                    // Active coaches badge (🟢 Name1, Name2 coaching)
+                    if (isGameActive(game)) {
+                        const activeBadge = document.createElement('span');
+                        activeBadge.className = 'game-active-badge';
+                        const coachNames = game.activeCoaches.join(', ');
+                        activeBadge.textContent = `🟢 ${coachNames} coaching`;
+                        activeBadge.title = 'Active coaches in this game';
+                        gameInfo.appendChild(activeBadge);
+                    } else if (!game.game_end_timestamp) {
+                        // Show [In Progress] only for games without end timestamp and no active coaches
                         const inProgressBadge = document.createElement('span');
-                        inProgressBadge.textContent = ' [In Progress]';
-                        inProgressBadge.style.color = '#007bff';
-                        inProgressBadge.style.fontWeight = 'bold';
-                        gameText.appendChild(inProgressBadge);
+                        inProgressBadge.className = 'in-progress-badge';
+                        inProgressBadge.textContent = '[In Progress]';
+                        gameInfo.appendChild(inProgressBadge);
                     }
                     
-                    gameItem.appendChild(gameText);
+                    gameItem.appendChild(gameInfo);
 
                     // Buttons Container
                     const buttonsDiv = document.createElement('div');
-                    buttonsDiv.style.display = 'flex';
-                    buttonsDiv.style.gap = '5px';
+                    buttonsDiv.className = 'game-actions';
 
                     // Resume/Open button for in-progress games
                     if (!game.game_end_timestamp && role === 'coach') {
                         const resumeBtn = document.createElement('button');
                         resumeBtn.innerHTML = '↪️ Resume';
-                        resumeBtn.classList.add('icon-button');
+                        resumeBtn.classList.add('icon-button', 'resume-btn');
                         resumeBtn.title = 'Resume Game';
-                        resumeBtn.style.width = 'auto';
-                        resumeBtn.style.padding = '5px 10px';
                         resumeBtn.onclick = (e) => {
                             e.stopPropagation();
                             resumeCloudGame(team, game.game_id);
@@ -324,15 +420,24 @@ async function populateCloudTeamsAndGames() {
                     gameItem.appendChild(buttonsDiv);
                     gamesList.appendChild(gameItem);
                 });
+                
+                gamesContainer.appendChild(gamesList);
             }
-
-            gamesCell.appendChild(gamesList);
-            teamRow.appendChild(gamesCell);
-            table.appendChild(teamRow);
+            
+            teamSection.appendChild(gamesContainer);
+            
+            // Toggle expand/collapse on header click
+            teamHeader.onclick = () => {
+                const isExpanded = gamesContainer.style.display !== 'none';
+                gamesContainer.style.display = isExpanded ? 'none' : 'block';
+                expandArrow.textContent = isExpanded ? '▶' : '▼';
+            };
+            
+            container.appendChild(teamSection);
         });
 
         listElement.innerHTML = '';
-        listElement.appendChild(table);
+        listElement.appendChild(container);
         
     } catch (error) {
         console.error('Error populating cloud teams:', error);
