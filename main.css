@@ -540,6 +540,7 @@ td.player-mmp,
 }
 
 
+/* Legacy team selection table styles (kept for backwards compatibility) */
 .team-selection-table {
     width: 100%;
     border-collapse: collapse;
@@ -556,6 +557,106 @@ td.player-mmp,
     cursor: pointer;
 }
 
+/* ============================================
+   Collapsible Team List Styles (Phase 6b)
+   ============================================ */
+
+.teams-list-container {
+    margin-top: 1em;
+}
+
+.team-section {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    background: #fff;
+}
+
+.team-section.has-active-games {
+    border-color: #28a745;
+    box-shadow: 0 0 5px rgba(40, 167, 69, 0.2);
+}
+
+.team-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 15px;
+    background: #f8f9fa;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease;
+}
+
+.team-header:hover {
+    background: #e9ecef;
+}
+
+.team-section.has-active-games .team-header {
+    background: #e8f5e9;
+}
+
+.team-section.has-active-games .team-header:hover {
+    background: #c8e6c9;
+}
+
+.expand-arrow {
+    font-size: 0.8em;
+    color: #666;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.team-header-name {
+    font-weight: bold;
+    font-size: 1.1em;
+    color: #333;
+}
+
+.team-header .role-badge {
+    font-size: 0.85em;
+    flex-shrink: 0;
+}
+
+.game-count {
+    font-size: 0.85em;
+    color: #666;
+    margin-left: 5px;
+}
+
+.team-active-indicator {
+    margin-left: auto;
+    animation: pulse 2s infinite;
+}
+
+.team-header-actions {
+    display: flex;
+    gap: 5px;
+    margin-left: auto;
+}
+
+.team-header-actions .icon-button {
+    padding: 5px 8px;
+    border-radius: 4px;
+}
+
+.team-header-actions .icon-button:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.team-games-container {
+    border-top: 1px solid #ddd;
+    background: #fff;
+}
+
+.no-games-message {
+    padding: 15px 20px;
+    color: #888;
+    font-style: italic;
+    text-align: center;
+}
 
 .games-list {
     list-style-type: none;
@@ -563,7 +664,81 @@ td.player-mmp,
     margin: 0;
 }
 
-.games-list li {
+.game-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    border-bottom: 1px solid #eee;
+    transition: background-color 0.15s ease;
+}
+
+.game-item:last-child {
+    border-bottom: none;
+}
+
+.game-item:hover {
+    background: #f8f9fa;
+}
+
+.game-item.game-active {
+    background: #e8f5e9;
+}
+
+.game-item.game-active:hover {
+    background: #c8e6c9;
+}
+
+.game-info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.game-text {
+    color: #333;
+}
+
+.game-active-badge {
+    display: inline-block;
+    background: #d4edda;
+    color: #155724;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 500;
+    animation: pulse 2s infinite;
+    white-space: nowrap;
+}
+
+.in-progress-badge {
+    color: #007bff;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.game-actions {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+.game-actions .resume-btn {
+    width: auto;
+    padding: 5px 10px;
+    background: #e3f2fd;
+    border-radius: 4px;
+}
+
+.game-actions .resume-btn:hover {
+    background: #bbdefb;
+}
+
+/* Legacy games-list li styles (kept for backwards compatibility) */
+.games-list li:not(.game-item) {
     padding: 0.5em 1em;
     display: flex;
     align-items: center;
