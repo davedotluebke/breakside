@@ -1615,6 +1615,12 @@ body.game-screen-active #controllerRoleButtons {
     min-width: 24px;
 }
 
+/* Point count in italics when player was subbed out mid-point (did not complete the point) */
+.panel-player-table .active-points-columns.point-cell-subbed-out {
+    font-style: italic;
+    opacity: 0.85;
+}
+
 .panel-player-table .active-header-teams {
     font-size: 0.7rem;
     text-align: center;
