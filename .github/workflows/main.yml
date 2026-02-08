@@ -26,7 +26,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Sync PWA files to S3
+      - name: Sync PWA files to S3 (except service worker)
         run: |
           aws s3 sync . s3://breakside.pro/ \
             --exclude ".git/*" \
@@ -42,7 +42,14 @@ jobs:
             --exclude "*.ogg" \
             --exclude "*.m4a" \
             --exclude "*.webm" \
+            --exclude "service-worker.js" \
             --delete
+
+      - name: Sync service worker with no-cache headers
+        run: |
+          aws s3 cp service-worker.js s3://breakside.pro/service-worker.js \
+            --cache-control "no-cache, no-store, must-revalidate" \
+            --content-type "application/javascript"
 
       - name: Sync viewer to S3
         run: |
