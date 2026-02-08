@@ -1,11 +1,33 @@
 #!/usr/bin/env python3
 
 import json
+import re
 import sys
 import os
 from datetime import datetime
 
 VERSION_FILE = 'version.json'
+SERVICE_WORKER_FILE = 'service-worker.js'
+
+
+def update_service_worker_cache(build_number):
+    """Update cacheName in service-worker.js to match the build number."""
+    try:
+        with open(SERVICE_WORKER_FILE, 'r') as f:
+            content = f.read()
+
+        new_content = re.sub(
+            r"const cacheName = '[^']*';",
+            f"const cacheName = 'build-{build_number}';",
+            content
+        )
+
+        if new_content != content:
+            with open(SERVICE_WORKER_FILE, 'w') as f:
+                f.write(new_content)
+    except FileNotFoundError:
+        pass  # service-worker.js not present, skip
+
 
 def increment_version():
     """Increment build number"""
@@ -25,6 +47,7 @@ def increment_version():
             json.dump(version_data, f, indent=2)
             f.write('\n')
         
+        update_service_worker_cache(version_data['build'])
         print(f"Version updated: {version_data['version']} (Build {version_data['build']})")
         return version_data
     except Exception as error:
@@ -58,6 +81,7 @@ def increment_patch_version():
             json.dump(version_data, f, indent=2)
             f.write('\n')
         
+        update_service_worker_cache(version_data['build'])
         print(f"Version updated: {version_data['version']} (Build {version_data['build']})")
         return version_data
     except Exception as error:
@@ -92,6 +116,7 @@ def increment_minor_version():
             json.dump(version_data, f, indent=2)
             f.write('\n')
         
+        update_service_worker_cache(version_data['build'])
         print(f"Version updated: {version_data['version']} (Build {version_data['build']})")
         return version_data
     except Exception as error:
@@ -127,6 +152,7 @@ def increment_major_version():
             json.dump(version_data, f, indent=2)
             f.write('\n')
         
+        update_service_worker_cache(version_data['build'])
         print(f"Version updated: {version_data['version']} (Build {version_data['build']})")
         return version_data
     except Exception as error:
