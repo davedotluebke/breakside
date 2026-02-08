@@ -930,9 +930,266 @@ function handlePbpSubPlayers() {
         return;
     }
     
-    // TODO: Implement mid-point substitution modal
+    // Check if point is in progress
+    if (typeof isPointInProgress === 'function' && !isPointInProgress()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('No point in progress - use Select Next Line instead', 'info');
+        }
+        return;
+    }
+    
+    showSubPlayersModal();
+}
+
+// =============================================================================
+// Sub Players Modal (for mid-point injury substitutions)
+// =============================================================================
+
+/**
+ * Create the Sub Players modal if it doesn't exist
+ */
+function createSubPlayersModal() {
+    if (document.getElementById('subPlayersModal')) {
+        return document.getElementById('subPlayersModal');
+    }
+    
+    const modal = document.createElement('div');
+    modal.id = 'subPlayersModal';
+    modal.className = 'modal sub-players-modal';
+    
+    modal.innerHTML = `
+        <div class="modal-content sub-players-modal-content">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Substitute Players</h2>
+                <span class="close" id="subPlayersModalClose">&times;</span>
+            </div>
+            <div class="sub-players-info">
+                <span id="subPlayersCount">7 selected</span>
+            </div>
+            <div class="sub-players-table-container" id="subPlayersTableContainer">
+                <table class="panel-player-table" id="subPlayersTable">
+                    <tbody>
+                        <!-- Player rows populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="sub-players-buttons">
+                <button id="subPlayersCancelBtn" class="ge-btn">Cancel</button>
+                <button id="subPlayersConfirmBtn" class="ge-btn ge-btn-confirm">Confirm</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Wire up event handlers
+    document.getElementById('subPlayersModalClose').addEventListener('click', hideSubPlayersModal);
+    document.getElementById('subPlayersCancelBtn').addEventListener('click', hideSubPlayersModal);
+    document.getElementById('subPlayersConfirmBtn').addEventListener('click', confirmSubstitution);
+    
+    // Close modal when clicking outside
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            hideSubPlayersModal();
+        }
+    });
+    
+    return modal;
+}
+
+/**
+ * Show the Sub Players modal and populate with current point players
+ */
+function showSubPlayersModal() {
+    const modal = createSubPlayersModal();
+    populateSubPlayersTable();
+    modal.style.display = 'block';
+}
+
+/**
+ * Hide the Sub Players modal
+ */
+function hideSubPlayersModal() {
+    const modal = document.getElementById('subPlayersModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Populate the Sub Players table with current roster
+ * Current point players are checked, others are unchecked
+ */
+function populateSubPlayersTable() {
+    const tableBody = document.querySelector('#subPlayersTable tbody');
+    if (!tableBody) return;
+    
+    tableBody.innerHTML = '';
+    
+    const point = getCurrentPoint();
+    if (!currentTeam || !currentTeam.teamRoster || !point) {
+        tableBody.innerHTML = '<tr><td colspan="2">No active point</td></tr>';
+        return;
+    }
+    
+    // Get current point players
+    const currentPlayers = point.players || [];
+    
+    // Sort roster: current players first, then alphabetical
+    const sortedRoster = [...currentTeam.teamRoster].sort((a, b) => {
+        const aInPoint = currentPlayers.includes(a.name);
+        const bInPoint = currentPlayers.includes(b.name);
+        if (aInPoint && !bInPoint) return -1;
+        if (!aInPoint && bInPoint) return 1;
+        return a.name.localeCompare(b.name);
+    });
+    
+    sortedRoster.forEach(player => {
+        const row = document.createElement('tr');
+        
+        // Checkbox cell
+        const checkboxCell = document.createElement('td');
+        checkboxCell.style.width = '40px';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = currentPlayers.includes(player.name);
+        checkbox.dataset.playerName = player.name;
+        checkbox.addEventListener('change', updateSubPlayersCount);
+        checkboxCell.appendChild(checkbox);
+        row.appendChild(checkboxCell);
+        
+        // Name cell with gender color
+        const nameCell = document.createElement('td');
+        nameCell.textContent = typeof formatPlayerName === 'function' 
+            ? formatPlayerName(player) 
+            : player.name;
+        if (player.gender === Gender.FMP) nameCell.classList.add('player-fmp');
+        else if (player.gender === Gender.MMP) nameCell.classList.add('player-mmp');
+        nameCell.style.cursor = 'pointer';
+        nameCell.addEventListener('click', () => checkbox.click());
+        row.appendChild(nameCell);
+        
+        tableBody.appendChild(row);
+    });
+    
+    updateSubPlayersCount();
+}
+
+/**
+ * Update the selected player count display
+ */
+function updateSubPlayersCount() {
+    const countEl = document.getElementById('subPlayersCount');
+    if (!countEl) return;
+    
+    const checkboxes = document.querySelectorAll('#subPlayersTable input[type="checkbox"]');
+    const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+    
+    countEl.textContent = `${checkedCount} selected`;
+    
+    // Update confirm button state
+    const confirmBtn = document.getElementById('subPlayersConfirmBtn');
+    if (confirmBtn) {
+        // Disable if no players selected
+        confirmBtn.disabled = checkedCount === 0;
+    }
+}
+
+/**
+ * Confirm the substitution and update the current point
+ */
+function confirmSubstitution() {
+    const point = getCurrentPoint();
+    if (!point) {
+        hideSubPlayersModal();
+        return;
+    }
+    
+    const checkboxes = document.querySelectorAll('#subPlayersTable input[type="checkbox"]');
+    const newPlayers = [];
+    
+    checkboxes.forEach(cb => {
+        if (cb.checked) {
+            newPlayers.push(cb.dataset.playerName);
+        }
+    });
+    
+    // Determine who came in and who went out
+    const previousPlayers = point.players || [];
+    const playersOut = previousPlayers.filter(p => !newPlayers.includes(p));
+    const playersIn = newPlayers.filter(p => !previousPlayers.includes(p));
+    
+    // Nothing changed
+    if (playersOut.length === 0 && playersIn.length === 0) {
+        hideSubPlayersModal();
+        return;
+    }
+    
+    // Track substituted-out players for points-played counting
+    if (!point.substitutedOutPlayers) {
+        point.substitutedOutPlayers = [];
+    }
+    playersOut.forEach(p => {
+        if (!point.substitutedOutPlayers.includes(p)) {
+            point.substitutedOutPlayers.push(p);
+        }
+    });
+    
+    // Update current point players
+    point.players = newPlayers;
+    
+    // Log substitution event(s)
+    // Get the current possession to add the event to
+    const currentPossession = point.possessions.length > 0
+        ? point.possessions[point.possessions.length - 1]
+        : null;
+    
+    // Create description for the substitution
+    let subDescription = '';
+    if (playersIn.length > 0 && playersOut.length > 0) {
+        // Format: "Sub: Alice, Bob in for Charlie, Dave"
+        const inNames = playersIn.map(name => name.split(' ')[0]).join(', ');
+        const outNames = playersOut.map(name => name.split(' ')[0]).join(', ');
+        subDescription = `Sub: ${inNames} in for ${outNames}`;
+    } else if (playersIn.length > 0) {
+        const inNames = playersIn.map(name => name.split(' ')[0]).join(', ');
+        subDescription = `Sub: ${inNames} added`;
+    } else if (playersOut.length > 0) {
+        const outNames = playersOut.map(name => name.split(' ')[0]).join(', ');
+        subDescription = `Sub: ${outNames} removed`;
+    }
+    
+    // Create an Other event with the injury flag and description
+    const subEvent = new Other({
+        injury: true,
+        description: subDescription
+    });
+    
+    // Add to current possession if it exists
+    if (currentPossession) {
+        currentPossession.events.push(subEvent);
+    }
+    
+    // Log to event log
+    if (typeof logEvent === 'function') {
+        logEvent(subDescription);
+    }
+    
+    // Save and update UI
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
+    
+    hideSubPlayersModal();
+    
+    // Update game log if it exists
+    if (typeof updateGameLogEvents === 'function') {
+        updateGameLogEvents();
+    }
+    
+    // Show confirmation toast
     if (typeof showControllerToast === 'function') {
-        showControllerToast('Mid-point substitutions coming soon', 'info');
+        showControllerToast(subDescription, 'success');
     }
 }
 
@@ -2175,8 +2432,15 @@ function updateSelectLineTable() {
     const sortedRoster = [...currentTeam.teamRoster].sort((a, b) => {
         const aLastPoint = lastPointPlayers.includes(a.name);
         const bLastPoint = lastPointPlayers.includes(b.name);
-        const aPlayedAny = game.points.some(p => p.players.includes(a.name));
-        const bPlayedAny = game.points.some(p => p.players.includes(b.name));
+        // Include players who were substituted out mid-point
+        const aPlayedAny = game.points.some(p => 
+            p.players.includes(a.name) || 
+            (p.substitutedOutPlayers && p.substitutedOutPlayers.includes(a.name))
+        );
+        const bPlayedAny = game.points.some(p => 
+            p.players.includes(b.name) || 
+            (p.substitutedOutPlayers && p.substitutedOutPlayers.includes(b.name))
+        );
         
         if (aLastPoint && !bLastPoint) return -1;
         if (!aLastPoint && bLastPoint) return 1;
@@ -2238,7 +2502,10 @@ function updateSelectLineTable() {
         game.points.forEach(point => {
             const pointCell = document.createElement('td');
             pointCell.classList.add('active-points-columns');
-            if (point.players.includes(player.name)) {
+            // Include players who were substituted out mid-point
+            const playedPoint = point.players.includes(player.name) ||
+                (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name));
+            if (playedPoint) {
                 runningPointTotal++;
                 pointCell.textContent = `${runningPointTotal}`;
             } else {

@@ -159,7 +159,10 @@ function getPlayerGameTime(playerName) {
     const game = currentGame();
     if (game) {
         game.points.forEach(point => {
-            if (point.players.includes(playerName)) {
+            // Include players who were substituted out mid-point
+            const playedPoint = point.players.includes(playerName) ||
+                (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(playerName));
+            if (playedPoint) {
                 if (point.endTimestamp) {
                     // For completed points, just use the totalPointTime
                     totalTime += point.totalPointTime;

@@ -3522,3 +3522,102 @@ body.next-line-mode #selectNextLineBtn {
     color: #666;
     margin-bottom: 20px;
 }
+
+/* ============================================
+   Sub Players Modal (mid-point substitutions)
+   ============================================ */
+
+.sub-players-modal-content {
+    max-width: 400px;
+    width: 90%;
+    margin: 10% auto;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.sub-players-modal-content .dialog-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 0;
+}
+
+.sub-players-modal-content .dialog-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+.sub-players-info {
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    color: #666;
+    border-bottom: 1px solid #eee;
+    background: #f8f9fa;
+}
+
+.sub-players-table-container {
+    flex: 1;
+    overflow-y: auto;
+    max-height: 50vh;
+}
+
+.sub-players-table-container table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.sub-players-table-container tr {
+    border-bottom: 1px solid #eee;
+}
+
+.sub-players-table-container tr:hover {
+    background: #f5f5f5;
+}
+
+.sub-players-table-container td {
+    padding: 10px 15px;
+}
+
+.sub-players-table-container input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.sub-players-buttons {
+    display: flex;
+    gap: 12px;
+    padding: 15px 20px;
+    justify-content: flex-end;
+    border-top: 1px solid #ddd;
+    background: #f8f9fa;
+}
+
+.sub-players-buttons .ge-btn {
+    padding: 10px 24px;
+    font-size: 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid #ccc;
+    background: #fff;
+}
+
+.sub-players-buttons .ge-btn:hover {
+    background: #e9ecef;
+}
+
+.sub-players-buttons .ge-btn-confirm {
+    background: #28a745;
+    color: white;
+    border-color: #28a745;
+}
+
+.sub-players-buttons .ge-btn-confirm:hover {
+    background: #218838;
+}
+
+.sub-players-buttons .ge-btn-confirm:disabled {
+    background: #6c757d;
+    border-color: #6c757d;
+    cursor: not-allowed;
+}

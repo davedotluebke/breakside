@@ -242,7 +242,12 @@ function populatePlayerStats() {
 
         pointCells.forEach((pointCell, pointIndex) => {
             const point = currentGame().points[pointIndex];
-            if (point && point.players.includes(player.name)) {
+            // Include players who were substituted out mid-point
+            const playedPoint = point && (
+                point.players.includes(player.name) ||
+                (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name))
+            );
+            if (playedPoint) {
                 runningPointTotal++;
                 pointCell.textContent = `${runningPointTotal}`;
             } else {
@@ -263,9 +268,13 @@ function getLastPointPlayers() {
 
 /**
  * Check if a player has played any points in the current game
+ * Includes players who were substituted out mid-point
  */
 function hasPlayedAnyPoints(playerName) {
-    return currentGame().points.some(point => point.players.includes(playerName));
+    return currentGame().points.some(point => 
+        point.players.includes(playerName) ||
+        (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(playerName))
+    );
 }
 
 /**

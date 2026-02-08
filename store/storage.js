@@ -132,6 +132,7 @@ function serializeGame(game) {
             endTimestamp: point.endTimestamp ? point.endTimestamp.toISOString() : null,
             totalPointTime: point.totalPointTime,
             lastPauseTime: point.lastPauseTime ? (typeof point.lastPauseTime === 'string' ? point.lastPauseTime : point.lastPauseTime.toISOString()) : null,
+            substitutedOutPlayers: point.substitutedOutPlayers || [],  // Players subbed out mid-point
             possessions: point.possessions.map(possession => ({
                 offensive: possession.offensive,
                 events: possession.events.map(event => serializeEvent(event))
@@ -398,6 +399,7 @@ function deserializeGame(gameData) {
         point.winner = pointData.winner;
         point.totalPointTime = pointData.totalPointTime || 0;
         point.lastPauseTime = pointData.lastPauseTime ? new Date(pointData.lastPauseTime) : null;
+        point.substitutedOutPlayers = pointData.substitutedOutPlayers || [];  // Players subbed out mid-point
         point.possessions = pointData.possessions.map(possessionData => {
             const possession = new Possession(possessionData.offensive);
             possession.events = possessionData.events.map(eventData => deserializeEvent(eventData));
