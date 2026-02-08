@@ -341,18 +341,20 @@ class Defense extends Event {
 
 // Other event class
 class Other extends Event {
-    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null}) {
+    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null, description = null}) {
         super('Other');
         this.timeout_flag = timeout;
         this.injury_flag = injury;
         this.timecap_flag = timecap;
         this.switchsides_flag = switchsides;
         this.halftime_flag = halftime;
+        this.description = description; // Generic description for custom events (e.g., substitutions)
     }
     
     // Override summarize for Other events
     summarize() {
         let summary = '';
+        if (this.description)       { summary += this.description + ' '; }
         if (this.timeout_flag)      { summary += 'Timeout called. '; }
         if (this.injury_flag)       { summary += 'Injury sub called '; }
         if (this.timecap_flag)      { summary += 'Hard cap called; game over '; }
@@ -417,6 +419,7 @@ class Point {
         this.endTimestamp = null;
         this.totalPointTime = 0;  // Accumulated time tracking
         this.lastPauseTime = null;  // Track when the point was last paused
+        this.substitutedOutPlayers = [];  // Players who were subbed out mid-point (for injury/fatigue)
     }
 
     addPossession(possession) {

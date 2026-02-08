@@ -114,8 +114,11 @@ function updateScore(winner) {
     logEvent(`${currentPoint.winner} scores!`);
 
     // Update player stats for those who played this point
+    // Include players who were substituted out mid-point (they still "played" the point)
     currentTeam.teamRoster.forEach(player => {
-        if (currentPoint.players.includes(player.name)) { // the player played this point
+        const playedPoint = currentPoint.players.includes(player.name) ||
+            (currentPoint.substitutedOutPlayers && currentPoint.substitutedOutPlayers.includes(player.name));
+        if (playedPoint) { // the player played this point
             player.totalPointsPlayed++;
             player.consecutivePointsPlayed++;
             player.totalTimePlayed += currentPoint.totalPointTime;
