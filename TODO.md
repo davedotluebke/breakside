@@ -428,6 +428,16 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 
 ---
 
+## New Items (Backlog)
+
+- [ ] **Feature**: When multiple users are signed into a game, and the Active Coach ends the game, all coaches and viewers should go to the game summary screen.
+- [ ] **Bug**: The game summary screen reports a score of 0-0 even after several points have been played.
+- [ ] **UI**: Only the Active Coach can start the next point, but the "Start Point (Offense/Defense)" button only appears in the "Select Next Line" panel. When that panel is minimized (e.g. when collaborating with a Line Coach), show the "Start Point" button in the Play-by-Play panel between points instead of the inactive "We score"/"They score"/"Key play" buttons.
+- [ ] **To verify**: Run a test with both a D line and an O line selected; verify which line is actually used when starting a D or O point. Define desired behavior when e.g. D line is selected but coach is viewing/editing O line (or vice versa), and consider UI to indicate what will happen to avoid surprise.
+- [ ] **Feature**: Checkbox in the header row of the select-next-player table to uncheck all players.
+
+---
+
 ## Future Enhancements (Post-Rollout)
 
 These are deferred until multi-user basics are stable:
