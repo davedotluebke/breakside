@@ -372,6 +372,7 @@ function deserializeGame(gameData) {
     game.startingGenderRatio = gameData.startingGenderRatio || null;
     game.lastLineUsed = gameData.lastLineUsed || null;
     game.rosterSnapshot = gameData.rosterSnapshot || null;  // New: roster snapshot
+    game.scores = gameData.scores || { [Role.TEAM]: 0, [Role.OPPONENT]: 0 };
     
     // Phase 6b: Timer/cap settings
     game.gameDurationMinutes = gameData.gameDurationMinutes ?? 50;
