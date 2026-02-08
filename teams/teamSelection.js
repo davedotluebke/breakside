@@ -41,45 +41,17 @@ function showSelectTeamScreen(firsttime = false) {
     const teamsContainer = document.createElement('div');
     teamsContainer.id = 'cloudTeamsContainer';
     
-    // Build header with refresh and server buttons
+    // Build header
     const header = document.createElement('div');
     header.style.display = 'flex';
     header.style.alignItems = 'center';
     header.style.gap = '10px';
-    header.style.flexWrap = 'wrap';
     header.style.marginBottom = '10px';
     
     const title = document.createElement('h3');
     title.textContent = 'Teams & Games';
     title.style.margin = '0';
     header.appendChild(title);
-    
-    const refreshBtn = document.createElement('button');
-    refreshBtn.id = 'refreshCloudGamesBtn';
-    refreshBtn.className = 'icon-button';
-    refreshBtn.innerHTML = '<i class="fas fa-sync" style="color: #333;"></i>';
-    refreshBtn.title = 'Refresh';
-    refreshBtn.onclick = () => populateCloudTeamsAndGames();
-    header.appendChild(refreshBtn);
-    
-    const setServerBtn = document.createElement('button');
-    setServerBtn.id = 'setServerBtn';
-    setServerBtn.className = 'icon-button';
-    setServerBtn.innerHTML = '<i class="fas fa-server" style="color: #333;"></i>';
-    setServerBtn.title = 'Set Server Address';
-    setServerBtn.style.width = 'auto';
-    setServerBtn.style.padding = '5px 10px';
-    setServerBtn.onclick = showSetServerDialog;
-    header.appendChild(setServerBtn);
-    
-    // Server URL display
-    const serverUrlDisplay = document.createElement('span');
-    serverUrlDisplay.id = 'serverUrlDisplay';
-    serverUrlDisplay.style.fontSize = '0.75em';
-    serverUrlDisplay.style.color = '#666';
-    serverUrlDisplay.style.marginLeft = 'auto';
-    serverUrlDisplay.textContent = `Server: ${typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'Not configured'}`;
-    header.appendChild(serverUrlDisplay);
     
     teamsContainer.appendChild(header);
     
@@ -270,22 +242,29 @@ async function populateCloudTeamsAndGames() {
             expandArrow.textContent = hasActiveGames ? '▼' : '▶';
             teamHeader.appendChild(expandArrow);
             
+            // Team icon (if available)
+            if (team.iconUrl) {
+                const teamIcon = document.createElement('img');
+                teamIcon.src = team.iconUrl;
+                teamIcon.className = 'team-header-icon';
+                teamIcon.alt = team.name;
+                teamHeader.appendChild(teamIcon);
+            }
+            
             // Team name
             const teamNameSpan = document.createElement('span');
             teamNameSpan.className = 'team-header-name';
-            if (team.teamSymbol) {
-                teamNameSpan.textContent = `${team.teamSymbol} ${team.name}`;
-            } else {
-                teamNameSpan.textContent = team.name;
-            }
+            teamNameSpan.textContent = team.name;
             teamHeader.appendChild(teamNameSpan);
             
-            // Role badge
-            const roleBadge = document.createElement('span');
-            roleBadge.className = 'role-badge';
-            roleBadge.textContent = role === 'coach' ? '🏈' : '👁️';
-            roleBadge.title = role === 'coach' ? 'Coach' : 'Viewer';
-            teamHeader.appendChild(roleBadge);
+            // Role badge (coach only - viewers don't need a badge)
+            if (role === 'coach') {
+                const roleBadge = document.createElement('span');
+                roleBadge.className = 'role-badge coach-badge';
+                roleBadge.innerHTML = '<i class="fas fa-clipboard"></i> <span class="role-badge-text">Coach</span>';
+                roleBadge.title = 'Coach';
+                teamHeader.appendChild(roleBadge);
+            }
             
             // Game count
             const gameCount = document.createElement('span');
@@ -308,8 +287,8 @@ async function populateCloudTeamsAndGames() {
             
             // Roster button
             const rosterBtn = document.createElement('button');
-            rosterBtn.innerHTML = '<i class="fas fa-users"></i>';
-            rosterBtn.classList.add('icon-button');
+            rosterBtn.innerHTML = '<i class="fas fa-users"></i> Roster';
+            rosterBtn.classList.add('icon-button', 'text-icon-button');
             rosterBtn.title = 'View Roster';
             rosterBtn.onclick = (e) => {
                 e.stopPropagation();
@@ -422,6 +401,18 @@ async function populateCloudTeamsAndGames() {
                 });
                 
                 gamesContainer.appendChild(gamesList);
+            }
+            
+            // "New Game" button for coaches
+            if (role === 'coach') {
+                const newGameBtn = document.createElement('button');
+                newGameBtn.className = 'new-game-btn';
+                newGameBtn.innerHTML = '<i class="fas fa-plus"></i> New Game';
+                newGameBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    selectCloudTeam(team);
+                };
+                gamesContainer.appendChild(newGameBtn);
             }
             
             teamSection.appendChild(gamesContainer);
@@ -1024,11 +1015,8 @@ function buildSyncStatusHTML() {
             ${pendingText}
         </div>
         <div class="sync-status-actions">
-            <button id="syncNowBtn" class="sync-btn" ${!isOnline ? 'disabled' : ''} onclick="triggerManualSync()">
-                <i class="fas fa-sync"></i> Sync
-            </button>
-            <button id="pullFromCloudBtn" class="sync-btn" ${!isOnline ? 'disabled' : ''} onclick="pullDataFromCloud()">
-                <i class="fas fa-cloud-download-alt"></i> Pull
+            <button id="refreshAllBtn" class="sync-btn" ${!isOnline ? 'disabled' : ''} onclick="doFullRefresh()">
+                <i class="fas fa-sync"></i> Refresh
             </button>
             ${signOutButton}
         </div>
@@ -1046,84 +1034,68 @@ function updateSyncStatusDisplay() {
 }
 
 /**
- * Trigger a manual sync of all pending data
+ * Unified refresh: push pending local changes, pull latest from cloud, re-render.
+ * @param {boolean} silent - If true, don't show alerts on failure (used for auto-refresh)
  */
-async function triggerManualSync() {
-    if (typeof processSyncQueue !== 'function') {
-        alert('Sync not available');
-        return;
-    }
+let _refreshInProgress = false;
+async function doFullRefresh(silent = false) {
+    if (_refreshInProgress) return;
+    _refreshInProgress = true;
     
-    const syncBtn = document.getElementById('syncNowBtn');
-    if (syncBtn) {
-        syncBtn.disabled = true;
-        syncBtn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Syncing...';
+    const refreshBtn = document.getElementById('refreshAllBtn');
+    if (refreshBtn) {
+        refreshBtn.disabled = true;
+        refreshBtn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Refreshing...';
     }
     
     try {
-        await processSyncQueue();
+        // Step 1: Push any pending local changes
+        if (typeof processSyncQueue === 'function') {
+            try {
+                await processSyncQueue();
+            } catch (e) {
+                console.warn('Sync queue processing failed:', e);
+            }
+        }
+        
+        // Step 2: Pull latest data from cloud
+        if (typeof syncUserTeams === 'function') {
+            try {
+                await syncUserTeams();
+            } catch (e) {
+                console.warn('Team sync failed:', e);
+            }
+        }
+        
+        if (typeof pullFromCloud === 'function') {
+            try {
+                await pullFromCloud();
+            } catch (e) {
+                console.warn('Pull from cloud failed:', e);
+            }
+        }
+        
+        // Step 3: Re-render the team/game list
         updateSyncStatusDisplay();
-        // Refresh the cloud games list
-        populateCloudGames();
+        await populateCloudTeamsAndGames();
+        
     } catch (error) {
-        console.error('Sync failed:', error);
-        alert('Sync failed: ' + error.message);
+        console.error('Refresh failed:', error);
+        if (!silent) {
+            alert('Refresh failed: ' + error.message);
+        }
     } finally {
-        if (syncBtn) {
-            syncBtn.disabled = false;
-            syncBtn.innerHTML = '<i class="fas fa-sync"></i> Sync';
+        _refreshInProgress = false;
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.innerHTML = '<i class="fas fa-sync"></i> Refresh';
         }
     }
 }
 
-/**
- * Pull latest data from the cloud
- */
-async function pullDataFromCloud() {
-    if (typeof pullFromCloud !== 'function') {
-        alert('Cloud sync not available');
-        return;
-    }
-    
-    const pullBtn = document.getElementById('pullFromCloudBtn');
-    if (pullBtn) {
-        pullBtn.disabled = true;
-        pullBtn.innerHTML = '<i class="fas fa-cloud-download-alt fa-spin"></i> Pulling...';
-    }
-    
-    try {
-        // First sync user's teams (this pulls any teams the user has access to)
-        if (typeof syncUserTeams === 'function') {
-            const teamResult = await syncUserTeams();
-            if (teamResult.synced > 0) {
-                console.log(`Synced ${teamResult.synced} teams from server`);
-            }
-        }
-        
-        // Then pull other data
-        const result = await pullFromCloud();
-        if (result.success) {
-            console.log('Pulled data from cloud:', result);
-            // Refresh displays - reload the whole screen to show new teams
-            showSelectTeamScreen();
-        } else {
-            // Refresh displays even on partial success
-            updateSyncStatusDisplay();
-            populateCloudGames();
-            if (result.error && result.error !== 'Not authenticated') {
-                alert('Pull failed: ' + (result.error || 'Unknown error'));
-            }
-        }
-    } catch (error) {
-        console.error('Pull failed:', error);
-        alert('Pull failed: ' + error.message);
-    } finally {
-        if (pullBtn) {
-            pullBtn.disabled = false;
-            pullBtn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Pull';
-        }
-    }
-}
+// Keep old function names for backwards compatibility
+async function triggerManualSync() { return doFullRefresh(); }
+async function pullDataFromCloud() { return doFullRefresh(); }
 
 /**
  * Handle sign out - clears auth state and shows login screen
@@ -1162,12 +1134,31 @@ async function handleSignOut() {
     }
 }
 
-// Make handleSignOut available globally for onclick
+// Make functions available globally for onclick handlers
 window.handleSignOut = handleSignOut;
+window.doFullRefresh = doFullRefresh;
 
-// Update sync status periodically
-setInterval(() => {
-    if (document.getElementById('syncStatusContainer')) {
-        updateSyncStatusDisplay();
+// Auto-refresh every 10 seconds when on the team selection screen
+let _autoRefreshInterval = null;
+
+function startAutoRefresh() {
+    stopAutoRefresh();
+    _autoRefreshInterval = setInterval(() => {
+        // Only auto-refresh when the select team screen is visible
+        const syncContainer = document.getElementById('syncStatusContainer');
+        const selectScreen = document.getElementById('selectTeamScreen');
+        if (syncContainer && selectScreen && selectScreen.style.display !== 'none') {
+            doFullRefresh(true); // silent refresh
+        }
+    }, 10000);
+}
+
+function stopAutoRefresh() {
+    if (_autoRefreshInterval) {
+        clearInterval(_autoRefreshInterval);
+        _autoRefreshInterval = null;
     }
-}, 5000);
+}
+
+// Start auto-refresh on load
+startAutoRefresh();
