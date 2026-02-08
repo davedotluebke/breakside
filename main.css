@@ -581,12 +581,13 @@ td.player-mmp,
 .team-header {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     padding: 12px 15px;
     background: #f8f9fa;
     cursor: pointer;
     user-select: none;
     transition: background-color 0.15s ease;
+    overflow: hidden;
 }
 
 .team-header:hover {
@@ -601,18 +602,14 @@ td.player-mmp,
     background: #c8e6c9;
 }
 
-.expand-arrow {
-    font-size: 0.8em;
-    color: #666;
-    width: 16px;
-    text-align: center;
-    flex-shrink: 0;
-}
-
 .team-header-name {
     font-weight: bold;
     font-size: 1.1em;
     color: #333;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
 
 .team-header-icon {

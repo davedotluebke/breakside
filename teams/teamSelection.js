@@ -236,12 +236,6 @@ async function populateCloudTeamsAndGames() {
             const teamHeader = document.createElement('div');
             teamHeader.className = 'team-header';
             
-            // Expand/collapse arrow
-            const expandArrow = document.createElement('span');
-            expandArrow.className = 'expand-arrow';
-            expandArrow.textContent = hasActiveGames ? '▼' : '▶';
-            teamHeader.appendChild(expandArrow);
-            
             // Team icon (if available)
             if (team.iconUrl) {
                 const teamIcon = document.createElement('img');
@@ -421,7 +415,6 @@ async function populateCloudTeamsAndGames() {
             teamHeader.onclick = () => {
                 const isExpanded = gamesContainer.style.display !== 'none';
                 gamesContainer.style.display = isExpanded ? 'none' : 'block';
-                expandArrow.textContent = isExpanded ? '▶' : '▼';
             };
             
             container.appendChild(teamSection);
@@ -1145,7 +1138,7 @@ function showConnectionInfo() {
     const isOnline = navigator.onLine;
     
     const message = `${isOnline ? 'Online' : 'Offline'}<br>` +
-        `<span style="font-size:0.9em;">👤 ${userEmail}<br>🖥️ ${serverUrl}</span>`;
+        `<span style="font-size:0.9em;">User: ${userEmail}<br>Server: ${serverUrl}</span>`;
     
     if (typeof showControllerToast === 'function') {
         showControllerToast(message, 'info', 3000);
