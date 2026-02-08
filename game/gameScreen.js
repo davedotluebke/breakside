@@ -1270,6 +1270,37 @@ function transitionToBetweenPoints() {
         const themScore = game.scores ? game.scores[Role.OPPONENT] : 0;
         updateGameScreenScore(usScore, themScore);
         
+        // Default next-line selection to the 7 who finished the point (reflects any mid-point subs).
+        // O/D line: overwrite only if NOT modified during the just-finished point (compare to point start).
+        // O and D lines: overwrite only if they have NEVER been modified this game (separate O/D pools).
+        const lastPoint = game.points.length > 0 ? game.points[game.points.length - 1] : null;
+        if (lastPoint && lastPoint.players && lastPoint.players.length > 0 && game.pendingNextLine) {
+            const pointStartTime = lastPoint.startTimestamp
+                ? new Date(lastPoint.startTimestamp).getTime()
+                : 0;
+            const endingLine = [...lastPoint.players];
+            // O/D line: reset to ending 7 unless modified during this point
+            const odModTime = game.pendingNextLine.odLineModifiedAt
+                ? new Date(game.pendingNextLine.odLineModifiedAt).getTime()
+                : 0;
+            if (odModTime <= pointStartTime) {
+                game.pendingNextLine.odLine = endingLine;
+            }
+            // O and D lines: reset only if never modified this game (compare to game start)
+            const gameStartTime = game.gameStartTimestamp
+                ? new Date(game.gameStartTimestamp).getTime()
+                : 0;
+            ['o', 'd'].forEach(type => {
+                const modKey = type + 'LineModifiedAt';
+                const modTime = game.pendingNextLine[modKey]
+                    ? new Date(game.pendingNextLine[modKey]).getTime()
+                    : 0;
+                if (modTime <= gameStartTime) {
+                    game.pendingNextLine[type + 'Line'] = endingLine;
+                }
+            });
+        }
+        
         // Refresh pending line selections from cloud (for multi-device sync)
         // This ensures Active Coach sees Line Coach's selections after point ends
         if (game.id && typeof refreshPendingLineFromCloud === 'function') {
@@ -2502,12 +2533,17 @@ function updateSelectLineTable() {
         game.points.forEach(point => {
             const pointCell = document.createElement('td');
             pointCell.classList.add('active-points-columns');
-            // Include players who were substituted out mid-point
-            const playedPoint = point.players.includes(player.name) ||
-                (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name));
+            // Include players who were substituted out mid-point (show both subbed-in and subbed-out)
+            const playedFullPoint = point.players.includes(player.name);
+            const subbedOutMidPoint = point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name);
+            const playedPoint = playedFullPoint || subbedOutMidPoint;
             if (playedPoint) {
                 runningPointTotal++;
                 pointCell.textContent = `${runningPointTotal}`;
+                // Italic for subbed-out (did not complete the point)
+                if (subbedOutMidPoint && !playedFullPoint) {
+                    pointCell.classList.add('point-cell-subbed-out');
+                }
             } else {
                 pointCell.textContent = '-';
             }
