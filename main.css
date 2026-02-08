@@ -667,6 +667,7 @@ td.player-mmp,
 .team-header-actions .icon-button {
     padding: 5px 8px;
     border-radius: 4px;
+    color: #333;
 }
 
 .team-header-actions .icon-button:hover {
@@ -2509,6 +2510,45 @@ body.next-line-mode #selectNextLineBtn {
 @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+}
+
+/* Subtle single-rotation spin for auto-refresh (not infinite) */
+.refresh-spin {
+    animation: refresh-spin-once 0.6s ease-in-out;
+}
+
+@keyframes refresh-spin-once {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Connection info toast */
+.connection-info-toast {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 0.85em;
+    line-height: 1.4;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    animation: toast-slide-in 0.2s ease-out;
+    max-width: 90vw;
+    word-break: break-all;
+}
+
+.connection-info-toast.toast-fade-out {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+@keyframes toast-slide-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 /* Local-only entity indicator */

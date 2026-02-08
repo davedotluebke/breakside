@@ -997,7 +997,7 @@ function buildSyncStatusHTML() {
     const statusText = isOnline ? 'Online' : 'Offline';
     const pendingText = totalPending > 0 
         ? `<span class="pending-badge">${totalPending} pending</span>` 
-        : '<span class="synced-badge">✓ Synced</span>';
+        : '';
     
     // Check if user is authenticated
     const isAuthenticated = window.breakside?.auth?.isAuthenticated?.() || false;
@@ -1009,14 +1009,14 @@ function buildSyncStatusHTML() {
         : '';
     
     return `
-        <div class="sync-status-info">
+        <div class="sync-status-info" onclick="showConnectionInfo()" style="cursor: pointer;">
             <span class="sync-status-icon">${statusIcon}</span>
             <span class="sync-status-text">${statusText}</span>
             ${pendingText}
         </div>
         <div class="sync-status-actions">
             <button id="refreshAllBtn" class="sync-btn" ${!isOnline ? 'disabled' : ''} onclick="doFullRefresh()">
-                <i class="fas fa-sync"></i> Refresh
+                <i id="refreshIcon" class="fas fa-sync"></i> Refresh
             </button>
             ${signOutButton}
         </div>
@@ -1042,10 +1042,10 @@ async function doFullRefresh(silent = false) {
     if (_refreshInProgress) return;
     _refreshInProgress = true;
     
-    const refreshBtn = document.getElementById('refreshAllBtn');
-    if (refreshBtn) {
-        refreshBtn.disabled = true;
-        refreshBtn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Refreshing...';
+    // Subtle feedback: spin the refresh icon once (no text change, no reflow)
+    const refreshIcon = document.getElementById('refreshIcon');
+    if (refreshIcon) {
+        refreshIcon.classList.add('refresh-spin');
     }
     
     try {
@@ -1086,9 +1086,10 @@ async function doFullRefresh(silent = false) {
         }
     } finally {
         _refreshInProgress = false;
-        if (refreshBtn) {
-            refreshBtn.disabled = false;
-            refreshBtn.innerHTML = '<i class="fas fa-sync"></i> Refresh';
+        // Remove spin class (re-query since innerHTML may have been rebuilt)
+        const icon = document.getElementById('refreshIcon');
+        if (icon) {
+            icon.classList.remove('refresh-spin');
         }
     }
 }
@@ -1134,9 +1135,39 @@ async function handleSignOut() {
     }
 }
 
+/**
+ * Show connection info toast when tapping the Online/Offline status
+ */
+function showConnectionInfo() {
+    const userEmail = window.breakside?.auth?.getCurrentUser?.()?.email || 'Not signed in';
+    const serverUrl = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'Not configured';
+    const isOnline = navigator.onLine;
+    
+    // Remove any existing toast
+    const existing = document.getElementById('connectionInfoToast');
+    if (existing) existing.remove();
+    
+    const toast = document.createElement('div');
+    toast.id = 'connectionInfoToast';
+    toast.className = 'connection-info-toast';
+    toast.innerHTML = `
+        <div><strong>${isOnline ? '🌐 Online' : '📴 Offline'}</strong></div>
+        <div style="margin-top: 4px;">👤 ${userEmail}</div>
+        <div style="margin-top: 2px;">🖥️ ${serverUrl}</div>
+    `;
+    document.body.appendChild(toast);
+    
+    // Auto-dismiss after 3 seconds
+    setTimeout(() => {
+        toast.classList.add('toast-fade-out');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 // Make functions available globally for onclick handlers
 window.handleSignOut = handleSignOut;
 window.doFullRefresh = doFullRefresh;
+window.showConnectionInfo = showConnectionInfo;
 
 // Auto-refresh every 10 seconds when on the team selection screen
 let _autoRefreshInterval = null;
