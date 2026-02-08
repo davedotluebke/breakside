@@ -149,6 +149,10 @@ function teamHasActiveGames(games) {
  * - Active game indicator showing coaching names
  * - Teams with active games are auto-expanded
  */
+// Track which teams the user has manually expanded/collapsed (survives re-renders)
+const _expandedTeams = new Set();
+let _expandStateInitialized = false;
+
 async function populateCloudTeamsAndGames() {
     const listElement = document.getElementById('cloudTeamsList');
     if (!listElement) return;
@@ -315,8 +319,12 @@ async function populateCloudTeamsAndGames() {
             // Games list (collapsible content)
             const gamesContainer = document.createElement('div');
             gamesContainer.className = 'team-games-container';
-            // Start expanded if team has active games, collapsed otherwise
-            gamesContainer.style.display = hasActiveGames ? 'block' : 'none';
+            
+            // On first render, expand teams with active games; after that, preserve user's choice
+            if (!_expandStateInitialized) {
+                if (hasActiveGames) _expandedTeams.add(team.id);
+            }
+            gamesContainer.style.display = _expandedTeams.has(team.id) ? 'block' : 'none';
             
             if (teamGames.length === 0) {
                 const noGamesMsg = document.createElement('div');
@@ -417,6 +425,11 @@ async function populateCloudTeamsAndGames() {
             teamHeader.onclick = () => {
                 const isExpanded = gamesContainer.style.display !== 'none';
                 gamesContainer.style.display = isExpanded ? 'none' : 'block';
+                if (isExpanded) {
+                    _expandedTeams.delete(team.id);
+                } else {
+                    _expandedTeams.add(team.id);
+                }
             };
             
             container.appendChild(teamSection);
@@ -424,6 +437,7 @@ async function populateCloudTeamsAndGames() {
 
         listElement.innerHTML = '';
         listElement.appendChild(container);
+        _expandStateInitialized = true;
         
     } catch (error) {
         console.error('Error populating cloud teams:', error);
