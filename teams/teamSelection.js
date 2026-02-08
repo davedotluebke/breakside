@@ -1136,32 +1136,20 @@ async function handleSignOut() {
 }
 
 /**
- * Show connection info toast when tapping the Online/Offline status
+ * Show connection info toast when tapping the Online/Offline status.
+ * Uses the existing toast system (showControllerToast) for consistent styling.
  */
 function showConnectionInfo() {
     const userEmail = window.breakside?.auth?.getCurrentUser?.()?.email || 'Not signed in';
     const serverUrl = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'Not configured';
     const isOnline = navigator.onLine;
     
-    // Remove any existing toast
-    const existing = document.getElementById('connectionInfoToast');
-    if (existing) existing.remove();
+    const message = `${isOnline ? 'Online' : 'Offline'}<br>` +
+        `<span style="font-size:0.9em;">👤 ${userEmail}<br>🖥️ ${serverUrl}</span>`;
     
-    const toast = document.createElement('div');
-    toast.id = 'connectionInfoToast';
-    toast.className = 'connection-info-toast';
-    toast.innerHTML = `
-        <div><strong>${isOnline ? '🌐 Online' : '📴 Offline'}</strong></div>
-        <div style="margin-top: 4px;">👤 ${userEmail}</div>
-        <div style="margin-top: 2px;">🖥️ ${serverUrl}</div>
-    `;
-    document.body.appendChild(toast);
-    
-    // Auto-dismiss after 3 seconds
-    setTimeout(() => {
-        toast.classList.add('toast-fade-out');
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    if (typeof showControllerToast === 'function') {
+        showControllerToast(message, 'info', 3000);
+    }
 }
 
 // Make functions available globally for onclick handlers
