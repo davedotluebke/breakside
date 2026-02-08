@@ -580,14 +580,13 @@ td.player-mmp,
 
 .team-header {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 15px;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 15px;
     background: #f8f9fa;
     cursor: pointer;
     user-select: none;
     transition: background-color 0.15s ease;
-    overflow: hidden;
 }
 
 .team-header:hover {
@@ -600,6 +599,22 @@ td.player-mmp,
 
 .team-section.has-active-games .team-header:hover {
     background: #c8e6c9;
+}
+
+/* Top row: [active dot] [icon] [name] ... [trash] */
+.team-header-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.team-header-top-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
 }
 
 .team-header-name {
@@ -620,8 +635,22 @@ td.player-mmp,
     flex-shrink: 0;
 }
 
-.team-header .role-badge {
+.team-active-indicator {
+    flex-shrink: 0;
+    animation: pulse 2s infinite;
+}
+
+/* Bottom row: [coach badge] [game count] [roster btn] */
+.team-header-bottom {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     font-size: 0.85em;
+    color: #666;
+    padding-left: 2px;
+}
+
+.team-header .role-badge {
     flex-shrink: 0;
 }
 
@@ -630,7 +659,7 @@ td.player-mmp,
     align-items: center;
     gap: 4px;
     color: #555;
-    font-size: 0.8em;
+    font-size: 0.95em;
 }
 
 .team-header .role-badge.coach-badge i {
@@ -645,38 +674,31 @@ td.player-mmp,
 }
 
 .game-count {
-    font-size: 0.85em;
     color: #666;
-    margin-left: 5px;
 }
 
-.team-active-indicator {
-    margin-left: auto;
-    animation: pulse 2s infinite;
+.team-header-bottom .text-icon-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #333;
+    white-space: nowrap;
+    padding: 2px 6px;
+    border-radius: 4px;
 }
 
-.team-header-actions {
-    display: flex;
-    gap: 5px;
-    margin-left: auto;
+.team-header-bottom .text-icon-button:hover {
+    background: rgba(0, 0, 0, 0.08);
 }
 
-.team-header-actions .icon-button {
-    padding: 5px 8px;
+.team-header .icon-button {
+    padding: 4px 8px;
     border-radius: 4px;
     color: #333;
 }
 
-.team-header-actions .icon-button:hover {
-    background: rgba(0, 0, 0, 0.1);
-}
-
-.team-header-actions .text-icon-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.85em;
-    white-space: nowrap;
+.team-header .icon-button:hover {
+    background: rgba(0, 0, 0, 0.08);
 }
 
 .team-games-container {
@@ -722,9 +744,9 @@ td.player-mmp,
 
 .game-item {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 20px;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 20px;
     border-bottom: 1px solid #eee;
     transition: background-color 0.15s ease;
 }
@@ -745,17 +767,38 @@ td.player-mmp,
     background: #c8e6c9;
 }
 
-.game-info {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    flex: 1;
-    min-width: 0;
+/* Line 1: date vs opponent score */
+.game-line1 {
+    color: #333;
+    font-size: 0.95em;
 }
 
-.game-text {
+/* Line 2: Join button + delete */
+.game-line2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.game-join-btn {
+    background: none;
+    border: 1px solid #555;
     color: #333;
+    padding: 3px 14px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.game-join-btn:hover {
+    background: #e9ecef;
+}
+
+/* Line 3: active coaches badge */
+.game-line3 {
+    padding-top: 2px;
 }
 
 .game-active-badge {
@@ -768,29 +811,6 @@ td.player-mmp,
     font-weight: 500;
     animation: pulse 2s infinite;
     white-space: nowrap;
-}
-
-.in-progress-badge {
-    color: #007bff;
-    font-weight: bold;
-    font-size: 0.9em;
-}
-
-.game-actions {
-    display: flex;
-    gap: 5px;
-    flex-shrink: 0;
-}
-
-.game-actions .resume-btn {
-    width: auto;
-    padding: 5px 10px;
-    background: #e3f2fd;
-    border-radius: 4px;
-}
-
-.game-actions .resume-btn:hover {
-    background: #bbdefb;
 }
 
 /* Legacy games-list li styles (kept for backwards compatibility) */
