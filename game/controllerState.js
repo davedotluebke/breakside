@@ -474,6 +474,81 @@ function getPollingGameId() {
 
 
 // =============================================================================
+// Wake/Sleep Recovery (Page Visibility API)
+// =============================================================================
+
+/**
+ * Handle page visibility changes (phone sleep/wake, tab switch, app switch).
+ * 
+ * When the page becomes hidden, browsers throttle or pause setInterval timers.
+ * The server expires roles after 30 seconds without a ping. When the page
+ * becomes visible again, we need to:
+ * 1. Immediately ping to get the latest server state
+ * 2. Re-claim any roles that were lost due to ping timeout
+ * 3. Restart polling at the correct interval
+ * 4. Restart game state refresh if it was stopped
+ */
+document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible') return;
+    
+    const gameId = currentGameIdForPolling;
+    if (!gameId) return; // Not in a game
+    
+    console.log('🎮 Page became visible — recovering game session...');
+    
+    // Remember what roles we had before the sleep
+    const hadActiveCoach = controllerState.isActiveCoach;
+    const hadLineCoach = controllerState.isLineCoach;
+    
+    // Restart polling interval (it may have drifted or been throttled)
+    if (controllerPollIntervalId) {
+        clearInterval(controllerPollIntervalId);
+        const interval = controllerState.myRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
+        controllerPollIntervalId = setInterval(() => {
+            if (currentGameIdForPolling) {
+                pingController(currentGameIdForPolling);
+            }
+        }, interval);
+    }
+    
+    // Immediately ping to get fresh server state
+    const result = await pingController(gameId);
+    
+    if (!result) {
+        console.warn('🎮 Wake ping failed — will retry on next interval');
+        return;
+    }
+    
+    // Check if roles were lost during sleep and silently re-claim
+    const lostActiveCoach = hadActiveCoach && !controllerState.isActiveCoach;
+    const lostLineCoach = hadLineCoach && !controllerState.isLineCoach;
+    
+    if (lostActiveCoach || lostLineCoach) {
+        console.log(`🎮 Roles lost during sleep — re-claiming (active: ${lostActiveCoach}, line: ${lostLineCoach})`);
+        
+        if (lostActiveCoach) {
+            const claimResult = await claimActiveCoach(gameId);
+            if (claimResult?.success) {
+                console.log('🎮 Re-claimed Active Coach after wake');
+            }
+        }
+        
+        if (lostLineCoach) {
+            const claimResult = await claimLineCoach(gameId);
+            if (claimResult?.success) {
+                console.log('🎮 Re-claimed Line Coach after wake');
+            }
+        }
+    }
+    
+    // Restart game state refresh if it was stopped
+    if (typeof startGameStateRefresh === 'function') {
+        startGameStateRefresh();
+    }
+});
+
+
+// =============================================================================
 // Role Checks
 // =============================================================================
 
