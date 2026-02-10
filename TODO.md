@@ -99,6 +99,7 @@ See [PHASE4_CONTROLLER_PLAN.md](PHASE4_CONTROLLER_PLAN.md) for full implementati
   - Role claiming and handoffs
   - Polling with adaptive intervals (2s active / 5s idle)
   - Permission checks (`canEditPlayByPlay`, `canEditLineup`)
+  - Sleep/wake recovery via Page Visibility API
   - UI stubs for Phase 6
 
 ---
@@ -400,6 +401,8 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [ ] Conflict notification toast: "Game updated by another coach"
 
 **Auto-Join Active Games:**
+- [x] Active game indicators on team selection screen (pulsing green dot, coach names badge)
+- [x] "Join" button on in-progress games in team selection screen
 - [ ] API: `GET /api/teams/{team_id}/active-game` - Get currently active game for a team
   - Returns game ID and basic info if a game is in progress
   - "In progress" = has points, no gameEndTimestamp, started within last 6 hours
@@ -410,11 +413,28 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [ ] Consider WebSocket for instant notifications (future enhancement)
 
 **Improve Game Discovery UI:**
-- [ ] Make it easier for coaches to find and join games in progress
-  - Clear visual indicator when a game is active for the current team
-  - Prominent "Join Game" button on roster screen
-  - List of recent/active games accessible from team view
-- [ ] Consider dedicated "Active Games" section or tab
+- [x] Cloud-first team/game selection screen redesign (`teams/teamSelection.js`)
+  - Two-line team tiles: top row (icon, name, delete), bottom row (coach badge, game count, roster)
+  - Two-line game items: terse date + opponent + score, "Join" button + delete
+  - Active game indicator (pulsing green dot) on team tile and game badge
+  - "+ New Game" button in expanded team section for coaches
+  - Unified "Refresh" button (push + pull + re-render, replaces separate Sync/Pull)
+  - 10-second silent auto-refresh with expand/collapse state preservation
+  - Connection info toast (tap Online status to see user + server)
+  - Removed legacy "Load Team" file import and server URL controls
+- [x] Seamless sleep/wake game session recovery (`game/controllerState.js`)
+  - Page Visibility API handler for phone sleep, app switch, phone calls
+  - Immediate ping + role re-claim on wake (transparent to user)
+  - Detects game ended by another coach → toast + return to team list
+  - Detects stale game (6+ hours idle) → prompt to return to team list
+  - Restarts polling intervals and game state refresh on wake
+- [ ] API: `GET /api/teams/{team_id}/active-game` - Get currently active game for a team
+  - Returns game ID and basic info if a game is in progress
+  - "In progress" = has points, no gameEndTimestamp, started within last 6 hours
+- [ ] PWA: Auto-join prompt when another coach starts/resumes a game
+  - Toast notification: "[Coach] started a game vs [Opponent]. Join?"
+  - Tap to enter game screen for that game
+- [ ] Consider WebSocket for instant notifications (future enhancement)
 
 ### 👁️ Phase 7: Viewer Experience
 
@@ -430,7 +450,7 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 
 ## New Items (Backlog)
 
-- [ ] **Feature**: When multiple users are signed into a game, and the Active Coach ends the game, all coaches and viewers should go to the game summary screen.
+- [ ] **Feature**: When multiple users are signed into a game, and the Active Coach ends the game, all coaches and viewers should go to the game summary screen. *(Partially done: wake recovery detects ended game and returns to team list. Still needed: real-time notification while app is foregrounded — the 3-second game state refresh should detect `gameEndTimestamp` and navigate away.)*
 - [ ] **Bug**: The game summary screen reports a score of 0-0 even after several points have been played.
 - [ ] **UI**: Only the Active Coach can start the next point, but the "Start Point (Offense/Defense)" button only appears in the "Select Next Line" panel. When that panel is minimized (e.g. when collaborating with a Line Coach), show the "Start Point" button in the Play-by-Play panel between points instead of the inactive "We score"/"They score"/"Key play" buttons.
 - [ ] **To verify**: Run a test with both a D line and an O line selected; verify which line is actually used when starting a D or O point. Define desired behavior when e.g. D line is selected but coach is viewing/editing O line (or vice versa), and consider UI to indicate what will happen to avoid surprise.
