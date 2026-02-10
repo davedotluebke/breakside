@@ -488,6 +488,9 @@ function getPollingGameId() {
  * 3. Restart polling at the correct interval
  * 4. Restart game state refresh if it was stopped
  */
+// Maximum game age (in hours) before prompting the user on wake
+const STALE_GAME_HOURS = 6;
+
 document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState !== 'visible') return;
     
@@ -495,6 +498,75 @@ document.addEventListener('visibilitychange', async () => {
     if (!gameId) return; // Not in a game
     
     console.log('🎮 Page became visible — recovering game session...');
+    
+    // --- Check for ended or stale game before attempting recovery ---
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    
+    if (game) {
+        // Refresh game data from cloud to detect if another coach ended the game
+        if (typeof refreshGameStateFromCloud === 'function') {
+            try {
+                await refreshGameStateFromCloud(gameId);
+            } catch (e) {
+                console.warn('🎮 Failed to refresh game state on wake:', e);
+            }
+        }
+        
+        // Gap 1: Game was ended by another coach while we were away
+        if (game.gameEndTimestamp) {
+            console.log('🎮 Game ended while away — returning to team selection');
+            showControllerToast('Game has ended', 'info', 3000);
+            stopControllerPolling();
+            if (typeof exitGameScreen === 'function') {
+                exitGameScreen();
+            }
+            if (typeof showSelectTeamScreen === 'function') {
+                showSelectTeamScreen();
+            }
+            return; // Skip role recovery
+        }
+        
+        // Gap 2: Game is very old — probably abandoned
+        const gameStart = game.gameStartTimestamp
+            ? new Date(game.gameStartTimestamp).getTime()
+            : null;
+        if (gameStart) {
+            const hoursElapsed = (Date.now() - gameStart) / (1000 * 60 * 60);
+            if (hoursElapsed > STALE_GAME_HOURS) {
+                // Check if there's been any recent activity (last point within the threshold)
+                const lastPoint = game.points && game.points.length > 0
+                    ? game.points[game.points.length - 1]
+                    : null;
+                const lastActivity = lastPoint?.endTimestamp
+                    ? new Date(lastPoint.endTimestamp).getTime()
+                    : lastPoint?.startTimestamp
+                        ? new Date(lastPoint.startTimestamp).getTime()
+                        : gameStart;
+                const hoursSinceActivity = (Date.now() - lastActivity) / (1000 * 60 * 60);
+                
+                if (hoursSinceActivity > STALE_GAME_HOURS) {
+                    console.log(`🎮 Game idle for ${hoursSinceActivity.toFixed(1)}h — prompting user`);
+                    const keepGoing = confirm(
+                        `This game has been idle for ${Math.floor(hoursSinceActivity)} hours.\n\n` +
+                        'Return to the team list?'
+                    );
+                    if (keepGoing) {
+                        stopControllerPolling();
+                        if (typeof exitGameScreen === 'function') {
+                            exitGameScreen();
+                        }
+                        if (typeof showSelectTeamScreen === 'function') {
+                            showSelectTeamScreen();
+                        }
+                        return; // Skip role recovery
+                    }
+                    // User chose to stay — continue with recovery below
+                }
+            }
+        }
+    }
+    
+    // --- Normal recovery: re-claim roles and restart polling ---
     
     // Remember what roles we had before the sleep
     const hadActiveCoach = controllerState.isActiveCoach;
