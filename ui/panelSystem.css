@@ -182,7 +182,13 @@ body.game-screen-active #controllerRoleButtons {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 50%;
+    flex: 1;
+    min-width: 0; /* Allow shrinking below content size */
+}
+
+/* Hide subtitle when panel content is visible (expanded) */
+.panel-subtitle:empty {
+    display: none;
 }
 
 /* Panel action buttons (expand/collapse) */
@@ -1155,6 +1161,54 @@ body.game-screen-active #controllerRoleButtons {
 
 .pbp-btn-action i {
     color: #6c757d;
+}
+
+/* =============================================================================
+   Start Point Button in Play-by-Play Panel
+   Shown when Select Line panel is minimized and between points
+   ============================================================================= */
+
+.pbp-start-point-btn {
+    display: none; /* Hidden by default, shown via JS */
+    width: 100%;
+    padding: 16px 20px;
+    margin: 0;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.2rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #78909C 0%, #607D8B 100%);
+    color: #fff;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+}
+
+.pbp-start-point-btn:active {
+    transform: scale(0.98);
+}
+
+/* Feedback colors for Start Point button - same as Select Line panel */
+.pbp-start-point-btn.feedback-ok {
+    background: linear-gradient(135deg, #4CAF50 0%, #43A047 100%);
+    box-shadow: 0 3px 8px rgba(76, 175, 80, 0.3);
+}
+
+.pbp-start-point-btn.feedback-count-warning {
+    background: linear-gradient(135deg, #f44336 0%, #e53935 100%);
+    box-shadow: 0 3px 8px rgba(244, 67, 54, 0.3);
+}
+
+.pbp-start-point-btn.feedback-gender-warning {
+    background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+    box-shadow: 0 3px 8px rgba(255, 152, 0, 0.3);
+}
+
+.pbp-start-point-btn.inactive {
+    background: linear-gradient(135deg, #9E9E9E 0%, #757575 100%);
+    opacity: 0.7;
 }
 
 /* =============================================================================

@@ -264,6 +264,9 @@ function createPlayByPlayContent() {
                 <i class="fas fa-ellipsis-h"></i>
             </button>
         </div>
+        <button id="pbpStartPointBtn" class="pbp-start-point-btn" style="display: none;">
+            Start Point
+        </button>
     `;
     
     return content;
@@ -771,6 +774,12 @@ function wirePlayByPlayEvents() {
     const gameEventsBtn = document.getElementById('pbpGameEventsBtn');
     if (gameEventsBtn) {
         gameEventsBtn.addEventListener('click', handlePbpGameEvents);
+    }
+    
+    // Start Point button (shown when Select Line panel is minimized)
+    const pbpStartPointBtn = document.getElementById('pbpStartPointBtn');
+    if (pbpStartPointBtn) {
+        pbpStartPointBtn.addEventListener('click', handlePanelStartPoint);
     }
 }
 
@@ -1537,6 +1546,7 @@ function handleGameEventEndGame() {
  * - Score buttons (We Score, They Score): enabled only DURING a point
  * - Key Play: enabled only DURING a point
  * - Undo, Events, More: enabled anytime (if Active Coach)
+ * - Start Point button: shown between points when Select Line panel is minimized
  */
 function updatePlayByPlayPanelState() {
     const panel = document.getElementById('panel-playByPlay');
@@ -1547,6 +1557,26 @@ function updatePlayByPlayPanelState() {
     
     // Disable panel visually if not Active Coach (but don't block pointer events on whole panel)
     panel.classList.toggle('role-disabled', !hasActiveCoachRole);
+    
+    // Check if Select Line panel is minimized
+    const selectLineMinimized = typeof isPanelMinimized === 'function' && isPanelMinimized('selectLine');
+    
+    // Show Start Point button when: Select Line is minimized, between points, and user is Active Coach
+    const showStartPoint = selectLineMinimized && !pointInProgress && hasActiveCoachRole;
+    const pbpStartPointBtn = document.getElementById('pbpStartPointBtn');
+    const mainButtons = panel.querySelector('.pbp-main-buttons');
+    
+    if (pbpStartPointBtn) {
+        pbpStartPointBtn.style.display = showStartPoint ? 'flex' : 'none';
+        if (showStartPoint) {
+            updatePbpStartPointButtonState(pbpStartPointBtn);
+        }
+    }
+    
+    // Hide main score buttons when Start Point is shown
+    if (mainButtons) {
+        mainButtons.style.display = showStartPoint ? 'none' : 'flex';
+    }
     
     // Score buttons - only enabled DURING a point
     const weScoreBtn = document.getElementById('pbpWeScoreBtn');
@@ -1578,6 +1608,62 @@ function updatePlayByPlayPanelState() {
     
     // Update Game Events modal buttons if it's open
     updateGameEventsModalState();
+}
+
+/**
+ * Update the Start Point button in the Play-by-Play panel
+ * Shows feedback colors similar to the Select Line panel's button
+ */
+function updatePbpStartPointButtonState(btn) {
+    if (!btn) return;
+    
+    const selectedPlayers = typeof getSelectedPlayersFromPanel === 'function' 
+        ? getSelectedPlayersFromPanel() 
+        : [];
+    const expectedCount = parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
+    
+    // Reset all states
+    btn.classList.remove('inactive', 'feedback-ok', 'feedback-count-warning', 'feedback-gender-warning');
+    
+    // Calculate feedback state
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    let genderRatioWarning = false;
+    let startingRatioRequired = false;
+    
+    if (game && game.alternateGenderRatio && game.alternateGenderRatio !== 'No') {
+        if (game.alternateGenderRatio === 'Alternating' && !game.startingGenderRatio && game.points.length === 0) {
+            startingRatioRequired = true;
+        } else if (selectedPlayers.length === expectedCount) {
+            genderRatioWarning = typeof checkPanelGenderRatio === 'function' 
+                ? !checkPanelGenderRatio(selectedPlayers, expectedCount)
+                : false;
+        }
+    }
+    
+    // Determine feedback class
+    let feedbackClass = '';
+    if (selectedPlayers.length === 0) {
+        feedbackClass = 'inactive';
+    } else if (startingRatioRequired) {
+        feedbackClass = 'inactive';
+    } else if (selectedPlayers.length !== expectedCount) {
+        feedbackClass = 'feedback-count-warning';
+    } else if (genderRatioWarning) {
+        feedbackClass = 'feedback-gender-warning';
+    } else {
+        feedbackClass = 'feedback-ok';
+    }
+    
+    // Determine starting position for button text
+    const startOn = typeof determineStartingPosition === 'function' 
+        ? determineStartingPosition() 
+        : 'offense';
+    const startOnLabel = startOn.charAt(0).toUpperCase() + startOn.slice(1);
+    btn.textContent = `Start Point (${startOnLabel})`;
+    
+    if (feedbackClass) {
+        btn.classList.add(feedbackClass);
+    }
 }
 
 /**
@@ -1803,6 +1889,13 @@ function handleODToggle() {
     // Update start point button state (in case player count changed)
     updateStartPointButtonState();
     
+    // Update subtitle and compact view for new line type
+    updateSelectLineSubtitle();
+    updateSelectLineCompactView();
+    
+    // Also update Play-by-Play panel (Start Point button depends on selections)
+    updatePlayByPlayPanelState();
+    
     // Show feedback
     const typeLabels = { od: 'O/D', o: 'Offense', d: 'Defense' };
     if (typeof showControllerToast === 'function') {
@@ -2006,8 +2099,12 @@ function handlePanelCheckboxChange(e) {
     const selectedPlayers = getSelectedPlayersFromPanel();
     syncPanelSelectionsToLegacy(selectedPlayers);
     
-    // Keep compact view in sync
+    // Keep compact view and subtitle in sync
     updateSelectLineCompactView();
+    updateSelectLineSubtitle();
+    
+    // Also update Play-by-Play panel (Start Point button state depends on selections)
+    updatePlayByPlayPanelState();
 }
 
 /**
@@ -2284,6 +2381,9 @@ function updateSelectLinePanelState() {
     
     // Update gender ratio display
     updatePanelGenderRatioDisplay();
+    
+    // Update subtitle (shown when minimized)
+    updateSelectLineSubtitle();
 }
 
 /**
@@ -2808,6 +2908,52 @@ function checkSelectLinePanelCompactMode() {
         compactView.style.display = 'none';
         fullView.style.display = 'flex';
     }
+    
+    // Also update subtitle (shown when panel is minimized)
+    updateSelectLineSubtitle();
+}
+
+/**
+ * Update the Select Line panel subtitle (shown in title bar when minimized)
+ * Shows the selected player names as a compact, comma-separated list
+ */
+function updateSelectLineSubtitle() {
+    if (typeof setPanelSubtitle !== 'function') return;
+    
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game) {
+        setPanelSubtitle('selectLine', '');
+        return;
+    }
+    
+    // Get current pending selections
+    const pendingLine = game.pendingNextLine || {};
+    const activeType = pendingLine.activeType || 'od';
+    const lineKey = activeType + 'Line';
+    const selectedNames = pendingLine[lineKey] || [];
+    
+    if (selectedNames.length === 0) {
+        setPanelSubtitle('selectLine', '(no players selected)');
+        return;
+    }
+    
+    // Build a compact display: "O: Alice, Bob, Carol..." or "D: Dave, Eve..."
+    const typeLabels = { o: 'O', d: 'D', od: 'O/D' };
+    const typeLabel = typeLabels[activeType] || 'O/D';
+    
+    // Get first names only for compactness
+    const firstNames = selectedNames.map(name => name.split(' ')[0]);
+    
+    // Join with commas, truncate if too long (approx 40 chars max for title bar)
+    let playerList = firstNames.join(', ');
+    const maxLength = 35;
+    if (playerList.length > maxLength) {
+        playerList = playerList.substring(0, maxLength - 1) + '…';
+    }
+    
+    // Format: "O/D: Alice, Bob, Carol..."
+    const subtitle = `${typeLabel}: ${playerList}`;
+    setPanelSubtitle('selectLine', subtitle);
 }
 
 /**
@@ -3628,6 +3774,7 @@ window.ensureDialogVisible = ensureDialogVisible;
 window.updateSelectLinePanel = updateSelectLinePanel;
 window.updateSelectLineTable = updateSelectLineTable;
 window.updateSelectLinePanelState = updateSelectLinePanelState;
+window.updateSelectLineSubtitle = updateSelectLineSubtitle;
 window.canEditSelectLinePanel = canEditSelectLinePanel;
 window.getSelectedPlayersFromPanel = getSelectedPlayersFromPanel;
 window.savePanelSelectionsToPendingNextLine = savePanelSelectionsToPendingNextLine;

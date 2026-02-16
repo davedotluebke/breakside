@@ -192,9 +192,12 @@ Replace current screen-based navigation with a **panel-based layout** for all in
   - **Auto-minimize**: When point ends
   - **Auto-maximize**: When point starts, if user is Active Coach
 - [x] Key Play dialog still available for detailed event entry
-- [ ] **Sub Players** button opens modal dialog for mid-point injury substitutions
+- [x] **Sub Players** button opens modal dialog for mid-point injury substitutions
   - One-off player selection table (similar to line selection)
-- [ ] Pull Dialog auto-popup for Active Coach at start of defensive points
+  - Tracks substitutedOutPlayers on Point for accurate points-played counting
+  - Both outgoing and incoming players get credit for playing the point
+- [x] Pull Dialog auto-popup for Active Coach at start of defensive points
+  - Triggered in `startNextPoint()` when `startPointOn === 'defense'`
 - [ ] Offense/Defense possession screens deprecated (keep code, remove from main flow)
 
 **4. "Select Next Line" Panel** ✅ (resizable)
@@ -204,7 +207,7 @@ Replace current screen-based navigation with a **panel-based layout** for all in
   - **"Start Point (Offense/Defense)"** button with feedback colors
 - [x] Panel states:
   - **Maximized**: Full player selection table visible
-  - **Minimized**: Title bar only (compact player names layout pending)
+  - **Minimized**: Title bar with selected player names subtitle
 - [x] Auto-behaviors:
   - **Active Coach**: Auto-minimize when point starts, auto-maximize when point ends
   - **Line Coach**: Can edit during points (their main job)
@@ -218,7 +221,10 @@ Replace current screen-based navigation with a **panel-based layout** for all in
   - Retitles to "Select Next O Line" and "Select Next D Line"
 - [x] **Between points**: Both Active Coach and Line Coach can edit lineup
 - [x] **During point**: Only Line Coach can edit (preparing next lineup)
-- [ ] Conflict warning toast when both coaches edit simultaneously
+- [x] Conflict warning toast when both coaches edit simultaneously
+  - Tracks local edit timestamps per line type (O, D, O/D)
+  - Warns when remote edit within 5 seconds of same line type
+  - Only warns once per point to avoid spam
 
 **5. "Game Events" Modal** ✅ (accessed from Play-by-Play panel)
 - [x] Triggered by "Events" button in Play-by-Play action row
@@ -228,10 +234,10 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [x] Active Coach only (buttons disabled if not Active Coach)
 - [x] Half Time / Switch Sides log events (no special behavior)
 
-**6. "Game Log" Panel** (resizable, bottom of stack)
-- [ ] Game status: Team names, opponent, current score
-- [ ] Game event log: Large font, scrollable, full event history
-- [ ] Gets remaining vertical space after other panels
+**6. "Game Log" Panel** ✅ (resizable, bottom of stack)
+- [x] Game status: Team names, opponent, current score
+- [x] Game event log: Large font, scrollable, full event history
+- [x] Gets remaining vertical space after other panels
 - [ ] Default states:
   - **Maximized**: For Viewers (only panel they see besides header)
   - **Maximized**: For Coaches without Active or Line Coach role
@@ -337,9 +343,9 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [x] **Point-aware button states**:
   - Score buttons (We/They Score, Key Play) disabled between points
   - Undo, Events, More enabled anytime if Active Coach
-- [ ] Sub Players modal for mid-point injury subs
-- [ ] Pull dialog auto-popup (defensive point start)
-- [ ] Remove "Use Old Screen" button when complete
+- [x] Sub Players modal for mid-point injury subs
+- [x] Pull dialog auto-popup (defensive point start)
+- [x] Remove "Use Old Screen" button (panels have full content, no stubs used)
 
 **Step 6: Select Next Line Panel** ✅
 - [x] Player selection table (ported from Before Point Screen)
@@ -363,9 +369,11 @@ Replace current screen-based navigation with a **panel-based layout** for all in
   - activeType is local-only (each user controls own view)
 - [x] Auto-resize behaviors (maximize on point end, minimize on point start for Active Coach)
 - [x] Multi-device sync: Line selections sync between coaches (timestamp merge)
-- [ ] Minimize to title bar showing selected player names (compact layout)
-- [ ] Conflict warning toast when both coaches edit
-- [ ] Remove "Use Old Screen" button when complete
+- [x] Minimize to title bar showing selected player names (compact layout)
+  - Subtitle shows "O/D: Alice, Bob, Carol..." when panel is minimized
+  - Updates automatically when players or line type changes
+- [x] Conflict warning toast when both coaches edit
+- [x] Remove "Use Old Screen" button (panels have full content, no stubs used)
 
 **Step 7: Cleanup**
 - [ ] Remove legacy screen navigation for in-game screens
@@ -451,8 +459,10 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 ## New Items (Backlog)
 
 - [ ] **Feature**: When multiple users are signed into a game, and the Active Coach ends the game, all coaches and viewers should go to the game summary screen. *(Partially done: wake recovery detects ended game and returns to team list. Still needed: real-time notification while app is foregrounded — the 3-second game state refresh should detect `gameEndTimestamp` and navigate away.)*
-- [ ] **Bug**: The game summary screen reports a score of 0-0 even after several points have been played.
-- [ ] **UI**: Only the Active Coach can start the next point, but the "Start Point (Offense/Defense)" button only appears in the "Select Next Line" panel. When that panel is minimized (e.g. when collaborating with a Line Coach), show the "Start Point" button in the Play-by-Play panel between points instead of the inactive "We score"/"They score"/"Key play" buttons.
+- [x] **Bug**: The game summary screen reports a score of 0-0 even after several points have been played. *(Fixed: `deserializeGame()` now restores `game.scores` from saved data.)*
+- [x] **UI**: Only the Active Coach can start the next point, but the "Start Point (Offense/Defense)" button only appears in the "Select Next Line" panel. When that panel is minimized (e.g. when collaborating with a Line Coach), show the "Start Point" button in the Play-by-Play panel between points instead of the inactive "We score"/"They score"/"Key play" buttons.
+  - Start Point button now appears in Play-by-Play panel when Select Line is minimized
+  - Shows same feedback colors (green/red/orange) based on player count and gender ratio
 - [ ] **To verify**: Run a test with both a D line and an O line selected; verify which line is actually used when starting a D or O point. Define desired behavior when e.g. D line is selected but coach is viewing/editing O line (or vice versa), and consider UI to indicate what will happen to avoid surprise.
 - [ ] **Feature**: Checkbox in the header row of the select-next-player table to uncheck all players.
 
