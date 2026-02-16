@@ -383,7 +383,7 @@ function createSelectLinePanel() {
     // Create title bar
     const titleBar = createPanelTitleBar({
         panelId: 'selectLine',
-        title: 'Select Next Line',
+        title: 'Next Line',
         showDragHandle: true,
         showExpandBtn: true
     });
@@ -1546,7 +1546,7 @@ function handleGameEventEndGame() {
  * - Score buttons (We Score, They Score): enabled only DURING a point
  * - Key Play: enabled only DURING a point
  * - Undo, Events, More: enabled anytime (if Active Coach)
- * - Start Point button: shown between points when Select Line panel is minimized
+ * - Start Point button: shown between points for Active Coach
  */
 function updatePlayByPlayPanelState() {
     const panel = document.getElementById('panel-playByPlay');
@@ -1558,18 +1558,17 @@ function updatePlayByPlayPanelState() {
     // Disable panel visually if not Active Coach (but don't block pointer events on whole panel)
     panel.classList.toggle('role-disabled', !hasActiveCoachRole);
     
-    // Check if Select Line panel is minimized
-    const selectLineMinimized = typeof isPanelMinimized === 'function' && isPanelMinimized('selectLine');
-    
-    // Show Start Point button when: Select Line is minimized, between points, and user is Active Coach
-    const showStartPoint = selectLineMinimized && !pointInProgress && hasActiveCoachRole;
+    // Show Start Point button when: between points and user is Active Coach
+    // (Always shown when between points, regardless of Select Line panel state)
+    const showStartPoint = !pointInProgress && hasActiveCoachRole;
     const pbpStartPointBtn = document.getElementById('pbpStartPointBtn');
     const mainButtons = panel.querySelector('.pbp-main-buttons');
     
     if (pbpStartPointBtn) {
         pbpStartPointBtn.style.display = showStartPoint ? 'flex' : 'none';
         if (showStartPoint) {
-            updatePbpStartPointButtonState(pbpStartPointBtn);
+            // Use shared function to apply button state
+            applyStartPointButtonState(pbpStartPointBtn, false);
         }
     }
     
@@ -1610,20 +1609,21 @@ function updatePlayByPlayPanelState() {
     updateGameEventsModalState();
 }
 
+// =============================================================================
+// Shared Start Point Button Logic
+// =============================================================================
+
 /**
- * Update the Start Point button in the Play-by-Play panel
- * Shows feedback colors similar to the Select Line panel's button
+ * Calculate the feedback state for Start Point buttons
+ * Used by both the Select Line panel and Play-by-Play panel Start Point buttons
+ * @returns {object} { feedbackClass, startOnLabel, pointInProgress }
  */
-function updatePbpStartPointButtonState(btn) {
-    if (!btn) return;
-    
+function getStartPointButtonState() {
     const selectedPlayers = typeof getSelectedPlayersFromPanel === 'function' 
         ? getSelectedPlayersFromPanel() 
         : [];
     const expectedCount = parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
-    
-    // Reset all states
-    btn.classList.remove('inactive', 'feedback-ok', 'feedback-count-warning', 'feedback-gender-warning');
+    const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
     
     // Calculate feedback state
     const game = typeof currentGame === 'function' ? currentGame() : null;
@@ -1647,20 +1647,53 @@ function updatePbpStartPointButtonState(btn) {
     } else if (startingRatioRequired) {
         feedbackClass = 'inactive';
     } else if (selectedPlayers.length !== expectedCount) {
-        feedbackClass = 'feedback-count-warning';
+        feedbackClass = 'feedback-count-warning';  // Wrong player count (red)
     } else if (genderRatioWarning) {
-        feedbackClass = 'feedback-gender-warning';
+        feedbackClass = 'feedback-gender-warning';  // Wrong gender ratio (orange)
     } else {
-        feedbackClass = 'feedback-ok';
+        feedbackClass = 'feedback-ok';  // All good (green)
     }
     
-    // Determine starting position for button text
+    // Determine starting position
     const startOn = typeof determineStartingPosition === 'function' 
         ? determineStartingPosition() 
         : 'offense';
     const startOnLabel = startOn.charAt(0).toUpperCase() + startOn.slice(1);
+    
+    return { feedbackClass, startOnLabel, pointInProgress };
+}
+
+/**
+ * Apply Start Point button state to a button element
+ * Used by both Select Line and Play-by-Play panel Start Point buttons
+ * @param {HTMLElement} btn - The button element
+ * @param {boolean} showPointInProgress - Whether to show "Point in progress" when point is active
+ */
+function applyStartPointButtonState(btn, showPointInProgress = true) {
+    if (!btn) return;
+    
+    const { feedbackClass, startOnLabel, pointInProgress } = getStartPointButtonState();
+    
+    // Reset all states
+    btn.classList.remove('warning', 'inactive', 'point-in-progress', 
+        'feedback-ok', 'feedback-count-warning', 'feedback-gender-warning');
+    btn.disabled = false;
+    
+    // If point is in progress and this button should show that state
+    if (pointInProgress && showPointInProgress) {
+        btn.textContent = 'Point in progress';
+        btn.classList.add('point-in-progress');
+        if (feedbackClass) {
+            btn.classList.add(feedbackClass);
+        }
+        btn.disabled = true;
+        return;
+    }
+    
+    // Set button text
     btn.textContent = `Start Point (${startOnLabel})`;
     
+    // Apply the feedback class
     if (feedbackClass) {
         btn.classList.add(feedbackClass);
     }
@@ -2270,86 +2303,15 @@ function checkPanelGenderRatio(selectedPlayerNames, expectedCount) {
 }
 
 /**
- * Update the Start Point button state (text and warning states)
- * Shows feedback colors (desaturated when point in progress)
+ * Update the Start Point button state in the Select Line panel
+ * Uses shared function for consistency with Play-by-Play panel's Start Point button
  */
 function updateStartPointButtonState() {
     const btn = document.getElementById('panelStartPointBtn');
     if (!btn) return;
     
-    const selectedPlayers = getSelectedPlayersFromPanel();
-    const expectedCount = parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
-    
-    // Check if point is in progress
-    const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
-    
-    // Debug logging
-    const latestPoint = typeof getLatestPoint === 'function' ? getLatestPoint() : null;
-    console.log('📍 updateStartPointButtonState:', {
-        pointInProgress,
-        latestPointWinner: latestPoint?.winner,
-        latestPointStartTimestamp: latestPoint?.startTimestamp,
-        latestPointPossessionsLength: latestPoint?.possessions?.length
-    });
-    
-    // Reset all states
-    btn.classList.remove('warning', 'inactive', 'point-in-progress', 
-        'feedback-ok', 'feedback-count-warning', 'feedback-gender-warning');
-    btn.disabled = false;
-    
-    // Calculate feedback state regardless of point status
-    const game = typeof currentGame === 'function' ? currentGame() : null;
-    let genderRatioWarning = false;
-    let startingRatioRequired = false;
-    
-    if (game && game.alternateGenderRatio && game.alternateGenderRatio !== 'No') {
-        if (game.alternateGenderRatio === 'Alternating' && !game.startingGenderRatio && game.points.length === 0) {
-            startingRatioRequired = true;
-        } else if (selectedPlayers.length === expectedCount) {
-            // Use panel-specific gender ratio check
-            genderRatioWarning = !checkPanelGenderRatio(selectedPlayers, expectedCount);
-        }
-    }
-    
-    // Determine feedback class
-    let feedbackClass = '';
-    if (selectedPlayers.length === 0) {
-        feedbackClass = 'inactive';
-    } else if (startingRatioRequired) {
-        feedbackClass = 'inactive';
-    } else if (selectedPlayers.length !== expectedCount) {
-        feedbackClass = 'feedback-count-warning';  // Wrong player count (red)
-    } else if (genderRatioWarning) {
-        feedbackClass = 'feedback-gender-warning';  // Wrong gender ratio (orange)
-    } else {
-        feedbackClass = 'feedback-ok';  // All good (green)
-    }
-    
-    // If point is in progress, disable button but show feedback
-    if (pointInProgress) {
-        btn.textContent = 'Point in progress';
-        btn.classList.add('point-in-progress');
-        if (feedbackClass) {
-            btn.classList.add(feedbackClass);
-        }
-        btn.disabled = true;
-        return;
-    }
-    
-    // Point not in progress - normal behavior
-    // Determine starting position
-    const startOn = typeof determineStartingPosition === 'function' 
-        ? determineStartingPosition() 
-        : 'offense';
-    
-    // Set button text
-    const startOnLabel = startOn.charAt(0).toUpperCase() + startOn.slice(1);
-    btn.textContent = `Start Point (${startOnLabel})`;
-    
-    // Apply the feedback class (will show saturated colors when not point-in-progress)
-    if (feedbackClass) {
-        btn.classList.add(feedbackClass);
-    }
+    // Use shared function - this button shows "Point in progress" when point is active
+    applyStartPointButtonState(btn, true);
 }
 
 /**
