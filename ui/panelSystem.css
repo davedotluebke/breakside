@@ -98,8 +98,8 @@ body.game-screen-active #controllerRoleButtons {
 .panel-title-bar {
     display: flex;
     align-items: center;
-    justify-content: center; /* Center content by default */
-    padding: 4px 12px;
+    justify-content: flex-start; /* Left-align content to make room for subtitle */
+    padding: 4px 8px 4px 28px; /* Leave room for drag handle on left, less padding on right */
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border-bottom: 1px solid #ddd;
     cursor: default;
@@ -116,14 +116,14 @@ body.game-screen-active #controllerRoleButtons {
     touch-action: none; /* Prevent browser handling of touch for drag */
 }
 
-/* Drag handle (left side of title bar) - visual indicator only */
+/* Drag handle (far left edge of title bar) - visual indicator only */
 .panel-drag-handle {
     position: absolute;
-    left: 12px;
+    left: 2px;
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 4px;
+    padding: 4px 6px;
     opacity: 0.3;
     transition: opacity 0.2s, transform 0.1s;
 }
@@ -178,7 +178,7 @@ body.game-screen-active #controllerRoleButtons {
 .panel-subtitle {
     font-size: 0.75rem;
     color: #666;
-    margin-left: 8px;
+    margin-left: 4px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
