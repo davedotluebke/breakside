@@ -166,12 +166,13 @@ body.game-screen-active #controllerRoleButtons {
     background: #007bff;
 }
 
-/* Panel title text - centered in title bar */
+/* Panel title text */
 .panel-title {
     font-weight: 600;
     font-size: 0.9rem;
     color: #333;
     white-space: nowrap;
+    flex-shrink: 0;
 }
 
 /* Panel subtitle (e.g., player names when minimized) */
@@ -179,6 +180,7 @@ body.game-screen-active #controllerRoleButtons {
     font-size: 0.75rem;
     color: #666;
     margin-left: 4px;
+    margin-right: 40px; /* Leave room for expand button */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -186,15 +188,16 @@ body.game-screen-active #controllerRoleButtons {
     min-width: 0; /* Allow shrinking below content size */
 }
 
-/* Hide subtitle when panel content is visible (expanded) */
+/* Hide subtitle when empty */
 .panel-subtitle:empty {
     display: none;
+    margin: 0;
 }
 
 /* Panel action buttons (expand/collapse) */
 .panel-actions {
     position: absolute;
-    right: 12px;
+    right: 8px;
     display: flex;
     gap: 4px;
 }
@@ -1181,7 +1184,7 @@ body.game-screen-active #controllerRoleButtons {
     transition: all 0.15s ease;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #78909C 0%, #607D8B 100%);
+    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); /* Neutral gray - same as Select Line */
     color: #fff;
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
 }
@@ -1190,24 +1193,24 @@ body.game-screen-active #controllerRoleButtons {
     transform: scale(0.98);
 }
 
-/* Feedback colors for Start Point button - same as Select Line panel */
+/* Feedback colors for Start Point button - MUST match Select Line panel colors exactly */
 .pbp-start-point-btn.feedback-ok {
-    background: linear-gradient(135deg, #4CAF50 0%, #43A047 100%);
-    box-shadow: 0 3px 8px rgba(76, 175, 80, 0.3);
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    box-shadow: 0 3px 8px rgba(40, 167, 69, 0.3);
 }
 
 .pbp-start-point-btn.feedback-count-warning {
-    background: linear-gradient(135deg, #f44336 0%, #e53935 100%);
-    box-shadow: 0 3px 8px rgba(244, 67, 54, 0.3);
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    box-shadow: 0 3px 8px rgba(220, 53, 69, 0.3);
 }
 
 .pbp-start-point-btn.feedback-gender-warning {
-    background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
-    box-shadow: 0 3px 8px rgba(255, 152, 0, 0.3);
+    background: linear-gradient(135deg, #ff8800 0%, #e67700 100%);
+    box-shadow: 0 3px 8px rgba(255, 136, 0, 0.3);
 }
 
 .pbp-start-point-btn.inactive {
-    background: linear-gradient(135deg, #9E9E9E 0%, #757575 100%);
+    background: linear-gradient(135deg, #adb5bd 0%, #868e96 100%);
     opacity: 0.7;
 }
 
@@ -1495,7 +1498,7 @@ body.game-screen-active #controllerRoleButtons {
     padding: 12px 16px;
     font-size: 1rem;
     font-weight: 600;
-    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); /* Neutral gray default */
     color: #fff;
     border: none;
     border-radius: 8px;
@@ -1505,7 +1508,6 @@ body.game-screen-active #controllerRoleButtons {
 }
 
 .select-line-start-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
     transform: translateY(-1px);
 }
 
