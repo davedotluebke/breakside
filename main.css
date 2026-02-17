@@ -233,50 +233,6 @@ th {
     margin-right: 10px;
 }
 
-#audioControls {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-#startNarrationBtn {
-    background-color: #28a745;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    white-space: nowrap;
-}
-
-#startNarrationBtn i {
-    font-size: 20px;
-    margin: 0;
-}
-
-#startNarrationBtn.inactive {
-    background-color: #cccccc;
-    cursor: not-allowed;
-    opacity: 0.7;
-}
-
-#startNarrationBtn.recording {
-    background-color: #dc3545;
-    animation: pulse 2s infinite;
-}
-
-#audioStatus {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.9em;
-    color: #666;
-}
 
 #toggleEventLogBtn {
     padding: 5px 15px;
@@ -829,20 +785,6 @@ td.player-mmp,
     font-size: 1em;
 }
 
-.audio-level-indicator {
-    width: 50px;
-    height: 4px;
-    background: #eee;
-    border-radius: 2px;
-    overflow: hidden;
-}
-
-.level-bar {
-    width: 0%;
-    height: 100%;
-    background: #28a745;
-    transition: width 0.1s ease;
-}
 
 @keyframes pulse {
     0% { opacity: 1; }

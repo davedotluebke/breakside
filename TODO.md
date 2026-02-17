@@ -6,380 +6,78 @@ For deployment info and technical architecture, see **[ARCHITECTURE.md](ARCHITEC
 
 ---
 
-## Current Status
+## Completed Phases
 
-### ✅ Phase 1: Authentication Foundation (Complete)
+<details>
+<summary>✅ Phase 1: Authentication Foundation</summary>
 
-- [x] Set up Supabase project (email/password auth)
-- [x] Backend: JWT validation module (`auth/jwt_validation.py`)
-- [x] Backend: Auth dependencies (`auth/dependencies.py`)
-- [x] Backend: User storage (`storage/user_storage.py`)
-- [x] Backend: Membership storage (`storage/membership_storage.py`)
-- [x] Backend: Auth API endpoints (`/api/auth/me`, `/api/auth/teams`)
-- [x] Frontend: Auth config and client (`auth/config.js`, `auth/auth.js`)
-- [x] Frontend: Login screen component (`auth/loginScreen.js`)
-- [x] Frontend: Auth headers on all API calls
-- [x] Frontend: Sign out button in PWA
-- [x] Landing page with Supabase auth modal
-- [x] Server routes for `/app/`, `/landing/`, `/view/{hash}`
+Supabase email/password auth, JWT validation, auth dependencies, user/membership storage, auth API endpoints, frontend login screen, auth headers on all API calls, landing page with auth modal.
 
-### ✅ Phase 2: Backend Auth Enforcement (Complete)
+See code: `auth/`, `ultistats_server/auth/`, `landing/`
+</details>
 
-- [x] Deploy auth-enabled API to EC2
-  - Added `SUPABASE_JWT_SECRET` to `/etc/breakside/env`
-  - Restart service
-- [x] Protect write endpoints with auth dependencies
-  - `POST /api/games/{game_id}/sync` → `require_game_team_coach`
-  - `PUT /api/teams/{team_id}` → `require_team_coach`
-  - `PUT/DELETE /api/players/{player_id}` → `require_player_edit_access`
-  - All `DELETE` endpoints protected
-- [x] Allow read endpoints for team members (`require_team_access`)
-- [x] Allow public read for games via share hash (`GET /api/share/{hash}`)
-- [x] Test: Unauthenticated requests return 401 (test_auth.py)
-- [x] Test: Wrong team returns 403 (test_auth.py)
-- [x] Auto-sync polling between browsers (10-second interval)
-- [x] Player/Team attribute changes sync across devices
+<details>
+<summary>✅ Phase 2: Backend Auth Enforcement</summary>
 
-### ✅ Phase 3: Team Membership Management (Complete)
+Protected write endpoints (`sync`, `PUT`, `DELETE`) with role-based auth dependencies. Public read for shared games. Auto-sync polling between browsers.
 
-See [PHASE3_TEAM_MGMT_PLAN.md](PHASE3_TEAM_MGMT_PLAN.md) for full implementation details.
+See `ultistats_server/main.py` auth decorators, `test_auth.py`
+</details>
 
-**Backend:**
-- [x] Storage: `invite_storage.py` with 5-char human-friendly codes
-- [x] API: `POST /api/teams/{team_id}/invites` - Create invite
-  - Coach invites: single-use, 7-day default expiry
-  - Viewer invites: multi-use, 30-day default expiry
-- [x] API: `GET /api/teams/{team_id}/invites` - List team invites
-- [x] API: `GET /api/invites/{code}/info` - Public invite preview
-- [x] API: `POST /api/invites/{code}/redeem` - Redeem invite code
-- [x] API: `DELETE /api/invites/{invite_id}` - Revoke invite
-- [x] API: `GET /api/teams/{team_id}/members` - List team members
-- [x] API: `DELETE /api/teams/{team_id}/members/{user_id}` - Remove member
-- [x] Last-coach protection (cannot remove only coach)
+<details>
+<summary>✅ Phase 3: Team Membership Management</summary>
 
-**Landing Page:**
-- [x] `/join/{code}` route with team preview
-- [x] Sign in / Sign up integration
-- [x] Automatic invite redemption after auth
-- [x] Redirect to PWA after joining
+Invite system (5-char codes, single-use coach / multi-use viewer), landing page join flow, team settings UI with member list, invite management. Last-coach protection.
 
-**PWA:**
-- [x] Team Settings screen (`teams/teamSettings.js`)
-- [x] Member list with remove functionality
-- [x] Invite creation for coach/viewer roles
-- [x] Invite list with copy link and revoke
-- [x] "Join a Team" manual code entry
-- [x] Name field in signup forms (stored as displayName)
-- [x] Clear local data on sign out (prevents data leaking between accounts)
-- [x] PWA install prompt after first authentication
-- [x] Redirect unauthenticated users to landing page
-- [x] Version display on logo tap
+See [PHASE3_TEAM_MGMT_PLAN.md](PHASE3_TEAM_MGMT_PLAN.md), `teams/teamSettings.js`, `ultistats_server/storage/invite_storage.py`
+</details>
 
----
+<details>
+<summary>✅ Phase 4: Game Controller State</summary>
 
-### ✅ Phase 4: Game Controller State (Complete)
+In-memory controller state with thread-safe management, auto-expire (30s), auto-approve handoffs (5s). Role claiming, handoffs, adaptive polling (2s/5s), sleep/wake recovery.
 
-See [PHASE4_CONTROLLER_PLAN.md](PHASE4_CONTROLLER_PLAN.md) for full implementation details.
+See [PHASE4_CONTROLLER_PLAN.md](PHASE4_CONTROLLER_PLAN.md), `game/controllerState.js`, `ultistats_server/storage/controller_storage.py`
+</details>
 
-**Backend:**
-- [x] In-memory controller state storage (`controller_storage.py`)
-  - Thread-safe state management
-  - Auto-expire stale claims (30 seconds without ping)
-  - Auto-approve handoffs (5-second timeout)
-- [x] API: `GET /api/games/{game_id}/controller` - Controller status
-- [x] API: `POST /api/games/{game_id}/claim-active` - Request Active Coach
-- [x] API: `POST /api/games/{game_id}/claim-line` - Request Line Coach
-- [x] API: `POST /api/games/{game_id}/release` - Release role
-- [x] API: `POST /api/games/{game_id}/handoff-response` - Accept/deny
-- [x] API: `POST /api/games/{game_id}/ping` - Keep role alive
-- [x] Comprehensive test suite (22 tests)
+<details>
+<summary>✅ Phase 5: Multi-User Game Sync (Core)</summary>
 
-**Frontend:**
-- [x] Controller state module (`game/controllerState.js`)
-  - Role claiming and handoffs
-  - Polling with adaptive intervals (2s active / 5s idle)
-  - Permission checks (`canEditPlayByPlay`, `canEditLineup`)
-  - Sleep/wake recovery via Page Visibility API
-  - UI stubs for Phase 6
+Cloud-only team/game UI, Active Coach push / Line Coach pull sync, pending line selections sync with timestamp merge, cloud-first team/game selection redesign, sleep/wake session recovery, active game indicators.
 
----
+See `store/sync.js`, `teams/teamSelection.js`, `game/controllerState.js`
+</details>
 
-### ✅ Phase 6: Handoff UI (Complete)
+<details>
+<summary>✅ Phase 6: Handoff UI</summary>
 
-**Role Buttons (Sub-header):**
-- [x] "Play-by-Play" and "Next Line" buttons below header
-- [x] Role holder name displayed under role label
-- [x] Tap to claim/request role
-- [x] Role button display logic fixed (see below)
+Role buttons with claim/request, handoff toast notifications with countdown, auto-assign roles to first coach, role button display logic (green/orange/grey).
 
-**Handoff Request Flow:**
-- [x] Toast notification for requester: "Handoff request sent..."
-  - Duration matches server timeout (10s configurable)
-  - Auto-dismissed when result arrives
-- [x] Toast notification for holder with Accept/Deny buttons
-  - Animated countdown on Accept button (vertical drain)
-  - Swipe-to-dismiss counts as Accept
-  - Auto-accepts on timeout
-- [x] Result notifications:
-  - Requester sees "You are now [role]" (success) or "Handoff denied" (error)
-  - Holder sees "Handoff accepted" or "Handoff denied"
+See `game/controllerState.js`, `ui/panelSystem.js`
+</details>
 
-**Server Integration:**
-- [x] Server provides `expiresInSeconds` for accurate client countdown
-- [x] Client polls for state changes at 2s (active) / 5s (idle)
-- [x] Handoff timeout configurable via `HANDOFF_EXPIRY_SECONDS` (server)
-- [x] Auto-assign roles to first coach who enters game
+<details>
+<summary>✅ Phase 6b: In-Game UI Redesign (Panels)</summary>
 
-**Role Button Display (Fixed):**
-- Server auto-assigns both roles to first coach who pings a game
-- Client mirrors server state exactly:
-  - Green / "You" — only if `roleHolder.userId === myUserId`
-  - Orange / `<name>` — if someone else holds the role
-  - Grey / "Available" — if role is truly unclaimed (after timeout)
-- Role timeout: 30s without ping → role auto-releases (becomes claimable)
+Replaced screen-based navigation with panel-based layout. All 6 panels implemented:
 
-**Future optimization:**
-- [ ] When only one coach is on the team, OR only one coach is actively polling:
-  - Hide role buttons entirely (more room for panels)
-  - That coach has full access regardless of server state
+1. **Header**: Hamburger menu, score display with team identity, game/point timer, cap countdown
+2. **Role Buttons**: Claim/handoff buttons for Active Coach and Line Coach
+3. **Play-by-Play**: Responsive Simple Mode layout (5 breakpoints), Key Play dialog, Sub Players modal, Pull dialog auto-popup, Game Events modal
+4. **Select Next Line**: Player selection table, O/D toggle, Start Point button with feedback colors, role-based access, conflict warning toast, multi-device sync
+5. **Game Events**: Modal with Timeout, Half Time, Switch Sides, End Game
+6. **Game Log**: Scrollable event history, role-based default states
+
+Panel mechanics: drag-to-resize with shoving, chevron toggle, double-tap full-screen, localStorage persistence.
+
+See `game/gameScreen.js`, `ui/panelSystem.js`, `ui/panelSystem.css`
+</details>
 
 ---
 
 ## Next Up
 
-### 🔄 Phase 6b: In-Game UI Redesign
-
-Replace current screen-based navigation with a **panel-based layout** for all in-game functionality.
-
-**Implementation Strategy:**
-- Create new `game/gameScreen.js` with full panel container
-- Stub all panels with placeholder content + "Use Old Screen" fallback buttons
-- Implement panels one-by-one, removing fallback buttons as each is completed
-- Mobile-first design throughout
-- This is a new major version (2.0) — no backward compatibility required during development
-
----
-
-#### Panel Layout (top to bottom)
-
-**1. Header Panel** ✅ (always visible, single line)
-- [x] Hamburger menu (left) with dropdown:
-  - **Leave Game**: Exit without ending, releases roles, returns to team list
-  - **End Game**: Available to Active or Line Coach (with confirmation)
-  - **About / Version**: Shows connection info, current version, and update button
-- [x] Team logo (tap for version display)
-- [x] Score display with team identity (icon OR symbol, tap to toggle)
-- [x] Timer display with toggle button
-  - **Game clock**: Total elapsed time, or countdown to cap if `roundEndTime` is set
-    - Turns red and counts negative when cap reached
-    - Cannot be paused
-  - **Point timer**: Elapsed time during point (with urgency colors)
-    - Pause/resume button for injuries, discussions, etc.
-  - Small label below digits: "game" or "point"
-- [x] New game fields: `gameDurationMinutes` (default 50), `roundEndTime` (optional override)
-
-**2. Role Buttons Panel** (coaches only, viewers don't see this)
-- [x] "Play-by-Play" and "Next Line" role claim buttons
-- [x] Same styling as current sub-header implementation
-- [x] Fix display logic per "Role Button Display Fix" section above
-- [ ] (Future) Hide panel entirely when single coach — defer until after handoff debugging
-
-**3. "Play-by-Play" Panel** ✅ (resizable)
-- [x] Responsive Simple Mode layout:
-  - **Minimum size**: Single row with "We Score", "They Score", "Key Play", `...` button
-  - **Maximum size**: Full Simple Mode layout with all buttons visible
-  - `...` menu reveals: Undo, Events
-- [x] Panel states:
-  - **Greyed out/disabled**: User is not Active Coach
-  - **Score buttons disabled**: When between points (no point in progress)
-  - **Auto-minimize**: When point ends
-  - **Auto-maximize**: When point starts, if user is Active Coach
-- [x] Key Play dialog still available for detailed event entry
-- [x] **Sub Players** button opens modal dialog for mid-point injury substitutions
-  - One-off player selection table (similar to line selection)
-  - Tracks substitutedOutPlayers on Point for accurate points-played counting
-  - Both outgoing and incoming players get credit for playing the point
-- [x] Pull Dialog auto-popup for Active Coach at start of defensive points
-  - Triggered in `startNextPoint()` when `startPointOn === 'defense'`
-- [x] Offense/Defense possession screens deprecated (keep code, remove from main flow)
-  - Pull dialog, continue game, and proceed-to-defense flows now stay on panel UI when active
-
-**4. "Select Next Line" Panel** ✅ (resizable)
-- [x] Replaces the separate Before Point Screen concept
-- [x] Panel content:
-  - Player selection table (sorted roster, time/points columns)
-  - **"Start Point (Offense/Defense)"** button with feedback colors
-- [x] Panel states:
-  - **Maximized**: Full player selection table visible
-  - **Minimized**: Title bar with selected player names subtitle
-- [x] Auto-behaviors:
-  - **Active Coach**: Auto-minimize when point starts, auto-maximize when point ends
-  - **Line Coach**: Can edit during points (their main job)
-  - **Both roles held**: Full access
-- [x] **O/D toggle button**: Cycles between O/D, O, and D line modes
-  - Auto-selects appropriate line at point end based on who scored
-  - O/D line prioritized if modified during the point
-  - Single-line workflow: stays on O/D if O/D lines never modified
-- [ ] **O/D split panels** (future enhancement):
-  - Creates second line selection panel
-  - Retitles to "Select Next O Line" and "Select Next D Line"
-- [x] **Between points**: Both Active Coach and Line Coach can edit lineup
-- [x] **During point**: Only Line Coach can edit (preparing next lineup)
-- [x] Conflict warning toast when both coaches edit simultaneously
-  - Tracks local edit timestamps per line type (O, D, O/D)
-  - Warns when remote edit within 5 seconds of same line type
-  - Only warns once per point to avoid spam
-
-**5. "Game Events" Modal** ✅ (accessed from Play-by-Play panel)
-- [x] Triggered by "Events" button in Play-by-Play action row
-- [x] Modal popup with buttons: Timeout, Half Time, Switch Sides, End Game
-- [x] **Timeout**: Available during AND between points
-- [x] **End Game, Half Time, Switch Sides**: Only available between points
-- [x] Active Coach only (buttons disabled if not Active Coach)
-- [x] Half Time / Switch Sides log events (no special behavior)
-
-**6. "Game Log" Panel** ✅ (resizable, bottom of stack)
-- [x] Game status: Team names, opponent, current score
-- [x] Game event log: Large font, scrollable, full event history
-- [x] Gets remaining vertical space after other panels
-- [x] Default states:
-  - **Maximized**: For Viewers (only panel they see besides header) — deferred to Phase 7 (Viewer Experience)
-  - **Maximized**: For Coaches without Active or Line Coach role
-  - **Minimized**: For Active/Line Coach (but always accessible)
-
----
-
-#### Panel Mechanics
-
-- [x] **Resize**: Drag entire title bar up/down (draggable panels only)
-  - "Shoving" behavior: dragging into another panel pushes it too
-  - Bottom panel clamped to screen edge
-- [x] **Chevron button**: Toggle individual panel minimize/expand
-- [x] **Double-tap title bar**: Full-screen maximize
-  - Minimizes all other resizable panels
-  - Double-tap again restores all panels to previous state
-  - Smooth 0.25s animated transitions
-- [x] **Space allocation**: 
-  - Game Log panel (bottom) gets remaining space, snaps to bottom when minimized
-- [x] **Persistence**: Panel sizes saved to localStorage (per-client)
-
----
-
-#### Role-Based Behavior Summary
-
-| Role | Play-by-Play | Select Next Line | Game Events Modal | Game Log |
-|------|--------------|------------------|-------------------|----------|
-| **Active Coach** | Full access | Edit between points | Full access | Available |
-| **Line Coach** | View only | Edit anytime | View only | Available |
-| **Both roles** | Full access | Edit anytime | Full access | Available |
-| **Coach (no role)** | Disabled | Disabled | Disabled | Maximized |
-| **Viewer** | Hidden | Hidden | Hidden | Maximized |
-
----
-
----
-
-#### Implementation Order
-
-**Step 1: Panel Container Foundation** ✅
-- [x] Create `game/gameScreen.js` with panel container system
-- [x] Create `ui/panelSystem.js` for resize/min-max logic
-- [x] CSS for mobile-first panel stack with drag handles
-- [x] Stub panels with placeholder content (4 panels: Header, Role Buttons, Play-by-Play, Select Line, Game Log)
-- [x] Each stub has "Use Old Screen →" button linking to legacy screen
-- [x] Wire up as new entry point when game starts
-- [x] Draggable title bars for panel resizing (full title bar is drag surface)
-- [x] Height-based minimize/maximize (no separate CSS states)
-- [x] Game Log panel snaps to bottom when minimized
-- [x] Chevron button toggles individual panel min/max
-- [x] Double-tap for full-screen maximize with restore
-- [x] Smooth animated transitions (0.25s)
-- [x] Compact title bars for more content space
-- [x] Hide legacy screens when panel UI is active
-
-**Step 2: Header Panel** ✅
-- [x] Port existing header (hamburger, logo, score)
-- [x] Smart score display with team identity:
-  - New optional Team fields: `teamSymbol` (4-char max), `iconUrl` (data URL to PNG)
-  - Display shows icon OR symbol (tap to toggle between them)
-  - Fallback priority: icon > symbol > short name (≤6 chars) > "Us"/"Them"
-  - Opponent uses same large font as team symbol
-- [x] Add timer toggle (game clock ↔ point timer)
-- [x] Add pause/resume for point timer
-- [x] New game fields: `gameDurationMinutes`, `roundEndTime`
-- [x] Red negative countdown when cap time exceeded
-- [x] Logo tap shows version/build for 3 seconds
-- [x] **Team Settings UI**: Team Identity section for setting symbol and icon
-  - Server-side image proxy (`POST /api/proxy-image`) to bypass CORS
-  - Fetches, resizes to 256×256 max, returns as base64 data URL
-  - Icon cached locally for offline use
-
-**Step 3: Role Buttons Panel** ✅
-- [x] Port existing role buttons from sub-header
-- [x] Ensure handoff flow still works
-- [x] Hide legacy role buttons when panel UI is active
-- [x] Fix display logic (first coach auto-assigned, mirror server state)
-- [ ] (Future) Hide panel for single-coach case
-
-**Step 4: Game Log Panel** ✅
-- [x] Game status display (teams, score)
-- [x] Large scrollable event log
-- [x] Remove "Use Old Screen" button when complete (no stub, real content)
-
-**Step 5: Play-by-Play Panel** ✅
-- [x] Responsive Simple Mode layout
-  - Full (>500px): Large square buttons, wrapped text, evenly spaced vertically
-  - Expanded (350-500px): Wide horizontal buttons stacked vertically
-  - Medium-tall (200-350px): Two rows, tall buttons with wrapped text
-  - Medium (120-200px): Two rows, shorter buttons with single-line text
-  - Compact (<120px): Single row with `...` more button
-- [x] We Score / They Score / Key Play buttons (icons hidden, text-only)
-- [x] `...` more button expands panel to show action row
-- [x] **Game Events modal** (End Game, Timeout, Half Time, Switch Sides)
-  - Triggered by Events button in action row
-  - **Timeout**: available during AND between points
-  - **End Game, Half Time, Switch Sides**: only between points
-  - Active Coach only
-- [x] Wire up score buttons to existing scoring logic
-- [x] Key Play dialog integration
-- [x] Undo functionality
-- [x] Auto-resize on point start/end
-- [x] **Point-aware button states**:
-  - Score buttons (We/They Score, Key Play) disabled between points
-  - Undo, Events, More enabled anytime if Active Coach
-- [x] Sub Players modal for mid-point injury subs
-- [x] Pull dialog auto-popup (defensive point start)
-- [x] Remove "Use Old Screen" button (panels have full content, no stubs used)
-
-**Step 6: Select Next Line Panel** ✅
-- [x] Player selection table (ported from Before Point Screen)
-  - Sorted roster (played last point first)
-  - Gender color coding
-  - Time column with auto-update during point
-  - Point participation columns with score headers
-- [x] Start Point (Offense/Defense) button
-  - Disabled during point with "Point in progress" text
-  - Feedback colors: green (ok), red (wrong count), orange (wrong gender ratio)
-  - Desaturated feedback colors when point in progress
-- [x] Role-based enable/disable (Active vs Line Coach)
-  - Between points: Both can edit
-  - During point: Only Line Coach can edit
-  - View-only overlay for non-permitted users
-- [x] O/D toggle button (cycles O/D → O → D)
-  - Saves/loads separate line selections
-  - Auto-selects appropriate line at point end
-  - Single-line workflow supported (stays on O/D if O/D lines never modified)
-  - Timestamp only updated on actual player changes, not toggle view
-  - activeType is local-only (each user controls own view)
-- [x] Auto-resize behaviors (maximize on point end, minimize on point start for Active Coach)
-- [x] Multi-device sync: Line selections sync between coaches (timestamp merge)
-- [x] Minimize to title bar showing selected player names (compact layout)
-  - Subtitle shows "O/D: Alice, Bob, Carol..." when panel is minimized
-  - Updates automatically when players or line type changes
-- [x] Conflict warning toast when both coaches edit
-- [x] Remove "Use Old Screen" button (panels have full content, no stubs used)
-
-**Step 7: Cleanup** (Legacy Screen Removal)
+### 🔄 Phase 6b Step 7: Legacy Cleanup
 
 **Replace navigation pattern:**
 - [ ] All `showScreen('beforePointScreen')` during active games → `enterGameScreen()` or panel state update
@@ -403,7 +101,7 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 
 **Testing checklist:**
 - [ ] Start new game → enters panel UI
-- [ ] Continue existing game → enters panel UI  
+- [ ] Continue existing game → enters panel UI
 - [ ] Point end → stays in panel UI, updates state
 - [ ] Leave Game (hamburger menu) → returns to team list
 - [ ] End Game → goes to summary screen
@@ -416,67 +114,20 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 
 ---
 
-#### Future: O/D Line Selection (Phase 7+)
-- [ ] O/D button splits "Select Next Line" into two panels
-- [ ] "Select Next O Line" — prepare offensive lineup
-- [ ] "Select Next D Line" — prepare defensive lineup
-- [ ] "Start Point" button appears in appropriate panel based on possession
+### 🔄 Phase 5: Remaining Optimizations
 
-### 🔄 Phase 5: Multi-User Game Sync (In Progress)
-
-**Game State Synchronization:**
-- [x] Cloud-only team/game UI (local storage only for offline queue)
-- [x] Active Coach pushes game data via `syncGameToCloud()`
-- [x] Line Coach/Viewers pull full game state via `refreshGameStateFromCloud()`
-  - Scores, points, events refresh every 3 seconds
-  - UI auto-updates (game log, score display, player stats)
-- [x] Pending line selections sync between coaches (`pendingNextLine`)
-  - Timestamp-based merge (newer wins)
-  - `activeType` (O/D toggle) is local-only per user
-- [ ] **Optimization**: API poll endpoint with version check (avoid fetching unchanged data)
-- [ ] **Optimization**: Role-based polling intervals (Active Coach: push-only, Viewer: 5s)
-
-**Conflict Resolution:**
-- [x] Line selection: timestamp-based merge (newer wins)
-- [x] Game state: Active Coach is authoritative source
+- [ ] API poll endpoint with version check (avoid fetching unchanged data)
+- [ ] Role-based polling intervals (Active Coach: push-only, Viewer: 5s)
 - [ ] Server-side version tracking for optimized polling
 - [ ] Conflict notification toast: "Game updated by another coach"
-
-**Auto-Join Active Games:**
-- [x] Active game indicators on team selection screen (pulsing green dot, coach names badge)
-- [x] "Join" button on in-progress games in team selection screen
 - [ ] API: `GET /api/teams/{team_id}/active-game` - Get currently active game for a team
   - Returns game ID and basic info if a game is in progress
   - "In progress" = has points, no gameEndTimestamp, started within last 6 hours
-- [ ] PWA: On team roster screen, show "Join Active Game" button if one exists
-- [ ] PWA: Auto-join prompt when another coach starts/resumes a game
+- [ ] Auto-join prompt when another coach starts/resumes a game
   - Toast notification: "[Coach] started a game vs [Opponent]. Join?"
   - Tap to enter game screen for that game
-- [ ] Consider WebSocket for instant notifications (future enhancement)
 
-**Improve Game Discovery UI:**
-- [x] Cloud-first team/game selection screen redesign (`teams/teamSelection.js`)
-  - Two-line team tiles: top row (icon, name, delete), bottom row (coach badge, game count, roster)
-  - Two-line game items: terse date + opponent + score, "Join" button + delete
-  - Active game indicator (pulsing green dot) on team tile and game badge
-  - "+ New Game" button in expanded team section for coaches
-  - Unified "Refresh" button (push + pull + re-render, replaces separate Sync/Pull)
-  - 10-second silent auto-refresh with expand/collapse state preservation
-  - Connection info toast (tap Online status to see user + server)
-  - Removed legacy "Load Team" file import and server URL controls
-- [x] Seamless sleep/wake game session recovery (`game/controllerState.js`)
-  - Page Visibility API handler for phone sleep, app switch, phone calls
-  - Immediate ping + role re-claim on wake (transparent to user)
-  - Detects game ended by another coach → toast + return to team list
-  - Detects stale game (6+ hours idle) → prompt to return to team list
-  - Restarts polling intervals and game state refresh on wake
-- [ ] API: `GET /api/teams/{team_id}/active-game` - Get currently active game for a team
-  - Returns game ID and basic info if a game is in progress
-  - "In progress" = has points, no gameEndTimestamp, started within last 6 hours
-- [ ] PWA: Auto-join prompt when another coach starts/resumes a game
-  - Toast notification: "[Coach] started a game vs [Opponent]. Join?"
-  - Tap to enter game screen for that game
-- [ ] Consider WebSocket for instant notifications (future enhancement)
+---
 
 ### 👁️ Phase 7: Viewer Experience
 
@@ -490,21 +141,13 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 
 ---
 
-## New Items (Backlog)
+## Backlog
 
-- [ ] **Feature**: When multiple users are signed into a game, and the Active Coach ends the game, all coaches and viewers should go to the game summary screen. *(Partially done: wake recovery detects ended game and returns to team list. Still needed: real-time notification while app is foregrounded — the 3-second game state refresh should detect `gameEndTimestamp` and navigate away.)*
-- [x] **Bug**: The game summary screen reports a score of 0-0 even after several points have been played. *(Fixed: `deserializeGame()` now restores `game.scores` from saved data.)*
-- [x] **PWA**: Improved update detection and manual update option
-  - Service worker checks for updates on page load and every 5 minutes
-  - Auto-reloads when new version is activated
-  - Tapping Online status shows current version and "Update Now" button if update available
-  - S3 deployment sets no-cache headers on service-worker.js
-- [x] **UI**: Start Point button in Play-by-Play panel for Active Coach between points
-  - Appears at top of panel (above score buttons) whenever between points
-  - Shows same feedback colors (green/red/orange) based on player count and gender ratio
-  - Shares logic with Select Line panel's Start Point button for consistency
-- [ ] **To verify**: Run a test with both a D line and an O line selected; verify which line is actually used when starting a D or O point. Define desired behavior when e.g. D line is selected but coach is viewing/editing O line (or vice versa), and consider UI to indicate what will happen to avoid surprise.
-- [ ] **Feature**: Checkbox in the header row of the select-next-player table to uncheck all players.
+- [ ] **Feature**: When Active Coach ends game, all coaches/viewers navigate to game summary. *(Partially done: wake recovery detects ended game. Still needed: real-time detection while foregrounded — 3-second game state refresh should detect `gameEndTimestamp` and navigate away.)*
+- [ ] **To verify**: Test D line vs O line behavior with simultaneous selection. Define desired behavior when e.g. D line is selected but coach is viewing/editing O line.
+- [ ] **Feature**: Checkbox in select-next-player table header to uncheck all players.
+- [ ] Hide role buttons when only one coach on team or only one coach polling (more room for panels).
+- [ ] O/D split panels: O/D button splits "Select Next Line" into two separate panels ("Select Next O Line" / "Select Next D Line").
 
 ---
 
