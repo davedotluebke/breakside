@@ -3106,14 +3106,17 @@ function updateSelectLineSubtitle() {
     const lineKey = activeType + 'Line';
     const selectedNames = pendingLine[lineKey] || [];
     
+    // Update panel title based on line type: "Next D Line", "Next O Line", or "Next Line"
+    const titleLabels = { o: 'Next O Line', d: 'Next D Line', od: 'Next Line' };
+    const panelTitle = titleLabels[activeType] || 'Next Line';
+    if (typeof setPanelTitle === 'function') {
+        setPanelTitle('selectLine', panelTitle);
+    }
+    
     if (selectedNames.length === 0) {
         setPanelSubtitle('selectLine', '(no players selected)');
         return;
     }
-    
-    // Build a compact display: "O: Alice, Bob, Carol..." or "D: Dave, Eve..."
-    const typeLabels = { o: 'O', d: 'D', od: 'O/D' };
-    const typeLabel = typeLabels[activeType] || 'O/D';
     
     // Get first names only for compactness
     const firstNames = selectedNames.map(name => name.split(' ')[0]);
@@ -3121,9 +3124,8 @@ function updateSelectLineSubtitle() {
     // Join with commas - CSS text-overflow: ellipsis handles truncation based on actual width
     const playerList = firstNames.join(', ');
     
-    // Format: "<strong>O/D</strong>: Alice, Bob, Carol..." with bold prefix
-    const subtitle = `<strong>${typeLabel}</strong>: ${playerList}`;
-    setPanelSubtitle('selectLine', subtitle, true);
+    // Subtitle is just the player names (type is now in the title)
+    setPanelSubtitle('selectLine', playerList);
 }
 
 /**
