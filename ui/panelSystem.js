@@ -916,11 +916,13 @@ function createPanelTitleBar(options) {
     // Title with optional inline grip icon for draggable panels
     const titleEl = document.createElement('span');
     titleEl.className = 'panel-title';
+    titleEl.id = `panel-${panelId}-title`;
     if (showDragHandle) {
         // Include grip icon inline with title for draggable panels
-        titleEl.innerHTML = `<i class="fas fa-grip-vertical panel-grip-icon"></i>${title}`;
+        // Store the title text in a data attribute for dynamic updates
+        titleEl.innerHTML = `<i class="fas fa-grip-vertical panel-grip-icon"></i><span class="panel-title-text">${title}</span>`;
     } else {
-        titleEl.textContent = title;
+        titleEl.innerHTML = `<span class="panel-title-text">${title}</span>`;
     }
     titleBar.appendChild(titleEl);
     
@@ -1236,6 +1238,21 @@ function setPanelSubtitle(panelId, text, useHtml = false) {
 }
 
 /**
+ * Set a panel's title text dynamically
+ * @param {string} panelId - Panel identifier
+ * @param {string} text - New title text
+ */
+function setPanelTitle(panelId, text) {
+    const titleEl = document.getElementById(`panel-${panelId}-title`);
+    if (titleEl) {
+        const titleText = titleEl.querySelector('.panel-title-text');
+        if (titleText) {
+            titleText.textContent = text || '';
+        }
+    }
+}
+
+/**
  * Reset all panel heights to defaults
  * Clears saved heights and removes explicit height styles
  */
@@ -1320,6 +1337,7 @@ window.minimizePanel = minimizePanel;
 window.maximizePanel = maximizePanel;
 window.setPanelVisible = setPanelVisible;
 window.setPanelSubtitle = setPanelSubtitle;
+window.setPanelTitle = setPanelTitle;
 window.resetPanelHeights = resetPanelHeights;
 window.resetAllPanelStates = resetAllPanelStates;
 window.updateExpandingPanel = updateExpandingPanel;
