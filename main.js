@@ -56,6 +56,9 @@ if ('serviceWorker' in navigator) {
             .then(reg => {
                 console.log('Service Worker: Registered');
                 
+                // Store registration globally for manual update checks
+                window.swRegistration = reg;
+                
                 // Check for updates immediately
                 reg.update().catch(err => console.log('SW update check failed:', err));
                 
@@ -81,6 +84,65 @@ if ('serviceWorker' in navigator) {
             .catch(err => console.log(`Service Worker Error: ${err}`));
     });
 }
+
+/**
+ * Check for app updates by fetching the latest version.json from server
+ * @returns {Promise<{hasUpdate: boolean, currentBuild: string, latestBuild: string}>}
+ */
+async function checkForAppUpdate() {
+    try {
+        // Fetch with cache-busting to get the latest version
+        const response = await fetch('./version.json?t=' + Date.now());
+        if (!response.ok) {
+            return { hasUpdate: false, error: 'Failed to fetch version' };
+        }
+        const serverVersion = await response.json();
+        
+        // Get current cached version from the service worker's cache name
+        // The service worker sets cacheName = 'build-XXX'
+        const currentBuild = window.APP_BUILD || 'unknown';
+        const latestBuild = serverVersion.build || 'unknown';
+        
+        return {
+            hasUpdate: currentBuild !== latestBuild && latestBuild !== 'unknown',
+            currentBuild,
+            latestBuild,
+            version: serverVersion.version
+        };
+    } catch (error) {
+        console.error('Error checking for updates:', error);
+        return { hasUpdate: false, error: error.message };
+    }
+}
+
+/**
+ * Force an app update by triggering service worker update and reload
+ */
+async function forceAppUpdate() {
+    if (!window.swRegistration) {
+        alert('Service worker not available. Try refreshing the page.');
+        return;
+    }
+    
+    try {
+        // Force the service worker to check for updates
+        await window.swRegistration.update();
+        
+        // Clear all caches
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
+        
+        // Reload the page to get the new version
+        window.location.reload(true);
+    } catch (error) {
+        console.error('Error forcing update:', error);
+        alert('Update failed: ' + error.message);
+    }
+}
+
+// Export for use in other modules
+window.checkForAppUpdate = checkForAppUpdate;
+window.forceAppUpdate = forceAppUpdate;
 
 /******************************************************************************/
 /********************************** Auth Initialization ***********************/
@@ -333,6 +395,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.breakside?.loginScreen?.initializeLoginScreen) {
         window.breakside.loginScreen.initializeLoginScreen();
     }
+    
+    // Load current app version
+    fetch('./version.json')
+        .then(r => r.json())
+        .then(v => {
+            window.APP_VERSION = v.version || 'unknown';
+            window.APP_BUILD = v.build || 'unknown';
+            console.log(`App version: ${window.APP_VERSION} (Build ${window.APP_BUILD})`);
+        })
+        .catch(err => console.log('Could not load version.json:', err));
     
     // Set initial header state based on starting screen
     const headerElement = document.querySelector('header');

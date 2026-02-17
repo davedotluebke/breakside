@@ -1147,17 +1147,54 @@ async function handleSignOut() {
 /**
  * Show connection info toast when tapping the Online/Offline status.
  * Uses the existing toast system (showControllerToast) for consistent styling.
+ * Includes version info and update check.
  */
-function showConnectionInfo() {
+async function showConnectionInfo() {
     const userEmail = window.breakside?.auth?.getCurrentUser?.()?.email || 'Not signed in';
     const serverUrl = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'Not configured';
     const isOnline = navigator.onLine;
     
+    // Get current version
+    const version = window.APP_VERSION || '?';
+    const build = window.APP_BUILD || '?';
+    
+    // Start with basic info, update later if we find an update available
+    let versionLine = `Version: ${version} (Build ${build})`;
+    let updateButton = '';
+    
+    // Check for updates if online
+    if (isOnline && typeof checkForAppUpdate === 'function') {
+        try {
+            const updateInfo = await checkForAppUpdate();
+            if (updateInfo.hasUpdate) {
+                versionLine = `Version: ${version} (Build ${build}) → <b>${updateInfo.latestBuild} available</b>`;
+                updateButton = `<br><button onclick="confirmAppUpdate()" style="margin-top:6px;padding:4px 12px;background:#28a745;color:white;border:none;border-radius:4px;cursor:pointer;">Update Now</button>`;
+            }
+        } catch (e) {
+            console.log('Update check failed:', e);
+        }
+    }
+    
     const message = `${isOnline ? 'Online' : 'Offline'}<br>` +
-        `<span style="font-size:0.9em;">User: ${userEmail}<br>Server: ${serverUrl}</span>`;
+        `<span style="font-size:0.9em;">${versionLine}<br>User: ${userEmail}<br>Server: ${serverUrl}${updateButton}</span>`;
     
     if (typeof showControllerToast === 'function') {
-        showControllerToast(message, 'info', 3000);
+        // Longer duration if update is available
+        showControllerToast(message, 'info', updateButton ? 8000 : 4000);
+    }
+}
+
+/**
+ * Show confirmation dialog and force app update
+ */
+function confirmAppUpdate() {
+    if (confirm('Update the app now? The page will reload.')) {
+        if (typeof forceAppUpdate === 'function') {
+            forceAppUpdate();
+        } else {
+            // Fallback: just reload with cache clear
+            window.location.reload(true);
+        }
     }
 }
 
@@ -1165,6 +1202,7 @@ function showConnectionInfo() {
 window.handleSignOut = handleSignOut;
 window.doFullRefresh = doFullRefresh;
 window.showConnectionInfo = showConnectionInfo;
+window.confirmAppUpdate = confirmAppUpdate;
 
 // Auto-refresh every 10 seconds when on the team selection screen
 let _autoRefreshInterval = null;
