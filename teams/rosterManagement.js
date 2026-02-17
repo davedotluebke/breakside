@@ -461,6 +461,19 @@ function validateJerseyNumber(input) {
     if (continueGameBtn) {
         continueGameBtn.addEventListener('click', () => {
             if (currentTeam.games.length > 0) {
+                // Phase 6b: Use panel-based game screen if enabled
+                if (window.useNewGameScreen && typeof enterGameScreen === 'function') {
+                    enterGameScreen();
+                    if (isPointInProgress() === false) {
+                        if (typeof transitionToBetweenPoints === 'function') {
+                            transitionToBetweenPoints();
+                        }
+                    }
+                    continueGameBtn.classList.add('inactive');
+                    return;
+                }
+                
+                // Legacy flow
                 if (isPointInProgress() === false) {
                     if (typeof updateActivePlayersList === 'function') {
                         updateActivePlayersList();

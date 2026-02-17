@@ -161,6 +161,14 @@ function startNextPoint() {
 
 function proceedToDefenseScreen() {
     console.log('proceedToDefenseScreen() called, isSimpleMode:', window.isSimpleMode, 'possessions.length:', currentPoint ? currentPoint.possessions.length : 'no currentPoint');
+    
+    // Phase 6b: If panel UI is active, don't navigate to legacy screens
+    if (window.useNewGameScreen && typeof isGameScreenVisible === 'function' && isGameScreenVisible()) {
+        console.log('Panel UI active, staying on game screen');
+        return;
+    }
+    
+    // Legacy flow
     if (window.isSimpleMode) {
         showScreen('simpleModeScreen');
         // Start timing immediately in simple mode

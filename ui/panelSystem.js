@@ -1148,33 +1148,38 @@ function isGameScreenVisible() {
 
 /**
  * Update panels based on user's controller role
- * @param {string|null} role - 'activeCoach', 'lineCoach', or null
+ * Uses the isActiveCoach() and isLineCoach() functions directly for accurate role checking.
  */
-function updatePanelsForRole(role) {
-    const isActiveCoach = role === 'activeCoach';
-    const isLineCoach = role === 'lineCoach';
-    const hasRole = isActiveCoach || isLineCoach;
+function updatePanelsForRole() {
+    // Use the authoritative boolean role checks
+    const hasActiveCoach = typeof window.isActiveCoach === 'function' && window.isActiveCoach();
+    const hasLineCoach = typeof window.isLineCoach === 'function' && window.isLineCoach();
+    const hasAnyRole = hasActiveCoach || hasLineCoach;
     
-    // Role buttons panel - hide for viewers
-    const isViewer = typeof getControllerState === 'function' && 
-                     !getControllerState().activeCoach && 
-                     !getControllerState().lineCoach;
     // For now, show role buttons for all coaches
+    // TODO: Hide for team viewers when viewer access is implemented
     setPanelVisible('roleButtons', true);
     
-    // Play-by-Play panel disabled if not Active Coach
+    // Play-by-Play panel disabled if not Active Coach (but has some other role)
     const playByPlayPanel = getPanelElement('playByPlay');
     if (playByPlayPanel) {
-        playByPlayPanel.classList.toggle('disabled', !isActiveCoach && hasRole);
+        // Disable if user has Line Coach role but NOT Active Coach
+        playByPlayPanel.classList.toggle('disabled', !hasActiveCoach && hasLineCoach);
     }
     
-    // Select Line panel - Line Coach keeps it open during points
-    // (This auto-behavior will be implemented in Step 7)
-    
-    // Follow panel - maximized for viewers or coaches without roles
-    if (!hasRole) {
-        if (!isPanelMinimized('follow')) {
+    // Game Log (Follow) panel default states based on role:
+    // - Maximized: For coaches without Active or Line Coach role
+    // - Minimized: For Active/Line Coach (but always accessible)
+    // This only applies when role changes, not during normal panel interactions
+    if (!hasAnyRole) {
+        // No controller role - maximize Game Log panel
+        if (isPanelMinimized('follow')) {
             maximizePanel('follow', false);
+        }
+    } else {
+        // Has a controller role - minimize Game Log panel to make room for others
+        if (!isPanelMinimized('follow')) {
+            minimizePanel('follow');
         }
     }
 }
@@ -1184,20 +1189,20 @@ function updatePanelsForRole(role) {
  * @param {boolean} duringPoint - Whether a point is currently in progress
  */
 function updatePanelsForGameState(duringPoint) {
-    const role = typeof getMyControllerRole === 'function' ? getMyControllerRole() : null;
-    const isActiveCoach = role === 'activeCoach';
+    // Use the authoritative boolean role check
+    const hasActiveCoach = typeof window.isActiveCoach === 'function' && window.isActiveCoach();
     
     // Play-by-Play panel
-        if (duringPoint && isActiveCoach) {
-            // Auto-maximize when point starts, if Active Coach
-            maximizePanel('playByPlay', false);
-        } else if (!duringPoint) {
-            // Auto-minimize when point ends
-            minimizePanel('playByPlay');
+    if (duringPoint && hasActiveCoach) {
+        // Auto-maximize when point starts, if Active Coach
+        maximizePanel('playByPlay', false);
+    } else if (!duringPoint) {
+        // Auto-minimize when point ends
+        minimizePanel('playByPlay');
     }
     
     // Select Line panel
-    if (isActiveCoach) {
+    if (hasActiveCoach) {
         if (duringPoint) {
             // Auto-minimize when point starts for Active Coach
             minimizePanel('selectLine');

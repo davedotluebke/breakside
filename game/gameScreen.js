@@ -1356,11 +1356,9 @@ function canEditPlayByPlayPanel() {
     if (typeof window.canEditPlayByPlay === 'function') {
         return window.canEditPlayByPlay();
     }
-    // Fallback: check if we have Active Coach role
-    if (typeof getMyControllerRole === 'function') {
-        const role = getMyControllerRole();
-        // Note: role could be 'activeCoach', 'lineCoach', or 'both'
-        return role === 'activeCoach' || role === 'both';
+    // Fallback: check if we have Active Coach role using the boolean flag
+    if (typeof window.isActiveCoach === 'function') {
+        return window.isActiveCoach();
     }
     // If controller system not available, allow (offline mode)
     return true;
@@ -3658,7 +3656,7 @@ function enterGameScreen() {
     if (typeof getControllerState === 'function') {
         const state = getControllerState();
         updateGameScreenRoleButtons(state);
-        updatePanelsForRole(state.myRole);
+        updatePanelsForRole();
     }
     
     // Update Play-by-Play panel state (based on role only)
@@ -3801,7 +3799,7 @@ window.updateControllerUI = function(state, previousState) {
     // Update game screen role buttons
     if (isGameScreenVisible()) {
         updateGameScreenRoleButtons(state);
-        updatePanelsForRole(state.myRole);
+        updatePanelsForRole();
         // Update Select Line panel permissions when roles change
         updateSelectLinePanelState();
         
