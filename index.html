@@ -154,13 +154,6 @@
 
     <header class="header-full">
         <div class="header-content">
-            <div class="simple-mode-toggle">
-                <label class="switch">
-                    <input type="checkbox" id="simpleModeToggle" checked>
-                    <span class="slider round"></span>
-                </label>
-                <span class="toggle-label">Simple</span>
-            </div>
             <div class="logo-container" id="logoContainer">
                 <img src="images/logo.disc.only.png" alt="Breakside Logo" id="headerLogo">
                 <a href="#" id="feedbackLink" class="feedback-text">Give Feedback</a>
@@ -429,121 +422,80 @@
         </div>
     </div>
 
-    <!-- Simple Mode Screen -->
-    <section id="simpleModeScreen" style="display: none;" class="in-game-content">
-        <div class="simple-mode-content">
-            <h2>Simple Mode</h2>
-            <div class="simple-mode-container">
-                <button id="weScoreBtn" class="large-action-btn">We Score</button>
-                <button id="theyScoreBtn" class="large-action-btn">They Score</button>
-                <button id="keyPlayBtn" class="secondary-action-btn">Key Play</button>
-                <div class="point-clock-container">
-                    <div class="point-clock">
-                        <span id="pointTimer">0:00</span>
+    <!-- Score Attribution Dialog -->
+    <div id="scoreAttributionDialog" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Score Attribution</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="score-attribution-container">
+                <div class="score-column">
+                    <div class="score-column-header">Threw<br>Score</div>
+                    <div id="throwerButtons" class="player-buttons">
+                        <!-- Player buttons will be dynamically added here -->
                     </div>
-                    <button id="pauseResumeBtn" class="pause-resume-btn">
-                        <i class="fas fa-pause"></i>
-                        <span class="pause-resume-text">Pause</span>
-                    </button>
                 </div>
-                <button id="chooseNextLineBtn" class="secondary-action-btn">Choose next line...</button>
+                <div class="score-column">
+                    <div class="score-column-header">Caught<br>Score</div>
+                    <div id="receiverButtons" class="player-buttons">
+                        <!-- Player buttons will be dynamically added here -->
+                    </div>
+                </div>
+            </div>
+            <div class="throw-flags-container">
+                <label class="throw-flag-checkbox">
+                    <input type="checkbox" id="huckFlag" value="huck">
+                    <span>Huck</span>
+                </label>
+                <label class="throw-flag-checkbox">
+                    <input type="checkbox" id="breakFlag" value="breakmark">
+                    <span>Break</span>
+                </label>
+                <label class="throw-flag-checkbox">
+                    <input type="checkbox" id="skyFlag" value="sky">
+                    <span>Sky</span>
+                </label>
+                <label class="throw-flag-checkbox">
+                    <input type="checkbox" id="layoutFlag" value="layout">
+                    <span>Layout</span>
+                </label>
+                <label class="throw-flag-checkbox">
+                    <input type="checkbox" id="hammerFlag" value="hammer">
+                    <span>Hammer</span>
+                </label>
+            </div>
+            <hr class="callahan-separator">
+            <div class="score-attribution-actions">
+                <button id="callahanBtn" class="special-action-btn">Callahan</button>
+                <button id="skipAttributionBtn" class="secondary-action-btn">Skip</button>
             </div>
         </div>
+    </div>
 
-        <!-- Next Line Selection Mode Header (initially hidden) -->
-        <div id="nextLineHeader" class="next-line-header" style="display: none;">
-            <div class="next-line-controls">
-                <button id="weScoreBtnMini" class="mini-action-btn">We Score</button>
-                <button id="theyScoreBtnMini" class="mini-action-btn">They Score</button>
-                <div class="mini-point-clock">
-                    <span id="pointTimerMini">0:00</span>
-                </div>
-                <button id="pauseResumeBtnMini" class="mini-action-btn">
-                    <i class="fas fa-pause"></i>
-                </button>
+    <!-- Key Play Dialog -->
+    <div id="keyPlayDialog" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Key Play</h2>
+                <span class="close">&times;</span>
             </div>
-            <div class="swipe-indicator">
-                <div class="swipe-line"></div>
-                <div class="swipe-line"></div>
-            </div>
-        </div>
-
-        <!-- Score Attribution Dialog -->
-        <div id="scoreAttributionDialog" class="modal" style="display: none;">
-            <div class="modal-content">
-                <div class="dialog-header prominent-dialog-header">
-                    <h2>Score Attribution</h2>
-                    <span class="close">&times;</span>
-                </div>
-                <div class="score-attribution-container">
-                    <div class="score-column">
-                        <div class="score-column-header">Threw<br>Score</div>
-                        <div id="throwerButtons" class="player-buttons">
-                            <!-- Player buttons will be dynamically added here -->
-                        </div>
-                    </div>
-                    <div class="score-column">
-                        <div class="score-column-header">Caught<br>Score</div>
-                        <div id="receiverButtons" class="player-buttons">
-                            <!-- Player buttons will be dynamically added here -->
-                        </div>
+            <div class="key-play-container">
+                <div class="key-play-column">
+                    <div class="key-play-header">Plays</div>
+                    <div id="keyPlayPanels" class="key-play-panels">
+                        <!-- Labeled panels will be dynamically added here -->
                     </div>
                 </div>
-                <div class="throw-flags-container">
-                    <label class="throw-flag-checkbox">
-                        <input type="checkbox" id="huckFlag" value="huck">
-                        <span>Huck</span>
-                    </label>
-                    <label class="throw-flag-checkbox">
-                        <input type="checkbox" id="breakFlag" value="breakmark">
-                        <span>Break</span>
-                    </label>
-                    <label class="throw-flag-checkbox">
-                        <input type="checkbox" id="skyFlag" value="sky">
-                        <span>Sky</span>
-                    </label>
-                    <label class="throw-flag-checkbox">
-                        <input type="checkbox" id="layoutFlag" value="layout">
-                        <span>Layout</span>
-                    </label>
-                    <label class="throw-flag-checkbox">
-                        <input type="checkbox" id="hammerFlag" value="hammer">
-                        <span>Hammer</span>
-                    </label>
-                </div>
-                <hr class="callahan-separator">
-                <div class="score-attribution-actions">
-                    <button id="callahanBtn" class="special-action-btn">Callahan</button>
-                    <button id="skipAttributionBtn" class="secondary-action-btn">Skip</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Key Play Dialog -->
-        <div id="keyPlayDialog" class="modal" style="display: none;">
-            <div class="modal-content">
-                <div class="dialog-header prominent-dialog-header">
-                    <h2>Key Play</h2>
-                    <span class="close">&times;</span>
-                </div>
-                <div class="key-play-container">
-                    <div class="key-play-column">
-                        <div class="key-play-header">Plays</div>
-                        <div id="keyPlayPanels" class="key-play-panels">
-                            <!-- Labeled panels will be dynamically added here -->
-                        </div>
-                    </div>
-                    <div class="key-play-column">
-                        <div class="key-play-header" id="keyPlayPlayerHeader">Players</div>
-                        <div id="keyPlayPlayerButtons" class="player-buttons">
-                            <!-- Player buttons will be dynamically added here -->
-                        </div>
+                <div class="key-play-column">
+                    <div class="key-play-header" id="keyPlayPlayerHeader">Players</div>
+                    <div id="keyPlayPlayerButtons" class="player-buttons">
+                        <!-- Player buttons will be dynamically added here -->
                     </div>
                 </div>
             </div>
         </div>
-
-    </section>
+    </div>
 
     <!-- Pull Dialog (outside all sections so it's not hidden by showScreen) -->
     <div id="pullDialog" class="modal" style="display: none;">
@@ -618,86 +570,8 @@
         </div>
     </div>
 
-    <!-- Before Point Screen -->
-    <section id="beforePointScreen" style="display: none;" class="in-game-content">
-        <div class="top-buttons">
-            <button id="startPointBtn">Start Point</button>
-            <button id="selectNextLineBtn" style="display: none;">Select Next Line</button>
-            <button id="selectLineBtn">Lines...</button>
-        </div>
-
-        <!-- Select Current Players Section -->
-        <section id="selectCurrentPlayers">
-            <h3>Select Active Players <span id="statsToggle" style="font-size: 0.8em; cursor: pointer; color: blue;">(Game)</span></h3>
-            <div id="genderRatioDisplay" style="display: none; margin: 0.5rem 0;">
-                <span>Gender Ratio: </span><span id="genderRatioText"></span>
-            </div>
-            <div id="startingGenderRatioSelection" style="display: none; margin: 0.5rem 0;">
-                <label>Starting Ratio: </label>
-                <input type="radio" id="startingRatioFMP" name="startingRatio" value="FMP">
-                <label for="startingRatioFMP">FMP</label>
-                <input type="radio" id="startingRatioMMP" name="startingRatio" value="MMP">
-                <label for="startingRatioMMP">MMP</label>
-            </div>
-            <div id="tableContainer">
-                <table id="activePlayersTable">
-                    <thead>
-                        <tr>
-                            <th></th>
-                            <th></th>
-                            <!-- Additional <th> elements will be added here dynamically for each point -->
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- The player rows will be dynamically added here -->
-                    </tbody>
-                </table>    
-            </div>
-            <div class="beforepoint-controls">
-                <button id="adjustRosterBtn">View/Edit Roster</button>
-            </div>
-        </section>
-        
-        <!-- Game Events Section -->
-        <section id="gameEvents">
-            <h3>Game Events</h3>
-            <button id="endGameBtn">End Game</button>
-            <button id="timeOutBtn">Time out</button>
-            <button id="halftimeBtn">Half Time</button>
-            <button id="switchSidesBtn">Switch Sides</button>
-        </section>
-    </section>
-
-    <!-- Play-by-Play Screen: Offense -->
-    <section id="offensePlayByPlayScreen" style="display: none;" class="in-game-content">
-        <h2>Offensive Possession</h2>
-        <div class="play-container">
-            <div id="offensivePlayerButtons" class="player-buttons">
-                <!-- Player buttons are dynamically generated -->
-            </div>
-            <div id="offensiveActionButtons" class="action-buttons">
-                <!-- Action buttons and sub-panels are dynamically generated -->
-            </div>
-        </div>
-        <button id="oSubPlayersBtn">Sub Players</button>
-    </section>  
-
-    <!-- Play-by-Play Screen: Defense -->
-    <section id="defensePlayByPlayScreen" style="display: none;" class="in-game-content">
-        <h2>Defensive Possession</h2>
-        <div class="play-container">
-            <div id="defensivePlayerButtons" class="player-buttons">
-                <!-- Player buttons are dynamically generated -->
-            </div>
-            <div id="defensiveActionButtons" class="action-buttons">
-                <!-- Action buttons and sub-panels are dynamically generated -->
-            </div>
-        </div>
-        <button id="dSubPlayersBtn">Sub Players</button>
-    </section>    
-
     <!-- Game Summary Screen -->
-    <section id="gameSummaryScreen" style="display: none;" class="in-game-content">
+    <section id="gameSummaryScreen" style="display: none;">
         <h2>Game Summary</h2>
 
         <div id="finalScore">
@@ -725,13 +599,6 @@
             <button id="anotherGameBtn">New Game</button>
         </footer>
     </section>
-
-    <!-- Undo + Event Log Panel, only visible on in-game screens -->
-    <footer id="bottomPanel">
-        <button id="undoBtn">Undo</button>
-        <button id="toggleEventLogBtn">Game Log</button>
-        <textarea id="eventLog" readonly></textarea>
-    </footer>
 
     <!-- Auth modules (must load before other modules) -->
     <script src="auth/config.js"></script>
@@ -761,16 +628,13 @@
     
     <!-- Game modules -->
     <script src="game/genderRatioDropdown.js"></script>
-    <script src="game/beforePointScreen.js"></script>
     <script src="game/pointManagement.js"></script>
     <script src="game/gameLogic.js"></script>
     <script src="game/controllerState.js"></script>
     <script src="game/gameScreen.js"></script>
-    
+
     <!-- Play-by-play modules -->
-    <script src="playByPlay/offenseScreen.js"></script>
-    <script src="playByPlay/defenseScreen.js"></script>
-    <script src="playByPlay/simpleModeScreen.js"></script>
+    <script src="playByPlay/scoreAttribution.js"></script>
     <script src="playByPlay/keyPlayDialog.js"></script>
     <script src="playByPlay/pullDialog.js"></script>
     
