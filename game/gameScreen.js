@@ -2906,12 +2906,8 @@ function updateSelectLineSubtitle() {
     // Get first names only for compactness
     const firstNames = selectedNames.map(name => name.split(' ')[0]);
     
-    // Join with commas, truncate if too long (approx 40 chars max for title bar)
-    let playerList = firstNames.join(', ');
-    const maxLength = 35;
-    if (playerList.length > maxLength) {
-        playerList = playerList.substring(0, maxLength - 1) + '…';
-    }
+    // Join with commas - CSS text-overflow: ellipsis handles truncation based on actual width
+    const playerList = firstNames.join(', ');
     
     // Format: "O/D: Alice, Bob, Carol..."
     const subtitle = `${typeLabel}: ${playerList}`;
