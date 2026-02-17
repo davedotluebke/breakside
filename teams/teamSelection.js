@@ -622,36 +622,13 @@ async function resumeCloudGame(cloudTeam, gameId) {
             saveAllTeamsData();
         }
         
-        // Navigate to appropriate screen based on game state
-        // Phase 6b: Use panel-based game screen if enabled (for ALL game states)
-        if (window.useNewGameScreen && typeof enterGameScreen === 'function') {
+        // Navigate to panel-based game screen
+        if (typeof enterGameScreen === 'function') {
             enterGameScreen();
-            // enterGameScreen() handles both in-progress and between-points states
-            // Call the appropriate transition based on game state
             const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
             if (!pointInProgress && typeof transitionToBetweenPoints === 'function') {
                 transitionToBetweenPoints();
             }
-        } else if (typeof isPointInProgress === 'function' && isPointInProgress()) {
-            // Legacy mode: point in progress
-            const latestPossession = typeof getLatestPossession === 'function' ? getLatestPossession() : null;
-            if (latestPossession && latestPossession.offensive) {
-                if (typeof updateOffensivePossessionScreen === 'function') {
-                    updateOffensivePossessionScreen();
-                }
-                showScreen('offensePlayByPlayScreen');
-            } else {
-                if (typeof updateDefensivePossessionScreen === 'function') {
-                    updateDefensivePossessionScreen();
-                }
-                showScreen('defensePlayByPlayScreen');
-            }
-        } else {
-            // Legacy mode: between points
-            if (typeof updateActivePlayersList === 'function') {
-                updateActivePlayersList();
-            }
-            showScreen('beforePointScreen');
         }
         
     } catch (error) {

@@ -204,6 +204,31 @@ function formatPlayTime(totalTimePlayed) {
 }
 
 /**
+ * Determine whether the next point starts on offense or defense.
+ * Pure game logic: inspects completed points, switchsides events, and point winners.
+ */
+function determineStartingPosition() {
+    if (!currentGame()) { console.log("Warning: No current game"); return 'offense'; }
+    let startPointOn = currentGame().startingPosition;
+    currentGame().points.forEach(point => {
+        let switchsides = false;
+        point.possessions.forEach(possession => {
+            possession.events.forEach(event => {
+                if (event.type === 'Other' && event.switchsides_flag) {
+                    switchsides = !switchsides;
+                }
+            });
+        });
+        if (point.winner === 'team') {
+            startPointOn = switchsides ? 'offense' : 'defense';
+        } else {
+            startPointOn = switchsides ? 'defense' : 'offense';
+        }
+    });
+    return startPointOn;
+}
+
+/**
  * Capitalize the first letter of a word
  */
 function capitalize(word) {

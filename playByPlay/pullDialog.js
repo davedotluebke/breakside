@@ -426,37 +426,7 @@ function closePullDialog() {
     console.log('closePullDialog() called');
     document.getElementById('pullDialog').style.display = 'none';
     
-    // If panel UI is active, don't navigate to legacy screens - just stay on game screen
-    if (window.useNewGameScreen && typeof isGameScreenVisible === 'function' && isGameScreenVisible()) {
-        console.log('Panel UI active, staying on game screen');
-        return;
-    }
-    
-    // Proceed to appropriate screen if we're starting a defense point (legacy flow)
-    if (currentPoint && currentPoint.startingPosition === 'defense') {
-        console.log('Proceeding to defense screen, proceedToDefenseScreen available:', typeof proceedToDefenseScreen);
-        // Use the proceedToDefenseScreen function if available, otherwise handle it here
-        if (typeof proceedToDefenseScreen === 'function') {
-            proceedToDefenseScreen();
-        } else {
-            // Fallback handling
-            if (window.isSimpleMode) {
-                showScreen('simpleModeScreen');
-                if (currentPoint.startTimestamp === null) {
-                    currentPoint.startTimestamp = new Date();
-                }
-            } else {
-                updateDefensivePossessionScreen();
-                showScreen('defensePlayByPlayScreen');
-                if (currentPoint.possessions.length === 0) {
-                    currentPoint.addPossession(new Possession(false));
-                }
-                if (currentPoint.startTimestamp === null) {
-                    currentPoint.startTimestamp = new Date();
-                }
-            }
-        }
-    }
+    // Panel UI stays on game screen — no legacy screen navigation needed
 }
 
 function isFirstDefensivePointForTeam(game) {

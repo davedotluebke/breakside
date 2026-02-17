@@ -29,20 +29,12 @@
     display: flex;
 }
 
-/* When game screen is active, prevent body scroll and override next-line-mode */
+/* When game screen is active, prevent body scroll */
 body.game-screen-active {
     overflow: hidden !important;
 }
 
-body.game-screen-active #beforePointScreen,
-body.game-screen-active #simpleModeScreen,
-body.game-screen-active #offensePlayByPlayScreen,
-body.game-screen-active #defensePlayByPlayScreen {
-    display: none !important;
-}
-
 body.game-screen-active header,
-body.game-screen-active #bottomPanel,
 body.game-screen-active #controllerRoleButtons {
     display: none !important;
 }

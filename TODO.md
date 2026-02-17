@@ -77,40 +77,33 @@ See `game/gameScreen.js`, `ui/panelSystem.js`, `ui/panelSystem.css`
 
 ## Next Up
 
-### 🔄 Phase 6b Step 7: Legacy Cleanup
+### 🔄 Phase 6b Step 7: Legacy Cleanup *(done — testing on `legacy-cleanup` branch)*
 
-**Replace navigation pattern:**
-- [ ] All `showScreen('beforePointScreen')` during active games → `enterGameScreen()` or panel state update
-  - `teamSelection.js` - after "Continue Game"
-  - `gameLogic.js` - offense/defense sub players buttons
-  - `pointManagement.js` - after point ends
-  - `rosterManagement.js` - continue game flow
+Code complete. Deleted `beforePointScreen.js`, `simpleModeScreen.js`, `offenseScreen.js`, `defenseScreen.js`. Panel UI is the only in-game mode.
 
-**Remove Simple Mode toggle and full play-by-play:**
-- [ ] Panel UI is now the only in-game mode (replaces Simple Mode)
-- [ ] Remove Simple Mode toggle from header
-- [ ] Remove full play-by-play event entry screens (to be re-coded later as optional feature)
-- [ ] Keep Key Play dialog (already works from panel UI)
+**Testing checklist (deploy branch and verify on device):**
+- [ ] Start a new game → enters panel UI directly
+- [ ] Continue an existing game → enters panel UI
+- [ ] Play through a full point (start → score) → stays in panel UI
+- [ ] Undo a score → stays in panel UI
+- [ ] Undo all the way back to before first point → stays in panel UI
+- [ ] Leave game via hamburger → returns to team list
+- [ ] End game → goes to game summary
+- [ ] Pull dialog on defensive point start
+- [ ] Sub Players modal from panel
+- [ ] Key Play dialog
+- [ ] Score attribution dialog (We Score → player selection)
+- [ ] Lines... button → selects a line → panel table updates correctly
+- [ ] No console errors about missing DOM elements
+- [ ] Gender ratio validation works on panel Start Point button
 
-**Files to remove or gut:**
-- [ ] `game/beforePointScreen.js` - replaced by panel UI
-- [ ] `screens/offenseDefenseScreen.js` (if exists) - possession now handled by O/D toggle
-- [ ] Parts of `screens/navigation.js` related to in-game screens
-- [ ] Legacy CSS for removed screens
-- [ ] References to `activePlayersTable` (panel version is authoritative)
-
-**Testing checklist:**
-- [ ] Start new game → enters panel UI
-- [ ] Continue existing game → enters panel UI
-- [ ] Point end → stays in panel UI, updates state
-- [ ] Leave Game (hamburger menu) → returns to team list
-- [ ] End Game → goes to summary screen
-- [ ] All entry/exit paths work correctly
-
-**Final steps:**
+**After testing passes:**
+- [ ] Merge `legacy-cleanup` → `main`
 - [ ] Update version to 2.0.0
 - [ ] Update ARCHITECTURE.md with new panel system
-- [ ] Consider keeping legacy code in a git branch for rollback safety
+
+**Dev tooling:**
+- [ ] Add local dev server for frontend testing (e.g., `npx serve .` or a simple Python HTTP server script)
 
 ---
 

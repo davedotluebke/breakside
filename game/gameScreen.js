@@ -1010,7 +1010,7 @@ function handlePbpWeScore() {
     // Ensure the dialog is visible by moving it to body if needed
     ensureDialogVisible('scoreAttributionDialog');
     
-    // Use the existing score attribution dialog from simpleModeScreen.js
+    // Use the existing score attribution dialog from scoreAttribution.js
     if (typeof showScoreAttributionDialog === 'function') {
         showScoreAttributionDialog();
     } else {
@@ -1411,7 +1411,7 @@ function canEditPlayByPlayPanel() {
 
 /**
  * Ensure a dialog element is visible by moving it to body if needed.
- * This fixes the issue where dialogs inside simpleModeScreen are hidden
+ * This fixes the issue where dialogs could be hidden by parent elements
  * when the game screen container is active (parent has display: none !important).
  * @param {string} dialogId - The ID of the dialog element
  */
@@ -2212,9 +2212,6 @@ function handlePanelStartPoint() {
         console.warn(`Starting point with ${selectedPlayers.length} players (expected ${expectedCount})`);
     }
     
-    // Update the legacy activePlayersTable checkboxes to match panel selections
-    syncPanelSelectionsToLegacy(selectedPlayers);
-    
     // Note: Don't stop game state refresh - viewers need updates during points
     // The refresh logic handles Active Coach differently (no full refresh during point)
     
@@ -2256,11 +2253,152 @@ function handlePanelStartPoint() {
  * Opens the line selection dialog
  */
 function handlePanelLinesClick() {
-    if (typeof showLineSelectionDialog === 'function') {
-        showLineSelectionDialog();
-    } else {
-        console.warn('showLineSelectionDialog not available');
+    showLineSelectionDialog();
+}
+
+/**
+ * Show the line selection dialog (panel-UI version).
+ * Reads lines from currentTeam.lines, lets the user pick one,
+ * then checks/unchecks panelActivePlayersTable checkboxes accordingly.
+ */
+let shouldClearSelectionsInLineDialog = true;
+
+function showLineSelectionDialog() {
+    if (!currentTeam || !currentTeam.lines || currentTeam.lines.length === 0) {
+        alert('No lines have been created yet. Please create lines in the roster management screen.');
+        return;
     }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'select-line-overlay';
+
+    const dialog = document.createElement('div');
+    dialog.className = 'select-line-dialog';
+
+    const heading = document.createElement('h3');
+    heading.textContent = 'Select Line';
+    dialog.appendChild(heading);
+
+    // Checkbox for clearing existing selections
+    const checkboxContainer = document.createElement('div');
+    checkboxContainer.className = 'clear-selections-checkbox-container';
+
+    const clearCheckbox = document.createElement('input');
+    clearCheckbox.type = 'checkbox';
+    clearCheckbox.id = 'clearSelectionsCheckbox';
+    clearCheckbox.checked = shouldClearSelectionsInLineDialog;
+
+    const clearLabel = document.createElement('label');
+    clearLabel.htmlFor = 'clearSelectionsCheckbox';
+    clearLabel.textContent = 'Clear existing selections';
+
+    checkboxContainer.appendChild(clearCheckbox);
+    checkboxContainer.appendChild(clearLabel);
+    dialog.appendChild(checkboxContainer);
+
+    const radioContainer = document.createElement('div');
+    radioContainer.className = 'select-line-radio-container';
+
+    let selectedLine = null;
+
+    currentTeam.lines.forEach((line, index) => {
+        const option = document.createElement('div');
+        option.className = 'select-line-radio-option';
+        if (currentGame && currentGame().lastLineUsed === line.name) {
+            option.classList.add('last-used');
+        }
+
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'lineSelection';
+        radio.id = `line-${index}`;
+        radio.value = line.name;
+
+        const label = document.createElement('label');
+        label.htmlFor = `line-${index}`;
+
+        const lineName = document.createElement('span');
+        lineName.className = 'line-name';
+        lineName.textContent = line.name;
+
+        const players = document.createElement('span');
+        players.className = 'line-players';
+        players.textContent = line.players.join(', ');
+
+        label.appendChild(lineName);
+        label.appendChild(players);
+
+        radio.addEventListener('change', () => {
+            selectedLine = line;
+            selectButton.disabled = false;
+        });
+
+        option.appendChild(radio);
+        option.appendChild(label);
+        radioContainer.appendChild(option);
+    });
+
+    dialog.appendChild(radioContainer);
+
+    const buttons = document.createElement('div');
+    buttons.className = 'select-line-buttons';
+
+    const selectButton = document.createElement('button');
+    selectButton.className = 'select-line-button select';
+    selectButton.textContent = 'Select';
+    selectButton.disabled = true;
+    selectButton.addEventListener('click', () => {
+        if (selectedLine) {
+            // Update panel table checkboxes
+            const panelCheckboxes = document.querySelectorAll('#panelActivePlayersTable input[type="checkbox"]');
+
+            if (clearCheckbox.checked) {
+                panelCheckboxes.forEach(checkbox => { checkbox.checked = false; });
+            }
+
+            panelCheckboxes.forEach(checkbox => {
+                if (checkbox.dataset.playerName && selectedLine.players.includes(checkbox.dataset.playerName)) {
+                    checkbox.checked = true;
+                }
+            });
+
+            // Clear stored next line selections since we just made a new selection
+            if (typeof clearNextLineSelections === 'function') {
+                clearNextLineSelections();
+            }
+
+            // Update the last used line and save
+            currentGame().lastLineUsed = selectedLine.name;
+            if (typeof saveAllTeamsData === 'function') {
+                saveAllTeamsData();
+            }
+
+            // Update panel state
+            savePanelSelectionsToPendingNextLine();
+            updateStartPointButtonState();
+            updateSelectLineCompactView();
+            updateSelectLineSubtitle();
+            updatePlayByPlayPanelState();
+
+            shouldClearSelectionsInLineDialog = false;
+
+            overlay.remove();
+        }
+    });
+
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'select-line-button cancel';
+    cancelButton.textContent = 'Cancel';
+    cancelButton.addEventListener('click', () => {
+        overlay.remove();
+    });
+
+    buttons.appendChild(selectButton);
+    buttons.appendChild(cancelButton);
+    dialog.appendChild(buttons);
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
 }
 
 /**
@@ -2339,10 +2477,6 @@ function handlePanelCheckboxChange(e) {
     
     // Update Start Point button state
     updateStartPointButtonState();
-    
-    // Sync to legacy table for compatibility
-    const selectedPlayers = getSelectedPlayersFromPanel();
-    syncPanelSelectionsToLegacy(selectedPlayers);
     
     // Keep compact view and subtitle in sync
     updateSelectLineCompactView();
@@ -2446,21 +2580,7 @@ function savePanelSelectionsToPendingNextLine(updateTimestamp = true) {
  * Sync panel selections to the legacy activePlayersTable
  * @param {string[]} selectedPlayers - Array of player names
  */
-function syncPanelSelectionsToLegacy(selectedPlayers) {
-    const legacyCheckboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
-    if (!currentTeam || !currentTeam.teamRoster) return;
-    
-    legacyCheckboxes.forEach((checkbox, index) => {
-        if (index < currentTeam.teamRoster.length) {
-            checkbox.checked = selectedPlayers.includes(currentTeam.teamRoster[index].name);
-        }
-    });
-    
-    // Update legacy button state
-    if (typeof checkPlayerCount === 'function') {
-        checkPlayerCount();
-    }
-}
+
 
 /**
  * Check gender ratio for panel-selected players

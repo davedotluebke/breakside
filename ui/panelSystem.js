@@ -1097,38 +1097,28 @@ function hideGameScreen() {
  * Hide all legacy screens to prevent them from showing under the panel UI
  */
 function hideLegacyScreens() {
-    // List of all legacy screen IDs
-    const legacyScreenIds = [
+    // Hide all non-game screens
+    const screenIds = [
         'selectTeamScreen',
-        'teamRosterScreen', 
+        'teamRosterScreen',
         'teamSettingsScreen',
-        'beforePointScreen',
-        'offensePlayByPlayScreen',
-        'defensePlayByPlayScreen',
-        'simpleModeScreen',
         'gameSummaryScreen'
     ];
-    
-    legacyScreenIds.forEach(id => {
+
+    screenIds.forEach(id => {
         const screen = document.getElementById(id);
         if (screen) {
             screen.style.display = 'none';
         }
     });
-    
-    // Also hide the header and bottom panel
+
+    // Also hide the header
     const header = document.querySelector('header');
     if (header) {
         header.style.display = 'none';
     }
-    
-    const bottomPanel = document.getElementById('bottomPanel');
-    if (bottomPanel) {
-        bottomPanel.style.display = 'none';
-    }
-    
-    // Hide the legacy controller role buttons (Phase 6 sub-header)
-    // The new panel-based role buttons are used instead
+
+    // Hide the controller role buttons sub-header
     const legacyRoleButtons = document.getElementById('controllerRoleButtons');
     if (legacyRoleButtons) {
         legacyRoleButtons.style.display = 'none';

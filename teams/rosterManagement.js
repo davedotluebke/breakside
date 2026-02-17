@@ -461,32 +461,12 @@ function validateJerseyNumber(input) {
     if (continueGameBtn) {
         continueGameBtn.addEventListener('click', () => {
             if (currentTeam.games.length > 0) {
-                // Phase 6b: Use panel-based game screen if enabled
-                if (window.useNewGameScreen && typeof enterGameScreen === 'function') {
+                if (typeof enterGameScreen === 'function') {
                     enterGameScreen();
                     if (isPointInProgress() === false) {
                         if (typeof transitionToBetweenPoints === 'function') {
                             transitionToBetweenPoints();
                         }
-                    }
-                    continueGameBtn.classList.add('inactive');
-                    return;
-                }
-                
-                // Legacy flow
-                if (isPointInProgress() === false) {
-                    if (typeof updateActivePlayersList === 'function') {
-                        updateActivePlayersList();
-                    }
-                    showScreen('beforePointScreen');
-                } else {
-                    const latestPossession = getLatestPossession();
-                    if (latestPossession && latestPossession.offensive) {
-                        updateOffensivePossessionScreen();
-                        showScreen('offensePlayByPlayScreen');
-                    } else {
-                        updateDefensivePossessionScreen();
-                        showScreen('defensePlayByPlayScreen');
                     }
                     continueGameBtn.classList.add('inactive');
                 }

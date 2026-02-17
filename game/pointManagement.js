@@ -1,49 +1,33 @@
 /*
  * Point Management
  * Handles point creation, transitions, and timing controls.
- * 
- * Phase 6b: Added useNewGameScreen toggle to enable panel-based UI
  */
 let countdownInterval = null;
 let countdownSeconds = 90;
 let isCountdownRunning = false;
 let isPaused = false;
 
-if (typeof window.isSimpleMode === 'undefined') {
-    window.isSimpleMode = true;
-}
-
-// Phase 6b: Toggle to use new panel-based game screen
-// Set to true to use the new UI, false for legacy screens
-window.useNewGameScreen = true;
 
 const pauseResumeBtn = document.getElementById('pauseResumeBtn');
 const pauseResumeText = pauseResumeBtn ? pauseResumeBtn.querySelector('.pause-resume-text') : null;
 const pauseResumeIcon = pauseResumeBtn ? pauseResumeBtn.querySelector('i') : null;
 
 function moveToNextPoint() {
-    console.log('moveToNextPoint() called, current nextLineSelections:', nextLineSelections);
+    console.log('moveToNextPoint() called');
 
-    // If we're in next line selection mode, exit it
-    if (document.body.classList.contains('next-line-mode')) {
-        console.log('Exiting next line mode from moveToNextPoint');
-        exitNextLineSelectionMode();
-    }
-
-    // Don't clear next line selections here - we want them to persist to the next point's Before Point screen
-    // They will be cleared when the point actually starts in startNextPoint()
-
-    updateActivePlayersList();
     logEvent("New point started");
-    // make contiueGameBtn active to enable changing roster between points
-    document.getElementById('continueGameBtn').classList.remove('inactive');
-    showScreen('beforePointScreen');
-    checkPlayerCount();  // to update the "Start Point" button style
-    makeColumnsSticky(); // once the table is rendered, make the left columns sticky
+
+    // Enter panel UI in between-points state
+    if (typeof enterGameScreen === 'function') {
+        enterGameScreen();
+    }
+    if (typeof transitionToBetweenPoints === 'function') {
+        transitionToBetweenPoints();
+    }
 
     // Start the countdown timer
     startCountdown();
-    
+
     // Sync to cloud when point ends (for live viewer updates)
     if (typeof saveAllTeamsData === 'function') {
         saveAllTeamsData();
@@ -66,31 +50,15 @@ function startNextPoint() {
     // Stop the countdown when point starts
     stopCountdown();
 
-    // Get selected players - prefer panel UI if active, fallback to legacy table
+    // Get selected players from panel table
     let activePlayersForThisPoint = [];
-    
-    // Try panel table first (new UI)
     const panelCheckboxes = document.querySelectorAll('#panelActivePlayersTable input[type="checkbox"]');
-    if (panelCheckboxes.length > 0) {
-        panelCheckboxes.forEach(checkbox => {
-            if (checkbox.checked && checkbox.dataset.playerName) {
-                activePlayersForThisPoint.push(checkbox.dataset.playerName);
-            }
-        });
-        console.log('📋 Got players from panel table:', activePlayersForThisPoint);
-    }
-    
-    // Fallback to legacy table if panel didn't have selections
-    if (activePlayersForThisPoint.length === 0) {
-        const legacyCheckboxes = [...document.querySelectorAll('#activePlayersTable input[type="checkbox"]')];
-        legacyCheckboxes.forEach((checkbox, index) => {
-            if (checkbox.checked) {
-                const player = currentTeam.teamRoster[index];
-                activePlayersForThisPoint.push(player.name);
-            }
-        });
-        console.log('📋 Got players from legacy table:', activePlayersForThisPoint);
-    }
+    panelCheckboxes.forEach(checkbox => {
+        if (checkbox.checked && checkbox.dataset.playerName) {
+            activePlayersForThisPoint.push(checkbox.dataset.playerName);
+        }
+    });
+    console.log('📋 Got players from panel table:', activePlayersForThisPoint);
 
     // Clear the stored next line selections since we're now using them
     console.log('About to clear next line selections in startNextPoint after using them');
@@ -103,56 +71,22 @@ function startNextPoint() {
     currentPoint = new Point(activePlayersForThisPoint, startPointOn);
     currentGame().points.push(currentPoint);
 
-    // Update the simple mode toggle to match isSimpleMode before showing the screen
-    document.getElementById('simpleModeToggle').checked = window.isSimpleMode;
+    // Start timing
+    if (currentPoint.startTimestamp !== null) {
+        console.warn("Warning: startTimestamp was already set when starting point");
+    }
+    currentPoint.startTimestamp = new Date();
 
-    // Phase 6b: Use new panel-based game screen if enabled
-    if (window.useNewGameScreen && typeof enterGameScreen === 'function') {
-        // Start timing
-        if (currentPoint.startTimestamp !== null) {
-            console.warn("Warning: startTimestamp was already set when starting point");
-        }
-        currentPoint.startTimestamp = new Date();
-        
-        // Enter the new game screen
+    // Enter the panel-based game screen
+    if (typeof enterGameScreen === 'function') {
         enterGameScreen();
-        
-        // For defense points, still show Pull dialog on top of game screen
-        if (startPointOn === 'defense' && typeof showPullDialog === 'function') {
-            showPullDialog();
-        }
-        
-        // Save and Sync on point start
-        if (typeof saveAllTeamsData === 'function') {
-            saveAllTeamsData();
-        }
-        return;
     }
 
-    // Legacy behavior: For defense points, show Pull dialog first (regardless of simple mode)
-    // The dialog will handle proceeding to the appropriate screen
-    if (startPointOn === 'defense') {
-        if (typeof showPullDialog === 'function') {
-            showPullDialog();
-        } else {
-            // Fallback if dialog not available
-            proceedToDefenseScreen();
-        }
-    } else {
-        // Offense points go directly to their screen
-        if (window.isSimpleMode) {
-            showScreen('simpleModeScreen');
-            // Start timing immediately in simple mode
-            if (currentPoint.startTimestamp !== null) {
-                console.warn("Warning: startTimestamp was already set when starting point in simple mode");
-            }
-            currentPoint.startTimestamp = new Date();
-        } else {
-            updateOffensivePossessionScreen();
-            showScreen('offensePlayByPlayScreen');
-        }
+    // For defense points, show Pull dialog on top of game screen
+    if (startPointOn === 'defense' && typeof showPullDialog === 'function') {
+        showPullDialog();
     }
-    
+
     // Save and Sync on point start
     if (typeof saveAllTeamsData === 'function') {
         saveAllTeamsData();
@@ -160,34 +94,8 @@ function startNextPoint() {
 }
 
 function proceedToDefenseScreen() {
-    console.log('proceedToDefenseScreen() called, isSimpleMode:', window.isSimpleMode, 'possessions.length:', currentPoint ? currentPoint.possessions.length : 'no currentPoint');
-    
-    // Phase 6b: If panel UI is active, don't navigate to legacy screens
-    if (window.useNewGameScreen && typeof isGameScreenVisible === 'function' && isGameScreenVisible()) {
-        console.log('Panel UI active, staying on game screen');
-        return;
-    }
-    
-    // Legacy flow
-    if (window.isSimpleMode) {
-        showScreen('simpleModeScreen');
-        // Start timing immediately in simple mode
-        if (currentPoint.startTimestamp !== null) {
-            console.warn("Warning: startTimestamp was already set when starting defensive point in simple mode");
-        }
-        currentPoint.startTimestamp = new Date();
-    } else {
-        updateDefensivePossessionScreen();
-        showScreen('defensePlayByPlayScreen');
-        // Ensure we have a defensive possession
-        if (currentPoint.possessions.length === 0) {
-            currentPoint.addPossession(new Possession(false));
-        }
-        if (currentPoint.startTimestamp !== null) {
-            console.warn("Warning: startTimestamp was already set when starting defensive point");
-        }
-        currentPoint.startTimestamp = new Date();
-    }
+    // Panel UI handles defense display — no legacy screen navigation needed
+    console.log('proceedToDefenseScreen() called — panel UI active, no-op');
 }
 
 const startPointBtn = document.getElementById('startPointBtn');
@@ -299,27 +207,10 @@ function updatePointTimer() {
     const seconds = Math.floor((elapsedTime % 60000) / 1000);
     const formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 
-    // Update both the main and mini timers
-    document.getElementById('pointTimer').textContent = formattedTime;
-
-    // Also update mini timer if in next line selection mode
-    if (document.body.classList.contains('next-line-mode')) {
-        document.getElementById('pointTimerMini').textContent = formattedTime;
-
-        // In next line selection mode, also update the time displays for active players
-        if (currentPoint && currentPoint.players) {
-            const timeCells = document.querySelectorAll('.active-time-column');
-
-            currentTeam.teamRoster.forEach((player, idx) => {
-                if (idx < timeCells.length) {
-                    // Only update time for players currently in the game
-                    if (currentPoint.players.includes(player.name)) {
-                        const totalTime = getPlayerGameTime(player.name);
-                        timeCells[idx].textContent = formatPlayTime(totalTime);
-                    }
-                }
-            });
-        }
+    // Update the point timer display
+    const pointTimerEl = document.getElementById('pointTimer');
+    if (pointTimerEl) {
+        pointTimerEl.textContent = formattedTime;
     }
 }
 
