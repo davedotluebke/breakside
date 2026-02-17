@@ -409,6 +409,28 @@ function deserializeGame(gameData) {
         return point;
     });
     
+    // Recalculate scores from points to ensure consistency
+    // This fixes cases where gameData.scores is missing, incorrect, or out of sync
+    const completedPoints = game.points.filter(p => p.winner);
+    if (completedPoints.length > 0) {
+        const calculatedScores = { [Role.TEAM]: 0, [Role.OPPONENT]: 0 };
+        completedPoints.forEach(point => {
+            if (point.winner === Role.TEAM || point.winner === 'team') {
+                calculatedScores[Role.TEAM]++;
+            } else if (point.winner === Role.OPPONENT || point.winner === 'opponent') {
+                calculatedScores[Role.OPPONENT]++;
+            }
+        });
+        
+        // Use calculated scores if they differ from stored (or if stored are 0-0 with completed points)
+        const storedTotal = (game.scores[Role.TEAM] || 0) + (game.scores[Role.OPPONENT] || 0);
+        const calculatedTotal = calculatedScores[Role.TEAM] + calculatedScores[Role.OPPONENT];
+        if (storedTotal !== calculatedTotal) {
+            console.log(`📊 Recalculated scores from ${game.scores[Role.TEAM]}-${game.scores[Role.OPPONENT]} to ${calculatedScores[Role.TEAM]}-${calculatedScores[Role.OPPONENT]}`);
+            game.scores = calculatedScores;
+        }
+    }
+    
     return game;
 }
 

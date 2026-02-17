@@ -718,9 +718,54 @@ function handleEndGame() {
         return;
     }
     
-    // Use existing end game confirmation
+    // Use existing end game confirmation if available
     if (typeof endGameConfirm === 'function') {
         endGameConfirm();
+    } else {
+        // Fallback: implement end game logic directly
+        if (!confirm('Are you sure you want to end the game?')) {
+            return;
+        }
+        
+        // Stop any running timers
+        if (typeof stopCountdown === 'function') {
+            stopCountdown();
+        }
+        
+        // Set game end timestamp
+        if (typeof currentGame === 'function' && currentGame()) {
+            currentGame().gameEndTimestamp = new Date();
+        }
+        
+        // Exit game screen
+        exitGameScreen();
+        
+        // Populate and show game summary screen
+        if (typeof currentGame === 'function' && currentGame()) {
+            const game = currentGame();
+            const teamNameEl = document.getElementById('teamName');
+            const teamScoreEl = document.getElementById('teamFinalScore');
+            const opponentNameEl = document.getElementById('opponentName');
+            const opponentScoreEl = document.getElementById('opponentFinalScore');
+            
+            if (teamNameEl) teamNameEl.textContent = game.team || '';
+            if (teamScoreEl) teamScoreEl.textContent = game.scores?.[Role.TEAM] ?? 0;
+            if (opponentNameEl) opponentNameEl.textContent = game.opponent || '';
+            if (opponentScoreEl) opponentScoreEl.textContent = game.scores?.[Role.OPPONENT] ?? 0;
+            
+            if (typeof updateGameSummaryRosterDisplay === 'function') {
+                updateGameSummaryRosterDisplay();
+            }
+        }
+        
+        if (typeof showScreen === 'function') {
+            showScreen('gameSummaryScreen');
+        }
+        
+        // Save data
+        if (typeof saveAllTeamsData === 'function') {
+            saveAllTeamsData();
+        }
     }
 }
 
@@ -1657,13 +1702,54 @@ function handleGameEventSwitchSides() {
 function handleGameEventEndGame() {
     hideGameEventsModal();
     
-    // Use existing end game functionality
+    // Use existing end game functionality if available
     if (typeof endGameConfirm === 'function') {
         endGameConfirm();
-    } else if (typeof showScreen === 'function') {
-        // Fallback: go to game summary
+    } else {
+        // Fallback: implement end game logic directly
+        if (!confirm('Are you sure you want to end the game?')) {
+            return;
+        }
+        
+        // Stop any running timers
+        if (typeof stopCountdown === 'function') {
+            stopCountdown();
+        }
+        
+        // Set game end timestamp
+        if (typeof currentGame === 'function' && currentGame()) {
+            currentGame().gameEndTimestamp = new Date();
+        }
+        
+        // Exit game screen
         exitGameScreen();
-        showScreen('gameSummaryScreen');
+        
+        // Populate and show game summary screen
+        if (typeof currentGame === 'function' && currentGame()) {
+            const game = currentGame();
+            const teamNameEl = document.getElementById('teamName');
+            const teamScoreEl = document.getElementById('teamFinalScore');
+            const opponentNameEl = document.getElementById('opponentName');
+            const opponentScoreEl = document.getElementById('opponentFinalScore');
+            
+            if (teamNameEl) teamNameEl.textContent = game.team || '';
+            if (teamScoreEl) teamScoreEl.textContent = game.scores?.[Role.TEAM] ?? 0;
+            if (opponentNameEl) opponentNameEl.textContent = game.opponent || '';
+            if (opponentScoreEl) opponentScoreEl.textContent = game.scores?.[Role.OPPONENT] ?? 0;
+            
+            if (typeof updateGameSummaryRosterDisplay === 'function') {
+                updateGameSummaryRosterDisplay();
+            }
+        }
+        
+        if (typeof showScreen === 'function') {
+            showScreen('gameSummaryScreen');
+        }
+        
+        // Save data
+        if (typeof saveAllTeamsData === 'function') {
+            saveAllTeamsData();
+        }
     }
 }
 
@@ -3799,7 +3885,19 @@ window.updateControllerUI = function(state, previousState) {
     // Update game screen role buttons
     if (isGameScreenVisible()) {
         updateGameScreenRoleButtons(state);
-        updatePanelsForRole();
+        
+        // Only update panels for role changes when roles ACTUALLY changed
+        // This prevents the Game Log panel from being repeatedly minimized every poll
+        const myUserId = window.currentUserId || (typeof getCurrentUserId === 'function' ? getCurrentUserId() : null);
+        const wasActiveCoach = previousState?.activeCoach?.userId === myUserId;
+        const wasLineCoach = previousState?.lineCoach?.userId === myUserId;
+        const isNowActiveCoach = state?.activeCoach?.userId === myUserId;
+        const isNowLineCoach = state?.lineCoach?.userId === myUserId;
+        
+        if (wasActiveCoach !== isNowActiveCoach || wasLineCoach !== isNowLineCoach) {
+            updatePanelsForRole();
+        }
+        
         // Update Select Line panel permissions when roles change
         updateSelectLinePanelState();
         
