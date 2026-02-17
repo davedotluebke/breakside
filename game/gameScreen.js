@@ -229,10 +229,14 @@ function createPlayByPlayContent() {
     content.className = 'pbp-panel-content layout-compact';
     
     // Structure: 
+    // - Start Point button (shown between points, hidden during points)
     // - Main row: We Score, They Score, Key Play (Key Play hidden in compact via CSS)
     // - Action row: Undo, Sub, Events, More (hidden in expanded/medium via CSS)
     // Note: Score button labels use separate spans for wrapping in "full" layout
     content.innerHTML = `
+        <button id="pbpStartPointBtn" class="pbp-start-point-btn" style="display: none;">
+            Start Point
+        </button>
         <div class="pbp-main-buttons">
             <button id="pbpWeScoreBtn" class="pbp-btn pbp-btn-score pbp-btn-us" title="We Score">
                 <i class="fas fa-plus-circle"></i>
@@ -264,9 +268,6 @@ function createPlayByPlayContent() {
                 <i class="fas fa-ellipsis-h"></i>
             </button>
         </div>
-        <button id="pbpStartPointBtn" class="pbp-start-point-btn" style="display: none;">
-            Start Point
-        </button>
     `;
     
     return content;
