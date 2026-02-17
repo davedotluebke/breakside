@@ -99,7 +99,7 @@ body.game-screen-active #controllerRoleButtons {
     display: flex;
     align-items: center;
     justify-content: flex-start; /* Left-align content to make room for subtitle */
-    padding: 4px 40px 4px 24px; /* 24px left for drag handle, 40px right for expand button */
+    padding: 4px 40px 4px 8px; /* 8px left, 40px right for expand button */
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border-bottom: 1px solid #ddd;
     cursor: default;
@@ -107,7 +107,7 @@ body.game-screen-active #controllerRoleButtons {
     min-height: 28px;
     flex-shrink: 0;
     transition: background 0.2s ease-out;
-    position: relative; /* For absolute positioning of icons */
+    position: relative; /* For absolute positioning of expand button */
 }
 
 /* Draggable title bars get special cursor and touch handling */
@@ -116,54 +116,29 @@ body.game-screen-active #controllerRoleButtons {
     touch-action: none; /* Prevent browser handling of touch for drag */
 }
 
-/* Drag handle (far left edge of title bar) - visual indicator only */
-.panel-drag-handle {
-    position: absolute;
-    left: 2px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 4px 6px;
-    opacity: 0.3;
-    transition: opacity 0.2s, transform 0.1s;
-}
-
-/* Draggable title bars - visual indicators */
-.panel-title-bar.draggable .panel-drag-handle {
-    opacity: 0.5;
-    cursor: ns-resize;
-}
-
-.panel-title-bar.draggable .panel-drag-handle.active {
-    opacity: 0.6;
-}
-
-/* Not draggable - dim the handle */
-.panel-title-bar.not-draggable .panel-drag-handle {
-    opacity: 0.2;
-    cursor: default;
-}
-
 .panel-title-bar.not-draggable {
     cursor: default;
 }
 
-.panel-drag-handle-line {
-    width: 16px;
-    height: 2px;
-    background: #666;
-    border-radius: 1px;
-    transition: background 0.15s;
+/* Inline grip icon for draggable panels */
+.panel-grip-icon {
+    margin-right: 6px;
+    color: #999;
+    font-size: 0.85rem;
+    transition: color 0.15s;
 }
 
-/* Highlight drag handle when panel is being dragged */
-.game-panel.dragging .panel-drag-handle {
-    opacity: 1;
-    transform: scale(1.1);
+.panel-title-bar.draggable .panel-grip-icon {
+    color: #777;
 }
 
-.game-panel.dragging .panel-drag-handle-line {
-    background: #007bff;
+.panel-title-bar.draggable:hover .panel-grip-icon {
+    color: #555;
+}
+
+/* Highlight grip when panel is being dragged */
+.game-panel.dragging .panel-grip-icon {
+    color: #007bff;
 }
 
 /* Panel title text */
@@ -317,10 +292,6 @@ body.game-screen-active #controllerRoleButtons {
     border-bottom: none;
     cursor: default;
     padding: 10px 12px;
-}
-
-.panel-header .panel-drag-handle {
-    display: none;
 }
 
 .header-content-row {

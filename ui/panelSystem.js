@@ -861,13 +861,8 @@ function wireDragHandleEvents(titleBar, panelId) {
         return;
     }
     
-    const dragHandle = titleBar.querySelector('.panel-drag-handle');
-    
-    // Mark as draggable
+    // Mark as draggable - the grip icon is inline with the title
     titleBar.classList.add('draggable');
-    if (dragHandle) {
-        dragHandle.classList.add('active');
-    }
     
     // Touch events on the ENTIRE title bar
     titleBar.addEventListener('touchstart', (e) => {
@@ -918,22 +913,15 @@ function createPanelTitleBar(options) {
     titleBar.className = 'panel-title-bar';
     titleBar.dataset.panelId = panelId;
     
-    // Drag handle
-    if (showDragHandle) {
-        const dragHandle = document.createElement('div');
-        dragHandle.className = 'panel-drag-handle';
-        dragHandle.innerHTML = `
-            <div class="panel-drag-handle-line"></div>
-            <div class="panel-drag-handle-line"></div>
-            <div class="panel-drag-handle-line"></div>
-        `;
-        titleBar.appendChild(dragHandle);
-    }
-    
-    // Title
+    // Title with optional inline grip icon for draggable panels
     const titleEl = document.createElement('span');
     titleEl.className = 'panel-title';
-    titleEl.textContent = title;
+    if (showDragHandle) {
+        // Include grip icon inline with title for draggable panels
+        titleEl.innerHTML = `<i class="fas fa-grip-vertical panel-grip-icon"></i>${title}`;
+    } else {
+        titleEl.textContent = title;
+    }
     titleBar.appendChild(titleEl);
     
     // Subtitle (for minimized state info)
