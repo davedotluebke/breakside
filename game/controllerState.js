@@ -21,9 +21,8 @@ let controllerState = {
     activeCoach: null,      // { userId, displayName, claimedAt, lastPing }
     lineCoach: null,        // { userId, displayName, claimedAt, lastPing }
     pendingHandoff: null,   // { role, requesterId, requesterName, currentHolderId, requestedAt, expiresAt }
-    myRole: null,           // 'activeCoach' | 'lineCoach' | 'both' | null
-    isActiveCoach: false,   // Track each role separately
-    isLineCoach: false,     // Track each role separately
+    isActiveCoach: false,   // Whether current user holds Active Coach role
+    isLineCoach: false,     // Whether current user holds Line Coach role
     hasPendingHandoffForMe: false,
     lastUpdate: null
 };
@@ -86,7 +85,6 @@ async function claimActiveCoach(gameId) {
                 showControllerToast('You are now Active Coach', 'success');
                 updateLocalControllerState({ 
                     state: data.state, 
-                    myRole: 'activeCoach',
                     hasPendingHandoffForMe: false
                 });
             } else if (data.status === 'handoff_requested') {
@@ -94,8 +92,7 @@ async function claimActiveCoach(gameId) {
                 const timeoutMs = (data.handoff?.expiresInSeconds ?? handoffTimeoutSeconds) * 1000;
                 handoffRequestSentToast = showControllerToast('Handoff request sent...', 'info', timeoutMs);
                 updateLocalControllerState({ 
-                    state: data.state, 
-                    myRole: controllerState.myRole 
+                    state: data.state 
                 });
             }
             return { success: true, ...data };
@@ -127,7 +124,6 @@ async function claimLineCoach(gameId) {
                 showControllerToast('You are now Line Coach', 'success');
                 updateLocalControllerState({ 
                     state: data.state, 
-                    myRole: 'lineCoach',
                     hasPendingHandoffForMe: false 
                 });
             } else if (data.status === 'handoff_requested') {
@@ -135,8 +131,7 @@ async function claimLineCoach(gameId) {
                 const timeoutMs = (data.handoff?.expiresInSeconds ?? handoffTimeoutSeconds) * 1000;
                 handoffRequestSentToast = showControllerToast('Handoff request sent...', 'info', timeoutMs);
                 updateLocalControllerState({ 
-                    state: data.state, 
-                    myRole: controllerState.myRole 
+                    state: data.state 
                 });
             }
             return { success: true, ...data };
@@ -170,7 +165,6 @@ async function releaseControllerRole(gameId, role) {
             showControllerToast(`Released ${roleLabel} role`, 'info');
             updateLocalControllerState({ 
                 state: data.state, 
-                myRole: null,
                 hasPendingHandoffForMe: false
             });
             return { success: true, ...data };
@@ -202,14 +196,12 @@ async function respondToHandoff(gameId, accept) {
                 showControllerToast('Handoff accepted - role transferred', 'info');
                 updateLocalControllerState({ 
                     state: data.state, 
-                    myRole: null,
                     hasPendingHandoffForMe: false
                 });
             } else {
                 showControllerToast('Handoff denied', 'info');
                 updateLocalControllerState({ 
                     state: data.state, 
-                    myRole: controllerState.myRole,
                     hasPendingHandoffForMe: false
                 });
             }
@@ -240,18 +232,9 @@ async function pingController(gameId) {
         if (response.ok) {
             const data = await response.json();
             
-            // Update local state
-            const myUserId = getCurrentUserId();
-            let myRole = null;
-            if (data.controllerState?.activeCoach?.userId === myUserId) {
-                myRole = 'activeCoach';
-            } else if (data.controllerState?.lineCoach?.userId === myUserId) {
-                myRole = 'lineCoach';
-            }
-            
+            // Update local state - role flags are computed in updateLocalControllerState
             updateLocalControllerState({
                 state: data.controllerState,
-                myRole: myRole,
                 hasPendingHandoffForMe: data.hasPendingHandoffForMe
             });
             
@@ -289,39 +272,10 @@ function updateLocalControllerState(data) {
     const iAmActiveCoach = newActiveCoach?.userId === myUserId;
     const iAmLineCoach = newLineCoach?.userId === myUserId;
     
-    // Compute myRole - can be 'activeCoach', 'lineCoach', 'both', or null
-    let myRole;
-    if (iAmActiveCoach && iAmLineCoach) {
-        myRole = 'both';
-    } else if (iAmActiveCoach) {
-        myRole = 'activeCoach';
-    } else if (iAmLineCoach) {
-        myRole = 'lineCoach';
-    } else {
-        myRole = null;
-    }
-    
-    // If data.myRole is explicitly provided (from claim/release), use it to override
-    // but only if it's consistent with the actual state
-    if (data.myRole !== undefined) {
-        // Trust explicit myRole from claim operations
-        if (data.myRole === 'activeCoach' && iAmActiveCoach) {
-            myRole = iAmLineCoach ? 'both' : 'activeCoach';
-        } else if (data.myRole === 'lineCoach' && iAmLineCoach) {
-            myRole = iAmActiveCoach ? 'both' : 'lineCoach';
-        } else if (data.myRole === null) {
-            // Explicit release - recalculate based on state
-            myRole = iAmActiveCoach && iAmLineCoach ? 'both' : 
-                     iAmActiveCoach ? 'activeCoach' : 
-                     iAmLineCoach ? 'lineCoach' : null;
-        }
-    }
-    
     controllerState = {
         activeCoach: newActiveCoach,
         lineCoach: newLineCoach,
         pendingHandoff: data.state?.pendingHandoff || null,
-        myRole: myRole,
         isActiveCoach: iAmActiveCoach,
         isLineCoach: iAmLineCoach,
         hasPendingHandoffForMe: data.hasPendingHandoffForMe || false,
@@ -341,7 +295,7 @@ function updateLocalControllerState(data) {
         }
         handoffRequestSentToast = null;
         
-        // Check if I got the role (also true if I now have 'both' and requested either)
+        // Check if I got the role I requested
         const iGotTheRole = (requestedRole === 'activeCoach' && controllerState.isActiveCoach) ||
                            (requestedRole === 'lineCoach' && controllerState.isLineCoach);
         const roleName = requestedRole === 'activeCoach' ? 'Play-by-Play' : 'Next Line';
@@ -415,8 +369,9 @@ function startControllerPolling(gameId) {
     // Initial fetch
     fetchControllerState(gameId);
     
-    // Start polling
-    const interval = controllerState.myRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
+    // Start polling (faster interval when holding a role)
+    const hasRole = controllerState.isActiveCoach || controllerState.isLineCoach;
+    const interval = hasRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
     controllerPollIntervalId = setInterval(() => {
         if (currentGameIdForPolling) {
             pingController(currentGameIdForPolling);
@@ -447,8 +402,9 @@ function adjustPollingInterval() {
     // Clear existing interval
     clearInterval(controllerPollIntervalId);
     
-    // Set new interval based on role
-    const interval = controllerState.myRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
+    // Set new interval based on role (faster when holding a role)
+    const hasRole = controllerState.isActiveCoach || controllerState.isLineCoach;
+    const interval = hasRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
     controllerPollIntervalId = setInterval(() => {
         if (currentGameIdForPolling) {
             pingController(currentGameIdForPolling);
@@ -575,7 +531,8 @@ document.addEventListener('visibilitychange', async () => {
     // Restart polling interval (it may have drifted or been throttled)
     if (controllerPollIntervalId) {
         clearInterval(controllerPollIntervalId);
-        const interval = controllerState.myRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
+        const hasRole = controllerState.isActiveCoach || controllerState.isLineCoach;
+        const interval = hasRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
         controllerPollIntervalId = setInterval(() => {
             if (currentGameIdForPolling) {
                 pingController(currentGameIdForPolling);
@@ -625,11 +582,16 @@ document.addEventListener('visibilitychange', async () => {
 // =============================================================================
 
 /**
- * Get current user's controller role
+ * Get current user's primary controller role
+ * Note: User can hold both roles simultaneously. This returns the "primary" role
+ * for UI purposes. Use isActiveCoach() and isLineCoach() for accurate role checks.
  * @returns {string|null} 'activeCoach', 'lineCoach', or null
  */
 function getMyControllerRole() {
-    return controllerState.myRole;
+    // Return activeCoach if held (takes priority), otherwise lineCoach, otherwise null
+    if (controllerState.isActiveCoach) return 'activeCoach';
+    if (controllerState.isLineCoach) return 'lineCoach';
+    return null;
 }
 
 /**
@@ -875,8 +837,16 @@ function updateControllerUI(state, previousState) {
     );
     
     // Log state changes
-    if (state.myRole !== previousState?.myRole) {
-        console.log(`🎮 Role changed: ${previousState?.myRole || 'none'} → ${state.myRole || 'none'}`);
+    const prevRoles = [];
+    if (previousState?.isActiveCoach) prevRoles.push('activeCoach');
+    if (previousState?.isLineCoach) prevRoles.push('lineCoach');
+    const currRoles = [];
+    if (state.isActiveCoach) currRoles.push('activeCoach');
+    if (state.isLineCoach) currRoles.push('lineCoach');
+    const prevRoleStr = prevRoles.length > 0 ? prevRoles.join('+') : 'none';
+    const currRoleStr = currRoles.length > 0 ? currRoles.join('+') : 'none';
+    if (prevRoleStr !== currRoleStr) {
+        console.log(`🎮 Role changed: ${prevRoleStr} → ${currRoleStr}`);
     }
     
     // Update Play-by-Play panel state when roles change

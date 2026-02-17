@@ -181,7 +181,7 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 **2. Role Buttons Panel** (coaches only, viewers don't see this)
 - [x] "Play-by-Play" and "Next Line" role claim buttons
 - [x] Same styling as current sub-header implementation
-- [ ] Fix display logic per "Role Button Display Fix" section above
+- [x] Fix display logic per "Role Button Display Fix" section above
 - [ ] (Future) Hide panel entirely when single coach — defer until after handoff debugging
 
 **3. "Play-by-Play" Panel** ✅ (resizable)
@@ -201,7 +201,8 @@ Replace current screen-based navigation with a **panel-based layout** for all in
   - Both outgoing and incoming players get credit for playing the point
 - [x] Pull Dialog auto-popup for Active Coach at start of defensive points
   - Triggered in `startNextPoint()` when `startPointOn === 'defense'`
-- [ ] Offense/Defense possession screens deprecated (keep code, remove from main flow)
+- [x] Offense/Defense possession screens deprecated (keep code, remove from main flow)
+  - Pull dialog, continue game, and proceed-to-defense flows now stay on panel UI when active
 
 **4. "Select Next Line" Panel** ✅ (resizable)
 - [x] Replaces the separate Before Point Screen concept
@@ -241,8 +242,8 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [x] Game status: Team names, opponent, current score
 - [x] Game event log: Large font, scrollable, full event history
 - [x] Gets remaining vertical space after other panels
-- [ ] Default states:
-  - **Maximized**: For Viewers (only panel they see besides header)
+- [x] Default states:
+  - **Maximized**: For Viewers (only panel they see besides header) — deferred to Phase 7 (Viewer Experience)
   - **Maximized**: For Coaches without Active or Line Coach role
   - **Minimized**: For Active/Line Coach (but always accessible)
 
