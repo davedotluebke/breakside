@@ -36,9 +36,23 @@ function createHeaderContent() {
     content.className = 'header-content-row';
     
     content.innerHTML = `
-        <button class="header-menu-btn" id="gameMenuBtn" title="Menu">
-            <i class="fas fa-bars"></i>
-        </button>
+        <div class="header-menu-container">
+            <button class="header-menu-btn" id="gameMenuBtn" title="Menu">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="header-menu-dropdown" id="gameMenuDropdown">
+                <button class="menu-item" id="menuLeaveGame">
+                    <i class="fas fa-sign-out-alt"></i> Leave Game
+                </button>
+                <button class="menu-item menu-item-danger" id="menuEndGame">
+                    <i class="fas fa-stop-circle"></i> End Game
+                </button>
+                <div class="menu-divider"></div>
+                <button class="menu-item" id="menuAbout">
+                    <i class="fas fa-info-circle"></i> About / Version
+                </button>
+            </div>
+        </div>
         
         <div class="header-logo-container">
             <img src="images/logo.disc.only.png" alt="Breakside" class="header-logo" id="gameScreenLogo">
@@ -521,11 +535,38 @@ let gameVersionTimeout = null;
  * Wire up all game screen event handlers
  */
 function wireGameScreenEvents() {
-    // Menu button
+    // Menu button - toggle dropdown
     const menuBtn = document.getElementById('gameMenuBtn');
     if (menuBtn) {
         menuBtn.addEventListener('click', handleGameMenuClick);
     }
+    
+    // Menu dropdown items
+    const leaveGameBtn = document.getElementById('menuLeaveGame');
+    if (leaveGameBtn) {
+        leaveGameBtn.addEventListener('click', handleLeaveGame);
+    }
+    
+    const endGameBtn = document.getElementById('menuEndGame');
+    if (endGameBtn) {
+        endGameBtn.addEventListener('click', handleEndGame);
+    }
+    
+    const aboutBtn = document.getElementById('menuAbout');
+    if (aboutBtn) {
+        aboutBtn.addEventListener('click', handleMenuAbout);
+    }
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('gameMenuDropdown');
+        const menuBtn = document.getElementById('gameMenuBtn');
+        if (dropdown && dropdown.classList.contains('visible')) {
+            if (!dropdown.contains(e.target) && e.target !== menuBtn) {
+                closeGameMenu();
+            }
+        }
+    });
     
     // Wire up Play-by-Play panel events
     wirePlayByPlayEvents();
@@ -599,13 +640,99 @@ function wireGameScreenEvents() {
 }
 
 /**
- * Handle menu button click
+ * Handle menu button click - toggle dropdown menu
  */
-function handleGameMenuClick() {
-    // For now, just exit to legacy before point screen
-    hideGameScreen();
-    if (typeof showScreen === 'function') {
-        showScreen('beforePointScreen');
+function handleGameMenuClick(e) {
+    e.stopPropagation();
+    const dropdown = document.getElementById('gameMenuDropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('visible');
+        
+        // Update End Game button state based on role
+        const endGameBtn = document.getElementById('menuEndGame');
+        if (endGameBtn) {
+            const canEnd = canEditPlayByPlayPanel() || 
+                (typeof isLineCoach === 'function' && isLineCoach());
+            endGameBtn.disabled = !canEnd;
+            endGameBtn.title = canEnd ? 'End the game' : 'Only Active or Line Coach can end the game';
+        }
+    }
+}
+
+/**
+ * Close the menu dropdown
+ */
+function closeGameMenu() {
+    const dropdown = document.getElementById('gameMenuDropdown');
+    if (dropdown) {
+        dropdown.classList.remove('visible');
+    }
+}
+
+/**
+ * Handle Leave Game - exit without ending
+ */
+function handleLeaveGame() {
+    closeGameMenu();
+    
+    if (confirm('Leave this game? You can rejoin later.')) {
+        // Release any held roles
+        if (typeof releaseControllerRole === 'function') {
+            const gameId = typeof getPollingGameId === 'function' ? getPollingGameId() : null;
+            if (gameId) {
+                releaseControllerRole(gameId).catch(err => {
+                    console.log('Could not release role:', err);
+                });
+            }
+        }
+        
+        // Stop polling
+        if (typeof stopControllerPolling === 'function') {
+            stopControllerPolling();
+        }
+        
+        // Exit game screen and return to team selection
+        exitGameScreen();
+        if (typeof showSelectTeamScreen === 'function') {
+            showSelectTeamScreen();
+        } else if (typeof showScreen === 'function') {
+            showScreen('teamSelectScreen');
+        }
+    }
+}
+
+/**
+ * Handle End Game - end the game (requires Active or Line Coach role)
+ */
+function handleEndGame() {
+    closeGameMenu();
+    
+    // Check if user has permission
+    const isActive = canEditPlayByPlayPanel();
+    const isLine = typeof isLineCoach === 'function' && isLineCoach();
+    
+    if (!isActive && !isLine) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('Only Active or Line Coach can end the game', 'warning');
+        }
+        return;
+    }
+    
+    // Use existing end game confirmation
+    if (typeof endGameConfirm === 'function') {
+        endGameConfirm();
+    }
+}
+
+/**
+ * Handle About/Version - show connection info toast
+ */
+function handleMenuAbout() {
+    closeGameMenu();
+    
+    // Use the same function as the Online status tap
+    if (typeof showConnectionInfo === 'function') {
+        showConnectionInfo();
     }
 }
 
