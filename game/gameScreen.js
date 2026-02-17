@@ -3580,6 +3580,9 @@ function formatTime(seconds) {
  */
 // Track the "no roles" warning toast so we can dismiss it when a role is claimed
 let noRolesWarningToast = null;
+// Track when we entered the game screen to delay the warning toast
+let gameScreenEnteredAt = null;
+const NO_ROLES_WARNING_DELAY_MS = 3000; // Wait 3 seconds before showing warning
 
 function updateGameScreenRoleButtons(state) {
     const activeBtn = document.getElementById('gameActiveCoachBtn');
@@ -3636,8 +3639,12 @@ function updateGameScreenRoleButtons(state) {
     }
     
     // Show warning toast when both roles become unclaimed (once per transition)
+    // Delay showing the warning to allow auto-assign to happen on first join
     const bothUnclaimed = !state.activeCoach && !state.lineCoach;
-    if (bothUnclaimed && !noRolesWarningToast) {
+    const timeSinceEntry = gameScreenEnteredAt ? (Date.now() - gameScreenEnteredAt) : 0;
+    const delayElapsed = timeSinceEntry >= NO_ROLES_WARNING_DELAY_MS;
+    
+    if (bothUnclaimed && !noRolesWarningToast && delayElapsed) {
         if (typeof showControllerToast === 'function') {
             noRolesWarningToast = showControllerToast('No coach has claimed a role. Tap a role to claim it.', 'warning', 0);
         }
@@ -3705,6 +3712,7 @@ function enterGameScreen() {
     
     // Reset the "no roles" warning toast reference so it can show again for this game session
     noRolesWarningToast = null;
+    gameScreenEnteredAt = Date.now();
     
     // Un-minimize the Play-by-Play panel when a point starts
     // (it's typically minimized between points when Select Next Line is maximized)
