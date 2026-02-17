@@ -3578,6 +3578,9 @@ function formatTime(seconds) {
  * Called when controller state changes
  * @param {object} state - Controller state
  */
+// Track whether we've shown the "no roles" warning toast recently
+let noRolesWarningShown = false;
+
 function updateGameScreenRoleButtons(state) {
     const activeBtn = document.getElementById('gameActiveCoachBtn');
     const lineBtn = document.getElementById('gameLineCoachBtn');
@@ -3588,18 +3591,14 @@ function updateGameScreenRoleButtons(state) {
     
     const myUserId = typeof getCurrentUserId === 'function' ? getCurrentUserId() : null;
     
-    // Check if we're in "local mode" - no roles claimed by anyone
-    // In this case, the user has implicit control of both roles
-    const isLocalMode = !state.activeCoach && !state.lineCoach;
-    
     // Update Active Coach button
     const iAmActiveCoach = state.activeCoach?.userId === myUserId;
     activeBtn.classList.remove('has-role', 'other-has-role', 'pending-handoff', 'role-available');
     
-    if (iAmActiveCoach || isLocalMode) {
-        // I explicitly have this role OR local mode (no server/sharing)
+    if (iAmActiveCoach) {
+        // I explicitly have this role
         activeBtn.classList.add('has-role');
-        if (activeHolder) activeHolder.textContent = isLocalMode ? 'You (local)' : 'You';
+        if (activeHolder) activeHolder.textContent = 'You';
     } else if (state.pendingHandoff?.role === 'activeCoach' && state.pendingHandoff?.requesterId === myUserId) {
         // I've requested this role
         activeBtn.classList.add('pending-handoff');
@@ -3609,7 +3608,7 @@ function updateGameScreenRoleButtons(state) {
         activeBtn.classList.add('other-has-role');
         if (activeHolder) activeHolder.textContent = state.activeCoach.displayName || 'Someone';
     } else {
-        // Role is truly unclaimed (rare - only after timeout)
+        // Role is unclaimed - show as available
         activeBtn.classList.add('role-available');
         if (activeHolder) activeHolder.textContent = 'Available';
     }
@@ -3618,10 +3617,10 @@ function updateGameScreenRoleButtons(state) {
     const iAmLineCoach = state.lineCoach?.userId === myUserId;
     lineBtn.classList.remove('has-role', 'other-has-role', 'pending-handoff', 'role-available');
     
-    if (iAmLineCoach || isLocalMode) {
-        // I explicitly have this role OR local mode (no server/sharing)
+    if (iAmLineCoach) {
+        // I explicitly have this role
         lineBtn.classList.add('has-role');
-        if (lineHolder) lineHolder.textContent = isLocalMode ? 'You (local)' : 'You';
+        if (lineHolder) lineHolder.textContent = 'You';
     } else if (state.pendingHandoff?.role === 'lineCoach' && state.pendingHandoff?.requesterId === myUserId) {
         // I've requested this role
         lineBtn.classList.add('pending-handoff');
@@ -3631,9 +3630,21 @@ function updateGameScreenRoleButtons(state) {
         lineBtn.classList.add('other-has-role');
         if (lineHolder) lineHolder.textContent = state.lineCoach.displayName || 'Someone';
     } else {
-        // Role is truly unclaimed (rare - only after timeout)
+        // Role is unclaimed - show as available
         lineBtn.classList.add('role-available');
         if (lineHolder) lineHolder.textContent = 'Available';
+    }
+    
+    // Show warning toast when both roles become unclaimed (once per transition)
+    const bothUnclaimed = !state.activeCoach && !state.lineCoach;
+    if (bothUnclaimed && !noRolesWarningShown) {
+        noRolesWarningShown = true;
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('No coach has claimed a role. Tap a role to claim it.', 'warning', 5000);
+        }
+    } else if (!bothUnclaimed) {
+        // Reset the flag when someone claims a role
+        noRolesWarningShown = false;
     }
 }
 
@@ -3689,6 +3700,9 @@ function enterGameScreen() {
     
     // Show the game screen
     showGameScreen();
+    
+    // Reset the "no roles" warning flag so it can show again for this game session
+    noRolesWarningShown = false;
     
     // Un-minimize the Play-by-Play panel when a point starts
     // (it's typically minimized between points when Select Next Line is maximized)
