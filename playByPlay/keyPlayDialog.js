@@ -508,6 +508,11 @@ function createKeyPlayDefenseEvent(player) {
     document.getElementById('keyPlayDialog').style.display = 'none';
     
     console.log('Defense event created:', defenseEvent.summarize());
+    
+    // Sync to cloud for live updates (Callahan already syncs via moveToNextPoint)
+    if (!defenseSubButtons.includes('defense-Callahan')) {
+        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    }
 }
 
 function handleKeyPlayPlayerSelection(playerName, buttonElement) {
@@ -660,6 +665,11 @@ function createKeyPlayThrowEvent() {
     document.getElementById('keyPlayDialog').style.display = 'none';
     
     console.log('Throw event created:', throwEvent.summarize());
+    
+    // Sync to cloud for live updates (scores already sync via moveToNextPoint)
+    if (!throwEvent.score_flag) {
+        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    }
 }
 
 function handleKeyPlayHeaderToggle() {
