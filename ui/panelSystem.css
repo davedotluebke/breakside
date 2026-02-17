@@ -99,7 +99,7 @@ body.game-screen-active #controllerRoleButtons {
     display: flex;
     align-items: center;
     justify-content: flex-start; /* Left-align content to make room for subtitle */
-    padding: 4px 40px 4px 8px; /* 8px left, 40px right for expand button */
+    padding: 4px 36px 4px 8px; /* 8px left, 36px right for expand button (28px btn + 6px gap + 2px margin) */
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border-bottom: 1px solid #ddd;
     cursor: default;
