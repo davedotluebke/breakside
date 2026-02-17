@@ -326,18 +326,19 @@ body.game-screen-active #controllerRoleButtons {
 /* Menu dropdown container */
 .header-menu-container {
     position: relative;
+    z-index: 9999; /* Above all panels */
 }
 
 .header-menu-dropdown {
-    position: absolute;
-    top: 100%;
-    left: 0;
+    position: fixed; /* Fixed so it's not clipped by parent overflow */
+    top: auto;
+    left: 12px;
     margin-top: 4px;
     background: #fff;
     border-radius: 8px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
     min-width: 180px;
-    z-index: 1000;
+    z-index: 9999;
     opacity: 0;
     visibility: hidden;
     transform: translateY(-8px);
