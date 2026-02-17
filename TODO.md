@@ -163,7 +163,10 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 #### Panel Layout (top to bottom)
 
 **1. Header Panel** ✅ (always visible, single line)
-- [x] Hamburger menu (left)
+- [x] Hamburger menu (left) with dropdown:
+  - **Leave Game**: Exit without ending, releases roles, returns to team list
+  - **End Game**: Available to Active or Line Coach (with confirmation)
+  - **About / Version**: Shows connection info, current version, and update button
 - [x] Team logo (tap for version display)
 - [x] Score display with team identity (icon OR symbol, tap to toggle)
 - [x] Timer display with toggle button
@@ -460,9 +463,15 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 
 - [ ] **Feature**: When multiple users are signed into a game, and the Active Coach ends the game, all coaches and viewers should go to the game summary screen. *(Partially done: wake recovery detects ended game and returns to team list. Still needed: real-time notification while app is foregrounded — the 3-second game state refresh should detect `gameEndTimestamp` and navigate away.)*
 - [x] **Bug**: The game summary screen reports a score of 0-0 even after several points have been played. *(Fixed: `deserializeGame()` now restores `game.scores` from saved data.)*
-- [x] **UI**: Only the Active Coach can start the next point, but the "Start Point (Offense/Defense)" button only appears in the "Select Next Line" panel. When that panel is minimized (e.g. when collaborating with a Line Coach), show the "Start Point" button in the Play-by-Play panel between points instead of the inactive "We score"/"They score"/"Key play" buttons.
-  - Start Point button now appears in Play-by-Play panel when Select Line is minimized
+- [x] **PWA**: Improved update detection and manual update option
+  - Service worker checks for updates on page load and every 5 minutes
+  - Auto-reloads when new version is activated
+  - Tapping Online status shows current version and "Update Now" button if update available
+  - S3 deployment sets no-cache headers on service-worker.js
+- [x] **UI**: Start Point button in Play-by-Play panel for Active Coach between points
+  - Appears at top of panel (above score buttons) whenever between points
   - Shows same feedback colors (green/red/orange) based on player count and gender ratio
+  - Shares logic with Select Line panel's Start Point button for consistency
 - [ ] **To verify**: Run a test with both a D line and an O line selected; verify which line is actually used when starting a D or O point. Define desired behavior when e.g. D line is selected but coach is viewing/editing O line (or vice versa), and consider UI to indicate what will happen to avoid surprise.
 - [ ] **Feature**: Checkbox in the header row of the select-next-player table to uncheck all players.
 

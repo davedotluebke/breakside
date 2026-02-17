@@ -159,7 +159,7 @@ The app uses a hierarchical data model to track comprehensive game statistics:
 
 ### Key Features
 - **Network-First Strategy** - Optimized loading with fallback to cached content
-- **Automatic Versioning** - Built-in version tracking and cloud backups
+- **Automatic Updates** - Service worker checks for updates on load and every 5 minutes; tap Online status to see version and manually trigger update
 - **Responsive CSS** - Mobile-first design with touch-optimized interactions
 - **Offline-First** - Works fully offline, syncs when connected
 - **Sleep/Wake Recovery** - Seamless game session recovery when the phone sleeps, the user switches apps, or takes a phone call. Uses the Page Visibility API to detect wake events, re-claim expired controller roles, and refresh game state automatically. Detects if the game was ended by another coach while away, or if the game has been idle for 6+ hours.
