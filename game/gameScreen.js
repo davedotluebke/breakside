@@ -3640,7 +3640,7 @@ function updateGameScreenRoleButtons(state) {
     if (bothUnclaimed && !noRolesWarningShown) {
         noRolesWarningShown = true;
         if (typeof showControllerToast === 'function') {
-            showControllerToast('No coach has claimed a role. Tap a role to claim it.', 'warning', 5000);
+            showControllerToast('No coach has claimed a role. Tap a role to claim it.', 'warning', 0);
         }
     } else if (!bothUnclaimed) {
         // Reset the flag when someone claims a role

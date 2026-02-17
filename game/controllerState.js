@@ -694,13 +694,16 @@ function showControllerToast(message, type = 'info', duration = 4000) {
     
     container.appendChild(toast);
     
-    // Auto-remove after duration
-    const autoRemoveTimeout = setTimeout(() => {
-        dismissToast(toast);
-    }, duration);
-    
-    // Store timeout so we can cancel it if manually dismissed
-    toast.dataset.timeoutId = autoRemoveTimeout;
+    // Auto-remove after duration (if duration > 0)
+    // Duration of 0 means persistent - user must dismiss manually
+    if (duration > 0) {
+        const autoRemoveTimeout = setTimeout(() => {
+            dismissToast(toast);
+        }, duration);
+        
+        // Store timeout so we can cancel it if manually dismissed
+        toast.dataset.timeoutId = autoRemoveTimeout;
+    }
     
     // Also log to event log if available
     if (typeof logEvent === 'function') {
