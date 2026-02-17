@@ -58,6 +58,13 @@ HANDOFF_EXPIRY_SECONDS = 10
 _controller_states: Dict[str, ControllerState] = {}
 _lock = threading.Lock()
 
+# Track recent explicit releases to prevent immediate auto-reassignment
+# Key: (game_id, user_id), Value: datetime of release
+_recent_releases: Dict[tuple, datetime] = {}
+
+# Cooldown period after explicit release before auto-assign can happen
+RELEASE_COOLDOWN_SECONDS = 60
+
 
 # =============================================================================
 # Helper Functions
@@ -164,6 +171,8 @@ def auto_assign_roles_if_unclaimed(
     automatically gets both roles. Subsequent coaches see those roles
     as occupied and must request a handoff.
     
+    Skips auto-assignment if the user recently released roles (cooldown period).
+    
     Args:
         game_id: The game identifier
         user_id: The user to assign roles to
@@ -183,6 +192,19 @@ def auto_assign_roles_if_unclaimed(
         # Handle expired handoffs
         if _is_handoff_expired(state.get("pendingHandoff")):
             _auto_approve_handoff(state)
+        
+        # Check if this user recently released roles (cooldown to prevent immediate re-assignment)
+        release_key = (game_id, user_id)
+        if release_key in _recent_releases:
+            release_time = _recent_releases[release_key]
+            elapsed = (datetime.now() - release_time).total_seconds()
+            if elapsed < RELEASE_COOLDOWN_SECONDS:
+                # User recently released roles - skip auto-assignment
+                _controller_states[game_id] = state
+                return dict(state)
+            else:
+                # Cooldown expired - clean up the entry
+                del _recent_releases[release_key]
         
         # If BOTH roles are unclaimed, assign both to this user
         # This makes the first coach to enter the game the default holder
@@ -445,6 +467,10 @@ def release_role(
         handoff = state.get("pendingHandoff")
         if handoff and handoff["role"] == role:
             state["pendingHandoff"] = None
+        
+        # Track the explicit release to prevent immediate auto-reassignment
+        # This cooldown prevents the next ping from auto-assigning roles back
+        _recent_releases[(game_id, user_id)] = datetime.now()
         
         _controller_states[game_id] = state
         return {"success": True, "state": dict(state)}
