@@ -378,10 +378,40 @@ Replace current screen-based navigation with a **panel-based layout** for all in
 - [x] Conflict warning toast when both coaches edit
 - [x] Remove "Use Old Screen" button (panels have full content, no stubs used)
 
-**Step 7: Cleanup**
-- [ ] Remove legacy screen navigation for in-game screens
+**Step 7: Cleanup** (Legacy Screen Removal)
+
+**Replace navigation pattern:**
+- [ ] All `showScreen('beforePointScreen')` during active games → `enterGameScreen()` or panel state update
+  - `teamSelection.js` - after "Continue Game"
+  - `gameLogic.js` - offense/defense sub players buttons
+  - `pointManagement.js` - after point ends
+  - `rosterManagement.js` - continue game flow
+
+**Remove Simple Mode toggle and full play-by-play:**
+- [ ] Panel UI is now the only in-game mode (replaces Simple Mode)
+- [ ] Remove Simple Mode toggle from header
+- [ ] Remove full play-by-play event entry screens (to be re-coded later as optional feature)
+- [ ] Keep Key Play dialog (already works from panel UI)
+
+**Files to remove or gut:**
+- [ ] `game/beforePointScreen.js` - replaced by panel UI
+- [ ] `screens/offenseDefenseScreen.js` (if exists) - possession now handled by O/D toggle
+- [ ] Parts of `screens/navigation.js` related to in-game screens
+- [ ] Legacy CSS for removed screens
+- [ ] References to `activePlayersTable` (panel version is authoritative)
+
+**Testing checklist:**
+- [ ] Start new game → enters panel UI
+- [ ] Continue existing game → enters panel UI  
+- [ ] Point end → stays in panel UI, updates state
+- [ ] Leave Game (hamburger menu) → returns to team list
+- [ ] End Game → goes to summary screen
+- [ ] All entry/exit paths work correctly
+
+**Final steps:**
 - [ ] Update version to 2.0.0
 - [ ] Update ARCHITECTURE.md with new panel system
+- [ ] Consider keeping legacy code in a git branch for rollback safety
 
 ---
 
