@@ -3578,8 +3578,8 @@ function formatTime(seconds) {
  * Called when controller state changes
  * @param {object} state - Controller state
  */
-// Track whether we've shown the "no roles" warning toast recently
-let noRolesWarningShown = false;
+// Track the "no roles" warning toast so we can dismiss it when a role is claimed
+let noRolesWarningToast = null;
 
 function updateGameScreenRoleButtons(state) {
     const activeBtn = document.getElementById('gameActiveCoachBtn');
@@ -3637,14 +3637,16 @@ function updateGameScreenRoleButtons(state) {
     
     // Show warning toast when both roles become unclaimed (once per transition)
     const bothUnclaimed = !state.activeCoach && !state.lineCoach;
-    if (bothUnclaimed && !noRolesWarningShown) {
-        noRolesWarningShown = true;
+    if (bothUnclaimed && !noRolesWarningToast) {
         if (typeof showControllerToast === 'function') {
-            showControllerToast('No coach has claimed a role. Tap a role to claim it.', 'warning', 0);
+            noRolesWarningToast = showControllerToast('No coach has claimed a role. Tap a role to claim it.', 'warning', 0);
         }
-    } else if (!bothUnclaimed) {
-        // Reset the flag when someone claims a role
-        noRolesWarningShown = false;
+    } else if (!bothUnclaimed && noRolesWarningToast) {
+        // Dismiss the warning toast when someone claims a role
+        if (typeof dismissToast === 'function') {
+            dismissToast(noRolesWarningToast);
+        }
+        noRolesWarningToast = null;
     }
 }
 
@@ -3701,8 +3703,8 @@ function enterGameScreen() {
     // Show the game screen
     showGameScreen();
     
-    // Reset the "no roles" warning flag so it can show again for this game session
-    noRolesWarningShown = false;
+    // Reset the "no roles" warning toast reference so it can show again for this game session
+    noRolesWarningToast = null;
     
     // Un-minimize the Play-by-Play panel when a point starts
     // (it's typically minimized between points when Select Next Line is maximized)
