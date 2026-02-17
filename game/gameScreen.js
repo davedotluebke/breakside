@@ -3121,9 +3121,9 @@ function updateSelectLineSubtitle() {
     // Join with commas - CSS text-overflow: ellipsis handles truncation based on actual width
     const playerList = firstNames.join(', ');
     
-    // Format: "O/D: Alice, Bob, Carol..."
-    const subtitle = `${typeLabel}: ${playerList}`;
-    setPanelSubtitle('selectLine', subtitle);
+    // Format: "<strong>O/D</strong>: Alice, Bob, Carol..." with bold prefix
+    const subtitle = `<strong>${typeLabel}</strong>: ${playerList}`;
+    setPanelSubtitle('selectLine', subtitle, true);
 }
 
 /**

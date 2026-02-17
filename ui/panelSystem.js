@@ -1224,10 +1224,14 @@ function updatePanelsForGameState(duringPoint) {
  * @param {string} panelId - Panel identifier
  * @param {string} text - Subtitle text
  */
-function setPanelSubtitle(panelId, text) {
+function setPanelSubtitle(panelId, text, useHtml = false) {
     const subtitle = document.getElementById(`panel-${panelId}-subtitle`);
     if (subtitle) {
-        subtitle.textContent = text || '';
+        if (useHtml) {
+            subtitle.innerHTML = text || '';
+        } else {
+            subtitle.textContent = text || '';
+        }
     }
 }
 
