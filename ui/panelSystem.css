@@ -99,7 +99,7 @@ body.game-screen-active #controllerRoleButtons {
     display: flex;
     align-items: center;
     justify-content: flex-start; /* Left-align content to make room for subtitle */
-    padding: 4px 8px 4px 28px; /* Leave room for drag handle on left, less padding on right */
+    padding: 4px 40px 4px 24px; /* 24px left for drag handle, 40px right for expand button */
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border-bottom: 1px solid #ddd;
     cursor: default;
@@ -180,7 +180,6 @@ body.game-screen-active #controllerRoleButtons {
     font-size: 0.75rem;
     color: #666;
     margin-left: 4px;
-    margin-right: 40px; /* Leave room for expand button */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -197,7 +196,7 @@ body.game-screen-active #controllerRoleButtons {
 /* Panel action buttons (expand/collapse) */
 .panel-actions {
     position: absolute;
-    right: 8px;
+    right: 6px;
     display: flex;
     gap: 4px;
 }
