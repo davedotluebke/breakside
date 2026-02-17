@@ -53,7 +53,31 @@ if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker
             .register('./service-worker.js')
-            .then(reg => console.log('Service Worker: Registered'))
+            .then(reg => {
+                console.log('Service Worker: Registered');
+                
+                // Check for updates immediately
+                reg.update().catch(err => console.log('SW update check failed:', err));
+                
+                // Check for updates periodically (every 5 minutes while app is open)
+                setInterval(() => {
+                    reg.update().catch(err => console.log('SW update check failed:', err));
+                }, 5 * 60 * 1000);
+                
+                // Listen for new service worker installing
+                reg.addEventListener('updatefound', () => {
+                    const newWorker = reg.installing;
+                    console.log('Service Worker: Update found, installing...');
+                    
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'activated') {
+                            console.log('Service Worker: New version activated, reloading...');
+                            // Reload to get the new version
+                            window.location.reload();
+                        }
+                    });
+                });
+            })
             .catch(err => console.log(`Service Worker Error: ${err}`));
     });
 }
