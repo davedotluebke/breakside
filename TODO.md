@@ -77,13 +77,13 @@ See `game/gameScreen.js`, `ui/panelSystem.js`, `ui/panelSystem.css`
 
 ## Known Bugs (found during legacy-cleanup testing)
 
-1. **Select Next Line table CSS broken**: Sticky columns no longer work as expected. Table does not start scrolled horizontally to the most recent point.
+1. ~~**Select Next Line table CSS broken**~~ — resolved (CSS caching issue)
 
 2. **Play-by-Play buttons broken after injury sub**: After performing an injury substitution, "We Score" and "They Score" buttons do nothing. Key Play dialog shows an empty player list (likely same root cause — `currentPoint.players` not updated after sub).
 
 3. **Game Log panel minimize/maximize broken**: Often gets stuck showing only a sliver of content even when there's empty space below. Cannot be dragged in this state. Tapping min/max icon repeatedly sometimes helps. Possibly a z-order issue — content underneath (team+games list) appears to scroll behind the panel header.
 
-4. **Undo removes throw event but leaves score**: Steps: start point → Key Play → Throw (Alice hucks to Bob for score). Game log shows score correctly. First undo removes the throw event but score remains in the game log. Second undo jumps back to before-point (line selection). Expected: first undo should remove both the throw event and the score it triggered.
+4. ~~**Undo removes throw event but leaves score**~~ — fixed (undo now reverts `updateScore()` changes when popping a scoring event)
 
 5. **Starting Ratio radio buttons persist after first point**: When enforcing gender ratio (Alternating mode), the "Starting Ratio" FMP/MMP radio buttons should disappear after the first point since the ratio is now implicit. They currently remain visible.
 

@@ -254,10 +254,42 @@ function summarizeGame() {
 
 // logEvent is now in ui/eventLogDisplay.js
 
+let undoPastStartTimestamp = null;
+
 /**
  * Undo the most recent event
  */
 function undoEvent() {
+    // Guard: no points in the game — warn, then offer to delete game on double-tap
+    if (currentGame().points.length === 0) {
+        const now = Date.now();
+        if (undoPastStartTimestamp && (now - undoPastStartTimestamp) < 4000) {
+            // Second press — offer restart
+            undoPastStartTimestamp = null;
+            if (confirm('This will delete the current game and return to the new game screen. Are you sure?')) {
+                currentTeam.games.pop();
+                stopCountdown();
+                isPaused = false;
+                clearNextLineSelections();
+                if (typeof exitGameScreen === 'function') {
+                    exitGameScreen();
+                }
+                updateTeamRosterDisplay();
+                document.getElementById('continueGameBtn').classList.add('inactive');
+                showScreen('teamRosterScreen');
+                saveAllTeamsData();
+            }
+        } else {
+            // First press — show toast, set timestamp
+            undoPastStartTimestamp = now;
+            if (typeof showControllerToast === 'function') {
+                showControllerToast('No events to undo', 'warning');
+            }
+        }
+        return;
+    }
+    undoPastStartTimestamp = null; // Reset if there are events to undo
+
     // XXX add logic to remove the most recent event from the current possession
     if (currentGame().points.length > 0) {
         const point = getLatestPoint();
@@ -298,6 +330,46 @@ function undoEvent() {
                         // Ensure goals doesn't go negative
                         if (undoneEvent.defender.goals < 0) {
                             undoneEvent.defender.goals = 0;
+                        }
+                    }
+                }
+                // If the undone event was a score, revert updateScore() changes
+                if (point.winner) {
+                    const wasScoreEvent =
+                        (undoneEvent instanceof Throw && undoneEvent.score_flag) ||
+                        (undoneEvent instanceof Defense && undoneEvent.Callahan_flag);
+                    if (wasScoreEvent) {
+                        // Revert game score
+                        currentGame().scores[point.winner]--;
+
+                        // Revert player stats set by updateScore()
+                        currentTeam.teamRoster.forEach(player => {
+                            const playedPoint = point.players.includes(player.name) ||
+                                (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name));
+                            if (playedPoint) {
+                                player.totalPointsPlayed--;
+                                player.consecutivePointsPlayed--;
+                                player.totalTimePlayed -= point.totalPointTime;
+                                if (player.totalTimePlayed < 0) player.totalTimePlayed = 0;
+                                if (point.winner === Role.TEAM) {
+                                    player.pointsWon--;
+                                    if (player.pointsWon < 0) player.pointsWon = 0;
+                                } else {
+                                    player.pointsLost--;
+                                    if (player.pointsLost < 0) player.pointsLost = 0;
+                                }
+                            }
+                        });
+
+                        // Clear point end state, restart timer
+                        point.winner = "";
+                        point.endTimestamp = null;
+                        point.startTimestamp = new Date();
+
+                        // Update score display
+                        if (typeof updateGameScreenScore === 'function') {
+                            const game = currentGame();
+                            updateGameScreenScore(game.scores[Role.TEAM], game.scores[Role.OPPONENT]);
                         }
                     }
                 }

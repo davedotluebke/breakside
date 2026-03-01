@@ -3427,6 +3427,7 @@ header h1 {
     cursor: pointer;
     border: 1px solid #ccc;
     background: #fff;
+    color: #333;
 }
 
 .sub-players-buttons .ge-btn:hover {
