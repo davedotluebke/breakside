@@ -805,7 +805,7 @@ function handleTimerPauseClick(e) {
         return;
     }
     
-    const point = getCurrentPoint();
+    const point = getLatestPoint();
     if (!point || !point.startTimestamp) {
         // No active point, nothing to pause
         return;
@@ -858,30 +858,12 @@ function updateTimerPauseButton() {
 }
 
 /**
- * Get the current point from the game
- * @returns {Point|null}
- */
-function getCurrentPoint() {
-    let game;
-    if (typeof currentGame === 'function') {
-        game = currentGame();
-    } else if (typeof currentGame !== 'undefined') {
-        game = currentGame;
-    }
-    
-    if (game && game.points && game.points.length > 0) {
-        return game.points[game.points.length - 1];
-    }
-    return null;
-}
-
-/**
  * Auto-resume point timer when a play-by-play event is recorded
  * Call this from event handlers
  */
 function autoResumePointTimer() {
     if (pointTimerPaused) {
-        const point = getCurrentPoint();
+        const point = getLatestPoint();
         if (point && point.lastPauseTime) {
             const pausedDuration = Date.now() - new Date(point.lastPauseTime).getTime();
             point.totalPointTime = (point.totalPointTime || 0) + pausedDuration;
@@ -1001,7 +983,7 @@ function handlePbpWeScore() {
     autoResumePointTimer();
     
     // Stop the point timer
-    const point = getCurrentPoint();
+    const point = getLatestPoint();
     if (point && point.startTimestamp) {
         point.totalPointTime = (point.totalPointTime || 0) + (Date.now() - new Date(point.startTimestamp).getTime());
         point.startTimestamp = null;
@@ -1034,7 +1016,7 @@ function handlePbpTheyScore() {
     autoResumePointTimer();
     
     // Stop the point timer
-    const point = getCurrentPoint();
+    const point = getLatestPoint();
     if (point && point.startTimestamp) {
         point.totalPointTime = (point.totalPointTime || 0) + (Date.now() - new Date(point.startTimestamp).getTime());
         point.startTimestamp = null;
@@ -1208,7 +1190,7 @@ function populateSubPlayersTable() {
     
     tableBody.innerHTML = '';
     
-    const point = getCurrentPoint();
+    const point = getLatestPoint();
     if (!currentTeam || !currentTeam.teamRoster || !point) {
         tableBody.innerHTML = '<tr><td colspan="2">No active point</td></tr>';
         return;
@@ -1281,7 +1263,7 @@ function updateSubPlayersCount() {
  * Confirm the substitution and update the current point
  */
 function confirmSubstitution() {
-    const point = getCurrentPoint();
+    const point = getLatestPoint();
     if (!point) {
         hideSubPlayersModal();
         return;
@@ -1631,7 +1613,7 @@ function hideGameEventsModal() {
  * Update Game Events modal button states based on current game state
  */
 function updateGameEventsModalState() {
-    const point = getCurrentPoint();
+    const point = getLatestPoint();
     const duringPoint = point && point.startTimestamp && !point.endTimestamp;
     
     // Timeout: available anytime
@@ -3594,7 +3576,7 @@ function updateTimerDisplay() {
         // Show point timer
         labelEl.textContent = 'point';
         
-        const point = getCurrentPoint();
+        const point = getLatestPoint();
         if (point && point.startTimestamp) {
             let elapsed;
             const startTime = new Date(point.startTimestamp).getTime();

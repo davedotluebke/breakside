@@ -4,9 +4,6 @@
  * 
  * Phase 4 update: Games use teamId and create rosterSnapshot
  */
-let currentPoint = null;
-let currentEvent = null;
-let currentPlayer = null;
 let appVersion = null;
 
 function startNewGame(startingPosition, seconds) {
@@ -88,33 +85,34 @@ function updateScore(winner) {
         throw new Error("inactive role");
     }
 
-    if (!currentPoint) {
+    const point = getLatestPoint();
+    if (!point) {
         throw new Error("No current point");
     }
 
-    if (currentPoint.startTimestamp === null) {
-        console.warn("Warning: currentPoint.startTimestamp is null; setting to now");
-        currentPoint.startTimestamp = new Date();
+    if (point.startTimestamp === null) {
+        console.warn("Warning: point.startTimestamp is null; setting to now");
+        point.startTimestamp = new Date();
     }
 
     // Add any remaining time to totalPointTime before ending
-    currentPoint.totalPointTime += (new Date() - currentPoint.startTimestamp);
-    currentPoint.endTimestamp = new Date();
-    currentPoint.winner = winner; // Setting the winning team for the current point
+    point.totalPointTime += (new Date() - point.startTimestamp);
+    point.endTimestamp = new Date();
+    point.winner = winner; // Setting the winning team for the current point
     currentGame().scores[winner]++;
 
     // Update event log
-    logEvent(`${currentPoint.winner} scores!`);
+    logEvent(`${point.winner} scores!`);
 
     // Update player stats for those who played this point
     // Include players who were substituted out mid-point (they still "played" the point)
     currentTeam.teamRoster.forEach(player => {
-        const playedPoint = currentPoint.players.includes(player.name) ||
-            (currentPoint.substitutedOutPlayers && currentPoint.substitutedOutPlayers.includes(player.name));
+        const playedPoint = point.players.includes(player.name) ||
+            (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name));
         if (playedPoint) { // the player played this point
             player.totalPointsPlayed++;
             player.consecutivePointsPlayed++;
-            player.totalTimePlayed += currentPoint.totalPointTime;
+            player.totalTimePlayed += point.totalPointTime;
             if (winner === Role.TEAM) {
                 player.pointsWon++;
             } else {
@@ -124,11 +122,6 @@ function updateScore(winner) {
             player.consecutivePointsPlayed = 0;
         }
     });
-
-    currentPoint = null;  // Reset the temporary point object
-    currentEvent = null;  // Reset the temporary event object
-    currentPlayer = null; // Reset the temporary player object
-
 
     // Phase 6b: Update game screen score display
     if (typeof updateGameScreenScore === 'function') {
@@ -160,10 +153,7 @@ document.getElementById('anotherGameBtn').addEventListener('click', function() {
     stopCountdown();
     isPaused = false;
     clearNextLineSelections();
-    currentPoint = null;
-    currentEvent = null;
-    currentPlayer = null;
-    
+
     // Phase 6b: Exit game screen if visible
     if (typeof exitGameScreen === 'function') {
         exitGameScreen();
@@ -270,10 +260,9 @@ function summarizeGame() {
 function undoEvent() {
     // XXX add logic to remove the most recent event from the current possession
     if (currentGame().points.length > 0) {
-        // currentPoint is a global, reset it
-        currentPoint = currentGame().points[currentGame().points.length - 1];
-        if (currentPoint.possessions.length > 0) {
-            let currentPossession = getActivePossession(currentPoint);
+        const point = getLatestPoint();
+        if (point.possessions.length > 0) {
+            let currentPossession = getActivePossession(point);
             if (currentPossession.events.length > 0) {
                 let undoneEvent = currentPossession.events.pop();
                 logEvent(`Undid event: ${undoneEvent.summarize()}`);
@@ -315,28 +304,28 @@ function undoEvent() {
                 // Panel UI auto-updates based on game state — no legacy screen refresh needed
             } else {
                 // no events in this possession, remove the possession
-                currentPoint.possessions.pop();
-                if (currentPoint.possessions.length === 0) {
-                    // no possessions left in this point, update player stats then remove the point 
-                    currentPoint.players.forEach(playerName => {
+                point.possessions.pop();
+                if (point.possessions.length === 0) {
+                    // no possessions left in this point, update player stats then remove the point
+                    point.players.forEach(playerName => {
                         let player = getPlayerFromName(playerName);
                         player.totalPointsPlayed--;
                         player.consecutivePointsPlayed--;
                         // Decrement time played for this point
-                        if (currentPoint.totalPointTime) {
-                            player.totalTimePlayed -= currentPoint.totalPointTime;
+                        if (point.totalPointTime) {
+                            player.totalTimePlayed -= point.totalPointTime;
                             // Ensure totalTimePlayed doesn't go negative
                             if (player.totalTimePlayed < 0) {
                                 player.totalTimePlayed = 0;
                             }
                         }
                         // Decrement pointsWon or pointsLost based on winner
-                        if (currentPoint.winner === Role.TEAM) {
+                        if (point.winner === Role.TEAM) {
                             player.pointsWon--;
                             if (player.pointsWon < 0) {
                                 player.pointsWon = 0;
                             }
-                        } else if (currentPoint.winner === Role.OPPONENT) {
+                        } else if (point.winner === Role.OPPONENT) {
                             player.pointsLost--;
                             if (player.pointsLost < 0) {
                                 player.pointsLost = 0;
@@ -344,23 +333,21 @@ function undoEvent() {
                         }
                     });
                     // Decrement game score if winner is set
-                    if (currentPoint.winner) {
-                        currentGame().scores[currentPoint.winner]--;
+                    if (point.winner) {
+                        currentGame().scores[point.winner]--;
                     }
                     currentGame().points.pop();
-                    currentPoint = null;
-                    // display the "before point screen" 
+                    // display the "before point screen"
                     moveToNextPoint();
                 } else {
                     // Restore state for previous possession
-                    currentPossession = getActivePossession(currentPoint);
+                    currentPossession = getActivePossession(point);
                     currentPossession.endTimestamp = null;
-                    currentEvent = currentPossession.events[currentPossession.events.length - 1];
                     // Panel UI auto-updates — no legacy screen navigation needed
                 }
             }
         }
-    } 
+    }
     // XXX update the event log
     logEvent("Undo button pressed!");
     saveAllTeamsData(); // Save and Sync
