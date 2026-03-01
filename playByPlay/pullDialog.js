@@ -71,8 +71,9 @@ function showPullDialog() {
         return;
     }
     
-    if (!game || !currentPoint) {
-        console.error('Cannot show pull dialog: no game or point', { game: !!game, currentPoint: !!currentPoint });
+    const point = getLatestPoint();
+    if (!game || !point) {
+        console.error('Cannot show pull dialog: no game or point', { game: !!game, point: !!point });
         return;
     }
 
@@ -178,8 +179,9 @@ function createPullPlayerButtons(expectedGender, alternatePulls) {
     playerButtonsContainer.appendChild(unknownButton);
     
     // Add player buttons for all active players
-    if (currentPoint && currentPoint.players) {
-        currentPoint.players.forEach(playerName => {
+    const point = getLatestPoint();
+    if (point && point.players) {
+        point.players.forEach(playerName => {
             const player = getPlayerFromName(playerName);
             const playerButton = document.createElement('button');
             playerButton.textContent = playerName;
@@ -366,7 +368,8 @@ function updatePullDialogState() {
 function createPullEvent() {
     console.log('createPullEvent() called');
     const game = currentGame();
-    if (!game || !currentPoint) {
+    const point = getLatestPoint();
+    if (!game || !point) {
         console.error('Cannot create pull event: no game or point');
         return;
     }
@@ -397,14 +400,14 @@ function createPullEvent() {
     });
 
     // Add to first possession (create if needed)
-    let firstPossession = currentPoint.possessions.length > 0 
-        ? currentPoint.possessions[0] 
+    let firstPossession = point.possessions.length > 0
+        ? point.possessions[0]
         : null;
-    
+
     if (!firstPossession) {
         // Create defensive possession for pull
         firstPossession = new Possession(false);
-        currentPoint.addPossession(firstPossession);
+        point.addPossession(firstPossession);
     }
     
     // Add pull event at the beginning of the event list
@@ -441,7 +444,8 @@ function isFirstDefensivePointForTeam(game) {
     }
     
     // If current point is defense, we're counting it, so subtract 1
-    if (currentPoint && currentPoint.startingPosition === 'defense') {
+    const latestPoint = getLatestPoint();
+    if (latestPoint && latestPoint.startingPosition === 'defense') {
         defensivePointCount--;
     }
     
@@ -454,7 +458,7 @@ function getExpectedPullGender(game) {
     // For alternating gender ratio games (4:3 - 3:4 or 3:2 - 2:3)
     // The pull should be done by a player matching the majority gender matching preference
     if (game.alternateGenderRatio === 'Alternating' && game.startingGenderRatio) {
-        // Determine the current point index (currentPoint has already been added to game.points)
+        // Determine the current point index (latest point has already been added to game.points)
         const currentPointIndex = game.points.length - 1;
         
         // Get the gender ratio for this point (FMP+ or MMP+)
@@ -471,9 +475,10 @@ function getExpectedPullGender(game) {
     // For fixed ratio games (e.g., "4:3", "3:2") with alternating gender pulls enabled,
     // pulls should alternate gender every point
     // Get all defensive points (excluding current point)
+    const latestPoint = getLatestPoint();
     const defensivePoints = [];
     for (const point of game.points) {
-        if (point.startingPosition === 'defense' && point !== currentPoint) {
+        if (point.startingPosition === 'defense' && point !== latestPoint) {
             defensivePoints.push(point);
         }
     }

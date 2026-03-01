@@ -166,8 +166,8 @@ function getPlayerGameTime(playerName) {
                 if (point.endTimestamp) {
                     // For completed points, just use the totalPointTime
                     totalTime += point.totalPointTime;
-                } else if (point === currentPoint) {
-                    // For the current point, handle paused state
+                } else if (!point.winner) {
+                    // For the current point (in progress), handle paused state
                     // Note: isPaused is a global variable defined in main.js
                     if (typeof isPaused !== 'undefined' && isPaused) {
                         // If paused, just use the accumulated time

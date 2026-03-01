@@ -26,8 +26,9 @@ function initializeScoreAttributionDialog() {
                 defender: defender,
                 Callahan: true
             });
-            currentPoint.addPossession(new Possession(false));
-            getActivePossession(currentPoint).addEvent(callahanEvent);
+            const point = getLatestPoint();
+            point.addPossession(new Possession(false));
+            getActivePossession(point).addEvent(callahanEvent);
 
             // Award goal to the defender who caught the Callahan
             if (defender) {
@@ -94,7 +95,8 @@ function showScoreAttributionDialog() {
     receiverButtons.appendChild(unknownReceiverBtn);
 
     // Add player buttons
-    currentPoint.players.forEach(playerName => {
+    const point = getLatestPoint();
+    point.players.forEach(playerName => {
         const throwerBtn = createPlayerButton(playerName);
         const receiverBtn = createPlayerButton(playerName);
         throwerButtons.appendChild(throwerBtn);
@@ -227,8 +229,9 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
             layout: document.getElementById('layoutFlag').checked,
             hammer: document.getElementById('hammerFlag').checked
         });
-        currentPoint.addPossession(new Possession(true));
-        getActivePossession(currentPoint).addEvent(scoreEvent);
+        const point = getLatestPoint();
+        point.addPossession(new Possession(true));
+        getActivePossession(point).addEvent(scoreEvent);
         selectedThrower.assists++;
         selectedReceiver.goals++;
 

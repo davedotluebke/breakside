@@ -158,8 +158,9 @@ function createKeyPlayPlayerButtons() {
     playerButtonsContainer.appendChild(unknownButton);
     
     // Add player buttons for all active players
-    if (currentPoint && currentPoint.players) {
-        currentPoint.players.forEach(playerName => {
+    const point = getLatestPoint();
+    if (point && point.players) {
+        point.players.forEach(playerName => {
             const playerButton = document.createElement('button');
             playerButton.textContent = playerName;
             playerButton.classList.add('player-button', 'inactive');
@@ -604,21 +605,22 @@ function handleThrowPlayerSelection(playerName, buttonElement) {
 }
 
 function ensurePossessionExists(isOffensive) {
-    let currentPossession = getActivePossession(currentPoint);
-    
+    const point = getLatestPoint();
+    let currentPossession = getActivePossession(point);
+
     if (!currentPossession) {
         // No possession exists, create a new one
         currentPossession = new Possession(isOffensive);
-        currentPoint.addPossession(currentPossession);
+        point.addPossession(currentPossession);
         console.log(`Created new ${isOffensive ? 'offensive' : 'defensive'} possession for Key Play event`);
     } else if (currentPossession.offensive !== isOffensive) {
         // Current possession doesn't match the required type, create a new one
         const previousType = currentPossession.offensive ? 'offensive' : 'defensive';
         currentPossession = new Possession(isOffensive);
-        currentPoint.addPossession(currentPossession);
+        point.addPossession(currentPossession);
         console.log(`Created new ${isOffensive ? 'offensive' : 'defensive'} possession (switched from ${previousType}) for Key Play event`);
     }
-    
+
     return currentPossession;
 }
 

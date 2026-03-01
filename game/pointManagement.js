@@ -68,14 +68,14 @@ function startNextPoint() {
     const startPointOn = determineStartingPosition();
 
     // Create a new Point with the active players and starting position
-    currentPoint = new Point(activePlayersForThisPoint, startPointOn);
-    currentGame().points.push(currentPoint);
+    const point = new Point(activePlayersForThisPoint, startPointOn);
+    currentGame().points.push(point);
 
     // Start timing
-    if (currentPoint.startTimestamp !== null) {
+    if (point.startTimestamp !== null) {
         console.warn("Warning: startTimestamp was already set when starting point");
     }
-    currentPoint.startTimestamp = new Date();
+    point.startTimestamp = new Date();
 
     // Enter the panel-based game screen
     if (typeof enterGameScreen === 'function') {
@@ -162,18 +162,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
 if (pauseResumeBtn) {
     pauseResumeBtn.addEventListener('click', () => {
-    if (!currentPoint) {
-        console.warn("Warning: pause/resume button clicked, but currentPoint is null");
+    const point = getLatestPoint();
+    if (!point) {
+        console.warn("Warning: pause/resume button clicked, but no current point");
         return;
     }
 
     isPaused = !isPaused;
     if (isPaused) {
         // Pause logic
-        currentPoint.lastPauseTime = new Date();
-        if (currentPoint.startTimestamp) {
-            currentPoint.totalPointTime += (currentPoint.lastPauseTime - currentPoint.startTimestamp);
-            currentPoint.startTimestamp = null;
+        point.lastPauseTime = new Date();
+        if (point.startTimestamp) {
+            point.totalPointTime += (point.lastPauseTime - point.startTimestamp);
+            point.startTimestamp = null;
         }
         if (pauseResumeIcon) {
             pauseResumeIcon.className = 'fas fa-play';
@@ -183,8 +184,8 @@ if (pauseResumeBtn) {
         }
     } else {
         // Resume logic
-        currentPoint.startTimestamp = new Date();
-        currentPoint.lastPauseTime = null;
+        point.startTimestamp = new Date();
+        point.lastPauseTime = null;
         if (pauseResumeIcon) {
             pauseResumeIcon.className = 'fas fa-pause';
         }
@@ -196,11 +197,12 @@ if (pauseResumeBtn) {
 }
 
 function updatePointTimer() {
-    if (!currentPoint) return;
+    const point = getLatestPoint();
+    if (!point) return;
 
-    let elapsedTime = currentPoint.totalPointTime;
-    if (currentPoint.startTimestamp && !isPaused) {
-        elapsedTime += (new Date() - currentPoint.startTimestamp);
+    let elapsedTime = point.totalPointTime;
+    if (point.startTimestamp && !isPaused) {
+        elapsedTime += (new Date() - point.startTimestamp);
     }
 
     const minutes = Math.floor(elapsedTime / 60000);
