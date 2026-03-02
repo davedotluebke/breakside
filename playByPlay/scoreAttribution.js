@@ -46,6 +46,19 @@ function initializeScoreAttributionDialog() {
     if (skipAttributionBtn) {
         skipAttributionBtn.addEventListener('click', function() {
             const dialog = document.getElementById('scoreAttributionDialog');
+            // Create scoring throw with Unknown Player (so undo can find it)
+            const scoreEvent = new Throw({
+                thrower: UNKNOWN_PLAYER_OBJ,
+                receiver: UNKNOWN_PLAYER_OBJ,
+                score: true
+            });
+            const point = getLatestPoint();
+            point.addPossession(new Possession(true));
+            getActivePossession(point).addEvent(scoreEvent);
+            UNKNOWN_PLAYER_OBJ.completedPasses++;
+            UNKNOWN_PLAYER_OBJ.assists++;
+            UNKNOWN_PLAYER_OBJ.goals++;
+
             updateScore(Role.TEAM);
             dialog.style.display = 'none';
             moveToNextPoint();
