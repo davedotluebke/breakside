@@ -411,6 +411,23 @@ function undoEvent() {
                     }
                 }
                 // Panel UI auto-updates based on game state — no legacy screen refresh needed
+
+                // If the possession is now empty after undoing (e.g. pull was only event),
+                // clean it up so the user isn't stranded mid-point with no way forward
+                if (currentPossession.events.length === 0) {
+                    point.possessions.pop();
+                    if (point.possessions.length === 0) {
+                        // No possessions left — remove the point and go to between-points.
+                        // Don't decrement player point stats: updateScore() was either never
+                        // called (unscored point) or already reverted by revertPointScore().
+                        currentGame().points.pop();
+                        moveToNextPoint();
+                    } else {
+                        // Go back to previous possession
+                        currentPossession = getActivePossession(point);
+                        currentPossession.endTimestamp = null;
+                    }
+                }
             } else {
                 // no events in this possession, remove the possession
                 point.possessions.pop();
