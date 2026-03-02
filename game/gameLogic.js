@@ -257,6 +257,47 @@ function summarizeGame() {
 let undoPastStartTimestamp = null;
 
 /**
+ * Revert the score and player stats set by updateScore() for a point.
+ * Used by undoEvent() when reverting a scored point.
+ */
+function revertPointScore(point) {
+    currentGame().scores[point.winner]--;
+
+    currentTeam.teamRoster.forEach(player => {
+        const playedPoint = point.players.includes(player.name) ||
+            (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name));
+        if (playedPoint) {
+            player.totalPointsPlayed--;
+            player.consecutivePointsPlayed--;
+            player.totalTimePlayed -= point.totalPointTime;
+            if (player.totalTimePlayed < 0) player.totalTimePlayed = 0;
+            if (point.winner === Role.TEAM) {
+                player.pointsWon--;
+                if (player.pointsWon < 0) player.pointsWon = 0;
+            } else {
+                player.pointsLost--;
+                if (player.pointsLost < 0) player.pointsLost = 0;
+            }
+        }
+    });
+
+    point.winner = "";
+    point.endTimestamp = null;
+    point.startTimestamp = new Date();
+
+    if (typeof updateGameScreenScore === 'function') {
+        const game = currentGame();
+        updateGameScreenScore(game.scores[Role.TEAM], game.scores[Role.OPPONENT]);
+    }
+
+    // Stop between-points countdown and restore in-point panel layout
+    stopCountdown();
+    if (typeof updatePanelsForGameState === 'function') {
+        updatePanelsForGameState(true);
+    }
+}
+
+/**
  * Undo the most recent event
  */
 function undoEvent() {
@@ -267,7 +308,12 @@ function undoEvent() {
             // Second press — offer restart
             undoPastStartTimestamp = null;
             if (confirm('This will delete the current game and return to the new game screen. Are you sure?')) {
+                const gameId = currentGame().id;
                 currentTeam.games.pop();
+                // Delete from cloud
+                if (typeof deleteGameFromCloud === 'function') {
+                    deleteGameFromCloud(gameId);
+                }
                 stopCountdown();
                 isPaused = false;
                 clearNextLineSelections();
@@ -293,6 +339,28 @@ function undoEvent() {
     // XXX add logic to remove the most recent event from the current possession
     if (currentGame().points.length > 0) {
         const point = getLatestPoint();
+
+        // If the point was scored but the last event isn't a scoring event,
+        // revert only the score (handles "They Score" and "Skip" without event)
+        if (point.winner) {
+            let hasScoreEvent = false;
+            if (point.possessions.length > 0) {
+                const lastPoss = getActivePossession(point);
+                if (lastPoss.events.length > 0) {
+                    const lastEvent = lastPoss.events[lastPoss.events.length - 1];
+                    hasScoreEvent =
+                        (lastEvent instanceof Throw && lastEvent.score_flag) ||
+                        (lastEvent instanceof Defense && lastEvent.Callahan_flag);
+                }
+            }
+            if (!hasScoreEvent) {
+                revertPointScore(point);
+                logEvent("Undo: score reverted");
+                saveAllTeamsData();
+                return;
+            }
+        }
+
         if (point.possessions.length > 0) {
             let currentPossession = getActivePossession(point);
             if (currentPossession.events.length > 0) {
@@ -339,38 +407,7 @@ function undoEvent() {
                         (undoneEvent instanceof Throw && undoneEvent.score_flag) ||
                         (undoneEvent instanceof Defense && undoneEvent.Callahan_flag);
                     if (wasScoreEvent) {
-                        // Revert game score
-                        currentGame().scores[point.winner]--;
-
-                        // Revert player stats set by updateScore()
-                        currentTeam.teamRoster.forEach(player => {
-                            const playedPoint = point.players.includes(player.name) ||
-                                (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name));
-                            if (playedPoint) {
-                                player.totalPointsPlayed--;
-                                player.consecutivePointsPlayed--;
-                                player.totalTimePlayed -= point.totalPointTime;
-                                if (player.totalTimePlayed < 0) player.totalTimePlayed = 0;
-                                if (point.winner === Role.TEAM) {
-                                    player.pointsWon--;
-                                    if (player.pointsWon < 0) player.pointsWon = 0;
-                                } else {
-                                    player.pointsLost--;
-                                    if (player.pointsLost < 0) player.pointsLost = 0;
-                                }
-                            }
-                        });
-
-                        // Clear point end state, restart timer
-                        point.winner = "";
-                        point.endTimestamp = null;
-                        point.startTimestamp = new Date();
-
-                        // Update score display
-                        if (typeof updateGameScreenScore === 'function') {
-                            const game = currentGame();
-                            updateGameScreenScore(game.scores[Role.TEAM], game.scores[Role.OPPONENT]);
-                        }
+                        revertPointScore(point);
                     }
                 }
                 // Panel UI auto-updates based on game state — no legacy screen refresh needed
