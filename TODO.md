@@ -85,7 +85,7 @@ See `game/gameScreen.js`, `ui/panelSystem.js`, `ui/panelSystem.css`
 
 4. ~~**Undo removes throw event but leaves score**~~ — fixed (undo now reverts `updateScore()` changes when popping a scoring event)
 
-5. **Starting Ratio radio buttons persist after first point**: When enforcing gender ratio (Alternating mode), the "Starting Ratio" FMP/MMP radio buttons should disappear after the first point since the ratio is now implicit. They currently remain visible.
+5. **Starting Ratio radio buttons persist after first point**: When enforcing gender ratio (Alternating mode), the "Starting Ratio" FMP/MMP radio buttons should disappear after the first point since the ratio is now implicit. They currently remain visible. **Additional observation:** Selecting "MMP" and entering 5 MMPs on a 4:3/3:4 game still turns Start Point from red to green — the ratio validation may not be connected to the FMP/MMP button state correctly.
 
 ---
 
