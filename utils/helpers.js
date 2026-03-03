@@ -270,9 +270,34 @@ function getGenderRatioForPoint(game, pointIndex) {
     if (!game || game.alternateGenderRatio !== 'Alternating' || !game.startingGenderRatio) {
         return null;
     }
-    
+
     const useFirstRatio = (((pointIndex + 1) >> 1) & 1) === 0;
-    
+
     return useFirstRatio ? game.startingGenderRatio : (game.startingGenderRatio === 'FMP' ? 'MMP' : 'FMP');
+}
+
+/**
+ * Get the expected gender ratio for the next point to be played.
+ * Uses game.points.length as the next point index.
+ * @returns {'FMP'|'MMP'|null}
+ */
+function getExpectedGenderRatio(game) {
+    return getGenderRatioForPoint(game, game ? game.points.length : 0);
+}
+
+/**
+ * Get expected FMP/MMP player counts for a given player count and ratio.
+ * The "majority" gender gets ceil(count/2), the other gets floor(count/2).
+ * E.g., 7 players + 'FMP' → {fmp: 4, mmp: 3}
+ * @returns {{fmp: number, mmp: number}}
+ */
+function getExpectedGenderCounts(expectedCount, expectedRatio) {
+    const majority = Math.ceil(expectedCount / 2);
+    const minority = Math.floor(expectedCount / 2);
+    if (expectedRatio === 'FMP') {
+        return { fmp: majority, mmp: minority };
+    } else {
+        return { fmp: minority, mmp: majority };
+    }
 }
 

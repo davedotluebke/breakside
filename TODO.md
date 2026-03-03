@@ -79,7 +79,7 @@ See `game/gameScreen.js`, `ui/panelSystem.js`, `ui/panelSystem.css`
 
 1. ~~**Select Next Line table CSS broken**~~ — resolved (CSS caching issue)
 
-2. **Play-by-Play buttons broken after injury sub**: After performing an injury substitution, "We Score" and "They Score" buttons do nothing. Key Play dialog shows an empty player list (likely same root cause — `currentPoint.players` not updated after sub).
+2. ~~**Play-by-Play buttons broken after injury sub**~~ — fixed
 
 3. **Game Log panel minimize/maximize broken**: Often gets stuck showing only a sliver of content even when there's empty space below. Cannot be dragged in this state. Tapping min/max icon repeatedly sometimes helps. Possibly a z-order issue — content underneath (team+games list) appears to scroll behind the panel header.
 
