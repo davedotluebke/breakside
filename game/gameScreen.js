@@ -2696,7 +2696,11 @@ function updatePanelGenderRatioDisplay() {
         if (text) text.textContent = `+${expectedRatio} point`;
         if (ratioSelection) ratioSelection.style.display = 'none';
     } else {
-        // Need to select starting ratio
+        // Need to select starting ratio — clear any stale selection from a previous game
+        const fmpRadio = document.getElementById('panelStartingRatioFMP');
+        const mmpRadio = document.getElementById('panelStartingRatioMMP');
+        if (fmpRadio) fmpRadio.checked = false;
+        if (mmpRadio) mmpRadio.checked = false;
         if (text) text.textContent = 'Select starting ratio';
         if (ratioSelection) ratioSelection.style.display = 'block';
     }
