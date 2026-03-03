@@ -355,6 +355,12 @@ function undoEvent() {
             }
             if (!hasScoreEvent) {
                 revertPointScore(point);
+                // If the point has no possessions (e.g. "They Score" with no
+                // prior events), remove the entire point and go between-points
+                if (point.possessions.length === 0) {
+                    currentGame().points.pop();
+                    moveToNextPoint();
+                }
                 logEvent("Undo: score reverted");
                 saveAllTeamsData();
                 return;
