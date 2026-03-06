@@ -766,6 +766,13 @@ function updatePanelDrag(clientY) {
         const newPanelHeight = Math.max(minHeight, dragState.startPanelHeight + actualSpaceChanged);
         dragState.panelElement.style.height = `${newPanelHeight}px`;
         dragState.panelElement.style.flex = '0 0 auto';
+    } else {
+        // Keep game log scroll anchored to bottom during drag so the title bar
+        // appears to slide over the top of the content
+        const eventsEl = document.getElementById('gameLogEvents');
+        if (eventsEl) {
+            eventsEl.scrollTop = eventsEl.scrollHeight - eventsEl.clientHeight;
+        }
     }
 }
 
