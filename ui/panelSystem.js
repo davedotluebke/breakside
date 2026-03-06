@@ -608,14 +608,14 @@ function startPanelDrag(panelId, clientY) {
     if (!panelElement) return;
     
     // If the follow panel is minimized (snapped to bottom), un-minimize it first
-    // so that dragging works intuitively. Set to flex-fill mode so it naturally
-    // expands to fill remaining space as panels above shrink during drag.
+    // so that dragging works intuitively. Keep it at current visual height
+    // (no snap) — it will grow/shrink during drag via updatePanelDrag,
+    // then switch to flex-fill in endPanelDrag.
     if (panelId === 'follow' && isPanelMinimized('follow')) {
         panelElement.classList.remove('snapped-to-bottom');
         panelElement.style.marginTop = '';
-        panelElement.style.height = '';
-        panelElement.style.flex = '1 1 auto';
-        setPanelState('follow', { height: null });
+        panelElement.style.height = `${FOLLOW_MIN_HEIGHT}px`;
+        panelElement.style.flex = '0 0 auto';
     }
     
     // Store starting heights of ALL resizable panels for absolute positioning
@@ -740,13 +740,11 @@ function updatePanelDrag(clientY) {
     // Calculate actual space taken/given
     const actualSpaceChanged = spaceNeeded - remainingSpace;
     
-    // Update the dragged panel's height (unless it's Follow which fills remaining)
-    if (dragState.panelId !== 'follow') {
-        const minHeight = getDragMinHeight(dragState.panelId);
-        const newPanelHeight = Math.max(minHeight, dragState.startPanelHeight + actualSpaceChanged);
-        dragState.panelElement.style.height = `${newPanelHeight}px`;
-        dragState.panelElement.style.flex = '0 0 auto';
-    }
+    // Update the dragged panel's height
+    const minHeight = getDragMinHeight(dragState.panelId);
+    const newPanelHeight = Math.max(minHeight, dragState.startPanelHeight + actualSpaceChanged);
+    dragState.panelElement.style.height = `${newPanelHeight}px`;
+    dragState.panelElement.style.flex = '0 0 auto';
 }
 
 /**
