@@ -2,3 +2,17 @@
 recv.txt
 api_key.sec
 __pycache__/
+
+# Audio test files
+*.wav
+*.webm
+*.ogg
+*.m4a
+
+# Editor configs
+.cursor/
+.vscode/
+
+# Test data exports
+teamData.*.json
+test_team.json
