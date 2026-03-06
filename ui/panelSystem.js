@@ -608,17 +608,14 @@ function startPanelDrag(panelId, clientY) {
     if (!panelElement) return;
     
     // If the follow panel is minimized (snapped to bottom), un-minimize it first
-    // so that dragging works intuitively
+    // so that dragging works intuitively. Set to flex-fill mode so it naturally
+    // expands to fill remaining space as panels above shrink during drag.
     if (panelId === 'follow' && isPanelMinimized('follow')) {
-        // Remove the snapped-to-bottom state
         panelElement.classList.remove('snapped-to-bottom');
         panelElement.style.marginTop = '';
-        // Set to a reasonable starting height for dragging
-        const startingHeight = 150;
-        panelElement.style.height = `${startingHeight}px`;
-        panelElement.style.flex = '0 0 auto';
-        // Update state
-        setPanelState('follow', { height: startingHeight, expandedHeight: startingHeight });
+        panelElement.style.height = '';
+        panelElement.style.flex = '1 1 auto';
+        setPanelState('follow', { height: null });
     }
     
     // Store starting heights of ALL resizable panels for absolute positioning
@@ -777,7 +774,12 @@ function endPanelDrag() {
             }
         }
     });
-    
+
+    // Ensure follow panel is in flex-fill mode after being dragged
+    if (dragState.panelId === 'follow') {
+        setPanelState('follow', { height: null });
+    }
+
     // Reset drag state
     dragState = {
         active: false,
