@@ -426,14 +426,6 @@ function createGameLogContent() {
     content.className = 'game-log-content';
     
     content.innerHTML = `
-        <div class="game-log-status" id="gameLogStatus">
-            <div class="game-log-teams">
-                <span class="game-log-team-us" id="gameLogTeamUs">Us</span>
-                <span class="game-log-vs">vs</span>
-                <span class="game-log-team-them" id="gameLogTeamThem">Them</span>
-            </div>
-            <div class="game-log-score" id="gameLogScore">0 – 0</div>
-        </div>
         <div class="game-log-events" id="gameLogEvents">
             <div class="game-log-placeholder">
                 <i class="fas fa-list"></i>
@@ -3367,46 +3359,60 @@ function updateGameScreenScore(usScore, themScore) {
 // =============================================================================
 
 /**
- * Update the Game Log panel status (teams and score)
+ * Update the Game Log title bar with live score.
+ * Format: "TeamName 5 – OppName 2"
+ * If the text overflows, collapses to short names:
+ *   Our team: currentTeam.teamSymbol (4-char, e.g. "CUDO") — skip if null
+ *   Opponent: "Opp."
  */
-function updateGameLogStatus() {
-    const teamUsEl = document.getElementById('gameLogTeamUs');
-    const teamThemEl = document.getElementById('gameLogTeamThem');
-    const scoreEl = document.getElementById('gameLogScore');
-    
+function updateGameLogTitleScore() {
+    const titleTextEl = document.querySelector('#panel-follow-title .panel-title-text');
+    if (!titleTextEl) return;
+
     let game;
     if (typeof currentGame === 'function') {
         game = currentGame();
     } else if (typeof currentGame !== 'undefined') {
         game = currentGame;
     }
-    
-    if (!game) return;
-    
-    // Update team names
+
+    if (!game) {
+        titleTextEl.textContent = 'Game Log';
+        return;
+    }
+
     const teamName = game.team || 'Us';
     const opponentName = game.opponent || 'Them';
-    
-    if (teamUsEl) teamUsEl.textContent = teamName;
-    if (teamThemEl) teamThemEl.textContent = opponentName;
-    
-    // Update score
     const usScore = game.scores ? game.scores[Role.TEAM] : 0;
     const themScore = game.scores ? game.scores[Role.OPPONENT] : 0;
-    
-    if (scoreEl) scoreEl.textContent = `${usScore} – ${themScore}`;
+
+    const fullText = `${teamName} ${usScore} – ${opponentName} ${themScore}`;
+    titleTextEl.textContent = fullText;
+
+    // Check for overflow and collapse names if needed
+    if (titleTextEl.scrollWidth > titleTextEl.clientWidth) {
+        const shortTeam = (typeof currentTeam !== 'undefined' && currentTeam && currentTeam.teamSymbol)
+            ? currentTeam.teamSymbol
+            : teamName;
+        const shortOpp = 'Opp.';
+        titleTextEl.textContent = `${shortTeam} ${usScore} – ${shortOpp} ${themScore}`;
+    }
 }
 
 /**
- * Update just the score in the Game Log panel
- * @param {number} usScore - Our team's score
- * @param {number} themScore - Opponent's score
+ * Update the Game Log panel status (teams and score in title bar)
+ */
+function updateGameLogStatus() {
+    updateGameLogTitleScore();
+}
+
+/**
+ * Update just the score in the Game Log panel title bar
+ * @param {number} usScore - Our team's score (unused, reads from game)
+ * @param {number} themScore - Opponent's score (unused, reads from game)
  */
 function updateGameLogScore(usScore, themScore) {
-    const scoreEl = document.getElementById('gameLogScore');
-    if (scoreEl) {
-        scoreEl.textContent = `${usScore} – ${themScore}`;
-    }
+    updateGameLogTitleScore();
 }
 
 /**
