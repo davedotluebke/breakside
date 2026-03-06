@@ -2886,14 +2886,15 @@ function updateSelectLineTable() {
         // Time column
         const timeCell = document.createElement('td');
         timeCell.classList.add('active-time-column');
+        const gameTime = typeof getPlayerGameTime === 'function'
+            ? getPlayerGameTime(player.name)
+            : 0;
         if (panelShowingTotalStats) {
+            const totalTime = (player.totalTimePlayed || 0) + gameTime;
             timeCell.textContent = typeof formatPlayTime === 'function'
-                ? formatPlayTime(player.totalTimePlayed || 0)
+                ? formatPlayTime(totalTime)
                 : '0:00';
         } else {
-            const gameTime = typeof getPlayerGameTime === 'function'
-                ? getPlayerGameTime(player.name)
-                : 0;
             timeCell.textContent = typeof formatPlayTime === 'function'
                 ? formatPlayTime(gameTime)
                 : '0:00';
