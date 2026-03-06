@@ -607,47 +607,15 @@ function startPanelDrag(panelId, clientY) {
     const panelElement = getPanelElement(panelId);
     if (!panelElement) return;
     
-    // If the follow panel is minimized (snapped to bottom), un-minimize to
-    // flex-fill mode so it fills remaining space. This keeps the bottom edge
-    // anchored during drag — only the title bar (top edge) moves.
+    // If the follow panel is minimized, un-minimize to its current height
+    // so dragging starts from the current visual position (no snap).
+    // The scroll-to-bottom anchor in updatePanelDrag keeps the bottom content
+    // visible as the panel resizes.
     if (panelId === 'follow' && isPanelMinimized('follow')) {
-        // Save scroll position before layout change
-        const eventsEl = document.getElementById('gameLogEvents');
-        const savedScrollTop = eventsEl ? eventsEl.scrollTop : 0;
-        const wasAtBottom = eventsEl
-            ? (eventsEl.scrollTop + eventsEl.clientHeight >= eventsEl.scrollHeight - 2)
-            : true;
-
-        // Before switching follow to flex-fill, freeze any currently-expanding
-        // panel at its measured height so it doesn't share space with follow
-        RESIZABLE_PANELS.forEach(id => {
-            if (id !== 'follow') {
-                const el = getPanelElement(id);
-                if (el && el.classList.contains('expanding')) {
-                    el.style.height = `${el.getBoundingClientRect().height}px`;
-                    el.style.flex = '0 0 auto';
-                    el.classList.remove('expanding');
-                }
-            }
-        });
-
         panelElement.classList.remove('snapped-to-bottom');
         panelElement.style.marginTop = '';
-        panelElement.style.height = '';
-        panelElement.style.flex = '1 1 auto';
-        panelStates['follow'] = { ...getPanelState('follow'), height: null };
-        savePanelStates();
-
-        // Restore scroll position after layout settles
-        requestAnimationFrame(() => {
-            if (eventsEl) {
-                if (wasAtBottom) {
-                    eventsEl.scrollTop = eventsEl.scrollHeight;
-                } else {
-                    eventsEl.scrollTop = savedScrollTop;
-                }
-            }
-        });
+        panelElement.style.height = `${FOLLOW_MIN_HEIGHT}px`;
+        panelElement.style.flex = '0 0 auto';
     }
     
     // Store starting heights of ALL resizable panels for absolute positioning
@@ -774,14 +742,14 @@ function updatePanelDrag(clientY) {
     
     // Update the dragged panel's height (unless it's Follow which fills remaining
     // space via flex — resizing panels above naturally resizes Follow)
-    if (dragState.panelId !== 'follow') {
-        const minHeight = getDragMinHeight(dragState.panelId);
-        const newPanelHeight = Math.max(minHeight, dragState.startPanelHeight + actualSpaceChanged);
-        dragState.panelElement.style.height = `${newPanelHeight}px`;
-        dragState.panelElement.style.flex = '0 0 auto';
-    } else {
-        // Keep game log scroll anchored to bottom during drag so the title bar
-        // appears to slide over the top of the content
+    const minHeight = getDragMinHeight(dragState.panelId);
+    const newPanelHeight = Math.max(minHeight, dragState.startPanelHeight + actualSpaceChanged);
+    dragState.panelElement.style.height = `${newPanelHeight}px`;
+    dragState.panelElement.style.flex = '0 0 auto';
+
+    // Keep game log scroll anchored to bottom during drag so the title bar
+    // appears to slide over the top of the content
+    if (dragState.panelId === 'follow') {
         const eventsEl = document.getElementById('gameLogEvents');
         if (eventsEl) {
             eventsEl.scrollTop = eventsEl.scrollHeight - eventsEl.clientHeight;
@@ -815,12 +783,26 @@ function endPanelDrag() {
         }
     });
 
-    // Ensure follow panel is in flex-fill mode after being dragged.
-    // Save/restore scroll position to prevent content jumping.
+    // After dragging follow, switch it to flex-fill mode so it fills
+    // remaining space naturally. First freeze any expanding panel at its
+    // current height so it doesn't compete for flex space.
     if (dragState.panelId === 'follow') {
         const eventsEl = document.getElementById('gameLogEvents');
         const savedScrollTop = eventsEl ? eventsEl.scrollTop : 0;
+
+        RESIZABLE_PANELS.forEach(id => {
+            if (id !== 'follow') {
+                const el = getPanelElement(id);
+                if (el && el.classList.contains('expanding')) {
+                    el.style.height = `${el.getBoundingClientRect().height}px`;
+                    el.style.flex = '0 0 auto';
+                    el.classList.remove('expanding');
+                }
+            }
+        });
+
         setPanelState('follow', { height: null });
+
         if (eventsEl) {
             requestAnimationFrame(() => {
                 eventsEl.scrollTop = savedScrollTop;
