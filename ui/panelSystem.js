@@ -618,6 +618,19 @@ function startPanelDrag(panelId, clientY) {
             ? (eventsEl.scrollTop + eventsEl.clientHeight >= eventsEl.scrollHeight - 2)
             : true;
 
+        // Before switching follow to flex-fill, freeze any currently-expanding
+        // panel at its measured height so it doesn't share space with follow
+        RESIZABLE_PANELS.forEach(id => {
+            if (id !== 'follow') {
+                const el = getPanelElement(id);
+                if (el && el.classList.contains('expanding')) {
+                    el.style.height = `${el.getBoundingClientRect().height}px`;
+                    el.style.flex = '0 0 auto';
+                    el.classList.remove('expanding');
+                }
+            }
+        });
+
         panelElement.classList.remove('snapped-to-bottom');
         panelElement.style.marginTop = '';
         panelElement.style.height = '';
