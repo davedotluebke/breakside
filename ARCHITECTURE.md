@@ -43,7 +43,7 @@ The frontend is a vanilla JavaScript Progressive Web App with no framework depen
 ```
 ultistats/
 ├── index.html              # Main HTML entry point
-├── main.js                 # Application bootstrap (~200 lines)
+├── main.js                 # Application bootstrap (~436 lines)
 ├── main.css                # Application styles
 ├── manifest.json           # PWA manifest
 ├── service-worker.js       # Service worker for offline functionality
@@ -63,22 +63,24 @@ ultistats/
 │
 ├── teams/                   # Team management
 │   ├── teamSelection.js    # Team selection and team CRUD operations
-│   └── rosterManagement.js # Roster display, player and line management
+│   ├── rosterManagement.js # Roster display, player and line management
+│   └── teamSettings.js     # Team settings, member list, invite management
 │
 ├── game/                    # Game core logic
 │   ├── gameLogic.js        # Game initialization, scoring, undo
+│   ├── gameScreen.js       # Game screen with panel layout
 │   ├── pointManagement.js  # Point creation, timing, transitions
-│   ├── beforePointScreen.js# Player selection and line management
+│   ├── controllerState.js  # Multi-coach role management
 │   └── genderRatioDropdown.js # Gender ratio rule selection
 │
 ├── playByPlay/              # Play-by-play tracking
-│   ├── offenseScreen.js    # Offensive possession tracking
-│   ├── defenseScreen.js    # Defensive possession tracking
-│   ├── simpleModeScreen.js # Simple mode scoring
 │   ├── keyPlayDialog.js    # Key play recording dialog
-│   └── pullDialog.js       # Pull tracking dialog
+│   ├── pullDialog.js       # Pull tracking dialog
+│   └── scoreAttribution.js # Score attribution dialog
 │
 ├── ui/                      # UI components
+│   ├── panelSystem.js       # Panel layout and drag-to-resize system
+│   ├── panelSystem.css      # Panel system styles
 │   ├── activePlayersDisplay.js # Active players table
 │   ├── eventLogDisplay.js   # Event log management
 │   └── buttonLayout.js      # UI consistency functions
@@ -135,6 +137,9 @@ ultistats_server/
 │   ├── player_storage.py# Player CRUD operations
 │   ├── user_storage.py  # User account CRUD operations
 │   ├── membership_storage.py # Team membership management
+│   ├── invite_storage.py    # Invite code management
+│   ├── share_storage.py     # Game sharing management
+│   ├── controller_storage.py # In-memory game controller state
 │   └── index_storage.py # Cross-entity index management
 │
 ├── static/
@@ -201,13 +206,13 @@ ultistats_server/
 - `PATCH /api/auth/me` - Update current user profile
 - `GET /api/auth/teams` - List teams user has access to
 
-#### Memberships (planned)
+#### Memberships
 - `POST /api/teams/{team_id}/invite` - Generate invite code
 - `POST /api/invites/{code}/redeem` - Redeem invite code
 - `GET /api/teams/{team_id}/members` - List team members
 - `DELETE /api/teams/{team_id}/members/{user_id}` - Remove member
 
-#### Game Control (planned)
+#### Game Control
 - `GET /api/games/{game_id}/status` - Get active/line coach status
 - `POST /api/games/{game_id}/claim-active` - Request Active Coach role
 - `POST /api/games/{game_id}/claim-line` - Request Line Coach role
@@ -525,6 +530,9 @@ auth/
 ├── config.js         # Supabase URL and anon key
 ├── auth.js           # Supabase client, session management
 └── loginScreen.js    # Login/signup UI component
+
+teams/
+└── teamSettings.js   # Team settings, member list, invite management UI
 ```
 
 Exported via `window.breakside.auth`:
