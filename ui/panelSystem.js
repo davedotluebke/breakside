@@ -25,6 +25,9 @@ const MIN_PANEL_HEIGHT = 36;
 // This ensures the buttons are always visible unless explicitly minimized
 const PBP_MIN_CONTENT_HEIGHT = 96;
 
+// Minimum height for Follow (Game Log) panel (~36px title bar + ~44px for 2 lines of log content)
+const FOLLOW_MIN_HEIGHT = 80;
+
 // Default expanded height when un-minimizing a panel that has no saved height
 const DEFAULT_EXPANDED_HEIGHT = 150;
 
@@ -105,7 +108,8 @@ function getPanelState(panelId) {
  */
 function isPanelMinimized(panelId) {
     const state = getPanelState(panelId);
-    return state.height !== null && state.height <= MIN_PANEL_HEIGHT;
+    const minHeight = panelId === 'follow' ? FOLLOW_MIN_HEIGHT : MIN_PANEL_HEIGHT;
+    return state.height !== null && state.height <= minHeight;
 }
 
 /**
@@ -155,11 +159,11 @@ function applyPanelState(panelId) {
     if (isFollowPanel) {
         if (isMinimized) {
             // Snap to bottom: use margin-top: auto to push title bar to bottom
-            panel.style.height = `${MIN_PANEL_HEIGHT}px`;
+            panel.style.height = `${FOLLOW_MIN_HEIGHT}px`;
             panel.style.flex = '0 0 auto';
             panel.style.marginTop = 'auto';
             panel.classList.add('snapped-to-bottom');
-        } else if (state.height !== null && state.height > MIN_PANEL_HEIGHT) {
+        } else if (state.height !== null && state.height > FOLLOW_MIN_HEIGHT) {
             // Explicit expanded height
             panel.style.height = `${state.height}px`;
             panel.style.flex = '0 0 auto';
@@ -309,12 +313,13 @@ function minimizePanel(panelId) {
     }
     
     // Only save expandedHeight if current height is actually expanded
-    const expandedHeight = (currentHeight && currentHeight > MIN_PANEL_HEIGHT) 
-        ? currentHeight 
+    const minHeight = panelId === 'follow' ? FOLLOW_MIN_HEIGHT : MIN_PANEL_HEIGHT;
+    const expandedHeight = (currentHeight && currentHeight > minHeight)
+        ? currentHeight
         : state.expandedHeight;
-    
-    setPanelState(panelId, { 
-        height: MIN_PANEL_HEIGHT,
+
+    setPanelState(panelId, {
+        height: minHeight,
         expandedHeight: expandedHeight
     });
 }
@@ -456,9 +461,10 @@ function restoreFromFullScreen() {
         const savedHeight = preMaximizeHeights[id];
         if (savedHeight !== undefined) {
             // Restore the height
-            if (savedHeight <= MIN_PANEL_HEIGHT) {
+            const minHeight = id === 'follow' ? FOLLOW_MIN_HEIGHT : MIN_PANEL_HEIGHT;
+            if (savedHeight <= minHeight) {
                 // Was minimized before
-                setPanelState(id, { height: MIN_PANEL_HEIGHT });
+                setPanelState(id, { height: minHeight });
             } else {
                 // Was expanded - set height and expandedHeight
                 setPanelState(id, { 
@@ -578,6 +584,9 @@ function isPanelDraggable(panelId) {
 function getDragMinHeight(panelId) {
     if (panelId === 'playByPlay') {
         return PBP_MIN_CONTENT_HEIGHT;
+    }
+    if (panelId === 'follow') {
+        return FOLLOW_MIN_HEIGHT;
     }
     return MIN_PANEL_HEIGHT;
 }
@@ -1345,6 +1354,7 @@ window.getDragMinHeight = getDragMinHeight;
 window.DRAGGABLE_PANELS = DRAGGABLE_PANELS;
 window.RESIZABLE_PANELS = RESIZABLE_PANELS;
 window.PBP_MIN_CONTENT_HEIGHT = PBP_MIN_CONTENT_HEIGHT;
+window.FOLLOW_MIN_HEIGHT = FOLLOW_MIN_HEIGHT;
 
 // Game screen management
 window.showGameScreen = showGameScreen;
