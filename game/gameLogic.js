@@ -4,9 +4,6 @@
  * 
  * Phase 4 update: Games use teamId and create rosterSnapshot
  */
-let currentPoint = null;
-let currentEvent = null;
-let currentPlayer = null;
 let appVersion = null;
 
 function startNewGame(startingPosition, seconds) {
@@ -61,21 +58,14 @@ function startNewGame(startingPosition, seconds) {
     // Set countdown seconds before moving to next point
     countdownSeconds = seconds;
 
-    // Phase 6b: Use panel-based game screen if enabled
-    if (window.useNewGameScreen && typeof enterGameScreen === 'function') {
-        // Enter the panel-based game screen
+    // Enter the panel-based game screen
+    if (typeof enterGameScreen === 'function') {
         enterGameScreen();
-        
-        // Transition to between-points state (no point started yet)
-        if (typeof transitionToBetweenPoints === 'function') {
-            transitionToBetweenPoints();
-        }
-        
-        console.log('🎮 New game started with panel UI');
-    } else {
-        // Legacy: use beforePointScreen
-        moveToNextPoint();
     }
+    if (typeof transitionToBetweenPoints === 'function') {
+        transitionToBetweenPoints();
+    }
+    console.log('🎮 New game started with panel UI');
 }
 
 document.getElementById('startGameOnOBtn').addEventListener('click', function() {
@@ -95,33 +85,34 @@ function updateScore(winner) {
         throw new Error("inactive role");
     }
 
-    if (!currentPoint) {
+    const point = getLatestPoint();
+    if (!point) {
         throw new Error("No current point");
     }
 
-    if (currentPoint.startTimestamp === null) {
-        console.warn("Warning: currentPoint.startTimestamp is null; setting to now");
-        currentPoint.startTimestamp = new Date();
+    if (point.startTimestamp === null) {
+        console.warn("Warning: point.startTimestamp is null; setting to now");
+        point.startTimestamp = new Date();
     }
 
     // Add any remaining time to totalPointTime before ending
-    currentPoint.totalPointTime += (new Date() - currentPoint.startTimestamp);
-    currentPoint.endTimestamp = new Date();
-    currentPoint.winner = winner; // Setting the winning team for the current point
+    point.totalPointTime += (new Date() - point.startTimestamp);
+    point.endTimestamp = new Date();
+    point.winner = winner; // Setting the winning team for the current point
     currentGame().scores[winner]++;
 
     // Update event log
-    logEvent(`${currentPoint.winner} scores!`);
+    logEvent(`${point.winner} scores!`);
 
     // Update player stats for those who played this point
     // Include players who were substituted out mid-point (they still "played" the point)
     currentTeam.teamRoster.forEach(player => {
-        const playedPoint = currentPoint.players.includes(player.name) ||
-            (currentPoint.substitutedOutPlayers && currentPoint.substitutedOutPlayers.includes(player.name));
+        const playedPoint = point.players.includes(player.name) ||
+            (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name));
         if (playedPoint) { // the player played this point
             player.totalPointsPlayed++;
             player.consecutivePointsPlayed++;
-            player.totalTimePlayed += currentPoint.totalPointTime;
+            player.totalTimePlayed += point.totalPointTime;
             if (winner === Role.TEAM) {
                 player.pointsWon++;
             } else {
@@ -132,20 +123,6 @@ function updateScore(winner) {
         }
     });
 
-    currentPoint = null;  // Reset the temporary point object
-    currentEvent = null;  // Reset the temporary event object
-    currentPlayer = null; // Reset the temporary player object
-
-    // Check if we're in next line selection mode and exit if we are
-    if (document.body.classList.contains('next-line-mode')) {
-        exitNextLineSelectionMode();
-    }
-
-    // Un-select all player buttons so O action buttons will be inactive next point
-    document.querySelectorAll('.player-button').forEach(button => {
-        button.classList.remove('selected');
-    });
-
     // Phase 6b: Update game screen score display
     if (typeof updateGameScreenScore === 'function') {
         const game = currentGame();
@@ -153,129 +130,12 @@ function updateScore(winner) {
     }
 
     summarizeGame();
-    updateActivePlayersList();  // Update the table with the new point data
     saveAllTeamsData(); // Save and Sync
 }
 
-document.getElementById('endGameBtn').addEventListener('click', function() {
-    if (confirm('Are you sure you want to end the game?')) {
-        stopCountdown();
-        currentGame().gameEndTimestamp = new Date(); // Set end timestamp (fixed: was incorrectly using endTimestamp)
+// Legacy end game, switch sides, timeout, halftime buttons removed —
+// panel UI (gameScreen.js) handles all game events.
 
-        // Phase 6b: Exit game screen if visible
-        if (typeof exitGameScreen === 'function') {
-            exitGameScreen();
-        }
-
-        // Populate the gameSummaryScreen with statistics, then show it
-        document.getElementById('teamName').textContent = currentGame().team;
-        document.getElementById('teamFinalScore').textContent = currentGame().scores[Role.TEAM];
-        document.getElementById('opponentName').textContent = currentGame().opponent;
-        document.getElementById('opponentFinalScore').textContent = currentGame().scores[Role.OPPONENT];
-        updateGameSummaryRosterDisplay(); // Populate the roster stats table
-        showScreen('gameSummaryScreen');
-        saveAllTeamsData();
-    }
-});
-
-document.getElementById('switchSidesBtn').addEventListener('click', function() {
-    const inNextLineMode = document.body.classList.contains('next-line-mode');
-    const startPointBtn = document.getElementById('startPointBtn');
-
-    const game = currentGame();
-    const lastPoint = getLatestPoint();
-
-    if (!game || !lastPoint) {
-        currentGame().startingPosition = currentGame().startingPosition === 'offense' ? 'defense' : 'offense';
-        logEvent(`Switching starting position to ${currentGame().startingPosition}`);
-
-        if (!inNextLineMode && startPointBtn) {
-            const newStart = determineStartingPosition();
-            startPointBtn.textContent = `Start Point (${capitalize(newStart)})`;
-        }
-
-        if (typeof checkPlayerCount === 'function') {
-            checkPlayerCount();
-        }
-        return;
-    }
-
-    let possessionIndex = -1;
-    let eventIndex = -1;
-
-    for (let pIdx = lastPoint.possessions.length - 1; pIdx >= 0 && possessionIndex === -1; pIdx--) {
-        const possession = lastPoint.possessions[pIdx];
-        for (let eIdx = possession.events.length - 1; eIdx >= 0; eIdx--) {
-            const event = possession.events[eIdx];
-            if (event.type === 'Other' && event.switchsides_flag) {
-                possessionIndex = pIdx;
-                eventIndex = eIdx;
-                break;
-            }
-        }
-    }
-
-    if (possessionIndex !== -1) {
-        const possession = lastPoint.possessions[possessionIndex];
-        possession.events.splice(eventIndex, 1);
-        if (possession.events.length === 0) {
-            lastPoint.possessions.splice(possessionIndex, 1);
-        }
-        logEvent("Removed most recent switch sides event");
-    } else {
-        let targetPossession = lastPoint.possessions.length > 0
-            ? lastPoint.possessions[lastPoint.possessions.length - 1]
-            : null;
-
-        if (!targetPossession) {
-            targetPossession = new Possession(false);
-            lastPoint.addPossession(targetPossession);
-        }
-
-        const switchSidesEvent = new Other({ switchsides: true });
-        targetPossession.addEvent(switchSidesEvent);
-        logEvent(switchSidesEvent.summarize());
-    }
-
-    if (!inNextLineMode && startPointBtn) {
-        const newStart = determineStartingPosition();
-        startPointBtn.textContent = `Start Point (${capitalize(newStart)})`;
-    }
-
-    if (typeof checkPlayerCount === 'function') {
-        checkPlayerCount();
-    }
-});
-
-document.getElementById('timeOutBtn').addEventListener('click', function() {
-    // create Other event with timeout flag set; append to most recent point
-    currentEvent = new Other({timeout: true});
-    const currentPossession = getActivePossession(currentPoint);
-    currentPossession.addEvent(currentEvent);
-    logEvent(currentEvent.summarize());
-});
-
-document.getElementById('halftimeBtn').addEventListener('click', function() {
-    // create Other event with halftime flag set; append to most recent point
-    currentEvent = new Other({halftime: true});
-    const currentPossession = getActivePossession(currentPoint);
-    currentPossession.addEvent(currentEvent);
-    logEvent(currentEvent.summarize());
-});
-
-document.getElementById('oSubPlayersBtn').addEventListener('click', function() {
-    updateActivePlayersList();
-    showScreen('beforePointScreen');
-    // enable the "continue game" button
-    document.getElementById('continueGameBtn').classList.remove('inactive');
-});
-
-document.getElementById('dSubPlayersBtn').addEventListener('click', function() {
-    updateActivePlayersList();
-    showScreen('beforePointScreen');
-    // enable the "continue game" button
-    document.getElementById('continueGameBtn').classList.remove('inactive');
-});
 
 document.getElementById('downloadGameBtn').addEventListener('click', function() {
     const teamData = serializeTeam(currentTeam); // Assuming serializeTeam returns a JSON string
@@ -293,10 +153,7 @@ document.getElementById('anotherGameBtn').addEventListener('click', function() {
     stopCountdown();
     isPaused = false;
     clearNextLineSelections();
-    currentPoint = null;
-    currentEvent = null;
-    currentPlayer = null;
-    
+
     // Phase 6b: Exit game screen if visible
     if (typeof exitGameScreen === 'function') {
         exitGameScreen();
@@ -397,16 +254,121 @@ function summarizeGame() {
 
 // logEvent is now in ui/eventLogDisplay.js
 
+let undoPastStartTimestamp = null;
+
+/**
+ * Revert the score and player stats set by updateScore() for a point.
+ * Used by undoEvent() when reverting a scored point.
+ */
+function revertPointScore(point) {
+    currentGame().scores[point.winner]--;
+
+    currentTeam.teamRoster.forEach(player => {
+        const playedPoint = point.players.includes(player.name) ||
+            (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name));
+        if (playedPoint) {
+            player.totalPointsPlayed--;
+            player.consecutivePointsPlayed--;
+            player.totalTimePlayed -= point.totalPointTime;
+            if (player.totalTimePlayed < 0) player.totalTimePlayed = 0;
+            if (point.winner === Role.TEAM) {
+                player.pointsWon--;
+                if (player.pointsWon < 0) player.pointsWon = 0;
+            } else {
+                player.pointsLost--;
+                if (player.pointsLost < 0) player.pointsLost = 0;
+            }
+        }
+    });
+
+    point.winner = "";
+    point.endTimestamp = null;
+    point.startTimestamp = new Date();
+
+    if (typeof updateGameScreenScore === 'function') {
+        const game = currentGame();
+        updateGameScreenScore(game.scores[Role.TEAM], game.scores[Role.OPPONENT]);
+    }
+
+    // Stop between-points countdown and restore in-point panel layout
+    stopCountdown();
+    if (typeof updatePanelsForGameState === 'function') {
+        updatePanelsForGameState(true);
+    }
+}
+
 /**
  * Undo the most recent event
  */
 function undoEvent() {
+    // Guard: no points in the game — warn, then offer to delete game on double-tap
+    if (currentGame().points.length === 0) {
+        const now = Date.now();
+        if (undoPastStartTimestamp && (now - undoPastStartTimestamp) < 4000) {
+            // Second press — offer restart
+            undoPastStartTimestamp = null;
+            if (confirm('This will delete the current game and return to the new game screen. Are you sure?')) {
+                const gameId = currentGame().id;
+                currentTeam.games.pop();
+                // Delete from cloud
+                if (typeof deleteGameFromCloud === 'function') {
+                    deleteGameFromCloud(gameId);
+                }
+                stopCountdown();
+                isPaused = false;
+                clearNextLineSelections();
+                if (typeof exitGameScreen === 'function') {
+                    exitGameScreen();
+                }
+                updateTeamRosterDisplay();
+                document.getElementById('continueGameBtn').classList.add('inactive');
+                showScreen('teamRosterScreen');
+                saveAllTeamsData();
+            }
+        } else {
+            // First press — show toast, set timestamp
+            undoPastStartTimestamp = now;
+            if (typeof showControllerToast === 'function') {
+                showControllerToast('No events to undo', 'warning');
+            }
+        }
+        return;
+    }
+    undoPastStartTimestamp = null; // Reset if there are events to undo
+
     // XXX add logic to remove the most recent event from the current possession
     if (currentGame().points.length > 0) {
-        // currentPoint is a global, reset it
-        currentPoint = currentGame().points[currentGame().points.length - 1];
-        if (currentPoint.possessions.length > 0) {
-            let currentPossession = getActivePossession(currentPoint);
+        const point = getLatestPoint();
+
+        // If the point was scored but the last event isn't a scoring event,
+        // revert only the score (handles "They Score" and "Skip" without event)
+        if (point.winner) {
+            let hasScoreEvent = false;
+            if (point.possessions.length > 0) {
+                const lastPoss = getActivePossession(point);
+                if (lastPoss.events.length > 0) {
+                    const lastEvent = lastPoss.events[lastPoss.events.length - 1];
+                    hasScoreEvent =
+                        (lastEvent instanceof Throw && lastEvent.score_flag) ||
+                        (lastEvent instanceof Defense && lastEvent.Callahan_flag);
+                }
+            }
+            if (!hasScoreEvent) {
+                revertPointScore(point);
+                // If the point has no possessions (e.g. "They Score" with no
+                // prior events), remove the entire point and go between-points
+                if (point.possessions.length === 0) {
+                    currentGame().points.pop();
+                    moveToNextPoint();
+                }
+                logEvent("Undo: score reverted");
+                saveAllTeamsData();
+                return;
+            }
+        }
+
+        if (point.possessions.length > 0) {
+            let currentPossession = getActivePossession(point);
             if (currentPossession.events.length > 0) {
                 let undoneEvent = currentPossession.events.pop();
                 logEvent(`Undid event: ${undoneEvent.summarize()}`);
@@ -445,36 +407,57 @@ function undoEvent() {
                         }
                     }
                 }
-                // XXX we allocate but don't currently maintain turnover stats for players
-                if (currentPossession.offensive) {
-                    updateOffensivePossessionScreen();
-                } else {
-                    updateDefensivePossessionScreen();
+                // If the undone event was a score, revert updateScore() changes
+                if (point.winner) {
+                    const wasScoreEvent =
+                        (undoneEvent instanceof Throw && undoneEvent.score_flag) ||
+                        (undoneEvent instanceof Defense && undoneEvent.Callahan_flag);
+                    if (wasScoreEvent) {
+                        revertPointScore(point);
+                    }
+                }
+                // Panel UI auto-updates based on game state — no legacy screen refresh needed
+
+                // If the possession is now empty after undoing (e.g. pull was only event),
+                // clean it up so the user isn't stranded mid-point with no way forward
+                if (currentPossession.events.length === 0) {
+                    point.possessions.pop();
+                    if (point.possessions.length === 0) {
+                        // No possessions left — remove the point and go to between-points.
+                        // Don't decrement player point stats: updateScore() was either never
+                        // called (unscored point) or already reverted by revertPointScore().
+                        currentGame().points.pop();
+                        moveToNextPoint();
+                    } else {
+                        // Go back to previous possession
+                        currentPossession = getActivePossession(point);
+                        currentPossession.endTimestamp = null;
+                    }
                 }
             } else {
                 // no events in this possession, remove the possession
-                currentPoint.possessions.pop();
-                if (currentPoint.possessions.length === 0) {
-                    // no possessions left in this point, update player stats then remove the point 
-                    currentPoint.players.forEach(playerName => {
+                point.possessions.pop();
+                if (point.possessions.length === 0) {
+                    // no possessions left in this point, update player stats then remove the point
+                    point.players.forEach(playerName => {
                         let player = getPlayerFromName(playerName);
                         player.totalPointsPlayed--;
                         player.consecutivePointsPlayed--;
                         // Decrement time played for this point
-                        if (currentPoint.totalPointTime) {
-                            player.totalTimePlayed -= currentPoint.totalPointTime;
+                        if (point.totalPointTime) {
+                            player.totalTimePlayed -= point.totalPointTime;
                             // Ensure totalTimePlayed doesn't go negative
                             if (player.totalTimePlayed < 0) {
                                 player.totalTimePlayed = 0;
                             }
                         }
                         // Decrement pointsWon or pointsLost based on winner
-                        if (currentPoint.winner === Role.TEAM) {
+                        if (point.winner === Role.TEAM) {
                             player.pointsWon--;
                             if (player.pointsWon < 0) {
                                 player.pointsWon = 0;
                             }
-                        } else if (currentPoint.winner === Role.OPPONENT) {
+                        } else if (point.winner === Role.OPPONENT) {
                             player.pointsLost--;
                             if (player.pointsLost < 0) {
                                 player.pointsLost = 0;
@@ -482,29 +465,21 @@ function undoEvent() {
                         }
                     });
                     // Decrement game score if winner is set
-                    if (currentPoint.winner) {
-                        currentGame().scores[currentPoint.winner]--;
+                    if (point.winner) {
+                        currentGame().scores[point.winner]--;
                     }
                     currentGame().points.pop();
-                    currentPoint = null;
-                    // display the "before point screen" 
+                    // display the "before point screen"
                     moveToNextPoint();
                 } else {
-                    // update and display screen for the previous possession
-                    currentPossession = getActivePossession(currentPoint);
+                    // Restore state for previous possession
+                    currentPossession = getActivePossession(point);
                     currentPossession.endTimestamp = null;
-                    currentEvent = currentPossession.events[currentPossession.events.length - 1];
-                    if (currentPossession.offensive) {
-                        updateOffensivePossessionScreen();
-                        showScreen('offensePlayByPlayScreen');
-                    } else {
-                        updateDefensivePossessionScreen();
-                        showScreen('defensePlayByPlayScreen');
-                    }
+                    // Panel UI auto-updates — no legacy screen navigation needed
                 }
             }
         }
-    } 
+    }
     // XXX update the event log
     logEvent("Undo button pressed!");
     saveAllTeamsData(); // Save and Sync

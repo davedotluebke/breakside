@@ -23,13 +23,12 @@
  *   ├── game/                    # Game core logic
  *   │   ├── gameLogic.js        # Game initialization, scoring, and undo functionality
  *   │   ├── pointManagement.js  # Point creation, timing, and transitions
- *   │   └── beforePointScreen.js # Before Point screen with player selection and line management
+ *   │   └── gameScreen.js       # Panel-based in-game UI
  *   │
- *   ├── playByPlay/              # Play-by-play tracking screens
- *   │   ├── offenseScreen.js    # Offensive possession tracking and event creation
- *   │   ├── defenseScreen.js    # Defensive possession tracking and event creation
- *   │   ├── simpleModeScreen.js # Simple mode scoring and score attribution
- *   │   └── keyPlayDialog.js    # Key play dialog for recording important events
+ *   ├── playByPlay/              # Play-by-play dialogs
+ *   │   ├── scoreAttribution.js # Score attribution dialog (thrower/receiver)
+ *   │   ├── keyPlayDialog.js    # Key play dialog for recording important events
+ *   │   └── pullDialog.js       # Pull dialog for defensive points
  *   │
  *   ├── ui/                      # UI update functions
  *   │   ├── activePlayersDisplay.js # Active players table rendering and management
@@ -408,22 +407,17 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Set initial header state based on starting screen
     const headerElement = document.querySelector('header');
-    const simpleModeToggle = document.querySelector('.simple-mode-toggle');
-    
-    // Start with full header and hidden toggle since we start on team select
+
+    // Start with full header since we start on team select
     headerElement.classList.add('header-full');
     headerElement.classList.remove('header-compact');
-    simpleModeToggle.classList.add('hidden');
-    
-    // Initialize Simple Mode toggle to checked state (since it's now the default)
-    document.getElementById('simpleModeToggle').checked = window.isSimpleMode;
     
     // Initial display of countdown timer
     document.getElementById('countdownTimer').style.display = 'none';
     
     // Initialize play-by-play modules
-    if (typeof initializeSimpleModeScreen === 'function') {
-        initializeSimpleModeScreen();
+    if (typeof initializeScoreAttributionDialog === 'function') {
+        initializeScoreAttributionDialog();
     }
     if (typeof initializeKeyPlayDialog === 'function') {
         initializeKeyPlayDialog();
@@ -438,69 +432,5 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(matchButtonWidths, 100);
 });
 
-// Simple Mode Toggle
-window.isSimpleMode = window.isSimpleMode ?? true;
 
-document.getElementById('simpleModeToggle').addEventListener('change', function() {
-    window.isSimpleMode = this.checked;
-    
-    // If we're in next line selection mode, exit it first
-    if (document.body.classList.contains('next-line-mode')) {
-        exitNextLineSelectionMode();
-    }
-    
-    // Find which screen is currently visible
-    let currentScreenId = null;
-    for (const screen of screens) {
-        if (screen && screen.style.display !== 'none') {
-            currentScreenId = screen.id;
-            break;
-        }
-    }
-    
-    // Only process screen transitions if we're on a play-by-play screen
-    if (playByPlayScreenIds.includes(currentScreenId)) {
-        if (window.isSimpleMode) {
-            // When switching to simple mode, keep existing possession data
-            showScreen('simpleModeScreen');
-            
-            // Make sure point timer is running
-            if (currentPoint && !currentPoint.startTimestamp) {
-                currentPoint.startTimestamp = new Date();
-            }
-        } else {
-            // When switching back to detailed mode, determine which screen to show
-            if (!currentPoint) {
-                console.warn("No current point when toggling from simple mode");
-                return;
-            }
-            
-            // Check if we have any possessions in this point
-            if (currentPoint.possessions.length > 0) {
-                // Check if the latest possession is offensive or defensive
-                const latestPossession = currentPoint.possessions[currentPoint.possessions.length - 1];
-                if (latestPossession.offensive) {
-                    updateOffensivePossessionScreen();
-                    showScreen('offensePlayByPlayScreen');
-                } else {
-                    updateDefensivePossessionScreen();
-                    showScreen('defensePlayByPlayScreen');
-                }
-            } else {
-                // No possessions yet, use the starting position of the point
-                if (currentPoint.startingPosition === 'offense') {
-                    // Create the first possession as offensive
-                    currentPoint.addPossession(new Possession(true));
-                    updateOffensivePossessionScreen();
-                    showScreen('offensePlayByPlayScreen');
-                } else {
-                    // Create the first possession as defensive
-                    currentPoint.addPossession(new Possession(false));
-                    updateDefensivePossessionScreen();
-                    showScreen('defensePlayByPlayScreen');
-                }
-            }
-        }
-    }
-});
 

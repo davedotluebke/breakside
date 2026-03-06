@@ -25,6 +25,9 @@ const MIN_PANEL_HEIGHT = 36;
 // This ensures the buttons are always visible unless explicitly minimized
 const PBP_MIN_CONTENT_HEIGHT = 96;
 
+// Minimum height for Follow (Game Log) panel (~36px title bar + ~44px for 2 lines of log content)
+const FOLLOW_MIN_HEIGHT = 80;
+
 // Default expanded height when un-minimizing a panel that has no saved height
 const DEFAULT_EXPANDED_HEIGHT = 150;
 
@@ -105,7 +108,8 @@ function getPanelState(panelId) {
  */
 function isPanelMinimized(panelId) {
     const state = getPanelState(panelId);
-    return state.height !== null && state.height <= MIN_PANEL_HEIGHT;
+    const minHeight = panelId === 'follow' ? FOLLOW_MIN_HEIGHT : MIN_PANEL_HEIGHT;
+    return state.height !== null && state.height <= minHeight;
 }
 
 /**
@@ -155,11 +159,11 @@ function applyPanelState(panelId) {
     if (isFollowPanel) {
         if (isMinimized) {
             // Snap to bottom: use margin-top: auto to push title bar to bottom
-            panel.style.height = `${MIN_PANEL_HEIGHT}px`;
+            panel.style.height = `${FOLLOW_MIN_HEIGHT}px`;
             panel.style.flex = '0 0 auto';
             panel.style.marginTop = 'auto';
             panel.classList.add('snapped-to-bottom');
-        } else if (state.height !== null && state.height > MIN_PANEL_HEIGHT) {
+        } else if (state.height !== null && state.height > FOLLOW_MIN_HEIGHT) {
             // Explicit expanded height
             panel.style.height = `${state.height}px`;
             panel.style.flex = '0 0 auto';
@@ -309,12 +313,13 @@ function minimizePanel(panelId) {
     }
     
     // Only save expandedHeight if current height is actually expanded
-    const expandedHeight = (currentHeight && currentHeight > MIN_PANEL_HEIGHT) 
-        ? currentHeight 
+    const minHeight = panelId === 'follow' ? FOLLOW_MIN_HEIGHT : MIN_PANEL_HEIGHT;
+    const expandedHeight = (currentHeight && currentHeight > minHeight)
+        ? currentHeight
         : state.expandedHeight;
-    
-    setPanelState(panelId, { 
-        height: MIN_PANEL_HEIGHT,
+
+    setPanelState(panelId, {
+        height: minHeight,
         expandedHeight: expandedHeight
     });
 }
@@ -456,9 +461,10 @@ function restoreFromFullScreen() {
         const savedHeight = preMaximizeHeights[id];
         if (savedHeight !== undefined) {
             // Restore the height
-            if (savedHeight <= MIN_PANEL_HEIGHT) {
+            const minHeight = id === 'follow' ? FOLLOW_MIN_HEIGHT : MIN_PANEL_HEIGHT;
+            if (savedHeight <= minHeight) {
                 // Was minimized before
-                setPanelState(id, { height: MIN_PANEL_HEIGHT });
+                setPanelState(id, { height: minHeight });
             } else {
                 // Was expanded - set height and expandedHeight
                 setPanelState(id, { 
@@ -579,6 +585,9 @@ function getDragMinHeight(panelId) {
     if (panelId === 'playByPlay') {
         return PBP_MIN_CONTENT_HEIGHT;
     }
+    if (panelId === 'follow') {
+        return FOLLOW_MIN_HEIGHT;
+    }
     return MIN_PANEL_HEIGHT;
 }
 
@@ -598,18 +607,47 @@ function startPanelDrag(panelId, clientY) {
     const panelElement = getPanelElement(panelId);
     if (!panelElement) return;
     
-    // If the follow panel is minimized (snapped to bottom), un-minimize it first
-    // so that dragging works intuitively
+    // If the follow panel is minimized (snapped to bottom), un-minimize to
+    // flex-fill mode so it fills remaining space. This keeps the bottom edge
+    // anchored during drag — only the title bar (top edge) moves.
     if (panelId === 'follow' && isPanelMinimized('follow')) {
-        // Remove the snapped-to-bottom state
+        // Save scroll position before layout change
+        const eventsEl = document.getElementById('gameLogEvents');
+        const savedScrollTop = eventsEl ? eventsEl.scrollTop : 0;
+        const wasAtBottom = eventsEl
+            ? (eventsEl.scrollTop + eventsEl.clientHeight >= eventsEl.scrollHeight - 2)
+            : true;
+
+        // Before switching follow to flex-fill, freeze any currently-expanding
+        // panel at its measured height so it doesn't share space with follow
+        RESIZABLE_PANELS.forEach(id => {
+            if (id !== 'follow') {
+                const el = getPanelElement(id);
+                if (el && el.classList.contains('expanding')) {
+                    el.style.height = `${el.getBoundingClientRect().height}px`;
+                    el.style.flex = '0 0 auto';
+                    el.classList.remove('expanding');
+                }
+            }
+        });
+
         panelElement.classList.remove('snapped-to-bottom');
         panelElement.style.marginTop = '';
-        // Set to a reasonable starting height for dragging
-        const startingHeight = 150;
-        panelElement.style.height = `${startingHeight}px`;
-        panelElement.style.flex = '0 0 auto';
-        // Update state
-        setPanelState('follow', { height: startingHeight, expandedHeight: startingHeight });
+        panelElement.style.height = '';
+        panelElement.style.flex = '1 1 auto';
+        panelStates['follow'] = { ...getPanelState('follow'), height: null };
+        savePanelStates();
+
+        // Restore scroll position after layout settles
+        requestAnimationFrame(() => {
+            if (eventsEl) {
+                if (wasAtBottom) {
+                    eventsEl.scrollTop = eventsEl.scrollHeight;
+                } else {
+                    eventsEl.scrollTop = savedScrollTop;
+                }
+            }
+        });
     }
     
     // Store starting heights of ALL resizable panels for absolute positioning
@@ -734,12 +772,20 @@ function updatePanelDrag(clientY) {
     // Calculate actual space taken/given
     const actualSpaceChanged = spaceNeeded - remainingSpace;
     
-    // Update the dragged panel's height (unless it's Follow which fills remaining)
+    // Update the dragged panel's height (unless it's Follow which fills remaining
+    // space via flex — resizing panels above naturally resizes Follow)
     if (dragState.panelId !== 'follow') {
         const minHeight = getDragMinHeight(dragState.panelId);
         const newPanelHeight = Math.max(minHeight, dragState.startPanelHeight + actualSpaceChanged);
         dragState.panelElement.style.height = `${newPanelHeight}px`;
         dragState.panelElement.style.flex = '0 0 auto';
+    } else {
+        // Keep game log scroll anchored to bottom during drag so the title bar
+        // appears to slide over the top of the content
+        const eventsEl = document.getElementById('gameLogEvents');
+        if (eventsEl) {
+            eventsEl.scrollTop = eventsEl.scrollHeight - eventsEl.clientHeight;
+        }
     }
 }
 
@@ -768,7 +814,20 @@ function endPanelDrag() {
             }
         }
     });
-    
+
+    // Ensure follow panel is in flex-fill mode after being dragged.
+    // Save/restore scroll position to prevent content jumping.
+    if (dragState.panelId === 'follow') {
+        const eventsEl = document.getElementById('gameLogEvents');
+        const savedScrollTop = eventsEl ? eventsEl.scrollTop : 0;
+        setPanelState('follow', { height: null });
+        if (eventsEl) {
+            requestAnimationFrame(() => {
+                eventsEl.scrollTop = savedScrollTop;
+            });
+        }
+    }
+
     // Reset drag state
     dragState = {
         active: false,
@@ -1097,38 +1156,28 @@ function hideGameScreen() {
  * Hide all legacy screens to prevent them from showing under the panel UI
  */
 function hideLegacyScreens() {
-    // List of all legacy screen IDs
-    const legacyScreenIds = [
+    // Hide all non-game screens
+    const screenIds = [
         'selectTeamScreen',
-        'teamRosterScreen', 
+        'teamRosterScreen',
         'teamSettingsScreen',
-        'beforePointScreen',
-        'offensePlayByPlayScreen',
-        'defensePlayByPlayScreen',
-        'simpleModeScreen',
         'gameSummaryScreen'
     ];
-    
-    legacyScreenIds.forEach(id => {
+
+    screenIds.forEach(id => {
         const screen = document.getElementById(id);
         if (screen) {
             screen.style.display = 'none';
         }
     });
-    
-    // Also hide the header and bottom panel
+
+    // Also hide the header
     const header = document.querySelector('header');
     if (header) {
         header.style.display = 'none';
     }
-    
-    const bottomPanel = document.getElementById('bottomPanel');
-    if (bottomPanel) {
-        bottomPanel.style.display = 'none';
-    }
-    
-    // Hide the legacy controller role buttons (Phase 6 sub-header)
-    // The new panel-based role buttons are used instead
+
+    // Hide the controller role buttons sub-header
     const legacyRoleButtons = document.getElementById('controllerRoleButtons');
     if (legacyRoleButtons) {
         legacyRoleButtons.style.display = 'none';
@@ -1355,6 +1404,7 @@ window.getDragMinHeight = getDragMinHeight;
 window.DRAGGABLE_PANELS = DRAGGABLE_PANELS;
 window.RESIZABLE_PANELS = RESIZABLE_PANELS;
 window.PBP_MIN_CONTENT_HEIGHT = PBP_MIN_CONTENT_HEIGHT;
+window.FOLLOW_MIN_HEIGHT = FOLLOW_MIN_HEIGHT;
 
 // Game screen management
 window.showGameScreen = showGameScreen;

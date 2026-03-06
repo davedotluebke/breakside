@@ -166,8 +166,8 @@ function getPlayerGameTime(playerName) {
                 if (point.endTimestamp) {
                     // For completed points, just use the totalPointTime
                     totalTime += point.totalPointTime;
-                } else if (point === currentPoint) {
-                    // For the current point, handle paused state
+                } else if (!point.winner) {
+                    // For the current point (in progress), handle paused state
                     // Note: isPaused is a global variable defined in main.js
                     if (typeof isPaused !== 'undefined' && isPaused) {
                         // If paused, just use the accumulated time
@@ -201,6 +201,31 @@ function formatPlayTime(totalTimePlayed) {
     // Function to format a number as two digits with leading zeros
     const formatTwoDigits = (num) => (num < 10 ? `0${num}` : num);
     return `${formatTwoDigits(minutes)}:${formatTwoDigits(seconds)}`;
+}
+
+/**
+ * Determine whether the next point starts on offense or defense.
+ * Pure game logic: inspects completed points, switchsides events, and point winners.
+ */
+function determineStartingPosition() {
+    if (!currentGame()) { console.log("Warning: No current game"); return 'offense'; }
+    let startPointOn = currentGame().startingPosition;
+    currentGame().points.forEach(point => {
+        let switchsides = false;
+        point.possessions.forEach(possession => {
+            possession.events.forEach(event => {
+                if (event.type === 'Other' && event.switchsides_flag) {
+                    switchsides = !switchsides;
+                }
+            });
+        });
+        if (point.winner === 'team') {
+            startPointOn = switchsides ? 'offense' : 'defense';
+        } else {
+            startPointOn = switchsides ? 'defense' : 'offense';
+        }
+    });
+    return startPointOn;
 }
 
 /**
@@ -245,9 +270,34 @@ function getGenderRatioForPoint(game, pointIndex) {
     if (!game || game.alternateGenderRatio !== 'Alternating' || !game.startingGenderRatio) {
         return null;
     }
-    
+
     const useFirstRatio = (((pointIndex + 1) >> 1) & 1) === 0;
-    
+
     return useFirstRatio ? game.startingGenderRatio : (game.startingGenderRatio === 'FMP' ? 'MMP' : 'FMP');
+}
+
+/**
+ * Get the expected gender ratio for the next point to be played.
+ * Uses game.points.length as the next point index.
+ * @returns {'FMP'|'MMP'|null}
+ */
+function getExpectedGenderRatio(game) {
+    return getGenderRatioForPoint(game, game ? game.points.length : 0);
+}
+
+/**
+ * Get expected FMP/MMP player counts for a given player count and ratio.
+ * The "majority" gender gets ceil(count/2), the other gets floor(count/2).
+ * E.g., 7 players + 'FMP' → {fmp: 4, mmp: 3}
+ * @returns {{fmp: number, mmp: number}}
+ */
+function getExpectedGenderCounts(expectedCount, expectedRatio) {
+    const majority = Math.ceil(expectedCount / 2);
+    const minority = Math.floor(expectedCount / 2);
+    if (expectedRatio === 'FMP') {
+        return { fmp: majority, mmp: minority };
+    } else {
+        return { fmp: minority, mmp: majority };
+    }
 }
 

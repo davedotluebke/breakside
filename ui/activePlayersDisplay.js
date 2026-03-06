@@ -41,6 +41,7 @@ function updateActivePlayersList() {
  */
 function createActivePlayersTable() {
     const table = document.getElementById('activePlayersTable');
+    if (!table) return;
     const tableBody = table.querySelector('tbody');
     const tableHead = table.querySelector('thead');
 
@@ -127,7 +128,9 @@ function createPlayerRows() {
     });
 
     // Create player rows with checkboxes
-    const tableBody = document.getElementById('activePlayersTable').querySelector('tbody');
+    const tableEl = document.getElementById('activePlayersTable');
+    if (!tableEl) return;
+    const tableBody = tableEl.querySelector('tbody');
 
     currentTeam.teamRoster.forEach(player => {
         const row = document.createElement('tr');
@@ -228,7 +231,9 @@ function getPlayersToCheck() {
  * Populate player statistics in the table cells
  */
 function populatePlayerStats() {
-    const tableBody = document.getElementById('activePlayersTable').querySelector('tbody');
+    const tblEl = document.getElementById('activePlayersTable');
+    if (!tblEl) return;
+    const tableBody = tblEl.querySelector('tbody');
     const rows = tableBody.querySelectorAll('tr');
 
     rows.forEach((row, rowIndex) => {
@@ -453,7 +458,8 @@ function togglePlayerStats() {
 
     // Toggle stats display
     showingTotalStats = !showingTotalStats;
-    document.getElementById('statsToggle').textContent = showingTotalStats ? '(Total)' : '(Game)';
+    const statsToggle = document.getElementById('statsToggle');
+    if (statsToggle) statsToggle.textContent = showingTotalStats ? '(Total)' : '(Game)';
 
     // Update the display
     updateActivePlayersList();
