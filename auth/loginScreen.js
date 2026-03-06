@@ -297,22 +297,22 @@ function showAuthScreen() {
         authScreen.style.display = 'flex';
     }
     
-    // Hide other top-level screens (but not nested sections like #selectCurrentPlayers, #gameEvents)
+    // Hide other top-level screens
     const topLevelScreenIds = [
         'selectTeamScreen', 'teamRosterScreen', 'teamSettingsScreen',
-        'beforePointScreen', 'offensePlayByPlayScreen', 'defensePlayByPlayScreen',
-        'simpleModeScreen', 'gameSummaryScreen'
+        'gameSummaryScreen'
     ];
     topLevelScreenIds.forEach(id => {
         const screen = document.getElementById(id);
         if (screen) screen.style.display = 'none';
     });
-    
-    // Also hide the header and footer
+
+    // Also hide the header and game screen
     const header = document.querySelector('header');
-    const bottomPanel = document.getElementById('bottomPanel');
     if (header) header.style.display = 'none';
-    if (bottomPanel) bottomPanel.style.display = 'none';
+    if (typeof exitGameScreen === 'function') {
+        exitGameScreen();
+    }
     
     // Reset to login mode
     switchAuthMode('login');

@@ -29,20 +29,12 @@
     display: flex;
 }
 
-/* When game screen is active, prevent body scroll and override next-line-mode */
+/* When game screen is active, prevent body scroll */
 body.game-screen-active {
     overflow: hidden !important;
 }
 
-body.game-screen-active #beforePointScreen,
-body.game-screen-active #simpleModeScreen,
-body.game-screen-active #offensePlayByPlayScreen,
-body.game-screen-active #defensePlayByPlayScreen {
-    display: none !important;
-}
-
 body.game-screen-active header,
-body.game-screen-active #bottomPanel,
 body.game-screen-active #controllerRoleButtons {
     display: none !important;
 }
@@ -78,7 +70,7 @@ body.game-screen-active #controllerRoleButtons {
 
 .game-panel.fills-remaining {
     flex: 1 1 auto; /* Only this panel grows to fill remaining space */
-    min-height: 36px;
+    min-height: 80px;
 }
 
 
@@ -1938,7 +1930,7 @@ body.game-screen-active #controllerRoleButtons {
 .panel-follow {
     background: #fff;
     /* Follow panel's flex is controlled by JS based on state */
-    min-height: 36px;
+    min-height: 80px;
 }
 
 /* When Follow panel is snapped to bottom (minimized), push title bar to bottom */
@@ -1948,6 +1940,22 @@ body.game-screen-active #controllerRoleButtons {
 
 .panel-follow .panel-title-bar {
     background: linear-gradient(135deg, #f0f0f0 0%, #e8e8e8 100%);
+}
+
+/* Allow follow panel title to shrink so score text overflow can be detected */
+.panel-follow .panel-title {
+    display: flex;
+    align-items: center;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.panel-follow .panel-title-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
 
 /* Event log in follow panel */
@@ -2002,47 +2010,6 @@ body.game-screen-active #controllerRoleButtons {
     flex-direction: column;
     height: 100%;
     overflow: hidden;
-}
-
-/* Game status bar at top of Game Log */
-.game-log-status {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 8px 12px;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border-bottom: 1px solid #dee2e6;
-    flex-shrink: 0;
-}
-
-.game-log-teams {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.9rem;
-}
-
-.game-log-team-us {
-    font-weight: 600;
-    color: #28a745;
-}
-
-.game-log-vs {
-    color: #6c757d;
-    font-size: 0.8rem;
-}
-
-.game-log-team-them {
-    font-weight: 600;
-    color: #dc3545;
-}
-
-.game-log-score {
-    font-family: 'JetBrains Mono', monospace;
-    font-weight: 700;
-    font-size: 1.5rem;
-    color: #333;
-    margin-top: 4px;
 }
 
 /* Event log area - scrollable */

@@ -426,14 +426,6 @@ function createGameLogContent() {
     content.className = 'game-log-content';
     
     content.innerHTML = `
-        <div class="game-log-status" id="gameLogStatus">
-            <div class="game-log-teams">
-                <span class="game-log-team-us" id="gameLogTeamUs">Us</span>
-                <span class="game-log-vs">vs</span>
-                <span class="game-log-team-them" id="gameLogTeamThem">Them</span>
-            </div>
-            <div class="game-log-score" id="gameLogScore">0 – 0</div>
-        </div>
         <div class="game-log-events" id="gameLogEvents">
             <div class="game-log-placeholder">
                 <i class="fas fa-list"></i>
@@ -805,7 +797,7 @@ function handleTimerPauseClick(e) {
         return;
     }
     
-    const point = getCurrentPoint();
+    const point = getLatestPoint();
     if (!point || !point.startTimestamp) {
         // No active point, nothing to pause
         return;
@@ -858,30 +850,12 @@ function updateTimerPauseButton() {
 }
 
 /**
- * Get the current point from the game
- * @returns {Point|null}
- */
-function getCurrentPoint() {
-    let game;
-    if (typeof currentGame === 'function') {
-        game = currentGame();
-    } else if (typeof currentGame !== 'undefined') {
-        game = currentGame;
-    }
-    
-    if (game && game.points && game.points.length > 0) {
-        return game.points[game.points.length - 1];
-    }
-    return null;
-}
-
-/**
  * Auto-resume point timer when a play-by-play event is recorded
  * Call this from event handlers
  */
 function autoResumePointTimer() {
     if (pointTimerPaused) {
-        const point = getCurrentPoint();
+        const point = getLatestPoint();
         if (point && point.lastPauseTime) {
             const pausedDuration = Date.now() - new Date(point.lastPauseTime).getTime();
             point.totalPointTime = (point.totalPointTime || 0) + pausedDuration;
@@ -1001,7 +975,7 @@ function handlePbpWeScore() {
     autoResumePointTimer();
     
     // Stop the point timer
-    const point = getCurrentPoint();
+    const point = getLatestPoint();
     if (point && point.startTimestamp) {
         point.totalPointTime = (point.totalPointTime || 0) + (Date.now() - new Date(point.startTimestamp).getTime());
         point.startTimestamp = null;
@@ -1010,7 +984,7 @@ function handlePbpWeScore() {
     // Ensure the dialog is visible by moving it to body if needed
     ensureDialogVisible('scoreAttributionDialog');
     
-    // Use the existing score attribution dialog from simpleModeScreen.js
+    // Use the existing score attribution dialog from scoreAttribution.js
     if (typeof showScoreAttributionDialog === 'function') {
         showScoreAttributionDialog();
     } else {
@@ -1034,7 +1008,7 @@ function handlePbpTheyScore() {
     autoResumePointTimer();
     
     // Stop the point timer
-    const point = getCurrentPoint();
+    const point = getLatestPoint();
     if (point && point.startTimestamp) {
         point.totalPointTime = (point.totalPointTime || 0) + (Date.now() - new Date(point.startTimestamp).getTime());
         point.startTimestamp = null;
@@ -1208,7 +1182,7 @@ function populateSubPlayersTable() {
     
     tableBody.innerHTML = '';
     
-    const point = getCurrentPoint();
+    const point = getLatestPoint();
     if (!currentTeam || !currentTeam.teamRoster || !point) {
         tableBody.innerHTML = '<tr><td colspan="2">No active point</td></tr>';
         return;
@@ -1281,7 +1255,7 @@ function updateSubPlayersCount() {
  * Confirm the substitution and update the current point
  */
 function confirmSubstitution() {
-    const point = getCurrentPoint();
+    const point = getLatestPoint();
     if (!point) {
         hideSubPlayersModal();
         return;
@@ -1411,7 +1385,7 @@ function canEditPlayByPlayPanel() {
 
 /**
  * Ensure a dialog element is visible by moving it to body if needed.
- * This fixes the issue where dialogs inside simpleModeScreen are hidden
+ * This fixes the issue where dialogs could be hidden by parent elements
  * when the game screen container is active (parent has display: none !important).
  * @param {string} dialogId - The ID of the dialog element
  */
@@ -1631,7 +1605,7 @@ function hideGameEventsModal() {
  * Update Game Events modal button states based on current game state
  */
 function updateGameEventsModalState() {
-    const point = getCurrentPoint();
+    const point = getLatestPoint();
     const duringPoint = point && point.startTimestamp && !point.endTimestamp;
     
     // Timeout: available anytime
@@ -2212,9 +2186,6 @@ function handlePanelStartPoint() {
         console.warn(`Starting point with ${selectedPlayers.length} players (expected ${expectedCount})`);
     }
     
-    // Update the legacy activePlayersTable checkboxes to match panel selections
-    syncPanelSelectionsToLegacy(selectedPlayers);
-    
     // Note: Don't stop game state refresh - viewers need updates during points
     // The refresh logic handles Active Coach differently (no full refresh during point)
     
@@ -2256,11 +2227,152 @@ function handlePanelStartPoint() {
  * Opens the line selection dialog
  */
 function handlePanelLinesClick() {
-    if (typeof showLineSelectionDialog === 'function') {
-        showLineSelectionDialog();
-    } else {
-        console.warn('showLineSelectionDialog not available');
+    showLineSelectionDialog();
+}
+
+/**
+ * Show the line selection dialog (panel-UI version).
+ * Reads lines from currentTeam.lines, lets the user pick one,
+ * then checks/unchecks panelActivePlayersTable checkboxes accordingly.
+ */
+let shouldClearSelectionsInLineDialog = true;
+
+function showLineSelectionDialog() {
+    if (!currentTeam || !currentTeam.lines || currentTeam.lines.length === 0) {
+        alert('No lines have been created yet. Please create lines in the roster management screen.');
+        return;
     }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'select-line-overlay';
+
+    const dialog = document.createElement('div');
+    dialog.className = 'select-line-dialog';
+
+    const heading = document.createElement('h3');
+    heading.textContent = 'Select Line';
+    dialog.appendChild(heading);
+
+    // Checkbox for clearing existing selections
+    const checkboxContainer = document.createElement('div');
+    checkboxContainer.className = 'clear-selections-checkbox-container';
+
+    const clearCheckbox = document.createElement('input');
+    clearCheckbox.type = 'checkbox';
+    clearCheckbox.id = 'clearSelectionsCheckbox';
+    clearCheckbox.checked = shouldClearSelectionsInLineDialog;
+
+    const clearLabel = document.createElement('label');
+    clearLabel.htmlFor = 'clearSelectionsCheckbox';
+    clearLabel.textContent = 'Clear existing selections';
+
+    checkboxContainer.appendChild(clearCheckbox);
+    checkboxContainer.appendChild(clearLabel);
+    dialog.appendChild(checkboxContainer);
+
+    const radioContainer = document.createElement('div');
+    radioContainer.className = 'select-line-radio-container';
+
+    let selectedLine = null;
+
+    currentTeam.lines.forEach((line, index) => {
+        const option = document.createElement('div');
+        option.className = 'select-line-radio-option';
+        if (currentGame && currentGame().lastLineUsed === line.name) {
+            option.classList.add('last-used');
+        }
+
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'lineSelection';
+        radio.id = `line-${index}`;
+        radio.value = line.name;
+
+        const label = document.createElement('label');
+        label.htmlFor = `line-${index}`;
+
+        const lineName = document.createElement('span');
+        lineName.className = 'line-name';
+        lineName.textContent = line.name;
+
+        const players = document.createElement('span');
+        players.className = 'line-players';
+        players.textContent = line.players.join(', ');
+
+        label.appendChild(lineName);
+        label.appendChild(players);
+
+        radio.addEventListener('change', () => {
+            selectedLine = line;
+            selectButton.disabled = false;
+        });
+
+        option.appendChild(radio);
+        option.appendChild(label);
+        radioContainer.appendChild(option);
+    });
+
+    dialog.appendChild(radioContainer);
+
+    const buttons = document.createElement('div');
+    buttons.className = 'select-line-buttons';
+
+    const selectButton = document.createElement('button');
+    selectButton.className = 'select-line-button select';
+    selectButton.textContent = 'Select';
+    selectButton.disabled = true;
+    selectButton.addEventListener('click', () => {
+        if (selectedLine) {
+            // Update panel table checkboxes
+            const panelCheckboxes = document.querySelectorAll('#panelActivePlayersTable input[type="checkbox"]');
+
+            if (clearCheckbox.checked) {
+                panelCheckboxes.forEach(checkbox => { checkbox.checked = false; });
+            }
+
+            panelCheckboxes.forEach(checkbox => {
+                if (checkbox.dataset.playerName && selectedLine.players.includes(checkbox.dataset.playerName)) {
+                    checkbox.checked = true;
+                }
+            });
+
+            // Clear stored next line selections since we just made a new selection
+            if (typeof clearNextLineSelections === 'function') {
+                clearNextLineSelections();
+            }
+
+            // Update the last used line and save
+            currentGame().lastLineUsed = selectedLine.name;
+            if (typeof saveAllTeamsData === 'function') {
+                saveAllTeamsData();
+            }
+
+            // Update panel state
+            savePanelSelectionsToPendingNextLine();
+            updateStartPointButtonState();
+            updateSelectLineCompactView();
+            updateSelectLineSubtitle();
+            updatePlayByPlayPanelState();
+
+            shouldClearSelectionsInLineDialog = false;
+
+            overlay.remove();
+        }
+    });
+
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'select-line-button cancel';
+    cancelButton.textContent = 'Cancel';
+    cancelButton.addEventListener('click', () => {
+        overlay.remove();
+    });
+
+    buttons.appendChild(selectButton);
+    buttons.appendChild(cancelButton);
+    dialog.appendChild(buttons);
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
 }
 
 /**
@@ -2339,10 +2451,6 @@ function handlePanelCheckboxChange(e) {
     
     // Update Start Point button state
     updateStartPointButtonState();
-    
-    // Sync to legacy table for compatibility
-    const selectedPlayers = getSelectedPlayersFromPanel();
-    syncPanelSelectionsToLegacy(selectedPlayers);
     
     // Keep compact view and subtitle in sync
     updateSelectLineCompactView();
@@ -2446,21 +2554,7 @@ function savePanelSelectionsToPendingNextLine(updateTimestamp = true) {
  * Sync panel selections to the legacy activePlayersTable
  * @param {string[]} selectedPlayers - Array of player names
  */
-function syncPanelSelectionsToLegacy(selectedPlayers) {
-    const legacyCheckboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
-    if (!currentTeam || !currentTeam.teamRoster) return;
-    
-    legacyCheckboxes.forEach((checkbox, index) => {
-        if (index < currentTeam.teamRoster.length) {
-            checkbox.checked = selectedPlayers.includes(currentTeam.teamRoster[index].name);
-        }
-    });
-    
-    // Update legacy button state
-    if (typeof checkPlayerCount === 'function') {
-        checkPlayerCount();
-    }
-}
+
 
 /**
  * Check gender ratio for panel-selected players
@@ -2594,7 +2688,11 @@ function updatePanelGenderRatioDisplay() {
         if (text) text.textContent = `+${expectedRatio} point`;
         if (ratioSelection) ratioSelection.style.display = 'none';
     } else {
-        // Need to select starting ratio
+        // Need to select starting ratio — clear any stale selection from a previous game
+        const fmpRadio = document.getElementById('panelStartingRatioFMP');
+        const mmpRadio = document.getElementById('panelStartingRatioMMP');
+        if (fmpRadio) fmpRadio.checked = false;
+        if (mmpRadio) mmpRadio.checked = false;
         if (text) text.textContent = 'Select starting ratio';
         if (ratioSelection) ratioSelection.style.display = 'block';
     }
@@ -2788,14 +2886,15 @@ function updateSelectLineTable() {
         // Time column
         const timeCell = document.createElement('td');
         timeCell.classList.add('active-time-column');
+        const gameTime = typeof getPlayerGameTime === 'function'
+            ? getPlayerGameTime(player.name)
+            : 0;
         if (panelShowingTotalStats) {
+            const totalTime = (player.totalTimePlayed || 0) + gameTime;
             timeCell.textContent = typeof formatPlayTime === 'function'
-                ? formatPlayTime(player.totalTimePlayed || 0)
+                ? formatPlayTime(totalTime)
                 : '0:00';
         } else {
-            const gameTime = typeof getPlayerGameTime === 'function'
-                ? getPlayerGameTime(player.name)
-                : 0;
             timeCell.textContent = typeof formatPlayTime === 'function'
                 ? formatPlayTime(gameTime)
                 : '0:00';
@@ -3261,46 +3360,60 @@ function updateGameScreenScore(usScore, themScore) {
 // =============================================================================
 
 /**
- * Update the Game Log panel status (teams and score)
+ * Update the Game Log title bar with live score.
+ * Format: "TeamName 5 – OppName 2"
+ * If the text overflows, collapses to short names:
+ *   Our team: currentTeam.teamSymbol (4-char, e.g. "CUDO") — skip if null
+ *   Opponent: "Opp."
  */
-function updateGameLogStatus() {
-    const teamUsEl = document.getElementById('gameLogTeamUs');
-    const teamThemEl = document.getElementById('gameLogTeamThem');
-    const scoreEl = document.getElementById('gameLogScore');
-    
+function updateGameLogTitleScore() {
+    const titleTextEl = document.querySelector('#panel-follow-title .panel-title-text');
+    if (!titleTextEl) return;
+
     let game;
     if (typeof currentGame === 'function') {
         game = currentGame();
     } else if (typeof currentGame !== 'undefined') {
         game = currentGame;
     }
-    
-    if (!game) return;
-    
-    // Update team names
+
+    if (!game) {
+        titleTextEl.textContent = 'Game Log';
+        return;
+    }
+
     const teamName = game.team || 'Us';
     const opponentName = game.opponent || 'Them';
-    
-    if (teamUsEl) teamUsEl.textContent = teamName;
-    if (teamThemEl) teamThemEl.textContent = opponentName;
-    
-    // Update score
     const usScore = game.scores ? game.scores[Role.TEAM] : 0;
     const themScore = game.scores ? game.scores[Role.OPPONENT] : 0;
-    
-    if (scoreEl) scoreEl.textContent = `${usScore} – ${themScore}`;
+
+    const fullText = `${teamName} ${usScore} – ${opponentName} ${themScore}`;
+    titleTextEl.textContent = fullText;
+
+    // Check for overflow and collapse names if needed
+    if (titleTextEl.scrollWidth > titleTextEl.clientWidth) {
+        const shortTeam = (typeof currentTeam !== 'undefined' && currentTeam && currentTeam.teamSymbol)
+            ? currentTeam.teamSymbol
+            : teamName;
+        const shortOpp = 'Opp.';
+        titleTextEl.textContent = `${shortTeam} ${usScore} – ${shortOpp} ${themScore}`;
+    }
 }
 
 /**
- * Update just the score in the Game Log panel
- * @param {number} usScore - Our team's score
- * @param {number} themScore - Opponent's score
+ * Update the Game Log panel status (teams and score in title bar)
+ */
+function updateGameLogStatus() {
+    updateGameLogTitleScore();
+}
+
+/**
+ * Update just the score in the Game Log panel title bar
+ * @param {number} usScore - Our team's score (unused, reads from game)
+ * @param {number} themScore - Opponent's score (unused, reads from game)
  */
 function updateGameLogScore(usScore, themScore) {
-    const scoreEl = document.getElementById('gameLogScore');
-    if (scoreEl) {
-        scoreEl.textContent = `${usScore} – ${themScore}`;
-    }
+    updateGameLogTitleScore();
 }
 
 /**
@@ -3364,10 +3477,12 @@ function updateGameLogEvents() {
         html += `<div class="${lineClass}">${escapeHtml(line)}</div>`;
     }
     
-    eventsEl.innerHTML = html;
-    
-    // Auto-scroll to bottom
-    eventsEl.scrollTop = eventsEl.scrollHeight;
+    // Only update DOM and auto-scroll if content actually changed
+    if (eventsEl.innerHTML !== html) {
+        eventsEl.innerHTML = html;
+        // Auto-scroll to bottom only when new content arrives
+        eventsEl.scrollTop = eventsEl.scrollHeight;
+    }
 }
 
 /**
@@ -3474,7 +3589,7 @@ function updateTimerDisplay() {
         // Show point timer
         labelEl.textContent = 'point';
         
-        const point = getCurrentPoint();
+        const point = getLatestPoint();
         if (point && point.startTimestamp) {
             let elapsed;
             const startTime = new Date(point.startTimestamp).getTime();

@@ -331,7 +331,11 @@ class Defense extends Event {
         if (this.stall_flag)            { summary += 'Stall '; }
         if (this.unforcedError_flag)    { summary += 'Unforced error '; }
         if (this.defender) {
-            summary += (summary ? summary : 'Turnover caused ') + `by ${defender}`;
+            if (summary) {
+                summary += `by ${defender}`;
+            } else {
+                summary = `Defensive play by ${defender}: turnover caused`;
+            }
         } else {
             summary = (summary ? summary : 'Unforced turnover by opponent');
         }

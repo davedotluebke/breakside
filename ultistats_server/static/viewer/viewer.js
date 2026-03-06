@@ -771,7 +771,11 @@ function renderEvent(event) {
         if (event.stall_flag) summary += 'Stall ';
         if (event.unforcedError_flag) summary += 'Unforced error ';
         if (defender) {
-            summary += (summary ? '' : 'Turnover caused ') + `by ${defender}`;
+            if (summary) {
+                summary += `by ${defender}`;
+            } else {
+                summary = `Defensive play by ${defender}: turnover caused`;
+            }
         } else {
             summary = summary || 'Unforced turnover by opponent';
         }
