@@ -3476,10 +3476,12 @@ function updateGameLogEvents() {
         html += `<div class="${lineClass}">${escapeHtml(line)}</div>`;
     }
     
-    eventsEl.innerHTML = html;
-    
-    // Auto-scroll to bottom
-    eventsEl.scrollTop = eventsEl.scrollHeight;
+    // Only update DOM and auto-scroll if content actually changed
+    if (eventsEl.innerHTML !== html) {
+        eventsEl.innerHTML = html;
+        // Auto-scroll to bottom only when new content arrives
+        eventsEl.scrollTop = eventsEl.scrollHeight;
+    }
 }
 
 /**
