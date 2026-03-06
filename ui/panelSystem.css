@@ -1944,6 +1944,8 @@ body.game-screen-active #controllerRoleButtons {
 
 /* Allow follow panel title to shrink so score text overflow can be detected */
 .panel-follow .panel-title {
+    display: flex;
+    align-items: center;
     flex-shrink: 1;
     min-width: 0;
     overflow: hidden;
@@ -1952,7 +1954,8 @@ body.game-screen-active #controllerRoleButtons {
 .panel-follow .panel-title-text {
     overflow: hidden;
     text-overflow: ellipsis;
-    display: block;
+    white-space: nowrap;
+    min-width: 0;
 }
 
 /* Event log in follow panel */
