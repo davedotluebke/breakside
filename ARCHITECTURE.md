@@ -26,11 +26,14 @@ Breakside uses a hybrid architecture with a Progressive Web App (PWA) frontend h
 
 | Service | URL | Hosted On |
 |---------|-----|-----------|
-| **PWA** | https://www.breakside.pro | CloudFront → S3 |
+| **PWA** | https://www.breakside.pro | CloudFront (`E6M9KCXIU9CKD`) → S3 |
 | **PWA (redirect)** | https://breakside.pro | EC2 → www |
+| **Staging PWA** | https://staging.breakside.pro | CloudFront (`E12N2STN9MM8FA`) → S3 |
 | **Static Viewer** | https://www.breakside.pro/viewer/ | CloudFront → S3 |
 | **API** | https://api.breakside.pro | EC2 → FastAPI |
 | **Health Check** | https://api.breakside.pro/health | EC2 |
+
+Staging uses the same production API. The API endpoint can be overridden via `?api=<url>` query parameter (saved to localStorage, clear with `?api=reset`).
 
 ---
 
@@ -551,8 +554,10 @@ Exported via `window.breakside.auth`:
 
 | Component | Details |
 |-----------|---------|
-| **CloudFront** | Distribution `E6M9KCXIU9CKD` |
-| **S3 Bucket** | `breakside.pro` (us-east-1) |
+| **CloudFront (prod)** | Distribution `E6M9KCXIU9CKD` |
+| **CloudFront (staging)** | Distribution `E12N2STN9MM8FA` |
+| **S3 Bucket (prod)** | `breakside.pro` (us-east-1) |
+| **S3 Bucket (staging)** | `staging.breakside.pro` (us-east-1) |
 | **EC2 Instance** | Amazon Linux 2, IP: 3.212.138.180 |
 | **SSL (CloudFront)** | ACM certificate |
 | **SSL (EC2)** | Let's Encrypt via certbot |
@@ -572,15 +577,22 @@ Exported via `window.breakside.auth`:
 |--------|------|-------|
 | `breakside.pro` | A | 3.212.138.180 |
 | `www.breakside.pro` | CNAME | d17eottm1x91n5.cloudfront.net |
+| `staging.breakside.pro` | CNAME | *(CloudFront distribution domain for E12N2STN9MM8FA)* |
 | `api.breakside.pro` | A | 3.212.138.180 |
 
 ### CI/CD
 
-GitHub Actions workflow (`.github/workflows/main.yml`):
+**Production** — GitHub Actions workflow (`.github/workflows/main.yml`):
 1. Triggers on push to `main` branch
-2. Syncs PWA files to S3
+2. Syncs PWA files to S3 (`breakside.pro`)
 3. Syncs viewer to S3
-4. Invalidates CloudFront cache
+4. Invalidates CloudFront cache (`E6M9KCXIU9CKD`)
+
+**Staging** — Manual deploy via `./scripts/deploy-staging.sh`:
+1. Syncs current working directory to S3 (`staging.breakside.pro`)
+2. Uploads service worker with no-cache headers
+3. Syncs viewer to S3
+4. Invalidates CloudFront cache (`E12N2STN9MM8FA`)
 
 ---
 

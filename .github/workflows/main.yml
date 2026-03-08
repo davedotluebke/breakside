@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - legacy-cleanup
     paths-ignore:
       - 'ultistats_server/**'
       - 'data/**'

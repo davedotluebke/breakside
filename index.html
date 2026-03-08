@@ -27,6 +27,13 @@
     
     <!-- Manifest -->
     <link rel="manifest" href="manifest.json">
+    <script>
+        if (location.hostname === 'staging.breakside.pro') {
+            document.querySelector('link[rel="manifest"]').href = 'manifest-staging.json';
+            document.querySelector('meta[name="apple-mobile-web-app-title"]').content = 'Breakside STG';
+            document.title = 'Breakside STG';
+        }
+    </script>
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">

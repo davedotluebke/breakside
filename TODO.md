@@ -101,9 +101,14 @@ pytest test_auth.py -v
 ### Deploy Commands
 
 ```bash
-# Deploy PWA to S3 (via GitHub Actions)
+# Local dev server
+./scripts/dev-server.sh            # serves on http://localhost:3000
+
+# Deploy to staging (working directory, no commit needed)
+./scripts/deploy-staging.sh
+
+# Deploy PWA to production (via GitHub Actions)
 git push origin main
-# GitHub Actions syncs to S3 and invalidates CloudFront
 
 # Force PWA cache refresh
 # Edit service-worker.js: increment cacheName (e.g., 'v8' → 'v9')
