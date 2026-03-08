@@ -15,7 +15,25 @@
 // API_BASE_URL can be set via localStorage for multi-device testing
 // e.g., localStorage.setItem('ultistats_api_url', 'http://192.168.1.100:8000')
 function getApiBaseUrl() {
-    // First, check localStorage override (for testing)
+    // Check for ?api= URL parameter override
+    const params = new URLSearchParams(window.location.search);
+    const apiParam = params.get('api');
+    if (apiParam) {
+        if (apiParam === 'reset') {
+            localStorage.removeItem('ultistats_api_url');
+            console.log('API override cleared');
+        } else {
+            localStorage.setItem('ultistats_api_url', apiParam);
+            console.log(`API override set: ${apiParam}`);
+        }
+        // Clean the URL
+        params.delete('api');
+        const clean = params.toString();
+        const newUrl = window.location.pathname + (clean ? '?' + clean : '') + window.location.hash;
+        window.history.replaceState({}, '', newUrl);
+    }
+
+    // Check localStorage override (for testing)
     const storedUrl = localStorage.getItem('ultistats_api_url');
     if (storedUrl) return storedUrl;
     
