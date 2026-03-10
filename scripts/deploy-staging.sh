@@ -18,7 +18,17 @@ BUCKET="${STAGING_BUCKET:-staging.breakside.pro}"
 CF_DIST="${STAGING_CF_DIST:-E12N2STN9MM8FA}"
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-echo "Deploying $DIR to s3://$BUCKET ..."
+STAMP=$(date -u +%Y%m%d%H%M%S)
+echo "Deploying $DIR to s3://$BUCKET (stamp: $STAMP) ..."
+
+# Create a stamped version.json for staging (detects redeploys without a commit)
+STAGED_VERSION=$(mktemp)
+python3 -c "
+import json, sys
+v = json.load(open('$DIR/version.json'))
+v['deployStamp'] = '$STAMP'
+json.dump(v, sys.stdout, indent=2)
+" > "$STAGED_VERSION"
 
 aws s3 sync "$DIR" "s3://$BUCKET/" \
   --exclude ".git/*" \
@@ -40,9 +50,16 @@ aws s3 sync "$DIR" "s3://$BUCKET/" \
   --exclude "*.m4a" \
   --exclude "*.webm" \
   --exclude "service-worker.js" \
+  --exclude "version.json" \
   --exclude "LICENSE" \
   --exclude "CLAUDE.md" \
   --delete
+
+# Upload version.json with deploy stamp and no-cache headers
+aws s3 cp "$STAGED_VERSION" "s3://$BUCKET/version.json" \
+  --cache-control "no-cache, no-store, must-revalidate" \
+  --content-type "application/json"
+rm -f "$STAGED_VERSION"
 
 # Upload service worker with no-cache headers
 aws s3 cp "$DIR/service-worker.js" "s3://$BUCKET/service-worker.js" \

@@ -3234,7 +3234,7 @@ header h1 {
 }
 
 .toast.toast-info {
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    background: linear-gradient(135deg, #17a2b8 0%, #117a8b 100%);
     color: white;
 }
 
@@ -3448,4 +3448,20 @@ header h1 {
     background: #6c757d;
     border-color: #6c757d;
     cursor: not-allowed;
+}
+
+/* ============================================
+   Staging environment overrides
+   ============================================ */
+
+body.staging header {
+    background-color: #7B68AE;
+}
+
+body.staging .version-overlay {
+    background: #7B68AE;
+}
+
+body.staging .panel-header {
+    background: #7B68AE;
 }
