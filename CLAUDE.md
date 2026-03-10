@@ -37,7 +37,7 @@ API auto-routes to `http://localhost:8000` when on localhost. Start backend sepa
 ```bash
 ./scripts/deploy-staging.sh    # deploys working directory to staging.breakside.pro
 ```
-Deploys current working directory (not committed state) to S3 + CloudFront invalidation. Staging uses the same production API (`api.breakside.pro`). Use `?api=<url>` to override the API endpoint (saved to localStorage), `?api=reset` to clear.
+Deploys current working directory (not committed state) to S3 + CloudFront invalidation. Each deploy writes a `deployStamp` into `version.json` so the PWA can detect redeploys without a commit (tap Online/About to check for updates). Staging uses the same production API (`api.breakside.pro`). Use `?api=<url>` to override the API endpoint (saved to localStorage), `?api=reset` to clear. Staging has a purple header (vs production orange) for visual distinction.
 
 ### Production deployment
 - **Frontend**: Push to `main` triggers GitHub Actions → S3 sync → CloudFront invalidation. No server restart needed.
@@ -49,7 +49,7 @@ Deploys current working directory (not committed state) to S3 + CloudFront inval
 - Only remind about server restart when changes touch `ultistats_server/` files.
 
 ### Version tracking
-`version.json` has version and build number. A pre-commit hook (`increment-version.py`) auto-increments the build number on each commit.
+`version.json` has version and build number. A pre-commit hook (`increment-version.py`) auto-increments the build number on each commit. On staging, the deploy script also writes a `deployStamp` field so the app detects redeploys even without a build number change.
 
 ## Architecture
 

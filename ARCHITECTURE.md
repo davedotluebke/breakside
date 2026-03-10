@@ -589,10 +589,13 @@ Exported via `window.breakside.auth`:
 4. Invalidates CloudFront cache (`E6M9KCXIU9CKD`)
 
 **Staging** — Manual deploy via `./scripts/deploy-staging.sh`:
-1. Syncs current working directory to S3 (`staging.breakside.pro`)
-2. Uploads service worker with no-cache headers
-3. Syncs viewer to S3
-4. Invalidates CloudFront cache (`E12N2STN9MM8FA`)
+1. Generates a deploy timestamp (`deployStamp`) and injects it into `version.json`
+2. Syncs current working directory to S3 (`staging.breakside.pro`)
+3. Uploads `version.json` and service worker with no-cache headers
+4. Syncs viewer to S3
+5. Invalidates CloudFront cache (`E12N2STN9MM8FA`)
+
+Staging has a purple header (vs production orange) via `body.staging` CSS class. The deploy stamp lets the PWA detect redeploys without a commit — tap Online/About to check for updates.
 
 ---
 
