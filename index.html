@@ -11,10 +11,12 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Breakside">
+    <script>window._isStaging = location.hostname === 'staging.breakside.pro';</script>
+    <meta name="apple-mobile-web-app-title" id="appTitle" content="Breakside">
+    <script>if(window._isStaging) document.getElementById('appTitle').content = 'Breakside STG';</script>
     <meta name="msapplication-TileColor" content="#E19049">
     <meta name="msapplication-config" content="browserconfig.xml">
-    
+
     <!-- Favicon and Icons -->
     <link rel="icon" type="image/x-icon" href="images/favicon.ico">
     <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
@@ -24,15 +26,11 @@
     <link rel="icon" type="image/png" sizes="192x192" href="images/favicon-192x192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="images/favicon-512x512.png">
     <link rel="apple-touch-icon" sizes="180x180" href="images/favicon-192x192.png">
-    
+
     <!-- Manifest -->
-    <link rel="manifest" href="manifest.json">
     <script>
-        if (location.hostname === 'staging.breakside.pro') {
-            document.querySelector('link[rel="manifest"]').href = 'manifest-staging.json';
-            document.querySelector('meta[name="apple-mobile-web-app-title"]').content = 'Breakside STG';
-            document.title = 'Breakside STG';
-        }
+        document.write('<link rel="manifest" href="' + (window._isStaging ? 'manifest-staging.json' : 'manifest.json') + '">');
+        if (window._isStaging) document.title = 'Breakside STG';
     </script>
     
     <!-- Fonts -->
@@ -51,6 +49,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+<script>if(window._isStaging) document.body.classList.add('staging');</script>
     <!-- Auth Screen (shown when not logged in) -->
     <section id="authScreen" class="auth-screen" style="display: none;">
         <div class="auth-container">

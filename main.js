@@ -96,16 +96,22 @@ async function checkForAppUpdate() {
             return { hasUpdate: false, error: 'Failed to fetch version' };
         }
         const serverVersion = await response.json();
-        
-        // Get current cached version from the service worker's cache name
-        // The service worker sets cacheName = 'build-XXX'
+
         const currentBuild = window.APP_BUILD || 'unknown';
         const latestBuild = serverVersion.build || 'unknown';
-        
+
+        // Check build number change (production commits)
+        const buildChanged = currentBuild !== latestBuild && latestBuild !== 'unknown';
+
+        // Check deploy stamp change (staging deploys without a commit)
+        const currentStamp = window.APP_DEPLOY_STAMP || null;
+        const latestStamp = serverVersion.deployStamp || null;
+        const stampChanged = latestStamp && currentStamp !== latestStamp;
+
         return {
-            hasUpdate: currentBuild !== latestBuild && latestBuild !== 'unknown',
+            hasUpdate: buildChanged || stampChanged,
             currentBuild,
-            latestBuild,
+            latestBuild: stampChanged && !buildChanged ? `${latestBuild} (redeployed)` : latestBuild,
             version: serverVersion.version
         };
     } catch (error) {
@@ -395,13 +401,14 @@ document.addEventListener('DOMContentLoaded', function() {
         window.breakside.loginScreen.initializeLoginScreen();
     }
     
-    // Load current app version
+    // Load current app version and deploy stamp
     fetch('./version.json')
         .then(r => r.json())
         .then(v => {
             window.APP_VERSION = v.version || 'unknown';
             window.APP_BUILD = v.build || 'unknown';
-            console.log(`App version: ${window.APP_VERSION} (Build ${window.APP_BUILD})`);
+            window.APP_DEPLOY_STAMP = v.deployStamp || null;
+            console.log(`App version: ${window.APP_VERSION} (Build ${window.APP_BUILD})${window.APP_DEPLOY_STAMP ? ' deploy:' + window.APP_DEPLOY_STAMP : ''}`);
         })
         .catch(err => console.log('Could not load version.json:', err));
     
