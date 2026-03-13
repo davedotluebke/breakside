@@ -18,6 +18,28 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Increment build version
+        run: |
+          # Skip if version.json was already modified in this commit
+          # (means the pre-commit hook already bumped it)
+          if git diff HEAD~1 --name-only | grep -q "^version.json$"; then
+            echo "Version already bumped in this commit, skipping"
+          else
+            python3 increment-version.py build
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add version.json service-worker.js
+            git commit -m "Auto-increment build version"
+            git push
+          fi
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
