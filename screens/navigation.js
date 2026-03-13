@@ -49,6 +49,11 @@ function showScreen(screenId) {
 
     // Show/hide controller role buttons
     manageControllerButtons(screenId);
+
+    // Start active-game polling on non-game screens
+    if (nonGameScreenIds.includes(screenId) && typeof startActiveGamePolling === 'function') {
+        startActiveGamePolling();
+    }
 }
 
 /**

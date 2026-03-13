@@ -10,14 +10,14 @@ For deployment info and technical architecture, see **[ARCHITECTURE.md](ARCHITEC
 
 ### Phase 5: Remaining Optimizations
 
-- [ ] API poll endpoint with version check (avoid fetching unchanged data)
-- [ ] Role-based polling intervals (Active Coach: push-only, Viewer: 5s)
-- [ ] Server-side version tracking for optimized polling
-- [ ] Conflict notification toast: "Game updated by another coach"
-- [ ] API: `GET /api/teams/{team_id}/active-game` - Get currently active game for a team
+- [x] API poll endpoint with version check (avoid fetching unchanged data)
+- [x] Role-based polling intervals (Active Coach: push-only, Viewer: 5s)
+- [x] Server-side version tracking for optimized polling
+- [x] Conflict notification toast: "Game updated by another coach"
+- [x] API: `GET /api/teams/{team_id}/active-game` - Get currently active game for a team
   - Returns game ID and basic info if a game is in progress
   - "In progress" = has points, no gameEndTimestamp, started within last 6 hours
-- [ ] Auto-join prompt when another coach starts/resumes a game
+- [x] Auto-join prompt when another coach starts/resumes a game
   - Toast notification: "[Coach] started a game vs [Opponent]. Join?"
   - Tap to enter game screen for that game
 
