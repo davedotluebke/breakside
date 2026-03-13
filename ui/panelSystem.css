@@ -2329,3 +2329,54 @@ body.panel-dragging .panel-content {
     opacity: 0.85;
 }
 
+/* =============================================================================
+   O/D Split Panels - Stacked O and D line selection panels
+   ============================================================================= */
+
+.panel-selectOLine {
+    background: #fff;
+}
+
+.panel-selectOLine .panel-title-bar {
+    background: linear-gradient(135deg, #e8f4e8 0%, #d4e8d4 100%);
+}
+
+.panel-selectOLine .panel-content {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.panel-selectDLine {
+    background: #fff;
+}
+
+.panel-selectDLine .panel-title-bar {
+    background: linear-gradient(135deg, #e8e8f4 0%, #d4d4e8 100%);
+}
+
+.panel-selectDLine .panel-content {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* Split panel readonly state */
+.panel-selectOLine.readonly .select-line-start-btn,
+.panel-selectOLine.readonly .select-line-lines-btn,
+.panel-selectDLine.readonly .select-line-start-btn,
+.panel-selectDLine.readonly .select-line-lines-btn {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.panel-selectOLine.readonly .panel-player-table .active-checkbox,
+.panel-selectDLine.readonly .panel-player-table .active-checkbox {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+

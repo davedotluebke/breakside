@@ -51,6 +51,26 @@ Deploys current working directory (not committed state) to S3 + CloudFront inval
 ### Version tracking
 `version.json` has version and build number. A pre-commit hook (`increment-version.py`) auto-increments the build number on each commit. On staging, the deploy script also writes a `deployStamp` field so the app detects redeploys even without a build number change.
 
+## Feature Worktrees
+
+For parallel development (e.g., multiple Claude Code sessions), use git worktrees:
+
+```bash
+# Create worktree with feature branch
+git worktree add .worktrees/<feature-name> -b <feature-name>
+
+# Dev server on a different port
+cd .worktrees/<feature-name> && ./scripts/dev-server.sh 3001
+
+# Merge back from main directory
+git merge <feature-name>
+
+# Cleanup
+git worktree remove .worktrees/<feature-name> && git branch -d <feature-name>
+```
+
+`.worktrees/` is gitignored so other sessions won't accidentally stage worktree files.
+
 ## Architecture
 
 ### Frontend (root directory)

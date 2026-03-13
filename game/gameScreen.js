@@ -342,7 +342,7 @@ function createSelectLineContent() {
         <div class="select-line-full-view" id="selectLineFullView">
             <div class="select-line-header-row">
                 <span class="select-line-stats-toggle" id="panelStatsToggle">(Game)</span>
-                <button class="select-line-od-toggle" id="panelODToggle" title="Toggle O/D/O-D line (coming soon)">
+                <button class="select-line-od-toggle" id="panelODToggle" title="Toggle O/D line mode">
                     O/D
                 </button>
             </div>
@@ -412,6 +412,637 @@ function createSelectLinePanel() {
     panel.appendChild(contentArea);
     
     return panel;
+}
+
+// =============================================================================
+// O/D Split Panels - Two stacked panels for O and D lines simultaneously
+// =============================================================================
+
+/**
+ * Create the content for an O or D split panel
+ * @param {'o'|'d'} lineType - Which line type this panel is for
+ * @returns {HTMLElement}
+ */
+function createSplitLineContent(lineType) {
+    const suffix = lineType === 'o' ? 'O' : 'D';
+    const content = document.createElement('div');
+    content.className = 'select-line-content';
+
+    content.innerHTML = `
+        <!-- Compact view - shown when panel is very small -->
+        <div class="select-line-compact-view" id="select${suffix}LineCompactView" style="display: none;">
+            <span class="compact-line-type-link" id="compact${suffix}LineTypeLink">${suffix}: </span>
+            <span class="compact-player-list" id="compact${suffix}PlayerList"></span>
+        </div>
+
+        <!-- Full view - normal table UI -->
+        <div class="select-line-full-view" id="select${suffix}LineFullView">
+            <div class="select-line-top-row">
+                <button class="select-line-start-btn" id="panelStartPointBtn${suffix}">
+                    Start ${suffix} Point
+                </button>
+            </div>
+            <div class="select-line-table-container" id="panelTableContainer${suffix}">
+                <table class="panel-player-table" id="panelActivePlayersTable${suffix}">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="select-line-readonly-overlay" id="panelReadonlyOverlay${suffix}" style="display: none;">
+            <span class="readonly-badge">View Only</span>
+        </div>
+    `;
+
+    return content;
+}
+
+/**
+ * Create an O or D split panel
+ * @param {'o'|'d'} lineType
+ * @returns {HTMLElement}
+ */
+function createSplitPanel(lineType) {
+    const panelId = lineType === 'o' ? 'selectOLine' : 'selectDLine';
+    const title = lineType === 'o' ? 'Next O Line' : 'Next D Line';
+
+    const panel = document.createElement('div');
+    panel.id = `panel-${panelId}`;
+    panel.className = `game-panel panel-${panelId}`;
+
+    const titleBar = createPanelTitleBar({
+        panelId: panelId,
+        title: title,
+        showDragHandle: true,
+        showExpandBtn: true
+    });
+    panel.appendChild(titleBar);
+
+    const contentArea = document.createElement('div');
+    contentArea.className = 'panel-content';
+    contentArea.id = `panel-${panelId}-content`;
+    contentArea.appendChild(createSplitLineContent(lineType));
+    panel.appendChild(contentArea);
+
+    return panel;
+}
+
+/**
+ * Check if we're currently in split mode
+ * @returns {boolean}
+ */
+function isSplitMode() {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    return game?.pendingNextLine?.activeType === 'split';
+}
+
+/**
+ * Enter split mode: hide the single selectLine panel, show O and D panels
+ */
+function enterSplitMode() {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !game.pendingNextLine) return;
+
+    // Save current selections before switching
+    savePanelSelectionsToPendingNextLine(false);
+
+    // Hide the combined selectLine panel
+    const selectLinePanel = document.getElementById('panel-selectLine');
+    if (selectLinePanel) {
+        selectLinePanel.style.display = 'none';
+    }
+
+    // Get the panel stack
+    const stack = document.querySelector('.panel-stack');
+    if (!stack) return;
+
+    // Find the follow panel to insert before
+    const followPanel = document.getElementById('panel-follow');
+
+    // Create and insert O and D panels if they don't exist
+    let oPanel = document.getElementById('panel-selectOLine');
+    let dPanel = document.getElementById('panel-selectDLine');
+
+    if (!oPanel) {
+        oPanel = createSplitPanel('o');
+        stack.insertBefore(oPanel, followPanel);
+    } else {
+        oPanel.style.display = '';
+    }
+
+    if (!dPanel) {
+        dPanel = createSplitPanel('d');
+        stack.insertBefore(dPanel, followPanel);
+    } else {
+        dPanel.style.display = '';
+    }
+
+    // Wire up event handlers for the new panels
+    wireSplitPanelEvents();
+
+    // Set active type to split
+    game.pendingNextLine.activeType = 'split';
+
+    // Populate both tables
+    updateSplitPanelTable('o');
+    updateSplitPanelTable('d');
+
+    // Update panel states to show split panels
+    if (typeof setPanelVisible === 'function') {
+        setPanelVisible('selectOLine', true);
+        setPanelVisible('selectDLine', true);
+    }
+
+    // Initialize compact view observers for split panels
+    initSplitPanelCompactViewObservers();
+
+    // Save state
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
+}
+
+/**
+ * Exit split mode: hide O and D panels, show the single selectLine panel
+ */
+function exitSplitMode() {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !game.pendingNextLine) return;
+
+    // Save selections from both split panels
+    saveSplitPanelSelections();
+
+    // Hide split panels
+    const oPanel = document.getElementById('panel-selectOLine');
+    const dPanel = document.getElementById('panel-selectDLine');
+    if (oPanel) oPanel.style.display = 'none';
+    if (dPanel) dPanel.style.display = 'none';
+
+    // Update panel states
+    if (typeof setPanelVisible === 'function') {
+        setPanelVisible('selectOLine', false);
+        setPanelVisible('selectDLine', false);
+    }
+
+    // Show the combined panel again
+    const selectLinePanel = document.getElementById('panel-selectLine');
+    if (selectLinePanel) {
+        selectLinePanel.style.display = '';
+    }
+
+    // Set active type back to od
+    game.pendingNextLine.activeType = 'od';
+
+    // Refresh the single panel
+    updateSelectLineTable();
+    updateODToggleButton();
+    updateSelectLineSubtitle();
+    updateSelectLineCompactView();
+
+    // Save state
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
+}
+
+/**
+ * Wire up event handlers for split panels
+ */
+function wireSplitPanelEvents() {
+    // Start Point buttons
+    const startO = document.getElementById('panelStartPointBtnO');
+    if (startO) {
+        startO.removeEventListener('click', handleSplitStartPointO);
+        startO.addEventListener('click', handleSplitStartPointO);
+    }
+    const startD = document.getElementById('panelStartPointBtnD');
+    if (startD) {
+        startD.removeEventListener('click', handleSplitStartPointD);
+        startD.addEventListener('click', handleSplitStartPointD);
+    }
+
+    // Checkbox change handlers (delegated)
+    const tableContainerO = document.getElementById('panelTableContainerO');
+    if (tableContainerO) {
+        tableContainerO.removeEventListener('change', handleSplitCheckboxChangeO);
+        tableContainerO.addEventListener('change', handleSplitCheckboxChangeO);
+    }
+    const tableContainerD = document.getElementById('panelTableContainerD');
+    if (tableContainerD) {
+        tableContainerD.removeEventListener('change', handleSplitCheckboxChangeD);
+        tableContainerD.addEventListener('change', handleSplitCheckboxChangeD);
+    }
+
+    // Compact view line type tap handlers (exit split mode)
+    const compactLinkO = document.getElementById('compactOLineTypeLink');
+    if (compactLinkO) {
+        compactLinkO.removeEventListener('click', exitSplitMode);
+        compactLinkO.addEventListener('click', exitSplitMode);
+    }
+    const compactLinkD = document.getElementById('compactDLineTypeLink');
+    if (compactLinkD) {
+        compactLinkD.removeEventListener('click', exitSplitMode);
+        compactLinkD.addEventListener('click', exitSplitMode);
+    }
+}
+
+function handleSplitStartPointO() { handleSplitStartPoint('o'); }
+function handleSplitStartPointD() { handleSplitStartPoint('d'); }
+
+/**
+ * Handle Start Point from a split panel
+ * @param {'o'|'d'} lineType
+ */
+function handleSplitStartPoint(lineType) {
+    // Check if point is already in progress
+    if (typeof isPointInProgress === 'function' && isPointInProgress()) return;
+
+    // Check permissions
+    if (!canEditPlayByPlayPanel()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('Only the Active Coach can start a new point', 'warning');
+        }
+        return;
+    }
+
+    // Save selections from the split panels first
+    saveSplitPanelSelections();
+
+    // Get selected players from the clicked panel's table
+    const suffix = lineType === 'o' ? 'O' : 'D';
+    const tableId = `panelActivePlayersTable${suffix}`;
+    const selectedPlayers = getSelectedPlayersFromTable(tableId);
+
+    if (selectedPlayers.length === 0) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('Please select players for the point', 'warning');
+        }
+        return;
+    }
+
+    // Set these players as the active line for startNextPoint
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (game && game.pendingNextLine) {
+        // Copy split panel selection to the od line so startNextPoint picks it up
+        game.pendingNextLine.odLine = selectedPlayers;
+        // Temporarily switch to od so startNextPoint reads from odLine
+        game.pendingNextLine.activeType = 'od';
+    }
+
+    // Also update the main panel's checkboxes to match (startNextPoint reads from there)
+    setMainPanelCheckboxes(selectedPlayers);
+
+    // Exit split mode before starting the point
+    const oPanel = document.getElementById('panel-selectOLine');
+    const dPanel = document.getElementById('panel-selectDLine');
+    if (oPanel) oPanel.style.display = 'none';
+    if (dPanel) dPanel.style.display = 'none';
+    if (typeof setPanelVisible === 'function') {
+        setPanelVisible('selectOLine', false);
+        setPanelVisible('selectDLine', false);
+    }
+    const selectLinePanel = document.getElementById('panel-selectLine');
+    if (selectLinePanel) selectLinePanel.style.display = '';
+
+    // Now start the point using normal flow
+    handlePanelStartPoint();
+}
+
+/**
+ * Set checkboxes in the main panelActivePlayersTable to match given players
+ * @param {string[]} playerNames
+ */
+function setMainPanelCheckboxes(playerNames) {
+    const checkboxes = document.querySelectorAll('#panelActivePlayersTable input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+        cb.checked = playerNames.includes(cb.dataset.playerName);
+    });
+}
+
+/**
+ * Get selected players from a specific table
+ * @param {string} tableId
+ * @returns {string[]}
+ */
+function getSelectedPlayersFromTable(tableId) {
+    const checkboxes = document.querySelectorAll(`#${tableId} input[type="checkbox"]`);
+    const selected = [];
+    checkboxes.forEach(cb => {
+        if (cb.checked && cb.dataset.playerName) {
+            selected.push(cb.dataset.playerName);
+        }
+    });
+    return selected;
+}
+
+function handleSplitCheckboxChangeO(e) { handleSplitCheckboxChange(e, 'o'); }
+function handleSplitCheckboxChangeD(e) { handleSplitCheckboxChange(e, 'd'); }
+
+/**
+ * Handle checkbox change in a split panel
+ * @param {Event} e
+ * @param {'o'|'d'} lineType
+ */
+function handleSplitCheckboxChange(e, lineType) {
+    if (!e.target || !e.target.matches('input[type="checkbox"]')) return;
+
+    if (!canEditSelectLinePanel()) {
+        e.target.checked = !e.target.checked;
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('Only the Line Coach can edit during a point', 'warning');
+        }
+        return;
+    }
+
+    // Save from the specific panel
+    const suffix = lineType === 'o' ? 'O' : 'D';
+    const tableId = `panelActivePlayersTable${suffix}`;
+    const selectedPlayers = getSelectedPlayersFromTable(tableId);
+
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (game && game.pendingNextLine) {
+        game.pendingNextLine[lineType + 'Line'] = selectedPlayers;
+        game.pendingNextLine[lineType + 'LineModifiedAt'] = new Date().toISOString();
+        localLineEditTimestamps[lineType + 'Line'] = Date.now();
+    }
+
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
+
+    // Update compact view for this panel
+    updateSplitPanelCompactView(lineType);
+    updateSplitPanelSubtitle(lineType);
+    updatePlayByPlayPanelState();
+}
+
+/**
+ * Save selections from both split panels to pendingNextLine
+ */
+function saveSplitPanelSelections() {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !game.pendingNextLine) return;
+
+    const oPlayers = getSelectedPlayersFromTable('panelActivePlayersTableO');
+    const dPlayers = getSelectedPlayersFromTable('panelActivePlayersTableD');
+
+    if (oPlayers.length > 0 || document.getElementById('panelActivePlayersTableO')) {
+        game.pendingNextLine.oLine = oPlayers;
+        game.pendingNextLine.oLineModifiedAt = new Date().toISOString();
+        localLineEditTimestamps['oLine'] = Date.now();
+    }
+
+    if (dPlayers.length > 0 || document.getElementById('panelActivePlayersTableD')) {
+        game.pendingNextLine.dLine = dPlayers;
+        game.pendingNextLine.dLineModifiedAt = new Date().toISOString();
+        localLineEditTimestamps['dLine'] = Date.now();
+    }
+
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
+}
+
+/**
+ * Update a split panel's player table
+ * @param {'o'|'d'} lineType
+ */
+function updateSplitPanelTable(lineType) {
+    const suffix = lineType === 'o' ? 'O' : 'D';
+    const table = document.getElementById(`panelActivePlayersTable${suffix}`);
+    if (!table) return;
+
+    const tableBody = table.querySelector('tbody');
+    const tableHead = table.querySelector('thead');
+    if (!tableBody || !tableHead) return;
+
+    tableBody.innerHTML = '';
+    tableHead.innerHTML = '';
+
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !currentTeam || !currentTeam.teamRoster) return;
+
+    const pendingLine = game.pendingNextLine || {};
+    const selectedPlayers = pendingLine[lineType + 'Line'] || [];
+
+    // Simple header - just line type
+    const headerRow = document.createElement('tr');
+    const headerCell = document.createElement('th');
+    headerCell.setAttribute('colspan', '3');
+    headerCell.textContent = lineType === 'o' ? 'Offense' : 'Defense';
+    headerCell.classList.add('active-header-teams');
+    headerRow.appendChild(headerCell);
+    tableHead.appendChild(headerRow);
+
+    // Get last point players for sorting
+    const lastPointPlayers = game.points.length > 0
+        ? game.points[game.points.length - 1].players
+        : [];
+
+    // Sort roster
+    const sortedRoster = [...currentTeam.teamRoster].sort((a, b) => {
+        const aLastPoint = lastPointPlayers.includes(a.name);
+        const bLastPoint = lastPointPlayers.includes(b.name);
+        const aPlayedAny = game.points.some(p =>
+            p.players.includes(a.name) ||
+            (p.substitutedOutPlayers && p.substitutedOutPlayers.includes(a.name))
+        );
+        const bPlayedAny = game.points.some(p =>
+            p.players.includes(b.name) ||
+            (p.substitutedOutPlayers && p.substitutedOutPlayers.includes(b.name))
+        );
+
+        if (aLastPoint && !bLastPoint) return -1;
+        if (!aLastPoint && bLastPoint) return 1;
+        if (aPlayedAny && !bPlayedAny) return -1;
+        if (!aPlayedAny && bPlayedAny) return 1;
+        return a.name.localeCompare(b.name);
+    });
+
+    // Create player rows (simplified - checkbox + name only, no stats)
+    sortedRoster.forEach(player => {
+        const row = document.createElement('tr');
+
+        const checkboxCell = document.createElement('td');
+        checkboxCell.classList.add('active-checkbox-column');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.classList.add('active-checkbox');
+        checkbox.checked = selectedPlayers.includes(player.name);
+        checkbox.dataset.playerName = player.name;
+        checkboxCell.appendChild(checkbox);
+        row.appendChild(checkboxCell);
+
+        const nameCell = document.createElement('td');
+        nameCell.classList.add('active-name-column');
+        nameCell.textContent = typeof formatPlayerName === 'function'
+            ? formatPlayerName(player)
+            : player.name;
+
+        if (player.gender === Gender.FMP) nameCell.classList.add('player-fmp');
+        else if (player.gender === Gender.MMP) nameCell.classList.add('player-mmp');
+
+        nameCell.style.cursor = 'pointer';
+        nameCell.addEventListener('click', () => checkbox.click());
+        row.appendChild(nameCell);
+
+        tableBody.appendChild(row);
+    });
+
+    // Update compact view
+    updateSplitPanelCompactView(lineType);
+    updateSplitPanelSubtitle(lineType);
+}
+
+/**
+ * Update both split panels
+ */
+function updateSplitPanels() {
+    if (!isSplitMode()) return;
+    updateSplitPanelTable('o');
+    updateSplitPanelTable('d');
+}
+
+/**
+ * Update compact view for a split panel
+ * @param {'o'|'d'} lineType
+ */
+function updateSplitPanelCompactView(lineType) {
+    const suffix = lineType === 'o' ? 'O' : 'D';
+    const compactView = document.getElementById(`select${suffix}LineCompactView`);
+    if (!compactView) return;
+
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game) return;
+
+    const pendingLine = game.pendingNextLine || {};
+    const selectedNames = pendingLine[lineType + 'Line'] || [];
+
+    const linkEl = document.getElementById(`compact${suffix}LineTypeLink`);
+    if (linkEl) {
+        linkEl.textContent = `${suffix}: `;
+    }
+
+    const listEl = document.getElementById(`compact${suffix}PlayerList`);
+    if (!listEl) return;
+
+    listEl.innerHTML = '';
+
+    if (selectedNames.length === 0) {
+        listEl.textContent = '(none selected yet)';
+        return;
+    }
+
+    const roster = currentTeam?.teamRoster || [];
+    const firstNames = selectedNames.map(name => name.split(' ')[0]);
+
+    const containerWidth = compactView.clientWidth;
+    const linkWidth = linkEl ? linkEl.offsetWidth : 40;
+    const padding = 24;
+    const availableWidth = containerWidth - linkWidth - padding;
+
+    renderCompactPlayerNames(firstNames, selectedNames, roster, listEl, availableWidth);
+}
+
+/**
+ * Update subtitle for a split panel
+ * @param {'o'|'d'} lineType
+ */
+function updateSplitPanelSubtitle(lineType) {
+    if (typeof setPanelSubtitle !== 'function') return;
+
+    const panelId = lineType === 'o' ? 'selectOLine' : 'selectDLine';
+
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game) {
+        setPanelSubtitle(panelId, '');
+        return;
+    }
+
+    const pendingLine = game.pendingNextLine || {};
+    const selectedNames = pendingLine[lineType + 'Line'] || [];
+
+    if (selectedNames.length === 0) {
+        setPanelSubtitle(panelId, '(no players selected)');
+        return;
+    }
+
+    const firstNames = selectedNames.map(name => name.split(' ')[0]);
+    setPanelSubtitle(panelId, firstNames.join(', '));
+}
+
+/**
+ * Initialize compact view resize observers for split panels
+ */
+let splitOPanelResizeObserver = null;
+let splitDPanelResizeObserver = null;
+
+function initSplitPanelCompactViewObservers() {
+    ['o', 'd'].forEach(lineType => {
+        const suffix = lineType === 'o' ? 'O' : 'D';
+        const panelId = lineType === 'o' ? 'selectOLine' : 'selectDLine';
+        const panel = document.getElementById(`panel-${panelId}`);
+        if (!panel) return;
+
+        const contentArea = panel.querySelector('.panel-content');
+        if (!contentArea) return;
+
+        // Clean up existing observer
+        const observerRef = lineType === 'o' ? 'splitOPanelResizeObserver' : 'splitDPanelResizeObserver';
+        if (lineType === 'o' && splitOPanelResizeObserver) splitOPanelResizeObserver.disconnect();
+        if (lineType === 'd' && splitDPanelResizeObserver) splitDPanelResizeObserver.disconnect();
+
+        const observer = new ResizeObserver(() => {
+            requestAnimationFrame(() => {
+                checkSplitPanelCompactMode(lineType);
+            });
+        });
+
+        observer.observe(contentArea);
+
+        if (lineType === 'o') splitOPanelResizeObserver = observer;
+        else splitDPanelResizeObserver = observer;
+
+        checkSplitPanelCompactMode(lineType);
+    });
+}
+
+/**
+ * Check compact mode for a split panel
+ * @param {'o'|'d'} lineType
+ */
+function checkSplitPanelCompactMode(lineType) {
+    const suffix = lineType === 'o' ? 'O' : 'D';
+    const panelId = lineType === 'o' ? 'selectOLine' : 'selectDLine';
+    const panel = document.getElementById(`panel-${panelId}`);
+    if (!panel) return;
+
+    const contentArea = panel.querySelector('.panel-content');
+    if (!contentArea) return;
+
+    const compactView = document.getElementById(`select${suffix}LineCompactView`);
+    const fullView = document.getElementById(`select${suffix}LineFullView`);
+    if (!compactView || !fullView) return;
+
+    const contentHeight = contentArea.clientHeight;
+    const isCompact = contentHeight < COMPACT_VIEW_THRESHOLD;
+
+    if (isCompact) {
+        compactView.style.display = 'block';
+        fullView.style.display = 'none';
+        updateSplitPanelCompactView(lineType);
+    } else {
+        compactView.style.display = 'none';
+        fullView.style.display = 'flex';
+    }
+
+    updateSplitPanelSubtitle(lineType);
 }
 
 // Game Events panel removed - will be a modal popup from Play-by-Play panel
@@ -1478,11 +2109,20 @@ function transitionToBetweenPoints() {
     // Update Select Next Line panel with latest data
     updateSelectLinePanel();
     
+    // Update split panels if in split mode
+    if (isSplitMode()) {
+        updateSplitPanels();
+    }
+
     // Maximize Select Next Line panel (for line selection)
     if (typeof maximizePanel === 'function') {
-        maximizePanel('selectLine', false);
+        if (isSplitMode()) {
+            maximizePanel('selectOLine', false);
+        } else {
+            maximizePanel('selectLine', false);
+        }
     }
-    
+
     // Minimize Play-by-Play panel (point is over)
     if (typeof minimizePanel === 'function') {
         minimizePanel('playByPlay');
@@ -2065,12 +2705,12 @@ function handlePanelStatsToggle() {
 
 /**
  * Handle O/D toggle button click
- * Cycles between 'od' → 'o' → 'd' → 'od'
+ * Cycles between 'od' → 'o' → 'd' → 'split' → 'od'
  */
 function handleODToggle() {
     const game = typeof currentGame === 'function' ? currentGame() : null;
     if (!game || !game.pendingNextLine) return;
-    
+
     // Check if user can edit
     if (!canEditSelectLinePanel()) {
         if (typeof showControllerToast === 'function') {
@@ -2078,44 +2718,66 @@ function handleODToggle() {
         }
         return;
     }
-    
+
     // Save current selections before switching (don't update timestamp - just viewing)
-    savePanelSelectionsToPendingNextLine(false);
-    
-    // Cycle to next type: od → o → d → od
+    if (!isSplitMode()) {
+        savePanelSelectionsToPendingNextLine(false);
+    }
+
+    // Cycle to next type: od → o → d → split → od
     const currentType = game.pendingNextLine.activeType || 'od';
     let nextType;
     switch (currentType) {
         case 'od': nextType = 'o'; break;
         case 'o': nextType = 'd'; break;
-        case 'd': nextType = 'od'; break;
+        case 'd': nextType = 'split'; break;
+        case 'split': nextType = 'od'; break;
         default: nextType = 'od';
     }
-    
-    // Update active type (local-only, not synced)
+
+    // Handle split mode transitions
+    if (nextType === 'split') {
+        enterSplitMode();
+        updateODToggleButton();
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('Split view: O and D lines side by side', 'info');
+        }
+        return;
+    }
+
+    if (currentType === 'split') {
+        exitSplitMode();
+        // exitSplitMode sets activeType to 'od' and updates UI
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('Switched to O/D line', 'info');
+        }
+        return;
+    }
+
+    // Normal (non-split) transition
     game.pendingNextLine.activeType = nextType;
-    
+
     // Save game state
     if (typeof saveAllTeamsData === 'function') {
         saveAllTeamsData();
     }
-    
+
     // Refresh the table to show the new line's selections
     updateSelectLineTable();
-    
+
     // Update button text
     updateODToggleButton();
-    
+
     // Update start point button state (in case player count changed)
     updateStartPointButtonState();
-    
+
     // Update subtitle and compact view for new line type
     updateSelectLineSubtitle();
     updateSelectLineCompactView();
-    
+
     // Also update Play-by-Play panel (Start Point button depends on selections)
     updatePlayByPlayPanelState();
-    
+
     // Show feedback
     const typeLabels = { od: 'O/D', o: 'Offense', d: 'Defense' };
     if (typeof showControllerToast === 'function') {
@@ -2134,14 +2796,15 @@ function updateODToggleButton() {
     const activeType = game?.pendingNextLine?.activeType || 'od';
     
     // Update button text
-    const typeLabels = { od: 'O/D', o: 'O', d: 'D' };
+    const typeLabels = { od: 'O/D', o: 'O', d: 'D', split: 'O|D' };
     btn.textContent = typeLabels[activeType] || 'O/D';
-    
+
     // Update title/tooltip
-    const typeDescriptions = { 
-        od: 'General line (tap to switch to Offense)', 
-        o: 'Offense line (tap to switch to Defense)', 
-        d: 'Defense line (tap to switch to O/D)' 
+    const typeDescriptions = {
+        od: 'Combined line (tap to switch to Offense)',
+        o: 'Offense line (tap to switch to Defense)',
+        d: 'Defense line (tap to split O and D)',
+        split: 'Split view (tap to merge back to O/D)'
     };
     btn.title = typeDescriptions[activeType] || 'Toggle O/D/O-D line';
 }
@@ -2666,12 +3329,24 @@ function updateSelectLinePanelState() {
     
     // Update Start Point button state (handles disabled state based on point status)
     updateStartPointButtonState();
-    
+
     // Update gender ratio display
     updatePanelGenderRatioDisplay();
-    
+
     // Update subtitle (shown when minimized)
     updateSelectLineSubtitle();
+
+    // Also update split panels if in split mode
+    if (isSplitMode()) {
+        ['O', 'D'].forEach(suffix => {
+            const splitPanel = document.getElementById(`panel-select${suffix}Line`);
+            const splitOverlay = document.getElementById(`panelReadonlyOverlay${suffix}`);
+            if (splitOverlay) splitOverlay.style.display = canEdit ? 'none' : 'flex';
+            if (splitPanel) splitPanel.classList.toggle('readonly', !canEdit);
+            const splitCheckboxes = document.querySelectorAll(`#panelActivePlayersTable${suffix} input[type="checkbox"]`);
+            splitCheckboxes.forEach(cb => { cb.disabled = !canEdit; });
+        });
+    }
 }
 
 /**
@@ -2773,10 +3448,22 @@ function selectAppropriateLineAtPointEnd() {
         }
     }
     
+    // In split mode, don't change activeType — instead highlight the appropriate panel
+    if (isSplitMode()) {
+        // Maximize the panel that matches what the team needs next
+        const panelToMaximize = selectedType === 'd' ? 'selectDLine' : 'selectOLine';
+        const panelToMinimize = selectedType === 'd' ? 'selectOLine' : 'selectDLine';
+        if (typeof maximizePanel === 'function') {
+            maximizePanel(panelToMaximize, false);
+        }
+        console.log(`📋 Split mode: highlighting ${panelToMaximize} panel`);
+        return;
+    }
+
     // Only update if different from current (local-only, not synced)
     if (game.pendingNextLine.activeType !== selectedType) {
         game.pendingNextLine.activeType = selectedType;
-        
+
         // Save game state (activeType won't be synced to cloud)
         if (typeof saveAllTeamsData === 'function') {
             saveAllTeamsData();
@@ -3033,7 +3720,7 @@ function updateSelectLineCompactView() {
     // Update line type link
     const linkEl = document.getElementById('compactLineTypeLink');
     if (linkEl) {
-        const typeLabels = { o: 'O: ', d: 'D: ', od: 'O/D: ' };
+        const typeLabels = { o: 'O: ', d: 'D: ', od: 'O/D: ', split: 'O|D: ' };
         linkEl.textContent = typeLabels[activeType] || 'O/D: ';
     }
     
@@ -3151,16 +3838,29 @@ function handleCompactLineTypeTap() {
     }
     
     const currentType = game.pendingNextLine.activeType || 'od';
-    const cycleOrder = ['o', 'd', 'od'];
+    const cycleOrder = ['o', 'd', 'split', 'od'];
     const currentIndex = cycleOrder.indexOf(currentType);
     const nextIndex = (currentIndex + 1) % cycleOrder.length;
-    
+    const nextType = cycleOrder[nextIndex];
+
+    // Handle split mode transition
+    if (nextType === 'split') {
+        enterSplitMode();
+        updateODToggleButton();
+        return;
+    }
+
+    if (currentType === 'split') {
+        exitSplitMode();
+        return;
+    }
+
     // Update active type (local-only, not synced)
-    game.pendingNextLine.activeType = cycleOrder[nextIndex];
-    
+    game.pendingNextLine.activeType = nextType;
+
     // Update compact view to show new line
     updateSelectLineCompactView();
-    
+
     // Also update the full view so it's in sync when panel expands
     // Update the O/D toggle button
     updateODToggleButton();
@@ -3226,7 +3926,7 @@ function updateSelectLineSubtitle() {
     const selectedNames = pendingLine[lineKey] || [];
     
     // Update panel title based on line type: "Next D Line", "Next O Line", or "Next Line"
-    const titleLabels = { o: 'Next O Line', d: 'Next D Line', od: 'Next Line' };
+    const titleLabels = { o: 'Next O Line', d: 'Next D Line', od: 'Next Line', split: 'Next Line' };
     const panelTitle = titleLabels[activeType] || 'Next Line';
     if (typeof setPanelTitle === 'function') {
         setPanelTitle('selectLine', panelTitle);
@@ -3916,10 +4616,15 @@ function enterGameScreen() {
     
     // Update Select Next Line panel
     updateSelectLinePanel();
-    
+
+    // Restore split mode if it was active
+    if (game && game.pendingNextLine && game.pendingNextLine.activeType === 'split') {
+        enterSplitMode();
+    }
+
     // Set up ResizeObserver for Play-by-Play panel layout
     setupPlayByPlayResizeObserver();
-    
+
     // Set up ResizeObserver for Select Line panel compact view
     initSelectLineCompactViewObserver();
     
@@ -4044,10 +4749,15 @@ function updateGameScreenAfterRefresh() {
     // Update Select Line panel (player stats, etc.)
     updateSelectLinePanel();
     updateSelectLineTable();
-    
+
+    // Update split panels if in split mode
+    if (isSplitMode()) {
+        updateSplitPanels();
+    }
+
     // Update Play-by-Play panel state
     updatePlayByPlayPanelState();
-    
+
     console.log('🔄 Updated UI after game state refresh');
 }
 
@@ -4137,4 +4847,10 @@ window.updateSelectLineSubtitle = updateSelectLineSubtitle;
 window.canEditSelectLinePanel = canEditSelectLinePanel;
 window.getSelectedPlayersFromPanel = getSelectedPlayersFromPanel;
 window.savePanelSelectionsToPendingNextLine = savePanelSelectionsToPendingNextLine;
+
+// O/D Split panels
+window.isSplitMode = isSplitMode;
+window.enterSplitMode = enterSplitMode;
+window.exitSplitMode = exitSplitMode;
+window.updateSplitPanels = updateSplitPanels;
 

@@ -33,14 +33,14 @@ const DEFAULT_EXPANDED_HEIGHT = 150;
 
 // Panel IDs in order (top to bottom)
 // Note: gameEvents removed - now a modal popup from Play-by-Play
-const PANEL_ORDER = ['header', 'roleButtons', 'playByPlay', 'selectLine', 'follow'];
+const PANEL_ORDER = ['header', 'roleButtons', 'playByPlay', 'selectLine', 'selectOLine', 'selectDLine', 'follow'];
 
 // Panels that can be resized via drag (these have draggable title bars)
 // Dragging a title bar resizes that panel and the one above it
-const DRAGGABLE_PANELS = ['selectLine', 'follow'];
+const DRAGGABLE_PANELS = ['selectLine', 'selectOLine', 'selectDLine', 'follow'];
 
 // Panels that CAN be resized (excludes fixed-height header and roleButtons)
-const RESIZABLE_PANELS = ['playByPlay', 'selectLine', 'follow'];
+const RESIZABLE_PANELS = ['playByPlay', 'selectLine', 'selectOLine', 'selectDLine', 'follow'];
 
 // Default panel states
 // height: null = natural/flexible height
@@ -52,6 +52,8 @@ const DEFAULT_PANEL_STATES = {
     roleButtons: { hidden: false, height: null, expandedHeight: null },
     playByPlay: { hidden: false, height: PBP_MIN_CONTENT_HEIGHT, expandedHeight: 250 },
     selectLine: { hidden: false, height: null, expandedHeight: null },
+    selectOLine: { hidden: true, height: null, expandedHeight: null },
+    selectDLine: { hidden: true, height: null, expandedHeight: null },
     follow: { hidden: false, height: null, expandedHeight: null }
 };
 
