@@ -16,3 +16,6 @@ __pycache__/
 # Test data exports
 teamData.*.json
 test_team.json
+
+# Feature worktrees (parallel Claude Code sessions)
+.worktrees/

@@ -101,6 +101,10 @@ ultistats/
 - Global state is managed through shared variables in `store/storage.js`
 - No circular dependencies - clear data flow: data → utils → features → UI
 
+### Feature Worktrees
+
+For parallel development, feature branches use git worktrees in `.worktrees/<feature-name>`. See CLAUDE.md for the workflow.
+
 ### Offline Support
 
 The service worker implements a network-first strategy with cache fallback:
