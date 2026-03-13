@@ -49,7 +49,12 @@ Deploys current working directory (not committed state) to S3 + CloudFront inval
 - Only remind about server restart when changes touch `ultistats_server/` files.
 
 ### Version tracking
-`version.json` has version and build number. A pre-commit hook (`increment-version.py`) auto-increments the build number on each commit. On staging, the deploy script also writes a `deployStamp` field so the app detects redeploys even without a build number change.
+`version.json` has version and build number. Build number auto-increments via:
+- **Direct commits to main**: pre-commit hook (`.git/hooks/pre-commit`) runs `increment-version.py`
+- **PR merges to main**: GitHub Actions workflow bumps version if the merge commit didn't already include a `version.json` change
+- **Feature branches**: pre-commit hook skips — no version bump (avoids merge conflicts across worktrees)
+
+On staging, the deploy script also writes a `deployStamp` field so the app detects redeploys even without a build number change.
 
 ## Feature Worktrees
 

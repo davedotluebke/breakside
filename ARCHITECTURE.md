@@ -588,9 +588,15 @@ Exported via `window.breakside.auth`:
 
 **Production** — GitHub Actions workflow (`.github/workflows/main.yml`):
 1. Triggers on push to `main` branch
-2. Syncs PWA files to S3 (`breakside.pro`)
-3. Syncs viewer to S3
-4. Invalidates CloudFront cache (`E6M9KCXIU9CKD`)
+2. Increments build version if not already bumped (e.g., PR merges)
+3. Syncs PWA files to S3 (`breakside.pro`)
+4. Syncs viewer to S3
+5. Invalidates CloudFront cache (`E6M9KCXIU9CKD`)
+
+**Version bumping** — Build number in `version.json` increments automatically:
+- Direct commits to main: pre-commit hook (`.git/hooks/pre-commit`)
+- PR merges: CI workflow detects missing `version.json` change and bumps
+- Feature branches: hook skips to avoid merge conflicts across worktrees
 
 **Staging** — Manual deploy via `./scripts/deploy-staging.sh`:
 1. Generates a deploy timestamp (`deployStamp`) and injects it into `version.json`
