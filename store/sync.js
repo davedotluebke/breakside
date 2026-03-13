@@ -983,9 +983,16 @@ async function refreshPendingLineFromCloud(gameId) {
         
         // Note: activeType is intentionally NOT synced - it's local UI state
         // Each user independently chooses which line type to view/edit
-        
+
         game.pendingNextLine = localPending;
-        
+
+        // Detect if game was ended by another session/device
+        if (gameData.gameEndTimestamp && !game.gameEndTimestamp) {
+            game.gameEndTimestamp = new Date(gameData.gameEndTimestamp);
+            console.log('📥 Refreshed pending line — game ended by another session');
+            return { gameJustEnded: true, pendingLine: localPending };
+        }
+
         console.log('📥 Refreshed pending line from cloud');
         return localPending;
         
