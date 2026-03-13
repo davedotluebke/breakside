@@ -4689,8 +4689,21 @@ function startGameStateRefresh() {
             // They are the authoritative source for game data
             if (typeof isPointInProgress === 'function' && !isPointInProgress()) {
                 if (typeof refreshPendingLineFromCloud === 'function') {
-                    const updated = await refreshPendingLineFromCloud(gameId);
-                    if (updated) {
+                    const result = await refreshPendingLineFromCloud(gameId);
+                    if (result && typeof result === 'object' && result.gameJustEnded) {
+                        // Game ended by another session/device
+                        console.log('🏁 Game ended by another session — leaving game screen');
+                        if (typeof showControllerToast === 'function') {
+                            showControllerToast('Game has ended', 'info', 4000);
+                        }
+                        stopControllerPolling();
+                        exitGameScreen();
+                        if (typeof showSelectTeamScreen === 'function') {
+                            showSelectTeamScreen();
+                        }
+                        return;
+                    }
+                    if (result) {
                         updateSelectLinePanel();
                     }
                 }
@@ -4700,6 +4713,20 @@ function startGameStateRefresh() {
             if (typeof refreshGameStateFromCloud === 'function') {
                 const result = await refreshGameStateFromCloud(gameId);
                 if (result) {
+                    // Game ended by another coach — navigate away
+                    if (typeof result === 'object' && result.gameJustEnded) {
+                        console.log('🏁 Game ended by another coach — leaving game screen');
+                        if (typeof showControllerToast === 'function') {
+                            showControllerToast('Game has ended', 'info', 4000);
+                        }
+                        stopControllerPolling();
+                        exitGameScreen();
+                        if (typeof showSelectTeamScreen === 'function') {
+                            showSelectTeamScreen();
+                        }
+                        return;
+                    }
+
                     // Update all UI elements
                     updateGameScreenAfterRefresh();
 
