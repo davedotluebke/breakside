@@ -658,8 +658,9 @@ let handoffTimeoutSeconds = 10;
  * @param {string} message - Message to display
  * @param {string} type - 'success', 'info', 'warning', 'error'
  * @param {number} duration - Duration in ms (default 4000)
+ * @param {object} options - Optional callbacks: { onTap, onDismiss }
  */
-function showControllerToast(message, type = 'info', duration = 4000) {
+function showControllerToast(message, type = 'info', duration = 4000, options = {}) {
     const container = document.getElementById('toastContainer');
     if (!container) {
         console.log(`🎮 Controller [${type}]: ${message}`);
@@ -688,10 +689,26 @@ function showControllerToast(message, type = 'info', duration = 4000) {
     
     // Close button handler
     toast.querySelector('.toast-close').addEventListener('click', () => dismissToast(toast));
-    
+
+    // Actionable toast: tap body (excluding close button) to trigger onTap
+    if (options.onTap) {
+        toast.classList.add('toast-actionable');
+        toast.addEventListener('click', (e) => {
+            // Don't trigger if they clicked the close button
+            if (e.target.closest('.toast-close')) return;
+            options.onTap();
+            dismissToast(toast);
+        });
+    }
+
+    // Store onDismiss callback for dismissToast to call
+    if (options.onDismiss) {
+        toast._onDismiss = options.onDismiss;
+    }
+
     // Add swipe-to-dismiss functionality
     addSwipeToDismiss(toast);
-    
+
     container.appendChild(toast);
     
     // Auto-remove after duration (if duration > 0)
@@ -721,12 +738,17 @@ function showControllerToast(message, type = 'info', duration = 4000) {
  */
 function dismissToast(toast, wasSwiped = false) {
     if (!toast || !toast.parentElement) return;
-    
+
     // Cancel auto-remove timeout
     if (toast.dataset.timeoutId) {
         clearTimeout(parseInt(toast.dataset.timeoutId));
     }
-    
+
+    // Call onDismiss callback if set
+    if (toast._onDismiss) {
+        toast._onDismiss();
+    }
+
     if (wasSwiped) {
         // Already swiped away, just remove immediately
         toast.remove();

@@ -1021,7 +1021,12 @@ async function refreshGameStateFromCloud(gameId) {
         if (!game || game.id !== gameId) {
             return false;
         }
-        
+
+        // Capture current state before overwriting to detect changes
+        const oldScores = game.scores ? { ...game.scores } : {};
+        const oldPointCount = game.points ? game.points.length : 0;
+        const oldGameEnded = !!game.gameEndTimestamp;
+
         // Update scores
         if (gameData.scores) {
             game.scores = gameData.scores;
@@ -1091,8 +1096,23 @@ async function refreshGameStateFromCloud(gameId) {
             game.pendingNextLine = localPending;
         }
         
-        console.log('📥 Refreshed full game state from cloud');
-        return true;
+        // Detect what changed
+        const newScores = game.scores || {};
+        const newPointCount = game.points ? game.points.length : 0;
+        const gameJustEnded = !oldGameEnded && !!game.gameEndTimestamp;
+        const scoreChanged = newScores[Role.TEAM] !== oldScores[Role.TEAM]
+            || newScores[Role.OPPONENT] !== oldScores[Role.OPPONENT];
+        const pointCountChanged = newPointCount !== oldPointCount;
+
+        const hasChanges = scoreChanged || pointCountChanged || gameJustEnded;
+
+        if (hasChanges) {
+            console.log('📥 Refreshed game state from cloud — changes detected',
+                { scoreChanged, pointCountChanged, gameJustEnded });
+        }
+
+        // Return change details so callers can react (e.g. show a toast)
+        return hasChanges ? { scoreChanged, pointCountChanged, gameJustEnded } : true;
         
     } catch (error) {
         console.error('Error refreshing game state:', error);

@@ -26,23 +26,45 @@ def test_data_dir():
         shutil.rmtree(_test_data_dir)
 
 
+MOCK_USER = {"id": "test-admin-user", "email": "admin@test.com", "role": "authenticated"}
+
+
 @pytest.fixture(scope="module")
 def client(test_data_dir):
-    """Create a test client with patched data directory."""
+    """Create a test client with patched data directory and mock auth."""
     # Patch config before importing app
     import config
     config.DATA_DIR = test_data_dir
     config.GAMES_DIR = test_data_dir / "games"
     config.TEAMS_DIR = test_data_dir / "teams"
     config.PLAYERS_DIR = test_data_dir / "players"
+    config.USERS_DIR = test_data_dir / "users"
+    config.MEMBERSHIPS_DIR = test_data_dir / "memberships"
+    config.SHARES_DIR = test_data_dir / "shares"
+    config.INVITES_DIR = test_data_dir / "invites"
     config.INDEX_FILE = test_data_dir / "index.json"
-    
+
     # Create directories
     config.GAMES_DIR.mkdir(parents=True, exist_ok=True)
     config.TEAMS_DIR.mkdir(parents=True, exist_ok=True)
     config.PLAYERS_DIR.mkdir(parents=True, exist_ok=True)
-    
+    config.USERS_DIR.mkdir(parents=True, exist_ok=True)
+    config.MEMBERSHIPS_DIR.mkdir(parents=True, exist_ok=True)
+    config.SHARES_DIR.mkdir(parents=True, exist_ok=True)
+    config.INVITES_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Create admin user in storage so is_admin() returns True
+    user_file = config.USERS_DIR / f"{MOCK_USER['id']}.json"
+    with open(user_file, 'w') as f:
+        json.dump({"id": MOCK_USER["id"], "email": MOCK_USER["email"], "isAdmin": True}, f)
+
     from main import app
+    from auth.jwt_validation import get_current_user, get_optional_user
+
+    # Override auth to return mock admin user
+    app.dependency_overrides[get_current_user] = lambda: MOCK_USER
+    app.dependency_overrides[get_optional_user] = lambda: MOCK_USER
+
     return TestClient(app)
 
 
@@ -329,6 +351,119 @@ class TestTeamAPI:
         assert "Player1" in names
         assert "Player2" in names
     
+    def test_get_team_active_game_no_games(self, client):
+        """Test GET /teams/{team_id}/active-game returns 404 when no games exist."""
+        team_response = client.post("/api/teams", json={
+            "id": "NoGames-Team",
+            "name": "NoGamesTeam"
+        })
+        team_id = team_response.json()["team_id"]
+        client.post("/api/index/rebuild")
+
+        response = client.get(f"/api/teams/{team_id}/active-game")
+        assert response.status_code == 404
+
+    def test_get_team_active_game_ended_game(self, client):
+        """Test GET /teams/{team_id}/active-game returns 404 when game has ended."""
+        from datetime import datetime
+        team_response = client.post("/api/teams", json={
+            "id": "EndedGame-Team",
+            "name": "EndedGameTeam"
+        })
+        team_id = team_response.json()["team_id"]
+        now = datetime.now().isoformat()
+
+        client.post("/api/games/ended-game-test/sync", json={
+            "team": "EndedGameTeam",
+            "opponent": "Opponent",
+            "teamId": team_id,
+            "gameStartTimestamp": now,
+            "gameEndTimestamp": now,
+            "points": [{"pointNumber": 1}]
+        })
+        client.post("/api/index/rebuild")
+
+        response = client.get(f"/api/teams/{team_id}/active-game")
+        assert response.status_code == 404
+
+    def test_get_team_active_game_success(self, client):
+        """Test GET /teams/{team_id}/active-game returns active game."""
+        from datetime import datetime
+        team_response = client.post("/api/teams", json={
+            "id": "ActiveGame-Team",
+            "name": "ActiveGameTeam"
+        })
+        team_id = team_response.json()["team_id"]
+        now = datetime.now().isoformat()
+
+        client.post("/api/games/active-game-test/sync", json={
+            "team": "ActiveGameTeam",
+            "opponent": "ActiveOpponent",
+            "teamId": team_id,
+            "gameStartTimestamp": now,
+            "scores": {"team": 3, "opponent": 2},
+            "points": [{"pointNumber": 1}, {"pointNumber": 2}]
+        })
+        client.post("/api/index/rebuild")
+
+        response = client.get(f"/api/teams/{team_id}/active-game")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["game_id"] == "active-game-test"
+        assert data["opponent"] == "ActiveOpponent"
+        assert data["points_count"] == 2
+        assert data["scores"] == {"team": 3, "opponent": 2}
+        assert "activeCoaches" in data
+        assert "lastActivity" in data
+
+    def test_get_team_active_game_old_game(self, client):
+        """Test GET /teams/{team_id}/active-game returns 404 for game older than 6 hours."""
+        team_response = client.post("/api/teams", json={
+            "id": "OldGame-Team",
+            "name": "OldGameTeam"
+        })
+        team_id = team_response.json()["team_id"]
+        old_ts = "2020-01-01T00:00:00"
+
+        client.post("/api/games/old-game-test/sync", json={
+            "team": "OldGameTeam",
+            "opponent": "Opponent",
+            "teamId": team_id,
+            "gameStartTimestamp": old_ts,
+            "points": [{"pointNumber": 1}]
+        })
+        client.post("/api/index/rebuild")
+
+        response = client.get(f"/api/teams/{team_id}/active-game")
+        assert response.status_code == 404
+
+    def test_get_team_active_game_no_points(self, client):
+        """Test GET /teams/{team_id}/active-game returns 404 when game has no points."""
+        from datetime import datetime
+        team_response = client.post("/api/teams", json={
+            "id": "NoPoints-Team",
+            "name": "NoPointsTeam"
+        })
+        team_id = team_response.json()["team_id"]
+        now = datetime.now().isoformat()
+
+        client.post("/api/games/no-points-game-test/sync", json={
+            "team": "NoPointsTeam",
+            "opponent": "Opponent",
+            "teamId": team_id,
+            "gameStartTimestamp": now,
+            "points": []
+        })
+        client.post("/api/index/rebuild")
+
+        response = client.get(f"/api/teams/{team_id}/active-game")
+        assert response.status_code == 404
+
+    def test_get_team_active_game_team_not_found(self, client):
+        """Test GET /teams/{team_id}/active-game returns 404 for nonexistent team."""
+        response = client.get("/api/teams/nonexistent-team-xyz/active-game")
+        assert response.status_code == 404
+
     def test_get_team_games(self, client):
         """Test GET /teams/{team_id}/games returns team's games."""
         # Create team

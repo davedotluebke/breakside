@@ -1998,6 +1998,7 @@ let panelShowingTotalStats = false;
 
 // Track conflict detection state
 let lastConflictToastPointIndex = -1;  // Prevent multiple toasts per point
+let lastGameUpdatedToastTime = 0;  // Throttle game-updated toasts
 let localLineEditTimestamps = {
     oLine: 0,
     dLine: 0,
@@ -2423,6 +2424,25 @@ function checkForLineEditConflict() {
             }
             lastConflictToastPointIndex = currentPointIndex;
         }
+    }
+}
+
+/**
+ * Show a toast when another coach updates the game state.
+ * Throttled to at most once every 10 seconds to avoid spamming.
+ */
+function showGameUpdatedToast(changes) {
+    const now = Date.now();
+    if (now - lastGameUpdatedToastTime < 10000) return;
+    lastGameUpdatedToastTime = now;
+
+    // Get the other coach's name from controller state
+    const state = typeof getControllerState === 'function' ? getControllerState() : {};
+    const coachName = state.activeCoach?.displayName;
+    const who = coachName || 'Another coach';
+
+    if (typeof showControllerToast === 'function') {
+        showControllerToast(`${who} updated the game`, 'info', 4000);
     }
 }
 
@@ -3814,6 +3834,11 @@ function stopGameScreenTimerLoop() {
  * Called when starting a point or entering a game
  */
 function enterGameScreen() {
+    // Stop active-game polling while in a game
+    if (typeof stopActiveGamePolling === 'function') {
+        stopActiveGamePolling();
+    }
+
     // Initialize if needed
     if (!gameScreenInitialized) {
         initGameScreen();
@@ -3909,6 +3934,12 @@ function exitGameScreen() {
     hideGameScreen();
     stopGameScreenTimerLoop();
     stopGameStateRefresh();
+
+    // Resume active-game polling when leaving a game
+    if (typeof startActiveGamePolling === 'function') {
+        startActiveGamePolling();
+    }
+
     console.log('🎮 Exited game screen');
 }
 
@@ -3962,10 +3993,15 @@ function startGameStateRefresh() {
         } else {
             // Line Coach / Viewer: Refresh full game state
             if (typeof refreshGameStateFromCloud === 'function') {
-                const updated = await refreshGameStateFromCloud(gameId);
-                if (updated) {
+                const result = await refreshGameStateFromCloud(gameId);
+                if (result) {
                     // Update all UI elements
                     updateGameScreenAfterRefresh();
+
+                    // Show conflict toast when another coach made meaningful changes
+                    if (typeof result === 'object' && (result.scoreChanged || result.pointCountChanged)) {
+                        showGameUpdatedToast(result);
+                    }
                 }
             }
         }

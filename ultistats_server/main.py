@@ -699,71 +699,64 @@ async def get_game(game_id: str, user: dict = Depends(require_game_team_access))
     return game_data
 
 
+def _enrich_game_with_activity(game: dict) -> None:
+    """Enrich a game dict with lastActivity and activeCoaches from controller state."""
+    game_id = game.get("game_id")
+    if not game_id:
+        return
+
+    five_minutes_ago = datetime.now().timestamp() - (5 * 60)
+    state = get_controller_state(game_id)
+
+    last_pings = []
+    active_coaches = []
+
+    if state.get("activeCoach") and state["activeCoach"].get("lastPing"):
+        ping_time = state["activeCoach"]["lastPing"]
+        last_pings.append(ping_time)
+        try:
+            ping_ts = datetime.fromisoformat(ping_time).timestamp()
+            if ping_ts > five_minutes_ago:
+                active_coaches.append(state["activeCoach"].get("displayName", "Unknown"))
+        except (ValueError, TypeError):
+            pass
+
+    if state.get("lineCoach") and state["lineCoach"].get("lastPing"):
+        ping_time = state["lineCoach"]["lastPing"]
+        last_pings.append(ping_time)
+        try:
+            ping_ts = datetime.fromisoformat(ping_time).timestamp()
+            if ping_ts > five_minutes_ago:
+                line_coach_name = state["lineCoach"].get("displayName", "Unknown")
+                if line_coach_name not in active_coaches:
+                    active_coaches.append(line_coach_name)
+        except (ValueError, TypeError):
+            pass
+
+    game["lastActivity"] = max(last_pings) if last_pings else None
+    game["activeCoaches"] = active_coaches
+
+
 @app.get("/api/games")
 async def list_games_endpoint(user: Optional[dict] = Depends(get_optional_user)):
     """
     List all games with metadata.
-    
+
     Returns only games for teams the user has access to.
     Anonymous users get an empty list.
-    
+
     Includes activity info: lastActivity timestamp and activeCoaches list
     for games with recent controller activity (within 5 minutes).
     """
     all_games = list_all_games()
-    
+
     if not user:
         return {"games": [], "count": 0}
-    
+
     # Enrich games with activity info from controller state
-    five_minutes_ago = datetime.now().timestamp() - (5 * 60)
-    
     for game in all_games:
-        game_id = game.get("game_id")
-        if not game_id:
-            continue
-            
-        # Get controller state for this game (in-memory, fast)
-        state = get_controller_state(game_id)
-        
-        # Find the most recent lastPing from any role
-        last_pings = []
-        active_coaches = []
-        
-        if state.get("activeCoach") and state["activeCoach"].get("lastPing"):
-            ping_time = state["activeCoach"]["lastPing"]
-            last_pings.append(ping_time)
-            # Check if this coach is active (within 5 minutes)
-            try:
-                ping_ts = datetime.fromisoformat(ping_time).timestamp()
-                if ping_ts > five_minutes_ago:
-                    active_coaches.append(state["activeCoach"].get("displayName", "Unknown"))
-            except (ValueError, TypeError):
-                pass
-                
-        if state.get("lineCoach") and state["lineCoach"].get("lastPing"):
-            ping_time = state["lineCoach"]["lastPing"]
-            last_pings.append(ping_time)
-            # Check if this coach is active (within 5 minutes)
-            # Only add if different from activeCoach
-            try:
-                ping_ts = datetime.fromisoformat(ping_time).timestamp()
-                if ping_ts > five_minutes_ago:
-                    line_coach_name = state["lineCoach"].get("displayName", "Unknown")
-                    if line_coach_name not in active_coaches:
-                        active_coaches.append(line_coach_name)
-            except (ValueError, TypeError):
-                pass
-        
-        # Set lastActivity to the most recent ping
-        if last_pings:
-            game["lastActivity"] = max(last_pings)
-        else:
-            game["lastActivity"] = None
-            
-        # Set active coaches list (only those active within 5 minutes)
-        game["activeCoaches"] = active_coaches
-    
+        _enrich_game_with_activity(game)
+
     # Admin sees all
     if is_admin(user["id"]):
         return {"games": all_games, "count": len(all_games)}
@@ -1735,6 +1728,72 @@ async def get_team_games_endpoint(team_id: str, user: dict = Depends(require_tea
     
     game_ids = get_team_games(team_id)
     return {"team_id": team_id, "game_ids": game_ids, "count": len(game_ids)}
+
+
+@app.get("/api/teams/{team_id}/active-game")
+async def get_team_active_game(team_id: str, user: dict = Depends(require_team_access("team_id"))):
+    """
+    Get the currently active game for a team.
+
+    A game is considered active if it:
+    - Has at least one point
+    - Has no gameEndTimestamp
+    - Was started within the last 6 hours
+
+    Returns the most recently started active game, or 404 if none.
+    Requires: Coach or Viewer access to the team.
+    """
+    if not team_exists(team_id):
+        raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+
+    game_ids = get_team_games(team_id)
+    six_hours_ago = datetime.now().timestamp() - (6 * 60 * 60)
+
+    active_games = []
+    for game_id in game_ids:
+        try:
+            game_data = get_game_current(game_id)
+        except FileNotFoundError:
+            continue
+
+        # Must have at least one point
+        points = game_data.get("points", [])
+        if len(points) == 0:
+            continue
+
+        # Must not have ended
+        if game_data.get("gameEndTimestamp"):
+            continue
+
+        # Must have started within 6 hours
+        start_ts = game_data.get("gameStartTimestamp")
+        if not start_ts:
+            continue
+        try:
+            start_epoch = datetime.fromisoformat(start_ts).timestamp()
+            if start_epoch < six_hours_ago:
+                continue
+        except (ValueError, TypeError):
+            continue
+
+        summary = {
+            "game_id": game_id,
+            "team": game_data.get("team", "Unknown"),
+            "teamId": game_data.get("teamId"),
+            "opponent": game_data.get("opponent", "Unknown"),
+            "game_start_timestamp": start_ts,
+            "scores": game_data.get("scores", {}),
+            "points_count": len(points),
+        }
+        _enrich_game_with_activity(summary)
+        active_games.append(summary)
+
+    if not active_games:
+        raise HTTPException(status_code=404, detail=f"No active game found for team {team_id}")
+
+    # Return the most recently started game
+    active_games.sort(key=lambda g: g.get("game_start_timestamp", ""), reverse=True)
+    return active_games[0]
 
 
 # =============================================================================

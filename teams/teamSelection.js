@@ -153,6 +153,12 @@ function teamHasActiveGames(games) {
 const _expandedTeams = new Set();
 let _expandStateInitialized = false;
 
+// Active-game polling state
+let _activeGamePollInterval = null;
+const _dismissedActiveGames = new Set();  // game IDs user dismissed this session
+let _previousActiveGameIds = new Set();   // game IDs that were active last poll
+let _cloudTeamsCache = [];                // cached team objects from last populateCloudTeamsAndGames()
+
 async function populateCloudTeamsAndGames() {
     const listElement = document.getElementById('cloudTeamsList');
     if (!listElement) return;
@@ -176,7 +182,8 @@ async function populateCloudTeamsAndGames() {
         
         const data = await response.json();
         const userTeams = data.teams || [];
-        
+        _cloudTeamsCache = userTeams;
+
         // Also fetch games (includes activeCoaches from server)
         let allGames = [];
         if (typeof listServerGames === 'function') {
@@ -1183,6 +1190,86 @@ window.handleSignOut = handleSignOut;
 window.doFullRefresh = doFullRefresh;
 window.showConnectionInfo = showConnectionInfo;
 window.confirmAppUpdate = confirmAppUpdate;
+
+// =============================================================================
+// Active-Game Polling (auto-join prompt)
+// =============================================================================
+
+/**
+ * Start polling for active games across the user's teams.
+ * Shows a toast when another coach starts or resumes a game.
+ */
+function startActiveGamePolling() {
+    if (_activeGamePollInterval) return; // already polling
+    if (!window.breakside?.auth?.isAuthenticated?.()) return;
+    if (!navigator.onLine) return;
+
+    checkForActiveGames(); // immediate first check
+    _activeGamePollInterval = setInterval(checkForActiveGames, 30000);
+    console.log('📡 Active-game polling started');
+}
+
+/**
+ * Stop active-game polling.
+ */
+function stopActiveGamePolling() {
+    if (_activeGamePollInterval) {
+        clearInterval(_activeGamePollInterval);
+        _activeGamePollInterval = null;
+        console.log('📡 Active-game polling stopped');
+    }
+}
+
+/**
+ * Check for newly active games and show toast notifications.
+ */
+async function checkForActiveGames() {
+    if (!navigator.onLine) return;
+    if (typeof listServerGames !== 'function') return;
+
+    try {
+        const allGames = await listServerGames();
+        // Active games that haven't ended
+        const activeGames = allGames.filter(g => isGameActive(g) && !g.game_end_timestamp);
+        const currentActiveIds = new Set(activeGames.map(g => g.game_id));
+
+        for (const game of activeGames) {
+            if (_previousActiveGameIds.has(game.game_id)) continue; // not new
+            if (_dismissedActiveGames.has(game.game_id)) continue;  // user dismissed
+
+            // Find the team from our cache
+            const teamEntry = _cloudTeamsCache.find(t => t.team.id === game.teamId);
+            if (!teamEntry) continue; // not our team or cache not populated yet
+
+            const coachNames = (game.activeCoaches || []).join(', ') || 'A coach';
+            const opponent = game.opponent || 'Unknown';
+            const message = `${coachNames} coaching vs ${opponent}. Tap to join`;
+
+            const gameId = game.game_id;
+            const cloudTeam = teamEntry.team;
+
+            if (typeof showControllerToast === 'function') {
+                showControllerToast(message, 'info', 8000, {
+                    onTap: () => {
+                        _dismissedActiveGames.delete(gameId);
+                        resumeCloudGame(cloudTeam, gameId);
+                    },
+                    onDismiss: () => {
+                        _dismissedActiveGames.add(gameId);
+                    }
+                });
+            }
+        }
+
+        _previousActiveGameIds = currentActiveIds;
+    } catch (error) {
+        console.warn('Active-game poll failed:', error);
+    }
+}
+
+// Export polling functions
+window.startActiveGamePolling = startActiveGamePolling;
+window.stopActiveGamePolling = stopActiveGamePolling;
 
 // Auto-refresh every 10 seconds when on the team selection screen
 let _autoRefreshInterval = null;
