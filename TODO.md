@@ -25,7 +25,7 @@ For deployment info and technical architecture, see **[ARCHITECTURE.md](ARCHITEC
 
 ### Phase 7: Viewer Experience
 
-- [ ] PWA: Read-only mode for Viewers
+- [x] PWA: Read-only mode for Viewers
   - Hide event buttons
   - Show "Spectating" badge
   - Live-update as events come in

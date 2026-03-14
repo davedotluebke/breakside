@@ -522,6 +522,7 @@ function initializeTeams() {
 var teams = [];                 // An array of teams
 var currentTeam = null;         // The current team being tracked
 var sampleTeam = null;          // A sample team with 10 players, used if no teams are found
+var currentTeamRole = null;     // The user's role on the current team ('coach' or 'viewer')
 
 /*
  * Global initialization
@@ -541,7 +542,16 @@ function clearAllTeamsData() {
     teams = [];
     currentTeam = null;
     sampleTeam = null;
+    currentTeamRole = null;
 }
+
+function getCurrentTeamRole() { return currentTeamRole; }
+function setCurrentTeamRole(role) { currentTeamRole = role; }
+function isViewer() { return currentTeamRole === 'viewer'; }
+
+window.getCurrentTeamRole = getCurrentTeamRole;
+window.setCurrentTeamRole = setCurrentTeamRole;
+window.isViewer = isViewer;
 
 // Expose clearAllTeamsData globally for auth module
 window.clearAllTeamsData = clearAllTeamsData;

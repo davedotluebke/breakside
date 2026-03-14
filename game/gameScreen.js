@@ -1271,13 +1271,19 @@ function handleGameMenuClick(e) {
     if (dropdown) {
         dropdown.classList.toggle('visible');
         
-        // Update End Game button state based on role
+        // Hide End Game for viewers, disable for non-role-holding coaches
         const endGameBtn = document.getElementById('menuEndGame');
         if (endGameBtn) {
-            const canEnd = canEditPlayByPlayPanel() || 
-                (typeof isLineCoach === 'function' && isLineCoach());
-            endGameBtn.disabled = !canEnd;
-            endGameBtn.title = canEnd ? 'End the game' : 'Only Active or Line Coach can end the game';
+            const viewerMode = typeof window.isViewer === 'function' && window.isViewer();
+            if (viewerMode) {
+                endGameBtn.style.display = 'none';
+            } else {
+                endGameBtn.style.display = '';
+                const canEnd = canEditPlayByPlayPanel() ||
+                    (typeof isLineCoach === 'function' && isLineCoach());
+                endGameBtn.disabled = !canEnd;
+                endGameBtn.title = canEnd ? 'End the game' : 'Only Active or Line Coach can end the game';
+            }
         }
     }
 }
