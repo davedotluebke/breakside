@@ -220,11 +220,13 @@ ultistats_server/
 - `DELETE /api/teams/{team_id}/members/{user_id}` - Remove member
 
 #### Game Control
-- `GET /api/games/{game_id}/status` - Get active/line coach status
+- `GET /api/games/{game_id}/controller` - Get controller state (roles, pending handoffs)
+- `POST /api/games/{game_id}/ping` - Ping to keep role alive; returns controller state + `connectedCoaches` list
 - `POST /api/games/{game_id}/claim-active` - Request Active Coach role
 - `POST /api/games/{game_id}/claim-line` - Request Line Coach role
 - `POST /api/games/{game_id}/release` - Release current role
-- `GET /api/games/{game_id}/poll` - Poll for game updates (optimized)
+- `POST /api/games/{game_id}/request-handoff` - Request handoff of a role from current holder
+- `POST /api/games/{game_id}/handoff-response` - Accept or deny a handoff request
 
 ---
 
@@ -489,14 +491,29 @@ Per-game controller state (in-memory, managed by `controller_storage.py`):
 }
 ```
 
+**Connected Coaches Tracking:**
+
+The server separately tracks all coaches actively polling each game, regardless of whether they hold a role. This is stored in-memory via `record_coach_ping()` / `get_connected_coaches()` in `controller_storage.py`.
+
+- Every `POST /ping` records the coach's presence with `{displayName, lastPing}`
+- `get_connected_coaches(game_id)` returns a list of `[{userId, displayName}]` for coaches who pinged within `STALE_TIMEOUT_SECONDS` (15s)
+- The ping response includes `connectedCoaches` so clients know how many coaches are present
+- The GET `/controller` endpoint does NOT return `connectedCoaches` (only POST `/ping` does)
+- Note: Viewers do not call the ping endpoint, so they do not appear in connected coaches
+
+**Client-Side Role Button Visibility:**
+
+Role claim buttons (Play-by-Play / Next Line) are hidden when only one coach is polling a game. Once multiple coaches are detected, a **latch** keeps the buttons visible for the session (even if the second coach disconnects). The latch resets when exiting the game screen (`resetMultiCoachDetected()`). This logic lives in `updatePanelsForRole()` in `ui/panelSystem.js`.
+
 **Timeouts:**
 - `STALE_CLAIM_SECONDS` (30s): Role auto-releases if holder stops pinging
+- `STALE_TIMEOUT_SECONDS` (15s): Coach removed from connected list if no ping
 - `HANDOFF_EXPIRY_SECONDS` (10s): Pending handoff auto-accepts if holder doesn't respond
 
 **API Response Enrichment:**
 - `expiresInSeconds`: Server-calculated time remaining for pending handoff
 - `handoffTimeoutSeconds`: Current timeout setting for client reference
-```
+- `connectedCoaches`: List of all coaches actively polling (from ping endpoint only)
 
 ### Invite Codes
 
@@ -512,14 +529,20 @@ Coach invites are single-use with 7-day expiry. Viewer invites are multi-use and
 
 ### Multi-User Polling Strategy
 
+**Controller polling** (via `POST /ping`):
+
 | User Type | Poll Interval | Payload |
 |-----------|---------------|---------|
-| Active Coach | 2 seconds | Full game state + controller status |
-| Line Coach | 2 seconds | Current lineup + controller status |
-| Coach (idle) | 3 seconds | Game state + controller status |
-| Viewer | 5 seconds | Game state only |
+| Coach (holding role) | 2 seconds | Controller state + connected coaches list |
+| Coach (no role) | 5 seconds | Controller state + connected coaches list |
 
-Handoff requests are checked on every poll. Future optimization: switch to WebSockets if latency becomes problematic.
+**Game state refresh** (via `GET /games/{id}`):
+
+| User Type | Poll Interval | Payload |
+|-----------|---------------|---------|
+| Line Coach / Viewer | 3 seconds | Full game state |
+
+Coaches poll the ping endpoint to maintain role claims and detect other coaches. The game state refresh runs separately for non-Active-Coach users to sync score/event changes. Handoff requests are detected via controller polling. Future optimization: switch to WebSockets if latency becomes problematic.
 
 ### URL Structure
 
