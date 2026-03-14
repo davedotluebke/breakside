@@ -111,6 +111,8 @@ FastAPI app in `main.py`. File-based JSON storage (no database).
 - Full game state sent on each sync (stateless API)
 - Every sync creates a timestamped version backup
 - Controller state (Active Coach / Line Coach roles) is in-memory only
+- Connected coaches tracked in-memory via ping endpoint (separate from role holders)
+- Role buttons hidden when solo coaching; latch visible once multi-coach detected (resets on game exit)
 - Data stored at `/var/lib/breakside/data/` on EC2
 
 ### Environment variables (backend)
