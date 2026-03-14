@@ -303,6 +303,12 @@ async function populateCloudTeamsAndGames() {
                 roleBadge.innerHTML = '<i class="fas fa-clipboard"></i> <span class="role-badge-text">Coach</span>';
                 roleBadge.title = 'Coach';
                 bottomRow.appendChild(roleBadge);
+            } else if (role === 'viewer') {
+                const roleBadge = document.createElement('span');
+                roleBadge.className = 'role-badge viewer-badge';
+                roleBadge.innerHTML = '<i class="fas fa-eye"></i> <span class="role-badge-text">Viewer</span>';
+                roleBadge.title = 'Viewer';
+                bottomRow.appendChild(roleBadge);
             }
             
             const gameCount = document.createElement('span');
@@ -365,16 +371,28 @@ async function populateCloudTeamsAndGames() {
                     const line2 = document.createElement('div');
                     line2.className = 'game-line2';
                     
-                    if (!game.game_end_timestamp && role === 'coach') {
-                        const joinBtn = document.createElement('button');
-                        joinBtn.textContent = 'Join';
-                        joinBtn.className = 'game-join-btn';
-                        joinBtn.title = 'Join Game';
-                        joinBtn.onclick = (e) => {
-                            e.stopPropagation();
-                            resumeCloudGame(team, game.game_id);
-                        };
-                        line2.appendChild(joinBtn);
+                    if (!game.game_end_timestamp) {
+                        if (role === 'coach') {
+                            const joinBtn = document.createElement('button');
+                            joinBtn.textContent = 'Join';
+                            joinBtn.className = 'game-join-btn';
+                            joinBtn.title = 'Join Game';
+                            joinBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                resumeCloudGame(team, game.game_id, role);
+                            };
+                            line2.appendChild(joinBtn);
+                        } else if (role === 'viewer') {
+                            const watchBtn = document.createElement('button');
+                            watchBtn.textContent = 'Watch';
+                            watchBtn.className = 'game-join-btn game-watch-btn';
+                            watchBtn.title = 'Watch Game';
+                            watchBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                resumeCloudGame(team, game.game_id, role);
+                            };
+                            line2.appendChild(watchBtn);
+                        }
                     }
                     
                     // Spacer pushes delete to the right
@@ -598,10 +616,15 @@ async function deleteCloudTeam(team) {
  * Resume a game from the cloud
  * Loads the game data and enters the appropriate screen
  */
-async function resumeCloudGame(cloudTeam, gameId) {
-    console.log('📥 Resuming cloud game:', gameId);
-    
+async function resumeCloudGame(cloudTeam, gameId, role) {
+    console.log('📥 Resuming cloud game:', gameId, role ? `(${role})` : '');
+
     try {
+        // Set the team role before entering the game screen
+        if (typeof window.setCurrentTeamRole === 'function') {
+            window.setCurrentTeamRole(role || 'coach');
+        }
+
         // First ensure the team is loaded
         await selectCloudTeam(cloudTeam);
         
@@ -1247,12 +1270,17 @@ async function checkForActiveGames() {
 
             const gameId = game.game_id;
             const cloudTeam = teamEntry.team;
+            const teamRole = teamEntry.role || 'coach';
+
+            const toastMessage = teamRole === 'viewer'
+                ? `${coachNames} coaching vs ${opponent}. Tap to watch`
+                : message;
 
             if (typeof showControllerToast === 'function') {
-                showControllerToast(message, 'info', 8000, {
+                showControllerToast(toastMessage, 'info', 8000, {
                     onTap: () => {
                         _dismissedActiveGames.delete(gameId);
-                        resumeCloudGame(cloudTeam, gameId);
+                        resumeCloudGame(cloudTeam, gameId, teamRole);
                     },
                     onDismiss: () => {
                         _dismissedActiveGames.add(gameId);

@@ -1213,14 +1213,28 @@ function updatePanelsForRole() {
     const hasLineCoach = typeof window.isLineCoach === 'function' && window.isLineCoach();
     const hasAnyRole = hasActiveCoach || hasLineCoach;
     
-    // Hide role buttons when solo coaching.
-    // Server tracks how many coaches are actively polling this game.
-    // Once we detect multiple coaches, latch visible for the session.
-    const state = typeof getControllerState === 'function' ? getControllerState() : {};
-    if ((state.connectedCoaches?.length || 0) > 1) {
-        _multiCoachDetected = true;
+    // Viewers always see the spectating badge panel, never role buttons
+    const isViewerMode = typeof window.isViewer === 'function' && window.isViewer();
+    if (isViewerMode) {
+        setPanelVisible('roleButtons', true);
+        // Show spectating badge content instead of role claim buttons
+        const rolePanel = getPanelElement('roleButtons');
+        if (rolePanel) {
+            const content = rolePanel.querySelector('.panel-content');
+            if (content && !content.querySelector('.spectating-badge')) {
+                content.innerHTML = '<div class="spectating-badge"><i class="fas fa-eye"></i> Spectating</div>';
+            }
+        }
+    } else {
+        // Hide role buttons when solo coaching.
+        // Server tracks how many coaches are actively polling this game.
+        // Once we detect multiple coaches, latch visible for the session.
+        const state = typeof getControllerState === 'function' ? getControllerState() : {};
+        if ((state.connectedCoaches?.length || 0) > 1) {
+            _multiCoachDetected = true;
+        }
+        setPanelVisible('roleButtons', _multiCoachDetected);
     }
-    setPanelVisible('roleButtons', _multiCoachDetected);
     
     // Play-by-Play panel disabled if not Active Coach (but has some other role)
     const playByPlayPanel = getPanelElement('playByPlay');

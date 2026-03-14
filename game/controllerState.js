@@ -362,6 +362,12 @@ function startControllerPolling(gameId) {
         console.warn('startControllerPolling: No game ID provided');
         return;
     }
+
+    // Viewers don't participate in controller state — they only watch via refreshGameState()
+    if (typeof window.isViewer === 'function' && window.isViewer()) {
+        console.log('👁️ Viewer mode: skipping controller polling');
+        return;
+    }
     
     // Stop any existing polling
     stopControllerPolling();
@@ -618,6 +624,7 @@ function isLineCoach() {
  * @returns {boolean}
  */
 function canEditPlayByPlay() {
+    if (typeof window.isViewer === 'function' && window.isViewer()) return false;
     return controllerState.isActiveCoach || !controllerState.activeCoach;
 }
 
@@ -627,8 +634,9 @@ function canEditPlayByPlay() {
  * @returns {boolean}
  */
 function canEditLineup() {
-    return controllerState.isLineCoach || 
-           controllerState.isActiveCoach || 
+    if (typeof window.isViewer === 'function' && window.isViewer()) return false;
+    return controllerState.isLineCoach ||
+           controllerState.isActiveCoach ||
            (!controllerState.lineCoach && !controllerState.activeCoach);
 }
 

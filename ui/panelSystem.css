@@ -657,6 +657,31 @@ body.game-screen-active #controllerRoleButtons {
     border-color: #aaa;
 }
 
+/* Spectating badge for viewers */
+.spectating-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #6c757d;
+    letter-spacing: 0.5px;
+}
+
+.spectating-badge i {
+    font-size: 1rem;
+}
+
+/* Watch button in team selection */
+.game-watch-btn {
+    background: #6c757d;
+    color: white;
+    border-color: #6c757d;
+}
+
 .role-claim-label {
     font-size: 0.85rem;
     font-weight: 600;
