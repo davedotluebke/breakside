@@ -80,6 +80,8 @@ try:
         respond_to_handoff,
         release_role,
         ping_role,
+        record_coach_ping,
+        get_connected_coach_count,
         clear_game_state,
         HANDOFF_EXPIRY_SECONDS,
     )
@@ -165,6 +167,8 @@ except ImportError:
         respond_to_handoff,
         release_role,
         ping_role,
+        record_coach_ping,
+        get_connected_coach_count,
         clear_game_state,
         HANDOFF_EXPIRY_SECONDS,
     )
@@ -1074,7 +1078,10 @@ async def ping_controller(
     
     # Auto-assign roles if both are unclaimed (first coach to enter gets both)
     state = auto_assign_roles_if_unclaimed(game_id, user["id"], display_name)
-    
+
+    # Record this coach as connected (even if they hold no role)
+    record_coach_ping(game_id, user["id"])
+
     # Ping whichever role(s) the user holds
     pinged = []
     if state.get("activeCoach") and state["activeCoach"]["userId"] == user["id"]:
@@ -1083,25 +1090,26 @@ async def ping_controller(
     if state.get("lineCoach") and state["lineCoach"]["userId"] == user["id"]:
         ping_role(game_id, "lineCoach", user["id"])
         pinged.append("lineCoach")
-    
+
     # Refresh state after pinging
     state = get_controller_state(game_id)
-    
+
     # Enrich pendingHandoff with expiresInSeconds for accurate client countdown
     enriched_state = _enrich_pending_handoff(state)
-    
+
     # Check for pending handoff for this user
     has_pending_for_me = (
-        state.get("pendingHandoff") and 
+        state.get("pendingHandoff") and
         state["pendingHandoff"]["currentHolderId"] == user["id"]
     )
-    
+
     return {
         "status": "ok",
         "pinged": pinged,
         "controllerState": enriched_state,
         "hasPendingHandoffForMe": has_pending_for_me,
         "handoffTimeoutSeconds": HANDOFF_EXPIRY_SECONDS,
+        "connectedCoaches": get_connected_coach_count(game_id),
         "serverTime": datetime.now().isoformat()
     }
 
