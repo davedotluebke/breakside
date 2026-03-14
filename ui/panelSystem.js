@@ -1209,9 +1209,14 @@ function updatePanelsForRole() {
     const hasLineCoach = typeof window.isLineCoach === 'function' && window.isLineCoach();
     const hasAnyRole = hasActiveCoach || hasLineCoach;
     
-    // For now, show role buttons for all coaches
-    // TODO: Hide for team viewers when viewer access is implemented
-    setPanelVisible('roleButtons', true);
+    // Hide role buttons when solo coaching (no other coaches present)
+    const state = typeof getControllerState === 'function' ? getControllerState() : {};
+    const myUserId = typeof getCurrentUserId === 'function' ? getCurrentUserId() : null;
+    const otherCoachPresent =
+        (state.activeCoach && state.activeCoach.userId !== myUserId) ||
+        (state.lineCoach && state.lineCoach.userId !== myUserId) ||
+        (state.pendingHandoff && state.pendingHandoff.requesterId !== myUserId);
+    setPanelVisible('roleButtons', otherCoachPresent);
     
     // Play-by-Play panel disabled if not Active Coach (but has some other role)
     const playByPlayPanel = getPanelElement('playByPlay');
