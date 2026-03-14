@@ -67,6 +67,10 @@ let maximizedPanelId = null;
 // Store panel heights before maximize for restoration
 let preMaximizeHeights = {};
 
+// Track whether another coach has been seen in the current game session.
+// Once true, role buttons stay visible until the game screen is exited.
+let _multiCoachDetected = false;
+
 /**
  * Load panel states from localStorage
  */
@@ -1209,14 +1213,19 @@ function updatePanelsForRole() {
     const hasLineCoach = typeof window.isLineCoach === 'function' && window.isLineCoach();
     const hasAnyRole = hasActiveCoach || hasLineCoach;
     
-    // Hide role buttons when solo coaching (no other coaches present)
+    // Hide role buttons when solo coaching (no other coaches present).
+    // Once we detect another coach in this game session, keep buttons visible
+    // permanently — avoids getting stuck without buttons to claim/release roles.
     const state = typeof getControllerState === 'function' ? getControllerState() : {};
     const myUserId = typeof getCurrentUserId === 'function' ? getCurrentUserId() : null;
     const otherCoachPresent =
         (state.activeCoach && state.activeCoach.userId !== myUserId) ||
         (state.lineCoach && state.lineCoach.userId !== myUserId) ||
         (state.pendingHandoff && state.pendingHandoff.requesterId !== myUserId);
-    setPanelVisible('roleButtons', otherCoachPresent);
+    if (otherCoachPresent) {
+        _multiCoachDetected = true;
+    }
+    setPanelVisible('roleButtons', _multiCoachDetected);
     
     // Play-by-Play panel disabled if not Active Coach (but has some other role)
     const playByPlayPanel = getPanelElement('playByPlay');
@@ -1412,6 +1421,9 @@ window.DRAGGABLE_PANELS = DRAGGABLE_PANELS;
 window.RESIZABLE_PANELS = RESIZABLE_PANELS;
 window.PBP_MIN_CONTENT_HEIGHT = PBP_MIN_CONTENT_HEIGHT;
 window.FOLLOW_MIN_HEIGHT = FOLLOW_MIN_HEIGHT;
+
+// Reset multi-coach detection (call when exiting game screen)
+window.resetMultiCoachDetected = function() { _multiCoachDetected = false; };
 
 // Game screen management
 window.showGameScreen = showGameScreen;

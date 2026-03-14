@@ -4640,6 +4640,11 @@ function exitGameScreen() {
     stopGameScreenTimerLoop();
     stopGameStateRefresh();
 
+    // Reset multi-coach detection for next game
+    if (typeof resetMultiCoachDetected === 'function') {
+        resetMultiCoachDetected();
+    }
+
     // Resume active-game polling when leaving a game
     if (typeof startActiveGamePolling === 'function') {
         startActiveGamePolling();
