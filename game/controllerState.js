@@ -235,7 +235,8 @@ async function pingController(gameId) {
             // Update local state - role flags are computed in updateLocalControllerState
             updateLocalControllerState({
                 state: data.controllerState,
-                hasPendingHandoffForMe: data.hasPendingHandoffForMe
+                hasPendingHandoffForMe: data.hasPendingHandoffForMe,
+                connectedCoaches: data.connectedCoaches
             });
             
             return data;
@@ -279,6 +280,7 @@ function updateLocalControllerState(data) {
         isActiveCoach: iAmActiveCoach,
         isLineCoach: iAmLineCoach,
         hasPendingHandoffForMe: data.hasPendingHandoffForMe || false,
+        connectedCoaches: data.connectedCoaches || controllerState.connectedCoaches || 1,
         lastUpdate: new Date()
     };
     

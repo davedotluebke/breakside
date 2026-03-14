@@ -65,6 +65,9 @@ _recent_releases: Dict[tuple, datetime] = {}
 # Cooldown period after explicit release before auto-assign can happen
 RELEASE_COOLDOWN_SECONDS = 60
 
+# Track all coaches polling each game: {game_id: {user_id: last_ping_datetime}}
+_connected_coaches: Dict[str, Dict[str, datetime]] = {}
+
 
 # =============================================================================
 # Helper Functions
@@ -510,6 +513,25 @@ def ping_role(
         current_holder["lastPing"] = datetime.now().isoformat()
         _controller_states[game_id] = state
         return {"success": True, "state": dict(state)}
+
+
+def record_coach_ping(game_id: str, user_id: str) -> None:
+    """Record that a coach is actively polling this game."""
+    with _lock:
+        if game_id not in _connected_coaches:
+            _connected_coaches[game_id] = {}
+        _connected_coaches[game_id][user_id] = datetime.now()
+
+
+def get_connected_coach_count(game_id: str) -> int:
+    """Return the number of coaches who have pinged within the stale timeout."""
+    with _lock:
+        coaches = _connected_coaches.get(game_id, {})
+        cutoff = datetime.now() - timedelta(seconds=STALE_TIMEOUT_SECONDS)
+        # Clean up stale entries while counting
+        active = {uid: t for uid, t in coaches.items() if t > cutoff}
+        _connected_coaches[game_id] = active
+        return len(active)
 
 
 def clear_game_state(game_id: str) -> None:

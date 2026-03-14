@@ -1213,16 +1213,11 @@ function updatePanelsForRole() {
     const hasLineCoach = typeof window.isLineCoach === 'function' && window.isLineCoach();
     const hasAnyRole = hasActiveCoach || hasLineCoach;
     
-    // Hide role buttons when solo coaching (no other coaches present).
-    // Once we detect another coach in this game session, keep buttons visible
-    // permanently — avoids getting stuck without buttons to claim/release roles.
+    // Hide role buttons when solo coaching.
+    // Server tracks how many coaches are actively polling this game.
+    // Once we detect multiple coaches, latch visible for the session.
     const state = typeof getControllerState === 'function' ? getControllerState() : {};
-    const myUserId = typeof getCurrentUserId === 'function' ? getCurrentUserId() : null;
-    const otherCoachPresent =
-        (state.activeCoach && state.activeCoach.userId !== myUserId) ||
-        (state.lineCoach && state.lineCoach.userId !== myUserId) ||
-        (state.pendingHandoff && state.pendingHandoff.requesterId !== myUserId);
-    if (otherCoachPresent) {
+    if ((state.connectedCoaches || 1) > 1) {
         _multiCoachDetected = true;
     }
     setPanelVisible('roleButtons', _multiCoachDetected);

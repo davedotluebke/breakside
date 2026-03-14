@@ -4813,13 +4813,10 @@ window.updateControllerUI = function(state, previousState) {
         const isNowActiveCoach = state?.activeCoach?.userId === myUserId;
         const isNowLineCoach = state?.lineCoach?.userId === myUserId;
         
-        // Also check if the set of coaches changed (for role panel visibility)
-        const hadOtherCoach = (previousState?.activeCoach && previousState.activeCoach.userId !== myUserId)
-            || (previousState?.lineCoach && previousState.lineCoach.userId !== myUserId);
-        const hasOtherCoach = (state?.activeCoach && state.activeCoach.userId !== myUserId)
-            || (state?.lineCoach && state.lineCoach.userId !== myUserId);
+        // Also check if the connected coach count changed (for role panel visibility)
+        const coachCountChanged = (previousState?.connectedCoaches || 1) !== (state?.connectedCoaches || 1);
 
-        if (wasActiveCoach !== isNowActiveCoach || wasLineCoach !== isNowLineCoach || hadOtherCoach !== hasOtherCoach) {
+        if (wasActiveCoach !== isNowActiveCoach || wasLineCoach !== isNowLineCoach || coachCountChanged) {
             updatePanelsForRole();
         }
         
