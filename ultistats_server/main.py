@@ -81,7 +81,7 @@ try:
         release_role,
         ping_role,
         record_coach_ping,
-        get_connected_coach_count,
+        get_connected_coaches,
         clear_game_state,
         HANDOFF_EXPIRY_SECONDS,
     )
@@ -168,7 +168,7 @@ except ImportError:
         release_role,
         ping_role,
         record_coach_ping,
-        get_connected_coach_count,
+        get_connected_coaches,
         clear_game_state,
         HANDOFF_EXPIRY_SECONDS,
     )
@@ -1080,7 +1080,7 @@ async def ping_controller(
     state = auto_assign_roles_if_unclaimed(game_id, user["id"], display_name)
 
     # Record this coach as connected (even if they hold no role)
-    record_coach_ping(game_id, user["id"])
+    record_coach_ping(game_id, user["id"], display_name)
 
     # Ping whichever role(s) the user holds
     pinged = []
@@ -1109,7 +1109,7 @@ async def ping_controller(
         "controllerState": enriched_state,
         "hasPendingHandoffForMe": has_pending_for_me,
         "handoffTimeoutSeconds": HANDOFF_EXPIRY_SECONDS,
-        "connectedCoaches": get_connected_coach_count(game_id),
+        "connectedCoaches": get_connected_coaches(game_id),
         "serverTime": datetime.now().isoformat()
     }
 

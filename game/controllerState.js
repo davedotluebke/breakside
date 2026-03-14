@@ -280,7 +280,7 @@ function updateLocalControllerState(data) {
         isActiveCoach: iAmActiveCoach,
         isLineCoach: iAmLineCoach,
         hasPendingHandoffForMe: data.hasPendingHandoffForMe || false,
-        connectedCoaches: data.connectedCoaches || controllerState.connectedCoaches || 1,
+        connectedCoaches: data.connectedCoaches || controllerState.connectedCoaches || [],
         lastUpdate: new Date()
     };
     

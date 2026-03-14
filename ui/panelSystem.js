@@ -1217,7 +1217,7 @@ function updatePanelsForRole() {
     // Server tracks how many coaches are actively polling this game.
     // Once we detect multiple coaches, latch visible for the session.
     const state = typeof getControllerState === 'function' ? getControllerState() : {};
-    if ((state.connectedCoaches || 1) > 1) {
+    if ((state.connectedCoaches?.length || 0) > 1) {
         _multiCoachDetected = true;
     }
     setPanelVisible('roleButtons', _multiCoachDetected);
