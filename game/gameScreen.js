@@ -4814,7 +4814,7 @@ window.updateControllerUI = function(state, previousState) {
         const isNowLineCoach = state?.lineCoach?.userId === myUserId;
         
         // Also check if the connected coach count changed (for role panel visibility)
-        const coachCountChanged = (previousState?.connectedCoaches || 1) !== (state?.connectedCoaches || 1);
+        const coachCountChanged = (previousState?.connectedCoaches?.length || 0) !== (state?.connectedCoaches?.length || 0);
 
         if (wasActiveCoach !== isNowActiveCoach || wasLineCoach !== isNowLineCoach || coachCountChanged) {
             updatePanelsForRole();

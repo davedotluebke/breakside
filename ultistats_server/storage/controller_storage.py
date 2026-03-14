@@ -515,23 +515,25 @@ def ping_role(
         return {"success": True, "state": dict(state)}
 
 
-def record_coach_ping(game_id: str, user_id: str) -> None:
+def record_coach_ping(game_id: str, user_id: str, display_name: str) -> None:
     """Record that a coach is actively polling this game."""
     with _lock:
         if game_id not in _connected_coaches:
             _connected_coaches[game_id] = {}
-        _connected_coaches[game_id][user_id] = datetime.now()
+        _connected_coaches[game_id][user_id] = {
+            "displayName": display_name,
+            "lastPing": datetime.now(),
+        }
 
 
-def get_connected_coach_count(game_id: str) -> int:
-    """Return the number of coaches who have pinged within the stale timeout."""
+def get_connected_coaches(game_id: str) -> list:
+    """Return list of coaches who have pinged within the stale timeout."""
     with _lock:
         coaches = _connected_coaches.get(game_id, {})
         cutoff = datetime.now() - timedelta(seconds=STALE_TIMEOUT_SECONDS)
-        # Clean up stale entries while counting
-        active = {uid: t for uid, t in coaches.items() if t > cutoff}
+        active = {uid: info for uid, info in coaches.items() if info["lastPing"] > cutoff}
         _connected_coaches[game_id] = active
-        return len(active)
+        return [{"userId": uid, "displayName": info["displayName"]} for uid, info in active.items()]
 
 
 def clear_game_state(game_id: str) -> None:
