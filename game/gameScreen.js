@@ -4475,6 +4475,17 @@ function updateGameScreenRoleButtons(state) {
         if (lineHolder) lineHolder.textContent = 'Available';
     }
     
+    // Hide role buttons panel when solo coaching (no other coaches present)
+    const rolePanel = document.getElementById('panel-roleButtons');
+    if (rolePanel) {
+        const myUserId = typeof getCurrentUserId === 'function' ? getCurrentUserId() : null;
+        const otherCoachPresent =
+            (state.activeCoach && state.activeCoach.userId !== myUserId) ||
+            (state.lineCoach && state.lineCoach.userId !== myUserId) ||
+            (state.pendingHandoff && state.pendingHandoff.requesterId !== myUserId);
+        rolePanel.style.display = otherCoachPresent ? '' : 'none';
+    }
+
     // Show warning toast when both roles become unclaimed (once per transition)
     // Delay showing the warning to allow auto-assign to happen on first join
     const bothUnclaimed = !state.activeCoach && !state.lineCoach;

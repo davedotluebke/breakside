@@ -40,7 +40,7 @@ For deployment info and technical architecture, see **[ARCHITECTURE.md](ARCHITEC
 - [x] **Feature**: When Active Coach ends game, all coaches/viewers navigate to game summary. *(Wake recovery + foreground 3-second refresh both detect `gameEndTimestamp` and navigate away.)*
 - [ ] **To verify**: Test D line vs O line behavior with simultaneous selection. Define desired behavior when e.g. D line is selected but coach is viewing/editing O line.
 - [ ] **Feature**: Checkbox in select-next-player table header to uncheck all players.
-- [ ] Hide role buttons when only one coach on team or only one coach polling (more room for panels).
+- [x] Hide role buttons when only one coach on team or only one coach polling (more room for panels).
 - [ ] O/D split panels: O/D button splits "Select Next Line" into two separate panels ("Select Next O Line" / "Select Next D Line").
 
 ---
