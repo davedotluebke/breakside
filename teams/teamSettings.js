@@ -47,7 +47,8 @@ function showTeamSettingsScreen(returnScreen) {
         return;
     }
 
-    _settingsReturnScreen = returnScreen || 'teamRosterScreen';
+    // Guard against being passed an Event object when used as an event handler directly
+    _settingsReturnScreen = (typeof returnScreen === 'string') ? returnScreen : 'teamRosterScreen';
 
     // Update team name
     const teamNameElement = document.getElementById('settingsTeamName');
