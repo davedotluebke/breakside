@@ -42,6 +42,7 @@ For deployment info and technical architecture, see **[ARCHITECTURE.md](ARCHITEC
 - [ ] **Feature**: Checkbox in select-next-player table header to uncheck all players.
 - [x] Hide role buttons when only one coach on team or only one coach polling (more room for panels).
 - [ ] O/D split panels: O/D button splits "Select Next Line" into two separate panels ("Select Next O Line" / "Select Next D Line").
+- [ ] "Clear pending" button in connection info dialog when sync queue has stuck items.
 
 ---
 
