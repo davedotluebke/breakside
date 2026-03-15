@@ -2199,6 +2199,22 @@ header h1 {
     white-space: nowrap;
 }
 
+/* Viewer roster back button */
+.viewer-roster-back {
+    margin-bottom: 8px;
+    padding: 6px 12px;
+    font-size: 0.9rem;
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #333;
+}
+
+.viewer-roster-back i {
+    margin-right: 4px;
+}
+
 .sync-status-bar {
     display: flex;
     justify-content: space-between;
