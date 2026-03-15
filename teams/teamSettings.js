@@ -83,6 +83,10 @@ function initializeTeamSettings() {
                     showScreen('selectTeamScreen');
                 }
             } else {
+                // Re-populate roster before showing (content may be stale)
+                if (_settingsReturnScreen === 'teamRosterScreen' && typeof updateTeamRosterDisplay === 'function') {
+                    updateTeamRosterDisplay();
+                }
                 showScreen(_settingsReturnScreen);
             }
         });
