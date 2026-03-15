@@ -14,7 +14,17 @@ function updateTeamRosterDisplay() {
             teamRosterHeader.textContent = 'Team Roster';
         }
     }
-    
+
+    // Hide editing controls for viewers
+    const viewerMode = typeof window.isViewer === 'function' && window.isViewer();
+    const rosterScreen = document.getElementById('teamRosterScreen');
+    if (rosterScreen) {
+        // Hide all management rows (add player, create line) and footer (start game, settings, etc.)
+        rosterScreen.querySelectorAll('.management-row, footer').forEach(el => {
+            el.style.display = viewerMode ? 'none' : '';
+        });
+    }
+
     // Initialize gender ratio dropdown when roster screen is displayed
     if (typeof initializeGenderRatioDropdown === 'function') {
         initializeGenderRatioDropdown();
