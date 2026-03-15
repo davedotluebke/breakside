@@ -1213,7 +1213,7 @@ function updatePanelsForRole() {
     const hasLineCoach = typeof window.isLineCoach === 'function' && window.isLineCoach();
     const hasAnyRole = hasActiveCoach || hasLineCoach;
     
-    // Viewers always see the spectating badge panel, never role buttons
+    // Viewers: show spectating badge, hide coaching panels, maximize game log
     const isViewerMode = typeof window.isViewer === 'function' && window.isViewer();
     if (isViewerMode) {
         setPanelVisible('roleButtons', true);
@@ -1225,6 +1225,16 @@ function updatePanelsForRole() {
                 content.innerHTML = '<div class="spectating-badge"><i class="fas fa-eye"></i> Spectating</div>';
             }
         }
+        // Hide coaching panels — viewers only see the game log
+        setPanelVisible('playByPlay', false);
+        setPanelVisible('selectLine', false);
+        setPanelVisible('splitO', false);
+        setPanelVisible('splitD', false);
+        // Maximize game log
+        if (isPanelMinimized('follow')) {
+            maximizePanel('follow', false);
+        }
+        return;
     } else {
         // Hide role buttons when solo coaching.
         // Server tracks how many coaches are actively polling this game.
@@ -1265,6 +1275,9 @@ function updatePanelsForRole() {
  * @param {boolean} duringPoint - Whether a point is currently in progress
  */
 function updatePanelsForGameState(duringPoint) {
+    // Viewers don't have coaching panels — skip
+    if (typeof window.isViewer === 'function' && window.isViewer()) return;
+
     // Use the authoritative boolean role check
     const hasActiveCoach = typeof window.isActiveCoach === 'function' && window.isActiveCoach();
     

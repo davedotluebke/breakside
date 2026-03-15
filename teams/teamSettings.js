@@ -38,25 +38,30 @@ function getApiBaseUrl() {
 // Screen Navigation
 // =============================================================================
 
-function showTeamSettingsScreen() {
+// Track where we came from so Back returns to the right screen
+let _settingsReturnScreen = 'teamRosterScreen';
+
+function showTeamSettingsScreen(returnScreen) {
     if (!currentTeam) {
         alert('No team selected');
         return;
     }
-    
+
+    _settingsReturnScreen = returnScreen || 'teamRosterScreen';
+
     // Update team name
     const teamNameElement = document.getElementById('settingsTeamName');
     if (teamNameElement) {
         teamNameElement.textContent = currentTeam.name;
     }
-    
+
     // Load team identity fields
     loadTeamIdentity();
-    
+
     // Load data
     loadTeamMembers();
     loadTeamInvites();
-    
+
     showScreen('teamSettingsScreen');
 }
 
@@ -71,7 +76,15 @@ function initializeTeamSettings() {
     const backFromSettingsBtn = document.getElementById('backFromSettingsBtn');
     if (backFromSettingsBtn) {
         backFromSettingsBtn.addEventListener('click', () => {
-            showScreen('teamRosterScreen');
+            if (_settingsReturnScreen === 'selectTeamScreen') {
+                if (typeof showSelectTeamScreen === 'function') {
+                    showSelectTeamScreen();
+                } else {
+                    showScreen('selectTeamScreen');
+                }
+            } else {
+                showScreen(_settingsReturnScreen);
+            }
         });
     }
     

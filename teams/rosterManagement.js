@@ -23,6 +23,32 @@ function updateTeamRosterDisplay() {
         rosterScreen.querySelectorAll('.management-row, footer').forEach(el => {
             el.style.display = viewerMode ? 'none' : '';
         });
+
+        // Add/show a back button for viewers (they can't see the footer's "Switch Team" button)
+        let viewerBackBtn = document.getElementById('viewerRosterBackBtn');
+        if (viewerMode) {
+            if (!viewerBackBtn) {
+                viewerBackBtn = document.createElement('button');
+                viewerBackBtn.id = 'viewerRosterBackBtn';
+                viewerBackBtn.className = 'back-button viewer-roster-back';
+                viewerBackBtn.innerHTML = '<i class="fas fa-arrow-left"></i> Back';
+                viewerBackBtn.onclick = () => {
+                    if (typeof showSelectTeamScreen === 'function') {
+                        showSelectTeamScreen();
+                    }
+                };
+                // Insert before the roster header row
+                const headerRow = rosterScreen.querySelector('.roster-header-row');
+                if (headerRow) {
+                    rosterScreen.insertBefore(viewerBackBtn, headerRow);
+                } else {
+                    rosterScreen.prepend(viewerBackBtn);
+                }
+            }
+            viewerBackBtn.style.display = '';
+        } else if (viewerBackBtn) {
+            viewerBackBtn.style.display = 'none';
+        }
     }
 
     // Initialize gender ratio dropdown when roster screen is displayed

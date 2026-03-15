@@ -324,7 +324,7 @@ async function populateCloudTeamsAndGames() {
                     e.stopPropagation();
                     selectCloudTeam(team).then(() => {
                         if (typeof showTeamSettingsScreen === 'function') {
-                            showTeamSettingsScreen();
+                            showTeamSettingsScreen('selectTeamScreen');
                         }
                     });
                 };
