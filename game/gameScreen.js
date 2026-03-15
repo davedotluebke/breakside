@@ -4742,7 +4742,9 @@ function startGameStateRefresh() {
                     updateGameScreenAfterRefresh();
 
                     // Show conflict toast when another coach made meaningful changes
-                    if (typeof result === 'object' && (result.scoreChanged || result.pointCountChanged)) {
+                    // (skip for viewers — they expect live updates)
+                    const isViewerUser = typeof window.isViewer === 'function' && window.isViewer();
+                    if (!isViewerUser && typeof result === 'object' && (result.scoreChanged || result.pointCountChanged)) {
                         showGameUpdatedToast(result);
                     }
                 }
