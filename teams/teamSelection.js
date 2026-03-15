@@ -47,13 +47,45 @@ function showSelectTeamScreen(firsttime = false) {
     header.style.alignItems = 'center';
     header.style.gap = '10px';
     header.style.marginBottom = '10px';
-    
+
     const title = document.createElement('h3');
     title.textContent = 'Teams & Games';
     title.style.margin = '0';
     header.appendChild(title);
-    
+
     teamsContainer.appendChild(header);
+
+    // Join Team section — invite code input at top of teams screen
+    const joinSection = document.createElement('div');
+    joinSection.className = 'teams-join-section';
+    joinSection.innerHTML = `
+        <div class="teams-join-form">
+            <input type="text" id="teamsJoinCodeInput" placeholder="Invite code" maxlength="5" class="join-code-input">
+            <button id="teamsJoinBtn" class="join-btn">Join Team</button>
+        </div>
+    `;
+    teamsContainer.appendChild(joinSection);
+
+    // Wire up join team from teams screen
+    setTimeout(() => {
+        const joinInput = document.getElementById('teamsJoinCodeInput');
+        const joinBtn = document.getElementById('teamsJoinBtn');
+        if (joinInput) {
+            joinInput.addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase(); });
+            joinInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && typeof handleJoinCodeFromTeamsScreen === 'function') {
+                    handleJoinCodeFromTeamsScreen();
+                }
+            });
+        }
+        if (joinBtn) {
+            joinBtn.addEventListener('click', () => {
+                if (typeof handleJoinCodeFromTeamsScreen === 'function') {
+                    handleJoinCodeFromTeamsScreen();
+                }
+            });
+        }
+    }, 0);
     
     const teamsList = document.createElement('div');
     teamsList.id = 'cloudTeamsList';
@@ -278,8 +310,26 @@ async function populateCloudTeamsAndGames() {
             
             topRow.appendChild(topLeft);
             
-            // Delete button (right side of top row, coaches only)
+            // Right side buttons (coaches only)
             if (role === 'coach') {
+                const topRight = document.createElement('div');
+                topRight.style.display = 'flex';
+                topRight.style.gap = '4px';
+
+                const settingsBtn = document.createElement('button');
+                settingsBtn.innerHTML = '<i class="fas fa-cog"></i>';
+                settingsBtn.classList.add('icon-button');
+                settingsBtn.title = 'Team Settings';
+                settingsBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    selectCloudTeam(team).then(() => {
+                        if (typeof showTeamSettingsScreen === 'function') {
+                            showTeamSettingsScreen();
+                        }
+                    });
+                };
+                topRight.appendChild(settingsBtn);
+
                 const deleteTeamBtn = document.createElement('button');
                 deleteTeamBtn.innerHTML = '<i class="fas fa-trash" style="color: #dc3545;"></i>';
                 deleteTeamBtn.classList.add('icon-button');
@@ -288,7 +338,9 @@ async function populateCloudTeamsAndGames() {
                     e.stopPropagation();
                     deleteCloudTeam(team);
                 };
-                topRow.appendChild(deleteTeamBtn);
+                topRight.appendChild(deleteTeamBtn);
+
+                topRow.appendChild(topRight);
             }
             
             teamHeader.appendChild(topRow);
@@ -322,6 +374,9 @@ async function populateCloudTeamsAndGames() {
             rosterBtn.title = 'View Roster';
             rosterBtn.onclick = (e) => {
                 e.stopPropagation();
+                if (typeof window.setCurrentTeamRole === 'function') {
+                    window.setCurrentTeamRole(role);
+                }
                 selectCloudTeam(team);
             };
             bottomRow.appendChild(rosterBtn);
@@ -371,28 +426,27 @@ async function populateCloudTeamsAndGames() {
                     const line2 = document.createElement('div');
                     line2.className = 'game-line2';
                     
-                    if (!game.game_end_timestamp) {
-                        if (role === 'coach') {
-                            const joinBtn = document.createElement('button');
-                            joinBtn.textContent = 'Join';
-                            joinBtn.className = 'game-join-btn';
-                            joinBtn.title = 'Join Game';
-                            joinBtn.onclick = (e) => {
-                                e.stopPropagation();
-                                resumeCloudGame(team, game.game_id, role);
-                            };
-                            line2.appendChild(joinBtn);
-                        } else if (role === 'viewer') {
-                            const watchBtn = document.createElement('button');
-                            watchBtn.textContent = 'Watch';
-                            watchBtn.className = 'game-join-btn game-watch-btn';
-                            watchBtn.title = 'Watch Game';
-                            watchBtn.onclick = (e) => {
-                                e.stopPropagation();
-                                resumeCloudGame(team, game.game_id, role);
-                            };
-                            line2.appendChild(watchBtn);
-                        }
+                    if (!game.game_end_timestamp && role === 'coach') {
+                        const joinBtn = document.createElement('button');
+                        joinBtn.textContent = 'Join';
+                        joinBtn.className = 'game-join-btn';
+                        joinBtn.title = 'Join Game';
+                        joinBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            resumeCloudGame(team, game.game_id, role);
+                        };
+                        line2.appendChild(joinBtn);
+                    }
+                    if (role === 'viewer') {
+                        const watchBtn = document.createElement('button');
+                        watchBtn.textContent = game.game_end_timestamp ? 'Review' : 'Watch';
+                        watchBtn.className = 'game-join-btn game-watch-btn';
+                        watchBtn.title = game.game_end_timestamp ? 'Review Game' : 'Watch Live';
+                        watchBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            resumeCloudGame(team, game.game_id, role);
+                        };
+                        line2.appendChild(watchBtn);
                     }
                     
                     // Spacer pushes delete to the right
@@ -1208,11 +1262,83 @@ function confirmAppUpdate() {
     }
 }
 
+/**
+ * Handle invite code entry from the teams screen.
+ * Reuses the join logic from teamSettings.js but reads from the teams-screen input.
+ */
+async function handleJoinCodeFromTeamsScreen() {
+    const input = document.getElementById('teamsJoinCodeInput');
+    if (!input) return;
+
+    const code = input.value.trim().toUpperCase();
+    if (code.length !== 5) {
+        alert('Please enter a 5-character invite code');
+        return;
+    }
+
+    if (!window.breakside?.auth?.isAuthenticated?.()) {
+        alert('Please sign in to join a team');
+        return;
+    }
+
+    try {
+        const response = await authFetch(`${API_BASE_URL}/api/invites/${code}/info`);
+
+        if (response.status === 404) {
+            alert('Invite not found. Please check the code and try again.');
+            return;
+        }
+        if (response.status === 410) {
+            const data = await response.json();
+            alert(data.detail || 'This invite has expired or been revoked.');
+            return;
+        }
+        if (!response.ok) {
+            throw new Error('Failed to load invite info');
+        }
+
+        const info = await response.json();
+
+        if (!confirm(`Join "${info.teamName}" as ${info.role}?\nInvited by ${info.invitedBy || 'a coach'}`)) {
+            return;
+        }
+
+        const headers = {};
+        const redeemResponse = await authFetch(`${API_BASE_URL}/api/invites/${code}/redeem`, {
+            method: 'POST',
+            headers
+        });
+
+        if (redeemResponse.status === 409) {
+            alert("You're already on this team!");
+            return;
+        }
+        if (!redeemResponse.ok) {
+            const data = await redeemResponse.json();
+            throw new Error(data.detail || 'Failed to join team');
+        }
+
+        const result = await redeemResponse.json();
+        input.value = '';
+        alert(`Joined ${result.team?.name || 'the team'} as ${result.membership?.role || 'member'}!`);
+
+        if (typeof syncUserTeams === 'function') {
+            await syncUserTeams();
+        }
+        showSelectTeamScreen();
+
+    } catch (error) {
+        console.error('Error joining team:', error);
+        alert('Failed to join team: ' + error.message);
+    }
+}
+
 // Make functions available globally for onclick handlers
 window.handleSignOut = handleSignOut;
 window.doFullRefresh = doFullRefresh;
 window.showConnectionInfo = showConnectionInfo;
 window.confirmAppUpdate = confirmAppUpdate;
+window.handleJoinCodeFromTeamsScreen = handleJoinCodeFromTeamsScreen;
 
 // =============================================================================
 // Active-Game Polling (auto-join prompt)

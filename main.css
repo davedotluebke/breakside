@@ -2174,6 +2174,31 @@ header h1 {
    Sync Status Bar (Phase 4)
    ============================================================================= */
 
+/* Join Team section on teams screen */
+.teams-join-section {
+    margin-bottom: 12px;
+}
+
+.teams-join-form {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.teams-join-form .join-code-input {
+    flex: 0 0 auto;
+    width: 130px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-align: center;
+    font-weight: 600;
+}
+
+.teams-join-form .join-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
 .sync-status-bar {
     display: flex;
     justify-content: space-between;
