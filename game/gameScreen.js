@@ -48,6 +48,9 @@ function createHeaderContent() {
                     <i class="fas fa-stop-circle"></i> End Game
                 </button>
                 <div class="menu-divider"></div>
+                <button class="menu-item" id="menuSettings">
+                    <i class="fas fa-cog"></i> Settings
+                </button>
                 <button class="menu-item" id="menuAbout">
                     <i class="fas fa-info-circle"></i> About / Version
                 </button>
@@ -301,8 +304,7 @@ function createPlayByPlayPanel() {
     const titleBar = createPanelTitleBar({
         panelId: 'playByPlay',
         title: 'Play-by-Play',
-        showDragHandle: false,
-        showExpandBtn: true
+        showDragHandle: false
     });
     panel.appendChild(titleBar);
     
@@ -332,57 +334,45 @@ function createSelectLineContent() {
     content.className = 'select-line-content';
     
     content.innerHTML = `
-        <!-- Compact view - shown when panel is very small -->
-        <div class="select-line-compact-view" id="selectLineCompactView" style="display: none;">
-            <span class="compact-line-type-link" id="compactLineTypeLink">O/D: </span>
-            <span class="compact-player-list" id="compactPlayerList"></span>
+        <div class="select-line-header-row">
+            <span class="select-line-stats-toggle" id="panelStatsToggle">(Game)</span>
+            <button class="select-line-od-toggle" id="panelODToggle" title="Toggle O/D line mode">
+                O/D
+            </button>
         </div>
-        
-        <!-- Full view - normal table UI -->
-        <div class="select-line-full-view" id="selectLineFullView">
-            <div class="select-line-header-row">
-                <span class="select-line-stats-toggle" id="panelStatsToggle">(Game)</span>
-                <button class="select-line-od-toggle" id="panelODToggle" title="Toggle O/D line mode">
-                    O/D
-                </button>
-            </div>
-            <div class="select-line-top-row">
-                <button class="select-line-start-btn" id="panelStartPointBtn">
-                    Start Point
-                </button>
-                <button class="select-line-lines-btn" id="panelLinesBtn">
-                    Lines...
-                </button>
-            </div>
-            <div class="select-line-gender-ratio" id="panelGenderRatioDisplay" style="display: none;">
-                <span>Gender Ratio: </span><span id="panelGenderRatioText"></span>
-            </div>
-            <div class="select-line-starting-ratio" id="panelStartingRatioSelection" style="display: none;">
-                <label>Starting Ratio: </label>
-                <input type="radio" id="panelStartingRatioFMP" name="panelStartingRatio" value="FMP">
-                <label for="panelStartingRatioFMP">FMP</label>
-                <input type="radio" id="panelStartingRatioMMP" name="panelStartingRatio" value="MMP">
-                <label for="panelStartingRatioMMP">MMP</label>
-            </div>
-            <div class="select-line-table-container" id="panelTableContainer">
-                <table class="panel-player-table" id="panelActivePlayersTable">
-                    <thead>
-                        <tr>
-                            <th></th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- Player rows will be dynamically added here -->
-                    </tbody>
-                </table>
-            </div>
+        <div class="select-line-top-row">
+            <button class="select-line-lines-btn" id="panelLinesBtn">
+                Lines...
+            </button>
+        </div>
+        <div class="select-line-gender-ratio" id="panelGenderRatioDisplay" style="display: none;">
+            <span>Gender Ratio: </span><span id="panelGenderRatioText"></span>
+        </div>
+        <div class="select-line-starting-ratio" id="panelStartingRatioSelection" style="display: none;">
+            <label>Starting Ratio: </label>
+            <input type="radio" id="panelStartingRatioFMP" name="panelStartingRatio" value="FMP">
+            <label for="panelStartingRatioFMP">FMP</label>
+            <input type="radio" id="panelStartingRatioMMP" name="panelStartingRatio" value="MMP">
+            <label for="panelStartingRatioMMP">MMP</label>
+        </div>
+        <div class="select-line-table-container" id="panelTableContainer">
+            <table class="panel-player-table" id="panelActivePlayersTable">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Player rows will be dynamically added here -->
+                </tbody>
+            </table>
         </div>
         <div class="select-line-readonly-overlay" id="panelReadonlyOverlay" style="display: none;">
             <span class="readonly-badge">View Only</span>
         </div>
     `;
-    
+
     return content;
 }
 
@@ -394,13 +384,12 @@ function createSelectLinePanel() {
     const panel = document.createElement('div');
     panel.id = 'panel-selectLine';
     panel.className = 'game-panel panel-selectLine';
-    
+
     // Create title bar
     const titleBar = createPanelTitleBar({
         panelId: 'selectLine',
         title: 'Next Line',
-        showDragHandle: true,
-        showExpandBtn: true
+        showDragHandle: true
     });
     panel.appendChild(titleBar);
     
@@ -429,31 +418,17 @@ function createSplitLineContent(lineType) {
     content.className = 'select-line-content';
 
     content.innerHTML = `
-        <!-- Compact view - shown when panel is very small -->
-        <div class="select-line-compact-view" id="select${suffix}LineCompactView" style="display: none;">
-            <span class="compact-line-type-link" id="compact${suffix}LineTypeLink">${suffix}: </span>
-            <span class="compact-player-list" id="compact${suffix}PlayerList"></span>
-        </div>
-
-        <!-- Full view - normal table UI -->
-        <div class="select-line-full-view" id="select${suffix}LineFullView">
-            <div class="select-line-top-row">
-                <button class="select-line-start-btn" id="panelStartPointBtn${suffix}">
-                    Start ${suffix} Point
-                </button>
-            </div>
-            <div class="select-line-table-container" id="panelTableContainer${suffix}">
-                <table class="panel-player-table" id="panelActivePlayersTable${suffix}">
-                    <thead>
-                        <tr>
-                            <th></th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    </tbody>
-                </table>
-            </div>
+        <div class="select-line-table-container" id="panelTableContainer${suffix}">
+            <table class="panel-player-table" id="panelActivePlayersTable${suffix}">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
         </div>
         <div class="select-line-readonly-overlay" id="panelReadonlyOverlay${suffix}" style="display: none;">
             <span class="readonly-badge">View Only</span>
@@ -479,8 +454,7 @@ function createSplitPanel(lineType) {
     const titleBar = createPanelTitleBar({
         panelId: panelId,
         title: title,
-        showDragHandle: true,
-        showExpandBtn: true
+        showDragHandle: true
     });
     panel.appendChild(titleBar);
 
@@ -512,9 +486,12 @@ function enterSplitMode() {
     // Save current selections before switching
     savePanelSelectionsToPendingNextLine(false);
 
-    // Hide the combined selectLine panel
+    // Measure selectLine height BEFORE hiding (hidden elements return 0)
     const selectLinePanel = document.getElementById('panel-selectLine');
+    let selectLineHeight = 0;
     if (selectLinePanel) {
+        selectLineHeight = selectLinePanel.getBoundingClientRect().height;
+        if (selectLineHeight === 0) selectLineHeight = 150; // fallback if already hidden
         selectLinePanel.style.display = 'none';
     }
 
@@ -553,14 +530,38 @@ function enterSplitMode() {
     updateSplitPanelTable('o');
     updateSplitPanelTable('d');
 
-    // Update panel states to show split panels
+    // Update panel states to show split panels, hide combined
     if (typeof setPanelVisible === 'function') {
+        setPanelVisible('selectLine', false);
         setPanelVisible('selectOLine', true);
         setPanelVisible('selectDLine', true);
     }
 
-    // Initialize compact view observers for split panels
-    initSplitPanelCompactViewObservers();
+    // Set reasonable initial heights for split panels using pre-measured height
+    if (typeof setPanelState === 'function') {
+        const splitHeight = Math.max(MIN_PANEL_HEIGHT + 20, Math.floor(selectLineHeight / 2));
+        setPanelState('selectOLine', { height: splitHeight });
+        setPanelState('selectDLine', { height: splitHeight });
+        // Ensure Follow absorbs remaining space
+        setPanelState('follow', { height: null });
+    }
+
+    // Add O|D toggle button to O Line title bar
+    const oTitleBar = oPanel.querySelector('.panel-title-bar');
+    if (oTitleBar) {
+        const actions = oTitleBar.querySelector('.panel-actions');
+        if (actions && !actions.querySelector('.od-split-toggle')) {
+            const toggleBtn = document.createElement('button');
+            toggleBtn.className = 'panel-action-btn od-split-toggle';
+            toggleBtn.textContent = 'O|D';
+            toggleBtn.title = 'Exit split mode';
+            toggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleODToggle();
+            });
+            actions.appendChild(toggleBtn);
+        }
+    }
 
     // Save state
     if (typeof saveAllTeamsData === 'function') {
@@ -578,6 +579,10 @@ function exitSplitMode() {
     // Save selections from both split panels
     saveSplitPanelSelections();
 
+    // Remove O|D toggle button from split panel title bar
+    const splitToggle = document.querySelector('.od-split-toggle');
+    if (splitToggle) splitToggle.remove();
+
     // Hide split panels
     const oPanel = document.getElementById('panel-selectOLine');
     const dPanel = document.getElementById('panel-selectDLine');
@@ -586,14 +591,25 @@ function exitSplitMode() {
 
     // Update panel states
     if (typeof setPanelVisible === 'function') {
+        setPanelVisible('selectLine', true);
         setPanelVisible('selectOLine', false);
         setPanelVisible('selectDLine', false);
     }
 
-    // Show the combined panel again
+    // Show the combined panel again and set a reasonable height
     const selectLinePanel = document.getElementById('panel-selectLine');
     if (selectLinePanel) {
         selectLinePanel.style.display = '';
+        // Combine the split panel heights for a reasonable selectLine height
+        const oState = typeof getPanelState === 'function' ? getPanelState('selectOLine') : null;
+        const dState = typeof getPanelState === 'function' ? getPanelState('selectDLine') : null;
+        const combinedHeight = (oState?.height || 150) + (dState?.height || 150);
+        const container = document.getElementById('gameScreenContainer');
+        const maxHeight = container ? Math.floor(container.clientHeight * 0.45) : 300;
+        if (typeof setPanelState === 'function') {
+            setPanelState('selectLine', { height: Math.min(combinedHeight, maxHeight) });
+            setPanelState('follow', { height: null });
+        }
     }
 
     // Set active type back to od
@@ -603,7 +619,6 @@ function exitSplitMode() {
     updateSelectLineTable();
     updateODToggleButton();
     updateSelectLineSubtitle();
-    updateSelectLineCompactView();
 
     // Save state
     if (typeof saveAllTeamsData === 'function') {
@@ -615,18 +630,6 @@ function exitSplitMode() {
  * Wire up event handlers for split panels
  */
 function wireSplitPanelEvents() {
-    // Start Point buttons
-    const startO = document.getElementById('panelStartPointBtnO');
-    if (startO) {
-        startO.removeEventListener('click', handleSplitStartPointO);
-        startO.addEventListener('click', handleSplitStartPointO);
-    }
-    const startD = document.getElementById('panelStartPointBtnD');
-    if (startD) {
-        startD.removeEventListener('click', handleSplitStartPointD);
-        startD.addEventListener('click', handleSplitStartPointD);
-    }
-
     // Checkbox change handlers (delegated)
     const tableContainerO = document.getElementById('panelTableContainerO');
     if (tableContainerO) {
@@ -638,80 +641,6 @@ function wireSplitPanelEvents() {
         tableContainerD.removeEventListener('change', handleSplitCheckboxChangeD);
         tableContainerD.addEventListener('change', handleSplitCheckboxChangeD);
     }
-
-    // Compact view line type tap handlers (exit split mode)
-    const compactLinkO = document.getElementById('compactOLineTypeLink');
-    if (compactLinkO) {
-        compactLinkO.removeEventListener('click', exitSplitMode);
-        compactLinkO.addEventListener('click', exitSplitMode);
-    }
-    const compactLinkD = document.getElementById('compactDLineTypeLink');
-    if (compactLinkD) {
-        compactLinkD.removeEventListener('click', exitSplitMode);
-        compactLinkD.addEventListener('click', exitSplitMode);
-    }
-}
-
-function handleSplitStartPointO() { handleSplitStartPoint('o'); }
-function handleSplitStartPointD() { handleSplitStartPoint('d'); }
-
-/**
- * Handle Start Point from a split panel
- * @param {'o'|'d'} lineType
- */
-function handleSplitStartPoint(lineType) {
-    // Check if point is already in progress
-    if (typeof isPointInProgress === 'function' && isPointInProgress()) return;
-
-    // Check permissions
-    if (!canEditPlayByPlayPanel()) {
-        if (typeof showControllerToast === 'function') {
-            showControllerToast('Only the Active Coach can start a new point', 'warning');
-        }
-        return;
-    }
-
-    // Save selections from the split panels first
-    saveSplitPanelSelections();
-
-    // Get selected players from the clicked panel's table
-    const suffix = lineType === 'o' ? 'O' : 'D';
-    const tableId = `panelActivePlayersTable${suffix}`;
-    const selectedPlayers = getSelectedPlayersFromTable(tableId);
-
-    if (selectedPlayers.length === 0) {
-        if (typeof showControllerToast === 'function') {
-            showControllerToast('Please select players for the point', 'warning');
-        }
-        return;
-    }
-
-    // Set these players as the active line for startNextPoint
-    const game = typeof currentGame === 'function' ? currentGame() : null;
-    if (game && game.pendingNextLine) {
-        // Copy split panel selection to the od line so startNextPoint picks it up
-        game.pendingNextLine.odLine = selectedPlayers;
-        // Temporarily switch to od so startNextPoint reads from odLine
-        game.pendingNextLine.activeType = 'od';
-    }
-
-    // Also update the main panel's checkboxes to match (startNextPoint reads from there)
-    setMainPanelCheckboxes(selectedPlayers);
-
-    // Exit split mode before starting the point
-    const oPanel = document.getElementById('panel-selectOLine');
-    const dPanel = document.getElementById('panel-selectDLine');
-    if (oPanel) oPanel.style.display = 'none';
-    if (dPanel) dPanel.style.display = 'none';
-    if (typeof setPanelVisible === 'function') {
-        setPanelVisible('selectOLine', false);
-        setPanelVisible('selectDLine', false);
-    }
-    const selectLinePanel = document.getElementById('panel-selectLine');
-    if (selectLinePanel) selectLinePanel.style.display = '';
-
-    // Now start the point using normal flow
-    handlePanelStartPoint();
 }
 
 /**
@@ -776,8 +705,6 @@ function handleSplitCheckboxChange(e, lineType) {
         saveAllTeamsData();
     }
 
-    // Update compact view for this panel
-    updateSplitPanelCompactView(lineType);
     updateSplitPanelSubtitle(lineType);
     updatePlayByPlayPanelState();
 }
@@ -831,14 +758,39 @@ function updateSplitPanelTable(lineType) {
     const pendingLine = game.pendingNextLine || {};
     const selectedPlayers = pendingLine[lineType + 'Line'] || [];
 
-    // Simple header - just line type
-    const headerRow = document.createElement('tr');
-    const headerCell = document.createElement('th');
-    headerCell.setAttribute('colspan', '3');
-    headerCell.textContent = lineType === 'o' ? 'Offense' : 'Defense';
-    headerCell.classList.add('active-header-teams');
-    headerRow.appendChild(headerCell);
-    tableHead.appendChild(headerRow);
+    // Score header rows (same as main table)
+    const runningScores = typeof getRunningScores === 'function'
+        ? getRunningScores()
+        : { team: [0], opponent: [0] };
+
+    const teamScoreRow = document.createElement('tr');
+    const opponentScoreRow = document.createElement('tr');
+
+    const addScoreCells = (row, teamName, scores) => {
+        const nameCell = document.createElement('th');
+        nameCell.textContent = teamName;
+        nameCell.setAttribute('colspan', '3');
+        nameCell.classList.add('active-header-teams');
+        row.appendChild(nameCell);
+
+        scores.forEach((score, index) => {
+            const scoreCell = document.createElement('th');
+            scoreCell.textContent = score;
+            if (game.alternateGenderRatio === 'Alternating' && game.startingGenderRatio) {
+                const genderRatio = typeof getGenderRatioForPoint === 'function'
+                    ? getGenderRatioForPoint(game, index)
+                    : null;
+                if (genderRatio === 'FMP') scoreCell.classList.add('score-cell-fmp');
+                else if (genderRatio === 'MMP') scoreCell.classList.add('score-cell-mmp');
+            }
+            row.appendChild(scoreCell);
+        });
+    };
+
+    addScoreCells(teamScoreRow, game.team, runningScores.team);
+    addScoreCells(opponentScoreRow, game.opponent, runningScores.opponent);
+    tableHead.appendChild(teamScoreRow);
+    tableHead.appendChild(opponentScoreRow);
 
     // Get last point players for sorting
     const lastPointPlayers = game.points.length > 0
@@ -865,7 +817,7 @@ function updateSplitPanelTable(lineType) {
         return a.name.localeCompare(b.name);
     });
 
-    // Create player rows (simplified - checkbox + name only, no stats)
+    // Create player rows with time + point participation columns
     sortedRoster.forEach(player => {
         const row = document.createElement('tr');
 
@@ -892,11 +844,45 @@ function updateSplitPanelTable(lineType) {
         nameCell.addEventListener('click', () => checkbox.click());
         row.appendChild(nameCell);
 
+        // Time column (game stats only, no total toggle)
+        const timeCell = document.createElement('td');
+        timeCell.classList.add('active-time-column');
+        const gameTime = typeof getPlayerGameTime === 'function'
+            ? getPlayerGameTime(player.name)
+            : 0;
+        timeCell.textContent = typeof formatPlayTime === 'function'
+            ? formatPlayTime(gameTime)
+            : '0:00';
+        row.appendChild(timeCell);
+
+        // Point participation columns
+        let runningPointTotal = 0;
+        game.points.forEach(point => {
+            const pointCell = document.createElement('td');
+            pointCell.classList.add('active-points-columns');
+            const playedFullPoint = point.players.includes(player.name);
+            const subbedOutMidPoint = point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name);
+            const playedPoint = playedFullPoint || subbedOutMidPoint;
+            if (playedPoint) {
+                runningPointTotal++;
+                pointCell.textContent = `${runningPointTotal}`;
+                if (subbedOutMidPoint && !playedFullPoint) {
+                    pointCell.classList.add('point-cell-subbed-out');
+                }
+            } else {
+                pointCell.textContent = '-';
+            }
+            row.appendChild(pointCell);
+        });
+
         tableBody.appendChild(row);
     });
 
-    // Update compact view
-    updateSplitPanelCompactView(lineType);
+    // Apply sticky columns for this split table
+    requestAnimationFrame(() => {
+        makeSplitPanelColumnsSticky(suffix);
+    });
+
     updateSplitPanelSubtitle(lineType);
 }
 
@@ -907,47 +893,6 @@ function updateSplitPanels() {
     if (!isSplitMode()) return;
     updateSplitPanelTable('o');
     updateSplitPanelTable('d');
-}
-
-/**
- * Update compact view for a split panel
- * @param {'o'|'d'} lineType
- */
-function updateSplitPanelCompactView(lineType) {
-    const suffix = lineType === 'o' ? 'O' : 'D';
-    const compactView = document.getElementById(`select${suffix}LineCompactView`);
-    if (!compactView) return;
-
-    const game = typeof currentGame === 'function' ? currentGame() : null;
-    if (!game) return;
-
-    const pendingLine = game.pendingNextLine || {};
-    const selectedNames = pendingLine[lineType + 'Line'] || [];
-
-    const linkEl = document.getElementById(`compact${suffix}LineTypeLink`);
-    if (linkEl) {
-        linkEl.textContent = `${suffix}: `;
-    }
-
-    const listEl = document.getElementById(`compact${suffix}PlayerList`);
-    if (!listEl) return;
-
-    listEl.innerHTML = '';
-
-    if (selectedNames.length === 0) {
-        listEl.textContent = '(none selected yet)';
-        return;
-    }
-
-    const roster = currentTeam?.teamRoster || [];
-    const firstNames = selectedNames.map(name => name.split(' ')[0]);
-
-    const containerWidth = compactView.clientWidth;
-    const linkWidth = linkEl ? linkEl.offsetWidth : 40;
-    const padding = 24;
-    const availableWidth = containerWidth - linkWidth - padding;
-
-    renderCompactPlayerNames(firstNames, selectedNames, roster, listEl, availableWidth);
 }
 
 /**
@@ -975,74 +920,6 @@ function updateSplitPanelSubtitle(lineType) {
 
     const firstNames = selectedNames.map(name => name.split(' ')[0]);
     setPanelSubtitle(panelId, firstNames.join(', '));
-}
-
-/**
- * Initialize compact view resize observers for split panels
- */
-let splitOPanelResizeObserver = null;
-let splitDPanelResizeObserver = null;
-
-function initSplitPanelCompactViewObservers() {
-    ['o', 'd'].forEach(lineType => {
-        const suffix = lineType === 'o' ? 'O' : 'D';
-        const panelId = lineType === 'o' ? 'selectOLine' : 'selectDLine';
-        const panel = document.getElementById(`panel-${panelId}`);
-        if (!panel) return;
-
-        const contentArea = panel.querySelector('.panel-content');
-        if (!contentArea) return;
-
-        // Clean up existing observer
-        const observerRef = lineType === 'o' ? 'splitOPanelResizeObserver' : 'splitDPanelResizeObserver';
-        if (lineType === 'o' && splitOPanelResizeObserver) splitOPanelResizeObserver.disconnect();
-        if (lineType === 'd' && splitDPanelResizeObserver) splitDPanelResizeObserver.disconnect();
-
-        const observer = new ResizeObserver(() => {
-            requestAnimationFrame(() => {
-                checkSplitPanelCompactMode(lineType);
-            });
-        });
-
-        observer.observe(contentArea);
-
-        if (lineType === 'o') splitOPanelResizeObserver = observer;
-        else splitDPanelResizeObserver = observer;
-
-        checkSplitPanelCompactMode(lineType);
-    });
-}
-
-/**
- * Check compact mode for a split panel
- * @param {'o'|'d'} lineType
- */
-function checkSplitPanelCompactMode(lineType) {
-    const suffix = lineType === 'o' ? 'O' : 'D';
-    const panelId = lineType === 'o' ? 'selectOLine' : 'selectDLine';
-    const panel = document.getElementById(`panel-${panelId}`);
-    if (!panel) return;
-
-    const contentArea = panel.querySelector('.panel-content');
-    if (!contentArea) return;
-
-    const compactView = document.getElementById(`select${suffix}LineCompactView`);
-    const fullView = document.getElementById(`select${suffix}LineFullView`);
-    if (!compactView || !fullView) return;
-
-    const contentHeight = contentArea.clientHeight;
-    const isCompact = contentHeight < COMPACT_VIEW_THRESHOLD;
-
-    if (isCompact) {
-        compactView.style.display = 'block';
-        fullView.style.display = 'none';
-        updateSplitPanelCompactView(lineType);
-    } else {
-        compactView.style.display = 'none';
-        fullView.style.display = 'flex';
-    }
-
-    updateSplitPanelSubtitle(lineType);
 }
 
 // Game Events panel removed - will be a modal popup from Play-by-Play panel
@@ -1081,8 +958,7 @@ function createFollowPanel() {
     const titleBar = createPanelTitleBar({
         panelId: 'follow',
         title: 'Game Log',
-        showDragHandle: true,
-        showExpandBtn: true
+        showDragHandle: true
     });
     panel.appendChild(titleBar);
     
@@ -1179,7 +1055,15 @@ function wireGameScreenEvents() {
     if (aboutBtn) {
         aboutBtn.addEventListener('click', handleMenuAbout);
     }
-    
+
+    const settingsBtn = document.getElementById('menuSettings');
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', () => {
+            closeGameMenu();
+            showGameSettingsDialog();
+        });
+    }
+
     // Close menu when clicking outside
     document.addEventListener('click', (e) => {
         const dropdown = document.getElementById('gameMenuDropdown');
@@ -1211,9 +1095,12 @@ function wireGameScreenEvents() {
             }
             
             // Show version
-            const versionText = typeof appVersion !== 'undefined' && appVersion
+            let versionText = typeof appVersion !== 'undefined' && appVersion
                 ? `v${appVersion.version} (${appVersion.build})`
                 : 'v?.?.?';
+            if (window.APP_DEPLOY_LABEL) {
+                versionText += ` [${window.APP_DEPLOY_LABEL}]`;
+            }
             versionOverlay.textContent = versionText;
             versionOverlay.classList.add('visible');
             
@@ -1410,6 +1297,64 @@ function handleMenuAbout() {
     }
 }
 
+// =============================================================================
+// Settings Dialog
+// =============================================================================
+
+/**
+ * Show the in-game settings dialog
+ */
+function showGameSettingsDialog() {
+    // Remove existing dialog if any
+    const existing = document.getElementById('gameSettingsDialog');
+    if (existing) existing.remove();
+
+    const physicalDrag = typeof getFullyPhysicalPanelDragging === 'function'
+        ? getFullyPhysicalPanelDragging()
+        : false;
+
+    const dialog = document.createElement('div');
+    dialog.id = 'gameSettingsDialog';
+    dialog.className = 'game-settings-overlay';
+    dialog.innerHTML = `
+        <div class="game-settings-modal">
+            <div class="game-settings-header">
+                <h3>Settings</h3>
+                <button class="game-settings-close" id="settingsCloseBtn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="game-settings-body">
+                <label class="game-settings-toggle">
+                    <span class="settings-label">Physical panel dragging</span>
+                    <span class="settings-description">Pushed panels stay where pushed, even when you reverse the drag</span>
+                    <input type="checkbox" id="settingPhysicalDrag" ${physicalDrag ? 'checked' : ''}>
+                    <span class="settings-switch"></span>
+                </label>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(dialog);
+
+    // Close button
+    document.getElementById('settingsCloseBtn').addEventListener('click', () => {
+        dialog.remove();
+    });
+
+    // Click overlay to close
+    dialog.addEventListener('click', (e) => {
+        if (e.target === dialog) dialog.remove();
+    });
+
+    // Toggle handler
+    document.getElementById('settingPhysicalDrag').addEventListener('change', (e) => {
+        if (typeof setFullyPhysicalPanelDragging === 'function') {
+            setFullyPhysicalPanelDragging(e.target.checked);
+        }
+    });
+}
+
 /**
  * Handle timer toggle click (tapping on timer value)
  */
@@ -1587,7 +1532,7 @@ function togglePbpExpandedRow() {
         
         // Try to use panelSystem API if available
         if (typeof window.setPanelState === 'function') {
-            window.setPanelState('playByPlay', { height: MEDIUM_MIN_HEIGHT, expandedHeight: MEDIUM_MIN_HEIGHT });
+            window.setPanelState('playByPlay', { height: MEDIUM_MIN_HEIGHT });
         }
         
         // Trigger layout update
@@ -2120,20 +2065,6 @@ function transitionToBetweenPoints() {
         updateSplitPanels();
     }
 
-    // Maximize Select Next Line panel (for line selection)
-    if (typeof maximizePanel === 'function') {
-        if (isSplitMode()) {
-            maximizePanel('selectOLine', false);
-        } else {
-            maximizePanel('selectLine', false);
-        }
-    }
-
-    // Minimize Play-by-Play panel (point is over)
-    if (typeof minimizePanel === 'function') {
-        minimizePanel('playByPlay');
-    }
-    
     // Update Play-by-Play panel state (buttons now disabled since point ended)
     updatePlayByPlayPanelState();
     
@@ -2777,9 +2708,8 @@ function handleODToggle() {
     // Update start point button state (in case player count changed)
     updateStartPointButtonState();
 
-    // Update subtitle and compact view for new line type
+    // Update subtitle for new line type
     updateSelectLineSubtitle();
-    updateSelectLineCompactView();
 
     // Also update Play-by-Play panel (Start Point button depends on selections)
     updatePlayByPlayPanelState();
@@ -2869,17 +2799,6 @@ function handlePanelStartPoint() {
         if (isGameScreenVisible()) {
             const state = typeof getControllerState === 'function' ? getControllerState() : {};
             const hasActiveCoach = state.isActiveCoach;
-            
-            if (hasActiveCoach) {
-                // Active Coach: minimize Select Line, maximize Play-by-Play
-                if (typeof minimizePanel === 'function') {
-                    minimizePanel('selectLine');
-                }
-                if (typeof maximizePanel === 'function') {
-                    maximizePanel('playByPlay', false);
-                }
-            }
-            // If only Line Coach: leave panels unchanged so they can work on next line
             
             // Update displays
             updateSelectLinePanelState();
@@ -3020,7 +2939,6 @@ function showLineSelectionDialog() {
             // Update panel state
             savePanelSelectionsToPendingNextLine();
             updateStartPointButtonState();
-            updateSelectLineCompactView();
             updateSelectLineSubtitle();
             updatePlayByPlayPanelState();
 
@@ -3141,8 +3059,7 @@ function handlePanelCheckboxChange(e) {
     // Update Start Point button state
     updateStartPointButtonState();
     
-    // Keep compact view and subtitle in sync
-    updateSelectLineCompactView();
+    // Keep subtitle in sync
     updateSelectLineSubtitle();
     
     // Also update Play-by-Play panel (Start Point button state depends on selections)
@@ -3195,15 +3112,21 @@ function canEditSelectLinePanel() {
  * @returns {string[]} Array of player names
  */
 function getSelectedPlayersFromPanel() {
+    if (isSplitMode()) {
+        const startOn = typeof determineStartingPosition === 'function'
+            ? determineStartingPosition() : 'offense';
+        const suffix = startOn === 'defense' ? 'D' : 'O';
+        return getSelectedPlayersFromTable(`panelActivePlayersTable${suffix}`);
+    }
     const checkboxes = document.querySelectorAll('#panelActivePlayersTable input[type="checkbox"]');
     const selectedPlayers = [];
-    
+
     checkboxes.forEach(checkbox => {
         if (checkbox.checked && checkbox.dataset.playerName) {
             selectedPlayers.push(checkbox.dataset.playerName);
         }
     });
-    
+
     return selectedPlayers;
 }
 
@@ -3454,15 +3377,8 @@ function selectAppropriateLineAtPointEnd() {
         }
     }
     
-    // In split mode, don't change activeType — instead highlight the appropriate panel
+    // In split mode, don't change activeType
     if (isSplitMode()) {
-        // Maximize the panel that matches what the team needs next
-        const panelToMaximize = selectedType === 'd' ? 'selectDLine' : 'selectOLine';
-        const panelToMinimize = selectedType === 'd' ? 'selectOLine' : 'selectDLine';
-        if (typeof maximizePanel === 'function') {
-            maximizePanel(panelToMaximize, false);
-        }
-        console.log(`📋 Split mode: highlighting ${panelToMaximize} panel`);
         return;
     }
 
@@ -3644,8 +3560,6 @@ function updateSelectLineTable() {
         makePanelColumnsSticky();
     });
     
-    // Keep compact view in sync
-    updateSelectLineCompactView();
 }
 
 /**
@@ -3695,223 +3609,6 @@ function updateSelectLineTimeCells() {
     });
 }
 
-// =============================================================================
-// Select Line Panel - Compact View
-// =============================================================================
-
-// Height threshold for compact mode (in pixels)
-const COMPACT_VIEW_THRESHOLD = 60;
-
-// ResizeObserver for detecting panel height changes
-let selectLinePanelResizeObserver = null;
-
-/**
- * Update the compact view display with current line selection
- * Shows line type prefix and comma-separated player names with gender colors
- * Truncates names only as needed to fit all players on one line
- */
-function updateSelectLineCompactView() {
-    const compactView = document.getElementById('selectLineCompactView');
-    if (!compactView) return;
-    
-    const game = typeof currentGame === 'function' ? currentGame() : null;
-    if (!game) return;
-    
-    // Get current pending selections
-    const pendingLine = game.pendingNextLine || {};
-    const activeType = pendingLine.activeType || 'od';
-    const lineKey = activeType + 'Line';
-    const selectedNames = pendingLine[lineKey] || [];
-    
-    // Update line type link
-    const linkEl = document.getElementById('compactLineTypeLink');
-    if (linkEl) {
-        const typeLabels = { o: 'O: ', d: 'D: ', od: 'O/D: ', split: 'O|D: ' };
-        linkEl.textContent = typeLabels[activeType] || 'O/D: ';
-    }
-    
-    // Update player list
-    const listEl = document.getElementById('compactPlayerList');
-    if (!listEl) return;
-    
-    listEl.innerHTML = ''; // Clear existing
-    
-    if (selectedNames.length === 0) {
-        listEl.textContent = '(none selected yet)';
-        return;
-    }
-    
-    const roster = currentTeam?.teamRoster || [];
-    
-    // Get first names for all selected players
-    const firstNames = selectedNames.map(name => name.split(' ')[0]);
-    
-    // Calculate available width for player names
-    // Account for the line type link width and some padding
-    const containerWidth = compactView.clientWidth;
-    const linkWidth = linkEl ? linkEl.offsetWidth : 40;
-    const padding = 24; // Left + right padding
-    const availableWidth = containerWidth - linkWidth - padding;
-    
-    // Build the display with smart truncation
-    // Start with full first names and progressively truncate if needed
-    const displayNames = renderCompactPlayerNames(firstNames, selectedNames, roster, listEl, availableWidth);
-}
-
-/**
- * Render player names with smart truncation to fit available width
- * @param {string[]} firstNames - Array of first names
- * @param {string[]} fullNames - Array of full names (for roster lookup)
- * @param {Array} roster - Team roster for gender lookup
- * @param {HTMLElement} container - Container element to render into
- * @param {number} availableWidth - Available width in pixels
- */
-function renderCompactPlayerNames(firstNames, fullNames, roster, container, availableWidth) {
-    const SEPARATOR = ', ';
-    const ELLIPSIS = '…';
-    const CHAR_WIDTH_ESTIMATE = 8; // Approximate pixels per character
-    
-    // Calculate total length with full first names
-    const separatorLength = (firstNames.length - 1) * SEPARATOR.length;
-    const totalChars = firstNames.reduce((sum, name) => sum + name.length, 0) + separatorLength;
-    const estimatedWidth = totalChars * CHAR_WIDTH_ESTIMATE;
-    
-    let displayNames = [...firstNames];
-    
-    // If estimated width exceeds available, progressively truncate longest names
-    if (estimatedWidth > availableWidth) {
-        const targetChars = Math.floor(availableWidth / CHAR_WIDTH_ESTIMATE) - separatorLength;
-        const charsPerName = Math.max(2, Math.floor(targetChars / firstNames.length));
-        
-        // Sort names by length (longest first) to truncate them first
-        const namesByLength = firstNames
-            .map((name, idx) => ({ name, idx, len: name.length }))
-            .sort((a, b) => b.len - a.len);
-        
-        let totalUsed = firstNames.reduce((sum, n) => sum + n.length, 0);
-        
-        // Truncate longest names first until we fit
-        for (const item of namesByLength) {
-            if (totalUsed <= targetChars) break;
-            
-            const maxLen = Math.max(2, charsPerName);
-            if (item.name.length > maxLen) {
-                const truncatedLen = maxLen - 1; // Leave room for ellipsis
-                const savings = item.name.length - truncatedLen;
-                displayNames[item.idx] = item.name.substring(0, truncatedLen) + ELLIPSIS;
-                totalUsed -= savings;
-            }
-        }
-    }
-    
-    // Render the names with gender colors
-    displayNames.forEach((displayName, index) => {
-        if (index > 0) {
-            container.appendChild(document.createTextNode(SEPARATOR));
-        }
-        
-        const span = document.createElement('span');
-        const player = roster.find(p => p.name === fullNames[index]);
-        
-        span.textContent = displayName;
-        
-        // Apply gender color
-        if (player) {
-            if (player.gender === Gender.FMP) span.classList.add('player-fmp');
-            else if (player.gender === Gender.MMP) span.classList.add('player-mmp');
-        }
-        
-        container.appendChild(span);
-    });
-}
-
-/**
- * Cycle through line types when compact view link is tapped
- * Cycles: O → D → O/D → O...
- */
-function handleCompactLineTypeTap() {
-    const game = typeof currentGame === 'function' ? currentGame() : null;
-    if (!game) return;
-    
-    // Initialize pendingNextLine if needed
-    if (!game.pendingNextLine) {
-        game.pendingNextLine = {
-            activeType: 'od',
-            odLine: [],
-            oLine: [],
-            dLine: []
-        };
-    }
-    
-    const currentType = game.pendingNextLine.activeType || 'od';
-    const cycleOrder = ['o', 'd', 'split', 'od'];
-    const currentIndex = cycleOrder.indexOf(currentType);
-    const nextIndex = (currentIndex + 1) % cycleOrder.length;
-    const nextType = cycleOrder[nextIndex];
-
-    // Handle split mode transition
-    if (nextType === 'split') {
-        enterSplitMode();
-        updateODToggleButton();
-        return;
-    }
-
-    if (currentType === 'split') {
-        exitSplitMode();
-        return;
-    }
-
-    // Update active type (local-only, not synced)
-    game.pendingNextLine.activeType = nextType;
-
-    // Update compact view to show new line
-    updateSelectLineCompactView();
-
-    // Also update the full view so it's in sync when panel expands
-    // Update the O/D toggle button
-    updateODToggleButton();
-    updateSelectLineTable();
-    
-    // Save changes
-    if (typeof saveAllTeamsData === 'function') {
-        saveAllTeamsData();
-    }
-}
-
-/**
- * Check panel content height and switch between compact/full views
- * Called when panel is resized
- */
-function checkSelectLinePanelCompactMode() {
-    const panel = document.getElementById('panel-selectLine');
-    if (!panel) return;
-    
-    const contentArea = panel.querySelector('.panel-content');
-    if (!contentArea) return;
-    
-    const compactView = document.getElementById('selectLineCompactView');
-    const fullView = document.getElementById('selectLineFullView');
-    
-    if (!compactView || !fullView) return;
-    
-    // Get the content area height (excludes title bar)
-    const contentHeight = contentArea.clientHeight;
-    
-    const isCompact = contentHeight < COMPACT_VIEW_THRESHOLD;
-    
-    if (isCompact) {
-        compactView.style.display = 'block';
-        fullView.style.display = 'none';
-        updateSelectLineCompactView();
-    } else {
-        compactView.style.display = 'none';
-        fullView.style.display = 'flex';
-    }
-    
-    // Also update subtitle (shown when panel is minimized)
-    updateSelectLineSubtitle();
-}
-
 /**
  * Update the Select Line panel subtitle (shown in title bar when minimized)
  * Shows the selected player names as a compact, comma-separated list
@@ -3951,42 +3648,6 @@ function updateSelectLineSubtitle() {
     
     // Subtitle is just the player names (type is now in the title)
     setPanelSubtitle('selectLine', playerList);
-}
-
-/**
- * Initialize the compact view resize observer
- * Sets up a ResizeObserver to detect when the panel content area changes size
- */
-function initSelectLineCompactViewObserver() {
-    const panel = document.getElementById('panel-selectLine');
-    if (!panel) return;
-    
-    const contentArea = panel.querySelector('.panel-content');
-    if (!contentArea) return;
-    
-    // Clean up any existing observer
-    if (selectLinePanelResizeObserver) {
-        selectLinePanelResizeObserver.disconnect();
-    }
-    
-    // Create new observer
-    selectLinePanelResizeObserver = new ResizeObserver((entries) => {
-        // Debounce check to avoid excessive updates during drag
-        requestAnimationFrame(() => {
-            checkSelectLinePanelCompactMode();
-        });
-    });
-    
-    selectLinePanelResizeObserver.observe(contentArea);
-    
-    // Wire up click handler for line type cycling
-    const linkEl = document.getElementById('compactLineTypeLink');
-    if (linkEl) {
-        linkEl.addEventListener('click', handleCompactLineTypeTap);
-    }
-    
-    // Do initial check
-    checkSelectLinePanelCompactMode();
 }
 
 /**
@@ -4046,6 +3707,64 @@ function makePanelColumnsSticky() {
     
     // Scroll to right (show most recent points)
     const tableContainer = document.getElementById('panelTableContainer');
+    if (tableContainer) {
+        tableContainer.scrollLeft = tableContainer.scrollWidth;
+    }
+}
+
+/**
+ * Apply sticky columns to a split panel table
+ * @param {'O'|'D'} suffix
+ */
+function makeSplitPanelColumnsSticky(suffix) {
+    const tableId = `panelActivePlayersTable${suffix}`;
+    const checkboxCells = document.querySelectorAll(`#${tableId} .active-checkbox-column`);
+    const nameCells = document.querySelectorAll(`#${tableId} .active-name-column`);
+    const timeCells = document.querySelectorAll(`#${tableId} .active-time-column`);
+    const headerCells = document.querySelectorAll(`#${tableId} .active-header-teams`);
+
+    if (checkboxCells.length === 0) return;
+
+    const checkboxWidth = checkboxCells[0].getBoundingClientRect().width || 30;
+    const nameWidth = nameCells.length > 0 ? nameCells[0].getBoundingClientRect().width : 0;
+
+    checkboxCells.forEach(cell => {
+        cell.style.position = 'sticky';
+        cell.style.left = '0';
+        cell.style.zIndex = '4';
+        cell.style.backgroundColor = '#fafafa';
+        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
+        cell.style.border = 'none';
+    });
+
+    nameCells.forEach(cell => {
+        cell.style.position = 'sticky';
+        cell.style.left = `${checkboxWidth}px`;
+        cell.style.zIndex = '3';
+        cell.style.backgroundColor = '#fafafa';
+        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
+        cell.style.border = 'none';
+    });
+
+    timeCells.forEach(cell => {
+        cell.style.position = 'sticky';
+        cell.style.left = `${checkboxWidth + nameWidth}px`;
+        cell.style.zIndex = '3';
+        cell.style.backgroundColor = '#fafafa';
+        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
+        cell.style.border = 'none';
+    });
+
+    headerCells.forEach(cell => {
+        cell.style.position = 'sticky';
+        cell.style.left = '0';
+        cell.style.zIndex = '5';
+        cell.style.backgroundColor = '#fafafa';
+        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
+        cell.style.border = 'none';
+    });
+
+    const tableContainer = document.getElementById(`panelTableContainer${suffix}`);
     if (tableContainer) {
         tableContainer.scrollLeft = tableContainer.scrollWidth;
     }
@@ -4545,6 +4264,12 @@ function enterGameScreen() {
         stopActiveGamePolling();
     }
 
+    // Reset panel layout on every game entry so stale heights/hidden
+    // states from previous sessions don't persist across games.
+    if (typeof resetAllPanelStates === 'function') {
+        resetAllPanelStates();
+    }
+
     // Initialize if needed
     if (!gameScreenInitialized) {
         initGameScreen();
@@ -4561,14 +4286,6 @@ function enterGameScreen() {
     // Reset the "no roles" warning toast reference so it can show again for this game session
     noRolesWarningToast = null;
     gameScreenEnteredAt = Date.now();
-    
-    // Un-minimize the Play-by-Play panel when a point starts
-    // (it's typically minimized between points when Select Next Line is maximized)
-    if (typeof maximizePanel === 'function' && typeof isPanelMinimized === 'function') {
-        if (isPanelMinimized('playByPlay')) {
-            maximizePanel('playByPlay', false); // false = don't minimize other panels
-        }
-    }
     
     // Reset timer pause state when entering
     pointTimerPaused = false;
@@ -4623,6 +4340,22 @@ function enterGameScreen() {
     // Update Select Next Line panel
     updateSelectLinePanel();
 
+    // Pin selectLine at a reasonable height so it doesn't start at ~0
+    // (which causes the game log to overlap it before flex layout settles).
+    // Cap at 45% of container to ensure follow (game log) stays visible.
+    requestAnimationFrame(() => {
+        const slPanel = document.getElementById('panel-selectLine');
+        const slState = typeof getPanelState === 'function' ? getPanelState('selectLine') : null;
+        if (slPanel && slState && !slState.height) {
+            const container = document.getElementById('gameScreenContainer');
+            const maxHeight = container ? Math.floor(container.clientHeight * 0.45) : 300;
+            const measured = slPanel.getBoundingClientRect().height;
+            if (measured > MIN_PANEL_HEIGHT) {
+                setPanelState('selectLine', { height: Math.min(measured, maxHeight) });
+            }
+        }
+    });
+
     // Restore split mode if it was active
     if (game && game.pendingNextLine && game.pendingNextLine.activeType === 'split') {
         enterSplitMode();
@@ -4631,9 +4364,6 @@ function enterGameScreen() {
     // Set up ResizeObserver for Play-by-Play panel layout
     setupPlayByPlayResizeObserver();
 
-    // Set up ResizeObserver for Select Line panel compact view
-    initSelectLineCompactViewObserver();
-    
     console.log('🎮 Entered game screen');
 }
 

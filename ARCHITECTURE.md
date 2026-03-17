@@ -101,6 +101,72 @@ ultistats/
 - Global state is managed through shared variables in `store/storage.js`
 - No circular dependencies - clear data flow: data → utils → features → UI
 
+### Line Selection Mode Toggle
+
+Player-selection tables (main panel, O/D split panels, injury sub dialog) support a three-state mode toggle:
+
+```
+Manual ──tap──▶ Wholesale ──tap──▶ Auto ──tap──▶ Manual
+                (all unchecked)    (suggested)    (restored snapshot)
+```
+
+**States:**
+- **Manual** (default): User's own checkbox selections. Standard behavior.
+- **Wholesale**: All checkboxes cleared — a fresh start for building a line.
+- **Auto**: App suggests a lineup by selecting players with the fewest points played in the current game, respecting the game's gender ratio settings. Falls back to ignoring ratio if available players can't satisfy it.
+
+**Snapshot behavior:**
+- When leaving Manual (first tap), the current checked set is saved as `manualLineSnapshot`.
+- When returning to Manual (third tap), the snapshot is restored.
+- Any direct checkbox change while in Wholesale or Auto immediately transitions back to Manual and updates the snapshot to the new state.
+
+**State management:**
+- Each table context (main, O split, D split, injury sub) maintains its own `lineSelectionMode` and `manualLineSnapshot`.
+- Mode resets to Manual at the start of each new point.
+- The toggle is rendered as a tappable text label ("Manual" / "Wholesale" / "Auto") in the table header.
+
+**Auto algorithm (v1):**
+1. Determine expected player count and gender ratio from game settings.
+2. Sort roster by points played ascending (fewest first).
+3. Fill the line respecting ratio: pick from the under-represented gender first, then alternate.
+4. If ratio can't be met with available players, fill remaining slots regardless of gender.
+
+### Panel Drag-to-Resize System
+
+The in-game UI is a vertical stack of panels managed by `ui/panelSystem.js`. Panels are resized by dragging their title bars. The last panel (Follow/Game Log) is flex-fill and absorbs remaining space.
+
+**Layout model:** Panels `P[0], P[1], …, P[N-1]` are stacked vertically. Each has a title bar (~36px) at its top edge and a content area below. Each has a `minHeight` (title-bar-only for most; larger for PBP and Follow). Title bar position of panel `i` equals the sum of heights of panels `0` through `i-1`.
+
+**Drag algorithm — `moveTitleBar(i, delta)`:** A recursive function that moves title bar `i` by `delta` pixels. Moving down grows the panel above and shrinks the panel below. When the panel being shrunk hits its `minHeight`, the function recurses to push the next neighbor in the same direction (cascading). Title bar 0 is pinned (never moves). Follow (last panel) absorbs freely with no title bar below to push.
+
+```
+moveTitleBar(i, delta):
+    if delta > 0 (moving down):
+        canShrink = height[i] - minHeight[i]
+        if canShrink < delta and not last panel:
+            pushed = moveTitleBar(i + 1, delta - canShrink)  // cascade
+            canShrink += pushed
+        actual = min(delta, canShrink)
+        height[i-1] += actual    // panel above grows
+        height[i]   -= actual    // panel below shrinks
+
+    if delta < 0 (moving up):
+        canShrink = height[i-1] - minHeight[i-1]
+        if canShrink < |delta| and i-1 > 0:
+            pushed = moveTitleBar(i - 1, delta + canShrink)  // cascade
+            canShrink += |pushed|
+        actual = max(delta, -canShrink)
+        height[i-1] += actual    // panel above shrinks
+        height[i]   -= actual    // panel below grows
+```
+
+**Two drag modes** (toggled in Settings):
+
+- **Spring-back (default):** Each frame resets heights to their start-of-drag values and applies the absolute delta from the drag start position. When the finger reverses, all panels spring back to their original sizes.
+- **Physical:** Each frame applies an incremental delta from the previous frame's position. Pushed panels stay where they are because nothing asks them to move back — the recursion only pushes, never pulls.
+
+**Split mode:** The "Select Next Line" panel can be split into separate O Line and D Line panels. When split, `selectLine` is hidden (`display: none`) and `selectOLine`/`selectDLine` are shown. The drag system filters out non-rendered panels (`offsetParent === null`) to avoid dragging invisible elements.
+
 ### Feature Worktrees
 
 For parallel development, feature branches use git worktrees in `.worktrees/<feature-name>`. See CLAUDE.md for the workflow.
@@ -621,14 +687,14 @@ Exported via `window.breakside.auth`:
 - PR merges: CI workflow detects missing `version.json` change and bumps
 - Feature branches: hook skips to avoid merge conflicts across worktrees
 
-**Staging** — Manual deploy via `./scripts/deploy-staging.sh`:
-1. Generates a deploy timestamp (`deployStamp`) and injects it into `version.json`
+**Staging** — Manual deploy via `./scripts/deploy-staging.sh ["optional label"]`:
+1. Generates a deploy timestamp (`deployStamp`) and optional `deployLabel` from `$1`, injected into `version.json`
 2. Syncs current working directory to S3 (`staging.breakside.pro`)
 3. Uploads `version.json` and service worker with no-cache headers
 4. Syncs viewer to S3
 5. Invalidates CloudFront cache (`E12N2STN9MM8FA`)
 
-Staging has a purple header (vs production orange) via `body.staging` CSS class. The deploy stamp lets the PWA detect redeploys without a commit — tap Online/About to check for updates.
+Staging has a purple header (vs production orange) via `body.staging` CSS class. The deploy stamp lets the PWA detect redeploys without a commit — tap Online/About to check for updates. If a label was provided, it appears in the version toast as `[label]`.
 
 ---
 

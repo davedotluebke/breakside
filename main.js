@@ -377,9 +377,12 @@ if (headerLogo && versionOverlay) {
         }
         
         // Show version
-        const versionText = appVersion 
+        let versionText = appVersion
             ? `v${appVersion.version} (${appVersion.build})`
             : 'v?.?.?';
+        if (window.APP_DEPLOY_LABEL) {
+            versionText += ` [${window.APP_DEPLOY_LABEL}]`;
+        }
         versionOverlay.textContent = versionText;
         versionOverlay.style.display = 'flex';
         
@@ -408,7 +411,8 @@ document.addEventListener('DOMContentLoaded', function() {
             window.APP_VERSION = v.version || 'unknown';
             window.APP_BUILD = v.build || 'unknown';
             window.APP_DEPLOY_STAMP = v.deployStamp || null;
-            console.log(`App version: ${window.APP_VERSION} (Build ${window.APP_BUILD})${window.APP_DEPLOY_STAMP ? ' deploy:' + window.APP_DEPLOY_STAMP : ''}`);
+            window.APP_DEPLOY_LABEL = v.deployLabel || null;
+            console.log(`App version: ${window.APP_VERSION} (Build ${window.APP_BUILD})${window.APP_DEPLOY_STAMP ? ' deploy:' + window.APP_DEPLOY_STAMP : ''}${window.APP_DEPLOY_LABEL ? ' [' + window.APP_DEPLOY_LABEL + ']' : ''}`);
         })
         .catch(err => console.log('Could not load version.json:', err));
     
