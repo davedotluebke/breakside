@@ -56,22 +56,46 @@ Deploys current working directory (not committed state) to S3 + CloudFront inval
 
 On staging, the deploy script also writes a `deployStamp` field so the app detects redeploys even without a build number change.
 
-## Feature Worktrees
+## Multi-Session Development
 
-For parallel development (e.g., multiple Claude Code sessions), use git worktrees:
+Each Claude Code session MUST work in its own worktree. Never edit files directly on main.
 
+### Starting a session
 ```bash
-# Create worktree with feature branch
-git worktree add .worktrees/<feature-name> -b <feature-name>
+git worktree add .worktrees/<feature> -b <feature>
+cd .worktrees/<feature>
+./scripts/dev-server.sh 3001   # use a different port per worktree
+```
 
-# Dev server on a different port
-cd .worktrees/<feature-name> && ./scripts/dev-server.sh 3001
+### Committing
+Commit early and often on feature branches. Commits are free — the pre-commit hook skips version bumps on non-main branches. Commit after each logical change (a function, a bug fix, a UI tweak) without waiting for the user to ask. This keeps `git status` clean and prevents uncommitted changes from blocking merges in other sessions.
 
-# Merge back from main directory
-git merge <feature-name>
+### Testing on staging
+```bash
+./scripts/deploy-staging.sh "<feature>"   # label shows in version.json as deployLabel
+```
+Only one feature can be on staging at a time. Redeploy from the relevant worktree when switching.
 
-# Cleanup
-git worktree remove .worktrees/<feature-name> && git branch -d <feature-name>
+### Merging to production
+```bash
+cd /Users/luebke/src/ultistats    # main worktree — keep it clean
+git checkout main
+git merge <feature>
+git push origin main
+```
+
+### If branches overlap
+```bash
+# Rebase the later branch onto main after the first merges:
+cd .worktrees/<feature-b>
+git rebase main
+# Resolve conflicts in the worktree, then merge as normal
+```
+
+### Cleanup
+```bash
+git worktree remove .worktrees/<feature>
+git branch -d <feature>
 ```
 
 `.worktrees/` is gitignored so other sessions won't accidentally stage worktree files.

@@ -17,5 +17,15 @@ __pycache__/
 teamData.*.json
 test_team.json
 
+# Server data files (created by tests and local dev server)
+data/players/
+data/teams/
+data/games/
+data/memberships/
+data/shares/
+data/invites/
+data/users/
+data/index.json
+
 # Feature worktrees (parallel Claude Code sessions)
 .worktrees/
