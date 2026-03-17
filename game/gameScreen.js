@@ -754,6 +754,9 @@ function updateSplitPanelTable(lineType) {
         ? getRunningScores()
         : { team: [0], opponent: [0] };
 
+    // Check if last point is in progress (no winner yet)
+    const pointInProgress = game.points.length > 0 && !game.points[game.points.length - 1].winner;
+
     const teamScoreRow = document.createElement('tr');
     const opponentScoreRow = document.createElement('tr');
 
@@ -766,7 +769,11 @@ function updateSplitPanelTable(lineType) {
 
         scores.forEach((score, index) => {
             const scoreCell = document.createElement('th');
-            scoreCell.textContent = score;
+            if (pointInProgress && index === scores.length - 1) {
+                scoreCell.textContent = '-';
+            } else {
+                scoreCell.textContent = score;
+            }
             if (game.alternateGenderRatio === 'Alternating' && game.startingGenderRatio) {
                 const genderRatio = typeof getGenderRatioForPoint === 'function'
                     ? getGenderRatioForPoint(game, index)
@@ -3397,6 +3404,9 @@ function updateSelectLineTable() {
     const teamScoreRow = document.createElement('tr');
     const opponentScoreRow = document.createElement('tr');
     
+    // Check if last point is in progress (no winner yet)
+    const pointInProgress = game.points.length > 0 && !game.points[game.points.length - 1].winner;
+
     // Add score cells helper
     const addScoreCells = (row, teamName, scores) => {
         const nameCell = document.createElement('th');
@@ -3404,11 +3414,16 @@ function updateSelectLineTable() {
         nameCell.setAttribute('colspan', '3');
         nameCell.classList.add('active-header-teams');
         row.appendChild(nameCell);
-        
+
         scores.forEach((score, index) => {
             const scoreCell = document.createElement('th');
-            scoreCell.textContent = score;
-            
+            // Show hyphen for the in-progress point's score column (last one)
+            if (pointInProgress && index === scores.length - 1) {
+                scoreCell.textContent = '-';
+            } else {
+                scoreCell.textContent = score;
+            }
+
             // Color score cells based on gender ratio
             if (game.alternateGenderRatio === 'Alternating' && game.startingGenderRatio) {
                 const genderRatio = typeof getGenderRatioForPoint === 'function'
@@ -3417,7 +3432,7 @@ function updateSelectLineTable() {
                 if (genderRatio === 'FMP') scoreCell.classList.add('score-cell-fmp');
                 else if (genderRatio === 'MMP') scoreCell.classList.add('score-cell-mmp');
             }
-            
+
             row.appendChild(scoreCell);
         });
     };
@@ -3646,8 +3661,9 @@ function makePanelColumnsSticky() {
         cell.style.backgroundColor = '#fafafa';
         cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
         cell.style.border = 'none';
+        cell.style.touchAction = 'pan-y';
     });
-    
+
     // Apply sticky styles to name column
     nameCells.forEach(cell => {
         cell.style.position = 'sticky';
@@ -3656,8 +3672,9 @@ function makePanelColumnsSticky() {
         cell.style.backgroundColor = '#fafafa';
         cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
         cell.style.border = 'none';
+        cell.style.touchAction = 'pan-y';
     });
-    
+
     // Apply sticky styles to time column
     timeCells.forEach(cell => {
         cell.style.position = 'sticky';
@@ -3666,8 +3683,9 @@ function makePanelColumnsSticky() {
         cell.style.backgroundColor = '#fafafa';
         cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
         cell.style.border = 'none';
+        cell.style.touchAction = 'pan-y';
     });
-    
+
     // Apply sticky styles to header cells
     headerCells.forEach(cell => {
         cell.style.position = 'sticky';
@@ -3676,8 +3694,9 @@ function makePanelColumnsSticky() {
         cell.style.backgroundColor = '#fafafa';
         cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
         cell.style.border = 'none';
+        cell.style.touchAction = 'pan-y';
     });
-    
+
     // Scroll to right (show most recent points)
     const tableContainer = document.getElementById('panelTableContainer');
     if (tableContainer) {
@@ -3708,6 +3727,7 @@ function makeSplitPanelColumnsSticky(suffix) {
         cell.style.backgroundColor = '#fafafa';
         cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
         cell.style.border = 'none';
+        cell.style.touchAction = 'pan-y';
     });
 
     nameCells.forEach(cell => {
@@ -3717,6 +3737,7 @@ function makeSplitPanelColumnsSticky(suffix) {
         cell.style.backgroundColor = '#fafafa';
         cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
         cell.style.border = 'none';
+        cell.style.touchAction = 'pan-y';
     });
 
     timeCells.forEach(cell => {
@@ -3726,6 +3747,7 @@ function makeSplitPanelColumnsSticky(suffix) {
         cell.style.backgroundColor = '#fafafa';
         cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
         cell.style.border = 'none';
+        cell.style.touchAction = 'pan-y';
     });
 
     headerCells.forEach(cell => {
@@ -3735,6 +3757,7 @@ function makeSplitPanelColumnsSticky(suffix) {
         cell.style.backgroundColor = '#fafafa';
         cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
         cell.style.border = 'none';
+        cell.style.touchAction = 'pan-y';
     });
 
     const tableContainer = document.getElementById(`panelTableContainer${suffix}`);

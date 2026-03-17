@@ -1660,6 +1660,11 @@ body.game-screen-active #controllerRoleButtons {
     white-space: nowrap;
 }
 
+.panel-player-table th:last-child,
+.panel-player-table td:last-child {
+    padding-right: 18px; /* clear iOS overlay scrollbar */
+}
+
 .panel-player-table th {
     background: #f8f9fa;
     font-weight: 600;
