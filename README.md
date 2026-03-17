@@ -55,6 +55,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 ### Advanced Game Features
 - **Line Management** - Select active players for each point, or sub in entire lines
 - **Next-line Selection** - Select line for the next point during the current point
+- **O/D Line Views** - Toggle between combined O/D, offense-only, defense-only, or split O|D side-by-side panels for managing separate offensive and defensive lines
 - **Score Attribution** - Attribute goals and assists to specific players
 - **Point Timer** - Automatic timing of points with visual indicators
 - **Undo Capability** - Correct mistakes with real-time undo functionality
