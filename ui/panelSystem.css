@@ -1527,13 +1527,17 @@ body.game-screen-active #controllerRoleButtons {
     overflow: hidden;
 }
 
-/* Header row with stats toggle and O/D toggle */
-.select-line-header-row {
+/* Compact toolbar row above the player table */
+.select-line-toolbar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 0 4px;
+    gap: 6px;
+    padding: 4px 8px;
     flex-shrink: 0;
+}
+
+.select-line-toolbar-spacer {
+    flex: 1; /* pushes everything right, reserves left space */
 }
 
 .select-line-stats-toggle {
@@ -1548,7 +1552,7 @@ body.game-screen-active #controllerRoleButtons {
 }
 
 .select-line-od-toggle {
-    padding: 4px 12px;
+    padding: 2px 8px;
     font-size: 0.8rem;
     font-weight: 600;
     background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
@@ -1572,94 +1576,14 @@ body.game-screen-active #controllerRoleButtons {
     background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
 }
 
-/* Top row with Start Point and Lines buttons */
-.select-line-top-row {
-    display: flex;
-    gap: 8px;
-    flex-shrink: 0;
-}
-
-.select-line-start-btn {
-    flex: 1;
-    padding: 12px 16px;
-    font-size: 1rem;
-    font-weight: 600;
-    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); /* Neutral gray default */
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    margin: 0;
-    transition: all 0.15s;
-}
-
-.select-line-start-btn:hover:not(:disabled) {
-    transform: translateY(-1px);
-}
-
-.select-line-start-btn:active:not(:disabled) {
-    transform: scale(0.98);
-}
-
-/* Feedback states when point NOT in progress (saturated colors) */
-.select-line-start-btn.feedback-ok {
-    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
-}
-
-.select-line-start-btn.feedback-count-warning {
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-}
-
-.select-line-start-btn.feedback-gender-warning {
-    background: linear-gradient(135deg, #ff8800 0%, #e67700 100%);
-}
-
-.select-line-start-btn.inactive {
-    background: linear-gradient(135deg, #adb5bd 0%, #868e96 100%);
-    cursor: not-allowed;
-}
-
-/* Legacy warning class (keep for backwards compatibility) */
-.select-line-start-btn.warning {
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-}
-
-.select-line-start-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-/* Point in progress base state (gray) */
-.select-line-start-btn.point-in-progress {
-    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
-    cursor: not-allowed;
-}
-
-/* Point in progress with feedback (desaturated colors) */
-.select-line-start-btn.point-in-progress.feedback-ok {
-    background: linear-gradient(135deg, #6b9b7a 0%, #5a8a6a 100%);
-}
-
-.select-line-start-btn.point-in-progress.feedback-count-warning {
-    background: linear-gradient(135deg, #a87a7f 0%, #987075 100%);
-}
-
-.select-line-start-btn.point-in-progress.feedback-gender-warning {
-    background: linear-gradient(135deg, #b89060 0%, #a88055 100%);
-}
-
-.select-line-start-btn.point-in-progress.inactive {
-    background: linear-gradient(135deg, #8a9098 0%, #7a8088 100%);
-}
-
 .select-line-lines-btn {
-    padding: 12px 16px;
-    font-size: 0.9rem;
+    padding: 2px 8px;
+    font-size: 0.8rem;
     font-weight: 500;
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     color: #495057;
     border: 1px solid #dee2e6;
-    border-radius: 8px;
+    border-radius: 4px;
     cursor: pointer;
     margin: 0;
     transition: all 0.15s;
@@ -1669,16 +1593,32 @@ body.game-screen-active #controllerRoleButtons {
     background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
 }
 
-/* Gender ratio display */
-.select-line-gender-ratio {
-    font-size: 0.85rem;
-    color: #495057;
-    padding: 4px 8px;
-    background: #f8f9fa;
-    border-radius: 4px;
-    flex-shrink: 0;
+/* Gender ratio badge */
+.select-line-gender-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    cursor: default;
 }
 
+.select-line-gender-badge.gender-badge-fmp {
+    background: rgba(156, 39, 176, 0.15);
+    color: #9c27b0;
+}
+
+.select-line-gender-badge.gender-badge-mmp {
+    background: rgba(25, 118, 210, 0.15);
+    color: #1976d2;
+}
+
+.select-line-gender-badge.gender-badge-neutral {
+    background: #f0f0f0;
+    color: #666;
+}
+
+/* Starting ratio selection (only shown when alternating + no starting ratio set) */
 .select-line-starting-ratio {
     font-size: 0.85rem;
     padding: 4px 8px;
@@ -1811,7 +1751,6 @@ body.game-screen-active #controllerRoleButtons {
 }
 
 /* Readonly state */
-.panel-selectLine.readonly .select-line-start-btn,
 .panel-selectLine.readonly .select-line-lines-btn,
 .panel-selectLine.readonly .select-line-od-toggle {
     opacity: 0.6;
@@ -1825,49 +1764,23 @@ body.game-screen-active #controllerRoleButtons {
 
 /* Mobile adjustments for Select Line panel */
 @media (max-width: 480px) {
-    .select-line-top-row {
-        gap: 6px;
-    }
-    
-    .select-line-start-btn {
-        padding: 10px 12px;
-        font-size: 0.9rem;
-    }
-    
-    .select-line-lines-btn {
-        padding: 10px 12px;
-        font-size: 0.85rem;
-    }
-    
     .panel-player-table {
         font-size: 0.8rem;
     }
-    
+
     .panel-player-table th,
     .panel-player-table td {
         padding: 5px 6px;
     }
-    
+
     .panel-player-table .active-checkbox {
         width: 16px;
         height: 16px;
     }
-    
+
     .panel-player-table .active-name-column {
         min-width: 80px;
         max-width: 120px;
-    }
-}
-
-@media (max-width: 360px) {
-    .select-line-start-btn {
-        padding: 8px 10px;
-        font-size: 0.85rem;
-    }
-    
-    .select-line-lines-btn {
-        padding: 8px 10px;
-        font-size: 0.8rem;
     }
 }
 
@@ -2298,9 +2211,7 @@ body.panel-dragging .panel-content {
 }
 
 /* Split panel readonly state */
-.panel-selectOLine.readonly .select-line-start-btn,
 .panel-selectOLine.readonly .select-line-lines-btn,
-.panel-selectDLine.readonly .select-line-start-btn,
 .panel-selectDLine.readonly .select-line-lines-btn {
     opacity: 0.6;
     pointer-events: none;

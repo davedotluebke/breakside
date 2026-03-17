@@ -324,29 +324,20 @@ function createPlayByPlayPanel() {
 
 /**
  * Create the Select Next Line panel content
- * Contains: header row with toggles, Start Point button, Lines button, 
- * gender ratio display, and player selection table
- * Also includes a compact view for when panel is very small
+ * Contains: compact toolbar row with toggles, gender badge, and player selection table
  * @returns {HTMLElement}
  */
 function createSelectLineContent() {
     const content = document.createElement('div');
     content.className = 'select-line-content';
-    
+
     content.innerHTML = `
-        <div class="select-line-header-row">
+        <div class="select-line-toolbar">
+            <span class="select-line-toolbar-spacer"></span>
+            <button class="select-line-lines-btn" id="panelLinesBtn">Lines...</button>
             <span class="select-line-stats-toggle" id="panelStatsToggle">(Game)</span>
-            <button class="select-line-od-toggle" id="panelODToggle" title="Toggle O/D line mode">
-                O/D
-            </button>
-        </div>
-        <div class="select-line-top-row">
-            <button class="select-line-lines-btn" id="panelLinesBtn">
-                Lines...
-            </button>
-        </div>
-        <div class="select-line-gender-ratio" id="panelGenderRatioDisplay" style="display: none;">
-            <span>Gender Ratio: </span><span id="panelGenderRatioText"></span>
+            <span class="select-line-gender-badge" id="panelGenderBadge" style="display: none;"></span>
+            <button class="select-line-od-toggle" id="panelODToggle" title="Toggle O/D line mode">O/D</button>
         </div>
         <div class="select-line-starting-ratio" id="panelStartingRatioSelection" style="display: none;">
             <label>Starting Ratio: </label>
@@ -2598,12 +2589,6 @@ function wireSelectLineEvents() {
         odToggle.addEventListener('click', handleODToggle);
     }
     
-    // Start Point button
-    const startPointBtn = document.getElementById('panelStartPointBtn');
-    if (startPointBtn) {
-        startPointBtn.addEventListener('click', handlePanelStartPoint);
-    }
-    
     // Lines button
     const linesBtn = document.getElementById('panelLinesBtn');
     if (linesBtn) {
@@ -2704,9 +2689,6 @@ function handleODToggle() {
 
     // Update button text
     updateODToggleButton();
-
-    // Update start point button state (in case player count changed)
-    updateStartPointButtonState();
 
     // Update subtitle for new line type
     updateSelectLineSubtitle();
@@ -2938,7 +2920,6 @@ function showLineSelectionDialog() {
 
             // Update panel state
             savePanelSelectionsToPendingNextLine();
-            updateStartPointButtonState();
             updateSelectLineSubtitle();
             updatePlayByPlayPanelState();
 
@@ -3055,10 +3036,7 @@ function handlePanelCheckboxChange(e) {
     
     // Save to pending next line
     savePanelSelectionsToPendingNextLine();
-    
-    // Update Start Point button state
-    updateStartPointButtonState();
-    
+
     // Keep subtitle in sync
     updateSelectLineSubtitle();
     
@@ -3221,18 +3199,6 @@ function checkPanelGenderRatio(selectedPlayerNames, expectedCount) {
 }
 
 /**
- * Update the Start Point button state in the Select Line panel
- * Uses shared function for consistency with Play-by-Play panel's Start Point button
- */
-function updateStartPointButtonState() {
-    const btn = document.getElementById('panelStartPointBtn');
-    if (!btn) return;
-    
-    // Use shared function - this button shows "Point in progress" when point is active
-    applyStartPointButtonState(btn, true);
-}
-
-/**
  * Update the Select Line panel based on game state and permissions
  */
 function updateSelectLinePanelState() {
@@ -3256,9 +3222,6 @@ function updateSelectLinePanelState() {
         cb.disabled = !canEdit;
     });
     
-    // Update Start Point button state (handles disabled state based on point status)
-    updateStartPointButtonState();
-
     // Update gender ratio display
     updatePanelGenderRatioDisplay();
 
@@ -3283,41 +3246,48 @@ function updateSelectLinePanelState() {
  */
 function updatePanelGenderRatioDisplay() {
     const game = typeof currentGame === 'function' ? currentGame() : null;
-    const display = document.getElementById('panelGenderRatioDisplay');
-    const text = document.getElementById('panelGenderRatioText');
+    const badge = document.getElementById('panelGenderBadge');
     const ratioSelection = document.getElementById('panelStartingRatioSelection');
-    
+
     if (!game || !game.alternateGenderRatio || game.alternateGenderRatio === 'No') {
-        if (display) display.style.display = 'none';
+        if (badge) badge.style.display = 'none';
         if (ratioSelection) ratioSelection.style.display = 'none';
         return;
     }
-    
-    // Show gender ratio display
-    if (display) display.style.display = 'block';
-    
+
     // Fixed ratio (e.g., "4:3")
     if (game.alternateGenderRatio !== 'Alternating') {
-        if (text) text.textContent = `${game.alternateGenderRatio} FMP:MMP`;
+        if (badge) {
+            badge.textContent = game.alternateGenderRatio;
+            badge.className = 'select-line-gender-badge gender-badge-neutral';
+            badge.style.display = '';
+            badge.onclick = null;
+        }
         if (ratioSelection) ratioSelection.style.display = 'none';
         return;
     }
-    
+
     // Alternating ratio
-    const expectedRatio = typeof getExpectedGenderRatio === 'function' 
-        ? getExpectedGenderRatio(game) 
+    const expectedRatio = typeof getExpectedGenderRatio === 'function'
+        ? getExpectedGenderRatio(game)
         : null;
-    
+
     if (expectedRatio) {
-        if (text) text.textContent = `+${expectedRatio} point`;
+        if (badge) {
+            badge.textContent = `+${expectedRatio} point`;
+            badge.className = 'select-line-gender-badge ' +
+                (expectedRatio === 'FMP' ? 'gender-badge-fmp' : 'gender-badge-mmp');
+            badge.style.display = '';
+            badge.onclick = null;
+        }
         if (ratioSelection) ratioSelection.style.display = 'none';
     } else {
-        // Need to select starting ratio — clear any stale selection from a previous game
+        // Need to select starting ratio — show selection row, hide badge
+        if (badge) badge.style.display = 'none';
         const fmpRadio = document.getElementById('panelStartingRatioFMP');
         const mmpRadio = document.getElementById('panelStartingRatioMMP');
         if (fmpRadio) fmpRadio.checked = false;
         if (mmpRadio) mmpRadio.checked = false;
-        if (text) text.textContent = 'Select starting ratio';
         if (ratioSelection) ratioSelection.style.display = 'block';
     }
 }
@@ -3353,16 +3323,19 @@ function selectAppropriateLineAtPointEnd() {
     
     let selectedType;
     
-    // Priority 1: If O/D line was modified DURING this point, use it
-    if (odLineModTime > pointStartTime) {
+    const currentType = game.pendingNextLine.activeType || 'od';
+
+    // Priority 1: If user is currently on the combined O/D view, stay there.
+    // Coaches who use O/D don't want to be forced into separate O/D lines
+    // just because they once toggled through the other views.
+    if (currentType === 'od') {
+        selectedType = 'od';
+        console.log('📋 Staying on O/D line (user is in combined view)');
+    }
+    // Priority 2: If O/D line was modified DURING this point, switch to it
+    else if (odLineModTime > pointStartTime) {
         selectedType = 'od';
         console.log('📋 Auto-selecting O/D line (modified during point)');
-    }
-    // Priority 2: If O and D lines have NEVER been modified, stay on O/D
-    // (user is using single-line workflow)
-    else if (oLineModTime === 0 && dLineModTime === 0) {
-        selectedType = 'od';
-        console.log('📋 Staying on O/D line (O and D lines never modified - single-line workflow)');
     }
     // Priority 3: Use O or D line based on who scored
     else {
