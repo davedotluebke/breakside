@@ -3639,6 +3639,67 @@ function updateSelectLineSubtitle() {
 }
 
 /**
+ * Enable axis-locked scrolling on a table container.
+ * After the touch moves past a threshold, classifies the gesture as
+ * horizontal or vertical, then takes over scrolling via preventDefault()
+ * and manual scrollLeft/scrollTop updates on the locked axis only.
+ * Only attaches listeners once per container (idempotent).
+ * @param {HTMLElement} container - The .select-line-table-container element
+ */
+function enableAxisLockedScroll(container) {
+    if (container._axisLockAttached) return;
+    container._axisLockAttached = true;
+
+    let startX, startY, lastX, lastY, axis; // axis: null | 'h' | 'v'
+    const THRESHOLD = 8;
+
+    let onStickyColumn;
+
+    container.addEventListener('touchstart', (e) => {
+        const touch = e.touches[0];
+        startX = lastX = touch.clientX;
+        startY = lastY = touch.clientY;
+        axis = null;
+        // Check if touch started on a sticky column — those use native pan-y
+        onStickyColumn = !!e.target.closest(
+            '.active-checkbox-column, .active-name-column, .active-time-column, .active-checkbox, .active-header-teams'
+        );
+    }, { passive: true });
+
+    // Non-passive so we can preventDefault() once axis is locked
+    container.addEventListener('touchmove', (e) => {
+        if (!e.touches.length || onStickyColumn) return;
+        const touch = e.touches[0];
+
+        if (!axis) {
+            const dx = Math.abs(touch.clientX - startX);
+            const dy = Math.abs(touch.clientY - startY);
+            if (dx >= THRESHOLD || dy >= THRESHOLD) {
+                axis = (dx > dy * 2) ? 'h' : 'v';
+            } else {
+                return; // not enough movement yet
+            }
+        }
+
+        // Take over scrolling — prevent browser's default diagonal scroll
+        e.preventDefault();
+        const moveX = lastX - touch.clientX;
+        const moveY = lastY - touch.clientY;
+        lastX = touch.clientX;
+        lastY = touch.clientY;
+
+        if (axis === 'h') {
+            container.scrollLeft += moveX;
+        } else {
+            container.scrollTop += moveY;
+        }
+    }, { passive: false });
+
+    container.addEventListener('touchend', () => { axis = null; }, { passive: true });
+    container.addEventListener('touchcancel', () => { axis = null; }, { passive: true });
+}
+
+/**
  * Make panel table columns sticky (similar to legacy makeColumnsSticky)
  */
 function makePanelColumnsSticky() {
@@ -3701,6 +3762,7 @@ function makePanelColumnsSticky() {
     const tableContainer = document.getElementById('panelTableContainer');
     if (tableContainer) {
         tableContainer.scrollLeft = tableContainer.scrollWidth;
+        enableAxisLockedScroll(tableContainer);
     }
 }
 
@@ -3763,6 +3825,7 @@ function makeSplitPanelColumnsSticky(suffix) {
     const tableContainer = document.getElementById(`panelTableContainer${suffix}`);
     if (tableContainer) {
         tableContainer.scrollLeft = tableContainer.scrollWidth;
+        enableAxisLockedScroll(tableContainer);
     }
 }
 
