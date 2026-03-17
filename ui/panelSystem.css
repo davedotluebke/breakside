@@ -201,6 +201,24 @@ body.game-screen-active #controllerRoleButtons {
     font-size: 0.7rem;
 }
 
+.panel-action-btn.od-split-toggle {
+    width: auto;
+    padding: 0 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+/* Spectating badge for viewer mode */
+.spectating-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    color: #666;
+}
+
 /* =============================================================================
    Panel Content Area
    ============================================================================= */
@@ -1864,62 +1882,6 @@ body.game-screen-active #controllerRoleButtons {
     }
 }
 
-/* =============================================================================
-   Select Line Panel - Compact View
-   Shown when panel is resized to very small height (~60px content area)
-   ============================================================================= */
-
-/* Compact view container - left-justified for consistent tap target */
-.select-line-compact-view {
-    display: flex;
-    align-items: center;
-    padding: 8px 12px;
-    font-size: 14px;
-    line-height: 1.4;
-    white-space: nowrap;
-    overflow: hidden;
-}
-
-/* Tappable line type link */
-.compact-line-type-link {
-    font-weight: bold;
-    color: #007AFF;
-    cursor: pointer;
-    text-decoration: underline;
-}
-
-.compact-line-type-link:hover {
-    color: #0056b3;
-}
-
-.compact-line-type-link:active {
-    opacity: 0.7;
-}
-
-/* Player list - takes remaining space, truncates if needed */
-.compact-player-list {
-    color: #333;
-    flex: 1;
-    min-width: 0; /* Allow flex item to shrink below content size */
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* TBD placeholder styling */
-.compact-tbd {
-    color: #999;
-    font-style: italic;
-}
-
-/* Gender colors in compact view (same as table view) */
-.select-line-compact-view .player-fmp {
-    color: #9c27b0;
-}
-
-.select-line-compact-view .player-mmp {
-    color: #1976d2;
-}
-
 /* Full view container - uses flex for table layout */
 .select-line-full-view {
     display: flex;
@@ -1928,12 +1890,6 @@ body.game-screen-active #controllerRoleButtons {
     flex: 1;
     min-height: 0;
     overflow: hidden;
-}
-
-/* Smooth transition between views */
-.select-line-compact-view,
-.select-line-full-view {
-    transition: opacity 250ms ease-in-out;
 }
 
 /* =============================================================================
@@ -1956,11 +1912,6 @@ body.game-screen-active #controllerRoleButtons {
     background: #fff;
     /* Follow panel's flex is controlled by JS based on state */
     min-height: 80px;
-}
-
-/* When Follow panel is snapped to bottom (minimized), push title bar to bottom */
-.panel-follow.snapped-to-bottom {
-    /* margin-top: auto is set by JS */
 }
 
 .panel-follow .panel-title-bar {
@@ -2343,17 +2294,6 @@ body.panel-dragging .panel-content {
 
 /* Panel animations are now handled via height changes with CSS transitions */
 
-/* Visual feedback for full-screen maximized panel */
-.game-panel.full-screen-maximized .panel-title-bar {
-    background: linear-gradient(135deg, #e8f4fc 0%, #d4e8f7 100%);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-/* Subtle indicator that other panels are minimized due to full-screen mode */
-.game-panel.minimized-for-fullscreen .panel-title-bar {
-    opacity: 0.85;
-}
-
 /* =============================================================================
    O/D Split Panels - Stacked O and D line selection panels
    ============================================================================= */
@@ -2403,5 +2343,117 @@ body.panel-dragging .panel-content {
 .panel-selectDLine.readonly .panel-player-table .active-checkbox {
     opacity: 0.6;
     cursor: not-allowed;
+}
+
+/* =============================================================================
+   Game Settings Dialog
+   ============================================================================= */
+
+.game-settings-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.game-settings-modal {
+    background: #fff;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 360px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.game-settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.game-settings-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.game-settings-close {
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    color: #666;
+    cursor: pointer;
+    padding: 4px 8px;
+}
+
+.game-settings-body {
+    padding: 16px;
+}
+
+.game-settings-toggle {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 2px 12px;
+    align-items: center;
+    cursor: pointer;
+}
+
+.game-settings-toggle .settings-label {
+    grid-column: 1;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.game-settings-toggle .settings-description {
+    grid-column: 1;
+    font-size: 0.75rem;
+    color: #888;
+    line-height: 1.3;
+}
+
+.game-settings-toggle input[type="checkbox"] {
+    display: none;
+}
+
+.game-settings-toggle .settings-switch {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    width: 44px;
+    height: 24px;
+    background: #ccc;
+    border-radius: 12px;
+    position: relative;
+    transition: background 0.2s;
+}
+
+.game-settings-toggle .settings-switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.game-settings-toggle input:checked + .settings-switch {
+    background: #007bff;
+}
+
+.game-settings-toggle input:checked + .settings-switch::after {
+    transform: translateX(20px);
 }
 

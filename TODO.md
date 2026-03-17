@@ -39,9 +39,18 @@ For deployment info and technical architecture, see **[ARCHITECTURE.md](ARCHITEC
 
 - [x] **Feature**: When Active Coach ends game, all coaches/viewers navigate to game summary. *(Wake recovery + foreground 3-second refresh both detect `gameEndTimestamp` and navigate away.)*
 - [ ] **To verify**: Test D line vs O line behavior with simultaneous selection. Define desired behavior when e.g. D line is selected but coach is viewing/editing O line.
-- [ ] **Feature**: Checkbox in select-next-player table header to uncheck all players.
+- [ ] **Feature**: Line selection mode toggle (Manual / Wholesale / Auto)
+  - Tappable text element in each player-selection table header that cycles through three states:
+    - **Manual** (default): Whatever the user has checked. This is the normal behavior today.
+    - **Wholesale**: All players unchecked (clean slate for building a line from scratch).
+    - **Auto**: App suggests a lineup — picks players with fewest points played while respecting the game's gender ratio rules. Falls back gracefully when available players can't meet the ratio.
+  - Tap cycles: Manual → Wholesale → Auto → Manual.
+  - Toggling away from Manual saves the current checked set as a snapshot. Toggling back to Manual restores that snapshot.
+  - Any manual checkbox change while in Wholesale or Auto immediately returns to Manual state, and the modified set becomes the new snapshot.
+  - Resets to Manual at the start of each new point.
+  - Present in all three player-selection contexts: main Select Next Line panel, O/D split panels, and injury substitution dialog.
 - [x] Hide role buttons when only one coach on team or only one coach polling (more room for panels).
-- [ ] O/D split panels: O/D button splits "Select Next Line" into two separate panels ("Select Next O Line" / "Select Next D Line").
+- [x] O/D split panels: O/D button splits "Select Next Line" into two separate panels ("Select Next O Line" / "Select Next D Line").
 - [ ] "Clear pending" button in connection info dialog when sync queue has stuck items.
 
 ---
@@ -77,6 +86,11 @@ These are deferred until multi-user basics are stable:
 - [ ] Rate limiting and abuse prevention
 - [ ] "Publish" games to make them searchable/discoverable
 - [ ] Git-based backup and version history
+
+### Line Selection
+- [ ] Clever auto-lineup algorithm (weight recent consecutive points, fatigue, O/D preference, matchups)
+- [ ] "Suggest lineups every point" toggle in pre-game/roster screen (auto mode as default each point)
+- [ ] Design mockups for line selection mode toggle (icon exploration, visual states)
 
 ### UI/UX
 - [ ] Comprehensive UI redesign

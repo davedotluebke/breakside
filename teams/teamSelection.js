@@ -1223,7 +1223,8 @@ async function showConnectionInfo() {
     const build = window.APP_BUILD || '?';
     
     // Start with basic info, update later if we find an update available
-    let versionLine = `Version: ${version} (Build ${build})`;
+    const label = window.APP_DEPLOY_LABEL;
+    let versionLine = `Version: ${version} (Build ${build})${label ? ' [' + label + ']' : ''}`;
     let updateButton = '';
     
     // Check for updates if online

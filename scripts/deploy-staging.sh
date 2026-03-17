@@ -2,7 +2,7 @@
 # Deploy current working directory to the staging S3 bucket.
 # Mirrors production exclusions. Includes service worker with no-cache headers.
 #
-# Usage: ./scripts/deploy-staging.sh
+# Usage: ./scripts/deploy-staging.sh ["optional label"]
 #
 # Prerequisites:
 #   - AWS CLI configured with appropriate credentials
@@ -18,8 +18,9 @@ BUCKET="${STAGING_BUCKET:-staging.breakside.pro}"
 CF_DIST="${STAGING_CF_DIST:-E12N2STN9MM8FA}"
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
+LABEL="${1:-}"
 STAMP=$(date -u +%Y%m%d%H%M%S)
-echo "Deploying $DIR to s3://$BUCKET (stamp: $STAMP) ..."
+echo "Deploying $DIR to s3://$BUCKET (stamp: $STAMP${LABEL:+, label: $LABEL}) ..."
 
 # Create a stamped version.json for staging (detects redeploys without a commit)
 STAGED_VERSION=$(mktemp)
@@ -27,6 +28,9 @@ python3 -c "
 import json, sys
 v = json.load(open('$DIR/version.json'))
 v['deployStamp'] = '$STAMP'
+label = '$LABEL'
+if label:
+    v['deployLabel'] = label
 json.dump(v, sys.stdout, indent=2)
 " > "$STAGED_VERSION"
 

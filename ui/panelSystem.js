@@ -1,14 +1,11 @@
 /*
- * Panel System - Resize, Pin, and Min/Max Logic
+ * Panel System - Drag-to-Resize Layout
  * Phase 6b: Panel Container Foundation
- * 
+ *
  * This module provides the core panel management functionality for the in-game UI.
- * Each panel can be:
- * - Minimized (collapsed to title bar only)
- * - Maximized (expanded to show full content)
- * - Pinned (locked to current size, survives auto-resize behaviors)
- * - Resized via drag handle (draggable title bars)
- * 
+ * Panels are resized solely by dragging title bars. The Follow (Game Log) panel
+ * absorbs remaining space via flex-fill.
+ *
  * Panel state is saved to localStorage per-client.
  */
 
@@ -28,8 +25,6 @@ const PBP_MIN_CONTENT_HEIGHT = 96;
 // Minimum height for Follow (Game Log) panel (~36px title bar + ~44px for 2 lines of log content)
 const FOLLOW_MIN_HEIGHT = 80;
 
-// Default expanded height when un-minimizing a panel that has no saved height
-const DEFAULT_EXPANDED_HEIGHT = 150;
 
 // Panel IDs in order (top to bottom)
 // Note: gameEvents removed - now a modal popup from Play-by-Play
@@ -43,29 +38,21 @@ const DRAGGABLE_PANELS = ['selectLine', 'selectOLine', 'selectDLine', 'follow'];
 const RESIZABLE_PANELS = ['playByPlay', 'selectLine', 'selectOLine', 'selectDLine', 'follow'];
 
 // Default panel states
-// height: null = natural/flexible height
+// height: null = natural/flexible height (Follow uses flex-fill)
 // height: MIN_PANEL_HEIGHT = "minimized" (title bar only)
-// height: number > MIN_PANEL_HEIGHT = explicit expanded height
-// expandedHeight: saved height to restore when un-minimizing
+// height: number > MIN_PANEL_HEIGHT = explicit drag height
 const DEFAULT_PANEL_STATES = {
-    header: { hidden: false, height: null, expandedHeight: null },
-    roleButtons: { hidden: false, height: null, expandedHeight: null },
-    playByPlay: { hidden: false, height: PBP_MIN_CONTENT_HEIGHT, expandedHeight: 250 },
-    selectLine: { hidden: false, height: null, expandedHeight: null },
-    selectOLine: { hidden: true, height: null, expandedHeight: null },
-    selectDLine: { hidden: true, height: null, expandedHeight: null },
-    follow: { hidden: false, height: null, expandedHeight: null }
+    header: { hidden: false, height: null },
+    roleButtons: { hidden: false, height: null },
+    playByPlay: { hidden: false, height: PBP_MIN_CONTENT_HEIGHT },
+    selectLine: { hidden: false, height: null },
+    selectOLine: { hidden: true, height: null },
+    selectDLine: { hidden: true, height: null },
+    follow: { hidden: false, height: null }
 };
 
 // Current panel states
 let panelStates = { ...DEFAULT_PANEL_STATES };
-
-// Track which panel is currently "full screen maximized" (others minimized)
-// null = no panel maximized, panelId = that panel is maximized
-let maximizedPanelId = null;
-
-// Store panel heights before maximize for restoration
-let preMaximizeHeights = {};
 
 // Track whether another coach has been seen in the current game session.
 // Once true, role buttons stay visible until the game screen is exited.
@@ -80,6 +67,15 @@ function loadPanelStates() {
         if (saved) {
             const parsed = JSON.parse(saved);
             panelStates = { ...DEFAULT_PANEL_STATES, ...parsed };
+            // Strip legacy expandedHeight from saved state
+            Object.keys(panelStates).forEach(id => {
+                delete panelStates[id].expandedHeight;
+            });
+            // Always reset Follow to flex-fill on load to prevent stale
+            // minimized state from hiding the game log
+            if (panelStates.follow) {
+                panelStates.follow.height = null;
+            }
         }
     } catch (e) {
         console.warn('Failed to load panel states:', e);
@@ -104,7 +100,7 @@ function savePanelStates() {
  * @returns {object} Panel state
  */
 function getPanelState(panelId) {
-    return panelStates[panelId] || { hidden: false, height: null, expandedHeight: null };
+    return panelStates[panelId] || { hidden: false, height: null };
 }
 
 /**
@@ -151,61 +147,37 @@ function getPanelElement(panelId) {
 function applyPanelState(panelId) {
     const panel = getPanelElement(panelId);
     if (!panel) return;
-    
+
     const state = getPanelState(panelId);
     const isFollowPanel = panelId === 'follow';
-    const isMinimized = isPanelMinimized(panelId);
-    
+
     // Apply hidden state
     panel.classList.toggle('hidden', state.hidden);
-    
-    // Special handling for Follow panel (bottom panel)
-    // When minimized, it snaps to bottom of screen
-    // When expanded, it fills remaining space
+
+    // Follow panel: either explicit drag height or flex-fill
     if (isFollowPanel) {
-        if (isMinimized) {
-            // Snap to bottom: use margin-top: auto to push title bar to bottom
-            panel.style.height = `${FOLLOW_MIN_HEIGHT}px`;
-            panel.style.flex = '0 0 auto';
-            panel.style.marginTop = 'auto';
-            panel.classList.add('snapped-to-bottom');
-        } else if (state.height !== null && state.height > FOLLOW_MIN_HEIGHT) {
-            // Explicit expanded height
+        panel.style.marginTop = '';
+        panel.classList.remove('snapped-to-bottom');
+        if (state.height !== null && state.height > 0) {
             panel.style.height = `${state.height}px`;
             panel.style.flex = '0 0 auto';
-            panel.style.marginTop = '';
-            panel.classList.remove('snapped-to-bottom');
         } else {
             // Fill remaining space (height: null)
             panel.style.height = '';
             panel.style.flex = '1 1 auto';
-            panel.style.marginTop = '';
-            panel.classList.remove('snapped-to-bottom');
         }
     } else {
         // Regular panels
         panel.style.marginTop = '';
         panel.classList.remove('snapped-to-bottom');
-        
+
         if (state.height !== null) {
-            // Explicit height set
             panel.style.height = `${state.height}px`;
             panel.style.flex = '0 0 auto';
         } else {
-            // Natural height
             panel.style.height = '';
             panel.style.flex = '0 0 auto';
         }
-    }
-    
-    // Update expand/collapse button icon based on minimized state
-    const expandBtn = panel.querySelector('.panel-expand-btn');
-    if (expandBtn) {
-        const icon = expandBtn.querySelector('i');
-        if (icon) {
-            icon.className = isMinimized ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
-        }
-        expandBtn.title = isMinimized ? 'Expand panel' : 'Collapse panel';
     }
 }
 
@@ -227,56 +199,54 @@ function applyAllPanelStates() {
  */
 function updateExpandingPanel() {
     const followPanel = getPanelElement('follow');
-    const followMinimized = isPanelMinimized('follow');
     const followState = getPanelState('follow');
-    
+    const followAtMin = followState.height !== null && followState.height <= getDragMinHeight('follow');
+
     // All potentially expanding panels (bottom-up order, excluding Follow)
-    const expandOrder = ['selectLine', 'playByPlay'];
-    
-    // If Follow is not minimized and has no explicit expanded height, it handles expansion
-    if (!followMinimized && (followState.height === null || followState.height > MIN_PANEL_HEIGHT)) {
-        // Ensure Follow has flex-grow and expanding class
+    // Include split panels when visible
+    const expandOrder = [];
+    if (!getPanelState('selectDLine').hidden) expandOrder.push('selectDLine');
+    if (!getPanelState('selectOLine').hidden) expandOrder.push('selectOLine');
+    if (!getPanelState('selectLine').hidden) expandOrder.push('selectLine');
+    expandOrder.push('playByPlay');
+
+    // If Follow is not at minimum and has no explicit height, it handles expansion
+    if (!followAtMin && (followState.height === null || followState.height > getDragMinHeight('follow'))) {
         if (followPanel) {
             if (followState.height === null) {
                 followPanel.style.flex = '1 1 auto';
             }
             followPanel.classList.add('expanding');
         }
-        // Remove expanding from other panels
         expandOrder.forEach(id => {
             const panel = getPanelElement(id);
-            if (panel) {
-                panel.classList.remove('expanding');
-            }
+            if (panel) panel.classList.remove('expanding');
         });
         return;
     }
-    
-    // Follow is minimized (snapped to bottom) - remove its expanding class
+
+    // Follow is at minimum - remove its expanding class
     if (followPanel) {
         followPanel.classList.remove('expanding');
     }
-    
-    // Find the last non-minimized panel to expand and fill the space above Follow
+
+    // Find the last non-minimized panel to expand
     let expandingPanelId = null;
-    
     for (const panelId of expandOrder) {
         const state = getPanelState(panelId);
-        const isMinimized = isPanelMinimized(panelId);
-        if (!isMinimized && !state.hidden) {
-            // This panel should expand
+        const atMin = state.height !== null && state.height <= getDragMinHeight(panelId);
+        if (!atMin && !state.hidden) {
             expandingPanelId = panelId;
             break;
         }
     }
-    
-    // Apply expanding class and flex-grow to the expanding panel, remove from others
+
     expandOrder.forEach(id => {
         const panel = getPanelElement(id);
         if (panel) {
             if (id === expandingPanelId) {
                 panel.style.flex = '1 1 auto';
-                panel.style.height = ''; // Clear explicit height to allow flex
+                panel.style.height = '';
                 panel.classList.add('expanding');
             } else {
                 panel.classList.remove('expanding');
@@ -290,78 +260,24 @@ function updateExpandingPanel() {
 // =============================================================================
 
 /**
- * Toggle panel minimized state
- * Minimized = height set to MIN_PANEL_HEIGHT (title bar only)
- * Expanded = height restored to expandedHeight or default
- * @param {string} panelId - Panel identifier
- */
-function togglePanelMinimized(panelId) {
-    if (isPanelMinimized(panelId)) {
-        maximizePanel(panelId, false);
-    } else {
-        minimizePanel(panelId);
-    }
-}
-
-/**
- * Minimize a panel (set height to title bar only)
+ * Minimize a panel (set height to minimum)
+ * Used by split mode transitions.
  * @param {string} panelId - Panel identifier
  */
 function minimizePanel(panelId) {
-    const panel = getPanelElement(panelId);
-    const state = getPanelState(panelId);
-    
-    // Save current height before minimizing (so we can restore it later)
-    let currentHeight = state.height;
-    if (currentHeight === null && panel) {
-        // Measure actual height if not explicitly set
-        currentHeight = panel.getBoundingClientRect().height;
-    }
-    
-    // Only save expandedHeight if current height is actually expanded
     const minHeight = panelId === 'follow' ? FOLLOW_MIN_HEIGHT : MIN_PANEL_HEIGHT;
-    const expandedHeight = (currentHeight && currentHeight > minHeight)
-        ? currentHeight
-        : state.expandedHeight;
-
-    setPanelState(panelId, {
-        height: minHeight,
-        expandedHeight: expandedHeight
-    });
+    setPanelState(panelId, { height: minHeight });
 }
 
 /**
- * Maximize a panel (restore to expanded height)
+ * Maximize a panel (set to flex-fill or a reasonable default)
+ * Used by split mode transitions.
  * @param {string} panelId - Panel identifier
- * @param {boolean} minimizeOthers - If true, minimize non-pinned panels
+ * @param {boolean} _minimizeOthers - Ignored (kept for call-site compat)
  */
-function maximizePanel(panelId, minimizeOthers = true) {
-    if (minimizeOthers) {
-        // Minimize all non-pinned resizable panels except the one being maximized
-        RESIZABLE_PANELS.forEach(id => {
-            if (id !== panelId) {
-                const state = getPanelState(id);
-                if (!state.pinned && !isPanelMinimized(id)) {
-                    minimizePanel(id);
-                }
-            }
-        });
-}
-
-    const state = getPanelState(panelId);
-    
-    // Restore to expandedHeight, or default, or null (natural height)
-    // For Follow panel, use null to let it flex-fill
-    let newHeight;
-    if (panelId === 'follow') {
-        newHeight = null; // Follow uses flex to fill space
-    } else if (state.expandedHeight && state.expandedHeight > MIN_PANEL_HEIGHT) {
-        newHeight = state.expandedHeight;
-    } else {
-        newHeight = DEFAULT_EXPANDED_HEIGHT;
-    }
-    
-    setPanelState(panelId, { height: newHeight });
+function maximizePanel(panelId, _minimizeOthers = true) {
+    // Follow uses flex to fill space; others get null (natural height)
+    setPanelState(panelId, { height: null });
 }
 
 /**
@@ -373,169 +289,33 @@ function setPanelVisible(panelId, visible) {
     setPanelState(panelId, { hidden: !visible });
 }
 
-/**
- * Toggle full-screen maximize for a panel
- * - If this panel is not maximized: minimize all other resizable panels, giving
- *   maximum space to this panel. Save current heights for restoration.
- * - If this panel IS maximized: restore all panels to their pre-maximize heights.
- * @param {string} panelId - Panel identifier
- */
-function toggleFullScreenPanel(panelId) {
-    // Only resizable panels can be full-screen maximized
-    if (!RESIZABLE_PANELS.includes(panelId)) return;
-    
-    if (maximizedPanelId === panelId) {
-        // This panel is already maximized - restore all panels
-        restoreFromFullScreen();
-    } else {
-        // Maximize this panel (minimize others)
-        enterFullScreenPanel(panelId);
-    }
-}
-
-/**
- * Enter full-screen mode for a panel
- * Saves current heights and minimizes all other resizable panels
- * @param {string} panelId - Panel to maximize
- */
-function enterFullScreenPanel(panelId) {
-    // Save current heights of all resizable panels for restoration
-    preMaximizeHeights = {};
-    RESIZABLE_PANELS.forEach(id => {
-        const panel = getPanelElement(id);
-        if (panel) {
-            const state = getPanelState(id);
-            // Store either explicit height or measured height
-            preMaximizeHeights[id] = state.height !== null 
-                ? state.height 
-                : panel.getBoundingClientRect().height;
-        }
-    });
-    
-    // Minimize all other resizable panels and add visual indicator
-    RESIZABLE_PANELS.forEach(id => {
-        const panel = getPanelElement(id);
-        if (id !== panelId) {
-            if (!isPanelMinimized(id)) {
-                minimizePanel(id);
-            }
-            // Add class to indicate this panel is minimized for full-screen mode
-            if (panel) {
-                panel.classList.add('minimized-for-fullscreen');
-                panel.classList.remove('full-screen-maximized');
-            }
-        }
-    });
-    
-    // Make sure the target panel is NOT minimized
-    if (isPanelMinimized(panelId)) {
-        maximizePanel(panelId, false); // false = don't minimize others (we already did)
-    }
-    
-    // Add visual indicator to maximized panel
-    const maximizedPanel = getPanelElement(panelId);
-    if (maximizedPanel) {
-        maximizedPanel.classList.add('full-screen-maximized');
-        maximizedPanel.classList.remove('minimized-for-fullscreen');
-    }
-    
-    // Track which panel is maximized
-    maximizedPanelId = panelId;
-    
-    // Update expanding panel assignment
-    updateExpandingPanel();
-    savePanelStates();
-}
-
-/**
- * Restore all panels from full-screen mode
- * Restores heights saved before maximize
- */
-function restoreFromFullScreen() {
-    if (!maximizedPanelId) return;
-    
-    // Remove visual indicator classes from all panels
-    RESIZABLE_PANELS.forEach(id => {
-        const panel = getPanelElement(id);
-        if (panel) {
-            panel.classList.remove('full-screen-maximized', 'minimized-for-fullscreen');
-        }
-    });
-    
-    // Restore all panels to their pre-maximize heights
-    RESIZABLE_PANELS.forEach(id => {
-        const savedHeight = preMaximizeHeights[id];
-        if (savedHeight !== undefined) {
-            // Restore the height
-            const minHeight = id === 'follow' ? FOLLOW_MIN_HEIGHT : MIN_PANEL_HEIGHT;
-            if (savedHeight <= minHeight) {
-                // Was minimized before
-                setPanelState(id, { height: minHeight });
-            } else {
-                // Was expanded - set height and expandedHeight
-                setPanelState(id, { 
-                    height: id === 'follow' ? null : savedHeight,
-                    expandedHeight: savedHeight
-                });
-            }
-        }
-    });
-    
-    // Clear maximized state
-    maximizedPanelId = null;
-    preMaximizeHeights = {};
-    
-    // Update expanding panel assignment
-    updateExpandingPanel();
-    savePanelStates();
-}
-
-// =============================================================================
-// Event Handlers
-// =============================================================================
-
-/**
- * Handle double-tap on title bar to toggle full-screen maximize
- * Double-tap maximizes the panel (minimizes others)
- * Double-tap again restores all panels to previous state
- * @param {string} panelId - Panel identifier
- */
-let lastTapTime = {};
-function handleTitleBarTap(panelId) {
-    const now = Date.now();
-    const lastTap = lastTapTime[panelId] || 0;
-    
-    if (now - lastTap < 300) {
-        // Double tap detected - toggle full-screen maximize
-        toggleFullScreenPanel(panelId);
-        lastTapTime[panelId] = 0;
-    } else {
-        lastTapTime[panelId] = now;
-    }
-}
-
-/**
- * Handle expand/collapse button click
- * @param {Event} e - Click event
- * @param {string} panelId - Panel identifier
- */
-function handleExpandClick(e, panelId) {
-    e.stopPropagation();
-    togglePanelMinimized(panelId);
-}
-
 // =============================================================================
 // Drag-to-Resize Handling
 // =============================================================================
+
+// Setting: fully-physical panel dragging
+// When enabled, pushed panels stay where pushed (even when dragging back within
+// the same gesture). When disabled, panels spring back to their start-of-gesture
+// position when the drag reverses.
+const PHYSICAL_DRAG_KEY = 'breakside_physical_drag';
+let fullyPhysicalPanelDragging = localStorage.getItem(PHYSICAL_DRAG_KEY) === 'true';
+
+function setFullyPhysicalPanelDragging(enabled) {
+    fullyPhysicalPanelDragging = enabled;
+    localStorage.setItem(PHYSICAL_DRAG_KEY, enabled ? 'true' : 'false');
+}
 
 // Drag state
 let dragState = {
     active: false,
     panelId: null,
-    startY: 0,
-    startPanelHeight: 0,
     panelElement: null,
-    startHeights: {} // Store starting heights of all panels for absolute positioning
+    panels: null,       // ordered list of {id, element, minHeight}
+    heights: null,      // current heights (physical: persists; spring-back: reset each frame)
+    startHeights: null,  // initial heights snapshot for spring-back reset
+    draggedIndex: -1,
+    startY: 0,
+    lastClientY: 0
 };
 
 /**
@@ -605,193 +385,169 @@ function getDragMinHeight(panelId) {
 function startPanelDrag(panelId, clientY) {
     // Don't allow dragging if this panel is not draggable
     if (!isPanelDraggable(panelId)) return;
-    
+
     // Check there's at least one resizable panel above
     const abovePanelId = getPanelAbove(panelId, false);
     if (!abovePanelId) return;
-    
+
     const panelElement = getPanelElement(panelId);
     if (!panelElement) return;
-    
-    // If the follow panel is minimized (snapped to bottom), un-minimize to
-    // flex-fill mode so it fills remaining space. This keeps the bottom edge
-    // anchored during drag — only the title bar (top edge) moves.
-    if (panelId === 'follow' && isPanelMinimized('follow')) {
-        // Save scroll position before layout change
-        const eventsEl = document.getElementById('gameLogEvents');
-        const savedScrollTop = eventsEl ? eventsEl.scrollTop : 0;
-        const wasAtBottom = eventsEl
-            ? (eventsEl.scrollTop + eventsEl.clientHeight >= eventsEl.scrollHeight - 2)
-            : true;
 
-        // Before switching follow to flex-fill, freeze any currently-expanding
-        // panel at its measured height so it doesn't share space with follow
-        RESIZABLE_PANELS.forEach(id => {
-            if (id !== 'follow') {
-                const el = getPanelElement(id);
-                if (el && el.classList.contains('expanding')) {
-                    el.style.height = `${el.getBoundingClientRect().height}px`;
-                    el.style.flex = '0 0 auto';
-                    el.classList.remove('expanding');
-                }
-            }
-        });
-
-        panelElement.classList.remove('snapped-to-bottom');
-        panelElement.style.marginTop = '';
-        panelElement.style.height = '';
-        panelElement.style.flex = '1 1 auto';
-        panelStates['follow'] = { ...getPanelState('follow'), height: null };
-        savePanelStates();
-
-        // Restore scroll position after layout settles
-        requestAnimationFrame(() => {
-            if (eventsEl) {
-                if (wasAtBottom) {
-                    eventsEl.scrollTop = eventsEl.scrollHeight;
-                } else {
-                    eventsEl.scrollTop = savedScrollTop;
-                }
-            }
-        });
-    }
-    
-    // Store starting heights of ALL resizable panels for absolute positioning
-    const startHeights = {};
-    RESIZABLE_PANELS.forEach(id => {
-        const el = getPanelElement(id);
-        if (el) {
-            startHeights[id] = el.getBoundingClientRect().height;
+    // Ensure follow is in flex-fill mode before measuring
+    const followState = getPanelState('follow');
+    if (followState.height !== null) {
+        const followEl = getPanelElement('follow');
+        if (followEl) {
+            followEl.classList.remove('snapped-to-bottom');
+            followEl.style.marginTop = '';
+            followEl.style.height = '';
+            followEl.style.flex = '1 1 auto';
+            panelStates['follow'] = { ...followState, height: null };
         }
+    }
+    savePanelStates();
+
+    // Build ordered list of visible resizable panels with measured heights.
+    // Skip panels that are hidden OR have display:none (e.g. selectLine in split mode)
+    const panels = [];
+    let draggedIndex = -1;
+    RESIZABLE_PANELS.forEach(id => {
+        const st = getPanelState(id);
+        if (st.hidden) return;
+        const el = getPanelElement(id);
+        if (!el) return;
+        if (el.style.display === 'none' || el.offsetParent === null) return;
+        if (id === panelId) draggedIndex = panels.length;
+        panels.push({
+            id,
+            element: el,
+            minHeight: getDragMinHeight(id)
+        });
     });
-    
+
+    if (draggedIndex < 1) return; // need at least one panel above
+
+    // Measure heights and freeze non-follow panels to explicit heights
+    const heights = panels.map((p, i) => {
+        const h = p.element.getBoundingClientRect().height;
+        if (p.id !== 'follow') {
+            p.element.style.height = `${h}px`;
+            p.element.style.flex = '0 0 auto';
+        }
+        return h;
+    });
+
     dragState = {
         active: true,
         panelId,
-        startY: clientY,
-        startPanelHeight: startHeights[panelId] || 0,
         panelElement,
-        startHeights
+        panels,
+        heights,
+        startHeights: heights.slice(), // copy for spring-back reset
+        draggedIndex,
+        startY: clientY,
+        lastClientY: clientY
     };
-    
+
     // Add dragging class for visual feedback
     panelElement.classList.add('dragging');
     document.body.classList.add('panel-dragging');
-    
+
     // Prevent text selection during drag
     document.body.style.userSelect = 'none';
     document.body.style.webkitUserSelect = 'none';
 }
 
 /**
- * Update drag operation with "shoving" behavior
- * When a panel above reaches MIN_PANEL_HEIGHT, continue pushing panels above it
+ * Move title bar `i` by `delta` pixels. Recursively pushes neighbors.
+ *
+ * Moving title bar i down grows panel i-1, shrinks panel i.
+ * Moving title bar i up shrinks panel i-1, grows panel i.
+ *
+ * @param {number} i - Title bar index in dragState.panels
+ * @param {number} delta - Requested movement (negative=up, positive=down)
+ * @param {number[]} heights - Current heights array (mutated in place)
+ * @param {Array} panels - Panel info array from dragState
+ * @returns {number} Actual movement applied
+ */
+function moveTitleBar(i, delta, heights, panels) {
+    if (delta === 0) return 0;
+    const lastIdx = panels.length - 1;
+
+    if (delta > 0) {
+        // Moving down: panel i shrinks, panel i-1 grows
+        const canShrink = heights[i] - panels[i].minHeight;
+        let available = canShrink;
+        // If panel i is not the follow (last) panel, we can push bar i+1 down
+        if (available < delta && i < lastIdx) {
+            const pushed = moveTitleBar(i + 1, delta - available, heights, panels);
+            available += pushed;
+        }
+        const actual = Math.min(delta, Math.max(0, available));
+        heights[i - 1] += actual;
+        heights[i] -= actual;
+        return actual;
+    } else {
+        // Moving up: panel i-1 shrinks, panel i grows
+        const canShrink = heights[i - 1] - panels[i - 1].minHeight;
+        let available = canShrink;
+        // Can push bar i-1 up if i-1 > 0 (bar 0 is pinned)
+        if (available < -delta && i - 1 > 0) {
+            const pushed = moveTitleBar(i - 1, delta + available, heights, panels);
+            available += -pushed; // pushed is negative
+        }
+        const actual = Math.max(delta, -Math.max(0, available));
+        heights[i - 1] += actual; // shrinks (actual is negative)
+        heights[i] -= actual;     // grows
+        return actual;
+    }
+}
+
+/**
+ * Update drag operation with cascading "push" behavior.
+ *
+ * Two modes:
+ * - Spring-back (default): resets heights to start each frame, applies absolute delta.
+ *   Panels spring back when the finger reverses direction.
+ * - Physical: applies incremental delta each frame. Pushed panels stay where pushed
+ *   because nothing asks them to move back.
+ *
  * @param {number} clientY - Current Y coordinate
  */
 function updatePanelDrag(clientY) {
     if (!dragState.active) return;
-    
-    const deltaY = clientY - dragState.startY;
-    
-    // Dragging up (negative delta) = make panels above smaller, this panel bigger
-    // Dragging down (positive delta) = make panels above bigger, this panel smaller
-    
-    // Calculate how much space we need to take from/give to panels above
-    let spaceNeeded = -deltaY; // Positive = need space from above, Negative = giving space to above
-    
-    // Get all resizable panels above the dragged panel (using STORED starting heights)
-    const draggedPanelIndex = PANEL_ORDER.indexOf(dragState.panelId);
-    const panelsAbove = [];
-    for (let i = draggedPanelIndex - 1; i >= 0; i--) {
-        const id = PANEL_ORDER[i];
-        if (RESIZABLE_PANELS.includes(id)) {
-            const el = getPanelElement(id);
-            const startHeight = dragState.startHeights[id];
-            if (el && startHeight !== undefined) {
-                panelsAbove.push({ id, element: el, startHeight });
-            }
+
+    const { panels, draggedIndex, startHeights } = dragState;
+    const heights = dragState.heights;
+
+    let delta;
+    if (fullyPhysicalPanelDragging) {
+        // Incremental delta from last frame — pushed panels stay put
+        delta = clientY - dragState.lastClientY;
+        dragState.lastClientY = clientY;
+    } else {
+        // Absolute delta from start — reset heights each frame for spring-back
+        delta = clientY - dragState.startY;
+        for (let i = 0; i < heights.length; i++) {
+            heights[i] = startHeights[i];
         }
     }
-    
-    if (panelsAbove.length === 0) return;
-    
-    // Calculate target heights based on STARTING heights (not current)
-    const targetHeights = new Map();
-    
-    // Initialize all panels to their starting height
-    panelsAbove.forEach(p => targetHeights.set(p.id, p.startHeight));
-    
-    let remainingSpace = spaceNeeded;
-    
-    if (spaceNeeded > 0) {
-        // Taking space from above (dragging up) - shrink panels from bottom to top
-        for (const panel of panelsAbove) {
-            if (remainingSpace <= 0) break;
-            
-            const startHeight = panel.startHeight;
-            const minHeight = getDragMinHeight(panel.id);
-            const availableSpace = startHeight - minHeight;
-            
-            if (availableSpace > 0) {
-                const spaceToTake = Math.min(availableSpace, remainingSpace);
-                targetHeights.set(panel.id, startHeight - spaceToTake);
-                remainingSpace -= spaceToTake;
-            } else {
-                // Panel was already at minimum, keep it there
-                targetHeights.set(panel.id, minHeight);
+
+    moveTitleBar(draggedIndex, delta, heights, panels);
+
+    // Apply heights to DOM — follow (last panel) stays as flex-fill
+    for (let i = 0; i < panels.length; i++) {
+        const p = panels[i];
+        if (p.id === 'follow') {
+            // Keep game log scroll anchored to bottom during drag
+            const eventsEl = document.getElementById('gameLogEvents');
+            if (eventsEl) {
+                eventsEl.scrollTop = eventsEl.scrollHeight - eventsEl.clientHeight;
             }
+            continue;
         }
-    } else {
-        // Giving space to above (dragging down) - expand first panel above
-        // Space can come from: 1) the dragged panel, 2) follow panel (if not already at bottom)
-        let spaceToGive = -remainingSpace;
-        
-        // Calculate available space from dragged panel
-        const draggedMinHeight = getDragMinHeight(dragState.panelId);
-        const draggedCanGive = Math.max(0, dragState.startPanelHeight - draggedMinHeight);
-        
-        // Calculate available space from follow panel (if we're not dragging it)
-        let followCanGive = 0;
-        if (dragState.panelId !== 'follow') {
-            const followStartHeight = dragState.startHeights['follow'] || 0;
-            followCanGive = Math.max(0, followStartHeight - MIN_PANEL_HEIGHT);
-        }
-        
-        // Total available space to give
-        const totalAvailable = draggedCanGive + followCanGive;
-        spaceToGive = Math.min(spaceToGive, totalAvailable);
-        
-        if (panelsAbove.length > 0 && spaceToGive > 0) {
-            const firstAbove = panelsAbove[0];
-            targetHeights.set(firstAbove.id, firstAbove.startHeight + spaceToGive);
-        }
-        remainingSpace = 0;
-    }
-    
-    // Apply target heights to panels above
-    panelsAbove.forEach(panel => {
-        const targetHeight = targetHeights.get(panel.id);
-        panel.element.style.height = `${targetHeight}px`;
-        panel.element.style.flex = '0 0 auto';
-    });
-    
-    // Calculate actual space taken/given
-    const actualSpaceChanged = spaceNeeded - remainingSpace;
-    
-    // Update the dragged panel's height (unless it's Follow which fills remaining
-    // space via flex — resizing panels above naturally resizes Follow)
-    if (dragState.panelId !== 'follow') {
-        const minHeight = getDragMinHeight(dragState.panelId);
-        const newPanelHeight = Math.max(minHeight, dragState.startPanelHeight + actualSpaceChanged);
-        dragState.panelElement.style.height = `${newPanelHeight}px`;
-        dragState.panelElement.style.flex = '0 0 auto';
-    } else {
-        // Keep game log scroll anchored to bottom during drag so the title bar
-        // appears to slide over the top of the content
-        const eventsEl = document.getElementById('gameLogEvents');
-        if (eventsEl) {
-            eventsEl.scrollTop = eventsEl.scrollHeight - eventsEl.clientHeight;
-        }
+        p.element.style.height = `${heights[i]}px`;
+        p.element.style.flex = '0 0 auto';
     }
 }
 
@@ -800,7 +556,7 @@ function updatePanelDrag(clientY) {
  */
 function endPanelDrag() {
     if (!dragState.active) return;
-    
+
     // Remove visual feedback
     if (dragState.panelElement) {
         dragState.panelElement.classList.remove('dragging');
@@ -808,40 +564,37 @@ function endPanelDrag() {
     document.body.classList.remove('panel-dragging');
     document.body.style.userSelect = '';
     document.body.style.webkitUserSelect = '';
-    
-    // Save heights for all resizable panels that may have changed
-    RESIZABLE_PANELS.forEach(panelId => {
-        const panel = getPanelElement(panelId);
-        if (panel && panelId !== 'follow') {
-            const rect = panel.getBoundingClientRect();
-            // Only save if height is explicitly set (has inline style)
-            if (panel.style.height) {
-                setPanelState(panelId, { height: Math.round(rect.height) });
-            }
-        }
-    });
 
-    // Ensure follow panel is in flex-fill mode after being dragged.
-    // Save/restore scroll position to prevent content jumping.
-    if (dragState.panelId === 'follow') {
-        const eventsEl = document.getElementById('gameLogEvents');
-        const savedScrollTop = eventsEl ? eventsEl.scrollTop : 0;
-        setPanelState('follow', { height: null });
-        if (eventsEl) {
-            requestAnimationFrame(() => {
-                eventsEl.scrollTop = savedScrollTop;
-            });
-        }
+    // Save final heights for all panels that were part of the drag
+    if (dragState.panels) {
+        dragState.panels.forEach((p, i) => {
+            if (p.id === 'follow') {
+                // Ensure follow is back in flex-fill mode
+                const eventsEl = document.getElementById('gameLogEvents');
+                const savedScrollTop = eventsEl ? eventsEl.scrollTop : 0;
+                setPanelState('follow', { height: null });
+                if (eventsEl) {
+                    requestAnimationFrame(() => {
+                        eventsEl.scrollTop = savedScrollTop;
+                    });
+                }
+            } else {
+                setPanelState(p.id, { height: Math.round(dragState.heights[i]) });
+            }
+        });
     }
 
     // Reset drag state
     dragState = {
         active: false,
         panelId: null,
-        startY: 0,
-        startPanelHeight: 0,
         panelElement: null,
-        startHeights: {}
+        panels: null,
+        heights: null,
+        startHeights: null,
+        draggedIndex: -1,
+        startY: 0,
+        lastClientY: 0
     };
 }
 
@@ -968,62 +721,40 @@ function initDragListeners() {
  * @param {string} options.panelId - Panel identifier
  * @param {string} options.title - Panel title text
  * @param {boolean} options.showDragHandle - Show drag handle
- * @param {boolean} options.showExpandBtn - Show expand/collapse button
  * @returns {HTMLElement}
  */
 function createPanelTitleBar(options) {
-    const { panelId, title, showDragHandle = true, showExpandBtn = true } = options;
-    
+    const { panelId, title, showDragHandle = true } = options;
+
     const titleBar = document.createElement('div');
     titleBar.className = 'panel-title-bar';
     titleBar.dataset.panelId = panelId;
-    
+
     // Title with optional inline grip icon for draggable panels
     const titleEl = document.createElement('span');
     titleEl.className = 'panel-title';
     titleEl.id = `panel-${panelId}-title`;
     if (showDragHandle) {
-        // Include grip icon inline with title for draggable panels
-        // Store the title text in a data attribute for dynamic updates
         titleEl.innerHTML = `<i class="fas fa-grip-vertical panel-grip-icon"></i><span class="panel-title-text">${title}</span>`;
     } else {
         titleEl.innerHTML = `<span class="panel-title-text">${title}</span>`;
     }
     titleBar.appendChild(titleEl);
-    
-    // Subtitle (for minimized state info)
+
+    // Subtitle (shown when panel is small)
     const subtitleEl = document.createElement('span');
     subtitleEl.className = 'panel-subtitle';
     subtitleEl.id = `panel-${panelId}-subtitle`;
     titleBar.appendChild(subtitleEl);
-    
-    // Actions container
+
+    // Actions container (for O/D toggle injection, etc.)
     const actions = document.createElement('div');
     actions.className = 'panel-actions';
-    
-    // Expand/collapse button
-    if (showExpandBtn) {
-        const expandBtn = document.createElement('button');
-        expandBtn.className = 'panel-action-btn panel-expand-btn';
-        expandBtn.title = 'Collapse panel';
-        expandBtn.innerHTML = '<i class="fas fa-chevron-up"></i>';
-        expandBtn.onclick = (e) => handleExpandClick(e, panelId);
-        actions.appendChild(expandBtn);
-    }
-    
     titleBar.appendChild(actions);
-    
-    // Double-tap handler for title bar (but not when dragging)
-    titleBar.addEventListener('click', (e) => {
-        // Don't trigger tap if we just finished dragging
-        if (!dragState.active) {
-            handleTitleBarTap(panelId);
-        }
-    });
-    
+
     // Wire up drag handle events
     wireDragHandleEvents(titleBar, panelId);
-    
+
     return titleBar;
 }
 
@@ -1077,7 +808,6 @@ function createPanelStub(options) {
  * @param {string} options.className - Additional class names
  * @param {string} options.title - Panel title
  * @param {boolean} options.showDragHandle - Show drag handle in title bar
- * @param {boolean} options.showExpandBtn - Show expand/collapse button
  * @param {HTMLElement|null} options.content - Content element (or null for stub)
  * @param {object} options.stubOptions - Options for stub if no content provided
  * @returns {HTMLElement}
@@ -1088,7 +818,6 @@ function createPanel(options) {
         className = '',
         title,
         showDragHandle = true,
-        showExpandBtn = true,
         content = null,
         stubOptions = {}
     } = options;
@@ -1101,8 +830,7 @@ function createPanel(options) {
     const titleBar = createPanelTitleBar({
         panelId: id,
         title,
-        showDragHandle,
-        showExpandBtn
+        showDragHandle
     });
     panel.appendChild(titleBar);
     
@@ -1212,96 +940,56 @@ function updatePanelsForRole() {
     const hasActiveCoach = typeof window.isActiveCoach === 'function' && window.isActiveCoach();
     const hasLineCoach = typeof window.isLineCoach === 'function' && window.isLineCoach();
     const hasAnyRole = hasActiveCoach || hasLineCoach;
-    
-    // Viewers: show spectating badge, hide coaching panels, maximize game log
+
+    // Viewer mode: show only game log with spectating badge
     const isViewerMode = typeof window.isViewer === 'function' && window.isViewer();
     if (isViewerMode) {
         setPanelVisible('roleButtons', true);
-        // Show spectating badge content instead of role claim buttons
-        const rolePanel = getPanelElement('roleButtons');
-        if (rolePanel) {
-            const content = rolePanel.querySelector('.panel-content');
-            if (content && !content.querySelector('.spectating-badge')) {
-                content.innerHTML = '<div class="spectating-badge"><i class="fas fa-eye"></i> Spectating</div>';
-            }
+        const content = document.querySelector('#panel-roleButtons .panel-content');
+        if (content) {
+            content.innerHTML = '<div class="spectating-badge"><i class="fas fa-eye"></i> Spectating</div>';
         }
-        // Hide coaching panels — viewers only see the game log
         setPanelVisible('playByPlay', false);
         setPanelVisible('selectLine', false);
-        setPanelVisible('splitO', false);
-        setPanelVisible('splitD', false);
-        // Maximize game log
+        setPanelVisible('selectOLine', false);
+        setPanelVisible('selectDLine', false);
         if (isPanelMinimized('follow')) {
             maximizePanel('follow', false);
         }
         return;
-    } else {
-        // Hide role buttons when solo coaching.
-        // Server tracks how many coaches are actively polling this game.
-        // Once we detect multiple coaches, latch visible for the session.
-        const state = typeof getControllerState === 'function' ? getControllerState() : {};
-        if ((state.connectedCoaches?.length || 0) > 1) {
-            _multiCoachDetected = true;
-        }
-        setPanelVisible('roleButtons', _multiCoachDetected);
     }
-    
+
+    // Ensure coach panels are visible (viewer mode may have hidden them
+    // in a previous session, and the hidden state persists in localStorage)
+    setPanelVisible('playByPlay', true);
+    const inSplitMode = typeof window.isSplitMode === 'function' && window.isSplitMode();
+    if (!inSplitMode) {
+        setPanelVisible('selectLine', true);
+    }
+
+    // Hide role buttons when solo coaching.
+    // Server tracks how many coaches are actively polling this game.
+    // Once we detect multiple coaches, latch visible for the session.
+    const state = typeof getControllerState === 'function' ? getControllerState() : {};
+    if ((state.connectedCoaches?.length || 0) > 1) {
+        _multiCoachDetected = true;
+    }
+    setPanelVisible('roleButtons', _multiCoachDetected);
+
     // Play-by-Play panel disabled if not Active Coach (but has some other role)
     const playByPlayPanel = getPanelElement('playByPlay');
     if (playByPlayPanel) {
-        // Disable if user has Line Coach role but NOT Active Coach
         playByPlayPanel.classList.toggle('disabled', !hasActiveCoach && hasLineCoach);
-    }
-    
-    // Game Log (Follow) panel default states based on role:
-    // - Maximized: For coaches without Active or Line Coach role
-    // - Minimized: For Active/Line Coach (but always accessible)
-    // This only applies when role changes, not during normal panel interactions
-    if (!hasAnyRole) {
-        // No controller role - maximize Game Log panel
-        if (isPanelMinimized('follow')) {
-            maximizePanel('follow', false);
-        }
-    } else {
-        // Has a controller role - minimize Game Log panel to make room for others
-        if (!isPanelMinimized('follow')) {
-            minimizePanel('follow');
-        }
     }
 }
 
 /**
  * Update panels based on game state (during point vs between points)
+ * No-op: panels are now resized solely by dragging.
  * @param {boolean} duringPoint - Whether a point is currently in progress
  */
 function updatePanelsForGameState(duringPoint) {
-    // Viewers don't have coaching panels — skip
-    if (typeof window.isViewer === 'function' && window.isViewer()) return;
-
-    // Use the authoritative boolean role check
-    const hasActiveCoach = typeof window.isActiveCoach === 'function' && window.isActiveCoach();
-    
-    // Play-by-Play panel
-    if (duringPoint && hasActiveCoach) {
-        // Auto-maximize when point starts, if Active Coach
-        maximizePanel('playByPlay', false);
-    } else if (!duringPoint) {
-        // Auto-minimize when point ends
-        minimizePanel('playByPlay');
-    }
-    
-    // Select Line panel
-    if (hasActiveCoach) {
-        if (duringPoint) {
-            // Auto-minimize when point starts for Active Coach
-            minimizePanel('selectLine');
-        } else {
-            // Auto-maximize when point ends
-            maximizePanel('selectLine', false);
-        }
-    }
-    
-    // Note: Game Events is now a modal popup from Play-by-Play, not a panel
+    // No auto-resize — panels are drag-only
 }
 
 // =============================================================================
@@ -1419,7 +1107,6 @@ window.savePanelStates = savePanelStates;
 window.isPanelMinimized = isPanelMinimized;
 
 // Panel actions
-window.togglePanelMinimized = togglePanelMinimized;
 window.minimizePanel = minimizePanel;
 window.maximizePanel = maximizePanel;
 window.setPanelVisible = setPanelVisible;
@@ -1428,8 +1115,6 @@ window.setPanelTitle = setPanelTitle;
 window.resetPanelHeights = resetPanelHeights;
 window.resetAllPanelStates = resetAllPanelStates;
 window.updateExpandingPanel = updateExpandingPanel;
-window.toggleFullScreenPanel = toggleFullScreenPanel;
-window.restoreFromFullScreen = restoreFromFullScreen;
 
 // Panel creation
 window.createPanelTitleBar = createPanelTitleBar;
@@ -1440,6 +1125,8 @@ window.createPanel = createPanel;
 window.isPanelDraggable = isPanelDraggable;
 window.getDragMinHeight = getDragMinHeight;
 window.DRAGGABLE_PANELS = DRAGGABLE_PANELS;
+window.setFullyPhysicalPanelDragging = setFullyPhysicalPanelDragging;
+window.getFullyPhysicalPanelDragging = function() { return fullyPhysicalPanelDragging; };
 window.RESIZABLE_PANELS = RESIZABLE_PANELS;
 window.PBP_MIN_CONTENT_HEIGHT = PBP_MIN_CONTENT_HEIGHT;
 window.FOLLOW_MIN_HEIGHT = FOLLOW_MIN_HEIGHT;
