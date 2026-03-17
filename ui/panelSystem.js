@@ -298,7 +298,7 @@ function setPanelVisible(panelId, visible) {
 // the same gesture). When disabled, panels spring back to their start-of-gesture
 // position when the drag reverses.
 const PHYSICAL_DRAG_KEY = 'breakside_physical_drag';
-let fullyPhysicalPanelDragging = localStorage.getItem(PHYSICAL_DRAG_KEY) === 'true';
+let fullyPhysicalPanelDragging = localStorage.getItem(PHYSICAL_DRAG_KEY) !== 'false';
 
 function setFullyPhysicalPanelDragging(enabled) {
     fullyPhysicalPanelDragging = enabled;
