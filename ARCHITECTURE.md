@@ -165,7 +165,12 @@ moveTitleBar(i, delta):
 - **Spring-back (default):** Each frame resets heights to their start-of-drag values and applies the absolute delta from the drag start position. When the finger reverses, all panels spring back to their original sizes.
 - **Physical:** Each frame applies an incremental delta from the previous frame's position. Pushed panels stay where they are because nothing asks them to move back — the recursion only pushes, never pulls.
 
-**Split mode:** The "Select Next Line" panel can be split into separate O Line and D Line panels. When split, `selectLine` is hidden (`display: none`) and `selectOLine`/`selectDLine` are shown. The drag system filters out non-rendered panels (`offsetParent === null`) to avoid dragging invisible elements.
+**Line type toggle:** The O/D button on the Select Next Line toolbar cycles through four modes: `od` → `o` → `d` → `split` → `od`. Each mode manages a separate player selection stored in `pendingNextLine` (`odLine`, `oLine`, `dLine`). When a point ends, `selectAppropriateLineAtPointEnd()` decides which view to show next:
+- If the coach was in combined `od` view, it stays in `od` (sticky preference).
+- If in `o` or `d` view, auto-switches to `o` or `d` based on who scored (team scored → defense next, opponent scored → offense next).
+- Split view is always preserved.
+
+**Split mode:** In split view, the `selectLine` panel is hidden (`display: none`) and two stacked panels `selectOLine`/`selectDLine` are shown. The drag system filters out non-rendered panels (`offsetParent === null`) to avoid dragging invisible elements.
 
 ### Feature Worktrees
 

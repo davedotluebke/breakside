@@ -38,7 +38,7 @@ For deployment info and technical architecture, see **[ARCHITECTURE.md](ARCHITEC
 ## Backlog
 
 - [x] **Feature**: When Active Coach ends game, all coaches/viewers navigate to game summary. *(Wake recovery + foreground 3-second refresh both detect `gameEndTimestamp` and navigate away.)*
-- [ ] **To verify**: Test D line vs O line behavior with simultaneous selection. Define desired behavior when e.g. D line is selected but coach is viewing/editing O line.
+- [x] O/D line view persistence between points (combined O/D stays; separate O/D auto-switches based on who scored; split preserved).
 - [ ] **Feature**: Line selection mode toggle (Manual / Wholesale / Auto)
   - Tappable text element in each player-selection table header that cycles through three states:
     - **Manual** (default): Whatever the user has checked. This is the normal behavior today.
