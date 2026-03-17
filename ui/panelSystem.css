@@ -92,8 +92,8 @@ body.game-screen-active #controllerRoleButtons {
     align-items: center;
     justify-content: flex-start; /* Left-align content to make room for subtitle */
     padding: 4px 36px 4px 8px; /* 8px left, 36px right for expand button (28px btn + 6px gap + 2px margin) */
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border-bottom: 1px solid #ddd;
+    background: linear-gradient(135deg, #5a6f8a 0%, #475a72 100%);
+    border-bottom: 1px solid #3d4f65;
     cursor: default;
     user-select: none;
     min-height: 28px;
@@ -115,29 +115,24 @@ body.game-screen-active #controllerRoleButtons {
 /* Inline grip icon for draggable panels */
 .panel-grip-icon {
     margin-right: 6px;
-    color: #999;
+    color: rgba(255, 255, 255, 0.5);
     font-size: 0.85rem;
     transition: color 0.15s;
 }
 
 .panel-title-bar.draggable .panel-grip-icon {
-    color: #777;
+    color: rgba(255, 255, 255, 0.7);
 }
 
 .panel-title-bar.draggable:hover .panel-grip-icon {
-    color: #555;
-}
-
-/* Highlight grip when panel is being dragged */
-.game-panel.dragging .panel-grip-icon {
-    color: #007bff;
+    color: #fff;
 }
 
 /* Panel title text */
 .panel-title {
     font-weight: 600;
     font-size: 0.9rem;
-    color: #333;
+    color: #fff;
     white-space: nowrap;
     flex-shrink: 0;
 }
@@ -145,7 +140,7 @@ body.game-screen-active #controllerRoleButtons {
 /* Panel subtitle (e.g., player names when minimized) */
 .panel-subtitle {
     font-size: 0.75rem;
-    color: #666;
+    color: rgba(255, 255, 255, 0.75);
     margin-left: 4px;
     white-space: nowrap;
     overflow: hidden;
@@ -773,9 +768,6 @@ body.game-screen-active #controllerRoleButtons {
     /* This allows chevron minimize to collapse to title bar only */
 }
 
-.panel-playByPlay .panel-title-bar {
-    background: linear-gradient(135deg, #e8f4e8 0%, #d4edda 100%);
-}
 
 .panel-playByPlay .panel-content {
     padding: 8px;
@@ -1515,9 +1507,6 @@ body.game-screen-active #controllerRoleButtons {
     background: #fff;
 }
 
-.panel-selectLine .panel-title-bar {
-    background: linear-gradient(135deg, #e8f0f8 0%, #d4e5f7 100%);
-}
 
 .panel-selectLine .panel-content {
     padding: 8px;
@@ -1900,9 +1889,6 @@ body.game-screen-active #controllerRoleButtons {
     background: #fff;
 }
 
-.panel-game-events .panel-title-bar {
-    background: linear-gradient(135deg, #f8f0e8 0%, #f7e5d4 100%);
-}
 
 /* =============================================================================
    Follow Panel (fills remaining space)
@@ -1914,9 +1900,6 @@ body.game-screen-active #controllerRoleButtons {
     min-height: 80px;
 }
 
-.panel-follow .panel-title-bar {
-    background: linear-gradient(135deg, #f0f0f0 0%, #e8e8e8 100%);
-}
 
 /* Allow follow panel title to shrink so score text overflow can be detected */
 .panel-follow .panel-title {
@@ -2268,16 +2251,6 @@ body.panel-dragging {
     z-index: 10;
 }
 
-.game-panel.dragging .panel-title-bar {
-    background: linear-gradient(135deg, #e3f0ff 0%, #cce5ff 100%);
-    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
-}
-
-/* Subtle border highlight on panels adjacent to drag */
-.game-panel.dragging + .game-panel,
-.game-panel:has(+ .game-panel.dragging) {
-    border-color: rgba(0, 123, 255, 0.3);
-}
 
 /* Disable transitions during drag for smoother resizing */
 body.panel-dragging .game-panel {
@@ -2302,9 +2275,6 @@ body.panel-dragging .panel-content {
     background: #fff;
 }
 
-.panel-selectOLine .panel-title-bar {
-    background: linear-gradient(135deg, #e8f4e8 0%, #d4e8d4 100%);
-}
 
 .panel-selectOLine .panel-content {
     padding: 8px;
@@ -2318,9 +2288,6 @@ body.panel-dragging .panel-content {
     background: #fff;
 }
 
-.panel-selectDLine .panel-title-bar {
-    background: linear-gradient(135deg, #e8e8f4 0%, #d4d4e8 100%);
-}
 
 .panel-selectDLine .panel-content {
     padding: 8px;
