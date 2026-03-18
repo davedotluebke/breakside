@@ -2060,8 +2060,7 @@ function transitionToBetweenPoints() {
             const odModTime = game.pendingNextLine.odLineModifiedAt
                 ? new Date(game.pendingNextLine.odLineModifiedAt).getTime()
                 : 0;
-            const mainModeIsManual = lineSelectionModes.main === 'manual';
-            if (odModTime <= pointStartTime && mainModeIsManual) {
+            if (odModTime <= pointStartTime && lineSelectionModes.main === 'manual') {
                 game.pendingNextLine.odLine = endingLine;
             }
             // O and D lines: reset only if never modified this game (compare to game start)
@@ -4945,17 +4944,15 @@ window.updateControllerUI = function(state, previousState) {
 // =============================================================================
 
 // Hook into moveToNextPoint to handle panel UI transitions
-// This is called after a score event to prepare for the next point
+// This is called after a score event to prepare for the next point.
+// Note: originalMoveToNextPoint already calls enterGameScreen() and
+// transitionToBetweenPoints(), so this wrapper just delegates — no
+// duplicate transitionToBetweenPoints() call.
 const originalMoveToNextPoint = window.moveToNextPoint;
 window.moveToNextPoint = function() {
     // Call original if it exists
     if (typeof originalMoveToNextPoint === 'function') {
         originalMoveToNextPoint();
-    }
-    
-    // If game screen is visible, transition to between-points state
-    if (isGameScreenVisible()) {
-        transitionToBetweenPoints();
     }
 };
 
