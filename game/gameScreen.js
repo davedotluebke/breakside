@@ -2789,22 +2789,15 @@ function computeAutoLine(context) {
 
 /**
  * Set checkboxes in a given table to match a list of player names.
- * Sets programmaticCheckboxChange flag to suppress mode-return.
+ * Does NOT dispatch change events — caller is responsible for saving state and updating UI.
  * @param {string} tableId
  * @param {string[]} playerNames
  */
 function setTableCheckboxes(tableId, playerNames) {
-    programmaticCheckboxChange = true;
     const checkboxes = document.querySelectorAll(`#${tableId} input[type="checkbox"]`);
     checkboxes.forEach(cb => {
-        const shouldCheck = playerNames.includes(cb.dataset.playerName);
-        if (cb.checked !== shouldCheck) {
-            cb.checked = shouldCheck;
-            // Fire change event so dependent UI updates (count badges, etc.)
-            cb.dispatchEvent(new Event('change', { bubbles: true }));
-        }
+        cb.checked = playerNames.includes(cb.dataset.playerName);
     });
-    programmaticCheckboxChange = false;
 }
 
 /**
@@ -2835,44 +2828,61 @@ function cycleSelectionMode(context) {
 
     const tableId = getContextTableId(context);
     const currentMode = lineSelectionModes[context];
+    let targetPlayers;
 
     if (currentMode === 'manual') {
         // Snapshot current, switch to wholesale (uncheck all)
         lineSelectionSnapshots[context] = getCheckedPlayersFromTable(tableId);
         lineSelectionModes[context] = 'wholesale';
-        setTableCheckboxes(tableId, []);
+        targetPlayers = [];
     } else if (currentMode === 'wholesale') {
         // Switch to auto
         lineSelectionModes[context] = 'auto';
-        const autoLine = computeAutoLine(context);
-        setTableCheckboxes(tableId, autoLine);
+        targetPlayers = computeAutoLine(context);
     } else {
         // Auto → Manual: restore snapshot
         lineSelectionModes[context] = 'manual';
-        if (lineSelectionSnapshots[context]) {
-            setTableCheckboxes(tableId, lineSelectionSnapshots[context]);
-        }
+        targetPlayers = lineSelectionSnapshots[context] || getCheckedPlayersFromTable(tableId);
         lineSelectionSnapshots[context] = null;
     }
 
-    // Save selections for main/split contexts
+    // Write target selection to pendingNextLine BEFORE touching checkboxes
+    // so sync won't overwrite with stale data
     if (context === 'main') {
-        savePanelSelectionsToPendingNextLine();
-        updateSelectLineSubtitle();
-    } else if (context === 'splitO' || context === 'splitD') {
-        const lineType = context === 'splitO' ? 'o' : 'd';
-        const suffix = lineType === 'o' ? 'O' : 'D';
-        const selectedPlayers = getSelectedPlayersFromTable(`panelActivePlayersTable${suffix}`);
         const game = typeof currentGame === 'function' ? currentGame() : null;
         if (game && game.pendingNextLine) {
-            game.pendingNextLine[lineType + 'Line'] = selectedPlayers;
+            const activeType = game.pendingNextLine.activeType || 'od';
+            game.pendingNextLine[activeType + 'Line'] = targetPlayers;
+            game.pendingNextLine[activeType + 'LineModifiedAt'] = new Date().toISOString();
+            localLineEditTimestamps[activeType + 'Line'] = Date.now();
+        }
+    } else if (context === 'splitO' || context === 'splitD') {
+        const lineType = context === 'splitO' ? 'o' : 'd';
+        const game = typeof currentGame === 'function' ? currentGame() : null;
+        if (game && game.pendingNextLine) {
+            game.pendingNextLine[lineType + 'Line'] = targetPlayers;
             game.pendingNextLine[lineType + 'LineModifiedAt'] = new Date().toISOString();
             localLineEditTimestamps[lineType + 'Line'] = Date.now();
         }
+    }
+
+    // Now update checkboxes to match (no change events fired)
+    setTableCheckboxes(tableId, targetPlayers);
+
+    // Save and update UI
+    if (context === 'main') {
+        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+        updateSelectLineSubtitle();
+    } else if (context === 'splitO' || context === 'splitD') {
+        const lineType = context === 'splitO' ? 'o' : 'd';
         if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
         updateSplitPanelSubtitle(lineType);
+    } else if (context === 'sub') {
+        // Update the count display directly — flag prevents mode-return
+        programmaticCheckboxChange = true;
+        updateSubPlayersCount();
+        programmaticCheckboxChange = false;
     }
-    // Sub context: selections stay in DOM, confirmed on button press
 
     updateModeToggleLabel(context);
     updatePlayByPlayPanelState();
