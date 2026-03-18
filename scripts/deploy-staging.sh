@@ -38,6 +38,7 @@ aws s3 sync "$DIR" "s3://$BUCKET/" \
   --exclude ".git/*" \
   --exclude ".github/*" \
   --exclude ".claude/*" \
+  --exclude ".worktrees/*" \
   --exclude ".vscode/*" \
   --exclude ".pytest_cache/*" \
   --exclude ".gitignore" \
