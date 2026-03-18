@@ -1654,6 +1654,9 @@ window.clearSyncQueue = function() {
     syncQueue = [];
     saveSyncQueue();
 };
+window.reloadSyncQueue = function() {
+    syncQueue = loadSyncQueue();
+};
 
 // Game sync (existing)
 window.syncGameToCloud = syncGameToCloud;
