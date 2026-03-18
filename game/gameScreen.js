@@ -2057,6 +2057,8 @@ function transitionToBetweenPoints() {
             const odModTime = game.pendingNextLine.odLineModifiedAt
                 ? new Date(game.pendingNextLine.odLineModifiedAt).getTime()
                 : 0;
+            console.log('📋 transitionToBetweenPoints: odModTime=%d, pointStartTime=%d, will reset=%s, endingLine=%o, currentOdLine=%o',
+                odModTime, pointStartTime, odModTime <= pointStartTime, endingLine, game.pendingNextLine.odLine);
             if (odModTime <= pointStartTime) {
                 game.pendingNextLine.odLine = endingLine;
             }
@@ -2739,8 +2741,12 @@ function computeAutoLine(context) {
         });
     });
 
+    console.log('📋 computeAutoLine: roster=%d, points=%d, expectedCount=%d, pointsPlayed=%o',
+        roster.length, game.points.length, expectedCount, {...pointsPlayed});
+
     // Check if gender ratio is active
     const hasRatio = game.alternateGenderRatio && game.alternateGenderRatio !== 'No';
+    console.log('📋 computeAutoLine: hasRatio=%s, alternateGenderRatio=%s', hasRatio, game.alternateGenderRatio);
 
     if (hasRatio && typeof getExpectedGenderRatio === 'function' && typeof getExpectedGenderCounts === 'function') {
         let expectedRatio;
@@ -2778,13 +2784,17 @@ function computeAutoLine(context) {
                     selected.push(remaining[i].name);
                 }
             }
+            console.log('📋 computeAutoLine (ratio): selected=%o', selected);
             return selected;
         }
     }
 
     // No ratio: pick top N by fewest points played
     const sorted = [...roster].sort((a, b) => (pointsPlayed[a.name] || 0) - (pointsPlayed[b.name] || 0));
-    return sorted.slice(0, expectedCount).map(p => p.name);
+    const result = sorted.slice(0, expectedCount).map(p => p.name);
+    console.log('📋 computeAutoLine (no ratio): sorted=%o, result=%o',
+        sorted.map(p => p.name + ':' + pointsPlayed[p.name]), result);
+    return result;
 }
 
 /**
@@ -2828,6 +2838,7 @@ function cycleSelectionMode(context) {
 
     const tableId = getContextTableId(context);
     const currentMode = lineSelectionModes[context];
+    console.log('📋 cycleSelectionMode: context=%s, currentMode=%s', context, currentMode);
     let targetPlayers;
 
     if (currentMode === 'manual') {
