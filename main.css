@@ -497,13 +497,13 @@ td.player-mmp,
    ============================================ */
 
 .teams-list-container {
-    margin-top: 1em;
+    margin-top: 0.5em;
 }
 
 .team-section {
     border: 1px solid #ddd;
     border-radius: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 6px;
     overflow: hidden;
     background: #fff;
 }
@@ -516,8 +516,8 @@ td.player-mmp,
 .team-header {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 10px 15px;
+    gap: 2px;
+    padding: 8px 12px;
     background: #f8f9fa;
     cursor: pointer;
     user-select: none;
@@ -2175,10 +2175,47 @@ header h1 {
    ============================================================================= */
 
 /* Join Team section on teams screen */
-.teams-join-section {
-    margin-bottom: 12px;
+/* Action row: Join Team + Create New Team side by side */
+.teams-action-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
 }
 
+.teams-action-btn {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.teams-join-btn {
+    background: #f8f9fa;
+    color: #333;
+}
+
+.teams-join-btn:hover {
+    background: #e9ecef;
+}
+
+.teams-create-btn {
+    background: #f8f9fa;
+    color: #333;
+}
+
+.teams-create-btn:hover {
+    background: #e9ecef;
+}
+
+/* Join code form (used inside dialog) */
 .teams-join-form {
     display: flex;
     gap: 8px;
@@ -2222,10 +2259,10 @@ header h1 {
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border: 1px solid #dee2e6;
     border-radius: 8px;
-    padding: 10px 15px;
-    margin-bottom: 15px;
+    padding: 8px 12px;
+    margin-bottom: 10px;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
 }
 
 .sync-status-info {
@@ -2312,6 +2349,22 @@ header h1 {
 
 .sync-btn.sign-out-btn:hover:not(:disabled) {
     background: linear-gradient(135deg, #5a6268 0%, #343a40 100%);
+}
+
+/* On narrow screens, hide button labels and Online text — show icons only */
+@media (max-width: 420px) {
+    .sync-btn-label {
+        display: none;
+    }
+    .sync-status-label {
+        display: none;
+    }
+    .sync-btn {
+        padding: 6px 8px;
+    }
+    .sync-btn.sign-out-btn {
+        margin-left: 4px;
+    }
 }
 
 .fa-spin {

@@ -40,49 +40,27 @@ function showSelectTeamScreen(firsttime = false) {
     // Teams & Games Section (cloud-only)
     const teamsContainer = document.createElement('div');
     teamsContainer.id = 'cloudTeamsContainer';
-    
-    // Build header
-    const header = document.createElement('div');
-    header.style.display = 'flex';
-    header.style.alignItems = 'center';
-    header.style.gap = '10px';
-    header.style.marginBottom = '10px';
 
-    const title = document.createElement('h3');
-    title.textContent = 'Teams & Games';
-    title.style.margin = '0';
-    header.appendChild(title);
-
-    teamsContainer.appendChild(header);
-
-    // Join Team section — invite code input at top of teams screen
-    const joinSection = document.createElement('div');
-    joinSection.className = 'teams-join-section';
-    joinSection.innerHTML = `
-        <div class="teams-join-form">
-            <input type="text" id="teamsJoinCodeInput" placeholder="Invite code" maxlength="5" class="join-code-input">
-            <button id="teamsJoinBtn" class="join-btn">Join Team</button>
-        </div>
+    // Action row: Join Team + Create New Team side-by-side
+    const actionRow = document.createElement('div');
+    actionRow.className = 'teams-action-row';
+    actionRow.innerHTML = `
+        <button id="teamsJoinBtn" class="teams-action-btn teams-join-btn"><i class="fas fa-user-plus"></i> Join Team</button>
+        <button id="teamsCreateBtn" class="teams-action-btn teams-create-btn"><i class="fas fa-plus"></i> New Team</button>
     `;
-    teamsContainer.appendChild(joinSection);
+    teamsContainer.appendChild(actionRow);
 
-    // Wire up join team from teams screen
+    // Wire up action buttons
     setTimeout(() => {
-        const joinInput = document.getElementById('teamsJoinCodeInput');
         const joinBtn = document.getElementById('teamsJoinBtn');
-        if (joinInput) {
-            joinInput.addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase(); });
-            joinInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && typeof handleJoinCodeFromTeamsScreen === 'function') {
-                    handleJoinCodeFromTeamsScreen();
-                }
-            });
-        }
         if (joinBtn) {
-            joinBtn.addEventListener('click', () => {
-                if (typeof handleJoinCodeFromTeamsScreen === 'function') {
-                    handleJoinCodeFromTeamsScreen();
-                }
+            joinBtn.addEventListener('click', showJoinTeamDialog);
+        }
+        const createBtn = document.getElementById('teamsCreateBtn');
+        if (createBtn) {
+            createBtn.addEventListener('click', () => {
+                const modal = document.getElementById('createTeamModal');
+                if (modal) modal.style.display = 'block';
             });
         }
     }, 0);
@@ -1077,19 +1055,19 @@ function buildSyncStatusHTML() {
     const userEmail = window.breakside?.auth?.getCurrentUser?.()?.email || '';
     const signOutButton = isAuthenticated
         ? `<button id="signOutBtn" class="sync-btn sign-out-btn" onclick="handleSignOut()" title="${userEmail}">
-               <i class="fas fa-sign-out-alt"></i> Sign Out
+               <i class="fas fa-sign-out-alt"></i><span class="sync-btn-label"> Sign Out</span>
            </button>`
         : '';
 
     return `
         <div class="sync-status-info" onclick="showConnectionInfo()" style="cursor: pointer;">
             <span class="sync-status-icon">${statusIcon}</span>
-            <span class="sync-status-text">${statusText}</span>
+            <span class="sync-status-text"><span class="sync-status-label">${statusText}</span></span>
         </div>
         ${pendingBadge}
         <div class="sync-status-actions">
             <button id="refreshAllBtn" class="sync-btn" ${!isOnline ? 'disabled' : ''} onclick="doFullRefresh()">
-                <i id="refreshIcon" class="fas fa-sync"></i> Refresh
+                <i id="refreshIcon" class="fas fa-sync"></i><span class="sync-btn-label"> Refresh</span>
             </button>
             ${signOutButton}
         </div>
@@ -1353,6 +1331,46 @@ window.addEventListener('click', function(event) {
  * Handle invite code entry from the teams screen.
  * Reuses the join logic from teamSettings.js but reads from the teams-screen input.
  */
+/**
+ * Show a dialog for entering an invite code to join a team
+ */
+function showJoinTeamDialog() {
+    // Reuse existing modal if present
+    let modal = document.getElementById('joinTeamCodeModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'joinTeamCodeModal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 320px;">
+                <div class="dialog-header prominent-dialog-header">
+                    <h2>Join a Team</h2>
+                    <span class="close" id="joinTeamCodeModalClose">&times;</span>
+                </div>
+                <p style="margin: 8px 0 12px; color: #666; font-size: 0.9rem;">Enter the 5-character invite code from your team's coach.</p>
+                <div class="teams-join-form">
+                    <input type="text" id="teamsJoinCodeInput" placeholder="ABCDE" maxlength="5" class="join-code-input" style="flex:1;">
+                    <button id="teamsJoinSubmitBtn" class="join-btn">Join</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        modal.querySelector('#joinTeamCodeModalClose').addEventListener('click', () => { modal.style.display = 'none'; });
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+        modal.querySelector('#teamsJoinCodeInput').addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase(); });
+        modal.querySelector('#teamsJoinCodeInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleJoinCodeFromTeamsScreen();
+        });
+        modal.querySelector('#teamsJoinSubmitBtn').addEventListener('click', handleJoinCodeFromTeamsScreen);
+    }
+
+    const input = modal.querySelector('#teamsJoinCodeInput');
+    if (input) input.value = '';
+    modal.style.display = 'block';
+    setTimeout(() => { if (input) input.focus(); }, 100);
+}
+
 async function handleJoinCodeFromTeamsScreen() {
     const input = document.getElementById('teamsJoinCodeInput');
     if (!input) return;
@@ -1407,6 +1425,11 @@ async function handleJoinCodeFromTeamsScreen() {
 
         const result = await redeemResponse.json();
         input.value = '';
+
+        // Close the join dialog
+        const joinModal = document.getElementById('joinTeamCodeModal');
+        if (joinModal) joinModal.style.display = 'none';
+
         alert(`Joined ${result.team?.name || 'the team'} as ${result.membership?.role || 'member'}!`);
 
         if (typeof syncUserTeams === 'function') {
