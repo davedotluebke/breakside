@@ -93,9 +93,21 @@ These are deferred until multi-user basics are stable:
 - [ ] Git-based backup and version history
 
 ### Line Selection
-- [ ] Clever auto-lineup algorithm (weight recent consecutive points, fatigue, O/D preference, matchups)
+- [ ] Smarter auto-lineup tiebreaking
+  - Break ties (same points played) by preferring players who have sat out for more consecutive points
+  - Then break remaining ties by preferring players with more total points played (reward workhorses)
+- [ ] Player position and line preference in roster
+  - Add position field to player records: handler, cutter, hybrid
+  - Add O-line / D-line preference per player
+  - Auto-lineup uses these to build balanced lines
+- [ ] AI/stats-driven lineup suggestions
+  - Use game stats and/or AI to pick players that play well together
+- [ ] Wholesale/Auto icon UI redesign
+  - Replace cycling text toggle with two separate icons in the toolbar, far left
+  - Empty checkbox icon for Wholesale (clear all)
+  - AI sparkle icon for Auto (suggest lineup)
+  - Double-tapping either icon without making manual changes restores the snapshot (the players that were checked before wholesale cleared or auto filled)
 - [ ] "Suggest lineups every point" toggle in pre-game/roster screen (auto mode as default each point)
-- [ ] Design mockups for line selection mode toggle (icon exploration, visual states)
 
 ### UI/UX
 - [ ] Comprehensive UI redesign
