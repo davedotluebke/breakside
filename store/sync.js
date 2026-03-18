@@ -1648,6 +1648,13 @@ function clearSyncData() {
 // Clear data (for sign out)
 window.clearSyncData = clearSyncData;
 
+// Sync queue access (for pending dialog)
+window.getSyncQueueItems = function() { return syncQueue.slice(); };
+window.clearSyncQueue = function() {
+    syncQueue = [];
+    saveSyncQueue();
+};
+
 // Game sync (existing)
 window.syncGameToCloud = syncGameToCloud;
 window.generateGameId = generateGameId;
