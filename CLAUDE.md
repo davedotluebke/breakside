@@ -95,8 +95,8 @@ git rebase main
 ### Cleanup
 ```bash
 git worktree remove .worktrees/<feature>
-git branch -d <feature>
 ```
+Keep feature branches after merging — don't delete them. Branch names serve as a record of past work on GitHub.
 
 `.worktrees/` is gitignored so other sessions won't accidentally stage worktree files.
 
