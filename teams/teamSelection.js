@@ -1068,25 +1068,25 @@ function buildSyncStatusHTML() {
     const totalPending = status.pendingCount || 0;
     const statusIcon = isOnline ? '🌐' : '📴';
     const statusText = isOnline ? 'Online' : 'Offline';
-    const pendingText = totalPending > 0
-        ? `<span class="pending-badge" onclick="showPendingSyncDialog(); event.stopPropagation();" style="cursor: pointer;">${totalPending} pending</span>`
+    const pendingBadge = totalPending > 0
+        ? `<span class="pending-badge" onclick="showPendingSyncDialog()" style="cursor: pointer;">${totalPending} pending</span>`
         : '';
-    
+
     // Check if user is authenticated
     const isAuthenticated = window.breakside?.auth?.isAuthenticated?.() || false;
     const userEmail = window.breakside?.auth?.getCurrentUser?.()?.email || '';
-    const signOutButton = isAuthenticated 
+    const signOutButton = isAuthenticated
         ? `<button id="signOutBtn" class="sync-btn sign-out-btn" onclick="handleSignOut()" title="${userEmail}">
                <i class="fas fa-sign-out-alt"></i> Sign Out
            </button>`
         : '';
-    
+
     return `
         <div class="sync-status-info" onclick="showConnectionInfo()" style="cursor: pointer;">
             <span class="sync-status-icon">${statusIcon}</span>
             <span class="sync-status-text">${statusText}</span>
-            ${pendingText}
         </div>
+        ${pendingBadge}
         <div class="sync-status-actions">
             <button id="refreshAllBtn" class="sync-btn" ${!isOnline ? 'disabled' : ''} onclick="doFullRefresh()">
                 <i id="refreshIcon" class="fas fa-sync"></i> Refresh
