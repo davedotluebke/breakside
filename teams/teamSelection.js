@@ -1068,8 +1068,8 @@ function buildSyncStatusHTML() {
     const totalPending = status.pendingCount || 0;
     const statusIcon = isOnline ? '🌐' : '📴';
     const statusText = isOnline ? 'Online' : 'Offline';
-    const pendingText = totalPending > 0 
-        ? `<span class="pending-badge">${totalPending} pending</span>` 
+    const pendingText = totalPending > 0
+        ? `<span class="pending-badge" onclick="showPendingSyncDialog(); event.stopPropagation();" style="cursor: pointer;">${totalPending} pending</span>`
         : '';
     
     // Check if user is authenticated
@@ -1262,6 +1262,92 @@ function confirmAppUpdate() {
         }
     }
 }
+
+/**
+ * Show the pending sync dialog with a summary of queued items.
+ */
+function showPendingSyncDialog() {
+    const items = typeof getSyncQueueItems === 'function' ? getSyncQueueItems() : [];
+    const listEl = document.getElementById('pendingSyncList');
+    if (!listEl) return;
+
+    if (items.length === 0) {
+        listEl.innerHTML = '<p style="color:#888; font-style:italic;">No pending updates.</p>';
+    } else {
+        const maxShown = 3;
+        const lines = items.slice(0, maxShown).map(item => {
+            const label = describeSyncItem(item);
+            const age = formatSyncAge(item.timestamp);
+            const retryNote = item.retryCount > 0
+                ? ` <span style="color:#c00; font-size:0.8rem;">(${item.retryCount} failed attempt${item.retryCount > 1 ? 's' : ''})</span>`
+                : '';
+            return `<div style="padding: 0.4rem 0; border-bottom: 1px solid #eee;">
+                <span style="font-weight:600;">${item.action}</span> ${label}${retryNote}
+                <div style="font-size:0.8rem; color:#888;">${age}</div>
+            </div>`;
+        });
+        if (items.length > maxShown) {
+            lines.push(`<div style="padding: 0.4rem 0; color: #888; font-style: italic;">...and ${items.length - maxShown} more</div>`);
+        }
+        listEl.innerHTML = lines.join('');
+    }
+
+    document.getElementById('pendingSyncDialog').style.display = 'block';
+}
+
+/**
+ * Describe a sync queue item for display (team name, game opponent, player name).
+ */
+function describeSyncItem(item) {
+    const data = item.data || {};
+    if (item.type === 'game') {
+        const team = data.team || '?';
+        const opponent = data.opponent || '?';
+        return `game: ${team} vs ${opponent}`;
+    }
+    if (item.type === 'team') {
+        return `team: ${data.name || item.id}`;
+    }
+    if (item.type === 'player') {
+        return `player: ${data.name || item.id}`;
+    }
+    return `${item.type}: ${item.id}`;
+}
+
+/**
+ * Format how long ago a sync item was queued.
+ */
+function formatSyncAge(timestamp) {
+    if (!timestamp) return '';
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+}
+
+function closePendingSyncDialog() {
+    document.getElementById('pendingSyncDialog').style.display = 'none';
+}
+
+function confirmClearSyncQueue() {
+    if (!confirm('Discard all pending updates? These changes will be lost.')) return;
+    if (typeof clearSyncQueue === 'function') {
+        clearSyncQueue();
+    }
+    closePendingSyncDialog();
+    updateSyncStatusDisplay();
+}
+
+// Close pending sync dialog on backdrop click
+window.addEventListener('click', function(event) {
+    const dialog = document.getElementById('pendingSyncDialog');
+    if (event.target === dialog) {
+        closePendingSyncDialog();
+    }
+});
 
 /**
  * Handle invite code entry from the teams screen.

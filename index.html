@@ -434,6 +434,24 @@
         </div>
     </div>
 
+    <!-- Pending Sync Dialog -->
+    <div id="pendingSyncDialog" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 380px;">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Pending Updates</h2>
+                <span class="close" onclick="closePendingSyncDialog()">&times;</span>
+            </div>
+            <p style="margin: 0 0 1rem; font-size: 0.9rem; color: #555;">
+                These changes were made while offline or failed to sync. They'll be sent to the server automatically when you're back online.
+            </p>
+            <div id="pendingSyncList" style="margin-bottom: 1rem;"></div>
+            <div style="display: flex; gap: 0.5rem;">
+                <button class="primary-btn" style="flex: 1;" onclick="closePendingSyncDialog()">Keep</button>
+                <button class="secondary-btn" style="flex: 1;" onclick="confirmClearSyncQueue()">Clear All</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Score Attribution Dialog -->
     <div id="scoreAttributionDialog" class="modal" style="display: none;">
         <div class="modal-content">
