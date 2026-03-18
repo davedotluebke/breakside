@@ -60,6 +60,9 @@ function createHeaderContent() {
                 <button class="menu-item" id="menuTeamSettings">
                     <i class="fas fa-shield-alt"></i> Team Settings
                 </button>
+                <button class="menu-item" id="menuToggleRoleButtons">
+                    <i class="fas fa-user-tag"></i> Show Role Buttons
+                </button>
                 <div class="menu-divider"></div>
                 <button class="menu-item" id="menuSettings">
                     <i class="fas fa-cog"></i> App Settings
@@ -1120,6 +1123,22 @@ function wireGameScreenEvents() {
         });
     }
 
+    const toggleRoleBtn = document.getElementById('menuToggleRoleButtons');
+    if (toggleRoleBtn) {
+        toggleRoleBtn.addEventListener('click', () => {
+            closeGameMenu();
+            const panel = document.getElementById('panel-roleButtons');
+            const isVisible = panel && !panel.classList.contains('panel-hidden');
+            if (isVisible) {
+                if (typeof setPanelVisible === 'function') setPanelVisible('roleButtons', false);
+            } else {
+                // Set the latch so auto-hide doesn't undo this
+                if (typeof window.forceMultiCoachDetected === 'function') window.forceMultiCoachDetected();
+                if (typeof setPanelVisible === 'function') setPanelVisible('roleButtons', true);
+            }
+        });
+    }
+
     // Close menu when clicking outside
     document.addEventListener('click', (e) => {
         const dropdown = document.getElementById('gameMenuDropdown');
@@ -1214,6 +1233,16 @@ function handleGameMenuClick(e) {
     if (dropdown) {
         dropdown.classList.toggle('visible');
         
+        // Update role buttons toggle label
+        const toggleRoleBtn = document.getElementById('menuToggleRoleButtons');
+        if (toggleRoleBtn) {
+            const rolePanel = document.getElementById('panel-roleButtons');
+            const roleVisible = rolePanel && !rolePanel.classList.contains('panel-hidden');
+            toggleRoleBtn.innerHTML = roleVisible
+                ? '<i class="fas fa-user-tag"></i> Hide Role Buttons'
+                : '<i class="fas fa-user-tag"></i> Show Role Buttons';
+        }
+
         // Hide End Game for viewers, disable for non-role-holding coaches
         const endGameBtn = document.getElementById('menuEndGame');
         if (endGameBtn) {
