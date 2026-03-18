@@ -2053,13 +2053,15 @@ function transitionToBetweenPoints() {
                 ? new Date(lastPoint.startTimestamp).getTime()
                 : 0;
             const endingLine = [...lastPoint.players];
-            // O/D line: reset to ending 7 unless modified during this point
+            // O/D line: reset to ending 7 unless user explicitly changed mode (wholesale/auto)
+            // or modified during this point.
+            // Note: startTimestamp may be set at score-time (not point-start), so also
+            // check selection mode as a reliable signal of intentional changes.
             const odModTime = game.pendingNextLine.odLineModifiedAt
                 ? new Date(game.pendingNextLine.odLineModifiedAt).getTime()
                 : 0;
-            console.log('📋 transitionToBetweenPoints: odModTime=%d, pointStartTime=%d, will reset=%s, endingLine=%o, currentOdLine=%o',
-                odModTime, pointStartTime, odModTime <= pointStartTime, endingLine, game.pendingNextLine.odLine);
-            if (odModTime <= pointStartTime) {
+            const mainModeIsManual = lineSelectionModes.main === 'manual';
+            if (odModTime <= pointStartTime && mainModeIsManual) {
                 game.pendingNextLine.odLine = endingLine;
             }
             // O and D lines: reset only if never modified this game (compare to game start)
