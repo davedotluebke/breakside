@@ -77,7 +77,11 @@ function initializeTeamSettings() {
     const backFromSettingsBtn = document.getElementById('backFromSettingsBtn');
     if (backFromSettingsBtn) {
         backFromSettingsBtn.addEventListener('click', () => {
-            if (_settingsReturnScreen === 'selectTeamScreen') {
+            if (_settingsReturnScreen === 'gameScreen') {
+                if (typeof showGameScreen === 'function') {
+                    showGameScreen();
+                }
+            } else if (_settingsReturnScreen === 'selectTeamScreen') {
                 if (typeof showSelectTeamScreen === 'function') {
                     showSelectTeamScreen();
                 } else {
