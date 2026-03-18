@@ -39,7 +39,7 @@ For deployment info and technical architecture, see **[ARCHITECTURE.md](ARCHITEC
 
 - [x] **Feature**: When Active Coach ends game, all coaches/viewers navigate to game summary. *(Wake recovery + foreground 3-second refresh both detect `gameEndTimestamp` and navigate away.)*
 - [x] O/D line view persistence between points (combined O/D stays; separate O/D auto-switches based on who scored; split preserved).
-- [ ] **Feature**: Line selection mode toggle (Manual / Wholesale / Auto)
+- [x] **Feature**: Line selection mode toggle (Manual / Wholesale / Auto)
   - Tappable text element in each player-selection table header that cycles through three states:
     - **Manual** (default): Whatever the user has checked. This is the normal behavior today.
     - **Wholesale**: All players unchecked (clean slate for building a line from scratch).
@@ -52,6 +52,11 @@ For deployment info and technical architecture, see **[ARCHITECTURE.md](ARCHITEC
 - [x] Hide role buttons when only one coach on team or only one coach polling (more room for panels).
 - [x] O/D split panels: O/D button splits "Select Next Line" into two separate panels ("Select Next O Line" / "Select Next D Line").
 - [ ] "Clear pending" button in connection info dialog when sync queue has stuck items.
+- [ ] **Bug**: `point.startTimestamp` is null at score time despite being set at point start
+  - **Symptom**: `gameLogic.js` logs `Warning: point.startTimestamp is null; setting to now` during `updateScore()`, then sets it to the current time (score time, not point start time).
+  - **Root cause (suspected)**: `pointManagement.js:78` sets `point.startTimestamp = new Date()` immediately after pushing the point to `game.points`. However, `saveAllTeamsData()` serializes the game to localStorage as JSON shortly after. When the game object is later read back (via sync cycle, cloud refresh, or localStorage reload), the `Date` object may not survive deserialization — JSON.stringify converts Dates to ISO strings, but the deserializer may not reconvert them, or the in-memory game reference may get replaced by a freshly deserialized copy that lost the Date.
+  - **Impact**: Any code comparing `point.startTimestamp` to other timestamps during the point gets the wrong value. The `transitionToBetweenPoints()` "reset to ending line" logic used `pointStartTime` to decide whether the pending line was modified during the point — but since `pointStartTime` was actually score time, modifications made during the point appeared to be "before" the point started, causing them to be overwritten. (Worked around in the line-selection-mode branch by also checking `lineSelectionModes.main`.)
+  - **Where to look**: `pointManagement.js` (startNextPoint), `store/storage.js` (serialization), `store/sync.js` (syncGameToCloud / refreshPendingLineFromCloud / refreshGameStateFromCloud), `store/models.js` (Point constructor / serialization). Check whether the in-memory `game` object gets replaced by a deserialized copy after sync, and whether Date fields survive the round-trip.
 
 ---
 
@@ -88,9 +93,21 @@ These are deferred until multi-user basics are stable:
 - [ ] Git-based backup and version history
 
 ### Line Selection
-- [ ] Clever auto-lineup algorithm (weight recent consecutive points, fatigue, O/D preference, matchups)
+- [ ] Smarter auto-lineup tiebreaking
+  - Break ties (same points played) by preferring players who have sat out for more consecutive points
+  - Then break remaining ties by preferring players with more total points played (reward workhorses)
+- [ ] Player position and line preference in roster
+  - Add position field to player records: handler, cutter, hybrid
+  - Add O-line / D-line preference per player
+  - Auto-lineup uses these to build balanced lines
+- [ ] AI/stats-driven lineup suggestions
+  - Use game stats and/or AI to pick players that play well together
+- [ ] Wholesale/Auto icon UI redesign
+  - Replace cycling text toggle with two separate icons in the toolbar, far left
+  - Empty checkbox icon for Wholesale (clear all)
+  - AI sparkle icon for Auto (suggest lineup)
+  - Double-tapping either icon without making manual changes restores the snapshot (the players that were checked before wholesale cleared or auto filled)
 - [ ] "Suggest lineups every point" toggle in pre-game/roster screen (auto mode as default each point)
-- [ ] Design mockups for line selection mode toggle (icon exploration, visual states)
 
 ### UI/UX
 - [ ] Comprehensive UI redesign

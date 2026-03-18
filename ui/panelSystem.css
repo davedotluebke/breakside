@@ -1540,6 +1540,24 @@ body.game-screen-active #controllerRoleButtons {
     flex: 1; /* pushes everything right, reserves left space */
 }
 
+.select-line-mode-toggle {
+    font-size: 0.8rem;
+    color: #007bff;
+    cursor: pointer;
+    user-select: none;
+}
+
+.select-line-mode-toggle:hover {
+    text-decoration: underline;
+}
+
+.panel-selectLine.readonly .select-line-mode-toggle,
+.panel-selectOLine.readonly .select-line-mode-toggle,
+.panel-selectDLine.readonly .select-line-mode-toggle {
+    pointer-events: none;
+    opacity: 0.5;
+}
+
 .select-line-stats-toggle {
     font-size: 0.8rem;
     color: #007bff;
