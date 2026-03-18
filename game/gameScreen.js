@@ -54,8 +54,15 @@ function createHeaderContent() {
                     <i class="fas fa-stop-circle"></i> End Game
                 </button>
                 <div class="menu-divider"></div>
+                <button class="menu-item" id="menuRoster">
+                    <i class="fas fa-users"></i> Roster
+                </button>
+                <button class="menu-item" id="menuTeamSettings">
+                    <i class="fas fa-shield-alt"></i> Team Settings
+                </button>
+                <div class="menu-divider"></div>
                 <button class="menu-item" id="menuSettings">
-                    <i class="fas fa-cog"></i> Settings
+                    <i class="fas fa-cog"></i> App Settings
                 </button>
                 <button class="menu-item" id="menuAbout">
                     <i class="fas fa-info-circle"></i> About / Version
@@ -1088,6 +1095,28 @@ function wireGameScreenEvents() {
         settingsBtn.addEventListener('click', () => {
             closeGameMenu();
             showGameSettingsDialog();
+        });
+    }
+
+    const rosterBtn = document.getElementById('menuRoster');
+    if (rosterBtn) {
+        rosterBtn.addEventListener('click', () => {
+            closeGameMenu();
+            if (typeof hideGameScreen === 'function') hideGameScreen();
+            if (typeof updateTeamRosterDisplay === 'function') updateTeamRosterDisplay();
+            showScreen('teamRosterScreen');
+            // Ensure "Continue Game" button is active so user can return
+            const continueBtn = document.getElementById('continueGameBtn');
+            if (continueBtn) continueBtn.classList.remove('inactive');
+        });
+    }
+
+    const teamSettingsBtn = document.getElementById('menuTeamSettings');
+    if (teamSettingsBtn) {
+        teamSettingsBtn.addEventListener('click', () => {
+            closeGameMenu();
+            if (typeof hideGameScreen === 'function') hideGameScreen();
+            if (typeof showTeamSettingsScreen === 'function') showTeamSettingsScreen('gameScreen');
         });
     }
 
