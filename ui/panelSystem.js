@@ -1131,8 +1131,9 @@ window.RESIZABLE_PANELS = RESIZABLE_PANELS;
 window.PBP_MIN_CONTENT_HEIGHT = PBP_MIN_CONTENT_HEIGHT;
 window.FOLLOW_MIN_HEIGHT = FOLLOW_MIN_HEIGHT;
 
-// Reset multi-coach detection (call when exiting game screen)
+// Multi-coach detection controls (latch for role button visibility)
 window.resetMultiCoachDetected = function() { _multiCoachDetected = false; };
+window.forceMultiCoachDetected = function() { _multiCoachDetected = true; };
 
 // Game screen management
 window.showGameScreen = showGameScreen;
