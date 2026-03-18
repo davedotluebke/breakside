@@ -13,19 +13,25 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <script>window._isStaging = location.hostname === 'staging.breakside.pro';</script>
     <meta name="apple-mobile-web-app-title" id="appTitle" content="Breakside">
-    <script>if(window._isStaging) document.getElementById('appTitle').content = 'Breakside STG';</script>
     <meta name="msapplication-TileColor" content="#E19049">
     <meta name="msapplication-config" content="browserconfig.xml">
+    <script>
+        if(window._isStaging) {
+            document.getElementById('appTitle').content = 'Breakside STG';
+            document.querySelector('meta[name="theme-color"]').content = '#9B32EB';
+            document.querySelector('meta[name="msapplication-TileColor"]').content = '#9B32EB';
+        }
+    </script>
 
     <!-- Favicon and Icons -->
-    <link rel="icon" type="image/x-icon" href="images/favicon.ico">
-    <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="48x48" href="images/favicon-48x48.png">
-    <link rel="icon" type="image/png" sizes="96x96" href="images/favicon-96x96.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="images/favicon-192x192.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="images/favicon-512x512.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="images/favicon-192x192.png">
+    <script>
+        var _iconBase = window._isStaging ? 'images/staging/' : 'images/';
+        document.write('<link rel="icon" type="image/x-icon" href="images/favicon.ico">');
+        ['16x16','32x32','48x48','96x96','192x192','512x512'].forEach(function(s) {
+            document.write('<link rel="icon" type="image/png" sizes="' + s + '" href="' + _iconBase + 'favicon-' + s + '.png">');
+        });
+        document.write('<link rel="apple-touch-icon" sizes="180x180" href="' + _iconBase + 'favicon-192x192.png">');
+    </script>
 
     <!-- Manifest -->
     <script>
