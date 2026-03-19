@@ -676,6 +676,76 @@ td.player-mmp,
     margin-right: 4px;
 }
 
+/* Event container styles */
+.event-container {
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    margin: 8px 12px;
+    background: #f8f9fa;
+    overflow: hidden;
+}
+
+.event-container.event-closed {
+    opacity: 0.7;
+}
+
+.event-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: #e8e8e8;
+    gap: 8px;
+}
+
+.event-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    flex: 1;
+}
+
+.event-record {
+    font-size: 0.85rem;
+    color: #555;
+    font-weight: 500;
+}
+
+.event-header-btns {
+    display: flex;
+    gap: 4px;
+}
+
+.event-games-list {
+    margin: 0;
+    padding: 0;
+}
+
+.event-new-game-btn {
+    margin: 4px 8px 8px;
+    width: calc(100% - 16px);
+    font-size: 0.85rem;
+    padding: 6px;
+}
+
+.new-event-btn {
+    background: #6c5ce7;
+}
+
+.new-event-btn:hover {
+    background: #5b4bd5;
+}
+
+.team-action-buttons {
+    display: flex;
+    gap: 8px;
+    padding: 8px 15px;
+}
+
+.team-action-buttons .new-game-btn {
+    width: auto;
+    flex: 1;
+    margin: 0;
+}
+
 .no-games-message {
     padding: 15px 20px;
     color: #888;
