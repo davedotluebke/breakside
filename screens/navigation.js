@@ -15,6 +15,7 @@ const nonGameScreenIds = [
     'selectTeamScreen',
     'teamRosterScreen',
     'teamSettingsScreen',
+    'eventRosterScreen',
     'gameSummaryScreen'
 ];
 
@@ -24,6 +25,9 @@ function showScreen(screenId) {
             screen.style.display = 'none';
         }
     });
+    // Also hide dynamically created screens
+    const eventRoster = document.getElementById('eventRosterScreen');
+    if (eventRoster) eventRoster.style.display = 'none';
 
     const targetScreen = document.getElementById(screenId);
     if (!targetScreen) {
@@ -35,7 +39,7 @@ function showScreen(screenId) {
     // Header styling — full header on non-game screens
     const headerElement = document.querySelector('header');
     if (headerElement) {
-        if (screenId === 'selectTeamScreen' || screenId === 'teamRosterScreen' || screenId === 'teamSettingsScreen') {
+        if (screenId === 'selectTeamScreen' || screenId === 'teamRosterScreen' || screenId === 'teamSettingsScreen' || screenId === 'eventRosterScreen') {
             headerElement.classList.remove('header-compact');
             headerElement.classList.add('header-full');
         } else {

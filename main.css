@@ -746,6 +746,46 @@ td.player-mmp,
     margin: 0;
 }
 
+/* Event Roster styles */
+.event-roster-content {
+    padding: 0 1rem;
+}
+
+.event-roster-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.event-roster-row input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+}
+
+.event-roster-row span {
+    flex: 1;
+}
+
+.pickup-row {
+    padding: 6px 8px;
+    background: #fff3cd;
+    border-radius: 4px;
+    margin-bottom: 4px;
+}
+
+.event-pickup-add {
+    display: flex;
+    gap: 4px;
+    margin-top: 0.5rem;
+    align-items: center;
+}
+
+.event-pickup-add input, .event-pickup-add select {
+    padding: 6px;
+}
+
 .no-games-message {
     padding: 15px 20px;
     color: #888;
