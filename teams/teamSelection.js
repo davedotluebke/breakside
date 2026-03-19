@@ -1231,13 +1231,10 @@ async function showConnectionInfo() {
  * Show confirmation dialog and force app update
  */
 function confirmAppUpdate() {
-    if (confirm('Update the app now? The page will reload.')) {
-        if (typeof forceAppUpdate === 'function') {
-            forceAppUpdate();
-        } else {
-            // Fallback: just reload with cache clear
-            window.location.reload(true);
-        }
+    if (typeof forceAppUpdate === 'function') {
+        forceAppUpdate();
+    } else {
+        window.location.reload(true);
     }
 }
 
