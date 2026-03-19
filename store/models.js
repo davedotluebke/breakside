@@ -117,6 +117,7 @@ function Game(teamName, opponentName, startOn, teamId = null) {
         [Role.OPPONENT]: 0,
     };
     this.id = null; // Unique Game ID (e.g., YYYY-MM-DD_Team_vs_Opponent_Timestamp)
+    this.eventId = null; // TournamentEvent ID if game is part of an event
     this.points = [];  // An array of Point objects
     this.gameStartTimestamp = new Date();
     this.gameEndTimestamp = null;
@@ -149,24 +150,48 @@ function Game(teamName, opponentName, startOn, teamId = null) {
 }
 
 /**
- * Create a roster snapshot from a team's current roster
+ * Create a roster snapshot from a team's current roster or an event roster
  * Call this when starting a new game to capture player info for historical accuracy
  * @param {Team} team - The team object with players
+ * @param {TournamentEvent} [event] - Optional event; if provided, uses event roster
  * @returns {Object} Roster snapshot with players array and timestamp
  */
-function createRosterSnapshot(team) {
+function createRosterSnapshot(team, event) {
     if (!team || !team.teamRoster) {
         return null;
     }
-    
-    return {
-        players: team.teamRoster.map(player => ({
+
+    let players;
+    if (event && event.roster) {
+        // Build from event roster: team players filtered by event playerIds + pickups
+        const eventPlayerIds = event.roster.playerIds || [];
+        const teamPlayers = team.teamRoster.filter(p => eventPlayerIds.includes(p.id));
+        const pickups = (event.roster.pickupPlayers || []).map(p => ({
+            id: p.id,
+            name: p.name,
+            nickname: '',
+            number: p.number || null,
+            gender: p.gender || Gender.UNKNOWN
+        }));
+        players = teamPlayers.map(player => ({
             id: player.id,
             name: player.name,
             nickname: player.nickname || '',
             number: player.number || null,
             gender: player.gender || Gender.UNKNOWN
-        })),
+        })).concat(pickups);
+    } else {
+        players = team.teamRoster.map(player => ({
+            id: player.id,
+            name: player.name,
+            nickname: player.nickname || '',
+            number: player.number || null,
+            gender: player.gender || Gender.UNKNOWN
+        }));
+    }
+
+    return {
+        players: players,
         capturedAt: new Date().toISOString()
     };
 }
@@ -435,8 +460,42 @@ class Point {
 // Exports
 // =============================================================================
 
+/**
+ * Generate an event ID
+ * @param {string} name - Event name
+ * @returns {string} Event ID like "Spring-League-a3f2"
+ */
+function generateEventId(name) {
+    return generateShortId(name || 'Event');
+}
+
+/**
+ * TournamentEvent data structure
+ * Groups games for a team within a tournament or league.
+ * Named TournamentEvent to avoid collision with play-by-play Event base class.
+ */
+function TournamentEvent(name = "New Event", teamId = null, id = null) {
+    this.id = id || generateEventId(name);
+    this.name = name;
+    this.teamId = teamId;
+    this.status = 'open'; // 'open' or 'closed'
+    this.defaults = {
+        alternateGenderRatio: 'No',
+        alternateGenderPulls: false,
+        playersPerSide: 7
+    };
+    this.roster = {
+        playerIds: [],
+        pickupPlayers: [] // [{id, name, gender, number}]
+    };
+    this.gameIds = [];
+    this.createdAt = new Date().toISOString();
+    this.updatedAt = new Date().toISOString();
+}
+
 // ID generation functions - needed by sync.js for offline entity creation
 window.generateShortId = generateShortId;
 window.generatePlayerId = generatePlayerId;
 window.generateTeamId = generateTeamId;
+window.generateEventId = generateEventId;
 
