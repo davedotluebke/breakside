@@ -97,6 +97,18 @@ from .invite_storage import (
     rebuild_invite_index,
 )
 
+from .event_storage import (
+    generate_event_id,
+    save_event,
+    get_event,
+    list_events,
+    update_event,
+    delete_event,
+    event_exists,
+    list_team_events,
+    add_game_to_event,
+)
+
 from .controller_storage import (
     get_controller_state,
     auto_assign_roles_if_unclaimed,
@@ -193,6 +205,16 @@ __all__ = [
     "revoke_invite",
     "delete_invite",
     "rebuild_invite_index",
+    # Event storage
+    "generate_event_id",
+    "save_event",
+    "get_event",
+    "list_events",
+    "update_event",
+    "delete_event",
+    "event_exists",
+    "list_team_events",
+    "add_game_to_event",
     # Controller storage (in-memory)
     "get_controller_state",
     "auto_assign_roles_if_unclaimed",
