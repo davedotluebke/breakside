@@ -100,6 +100,7 @@ function serializeGame(game) {
     return {
         id: game.id,
         teamId: game.teamId,  // New: reference to team by ID
+        eventId: game.eventId || null,  // TournamentEvent ID
         team: game.team,       // Legacy: team name string
         opponent: game.opponent,
         startingPosition: game.startingPosition,
@@ -356,6 +357,7 @@ function deserializeGame(gameData) {
     );
     
     game.id = gameData.id;
+    game.eventId = gameData.eventId || null;
     game.gameStartTimestamp = new Date(gameData.gameStartTimestamp);
     game.gameEndTimestamp = gameData.gameEndTimestamp ? new Date(gameData.gameEndTimestamp) : null;
     
@@ -521,6 +523,7 @@ function initializeTeams() {
  */
 var teams = [];                 // An array of teams
 var currentTeam = null;         // The current team being tracked
+var currentEvent = null;        // The current TournamentEvent (null when standalone game)
 var sampleTeam = null;          // A sample team with 10 players, used if no teams are found
 var currentTeamRole = null;     // The user's role on the current team ('coach' or 'viewer')
 
@@ -541,9 +544,64 @@ function clearAllTeamsData() {
     console.log('Clearing in-memory teams data...');
     teams = [];
     currentTeam = null;
+    currentEvent = null;
     sampleTeam = null;
     currentTeamRole = null;
 }
+
+/**
+ * Serialize a TournamentEvent to a plain object
+ */
+function serializeTournamentEvent(event) {
+    return {
+        id: event.id,
+        name: event.name,
+        teamId: event.teamId,
+        status: event.status,
+        defaults: event.defaults || {},
+        roster: event.roster || { playerIds: [], pickupPlayers: [] },
+        gameIds: event.gameIds || [],
+        createdAt: event.createdAt,
+        updatedAt: event.updatedAt
+    };
+}
+
+/**
+ * Deserialize a TournamentEvent from data
+ */
+function deserializeTournamentEvent(data) {
+    const event = new TournamentEvent(data.name, data.teamId, data.id);
+    event.status = data.status || 'open';
+    event.defaults = data.defaults || {};
+    event.roster = data.roster || { playerIds: [], pickupPlayers: [] };
+    event.gameIds = data.gameIds || [];
+    event.createdAt = data.createdAt || new Date().toISOString();
+    event.updatedAt = data.updatedAt || event.createdAt;
+    return event;
+}
+
+/**
+ * Get the active roster for the current game context.
+ * Returns event roster players if currentEvent is set, else team roster.
+ * @returns {Array} Array of player objects
+ */
+function getActiveRoster() {
+    if (currentEvent && currentEvent.roster && currentTeam) {
+        const eventPlayerIds = currentEvent.roster.playerIds || [];
+        const teamPlayers = currentTeam.teamRoster.filter(p => eventPlayerIds.includes(p.id));
+        const pickups = (currentEvent.roster.pickupPlayers || []).map(p => {
+            // Create Player-like objects for pickups
+            const player = new Player(p.name, '', p.gender || Gender.UNKNOWN, p.number || null, p.id);
+            return player;
+        });
+        return [...teamPlayers, ...pickups];
+    }
+    return currentTeam ? currentTeam.teamRoster : [];
+}
+
+window.getActiveRoster = getActiveRoster;
+window.serializeTournamentEvent = serializeTournamentEvent;
+window.deserializeTournamentEvent = deserializeTournamentEvent;
 
 function getCurrentTeamRole() { return currentTeamRole; }
 function setCurrentTeamRole(role) { currentTeamRole = role; }

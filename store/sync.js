@@ -182,7 +182,7 @@ function addToSyncQueue(type, action, id, data) {
  * Get pending sync count by type
  */
 function getPendingSyncCount() {
-    const counts = { player: 0, team: 0, game: 0 };
+    const counts = { player: 0, team: 0, event: 0, game: 0 };
     syncQueue.forEach(item => {
         if (counts[item.type] !== undefined) {
             counts[item.type]++;
@@ -207,8 +207,8 @@ async function processSyncQueue() {
     isSyncing = true;
     console.log(`🔄 Processing ${syncQueue.length} items in sync queue...`);
     
-    // Sort queue by type (players first, then teams, then games)
-    const typeOrder = { player: 0, team: 1, game: 2 };
+    // Sort queue by type (players first, then teams, then events, then games)
+    const typeOrder = { player: 0, team: 1, event: 2, game: 3 };
     const sortedQueue = [...syncQueue].sort((a, b) => {
         return (typeOrder[a.type] || 3) - (typeOrder[b.type] || 3);
     });
@@ -291,6 +291,21 @@ async function syncQueueItem(item) {
             }
             break;
             
+        case 'event':
+            if (action === 'create') {
+                url = `${API_BASE_URL}/api/events`;
+                method = 'POST';
+                body = JSON.stringify(cleanData);
+            } else if (action === 'update') {
+                url = `${API_BASE_URL}/api/events/${id}`;
+                method = 'PUT';
+                body = JSON.stringify(cleanData);
+            } else if (action === 'delete') {
+                url = `${API_BASE_URL}/api/events/${id}`;
+                method = 'DELETE';
+            }
+            break;
+
         case 'game':
             if (action === 'create' || action === 'update' || action === 'sync') {
                 url = `${API_BASE_URL}/api/games/${id}/sync`;
@@ -301,7 +316,7 @@ async function syncQueueItem(item) {
                 method = 'DELETE';
             }
             break;
-            
+
         default:
             throw new Error(`Unknown entity type: ${type}`);
     }
@@ -676,6 +691,107 @@ async function deleteTeamFromCloud(teamId) {
         processSyncQueue();
     }
 }
+
+// =============================================================================
+// Event Sync Functions
+// =============================================================================
+
+/**
+ * Sync an event to the cloud (create or update)
+ * @param {object} event - TournamentEvent object or plain data
+ */
+async function syncEventToCloud(event) {
+    if (!event || !event.id) return;
+
+    const eventData = typeof serializeTournamentEvent === 'function'
+        ? serializeTournamentEvent(event)
+        : event;
+
+    addToSyncQueue('event', 'update', event.id, eventData);
+
+    if (isOnline) {
+        processSyncQueue();
+    }
+}
+
+/**
+ * Create an event via the API
+ * @param {object} eventData - Event data with name, teamId, etc.
+ * @returns {Promise<object>} Created event data
+ */
+async function createEventOnCloud(eventData) {
+    const response = await authFetch(`${API_BASE_URL}/api/events`, {
+        method: 'POST',
+        body: JSON.stringify(eventData)
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to create event: ${errorText}`);
+    }
+
+    const result = await response.json();
+    return result.event || result;
+}
+
+/**
+ * Update an event via the API
+ * @param {string} eventId - Event ID
+ * @param {object} eventData - Updated event data
+ * @returns {Promise<object>} Updated event data
+ */
+async function updateEventOnCloud(eventId, eventData) {
+    const response = await authFetch(`${API_BASE_URL}/api/events/${eventId}`, {
+        method: 'PUT',
+        body: JSON.stringify(eventData)
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to update event: ${errorText}`);
+    }
+
+    const result = await response.json();
+    return result.event || result;
+}
+
+/**
+ * Delete an event
+ * @param {string} eventId - Event ID
+ */
+async function deleteEventFromCloud(eventId) {
+    const response = await authFetch(`${API_BASE_URL}/api/events/${eventId}`, {
+        method: 'DELETE'
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to delete event: ${errorText}`);
+    }
+}
+
+/**
+ * List events for a team
+ * @param {string} teamId - Team ID
+ * @returns {Promise<Array>} List of events
+ */
+async function listTeamEvents(teamId) {
+    const response = await authFetch(`${API_BASE_URL}/api/teams/${teamId}/events`);
+
+    if (!response.ok) {
+        console.error('Failed to fetch team events:', response.statusText);
+        return [];
+    }
+
+    const result = await response.json();
+    return result.events || [];
+}
+
+window.syncEventToCloud = syncEventToCloud;
+window.createEventOnCloud = createEventOnCloud;
+window.updateEventOnCloud = updateEventOnCloud;
+window.deleteEventFromCloud = deleteEventFromCloud;
+window.listTeamEvents = listTeamEvents;
 
 // =============================================================================
 // Game Sync Functions
@@ -1542,7 +1658,7 @@ async function syncAllData() {
         await processSyncQueue();
         
         const pendingCounts = getPendingSyncCount();
-        const totalPending = pendingCounts.player + pendingCounts.team + pendingCounts.game;
+        const totalPending = pendingCounts.player + pendingCounts.team + pendingCounts.event + pendingCounts.game;
         
         if (totalPending === 0) {
             console.log('✅ Full sync complete');
