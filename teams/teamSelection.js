@@ -216,11 +216,24 @@ async function populateCloudTeamsAndGames() {
         const userTeams = data.teams || [];
         _cloudTeamsCache = userTeams;
 
-        // Also fetch games (includes activeCoaches from server)
+        // Also fetch games and events
         let allGames = [];
         if (typeof listServerGames === 'function') {
             allGames = await listServerGames();
         }
+
+        // Fetch events for all teams
+        const eventsByTeamId = {};
+        await Promise.all(userTeams.map(async ({ team }) => {
+            try {
+                if (typeof listTeamEvents === 'function') {
+                    eventsByTeamId[team.id] = await listTeamEvents(team.id);
+                }
+            } catch (e) {
+                console.warn(`Failed to fetch events for team ${team.id}:`, e);
+                eventsByTeamId[team.id] = [];
+            }
+        }));
         
         if (userTeams.length === 0) {
             listElement.innerHTML = `
@@ -387,107 +400,73 @@ async function populateCloudTeamsAndGames() {
             // Games list (collapsible content)
             const gamesContainer = document.createElement('div');
             gamesContainer.className = 'team-games-container';
-            
+
             // On first render, expand teams with active games; after that, preserve user's choice
             if (!_expandStateInitialized) {
                 if (hasActiveGames) _expandedTeams.add(team.id);
             }
             gamesContainer.style.display = _expandedTeams.has(team.id) ? 'block' : 'none';
-            
-            if (teamGames.length === 0) {
+
+            // Get events for this team
+            const teamEvents = eventsByTeamId[team.id] || [];
+            const eventMap = {};
+            teamEvents.forEach(ev => { eventMap[ev.id] = ev; });
+
+            // Group games by eventId
+            const eventGameIds = new Set();
+            const gamesByEventId = {};
+            teamGames.forEach(game => {
+                const eid = game.eventId || null;
+                if (eid && eventMap[eid]) {
+                    if (!gamesByEventId[eid]) gamesByEventId[eid] = [];
+                    gamesByEventId[eid].push(game);
+                    eventGameIds.add(game.game_id);
+                }
+            });
+            const standaloneGames = teamGames.filter(g => !eventGameIds.has(g.game_id));
+
+            // Build interleaved list: events and standalone games sorted by most recent activity
+            const renderItems = [];
+
+            // Add events with their latest game timestamp
+            teamEvents.forEach(ev => {
+                const evGames = gamesByEventId[ev.id] || [];
+                const latestTs = getMostRecentGameTimestamp(evGames);
+                renderItems.push({ type: 'event', event: ev, games: evGames, sortTs: latestTs || new Date(ev.createdAt || 0).getTime() });
+            });
+
+            // Add standalone games
+            standaloneGames.forEach(game => {
+                const ts = game.game_start_timestamp ? new Date(game.game_start_timestamp).getTime() : 0;
+                renderItems.push({ type: 'game', game: game, sortTs: ts });
+            });
+
+            // Sort newest first
+            renderItems.sort((a, b) => b.sortTs - a.sortTs);
+
+            if (renderItems.length === 0 && teamEvents.length === 0) {
                 const noGamesMsg = document.createElement('div');
                 noGamesMsg.className = 'no-games-message';
                 noGamesMsg.textContent = 'No games yet';
                 gamesContainer.appendChild(noGamesMsg);
             } else {
-                const gamesList = document.createElement('ul');
-                gamesList.className = 'games-list';
-                
-                teamGames.forEach(game => {
-                    const gameItem = document.createElement('li');
-                    gameItem.className = 'game-item';
-                    if (isGameActive(game)) {
-                        gameItem.classList.add('game-active');
+                renderItems.forEach(item => {
+                    if (item.type === 'event') {
+                        gamesContainer.appendChild(renderEventContainer(item.event, item.games, team, role));
+                    } else {
+                        const gamesList = document.createElement('ul');
+                        gamesList.className = 'games-list';
+                        gamesList.appendChild(renderGameItem(item.game, team, role));
+                        gamesContainer.appendChild(gamesList);
                     }
-                    
-                    // --- Line 1: date vs opponent score ---
-                    const line1 = document.createElement('div');
-                    line1.className = 'game-line1';
-                    
-                    const d = game.game_start_timestamp ? new Date(game.game_start_timestamp) : null;
-                    const dateStr = d
-                        ? `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`
-                        : '??/??/??';
-                    const scoreText = `${game.scores?.team || 0}-${game.scores?.opponent || 0}`;
-                    line1.textContent = `${dateStr}  vs ${game.opponent || '???'}  ${scoreText}`;
-                    gameItem.appendChild(line1);
-                    
-                    // --- Line 2: Join button + delete ---
-                    const line2 = document.createElement('div');
-                    line2.className = 'game-line2';
-                    
-                    if (!game.game_end_timestamp && role === 'coach') {
-                        const joinBtn = document.createElement('button');
-                        joinBtn.textContent = 'Join';
-                        joinBtn.className = 'game-join-btn';
-                        joinBtn.title = 'Join Game';
-                        joinBtn.onclick = (e) => {
-                            e.stopPropagation();
-                            resumeCloudGame(team, game.game_id, role);
-                        };
-                        line2.appendChild(joinBtn);
-                    }
-                    if (role === 'viewer') {
-                        const watchBtn = document.createElement('button');
-                        watchBtn.textContent = game.game_end_timestamp ? 'Review' : 'Watch';
-                        watchBtn.className = 'game-join-btn game-watch-btn';
-                        watchBtn.title = game.game_end_timestamp ? 'Review Game' : 'Watch Live';
-                        watchBtn.onclick = (e) => {
-                            e.stopPropagation();
-                            resumeCloudGame(team, game.game_id, role);
-                        };
-                        line2.appendChild(watchBtn);
-                    }
-                    
-                    // Spacer pushes delete to the right
-                    const spacer = document.createElement('span');
-                    spacer.style.flex = '1';
-                    line2.appendChild(spacer);
-                    
-                    if (role === 'coach') {
-                        const deleteBtn = document.createElement('button');
-                        deleteBtn.innerHTML = '<i class="fas fa-trash" style="color: #dc3545;"></i>';
-                        deleteBtn.classList.add('icon-button');
-                        deleteBtn.title = 'Delete Game';
-                        deleteBtn.onclick = (e) => {
-                            e.stopPropagation();
-                            deleteCloudGameWithConfirm(game.game_id);
-                        };
-                        line2.appendChild(deleteBtn);
-                    }
-                    gameItem.appendChild(line2);
-                    
-                    // --- Line 3 (if active): coaches badge ---
-                    if (isGameActive(game)) {
-                        const line3 = document.createElement('div');
-                        line3.className = 'game-line3';
-                        const activeBadge = document.createElement('span');
-                        activeBadge.className = 'game-active-badge';
-                        const coachNames = game.activeCoaches.join(', ');
-                        activeBadge.textContent = `🟢 ${coachNames} coaching`;
-                        activeBadge.title = 'Active coaches in this game';
-                        line3.appendChild(activeBadge);
-                        gameItem.appendChild(line3);
-                    }
-                    
-                    gamesList.appendChild(gameItem);
                 });
-                
-                gamesContainer.appendChild(gamesList);
             }
-            
-            // "New Game" button for coaches
+
+            // Buttons row for coaches
             if (role === 'coach') {
+                const btnRow = document.createElement('div');
+                btnRow.className = 'team-action-buttons';
+
                 const newGameBtn = document.createElement('button');
                 newGameBtn.className = 'new-game-btn';
                 newGameBtn.innerHTML = '<i class="fas fa-plus"></i> New Game';
@@ -495,9 +474,20 @@ async function populateCloudTeamsAndGames() {
                     e.stopPropagation();
                     selectCloudTeam(team);
                 };
-                gamesContainer.appendChild(newGameBtn);
+                btnRow.appendChild(newGameBtn);
+
+                const newEventBtn = document.createElement('button');
+                newEventBtn.className = 'new-game-btn new-event-btn';
+                newEventBtn.innerHTML = '<i class="fas fa-trophy"></i> New Event';
+                newEventBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    showCreateEventDialog(team);
+                };
+                btnRow.appendChild(newEventBtn);
+
+                gamesContainer.appendChild(btnRow);
             }
-            
+
             teamSection.appendChild(gamesContainer);
             
             // Toggle expand/collapse on header click
@@ -1536,3 +1526,389 @@ function stopAutoRefresh() {
 
 // Start auto-refresh on load
 startAutoRefresh();
+
+// =============================================================================
+// Event UI Helpers
+// =============================================================================
+
+/**
+ * Render a single game list item
+ */
+function renderGameItem(game, team, role) {
+    const gameItem = document.createElement('li');
+    gameItem.className = 'game-item';
+    if (isGameActive(game)) {
+        gameItem.classList.add('game-active');
+    }
+
+    // --- Line 1: date vs opponent score ---
+    const line1 = document.createElement('div');
+    line1.className = 'game-line1';
+
+    const d = game.game_start_timestamp ? new Date(game.game_start_timestamp) : null;
+    const dateStr = d
+        ? `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`
+        : '??/??/??';
+    const scoreText = `${game.scores?.team || 0}-${game.scores?.opponent || 0}`;
+    line1.textContent = `${dateStr}  vs ${game.opponent || '???'}  ${scoreText}`;
+    gameItem.appendChild(line1);
+
+    // --- Line 2: Join button + delete ---
+    const line2 = document.createElement('div');
+    line2.className = 'game-line2';
+
+    if (!game.game_end_timestamp && role === 'coach') {
+        const joinBtn = document.createElement('button');
+        joinBtn.textContent = 'Join';
+        joinBtn.className = 'game-join-btn';
+        joinBtn.title = 'Join Game';
+        joinBtn.onclick = (e) => {
+            e.stopPropagation();
+            resumeCloudGame(team, game.game_id, role);
+        };
+        line2.appendChild(joinBtn);
+    }
+    if (role === 'viewer') {
+        const watchBtn = document.createElement('button');
+        watchBtn.textContent = game.game_end_timestamp ? 'Review' : 'Watch';
+        watchBtn.className = 'game-join-btn game-watch-btn';
+        watchBtn.title = game.game_end_timestamp ? 'Review Game' : 'Watch Live';
+        watchBtn.onclick = (e) => {
+            e.stopPropagation();
+            resumeCloudGame(team, game.game_id, role);
+        };
+        line2.appendChild(watchBtn);
+    }
+
+    const spacer = document.createElement('span');
+    spacer.style.flex = '1';
+    line2.appendChild(spacer);
+
+    if (role === 'coach') {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.innerHTML = '<i class="fas fa-trash" style="color: #dc3545;"></i>';
+        deleteBtn.classList.add('icon-button');
+        deleteBtn.title = 'Delete Game';
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            deleteCloudGameWithConfirm(game.game_id);
+        };
+        line2.appendChild(deleteBtn);
+    }
+    gameItem.appendChild(line2);
+
+    // --- Line 3 (if active): coaches badge ---
+    if (isGameActive(game)) {
+        const line3 = document.createElement('div');
+        line3.className = 'game-line3';
+        const activeBadge = document.createElement('span');
+        activeBadge.className = 'game-active-badge';
+        const coachNames = game.activeCoaches.join(', ');
+        activeBadge.textContent = `🟢 ${coachNames} coaching`;
+        activeBadge.title = 'Active coaches in this game';
+        line3.appendChild(activeBadge);
+        gameItem.appendChild(line3);
+    }
+
+    return gameItem;
+}
+
+/**
+ * Render an event container with its games
+ */
+function renderEventContainer(event, games, team, role) {
+    const container = document.createElement('div');
+    container.className = 'event-container';
+    if (event.status === 'closed') {
+        container.classList.add('event-closed');
+    }
+
+    // Event header
+    const header = document.createElement('div');
+    header.className = 'event-header';
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'event-name';
+    nameSpan.textContent = event.name;
+    if (event.status === 'closed') {
+        nameSpan.textContent += ' (closed)';
+    }
+    header.appendChild(nameSpan);
+
+    if (role === 'coach') {
+        const headerBtns = document.createElement('span');
+        headerBtns.className = 'event-header-btns';
+
+        const rosterBtn = document.createElement('button');
+        rosterBtn.innerHTML = '<i class="fas fa-users"></i>';
+        rosterBtn.classList.add('icon-button');
+        rosterBtn.title = 'Event Roster';
+        rosterBtn.onclick = (e) => {
+            e.stopPropagation();
+            showEventRosterScreen(event, team);
+        };
+        headerBtns.appendChild(rosterBtn);
+
+        const settingsBtn = document.createElement('button');
+        settingsBtn.innerHTML = '<i class="fas fa-cog"></i>';
+        settingsBtn.classList.add('icon-button');
+        settingsBtn.title = 'Event Settings';
+        settingsBtn.onclick = (e) => {
+            e.stopPropagation();
+            showEventSettingsDialog(event, team);
+        };
+        headerBtns.appendChild(settingsBtn);
+
+        header.appendChild(headerBtns);
+    }
+
+    container.appendChild(header);
+
+    // Event games
+    if (games.length > 0) {
+        const gamesList = document.createElement('ul');
+        gamesList.className = 'games-list event-games-list';
+        games.forEach(game => {
+            gamesList.appendChild(renderGameItem(game, team, role));
+        });
+        container.appendChild(gamesList);
+    }
+
+    // "New Event Game" button for coaches (only open events)
+    if (role === 'coach' && event.status !== 'closed') {
+        const newGameBtn = document.createElement('button');
+        newGameBtn.className = 'new-game-btn event-new-game-btn';
+        newGameBtn.innerHTML = '<i class="fas fa-plus"></i> New Event Game';
+        newGameBtn.onclick = (e) => {
+            e.stopPropagation();
+            startNewEventGame(event, team);
+        };
+        container.appendChild(newGameBtn);
+    }
+
+    // W-L record
+    const wins = games.filter(g => (g.scores?.team || 0) > (g.scores?.opponent || 0)).length;
+    const losses = games.filter(g => (g.scores?.opponent || 0) > (g.scores?.team || 0)).length;
+    if (games.length > 0) {
+        const record = document.createElement('div');
+        record.className = 'event-record';
+        record.textContent = `${wins}W-${losses}L`;
+        header.insertBefore(record, header.querySelector('.event-header-btns'));
+    }
+
+    return container;
+}
+
+/**
+ * Show create event dialog
+ */
+function showCreateEventDialog(team) {
+    // Remove existing dialog if any
+    const existing = document.getElementById('createEventModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'createEventModal';
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>New Event</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div style="padding: 0.5rem 0;">
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label>Event Name</label>
+                    <input type="text" id="newEventName" placeholder="e.g. Spring League" style="width: 100%; padding: 8px; box-sizing: border-box;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label>Gender Ratio</label>
+                    <select id="newEventGenderRatio" style="width: 100%; padding: 8px;">
+                        <option value="No">No</option>
+                        <option value="Alternating">Alternating</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label><input type="checkbox" id="newEventAltPulls"> Alternate Gender Pulls</label>
+                </div>
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label>Players Per Side</label>
+                    <input type="number" id="newEventPlayersPerSide" value="7" min="2" max="7" style="width: 80px; padding: 8px;">
+                </div>
+                <button id="createEventBtn" class="primary-btn" style="width: 100%;">Create Event</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Close handler
+    modal.querySelector('.close').onclick = () => modal.remove();
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+    // Create handler
+    document.getElementById('createEventBtn').onclick = async () => {
+        const name = document.getElementById('newEventName').value.trim();
+        if (!name) { alert('Event name is required'); return; }
+
+        const eventData = {
+            name: name,
+            teamId: team.id,
+            status: 'open',
+            defaults: {
+                alternateGenderRatio: document.getElementById('newEventGenderRatio').value,
+                alternateGenderPulls: document.getElementById('newEventAltPulls').checked,
+                playersPerSide: parseInt(document.getElementById('newEventPlayersPerSide').value) || 7
+            },
+            roster: {
+                playerIds: team.playerIds || [],
+                pickupPlayers: []
+            }
+        };
+
+        try {
+            await createEventOnCloud(eventData);
+            modal.remove();
+            populateCloudTeamsAndGames();
+        } catch (error) {
+            alert('Failed to create event: ' + error.message);
+        }
+    };
+
+    // Focus name input
+    document.getElementById('newEventName').focus();
+}
+
+/**
+ * Show event settings dialog
+ */
+function showEventSettingsDialog(event, team) {
+    const existing = document.getElementById('eventSettingsModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'eventSettingsModal';
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Event Settings</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div style="padding: 0.5rem 0;">
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label>Event Name</label>
+                    <input type="text" id="editEventName" value="${event.name}" style="width: 100%; padding: 8px; box-sizing: border-box;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label>Gender Ratio</label>
+                    <select id="editEventGenderRatio" style="width: 100%; padding: 8px;">
+                        <option value="No" ${(event.defaults?.alternateGenderRatio || 'No') === 'No' ? 'selected' : ''}>No</option>
+                        <option value="Alternating" ${event.defaults?.alternateGenderRatio === 'Alternating' ? 'selected' : ''}>Alternating</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label><input type="checkbox" id="editEventAltPulls" ${event.defaults?.alternateGenderPulls ? 'checked' : ''}> Alternate Gender Pulls</label>
+                </div>
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label>Players Per Side</label>
+                    <input type="number" id="editEventPlayersPerSide" value="${event.defaults?.playersPerSide || 7}" min="2" max="7" style="width: 80px; padding: 8px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label>Status</label>
+                    <select id="editEventStatus" style="width: 100%; padding: 8px;">
+                        <option value="open" ${event.status === 'open' ? 'selected' : ''}>Open</option>
+                        <option value="closed" ${event.status === 'closed' ? 'selected' : ''}>Closed</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button id="saveEventSettingsBtn" class="primary-btn" style="flex: 1;">Save</button>
+                    <button id="deleteEventBtn" class="secondary-btn" style="flex: 0; color: #dc3545;">Delete</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    modal.querySelector('.close').onclick = () => modal.remove();
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+    document.getElementById('saveEventSettingsBtn').onclick = async () => {
+        const updatedData = {
+            ...event,
+            name: document.getElementById('editEventName').value.trim() || event.name,
+            status: document.getElementById('editEventStatus').value,
+            defaults: {
+                alternateGenderRatio: document.getElementById('editEventGenderRatio').value,
+                alternateGenderPulls: document.getElementById('editEventAltPulls').checked,
+                playersPerSide: parseInt(document.getElementById('editEventPlayersPerSide').value) || 7
+            }
+        };
+
+        try {
+            await updateEventOnCloud(event.id, updatedData);
+            modal.remove();
+            populateCloudTeamsAndGames();
+        } catch (error) {
+            alert('Failed to update event: ' + error.message);
+        }
+    };
+
+    document.getElementById('deleteEventBtn').onclick = async () => {
+        if (!confirm(`Delete event "${event.name}"? This will not delete the games, but they will become standalone.`)) return;
+        try {
+            await deleteEventFromCloud(event.id);
+            modal.remove();
+            populateCloudTeamsAndGames();
+        } catch (error) {
+            alert('Failed to delete event: ' + error.message);
+        }
+    };
+}
+
+/**
+ * Start a new game within an event — pre-fills defaults from the event
+ */
+async function startNewEventGame(event, team) {
+    // Select the team first (ensures currentTeam is set)
+    await selectCloudTeam(team);
+
+    // Set the current event
+    currentEvent = typeof deserializeTournamentEvent === 'function'
+        ? deserializeTournamentEvent(event)
+        : event;
+
+    // Pre-fill game settings from event defaults
+    const defaults = event.defaults || {};
+    const enforceSelect = document.getElementById('enforceGenderRatioSelect');
+    if (enforceSelect && defaults.alternateGenderRatio) {
+        enforceSelect.value = defaults.alternateGenderRatio;
+    }
+    const altPullsCheckbox = document.getElementById('alternateGenderPullsCheckbox');
+    if (altPullsCheckbox) {
+        altPullsCheckbox.checked = defaults.alternateGenderPulls || false;
+    }
+    const playersInput = document.getElementById('playersOnFieldInput');
+    if (playersInput && defaults.playersPerSide) {
+        playersInput.value = defaults.playersPerSide;
+    }
+
+    // Show the roster screen where Start Game buttons are
+    showScreen('teamRosterScreen');
+}
+
+/**
+ * Navigate to event roster screen
+ */
+function showEventRosterScreen(event, team) {
+    if (typeof showEventRosterUI === 'function') {
+        selectCloudTeam(team).then(() => {
+            showEventRosterUI(event);
+        });
+    } else {
+        alert('Event roster screen not available yet.');
+    }
+}

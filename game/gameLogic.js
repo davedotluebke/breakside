@@ -17,15 +17,20 @@ function startNewGame(startingPosition, seconds) {
     
     // Phase 4: Pass teamId to Game constructor
     const newGame = new Game(currentTeam.name, opponentName, startingPosition, currentTeam.id);
-    
+
+    // Set eventId if starting a game within an event
+    if (currentEvent) {
+        newGame.eventId = currentEvent.id;
+    }
+
     // Generate ID immediately for the new game
     if (typeof window.generateGameId === 'function') {
         newGame.id = window.generateGameId(newGame);
     }
-    
-    // Phase 4: Create roster snapshot from current team roster
+
+    // Create roster snapshot — from event roster if in event, else team roster
     if (typeof createRosterSnapshot === 'function') {
-        newGame.rosterSnapshot = createRosterSnapshot(currentTeam);
+        newGame.rosterSnapshot = createRosterSnapshot(currentTeam, currentEvent || undefined);
         console.log('📸 Created roster snapshot:', newGame.rosterSnapshot);
     }
     
