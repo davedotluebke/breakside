@@ -1128,7 +1128,7 @@ function wireGameScreenEvents() {
         toggleRoleBtn.addEventListener('click', () => {
             closeGameMenu();
             const panel = document.getElementById('panel-roleButtons');
-            const isVisible = panel && !panel.classList.contains('panel-hidden');
+            const isVisible = panel && !panel.classList.contains('hidden');
             if (isVisible) {
                 if (typeof setPanelVisible === 'function') setPanelVisible('roleButtons', false);
             } else {
@@ -1237,7 +1237,7 @@ function handleGameMenuClick(e) {
         const toggleRoleBtn = document.getElementById('menuToggleRoleButtons');
         if (toggleRoleBtn) {
             const rolePanel = document.getElementById('panel-roleButtons');
-            const roleVisible = rolePanel && !rolePanel.classList.contains('panel-hidden');
+            const roleVisible = rolePanel && !rolePanel.classList.contains('hidden');
             toggleRoleBtn.innerHTML = roleVisible
                 ? '<i class="fas fa-user-tag"></i> Hide Role Buttons'
                 : '<i class="fas fa-user-tag"></i> Show Role Buttons';
