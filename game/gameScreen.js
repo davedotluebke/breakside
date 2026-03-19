@@ -2672,8 +2672,9 @@ function setupPlayByPlayResizeObserver() {
 // Select Next Line Panel
 // =============================================================================
 
-// Track stats display mode for panel (Game vs Total)
+// Track stats display mode for panel (Game vs Total vs Event)
 let panelShowingTotalStats = false;
+let panelStatsMode = 'game'; // 'game', 'event', or 'total'
 
 // Track conflict detection state
 let lastConflictToastPointIndex = -1;  // Prevent multiple toasts per point
@@ -2730,15 +2731,32 @@ function wireSelectLineEvents() {
 }
 
 /**
- * Handle stats toggle click (Game/Total)
+ * Handle stats toggle click — cycles through Game → Event → (skip Total when in event)
+ * or Game ↔ Total when no event
  */
 function handlePanelStatsToggle() {
-    panelShowingTotalStats = !panelShowingTotalStats;
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    const inEvent = game && game.eventId && currentEvent;
+
+    if (inEvent) {
+        // Three-way cycle: game → event → game (skip total)
+        if (panelStatsMode === 'game') {
+            panelStatsMode = 'event';
+        } else {
+            panelStatsMode = 'game';
+        }
+    } else {
+        // Two-way: game ↔ total
+        panelStatsMode = panelStatsMode === 'game' ? 'total' : 'game';
+    }
+
+    panelShowingTotalStats = panelStatsMode === 'total';
+
     const toggle = document.getElementById('panelStatsToggle');
     if (toggle) {
-        toggle.textContent = panelShowingTotalStats ? '(Total)' : '(Game)';
+        const labels = { game: '(Game)', event: '(Event)', total: '(Total)' };
+        toggle.textContent = labels[panelStatsMode] || '(Game)';
     }
-    // Refresh table to show correct stats
     updateSelectLineTable();
 }
 
@@ -3873,7 +3891,14 @@ function updateSelectLineTable() {
         const gameTime = typeof getPlayerGameTime === 'function'
             ? getPlayerGameTime(player.name)
             : 0;
-        if (panelShowingTotalStats) {
+        if (panelStatsMode === 'event' && typeof getEventPlayerStats === 'function' && game.eventId) {
+            const eventStats = getEventPlayerStats(game.eventId);
+            const ps = eventStats[player.name] || {};
+            const eventTime = (ps.timePlayed || 0) + gameTime;
+            timeCell.textContent = typeof formatPlayTime === 'function'
+                ? formatPlayTime(eventTime)
+                : '0:00';
+        } else if (panelShowingTotalStats) {
             const totalTime = (player.totalTimePlayed || 0) + gameTime;
             timeCell.textContent = typeof formatPlayTime === 'function'
                 ? formatPlayTime(totalTime)
@@ -3884,9 +3909,15 @@ function updateSelectLineTable() {
                 : '0:00';
         }
         row.appendChild(timeCell);
-        
+
         // Point participation columns
-        let runningPointTotal = panelShowingTotalStats ? (player.pointsPlayedPreviousGames || 0) : 0;
+        let runningPointTotal = 0;
+        if (panelStatsMode === 'event' && typeof getEventPlayerStats === 'function' && game.eventId) {
+            const eventStats = getEventPlayerStats(game.eventId);
+            runningPointTotal = (eventStats[player.name]?.pointsPlayed || 0);
+        } else if (panelShowingTotalStats) {
+            runningPointTotal = player.pointsPlayedPreviousGames || 0;
+        }
         game.points.forEach(point => {
             const pointCell = document.createElement('td');
             pointCell.classList.add('active-points-columns');
@@ -3939,24 +3970,30 @@ function updateSelectLineTimeCells() {
         if (!playerName) return;
         
         // Find the player in the roster
-        const player = currentTeam?.teamRoster?.find(p => p.name === playerName);
+        const activeRoster = typeof getActiveRoster === 'function' ? getActiveRoster() : currentTeam?.teamRoster;
+        const player = activeRoster?.find(p => p.name === playerName);
         if (!player) return;
-        
+
+        const gameTime = typeof getPlayerGameTime === 'function'
+            ? getPlayerGameTime(playerName)
+            : 0;
+
         // Calculate time based on current display mode
-        if (panelShowingTotalStats) {
-            // Total stats: player's total time + current game time
-            const gameTime = typeof getPlayerGameTime === 'function'
-                ? getPlayerGameTime(playerName)
-                : 0;
+        if (panelStatsMode === 'event' && typeof getEventPlayerStats === 'function') {
+            const game = typeof currentGame === 'function' ? currentGame() : null;
+            if (game && game.eventId) {
+                const eventStats = getEventPlayerStats(game.eventId);
+                const eventTime = (eventStats[playerName]?.timePlayed || 0) + gameTime;
+                cell.textContent = typeof formatPlayTime === 'function'
+                    ? formatPlayTime(eventTime)
+                    : '0:00';
+            }
+        } else if (panelShowingTotalStats) {
             const totalTime = (player.totalTimePlayed || 0) + gameTime;
             cell.textContent = typeof formatPlayTime === 'function'
                 ? formatPlayTime(totalTime)
                 : '0:00';
         } else {
-            // Game stats: just game time (includes current point if playing)
-            const gameTime = typeof getPlayerGameTime === 'function'
-                ? getPlayerGameTime(playerName)
-                : 0;
             cell.textContent = typeof formatPlayTime === 'function'
                 ? formatPlayTime(gameTime)
                 : '0:00';
@@ -4685,6 +4722,25 @@ function stopGameScreenTimerLoop() {
  * Called when starting a point or entering a game
  */
 function enterGameScreen() {
+    // Reset stats mode
+    panelStatsMode = 'game';
+    panelShowingTotalStats = false;
+
+    // Set currentEvent if game is part of an event
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (game && game.eventId && !currentEvent) {
+        // Try to fetch event data (best effort — will be null if not loaded)
+        if (typeof listTeamEvents === 'function' && game.teamId) {
+            listTeamEvents(game.teamId).then(events => {
+                const ev = events.find(e => e.id === game.eventId);
+                if (ev) {
+                    currentEvent = typeof deserializeTournamentEvent === 'function'
+                        ? deserializeTournamentEvent(ev) : ev;
+                }
+            }).catch(() => {});
+        }
+    }
+
     // Stop active-game polling while in a game
     if (typeof stopActiveGamePolling === 'function') {
         stopActiveGamePolling();
@@ -4801,6 +4857,9 @@ function exitGameScreen() {
     hideGameScreen();
     stopGameScreenTimerLoop();
     stopGameStateRefresh();
+
+    // Clear event context when leaving game
+    currentEvent = null;
 
     // Reset multi-coach detection for next game
     if (typeof resetMultiCoachDetected === 'function') {
