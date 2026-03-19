@@ -238,6 +238,7 @@ def list_all_games() -> List[Dict[str, any]]:
                 "game_end_timestamp": game_data.get("gameEndTimestamp"),
                 "scores": game_data.get("scores", {}),
                 "points_count": len(game_data.get("points", [])),
+                "eventId": game_data.get("eventId"),
             })
         except (json.JSONDecodeError, KeyError):
             # Skip invalid game files

@@ -72,6 +72,15 @@ try:
         delete_membership,
         get_user_team_membership,
         get_team_coaches,
+        # Event storage
+        save_event,
+        get_event,
+        list_events,
+        update_event,
+        delete_event as delete_event_storage,
+        event_exists,
+        list_team_events,
+        add_game_to_event,
         # Controller storage (in-memory)
         get_controller_state,
         auto_assign_roles_if_unclaimed,
@@ -159,6 +168,15 @@ except ImportError:
         delete_membership,
         get_user_team_membership,
         get_team_coaches,
+        # Event storage
+        save_event,
+        get_event,
+        list_events,
+        update_event,
+        delete_event as delete_event_storage,
+        event_exists,
+        list_team_events,
+        add_game_to_event,
         # Controller storage (in-memory)
         get_controller_state,
         auto_assign_roles_if_unclaimed,
@@ -653,6 +671,99 @@ async def get_user_teams_endpoint(user: dict = Depends(get_current_user)):
 
 
 # =============================================================================
+# Event endpoints
+# =============================================================================
+
+@app.post("/api/events")
+async def create_event(
+    event_data: Dict[str, Any] = Body(...),
+    user: dict = Depends(get_current_user)
+):
+    """Create a new event. Requires coach access to the event's team."""
+    team_id = event_data.get('teamId')
+    if not team_id:
+        raise HTTPException(status_code=400, detail="teamId is required")
+
+    # Verify coach access to team
+    if AUTH_REQUIRED:
+        role = get_user_team_role(user['sub'], team_id)
+        if role != 'coach':
+            raise HTTPException(status_code=403, detail="Coach access required")
+
+    event_id = save_event(event_data)
+    return {"status": "created", "event_id": event_id, "event": get_event(event_id)}
+
+
+@app.get("/api/events/{event_id}")
+async def get_event_endpoint(
+    event_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Get an event by ID."""
+    if not event_exists(event_id):
+        raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
+    return get_event(event_id)
+
+
+@app.put("/api/events/{event_id}")
+async def update_event_endpoint(
+    event_id: str,
+    event_data: Dict[str, Any] = Body(...),
+    user: dict = Depends(get_current_user)
+):
+    """Update an event. Requires coach access to the event's team."""
+    if not event_exists(event_id):
+        raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
+
+    existing = get_event(event_id)
+    team_id = existing.get('teamId')
+
+    if AUTH_REQUIRED and team_id:
+        role = get_user_team_role(user['sub'], team_id)
+        if role != 'coach':
+            raise HTTPException(status_code=403, detail="Coach access required")
+
+    # Preserve teamId from existing
+    event_data['teamId'] = team_id
+    update_event(event_id, event_data)
+    return {"status": "updated", "event": get_event(event_id)}
+
+
+@app.delete("/api/events/{event_id}")
+async def delete_event_endpoint(
+    event_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Delete an event. Requires coach access to the event's team."""
+    if not event_exists(event_id):
+        raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
+
+    existing = get_event(event_id)
+    team_id = existing.get('teamId')
+
+    if AUTH_REQUIRED and team_id:
+        role = get_user_team_role(user['sub'], team_id)
+        if role != 'coach':
+            raise HTTPException(status_code=403, detail="Coach access required")
+
+    delete_event_storage(event_id)
+    return {"status": "deleted", "event_id": event_id}
+
+
+@app.get("/api/teams/{team_id}/events")
+async def get_team_events(
+    team_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """List all events for a team."""
+    if not team_exists(team_id):
+        raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+
+    events = list_team_events(team_id)
+    return {"events": events}
+
+
+# =============================================================================
 # Game endpoints
 # Note: All API routes use /api/ prefix to avoid conflicts with PWA static file serving
 
@@ -677,10 +788,19 @@ async def sync_game(
     if "team" not in game_data or "opponent" not in game_data:
         raise HTTPException(status_code=400, detail="Invalid game data: missing team or opponent")
     
+    # If game has an eventId, add game to event's gameIds (idempotent)
+    event_id = game_data.get('eventId')
+    if event_id and event_exists(event_id):
+        try:
+            add_game_to_event(event_id, game_id)
+        except Exception as e:
+            # Non-fatal: log but don't fail the sync
+            print(f"Warning: could not add game {game_id} to event {event_id}: {e}")
+
     # Save with versioning
     version_file = save_game_version(game_id, game_data)
     version_timestamp = Path(version_file).stem
-    
+
     return {
         "status": "synced",
         "game_id": game_id,

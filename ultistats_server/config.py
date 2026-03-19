@@ -16,6 +16,7 @@ MEMBERSHIPS_DIR = DATA_DIR / "memberships"
 INVITES_DIR = DATA_DIR / "invites"
 SHARES_DIR = DATA_DIR / "shares"
 SESSIONS_DIR = DATA_DIR / "sessions"
+EVENTS_DIR = DATA_DIR / "events"
 INDEX_FILE = DATA_DIR / "index.json"
 
 # Ensure data directories exist (only if we have write permissions)
@@ -29,6 +30,7 @@ try:
     INVITES_DIR.mkdir(parents=True, exist_ok=True)
     SHARES_DIR.mkdir(parents=True, exist_ok=True)
     SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+    EVENTS_DIR.mkdir(parents=True, exist_ok=True)
 except (OSError, PermissionError):
     # Will be created when first entity is saved
     pass
