@@ -360,6 +360,68 @@ function updateGameSummaryRosterDisplay() {
 
         rosterElement.appendChild(playerRow);
     });
+
+    // If game is part of an event, add Event Totals section
+    if (game && game.eventId && typeof getEventPlayerStats === 'function') {
+        appendEventTotalsToSummary(game, rosterElement);
+    }
+}
+
+/**
+ * Add event totals section to post-game summary
+ */
+function appendEventTotalsToSummary(game, containerEl) {
+    const eventStats = getEventPlayerStats(game.eventId);
+    if (!eventStats || Object.keys(eventStats).length === 0) return;
+
+    const record = typeof getEventRecord === 'function'
+        ? getEventRecord(game.eventId)
+        : { wins: 0, losses: 0 };
+
+    // Separator row
+    const sepRow = document.createElement('tr');
+    const sepCell = document.createElement('td');
+    sepCell.colSpan = 11;
+    sepCell.innerHTML = `<hr><strong>Event Totals</strong> (${record.wins}W-${record.losses}L)`;
+    sepCell.style.textAlign = 'center';
+    sepRow.appendChild(sepCell);
+    containerEl.appendChild(sepRow);
+
+    // Header row for event stats
+    const headerRow = document.createElement('tr');
+    ['Name', 'Pts', 'Time', 'Goals', 'Assists', '', '', '', 'TOs', '+/-', ''].forEach(headerText => {
+        const th = document.createElement('th');
+        th.textContent = headerText;
+        th.classList.add('roster-header');
+        headerRow.appendChild(th);
+    });
+    containerEl.appendChild(headerRow);
+
+    // Sort players by points played descending
+    const sorted = Object.entries(eventStats).sort((a, b) => b[1].pointsPlayed - a[1].pointsPlayed);
+    sorted.forEach(([playerName, stats]) => {
+        const row = document.createElement('tr');
+        row.style.background = '#f0f4ff';
+
+        const cells = [
+            playerName,
+            stats.pointsPlayed,
+            typeof formatPlayTime === 'function' ? formatPlayTime(stats.timePlayed) : '0:00',
+            stats.goals,
+            stats.assists,
+            '', '', '',
+            stats.turnovers,
+            stats.plusMinus > 0 ? `+${stats.plusMinus}` : stats.plusMinus,
+            ''
+        ];
+
+        cells.forEach(val => {
+            const td = document.createElement('td');
+            td.textContent = val;
+            row.appendChild(td);
+        });
+        containerEl.appendChild(row);
+    });
 }
 
 /**
