@@ -3752,16 +3752,20 @@ function updateSelectLineTable() {
     tableHead.innerHTML = '';
     
     const game = typeof currentGame === 'function' ? currentGame() : null;
-    if (!game || !currentTeam || !currentTeam.teamRoster) return;
-    
+    if (!game || !currentTeam) return;
+
+    // Use event roster if in event, else team roster
+    const activeRoster = typeof getActiveRoster === 'function' ? getActiveRoster() : currentTeam.teamRoster;
+    if (!activeRoster || activeRoster.length === 0) return;
+
     // Get current pending selections
     const pendingLine = game.pendingNextLine || {};
     const activeType = pendingLine.activeType || 'od';
     const selectedPlayers = pendingLine[activeType + 'Line'] || [];
-    
+
     // Create header rows (score display)
-    const runningScores = typeof getRunningScores === 'function' 
-        ? getRunningScores() 
+    const runningScores = typeof getRunningScores === 'function'
+        ? getRunningScores()
         : { team: [0], opponent: [0] };
     
     const teamScoreRow = document.createElement('tr');
@@ -3812,7 +3816,7 @@ function updateSelectLineTable() {
         : [];
     
     // Sort roster (played last point, played any points, not played)
-    const sortedRoster = [...currentTeam.teamRoster].sort((a, b) => {
+    const sortedRoster = [...activeRoster].sort((a, b) => {
         const aLastPoint = lastPointPlayers.includes(a.name);
         const bLastPoint = lastPointPlayers.includes(b.name);
         // Include players who were substituted out mid-point
