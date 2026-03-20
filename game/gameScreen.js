@@ -4727,10 +4727,10 @@ function enterGameScreen() {
     panelShowingTotalStats = false;
 
     // Set currentEvent if game is part of an event
-    const game = typeof currentGame === 'function' ? currentGame() : null;
-    if (game && game.eventId && !currentEvent) {
+    const currentGameObj = typeof currentGame === 'function' ? currentGame() : null;
+    if (currentGameObj && currentGameObj.eventId && !currentEvent) {
         // Try to fetch event data (best effort — will be null if not loaded)
-        if (typeof listTeamEvents === 'function' && game.teamId) {
+        if (typeof listTeamEvents === 'function' && currentGameObj.teamId) {
             listTeamEvents(game.teamId).then(events => {
                 const ev = events.find(e => e.id === game.eventId);
                 if (ev) {
