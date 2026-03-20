@@ -686,7 +686,7 @@ async def create_event(
 
     # Verify coach access to team
     if AUTH_REQUIRED:
-        role = get_user_team_role(user['sub'], team_id)
+        role = get_user_team_role(user['id'], team_id)
         if role != 'coach':
             raise HTTPException(status_code=403, detail="Coach access required")
 
@@ -719,7 +719,7 @@ async def update_event_endpoint(
     team_id = existing.get('teamId')
 
     if AUTH_REQUIRED and team_id:
-        role = get_user_team_role(user['sub'], team_id)
+        role = get_user_team_role(user['id'], team_id)
         if role != 'coach':
             raise HTTPException(status_code=403, detail="Coach access required")
 
@@ -742,7 +742,7 @@ async def delete_event_endpoint(
     team_id = existing.get('teamId')
 
     if AUTH_REQUIRED and team_id:
-        role = get_user_team_role(user['sub'], team_id)
+        role = get_user_team_role(user['id'], team_id)
         if role != 'coach':
             raise HTTPException(status_code=403, detail="Coach access required")
 
