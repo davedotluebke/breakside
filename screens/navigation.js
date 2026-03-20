@@ -36,16 +36,10 @@ function showScreen(screenId) {
     }
     targetScreen.style.display = 'block';
 
-    // Header styling — full header on non-game screens
+    // Ensure header is visible (hideLegacyScreens sets display:none via inline style)
     const headerElement = document.querySelector('header');
     if (headerElement) {
-        if (screenId === 'selectTeamScreen' || screenId === 'teamRosterScreen' || screenId === 'teamSettingsScreen' || screenId === 'eventRosterScreen') {
-            headerElement.classList.remove('header-compact');
-            headerElement.classList.add('header-full');
-        } else {
-            headerElement.classList.remove('header-full');
-            headerElement.classList.add('header-compact');
-        }
+        headerElement.style.display = '';
     }
 
     // Manage controller polling — stop on non-game screens
