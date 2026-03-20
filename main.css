@@ -2610,11 +2610,6 @@ header h1 {
 }
 
 /* Join Team Form */
-.join-team-form {
-    display: flex;
-    gap: 10px;
-}
-
 .join-code-input {
     flex: 1;
     padding: 10px 15px;
@@ -2944,35 +2939,6 @@ header h1 {
 }
 
 /* Join Team Modal */
-.join-modal {
-    text-align: center;
-}
-
-.join-team-preview {
-    background: #f8f9fa;
-    padding: 20px;
-    border-radius: 12px;
-    margin: 15px 0;
-}
-
-.join-team-name {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #333;
-    margin-bottom: 8px;
-}
-
-.join-team-role {
-    font-size: 1rem;
-    color: #666;
-    margin-bottom: 5px;
-}
-
-.join-team-inviter {
-    font-size: 0.9rem;
-    color: #888;
-}
-
 .modal-buttons {
     display: flex;
     gap: 10px;

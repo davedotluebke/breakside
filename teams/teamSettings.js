@@ -8,7 +8,6 @@
 // =============================================================================
 
 let currentInvite = null;
-let pendingJoinInfo = null;
 
 // =============================================================================
 // API Helpers
@@ -124,48 +123,11 @@ function initializeTeamSettings() {
         copyLinkBtn.addEventListener('click', copyInviteLink);
     }
     
-    // Join team buttons
-    const joinTeamBtn = document.getElementById('joinTeamBtn');
-    if (joinTeamBtn) {
-        joinTeamBtn.addEventListener('click', handleJoinCodeEntry);
-    }
-    
-    const joinCodeInput = document.getElementById('joinCodeInput');
-    if (joinCodeInput) {
-        // Auto-uppercase and submit on enter
-        joinCodeInput.addEventListener('input', (e) => {
-            e.target.value = e.target.value.toUpperCase();
-        });
-        joinCodeInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                handleJoinCodeEntry();
-            }
-        });
-    }
-    
-    // Join modal buttons
-    const cancelJoinBtn = document.getElementById('cancelJoinBtn');
-    if (cancelJoinBtn) {
-        cancelJoinBtn.addEventListener('click', hideJoinModal);
-    }
-    
-    const confirmJoinBtn = document.getElementById('confirmJoinBtn');
-    if (confirmJoinBtn) {
-        confirmJoinBtn.addEventListener('click', confirmJoinTeam);
-    }
-    
     // Close modals on backdrop click
     const inviteModal = document.getElementById('inviteCreatedModal');
     if (inviteModal) {
         inviteModal.addEventListener('click', (e) => {
             if (e.target === inviteModal) hideInviteModal();
-        });
-    }
-    
-    const joinModal = document.getElementById('joinTeamModal');
-    if (joinModal) {
-        joinModal.addEventListener('click', (e) => {
-            if (e.target === joinModal) hideJoinModal();
         });
     }
     
@@ -535,139 +497,6 @@ function showCopyFeedback(btnId) {
         setTimeout(() => {
             btn.innerHTML = originalHtml;
         }, 1500);
-    }
-}
-
-// =============================================================================
-// Join Team
-// =============================================================================
-
-async function handleJoinCodeEntry() {
-    const input = document.getElementById('joinCodeInput');
-    if (!input) return;
-    
-    const code = input.value.trim().toUpperCase();
-    if (code.length !== 5) {
-        alert('Please enter a 5-character invite code');
-        return;
-    }
-    
-    if (!window.breakside?.auth?.isAuthenticated?.()) {
-        alert('Please sign in to join a team');
-        return;
-    }
-    
-    try {
-        // Fetch invite info first
-        const response = await fetch(`${getApiBaseUrl()}/api/invites/${code}/info`);
-        
-        if (response.status === 404) {
-            alert('Invite not found. Please check the code and try again.');
-            return;
-        }
-        
-        if (response.status === 410) {
-            const data = await response.json();
-            alert(data.detail || 'This invite has expired or been revoked.');
-            return;
-        }
-        
-        if (!response.ok) {
-            throw new Error('Failed to load invite info');
-        }
-        
-        const info = await response.json();
-        pendingJoinInfo = { code, ...info };
-        
-        showJoinModal(info);
-        
-    } catch (error) {
-        console.error('Error checking invite:', error);
-        alert('Failed to check invite: ' + error.message);
-    }
-}
-
-function showJoinModal(info) {
-    const modal = document.getElementById('joinTeamModal');
-    const teamNameEl = document.getElementById('joinTeamName');
-    const roleEl = document.getElementById('joinTeamRole');
-    const inviterEl = document.getElementById('joinTeamInviter');
-    
-    if (!modal) return;
-    
-    if (teamNameEl) teamNameEl.textContent = info.teamName;
-    if (roleEl) roleEl.textContent = info.role;
-    if (inviterEl) inviterEl.textContent = info.invitedBy || 'A coach';
-    
-    modal.style.display = 'flex';
-}
-
-function hideJoinModal() {
-    const modal = document.getElementById('joinTeamModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-    pendingJoinInfo = null;
-}
-
-async function confirmJoinTeam() {
-    if (!pendingJoinInfo?.code) {
-        hideJoinModal();
-        return;
-    }
-    
-    const confirmBtn = document.getElementById('confirmJoinBtn');
-    if (confirmBtn) {
-        confirmBtn.disabled = true;
-        confirmBtn.textContent = 'Joining...';
-    }
-    
-    try {
-        const headers = await getAuthHeaders();
-        const response = await fetch(`${getApiBaseUrl()}/api/invites/${pendingJoinInfo.code}/redeem`, {
-            method: 'POST',
-            headers
-        });
-        
-        if (response.status === 409) {
-            alert("You're already on this team!");
-            hideJoinModal();
-            return;
-        }
-        
-        if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.detail || 'Failed to join team');
-        }
-        
-        const result = await response.json();
-        
-        hideJoinModal();
-        
-        // Clear the input
-        const input = document.getElementById('joinCodeInput');
-        if (input) input.value = '';
-        
-        alert(`You've joined ${result.team?.name || 'the team'} as a ${result.membership?.role}!`);
-        
-        // Trigger a sync to pull the new team
-        if (typeof syncUserTeams === 'function') {
-            await syncUserTeams();
-        }
-        
-        // Refresh the team list or go back
-        if (typeof showSelectTeamScreen === 'function') {
-            showSelectTeamScreen();
-        }
-        
-    } catch (error) {
-        console.error('Error joining team:', error);
-        alert('Failed to join team: ' + error.message);
-    } finally {
-        if (confirmBtn) {
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Join Team';
-        }
     }
 }
 
