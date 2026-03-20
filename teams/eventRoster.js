@@ -33,10 +33,10 @@ function showEventRosterUI(event) {
             <h3>Pickup Players</h3>
             <div id="eventPickupList" class="event-pickup-list"></div>
             <div class="event-pickup-add">
-                <input type="text" id="pickupNameInput" placeholder="Name">
-                <button type="button" id="pickupGenderToggle" class="pickup-gender-toggle" data-gender="Unknown">--</button>
-                <input type="text" id="pickupNumberInput" placeholder="#">
-                <button id="addPickupBtn" class="event-pickup-add-btn"><i class="fas fa-plus-circle"></i></button>
+                <input type="text" id="pickupNameInput" class="pickup-name" placeholder="Name">
+                <button type="button" id="pickupGenderToggle" class="pickup-gender-toggle" data-gender="Unknown">-</button>
+                <input type="text" id="pickupNumberInput" class="pickup-number" placeholder="#" inputmode="numeric">
+                <button type="button" id="addPickupBtn" class="pickup-add-icon"><i class="far fa-plus-square"></i></button>
             </div>
 
             <button id="saveEventRosterBtn" class="primary-btn" style="width:100%; margin-top:1rem;">Save Roster</button>
@@ -113,11 +113,11 @@ function showEventRosterUI(event) {
     }
     renderPickups();
 
-    // Gender toggle cycling: -- → MMP → FMP → --
+    // Gender toggle cycling: - → MMP → FMP → -
     const genderToggle = document.getElementById('pickupGenderToggle');
     genderToggle.onclick = () => {
         const cycle = { 'Unknown': 'MMP', 'MMP': 'FMP', 'FMP': 'Unknown' };
-        const labels = { 'Unknown': '--', 'MMP': 'MMP', 'FMP': 'FMP' };
+        const labels = { 'Unknown': '-', 'MMP': 'MMP', 'FMP': 'FMP' };
         const current = genderToggle.dataset.gender;
         const next = cycle[current] || 'Unknown';
         genderToggle.dataset.gender = next;
@@ -125,6 +125,14 @@ function showEventRosterUI(event) {
         genderToggle.className = 'pickup-gender-toggle' +
             (next === 'MMP' ? ' pickup-gender-mmp' : next === 'FMP' ? ' pickup-gender-fmp' : '');
     };
+
+    // Enter key on name input triggers add
+    document.getElementById('pickupNameInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            document.getElementById('addPickupBtn').click();
+        }
+    });
 
     // Add pickup button
     document.getElementById('addPickupBtn').onclick = () => {
@@ -142,7 +150,7 @@ function showEventRosterUI(event) {
         document.getElementById('pickupNameInput').value = '';
         document.getElementById('pickupNumberInput').value = '';
         genderToggle.dataset.gender = 'Unknown';
-        genderToggle.textContent = '--';
+        genderToggle.textContent = '-';
         genderToggle.className = 'pickup-gender-toggle';
     };
 

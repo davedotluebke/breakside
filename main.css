@@ -876,68 +876,69 @@ td.player-mmp,
     gap: 4px;
     margin-top: 0.5rem;
     align-items: center;
+    padding: 0 1rem;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
-.event-pickup-add input {
+.event-pickup-add .pickup-name {
+    flex: 1 1 0;
+    min-width: 60px;
     padding: 6px;
-    min-width: 0;
-}
-
-.event-pickup-add input[placeholder="Name"] {
-    flex: 1;
-}
-
-.event-pickup-add input[placeholder="#"] {
-    width: 28px;
-    text-align: center;
-    flex: 0 0 28px;
-}
-
-.pickup-gender-toggle {
-    flex: 0 0 auto;
-    min-width: 36px;
-    padding: 6px 4px;
-    margin: 0;
+    font-size: 0.9rem;
     border: 1px solid #ccc;
     border-radius: 4px;
-    background: #f0f0f0 !important;
-    color: #666 !important;
-    font-size: 0.8rem;
-    font-weight: 600;
+    box-sizing: border-box;
+}
+
+.event-pickup-add .pickup-gender-toggle {
+    flex: 0 0 auto;
+    padding: 4px 6px;
+    margin: 0;
+    min-width: 32px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #eee !important;
+    color: #999 !important;
+    font-size: 0.75rem;
+    font-weight: 700;
     text-align: center;
     cursor: pointer;
 }
 
-.pickup-gender-mmp {
-    background: #d4edff !important;
-    color: #0066cc !important;
-    border-color: #0066cc !important;
+.event-pickup-add .pickup-gender-toggle.pickup-gender-mmp {
+    background: #d4e8dd !important;
+    color: #2d8659 !important;
+    border-color: #2d8659 !important;
 }
 
-.pickup-gender-fmp {
-    background: #ffe0e6 !important;
-    color: #cc0044 !important;
-    border-color: #cc0044 !important;
+.event-pickup-add .pickup-gender-toggle.pickup-gender-fmp {
+    background: #e8d5f2 !important;
+    color: #7d3c98 !important;
+    border-color: #7d3c98 !important;
 }
 
-.event-pickup-add-btn {
+.event-pickup-add .pickup-number {
+    flex: 0 0 24px;
+    width: 24px;
+    padding: 6px 2px;
+    font-size: 0.85rem;
+    text-align: center;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.event-pickup-add .pickup-add-icon {
     flex: 0 0 auto;
-    width: 30px;
-    height: 30px;
     padding: 0;
     margin: 0;
-    background: #28a745 !important;
-    color: #fff !important;
-    border: none;
-    border-radius: 50%;
-    font-size: 1rem;
-    line-height: 30px;
-    text-align: center;
+    background: transparent !important;
+    color: #28a745 !important;
+    border: none !important;
+    font-size: 1.4rem;
     cursor: pointer;
-}
-
-.event-pickup-add-btn i {
-    margin: 0;
+    line-height: 1;
 }
 
 .no-games-message {
