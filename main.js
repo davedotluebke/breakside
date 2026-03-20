@@ -386,13 +386,34 @@ function closeAppMenu() {
     if (dropdown) dropdown.classList.remove('visible');
 }
 
+function updateAppMenuState() {
+    const hasTeam = typeof currentTeam !== 'undefined' && currentTeam;
+    const rosterBtn = document.getElementById('menuAppRoster');
+    const settingsBtn = document.getElementById('menuAppTeamSettings');
+    const switchBtn = document.getElementById('menuSwitchTeam');
+
+    if (rosterBtn) rosterBtn.disabled = !hasTeam;
+    if (settingsBtn) settingsBtn.disabled = !hasTeam;
+
+    // Hide Switch Team when already on Select Team screen
+    if (switchBtn) {
+        const onSelectScreen = document.getElementById('selectTeamScreen')?.style.display !== 'none';
+        switchBtn.style.display = onSelectScreen ? 'none' : '';
+    }
+}
+
 function initializeAppMenu() {
     const menuBtn = document.getElementById('appMenuBtn');
     if (menuBtn) {
         menuBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             const dropdown = document.getElementById('appMenuDropdown');
-            if (dropdown) dropdown.classList.toggle('visible');
+            if (dropdown) {
+                dropdown.classList.toggle('visible');
+                if (dropdown.classList.contains('visible')) {
+                    updateAppMenuState();
+                }
+            }
         });
     }
 
