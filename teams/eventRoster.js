@@ -142,6 +142,23 @@ function showEventRosterUI(event) {
 
     // Save button
     document.getElementById('saveEventRosterBtn').onclick = async () => {
+        // Check for unsaved pickup name
+        const pendingName = document.getElementById('pickupNameInput').value.trim();
+        if (pendingName) {
+            const action = confirm(`You typed "${pendingName}" but didn't click + Add.\n\nOK = Add this player and save\nCancel = Go back`);
+            if (!action) return;
+            // Add the pending player
+            const gender = document.getElementById('pickupGenderInput').value;
+            const number = document.getElementById('pickupNumberInput').value.trim() || null;
+            const id = typeof generateShortId === 'function'
+                ? 'Pickup-' + generateShortId(pendingName)
+                : 'pickup-' + Math.random().toString(36).substr(2, 8);
+            pickups.push({ id, name: pendingName, gender, number });
+            document.getElementById('pickupNameInput').value = '';
+            document.getElementById('pickupNumberInput').value = '';
+            renderPickups();
+        }
+
         // Collect checked player IDs
         const checkedIds = [];
         playerListEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
