@@ -738,10 +738,13 @@ td.player-mmp,
     display: flex;
     gap: 8px;
     padding: 8px 15px;
+    overflow: hidden;
 }
 
 .team-action-buttons .new-game-btn {
+    display: block;
     width: auto;
+    min-width: 0;
     flex: 1;
     margin: 0;
 }
