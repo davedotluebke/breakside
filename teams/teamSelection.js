@@ -1941,10 +1941,22 @@ async function startNewEventGame(event, team) {
     // Select the team first (ensures currentTeam is set)
     await selectCloudTeam(team);
 
+    // Fetch fresh event data from server (roster may have changed since page load)
+    let freshEvent = event;
+    try {
+        if (typeof listTeamEvents === 'function') {
+            const events = await listTeamEvents(team.id);
+            const found = events.find(e => e.id === event.id);
+            if (found) freshEvent = found;
+        }
+    } catch (e) {
+        console.warn('Could not fetch fresh event data:', e);
+    }
+
     // Set the current event
     currentEvent = typeof deserializeTournamentEvent === 'function'
-        ? deserializeTournamentEvent(event)
-        : event;
+        ? deserializeTournamentEvent(freshEvent)
+        : freshEvent;
 
     // Pre-fill game settings from event defaults
     const defaults = event.defaults || {};

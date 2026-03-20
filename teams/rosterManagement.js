@@ -8,7 +8,9 @@
 function updateTeamRosterDisplay() {
     const teamRosterHeader = document.getElementById('teamRosterHeader');
     if (teamRosterHeader) {
-        if (currentTeam && currentTeam.name) {
+        if (currentEvent && currentTeam) {
+            teamRosterHeader.textContent = `${currentEvent.name}: ${currentTeam.name}`;
+        } else if (currentTeam && currentTeam.name) {
             teamRosterHeader.textContent = `Roster: ${currentTeam.name}`;
         } else {
             teamRosterHeader.textContent = 'Team Roster';
@@ -78,7 +80,12 @@ function updateTeamRosterDisplay() {
     });
     rosterElement.appendChild(headerRow);
 
-    currentTeam.teamRoster.forEach(player => {
+    // Use event roster if in an event, else full team roster
+    const rosterToDisplay = (typeof getActiveRoster === 'function' && currentEvent)
+        ? getActiveRoster()
+        : currentTeam.teamRoster;
+
+    rosterToDisplay.forEach(player => {
         const playerRow = document.createElement('tr');
 
         const checkboxCell = document.createElement('td');
