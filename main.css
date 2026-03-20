@@ -726,12 +726,13 @@ td.player-mmp,
     padding: 6px;
 }
 
-.new-event-btn {
-    background: #6c5ce7;
+.new-event-btn,
+.new-event-btn:active {
+    background: #6c5ce7 !important;
 }
 
 .new-event-btn:hover {
-    background: #5b4bd5;
+    background: #5b4bd5 !important;
 }
 
 .team-action-buttons {
@@ -747,6 +748,53 @@ td.player-mmp,
     min-width: 0;
     flex: 1;
     margin: 0;
+}
+
+/* Event dialog styles — ensure dark text on white modal background */
+#createEventModal .modal-content,
+#eventSettingsModal .modal-content {
+    color: #333;
+}
+
+#createEventModal label,
+#eventSettingsModal label {
+    color: #333;
+    font-weight: 500;
+    display: block;
+    margin-bottom: 4px;
+}
+
+#createEventModal input[type="text"],
+#createEventModal input[type="number"],
+#createEventModal select,
+#eventSettingsModal input[type="text"],
+#eventSettingsModal input[type="number"],
+#eventSettingsModal select {
+    color: #333;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+#createEventModal .primary-btn,
+#eventSettingsModal .primary-btn {
+    background: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+#eventSettingsModal .secondary-btn {
+    background: #f8f9fa;
+    color: #dc3545;
+    border: 1px solid #dc3545;
+    border-radius: 6px;
+    padding: 10px;
+    cursor: pointer;
 }
 
 /* Event Roster styles */
