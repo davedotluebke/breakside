@@ -2141,6 +2141,29 @@ header .header-content-row {
     flex: 1;
 }
 
+/* Panel title bars in non-game screens */
+section > .panel-title-bar {
+    cursor: default;
+    margin: 0 -5px; /* Extend to edges (counters body padding) */
+}
+
+.title-bar-back-btn {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 1rem;
+    padding: 4px 8px;
+    margin: 0 4px 0 0;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.title-bar-back-btn:hover {
+    background: rgba(255,255,255,0.15);
+}
 
 /* Make sure the timer text itself uses JetBrains Mono */
 #pointTimer {
@@ -2523,20 +2546,6 @@ header .header-content-row {
     margin: 0 auto;
 }
 
-.settings-header {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin-bottom: 20px;
-    padding: 10px 0;
-    border-bottom: 1px solid #ddd;
-}
-
-.settings-header h2 {
-    margin: 0;
-    padding: 0;
-    flex: 1;
-}
 
 .back-button {
     background: #6c757d;

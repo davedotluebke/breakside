@@ -470,6 +470,15 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize app hamburger menu
     initializeAppMenu();
+
+    // Game summary back button
+    const backFromSummaryBtn = document.getElementById('backFromSummaryBtn');
+    if (backFromSummaryBtn) {
+        backFromSummaryBtn.addEventListener('click', () => {
+            if (typeof updateTeamRosterDisplay === 'function') updateTeamRosterDisplay();
+            showScreen('teamRosterScreen');
+        });
+    }
     
     // Initial display of countdown timer
     document.getElementById('countdownTimer').style.display = 'none';
