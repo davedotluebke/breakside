@@ -1795,12 +1795,26 @@ function showCreateEventDialog(team) {
             }
         };
 
+        const btn = document.getElementById('createEventBtn');
+        btn.disabled = true;
+        btn.textContent = 'Creating...';
+
         try {
-            await createEventOnCloud(eventData);
+            const response = await authFetch(`${API_BASE_URL}/api/events`, {
+                method: 'POST',
+                body: JSON.stringify(eventData)
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText);
+            }
             modal.remove();
             populateCloudTeamsAndGames();
         } catch (error) {
+            console.error('Create event error:', error);
             alert('Failed to create event: ' + error.message);
+            btn.disabled = false;
+            btn.textContent = 'Create Event';
         }
     };
 
