@@ -893,26 +893,26 @@ td.player-mmp,
 
 .event-pickup-add .pickup-gender-toggle {
     flex: 0 0 auto;
-    padding: 4px 6px;
-    margin: 0;
-    min-width: 32px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+    padding: 4px 6px !important;
+    margin: 0 !important;
+    min-width: 28px;
+    border: 1px solid #ccc !important;
+    border-radius: 4px !important;
     background: #eee !important;
     color: #999 !important;
-    font-size: 0.75rem;
+    font-size: 0.75rem !important;
     font-weight: 700;
     text-align: center;
     cursor: pointer;
 }
 
-.event-pickup-add .pickup-gender-toggle.pickup-gender-mmp {
+.pickup-gender-toggle.pickup-gender-mmp {
     background: #d4e8dd !important;
     color: #2d8659 !important;
     border-color: #2d8659 !important;
 }
 
-.event-pickup-add .pickup-gender-toggle.pickup-gender-fmp {
+.pickup-gender-toggle.pickup-gender-fmp {
     background: #e8d5f2 !important;
     color: #7d3c98 !important;
     border-color: #7d3c98 !important;
@@ -921,7 +921,8 @@ td.player-mmp,
 .event-pickup-add .pickup-number {
     flex: 0 0 24px;
     width: 24px;
-    padding: 6px 2px;
+    padding: 4px 2px !important;
+    margin: 0 !important;
     font-size: 0.85rem;
     text-align: center;
     border: 1px solid #ccc;
@@ -931,12 +932,12 @@ td.player-mmp,
 
 .event-pickup-add .pickup-add-icon {
     flex: 0 0 auto;
-    padding: 0;
-    margin: 0;
+    padding: 2px !important;
+    margin: 0 !important;
     background: transparent !important;
     color: #28a745 !important;
     border: none !important;
-    font-size: 1.4rem;
+    font-size: 1.3rem !important;
     cursor: pointer;
     line-height: 1;
 }
