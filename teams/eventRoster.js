@@ -39,8 +39,8 @@ function showEventRosterUI(event) {
                     <option value="FMP">FMP</option>
                     <option value="Unknown">Unknown</option>
                 </select>
-                <input type="text" id="pickupNumberInput" placeholder="#" style="width:40px;">
-                <button id="addPickupBtn" class="event-pickup-add-btn">+ Add</button>
+                <input type="text" id="pickupNumberInput" placeholder="#">
+                <button id="addPickupBtn" class="event-pickup-add-btn"><i class="fas fa-plus-circle"></i></button>
             </div>
 
             <button id="saveEventRosterBtn" class="primary-btn" style="width:100%; margin-top:1rem;">Save Roster</button>
