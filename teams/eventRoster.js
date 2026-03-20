@@ -148,6 +148,8 @@ function showEventRosterUI(event) {
             if (cb.checked) checkedIds.push(cb.dataset.playerId);
         });
 
+        console.log('Event roster save — checkedIds:', checkedIds.length, 'pickups:', JSON.stringify(pickups));
+
         const updatedEvent = {
             ...event,
             roster: {
@@ -157,10 +159,12 @@ function showEventRosterUI(event) {
         };
 
         try {
-            await updateEventOnCloud(event.id, updatedEvent);
+            const result = await updateEventOnCloud(event.id, updatedEvent);
+            console.log('Event roster save result:', result);
             screen.style.display = 'none';
             showScreen('selectTeamScreen');
         } catch (error) {
+            console.error('Event roster save failed:', error);
             alert('Failed to save roster: ' + error.message);
         }
     };
