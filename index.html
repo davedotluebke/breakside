@@ -227,78 +227,99 @@
     </section>
 
     <!-- Team Roster Screen -->
-    <section id="teamRosterScreen"> 
-        <div class="roster-header-row">
-            <h2 id="teamRosterHeader">Team Roster</h2>
-            <button id="continueGameBtn" class="inactive">Continue Game</button>
-        </div>
-        <div class="roster-table-container">
-            <table id="rosterTable">
-                <tbody id="rosterList">
-                    <!-- Rows for players will be dynamically populated here -->
-                </tbody>
-            </table>
-        </div>
-        
-        <div class="management-row">
-            <div class="management-container full-width">
-                <div class="management-controls">
-                    <input type="text" id="newPlayerInput" placeholder="Add player" />
-                    <input type="text" id="newPlayerNumberInput" placeholder="#" class="player-number-input" />
-                    <div class="management-icons">
-                        <button id="addFMPPlayerBtn" class="icon-button gender-button fmp-button">
-                            +FMP
-                        </button>
-                        <button id="addMMPPlayerBtn" class="icon-button gender-button mmp-button">
-                            +MMP
-                        </button>
+    <section id="teamRosterScreen">
+        <!-- Start Game subscreen (default) -->
+        <div id="startGameSubscreen">
+            <div class="panel-title-bar not-draggable">
+                <span class="panel-title">Start Game</span>
+                <button class="panel-action-btn" id="showRosterBtn" title="Edit Roster">
+                    <i class="fas fa-users"></i> Roster
+                </button>
+            </div>
+            <div class="subscreen-content">
+                <button id="continueGameBtn" class="inactive">Continue Game</button>
+                <div class="start-game-settings">
+                    <input type="text" id="opponentNameInput" placeholder="Opponent Name" />
+                    <div class="start-game-field-row">
+                        <input type="number" id="playersOnFieldInput" value="7" min="2" max="7" />
+                        <label for="playersOnFieldInput">Players On Field</label>
+                    </div>
+                    <div class="start-game-field-row">
+                        <label for="enforceGenderRatioSelect">Enforce Gender Ratio:</label>
+                        <select id="enforceGenderRatioSelect"></select>
+                    </div>
+                    <div class="start-game-field-row">
+                        <label><input type="checkbox" id="alternateGenderPullsCheckbox"> Alternate Gender Pulls</label>
+                    </div>
+                    <div class="start-game-field-row">
+                        <label for="pointTimerInput">Seconds between points:</label>
+                        <input type="number" id="pointTimerInput" value="90" min="0" max="300">
+                    </div>
+                    <div class="start-game-buttons">
+                        Start Game on: <button id="startGameOnOBtn">Offense</button>
+                        <button id="startGameOnDBtn">Defense</button>
                     </div>
                 </div>
-            </div>
-        </div>
-        
-        <div class="management-row">
-            <div class="management-container">
-                <div class="management-controls">
-                    <input type="text" class="line-name-input" placeholder="Create line" />
-                    <div class="management-icons">
-                        <button class="add-line-button icon-button">
-                            <i class="fas fa-plus"></i>
-                        </button>
-                        <button class="delete-line-button icon-button">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
+                <hr>
+                <div class="start-game-advanced">
+                    <button id="downloadTeamBtn">Download Team (JSON)</button>
+                    <button id="restoreGamesBtn">Restore Saved Games</button>
+                    <button id="clearGamesBtn">Clear Saved Games</button>
                 </div>
             </div>
         </div>
 
-        <footer>
-            <input type="number" id="playersOnFieldInput" value="7" min="2" max="7" />
-            <label for="playersOnFieldInput">Players On Field</label>
-            <input type="text" id="opponentNameInput" placeholder="Opponent Name" />
-            <br>Start Game on: <button id="startGameOnOBtn">Offense</button>
-            <button id="startGameOnDBtn">Defense</button>
-            <div>
-                <label for="enforceGenderRatioSelect">Enforce Gender Ratio:</label>
-                <select id="enforceGenderRatioSelect"></select>
+        <!-- Edit Roster subscreen (hidden by default) -->
+        <div id="editRosterSubscreen" style="display: none;">
+            <div class="panel-title-bar not-draggable">
+                <button class="title-bar-back-btn" id="backToStartGameBtn">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <span class="panel-title" id="teamRosterHeader">Edit Roster</span>
             </div>
-            <div>
-                <label><input type="checkbox" id="alternateGenderPullsCheckbox"> Alternate Gender Pulls</label>
+            <div class="subscreen-content">
+                <div class="roster-table-container">
+                    <table id="rosterTable">
+                        <tbody id="rosterList">
+                            <!-- Rows for players will be dynamically populated here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="management-row">
+                    <div class="management-container full-width">
+                        <div class="management-controls">
+                            <input type="text" id="newPlayerInput" placeholder="Add player" />
+                            <input type="text" id="newPlayerNumberInput" placeholder="#" class="player-number-input" />
+                            <div class="management-icons">
+                                <button id="addFMPPlayerBtn" class="icon-button gender-button fmp-button">
+                                    +FMP
+                                </button>
+                                <button id="addMMPPlayerBtn" class="icon-button gender-button mmp-button">
+                                    +MMP
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="management-row">
+                    <div class="management-container">
+                        <div class="management-controls">
+                            <input type="text" class="line-name-input" placeholder="Create line" />
+                            <div class="management-icons">
+                                <button class="add-line-button icon-button">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                                <button class="delete-line-button icon-button">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div>
-                <label for="pointTimerInput">Seconds between points:</label>
-                <input type="number" id="pointTimerInput" value="90" min="0" max="300">
-            </div>
-            <hr>
-            <button id="downloadTeamBtn">Download Team (JSON)</button>
-            <button id="switchTeamsBtn">Switch Team</button>
-            <hr>
-            <button id="restoreGamesBtn">Restore Saved Games</button>
-            <button id="clearGamesBtn">Clear Saved Games</button>
-            <hr>
-            <button id="teamSettingsBtn">Team Settings</button>
-        </footer>
+        </div>
     </section>
 
     <!-- Team Settings Screen -->

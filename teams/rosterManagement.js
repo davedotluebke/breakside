@@ -19,12 +19,21 @@ function updateTeamRosterDisplay() {
     const viewerMode = typeof window.isViewer === 'function' && window.isViewer();
     const rosterScreen = document.getElementById('teamRosterScreen');
     if (rosterScreen) {
-        // Hide all management rows (add player, create line) and footer (start game, settings, etc.)
-        rosterScreen.querySelectorAll('.management-row, footer').forEach(el => {
+        // Hide management rows (add player, create line) and start game subscreen for viewers
+        rosterScreen.querySelectorAll('.management-row').forEach(el => {
             el.style.display = viewerMode ? 'none' : '';
         });
+        const startGameSubscreen = document.getElementById('startGameSubscreen');
+        if (startGameSubscreen) {
+            startGameSubscreen.style.display = viewerMode ? 'none' : '';
+        }
+        // Force roster subscreen visible for viewers
+        if (viewerMode) {
+            const editRosterSubscreen = document.getElementById('editRosterSubscreen');
+            if (editRosterSubscreen) editRosterSubscreen.style.display = '';
+        }
 
-        // Add/show a back button for viewers (they can't see the footer's "Switch Team" button)
+        // Add/show a back button for viewers (they can't use the hamburger menu easily)
         let viewerBackBtn = document.getElementById('viewerRosterBackBtn');
         if (viewerMode) {
             if (!viewerBackBtn) {
@@ -37,13 +46,7 @@ function updateTeamRosterDisplay() {
                         showSelectTeamScreen();
                     }
                 };
-                // Insert before the roster header row
-                const headerRow = rosterScreen.querySelector('.roster-header-row');
-                if (headerRow) {
-                    rosterScreen.insertBefore(viewerBackBtn, headerRow);
-                } else {
-                    rosterScreen.prepend(viewerBackBtn);
-                }
+                rosterScreen.prepend(viewerBackBtn);
             }
             viewerBackBtn.style.display = '';
         } else if (viewerBackBtn) {

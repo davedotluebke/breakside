@@ -1106,8 +1106,8 @@ function wireGameScreenEvents() {
         rosterBtn.addEventListener('click', () => {
             closeGameMenu();
             if (typeof hideGameScreen === 'function') hideGameScreen();
-            if (typeof updateTeamRosterDisplay === 'function') updateTeamRosterDisplay();
             showScreen('teamRosterScreen');
+            if (typeof showEditRosterSubscreen === 'function') showEditRosterSubscreen();
             // Ensure "Continue Game" button is active so user can return
             const continueBtn = document.getElementById('continueGameBtn');
             if (continueBtn) continueBtn.classList.remove('inactive');
