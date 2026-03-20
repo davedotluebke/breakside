@@ -2080,67 +2080,33 @@ td.player-mmp,
     }
 }
 
-/* Header styles */
+/* Header styles — compact unified header with hamburger menu */
 header {
-    background-color: #EB8232;  /* Matches logo orange */
+    background-color: #EB8232;
     color: #fff;
-    padding: 1rem 0;
-    text-align: center;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    margin-bottom: 1rem;
+    margin-bottom: 0;
     position: relative;
-    min-height: 70px; /* Ensure consistent height in both modes */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden; /* Prevent elements from overflowing */
 }
 
-.header-content {
+header .header-content-row {
     display: flex;
     align-items: center;
-    justify-content: center;
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 1rem;
-    position: relative;
-    width: 100%; /* Ensure content spans full width */
-    height: auto; /* Allow height to adjust for feedback text */
+    padding: 10px 12px;
+    gap: 10px;
 }
 
-.logo-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: auto;
-    height: auto;
+.header-logo-container {
+    position: relative;
     flex-shrink: 0;
-    transition: transform 0.5s ease, position 0.5s ease;
-    flex-direction: column;
 }
 
-.feedback-text {
-    font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.8);
-    margin-top: 2px;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
-    transition: color 0.2s ease;
-    text-decoration: none;
+.header-logo-container img {
+    height: 36px;
+    width: auto;
+    border-radius: 4px;
+    display: block;
     cursor: pointer;
-}
-
-.feedback-text:hover {
-    color: rgba(255, 255, 255, 1);
-}
-
-
-/* Remove hover transition */
-.logo-container img {
-    transition: none;
-    border-radius: 4px; /* Add slight rounded corners for better appearance */
-    height: 40px;
-    width: auto; /* Allow width to adjust to maintain aspect ratio */
-    max-width: none; /* Ensure the logo can expand to its natural ratio */
 }
 
 /* Version overlay - shown when tapping logo */
@@ -2149,7 +2115,7 @@ header {
     top: 0;
     left: 0;
     right: 0;
-    height: 40px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2163,38 +2129,16 @@ header {
     text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
 }
 
-/* Title styling with transition */
-header h1 {
-    margin: 0;
-    font-size: 2rem;
+.header-app-title {
+    font-size: 1.1rem;
     font-weight: 600;
     letter-spacing: 0.5px;
     text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
-    transition: opacity 0.4s ease, transform 0.4s ease;
-    margin-left: 1rem;
-    line-height: 50px; /* Match the new header height */
-    white-space: nowrap; /* Prevent wrapping */
+    white-space: nowrap;
 }
 
-/* Header states */
-.header-full .logo-container {
-    position: relative;
-    left: 0;
-    margin-right: 0; /* Remove any margin that might affect centering */
-}
-
-.header-compact .logo-container {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-}
-
-.header-compact h1 {
-    opacity: 0;
-    transform: translateY(-10px);
-    position: absolute;
-    pointer-events: none;
+.header-spacer {
+    flex: 1;
 }
 
 
@@ -2294,11 +2238,6 @@ header h1 {
     padding: 2rem;
 }
 
-/* When in full mode, make sure we have enough space for both title and logo */
-.header-full .header-content {
-    justify-content: center;
-    min-width: 180px; /* Ensure enough space for title and logo */
-}
 
 /* Next Line Selection Mode Styles */
 .next-line-header {
