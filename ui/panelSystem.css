@@ -34,8 +34,7 @@ body.game-screen-active {
     overflow: hidden !important;
 }
 
-body.game-screen-active header,
-body.game-screen-active #controllerRoleButtons {
+body.game-screen-active header {
     display: none !important;
 }
 

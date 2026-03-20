@@ -337,16 +337,17 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // Note: We delay this slightly to ensure all modules are loaded
 setTimeout(initializeApp, 100);
 
-// Feedback link handler - opens GitHub issues page
-const feedbackLink = document.getElementById('feedbackLink');
-if (feedbackLink) {
-    feedbackLink.addEventListener('click', function(e) {
-        e.preventDefault();
+// =============================================================================
+// App Hamburger Menu
+// =============================================================================
 
-        const versionInfo = appVersion ? `${appVersion.version} (Build ${appVersion.build})` : 'Unknown';
-        const userAgent = navigator.userAgent;
+let appVersionTimeout = null;
 
-        const body = `Please describe your experience or issue below:
+function openAppFeedback() {
+    const versionInfo = appVersion ? `${appVersion.version} (Build ${appVersion.build})` : 'Unknown';
+    const userAgent = navigator.userAgent;
+
+    const body = `Please describe your experience or issue below:
 
 ---
 
@@ -354,43 +355,94 @@ if (feedbackLink) {
 **App Version:** ${versionInfo}
 **Steps to reproduce:**`;
 
-        const encodedBody = encodeURIComponent(body);
-        const feedbackUrl = `https://github.com/davedotluebke/ultistats/issues/new?labels=beta_feedback&title=${encodeURIComponent('Beta Feedback:')}&body=${encodedBody}`;
+    const encodedBody = encodeURIComponent(body);
+    const feedbackUrl = `https://github.com/davedotluebke/ultistats/issues/new?labels=beta_feedback&title=${encodeURIComponent('Beta Feedback:')}&body=${encodedBody}`;
 
-        window.open(feedbackUrl, '_blank');
-    });
+    window.open(feedbackUrl, '_blank');
 }
 
-// Version display - tap logo to show version for 3 seconds
-const headerLogo = document.getElementById('headerLogo');
-const versionOverlay = document.getElementById('versionOverlay');
-let versionTimeout = null;
+function showAppVersionOverlay() {
+    const versionOverlay = document.getElementById('versionOverlay');
+    if (!versionOverlay) return;
 
-if (headerLogo && versionOverlay) {
-    headerLogo.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        // Clear any existing timeout
-        if (versionTimeout) {
-            clearTimeout(versionTimeout);
+    if (appVersionTimeout) clearTimeout(appVersionTimeout);
+
+    let versionText = appVersion
+        ? `v${appVersion.version} (${appVersion.build})`
+        : 'v?.?.?';
+    if (window.APP_DEPLOY_LABEL) {
+        versionText += ` [${window.APP_DEPLOY_LABEL}]`;
+    }
+    versionOverlay.textContent = versionText;
+    versionOverlay.style.display = 'flex';
+
+    appVersionTimeout = setTimeout(() => {
+        versionOverlay.style.display = 'none';
+    }, 3000);
+}
+
+function closeAppMenu() {
+    const dropdown = document.getElementById('appMenuDropdown');
+    if (dropdown) dropdown.classList.remove('visible');
+}
+
+function initializeAppMenu() {
+    const menuBtn = document.getElementById('appMenuBtn');
+    if (menuBtn) {
+        menuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const dropdown = document.getElementById('appMenuDropdown');
+            if (dropdown) dropdown.classList.toggle('visible');
+        });
+    }
+
+    // Close menu when clicking outside
+    document.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('appMenuDropdown');
+        const btn = document.getElementById('appMenuBtn');
+        if (dropdown && dropdown.classList.contains('visible')) {
+            if (!dropdown.contains(e.target) && e.target !== btn) {
+                closeAppMenu();
+            }
         }
-        
-        // Show version
-        let versionText = appVersion
-            ? `v${appVersion.version} (${appVersion.build})`
-            : 'v?.?.?';
-        if (window.APP_DEPLOY_LABEL) {
-            versionText += ` [${window.APP_DEPLOY_LABEL}]`;
-        }
-        versionOverlay.textContent = versionText;
-        versionOverlay.style.display = 'flex';
-        
-        // Hide after 3 seconds
-        versionTimeout = setTimeout(() => {
-            versionOverlay.style.display = 'none';
-        }, 3000);
     });
+
+    // Menu item handlers
+    document.getElementById('menuSwitchTeam')?.addEventListener('click', () => {
+        closeAppMenu();
+        if (typeof showSelectTeamScreen === 'function') showSelectTeamScreen();
+    });
+
+    document.getElementById('menuAppRoster')?.addEventListener('click', () => {
+        closeAppMenu();
+        if (typeof showEditRosterSubscreen === 'function') showEditRosterSubscreen();
+        showScreen('teamRosterScreen');
+    });
+
+    document.getElementById('menuAppTeamSettings')?.addEventListener('click', () => {
+        closeAppMenu();
+        if (typeof showTeamSettingsScreen === 'function') showTeamSettingsScreen();
+    });
+
+    document.getElementById('menuAppFeedback')?.addEventListener('click', () => {
+        closeAppMenu();
+        openAppFeedback();
+    });
+
+    document.getElementById('menuAppAbout')?.addEventListener('click', () => {
+        closeAppMenu();
+        showAppVersionOverlay();
+    });
+
+    // Logo tap also shows version
+    const headerLogo = document.getElementById('headerLogo');
+    if (headerLogo) {
+        headerLogo.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showAppVersionOverlay();
+        });
+    }
 }
 
 /******************************************************************************/
@@ -416,12 +468,8 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(err => console.log('Could not load version.json:', err));
     
-    // Set initial header state based on starting screen
-    const headerElement = document.querySelector('header');
-
-    // Start with full header since we start on team select
-    headerElement.classList.add('header-full');
-    headerElement.classList.remove('header-compact');
+    // Initialize app hamburger menu
+    initializeAppMenu();
     
     // Initial display of countdown timer
     document.getElementById('countdownTimer').style.display = 'none';
