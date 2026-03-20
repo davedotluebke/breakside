@@ -33,14 +33,14 @@ function showEventRosterUI(event) {
             <h3>Pickup Players</h3>
             <div id="eventPickupList" class="event-pickup-list"></div>
             <div class="event-pickup-add">
-                <input type="text" id="pickupNameInput" placeholder="Name" style="flex:2;">
-                <select id="pickupGenderInput" style="flex:1;">
+                <input type="text" id="pickupNameInput" placeholder="Name">
+                <select id="pickupGenderInput">
                     <option value="MMP">MMP</option>
                     <option value="FMP">FMP</option>
                     <option value="Unknown">Unknown</option>
                 </select>
                 <input type="text" id="pickupNumberInput" placeholder="#" style="width:40px;">
-                <button id="addPickupBtn" class="primary-btn" style="flex:0;">Add</button>
+                <button id="addPickupBtn" class="event-pickup-add-btn">+ Add</button>
             </div>
 
             <button id="saveEventRosterBtn" class="primary-btn" style="width:100%; margin-top:1rem;">Save Roster</button>
