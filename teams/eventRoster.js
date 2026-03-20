@@ -34,11 +34,7 @@ function showEventRosterUI(event) {
             <div id="eventPickupList" class="event-pickup-list"></div>
             <div class="event-pickup-add">
                 <input type="text" id="pickupNameInput" placeholder="Name">
-                <select id="pickupGenderInput">
-                    <option value="MMP">MMP</option>
-                    <option value="FMP">FMP</option>
-                    <option value="Unknown">Unknown</option>
-                </select>
+                <button type="button" id="pickupGenderToggle" class="pickup-gender-toggle" data-gender="Unknown">--</button>
                 <input type="text" id="pickupNumberInput" placeholder="#">
                 <button id="addPickupBtn" class="event-pickup-add-btn"><i class="fas fa-plus-circle"></i></button>
             </div>
@@ -117,11 +113,24 @@ function showEventRosterUI(event) {
     }
     renderPickups();
 
+    // Gender toggle cycling: -- → MMP → FMP → --
+    const genderToggle = document.getElementById('pickupGenderToggle');
+    genderToggle.onclick = () => {
+        const cycle = { 'Unknown': 'MMP', 'MMP': 'FMP', 'FMP': 'Unknown' };
+        const labels = { 'Unknown': '--', 'MMP': 'MMP', 'FMP': 'FMP' };
+        const current = genderToggle.dataset.gender;
+        const next = cycle[current] || 'Unknown';
+        genderToggle.dataset.gender = next;
+        genderToggle.textContent = labels[next];
+        genderToggle.className = 'pickup-gender-toggle' +
+            (next === 'MMP' ? ' pickup-gender-mmp' : next === 'FMP' ? ' pickup-gender-fmp' : '');
+    };
+
     // Add pickup button
     document.getElementById('addPickupBtn').onclick = () => {
         const name = document.getElementById('pickupNameInput').value.trim();
         if (!name) return;
-        const gender = document.getElementById('pickupGenderInput').value;
+        const gender = genderToggle.dataset.gender;
         const number = document.getElementById('pickupNumberInput').value.trim() || null;
         const id = typeof generateShortId === 'function'
             ? 'Pickup-' + generateShortId(name)
@@ -132,6 +141,9 @@ function showEventRosterUI(event) {
 
         document.getElementById('pickupNameInput').value = '';
         document.getElementById('pickupNumberInput').value = '';
+        genderToggle.dataset.gender = 'Unknown';
+        genderToggle.textContent = '--';
+        genderToggle.className = 'pickup-gender-toggle';
     };
 
     // Back button
@@ -148,7 +160,7 @@ function showEventRosterUI(event) {
             const action = confirm(`You typed "${pendingName}" but didn't click + Add.\n\nOK = Add this player and save\nCancel = Go back`);
             if (!action) return;
             // Add the pending player
-            const gender = document.getElementById('pickupGenderInput').value;
+            const gender = genderToggle.dataset.gender;
             const number = document.getElementById('pickupNumberInput').value.trim() || null;
             const id = typeof generateShortId === 'function'
                 ? 'Pickup-' + generateShortId(pendingName)

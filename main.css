@@ -873,43 +873,65 @@ td.player-mmp,
 
 .event-pickup-add {
     display: flex;
-    flex-wrap: wrap;
     gap: 4px;
     margin-top: 0.5rem;
     align-items: center;
 }
 
-.event-pickup-add input, .event-pickup-add select {
+.event-pickup-add input {
     padding: 6px;
     min-width: 0;
 }
 
 .event-pickup-add input[placeholder="Name"] {
-    flex: 2;
-}
-
-.event-pickup-add select {
     flex: 1;
 }
 
 .event-pickup-add input[placeholder="#"] {
-    flex: 0;
-    width: 36px;
+    width: 28px;
     text-align: center;
+    flex: 0 0 28px;
+}
+
+.pickup-gender-toggle {
+    flex: 0 0 auto;
+    min-width: 36px;
+    padding: 6px 4px;
+    margin: 0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #f0f0f0 !important;
+    color: #666 !important;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+}
+
+.pickup-gender-mmp {
+    background: #d4edff !important;
+    color: #0066cc !important;
+    border-color: #0066cc !important;
+}
+
+.pickup-gender-fmp {
+    background: #ffe0e6 !important;
+    color: #cc0044 !important;
+    border-color: #cc0044 !important;
 }
 
 .event-pickup-add-btn {
     flex: 0 0 auto;
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
     padding: 0;
     margin: 0;
     background: #28a745 !important;
     color: #fff !important;
     border: none;
     border-radius: 50%;
-    font-size: 1.1rem;
-    line-height: 32px;
+    font-size: 1rem;
+    line-height: 30px;
     text-align: center;
     cursor: pointer;
 }
