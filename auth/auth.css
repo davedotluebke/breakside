@@ -142,6 +142,13 @@
     height: 18px;
 }
 
+.google-note {
+    font-size: 0.75rem;
+    color: #999;
+    margin: 0.25rem 0 0;
+    text-align: center;
+}
+
 /* Divider */
 .auth-divider {
     display: flex;
