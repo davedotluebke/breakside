@@ -690,12 +690,26 @@ async function resumeCloudGame(cloudTeam, gameId, role) {
         }
         // Add game to end of array so currentGame() returns it
         currentTeam.games.push(game);
-        
+
+        // If game is part of an event, set currentEvent
+        if (game.eventId && typeof listTeamEvents === 'function') {
+            try {
+                const events = await listTeamEvents(cloudTeam.id);
+                const ev = events.find(e => e.id === game.eventId);
+                if (ev) {
+                    currentEvent = typeof deserializeTournamentEvent === 'function'
+                        ? deserializeTournamentEvent(ev) : ev;
+                }
+            } catch (e) {
+                console.warn('Could not load event for game:', e);
+            }
+        }
+
         // Save local state
         if (typeof saveAllTeamsData === 'function') {
             saveAllTeamsData();
         }
-        
+
         // Navigate to panel-based game screen
         if (typeof enterGameScreen === 'function') {
             enterGameScreen();
