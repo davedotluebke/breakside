@@ -415,8 +415,8 @@ function initializeAppMenu() {
 
     document.getElementById('menuAppRoster')?.addEventListener('click', () => {
         closeAppMenu();
-        if (typeof showEditRosterSubscreen === 'function') showEditRosterSubscreen();
         showScreen('teamRosterScreen');
+        if (typeof showEditRosterSubscreen === 'function') showEditRosterSubscreen();
     });
 
     document.getElementById('menuAppTeamSettings')?.addEventListener('click', () => {
