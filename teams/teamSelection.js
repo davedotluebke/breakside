@@ -1725,37 +1725,51 @@ function showCreateEventDialog(team) {
     modal.id = 'createEventModal';
     modal.className = 'modal';
     modal.style.display = 'flex';
+
     modal.innerHTML = `
-        <div class="modal-content">
+        <div class="modal-content event-dialog">
             <div class="dialog-header prominent-dialog-header">
                 <h2>New Event</h2>
                 <span class="close">&times;</span>
             </div>
-            <div style="padding: 0.5rem 0;">
-                <div class="form-group" style="margin-bottom: 0.75rem;">
-                    <label>Event Name</label>
-                    <input type="text" id="newEventName" placeholder="e.g. Spring League" style="width: 100%; padding: 8px; box-sizing: border-box;">
+            <div class="event-dialog-body">
+                <input type="text" id="newEventName" placeholder="Event Name" class="event-dialog-input">
+                <div class="event-dialog-row">
+                    <input type="number" id="newEventPlayersPerSide" value="7" min="2" max="7" class="event-dialog-number">
+                    <label for="newEventPlayersPerSide">Players On Field</label>
                 </div>
-                <div class="form-group" style="margin-bottom: 0.75rem;">
-                    <label>Gender Ratio</label>
-                    <select id="newEventGenderRatio" style="width: 100%; padding: 8px;">
-                        <option value="No">No</option>
-                        <option value="Alternating">Alternating</option>
-                    </select>
+                <div class="event-dialog-row">
+                    <label for="newEventGenderRatio">Enforce Gender Ratio:</label>
+                    <select id="newEventGenderRatio" class="event-dialog-select"></select>
                 </div>
-                <div class="form-group" style="margin-bottom: 0.75rem;">
+                <div class="event-dialog-row">
                     <label><input type="checkbox" id="newEventAltPulls"> Alternate Gender Pulls</label>
                 </div>
-                <div class="form-group" style="margin-bottom: 0.75rem;">
-                    <label>Players Per Side</label>
-                    <input type="number" id="newEventPlayersPerSide" value="7" min="2" max="7" style="width: 80px; padding: 8px;">
-                </div>
-                <button id="createEventBtn" class="primary-btn" style="width: 100%;">Create Event</button>
+                <button id="createEventBtn" class="event-dialog-submit">Create Event</button>
             </div>
         </div>
     `;
 
     document.body.appendChild(modal);
+
+    // Populate gender ratio dropdown using existing helper
+    const playerCountInput = document.getElementById('newEventPlayersPerSide');
+    const ratioSelect = document.getElementById('newEventGenderRatio');
+
+    function refreshRatioOptions() {
+        const count = parseInt(playerCountInput.value, 10) || 7;
+        ratioSelect.innerHTML = '';
+        if (typeof generateGenderRatioOptions === 'function') {
+            generateGenderRatioOptions(count).forEach(opt => {
+                const el = document.createElement('option');
+                el.value = opt.value;
+                el.textContent = opt.label;
+                ratioSelect.appendChild(el);
+            });
+        }
+    }
+    refreshRatioOptions();
+    playerCountInput.addEventListener('input', refreshRatioOptions);
 
     // Close handler
     modal.querySelector('.close').onclick = () => modal.remove();
@@ -1771,9 +1785,9 @@ function showCreateEventDialog(team) {
             teamId: team.id,
             status: 'open',
             defaults: {
-                alternateGenderRatio: document.getElementById('newEventGenderRatio').value,
+                alternateGenderRatio: ratioSelect.value,
                 alternateGenderPulls: document.getElementById('newEventAltPulls').checked,
-                playersPerSide: parseInt(document.getElementById('newEventPlayersPerSide').value) || 7
+                playersPerSide: parseInt(playerCountInput.value) || 7
             },
             roster: {
                 playerIds: team.playerIds || [],
@@ -1790,7 +1804,6 @@ function showCreateEventDialog(team) {
         }
     };
 
-    // Focus name input
     document.getElementById('newEventName').focus();
 }
 
@@ -1805,48 +1818,72 @@ function showEventSettingsDialog(event, team) {
     modal.id = 'eventSettingsModal';
     modal.className = 'modal';
     modal.style.display = 'flex';
+
     modal.innerHTML = `
-        <div class="modal-content">
+        <div class="modal-content event-dialog">
             <div class="dialog-header prominent-dialog-header">
                 <h2>Event Settings</h2>
                 <span class="close">&times;</span>
             </div>
-            <div style="padding: 0.5rem 0;">
-                <div class="form-group" style="margin-bottom: 0.75rem;">
-                    <label>Event Name</label>
-                    <input type="text" id="editEventName" value="${event.name}" style="width: 100%; padding: 8px; box-sizing: border-box;">
+            <div class="event-dialog-body">
+                <input type="text" id="editEventName" class="event-dialog-input" placeholder="Event Name">
+                <div class="event-dialog-row">
+                    <input type="number" id="editEventPlayersPerSide" min="2" max="7" class="event-dialog-number">
+                    <label for="editEventPlayersPerSide">Players On Field</label>
                 </div>
-                <div class="form-group" style="margin-bottom: 0.75rem;">
-                    <label>Gender Ratio</label>
-                    <select id="editEventGenderRatio" style="width: 100%; padding: 8px;">
-                        <option value="No" ${(event.defaults?.alternateGenderRatio || 'No') === 'No' ? 'selected' : ''}>No</option>
-                        <option value="Alternating" ${event.defaults?.alternateGenderRatio === 'Alternating' ? 'selected' : ''}>Alternating</option>
+                <div class="event-dialog-row">
+                    <label for="editEventGenderRatio">Enforce Gender Ratio:</label>
+                    <select id="editEventGenderRatio" class="event-dialog-select"></select>
+                </div>
+                <div class="event-dialog-row">
+                    <label><input type="checkbox" id="editEventAltPulls"> Alternate Gender Pulls</label>
+                </div>
+                <div class="event-dialog-row">
+                    <label for="editEventStatus">Status:</label>
+                    <select id="editEventStatus" class="event-dialog-select">
+                        <option value="open">Open</option>
+                        <option value="closed">Closed</option>
                     </select>
                 </div>
-                <div class="form-group" style="margin-bottom: 0.75rem;">
-                    <label><input type="checkbox" id="editEventAltPulls" ${event.defaults?.alternateGenderPulls ? 'checked' : ''}> Alternate Gender Pulls</label>
-                </div>
-                <div class="form-group" style="margin-bottom: 0.75rem;">
-                    <label>Players Per Side</label>
-                    <input type="number" id="editEventPlayersPerSide" value="${event.defaults?.playersPerSide || 7}" min="2" max="7" style="width: 80px; padding: 8px;">
-                </div>
-                <div class="form-group" style="margin-bottom: 0.75rem;">
-                    <label>Status</label>
-                    <select id="editEventStatus" style="width: 100%; padding: 8px;">
-                        <option value="open" ${event.status === 'open' ? 'selected' : ''}>Open</option>
-                        <option value="closed" ${event.status === 'closed' ? 'selected' : ''}>Closed</option>
-                    </select>
-                </div>
-                <div style="display: flex; gap: 0.5rem;">
-                    <button id="saveEventSettingsBtn" class="primary-btn" style="flex: 1;">Save</button>
-                    <button id="deleteEventBtn" class="secondary-btn" style="flex: 0; color: #dc3545;">Delete</button>
-                </div>
+                <button id="saveEventSettingsBtn" class="event-dialog-submit">Save</button>
+                <button id="deleteEventBtn" class="event-dialog-delete">Delete Event</button>
             </div>
         </div>
     `;
 
     document.body.appendChild(modal);
 
+    // Populate fields from event data
+    document.getElementById('editEventName').value = event.name || '';
+    document.getElementById('editEventPlayersPerSide').value = event.defaults?.playersPerSide || 7;
+    document.getElementById('editEventAltPulls').checked = event.defaults?.alternateGenderPulls || false;
+    document.getElementById('editEventStatus').value = event.status || 'open';
+
+    // Populate gender ratio dropdown
+    const playerCountInput = document.getElementById('editEventPlayersPerSide');
+    const ratioSelect = document.getElementById('editEventGenderRatio');
+    const savedRatio = event.defaults?.alternateGenderRatio || 'No';
+
+    function refreshRatioOptions() {
+        const count = parseInt(playerCountInput.value, 10) || 7;
+        ratioSelect.innerHTML = '';
+        if (typeof generateGenderRatioOptions === 'function') {
+            generateGenderRatioOptions(count).forEach(opt => {
+                const el = document.createElement('option');
+                el.value = opt.value;
+                el.textContent = opt.label;
+                ratioSelect.appendChild(el);
+            });
+        }
+        // Restore saved value if it exists in options
+        if ([...ratioSelect.options].some(o => o.value === savedRatio)) {
+            ratioSelect.value = savedRatio;
+        }
+    }
+    refreshRatioOptions();
+    playerCountInput.addEventListener('input', refreshRatioOptions);
+
+    // Close handler
     modal.querySelector('.close').onclick = () => modal.remove();
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
 
@@ -1856,9 +1893,9 @@ function showEventSettingsDialog(event, team) {
             name: document.getElementById('editEventName').value.trim() || event.name,
             status: document.getElementById('editEventStatus').value,
             defaults: {
-                alternateGenderRatio: document.getElementById('editEventGenderRatio').value,
+                alternateGenderRatio: ratioSelect.value,
                 alternateGenderPulls: document.getElementById('editEventAltPulls').checked,
-                playersPerSide: parseInt(document.getElementById('editEventPlayersPerSide').value) || 7
+                playersPerSide: parseInt(playerCountInput.value) || 7
             }
         };
 
