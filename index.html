@@ -212,7 +212,9 @@
         </div>
     </div>
     <section id="selectTeamScreen" style="display: none;">
-        <h2>Select Your Team</h2>
+        <div class="panel-title-bar not-draggable">
+            <span class="panel-title">Select Your Team</span>
+        </div>
         <div id="teamListWarning" class="warning-box" style="display: none;">
             No saved teams found. Create a new team or use the sample team.
         </div>
@@ -301,11 +303,11 @@
 
     <!-- Team Settings Screen -->
     <section id="teamSettingsScreen" style="display: none;">
-        <div class="settings-header">
-            <button id="backFromSettingsBtn" class="back-button">
-                <i class="fas fa-arrow-left"></i> Back
+        <div class="panel-title-bar not-draggable">
+            <button class="title-bar-back-btn" id="backFromSettingsBtn">
+                <i class="fas fa-arrow-left"></i>
             </button>
-            <h2>Team Settings</h2>
+            <span class="panel-title">Team Settings</span>
         </div>
         
         <div class="settings-content">
@@ -614,7 +616,12 @@
 
     <!-- Game Summary Screen -->
     <section id="gameSummaryScreen" style="display: none;">
-        <h2>Game Summary</h2>
+        <div class="panel-title-bar not-draggable">
+            <button class="title-bar-back-btn" id="backFromSummaryBtn">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <span class="panel-title">Game Summary</span>
+        </div>
 
         <div id="finalScore">
             <h3>Final Score</h3>
