@@ -380,6 +380,36 @@
         </div>
     </section>
 
+    <!-- Event Roster Screen -->
+    <section id="eventRosterScreen" style="display: none;">
+        <div class="settings-header">
+            <button id="backFromEventRosterBtn" class="back-button">
+                <i class="fas fa-arrow-left"></i> Back
+            </button>
+            <h2 id="eventRosterHeader">Event Roster</h2>
+        </div>
+        <div class="roster-table-container">
+            <table id="eventRosterTable">
+                <tbody id="eventRosterList"></tbody>
+            </table>
+        </div>
+        <div class="management-row">
+            <div class="management-container full-width">
+                <div class="management-controls">
+                    <input type="text" id="eventNewPlayerInput" placeholder="Add pickup player" />
+                    <input type="text" id="eventNewPlayerNumberInput" placeholder="#" class="player-number-input" />
+                    <div class="management-icons">
+                        <button id="eventAddFMPBtn" class="icon-button gender-button fmp-button">+FMP</button>
+                        <button id="eventAddMMPBtn" class="icon-button gender-button mmp-button">+MMP</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="event-roster-actions">
+            <button id="saveEventRosterBtn" class="primary-btn" style="width:100%;">Save Roster</button>
+        </div>
+    </section>
+
     <!-- Invite Created Modal -->
     <div id="inviteCreatedModal" class="modal" style="display: none;">
         <div class="modal-content invite-modal">

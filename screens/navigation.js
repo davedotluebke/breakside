@@ -7,6 +7,7 @@ const screens = [
     document.getElementById('selectTeamScreen'),
     document.getElementById('teamRosterScreen'),
     document.getElementById('teamSettingsScreen'),
+    document.getElementById('eventRosterScreen'),
     document.getElementById('gameSummaryScreen')
 ];
 
@@ -25,10 +26,6 @@ function showScreen(screenId) {
             screen.style.display = 'none';
         }
     });
-    // Also hide dynamically created screens
-    const eventRoster = document.getElementById('eventRosterScreen');
-    if (eventRoster) eventRoster.style.display = 'none';
-
     const targetScreen = document.getElementById(screenId);
     if (!targetScreen) {
         console.warn(`showScreen: screen with id "${screenId}" not found.`);

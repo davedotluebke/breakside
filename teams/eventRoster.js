@@ -1,169 +1,197 @@
 /*
  * Event Roster Management
  * Manages the roster for a TournamentEvent: select attending players and add pickups.
+ * Table-based layout matching team roster UI pattern.
  */
+
+// Module-level state
+let currentEventRosterEvent = null;
+let eventRosterPlayerIds = new Set();
+let eventRosterPickups = [];
 
 /**
  * Show the event roster UI for editing an event's roster
  * @param {object} event - The event data object from the server
  */
 function showEventRosterUI(event) {
-    // Remove existing screen if any
-    let screen = document.getElementById('eventRosterScreen');
-    if (!screen) {
-        screen = document.createElement('section');
-        screen.id = 'eventRosterScreen';
-        screen.style.display = 'none';
-        document.body.insertBefore(screen, document.querySelector('script'));
-    }
+    currentEventRosterEvent = event;
 
-    // Build the screen content
-    screen.innerHTML = `
-        <div class="settings-header">
-            <button id="backFromEventRosterBtn" class="back-button">
-                <i class="fas fa-arrow-left"></i> Back
-            </button>
-            <h2>${event.name} — Roster</h2>
-        </div>
-        <div class="event-roster-content">
-            <h3>Team Players</h3>
-            <p class="section-description">Uncheck players not attending this event</p>
-            <div id="eventRosterPlayerList" class="event-roster-player-list"></div>
-
-            <h3>Pickup Players</h3>
-            <div id="eventPickupList" class="event-pickup-list"></div>
-            <div class="event-pickup-add">
-                <input type="text" id="pickupNameInput" placeholder="Name" style="flex:2;">
-                <select id="pickupGenderInput" style="flex:1;">
-                    <option value="MMP">MMP</option>
-                    <option value="FMP">FMP</option>
-                    <option value="Unknown">Unknown</option>
-                </select>
-                <input type="text" id="pickupNumberInput" placeholder="#" style="width:40px;">
-                <button id="addPickupBtn" class="primary-btn" style="flex:0;">Add</button>
-            </div>
-
-            <button id="saveEventRosterBtn" class="primary-btn" style="width:100%; margin-top:1rem;">Save Roster</button>
-        </div>
-    `;
-
-    // Register in screens array if not already
-    const screens = [
-        document.getElementById('selectTeamScreen'),
-        document.getElementById('teamRosterScreen'),
-        document.getElementById('teamSettingsScreen'),
-        document.getElementById('gameSummaryScreen'),
-        screen
-    ];
-
-    // Show screen
-    screens.forEach(s => { if (s) s.style.display = 'none'; });
-    screen.style.display = 'block';
-    const headerElement = document.querySelector('header');
-    if (headerElement) {
-        headerElement.classList.remove('header-compact');
-        headerElement.classList.add('header-full');
-    }
-
-    // Populate team player checkboxes
-    const playerListEl = document.getElementById('eventRosterPlayerList');
+    // Clone roster state into local variables
+    const existingPlayerIds = event.roster?.playerIds || [];
     const roster = currentTeam ? currentTeam.teamRoster : [];
-    const eventPlayerIds = new Set(event.roster?.playerIds || []);
 
+    // If no playerIds saved yet, default to all team players checked
+    if (existingPlayerIds.length === 0 && roster.length > 0) {
+        eventRosterPlayerIds = new Set(roster.map(p => p.id));
+    } else {
+        eventRosterPlayerIds = new Set(existingPlayerIds);
+    }
+
+    eventRosterPickups = (event.roster?.pickupPlayers || []).map(p => ({ ...p }));
+
+    // Set header
+    const header = document.getElementById('eventRosterHeader');
+    if (header) header.textContent = `${event.name} — Roster`;
+
+    renderEventRosterTable();
+    showScreen('eventRosterScreen');
+}
+
+/**
+ * Render the event roster table rows
+ */
+function renderEventRosterTable() {
+    const tbody = document.getElementById('eventRosterList');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    // Header row
+    const headerRow = document.createElement('tr');
+    const thCheckbox = document.createElement('th');
+    thCheckbox.style.width = '30px';
+    headerRow.appendChild(thCheckbox);
+    const thName = document.createElement('th');
+    thName.textContent = 'Name';
+    thName.style.textAlign = 'left';
+    headerRow.appendChild(thName);
+    tbody.appendChild(headerRow);
+
+    // Team player rows
+    const roster = currentTeam ? currentTeam.teamRoster : [];
     roster.forEach(player => {
-        const row = document.createElement('label');
-        row.className = 'event-roster-row';
+        const row = document.createElement('tr');
+
+        // Checkbox cell
+        const tdCheck = document.createElement('td');
+        tdCheck.style.textAlign = 'center';
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        checkbox.checked = eventPlayerIds.size === 0 || eventPlayerIds.has(player.id);
-        checkbox.dataset.playerId = player.id;
-
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = player.name;
-        if (player.gender === 'FMP') nameSpan.classList.add('player-fmp');
-        else if (player.gender === 'MMP') nameSpan.classList.add('player-mmp');
-
-        row.appendChild(checkbox);
-        row.appendChild(nameSpan);
-        playerListEl.appendChild(row);
-    });
-
-    // Populate existing pickups
-    const pickupListEl = document.getElementById('eventPickupList');
-    const pickups = [...(event.roster?.pickupPlayers || [])];
-
-    function renderPickups() {
-        pickupListEl.innerHTML = '';
-        pickups.forEach((pickup, idx) => {
-            const row = document.createElement('div');
-            row.className = 'event-roster-row pickup-row';
-
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = `${pickup.name} (${pickup.gender || '?'})${pickup.number ? ' #' + pickup.number : ''}`;
-            row.appendChild(nameSpan);
-
-            const removeBtn = document.createElement('button');
-            removeBtn.innerHTML = '<i class="fas fa-times"></i>';
-            removeBtn.className = 'icon-button';
-            removeBtn.style.color = '#dc3545';
-            removeBtn.onclick = () => {
-                pickups.splice(idx, 1);
-                renderPickups();
-            };
-            row.appendChild(removeBtn);
-
-            pickupListEl.appendChild(row);
-        });
-    }
-    renderPickups();
-
-    // Add pickup button
-    document.getElementById('addPickupBtn').onclick = () => {
-        const name = document.getElementById('pickupNameInput').value.trim();
-        if (!name) return;
-        const gender = document.getElementById('pickupGenderInput').value;
-        const number = document.getElementById('pickupNumberInput').value.trim() || null;
-        const id = typeof generateShortId === 'function'
-            ? 'Pickup-' + generateShortId(name)
-            : 'pickup-' + Math.random().toString(36).substr(2, 8);
-
-        pickups.push({ id, name, gender, number });
-        renderPickups();
-
-        document.getElementById('pickupNameInput').value = '';
-        document.getElementById('pickupNumberInput').value = '';
-    };
-
-    // Back button
-    document.getElementById('backFromEventRosterBtn').onclick = () => {
-        screen.style.display = 'none';
-        showScreen('selectTeamScreen');
-    };
-
-    // Save button
-    document.getElementById('saveEventRosterBtn').onclick = async () => {
-        // Collect checked player IDs
-        const checkedIds = [];
-        playerListEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-            if (cb.checked) checkedIds.push(cb.dataset.playerId);
-        });
-
-        const updatedEvent = {
-            ...event,
-            roster: {
-                playerIds: checkedIds,
-                pickupPlayers: pickups
+        checkbox.checked = eventRosterPlayerIds.has(player.id);
+        checkbox.onchange = () => {
+            if (checkbox.checked) {
+                eventRosterPlayerIds.add(player.id);
+            } else {
+                eventRosterPlayerIds.delete(player.id);
             }
         };
+        tdCheck.appendChild(checkbox);
+        row.appendChild(tdCheck);
 
-        try {
-            await updateEventOnCloud(event.id, updatedEvent);
-            screen.style.display = 'none';
-            showScreen('selectTeamScreen');
-        } catch (error) {
-            alert('Failed to save roster: ' + error.message);
+        // Name cell (read-only for team players)
+        const tdName = document.createElement('td');
+        tdName.textContent = player.name;
+        if (player.gender === Gender.FMP) tdName.classList.add('player-fmp');
+        else if (player.gender === Gender.MMP) tdName.classList.add('player-mmp');
+        row.appendChild(tdName);
+
+        tbody.appendChild(row);
+    });
+
+    // Pickup player rows
+    eventRosterPickups.forEach((pickup, idx) => {
+        const row = document.createElement('tr');
+        row.className = 'pickup-row';
+
+        // Empty checkbox cell (pickups are always included)
+        const tdCheck = document.createElement('td');
+        row.appendChild(tdCheck);
+
+        // Name cell (clickable to edit)
+        const tdName = document.createElement('td');
+        tdName.textContent = `${pickup.name} (pickup)`;
+        if (pickup.gender === Gender.FMP) tdName.classList.add('player-fmp');
+        else if (pickup.gender === Gender.MMP) tdName.classList.add('player-mmp');
+        tdName.style.cursor = 'pointer';
+        tdName.onclick = () => {
+            showEditPlayerDialog(pickup, {
+                context: 'pickup',
+                onSave: (updated) => {
+                    Object.assign(pickup, updated);
+                    renderEventRosterTable();
+                },
+                onDelete: () => {
+                    eventRosterPickups.splice(idx, 1);
+                    renderEventRosterTable();
+                    closeEditPlayerDialog();
+                }
+            });
+        };
+        row.appendChild(tdName);
+
+        tbody.appendChild(row);
+    });
+}
+
+/**
+ * Add a pickup player to the event roster
+ * @param {string} gender - Gender value (Gender.FMP, Gender.MMP, or Gender.UNKNOWN)
+ */
+function addEventPickupPlayer(gender) {
+    const nameInput = document.getElementById('eventNewPlayerInput');
+    const numberInput = document.getElementById('eventNewPlayerNumberInput');
+    if (!nameInput) return;
+
+    const name = nameInput.value.trim();
+    if (!name) return;
+
+    const rawNumber = numberInput ? numberInput.value.trim() : '';
+    const number = rawNumber ? validateJerseyNumber(rawNumber) : null;
+    // If validation was cancelled (returned null when input was provided), don't add
+    if (rawNumber && number === null) return;
+
+    const id = 'Pickup-' + generateShortId(name);
+    eventRosterPickups.push({ id, name, gender, number });
+
+    renderEventRosterTable();
+
+    // Clear inputs
+    nameInput.value = '';
+    if (numberInput) numberInput.value = '';
+    nameInput.focus();
+}
+
+/**
+ * Save the event roster to the cloud
+ */
+async function saveEventRoster() {
+    if (!currentEventRosterEvent) return;
+
+    const updatedEvent = {
+        ...currentEventRosterEvent,
+        roster: {
+            playerIds: [...eventRosterPlayerIds],
+            pickupPlayers: eventRosterPickups
         }
     };
+
+    try {
+        await updateEventOnCloud(currentEventRosterEvent.id, updatedEvent);
+        showScreen('selectTeamScreen');
+    } catch (error) {
+        alert('Failed to save roster: ' + error.message);
+    }
 }
+
+/**
+ * Navigate back from event roster without saving
+ */
+function backFromEventRoster() {
+    showScreen('selectTeamScreen');
+}
+
+// Event listeners (IIFE matching rosterManagement.js pattern)
+(function initializeEventRoster() {
+    document.getElementById('eventAddFMPBtn')?.addEventListener('click', () => addEventPickupPlayer(Gender.FMP));
+    document.getElementById('eventAddMMPBtn')?.addEventListener('click', () => addEventPickupPlayer(Gender.MMP));
+    document.getElementById('saveEventRosterBtn')?.addEventListener('click', saveEventRoster);
+    document.getElementById('backFromEventRosterBtn')?.addEventListener('click', backFromEventRoster);
+
+    const nameInput = document.getElementById('eventNewPlayerInput');
+    if (nameInput) {
+        nameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') addEventPickupPlayer(Gender.UNKNOWN);
+        });
+    }
+})();
 
 window.showEventRosterUI = showEventRosterUI;
