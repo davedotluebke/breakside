@@ -14,7 +14,7 @@ function showEventRosterUI(event) {
         screen = document.createElement('section');
         screen.id = 'eventRosterScreen';
         screen.style.display = 'none';
-        document.body.insertBefore(screen, document.querySelector('script'));
+        document.body.appendChild(screen);
     }
 
     // Build the screen content
