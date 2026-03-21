@@ -279,13 +279,14 @@ ul {
     box-sizing: border-box;
 }
 
-#rosterTable {
+#rosterTable, #eventRosterTable {
     border-collapse: collapse;
     width: max-content;
     min-width: 100%;
 }
 
-#rosterTable th, #rosterTable td {
+#rosterTable th, #rosterTable td,
+#eventRosterTable th, #eventRosterTable td {
     border: 1px solid grey;
     padding: 5px;
     white-space: nowrap;
@@ -843,43 +844,17 @@ td.player-mmp,
 }
 
 /* Event Roster styles */
-.event-roster-content {
-    padding: 0 1rem;
+.pickup-row td {
+    background: #fff3cd;
 }
 
-.event-roster-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 0;
-    border-bottom: 1px solid #eee;
+.event-roster-actions {
+    padding: 0.5rem 20px 1rem;
 }
 
-.event-roster-row input[type="checkbox"] {
+#eventRosterTable input[type="checkbox"] {
     width: 20px;
     height: 20px;
-}
-
-.event-roster-row span {
-    flex: 1;
-}
-
-.pickup-row {
-    padding: 6px 8px;
-    background: #fff3cd;
-    border-radius: 4px;
-    margin-bottom: 4px;
-}
-
-.event-pickup-add {
-    display: flex;
-    gap: 4px;
-    margin-top: 0.5rem;
-    align-items: center;
-}
-
-.event-pickup-add input, .event-pickup-add select {
-    padding: 6px;
 }
 
 .no-games-message {

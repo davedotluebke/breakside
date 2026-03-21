@@ -727,11 +727,12 @@ function showDeleteLineDialog() {
 let editPlayerDialogPlayer = null;
 let editPlayerDialogPlayerId = null;  // Store ID separately to handle roster refreshes
 let editPlayerDialogOriginalData = null;
+let editPlayerDialogContext = {};  // Options for pickup context (onSave, onDelete callbacks)
 
 /**
  * Show the edit player dialog for a given player
  */
-function showEditPlayerDialog(player) {
+function showEditPlayerDialog(player, options = {}) {
     if (!player) {
         console.error('Cannot show edit player dialog: no player provided');
         return;
@@ -739,6 +740,7 @@ function showEditPlayerDialog(player) {
 
     editPlayerDialogPlayer = player;
     editPlayerDialogPlayerId = player.id;  // Store ID for reliable comparison
+    editPlayerDialogContext = options;
     // Store original values to detect changes
     editPlayerDialogOriginalData = {
         name: player.name,
@@ -780,7 +782,11 @@ function showEditPlayerDialog(player) {
     } else {
         playerIdDisplay.textContent = player.id || 'No ID';
     }
-    
+
+    // Hide player ID display for pickup context
+    const idField = playerIdDisplay ? playerIdDisplay.closest('.edit-player-id-field') : null;
+    if (idField) idField.style.display = options.context === 'pickup' ? 'none' : '';
+
     // Set gender button states
     if (fmpBtn && mmpBtn) {
         fmpBtn.classList.remove('selected');
@@ -812,6 +818,7 @@ function closeEditPlayerDialog() {
     editPlayerDialogPlayer = null;
     editPlayerDialogPlayerId = null;
     editPlayerDialogOriginalData = null;
+    editPlayerDialogContext = {};
 }
 
 /**
@@ -863,6 +870,14 @@ function deletePlayer() {
         return;
     }
 
+    // Pickup context: delegate to callback
+    if (editPlayerDialogContext.context === 'pickup' && editPlayerDialogContext.onDelete) {
+        const playerName = editPlayerDialogPlayer ? editPlayerDialogPlayer.name : 'this player';
+        if (!confirm(`Are you sure you want to remove ${playerName}?`)) return;
+        editPlayerDialogContext.onDelete();
+        return;
+    }
+
     // Get the current player from roster by ID (handles roster refresh)
     const player = currentTeam.teamRoster.find(p => p.id === editPlayerDialogPlayerId);
     if (!player) {
@@ -873,7 +888,7 @@ function deletePlayer() {
     }
 
     const playerName = player.name;
-    
+
     // Show confirmation alert
     if (!confirm(`Are you sure you want to delete ${playerName}?`)) {
         return; // User cancelled
@@ -881,13 +896,13 @@ function deletePlayer() {
 
     // Get player ID before removing
     const playerId = editPlayerDialogPlayerId;
-    
+
     // Remove player from roster by ID
     const index = currentTeam.teamRoster.findIndex(p => p.id === playerId);
     if (index > -1) {
         currentTeam.teamRoster.splice(index, 1);
     }
-    
+
     // Remove player ID from team's playerIds array
     if (currentTeam.playerIds && playerId) {
         const idIndex = currentTeam.playerIds.indexOf(playerId);
@@ -895,7 +910,7 @@ function deletePlayer() {
             currentTeam.playerIds.splice(idIndex, 1);
         }
     }
-    
+
     // Phase 4: Sync team update to cloud (player removed from team)
     // Note: We don't delete the player entity itself - they may be on other teams
     if (typeof syncTeamToCloud === 'function' && currentTeam.id) {
@@ -904,7 +919,7 @@ function deletePlayer() {
 
     // Save changes
     saveAllTeamsData();
-    
+
     // Refresh roster display
     updateTeamRosterDisplay();
 
@@ -918,15 +933,6 @@ function deletePlayer() {
 function saveEditedPlayer() {
     if (!editPlayerDialogPlayerId || !editPlayerDialogOriginalData) {
         console.error('Cannot save edited player: no player ID or original data');
-        return;
-    }
-
-    // Get the current player from roster by ID (handles roster refresh during edit)
-    const player = currentTeam.teamRoster.find(p => p.id === editPlayerDialogPlayerId);
-    if (!player) {
-        console.error('Cannot save edited player: player not found in roster');
-        alert('Error: Player not found. The roster may have been updated. Please try again.');
-        closeEditPlayerDialog();
         return;
     }
 
@@ -946,31 +952,46 @@ function saveEditedPlayer() {
         return;
     }
 
-    // Check if name already exists (excluding current player)
-    // Use ID comparison to handle cases where roster was refreshed and object references changed
-    const nameExists = currentTeam.teamRoster.some(p => 
-        p.id !== editPlayerDialogPlayerId && p.name === newName
-    );
-    if (nameExists) {
-        alert('A player with this name already exists');
-        return;
-    }
-
     // Get new values
     const newNumber = numberInput.value.trim();
     const newNumberValue = validateJerseyNumber(newNumber);
-    
+
     // If validation was cancelled (returned null when input was provided), don't save
     if (newNumber && newNumberValue === null) {
         return;
     }
-    
+
     // Determine new gender
     let newGender = Gender.UNKNOWN;
     if (fmpBtn && fmpBtn.classList.contains('selected')) {
         newGender = Gender.FMP;
     } else if (mmpBtn && mmpBtn.classList.contains('selected')) {
         newGender = Gender.MMP;
+    }
+
+    // Pickup context: delegate to callback
+    if (editPlayerDialogContext.context === 'pickup' && editPlayerDialogContext.onSave) {
+        editPlayerDialogContext.onSave({ name: newName, number: newNumberValue, gender: newGender });
+        closeEditPlayerDialog();
+        return;
+    }
+
+    // Get the current player from roster by ID (handles roster refresh during edit)
+    const player = currentTeam.teamRoster.find(p => p.id === editPlayerDialogPlayerId);
+    if (!player) {
+        console.error('Cannot save edited player: player not found in roster');
+        alert('Error: Player not found. The roster may have been updated. Please try again.');
+        closeEditPlayerDialog();
+        return;
+    }
+
+    // Check if name already exists (excluding current player)
+    const nameExists = currentTeam.teamRoster.some(p =>
+        p.id !== editPlayerDialogPlayerId && p.name === newName
+    );
+    if (nameExists) {
+        alert('A player with this name already exists');
+        return;
     }
 
     // Update player object (using fresh reference from roster)
@@ -986,7 +1007,7 @@ function saveEditedPlayer() {
 
     // Save changes
     saveAllTeamsData();
-    
+
     // Refresh roster display
     updateTeamRosterDisplay();
 
