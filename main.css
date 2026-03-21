@@ -2146,24 +2146,26 @@ section > .panel-title-bar {
     background: rgba(255,255,255,0.15);
 }
 
-/* Panel action button in title bar (e.g. "Roster" on Start Game) */
-.panel-action-btn {
-    background: rgba(255,255,255,0.15);
-    border: none;
-    color: #fff;
-    font-size: 0.85rem;
-    font-weight: 500;
-    padding: 4px 10px;
-    margin: 0 0 0 auto;
-    cursor: pointer;
-    border-radius: 4px;
+/* Roster navigation button on Start Game subscreen */
+.roster-nav-btn {
     display: flex;
     align-items: center;
-    gap: 5px;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    margin: 0 0 10px 0;
+    padding: 10px;
+    background: #5a6f8a;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
 }
 
-.panel-action-btn:hover {
-    background: rgba(255,255,255,0.25);
+.roster-nav-btn:hover {
+    background: #475a72;
 }
 
 /* Subscreen content padding */
