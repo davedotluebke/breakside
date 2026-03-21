@@ -1608,8 +1608,10 @@ function togglePbpExpandedRow() {
     if (!panel) return;
     
     const currentHeight = panel.getBoundingClientRect().height;
-    const MEDIUM_MIN_HEIGHT = 150; // Enough for two rows of buttons
-    
+    // Content height must exceed MEDIUM_THRESHOLD (120px) in updatePlayByPlayLayout
+    // Panel height = title bar (~36px) + content, so need ~160px minimum
+    const MEDIUM_MIN_HEIGHT = 165;
+
     if (currentHeight < MEDIUM_MIN_HEIGHT) {
         // Expand to medium height
         panel.style.height = `${MEDIUM_MIN_HEIGHT}px`;
