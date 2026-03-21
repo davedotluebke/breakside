@@ -33,16 +33,15 @@ function showScreen(screenId) {
     }
     targetScreen.style.display = 'block';
 
-    // Header styling — full header on non-game screens
+    // Default to Start Game subscreen when showing teamRosterScreen
+    if (screenId === 'teamRosterScreen') {
+        showStartGameSubscreen();
+    }
+
+    // Ensure header is visible (hideLegacyScreens sets display:none via inline style)
     const headerElement = document.querySelector('header');
     if (headerElement) {
-        if (screenId === 'selectTeamScreen' || screenId === 'teamRosterScreen' || screenId === 'teamSettingsScreen' || screenId === 'eventRosterScreen') {
-            headerElement.classList.remove('header-compact');
-            headerElement.classList.add('header-full');
-        } else {
-            headerElement.classList.remove('header-full');
-            headerElement.classList.add('header-compact');
-        }
+        headerElement.style.display = '';
     }
 
     // Manage controller polling — stop on non-game screens
@@ -84,3 +83,30 @@ function manageControllerPolling(screenId) {
         stopControllerPolling();
     }
 }
+
+// =============================================================================
+// Roster Screen Subscreens
+// =============================================================================
+
+function showStartGameSubscreen() {
+    document.getElementById('startGameSubscreen').style.display = '';
+    document.getElementById('editRosterSubscreen').style.display = 'none';
+}
+
+function showEditRosterSubscreen() {
+    document.getElementById('startGameSubscreen').style.display = 'none';
+    document.getElementById('editRosterSubscreen').style.display = '';
+    if (typeof updateTeamRosterDisplay === 'function') updateTeamRosterDisplay();
+}
+
+// Wire subscreen buttons once DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    const showRosterBtn = document.getElementById('showRosterBtn');
+    if (showRosterBtn) {
+        showRosterBtn.addEventListener('click', showEditRosterSubscreen);
+    }
+    const backToStartBtn = document.getElementById('backToStartGameBtn');
+    if (backToStartBtn) {
+        backToStartBtn.addEventListener('click', showStartGameSubscreen);
+    }
+});
