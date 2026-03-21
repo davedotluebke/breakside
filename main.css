@@ -2187,6 +2187,16 @@ section > .panel-title-bar {
     gap: 8px;
 }
 
+.start-game-field-row label {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.start-game-field-row select {
+    flex: 1;
+    min-width: 0;
+}
+
 .start-game-buttons {
     margin-top: 8px;
 }
