@@ -2201,13 +2201,6 @@ section > .panel-title-bar {
     margin-top: 8px;
 }
 
-.start-game-advanced {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    justify-content: center;
-}
-
 /* Make sure the timer text itself uses JetBrains Mono */
 #pointTimer {
     font-family: 'JetBrains Mono', monospace !important;
