@@ -452,7 +452,11 @@ function initializeAppMenu() {
 
     document.getElementById('menuAppAbout')?.addEventListener('click', () => {
         closeAppMenu();
-        showAppVersionOverlay();
+        if (typeof showConnectionInfo === 'function') {
+            showConnectionInfo();
+        } else {
+            showAppVersionOverlay();
+        }
     });
 
     // Logo tap also shows version
