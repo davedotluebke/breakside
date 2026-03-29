@@ -155,10 +155,13 @@ window.forceAppUpdate = forceAppUpdate;
 
 // Initialize authentication
 async function initializeApp() {
-    // Test mode: skip auth and go straight to team selection
-    // Activated via ?testMode=true URL parameter
+    // Test mode: skip Supabase auth and inject a fake session.
+    // Activated via ?testMode=true URL parameter.
     if (new URLSearchParams(window.location.search).get('testMode') === 'true') {
-        console.log('Test mode: skipping auth');
+        console.log('[Test] Test mode: injecting fake auth session');
+        if (window.breakside?.auth?.enableTestMode) {
+            window.breakside.auth.enableTestMode('test-user');
+        }
         showSelectTeamScreen(true);
         return;
     }

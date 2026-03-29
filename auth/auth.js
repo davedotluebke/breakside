@@ -147,6 +147,18 @@ function isAuthenticated() {
 }
 
 /**
+ * Enable test mode: inject a fake authenticated session without Supabase.
+ * For automated testing only — never call this in production.
+ * @param {string} userId - Test user ID (default: 'test-user')
+ */
+function enableTestMode(userId = 'test-user') {
+    currentUser = { id: userId, email: `${userId}@breakside.test` };
+    currentSession = { user: currentUser, access_token: 'test-mode-token' };
+    authInitialized = true;
+    console.log('[Test] Auth: test mode enabled, userId =', userId);
+}
+
+/**
  * Get the current user object.
  * @returns {object|null} User object or null if not authenticated
  */
@@ -425,6 +437,9 @@ window.breakside.auth = {
     handleLoginRedirect,
     authFetch,
     syncUserToBackend,
+
+    // Test support
+    enableTestMode,
 };
 
 // =============================================================================
