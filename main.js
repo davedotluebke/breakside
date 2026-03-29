@@ -155,11 +155,19 @@ window.forceAppUpdate = forceAppUpdate;
 
 // Initialize authentication
 async function initializeApp() {
+    // Test mode: skip auth and go straight to team selection
+    // Activated via ?testMode=true URL parameter
+    if (new URLSearchParams(window.location.search).get('testMode') === 'true') {
+        console.log('Test mode: skipping auth');
+        showSelectTeamScreen(true);
+        return;
+    }
+
     // Check if we're returning from Supabase auth (has hash params like #access_token)
-    const hasAuthCallback = window.location.hash.includes('access_token') || 
+    const hasAuthCallback = window.location.hash.includes('access_token') ||
                            window.location.hash.includes('refresh_token') ||
                            window.location.hash.includes('error_description');
-    
+
     // Initialize auth module
     if (window.breakside?.auth?.initializeAuth) {
         try {
