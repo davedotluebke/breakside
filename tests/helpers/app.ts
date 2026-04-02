@@ -10,7 +10,7 @@
  *   - Ending a game
  */
 import { expect, Page } from '@playwright/test';
-import { TEST_PARAMS } from '../playwright.config';
+import { TEST_PARAMS } from './constants';
 
 // ─── App Navigation ─────────────────────────────────────────────────────────
 

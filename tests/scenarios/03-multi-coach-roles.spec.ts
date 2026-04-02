@@ -8,7 +8,7 @@
  * Uses X-Test-User-Id header to distinguish coaches on the backend.
  */
 import { test, expect, Page, APIRequestContext } from '@playwright/test';
-import { BACKEND_URL, TEST_PARAMS } from '../playwright.config';
+import { BACKEND_URL, TEST_PARAMS } from '../helpers/constants';
 import {
   goToApp, setupTeamWithPlayers, startGame, selectAllPlayers,
 } from '../helpers/app';
