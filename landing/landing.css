@@ -223,12 +223,12 @@ body {
 }
 
 .phone-mockup {
-    width: 280px;
-    height: 560px;
+    width: 300px;
+    height: 460px;
     background: linear-gradient(145deg, var(--gray-700), var(--gray-800));
     border-radius: 40px;
     padding: 12px;
-    box-shadow: 
+    box-shadow:
         0 25px 50px -12px rgba(0, 0, 0, 0.5),
         inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
@@ -239,82 +239,14 @@ body {
     background: var(--gray-100);
     border-radius: 32px;
     overflow: hidden;
-    display: flex;
-    flex-direction: column;
 }
 
-.mockup-header {
-    background: var(--brand-orange);
-    color: white;
-    padding: var(--space-md);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: var(--space-sm);
-    font-weight: 600;
-}
-
-.mockup-vs {
-    opacity: 0.7;
-    font-size: 0.875rem;
-}
-
-.mockup-timer {
-    background: var(--gray-200);
-    text-align: center;
-    padding: var(--space-lg);
-    font-family: var(--font-mono);
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: var(--gray-800);
-}
-
-.mockup-players {
-    flex: 1;
-    padding: var(--space-md);
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-sm);
-    align-content: start;
-}
-
-.mockup-player {
-    background: var(--gray-200);
-    padding: var(--space-sm) var(--space-md);
-    border-radius: var(--radius-md);
-    text-align: center;
-    font-size: 0.875rem;
-    color: var(--gray-700);
-}
-
-.mockup-player.active {
-    background: var(--brand-orange-light);
-    color: var(--gray-800);
-    font-weight: 600;
-}
-
-.mockup-actions {
-    padding: var(--space-md);
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-sm);
-}
-
-.mockup-btn {
-    padding: var(--space-lg);
-    border-radius: var(--radius-lg);
-    text-align: center;
-    font-weight: 600;
-    color: white;
-    font-size: 0.9rem;
-}
-
-.mockup-btn.green {
-    background: var(--success);
-}
-
-.mockup-btn.red {
-    background: var(--error);
+.mockup-screenshot {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: left top;
+    display: block;
 }
 
 /* =============================================================================
