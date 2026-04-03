@@ -157,29 +157,35 @@ async def require_game_team_coach(
 ) -> dict:
     """
     Dependency for game write endpoints.
-    
+
     Looks up the teamId from:
     1. The existing game (if it exists)
     2. The request body (for new games being synced)
-    
+
     Then verifies the user is a Coach for that team.
-    
+    When AUTH_REQUIRED is false, skips the membership check.
+
     Returns:
         The user dict if authorized
-        
+
     Raises:
         HTTPException 400: If game has no teamId
         HTTPException 403: If user is not a coach for the team
     """
+    import os
+    auth_required = os.getenv("ULTISTATS_AUTH_REQUIRED", "true").lower() == "true"
+    if not auth_required:
+        return user
+
     game_id = request.path_params.get("game_id")
-    
+
     team_id = None
-    
+
     # Check existing game first
     if game_id and game_exists(game_id):
         game_data = get_game_current(game_id)
         team_id = game_data.get("teamId")
-    
+
     # If no team_id from existing game, check request body
     if not team_id:
         try:
@@ -187,17 +193,17 @@ async def require_game_team_coach(
             team_id = body.get("teamId")
         except Exception:
             pass  # Body might not be JSON or might not have teamId
-    
+
     if not team_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Game must have a teamId"
         )
-    
+
     # Admin bypass
     if is_admin(user["id"]):
         return user
-    
+
     # Verify coach access to this team
     role = get_user_team_role(user["id"], team_id)
     if role != "coach":
@@ -205,7 +211,7 @@ async def require_game_team_coach(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Coach access required for this team"
         )
-    
+
     return user
 
 
@@ -215,38 +221,44 @@ async def require_game_team_access(
 ) -> dict:
     """
     Dependency for game read endpoints.
-    
+
     Requires Coach or Viewer access to the game's team.
-    
+    When AUTH_REQUIRED is false, skips the membership check.
+
     Returns:
         The user dict if authorized
-        
+
     Raises:
         HTTPException 404: If game doesn't exist
         HTTPException 400: If game has no teamId
         HTTPException 403: If user doesn't have team access
     """
+    import os
+    auth_required = os.getenv("ULTISTATS_AUTH_REQUIRED", "true").lower() == "true"
+    if not auth_required:
+        return user
+
     game_id = request.path_params.get("game_id")
-    
+
     if not game_id or not game_exists(game_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Game {game_id} not found"
         )
-    
+
     game_data = get_game_current(game_id)
     team_id = game_data.get("teamId")
-    
+
     if not team_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Game has no teamId"
         )
-    
+
     # Admin bypass
     if is_admin(user["id"]):
         return user
-    
+
     # Verify any team access
     role = get_user_team_role(user["id"], team_id)
     if role is None:
@@ -254,7 +266,7 @@ async def require_game_team_access(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this team"
         )
-    
+
     return user
 
 

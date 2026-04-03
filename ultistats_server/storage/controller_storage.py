@@ -10,6 +10,7 @@ This is by design—ensures stale claims don't persist.
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Literal, TypedDict
 import threading
+import os
 
 # =============================================================================
 # Type Definitions
@@ -45,10 +46,10 @@ class ControllerState(TypedDict):
 # =============================================================================
 
 # Role expires if no ping received within this time
-STALE_TIMEOUT_SECONDS = 30
+STALE_TIMEOUT_SECONDS = int(os.getenv("BREAKSIDE_STALE_TIMEOUT", "30"))
 
 # Handoff auto-approves after this time (must match client-side HANDOFF_TIMEOUT_SECONDS)
-HANDOFF_EXPIRY_SECONDS = 10
+HANDOFF_EXPIRY_SECONDS = int(os.getenv("BREAKSIDE_HANDOFF_EXPIRY", "10"))
 
 
 # =============================================================================

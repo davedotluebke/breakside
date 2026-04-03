@@ -14,7 +14,7 @@ We verify the signature using Supabase's JWT secret.
 import jwt
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 # Import config - handle both relative and absolute imports
@@ -108,26 +108,40 @@ def verify_supabase_token(token: str) -> dict:
 
 
 async def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> dict:
     """
     FastAPI dependency that extracts and validates the current user from JWT.
-    
+
     Use this for endpoints that REQUIRE authentication.
-    
+    When AUTH_REQUIRED is false, accepts an X-Test-User-Id header to
+    identify distinct test users (needed for multi-coach tests).
+
     Returns:
         Dict with user info: {"id": str, "email": str, "role": str, ...}
-        
+
     Raises:
         HTTPException 401: If no token provided or token is invalid
     """
+    import os
+    auth_required = os.getenv("ULTISTATS_AUTH_REQUIRED", "true").lower() == "true"
+    if not auth_required:
+        # In test mode, use X-Test-User-Id header or fall back to a default
+        test_user_id = request.headers.get("x-test-user-id", "test-user")
+        return {
+            "id": test_user_id,
+            "email": f"{test_user_id}@breakside.test",
+            "role": "authenticated",
+        }
+
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     return verify_supabase_token(credentials.credentials)
 
 

@@ -147,6 +147,21 @@ function isAuthenticated() {
 }
 
 /**
+ * Enable test mode: inject a fake authenticated session without Supabase.
+ * For automated testing only — never call this in production.
+ * @param {string} userId - Test user ID (default: 'test-user')
+ */
+let _testModeUserId = null;
+
+function enableTestMode(userId = 'test-user') {
+    _testModeUserId = userId;
+    currentUser = { id: userId, email: `${userId}@breakside.test` };
+    currentSession = { user: currentUser, access_token: 'test-mode-token' };
+    authInitialized = true;
+    console.log('[Test] Auth: test mode enabled, userId =', userId);
+}
+
+/**
  * Get the current user object.
  * @returns {object|null} User object or null if not authenticated
  */
@@ -185,6 +200,11 @@ function onAuthStateChange(listener) {
  * @returns {Promise<object>} Headers object
  */
 async function getAuthHeaders() {
+    // In test mode, send X-Test-User-Id instead of a real JWT
+    if (_testModeUserId) {
+        return { 'X-Test-User-Id': _testModeUserId };
+    }
+
     if (!isAuthenticated() || !supabaseClient) {
         return {};
     }
@@ -425,6 +445,9 @@ window.breakside.auth = {
     handleLoginRedirect,
     authFetch,
     syncUserToBackend,
+
+    // Test support
+    enableTestMode,
 };
 
 // =============================================================================

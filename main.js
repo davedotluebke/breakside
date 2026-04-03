@@ -155,11 +155,25 @@ window.forceAppUpdate = forceAppUpdate;
 
 // Initialize authentication
 async function initializeApp() {
+    // Test mode: skip Supabase auth and inject a fake session.
+    // Activated via ?testMode=true URL parameter.
+    // Optional ?testUserId=<id> sets the user identity (for multi-coach tests).
+    if (new URLSearchParams(window.location.search).get('testMode') === 'true') {
+        const params = new URLSearchParams(window.location.search);
+        const testUserId = params.get('testUserId') || 'test-user';
+        console.log('[Test] Test mode: injecting fake auth session for', testUserId);
+        if (window.breakside?.auth?.enableTestMode) {
+            window.breakside.auth.enableTestMode(testUserId);
+        }
+        showSelectTeamScreen(true);
+        return;
+    }
+
     // Check if we're returning from Supabase auth (has hash params like #access_token)
-    const hasAuthCallback = window.location.hash.includes('access_token') || 
+    const hasAuthCallback = window.location.hash.includes('access_token') ||
                            window.location.hash.includes('refresh_token') ||
                            window.location.hash.includes('error_description');
-    
+
     // Initialize auth module
     if (window.breakside?.auth?.initializeAuth) {
         try {
