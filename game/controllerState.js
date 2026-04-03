@@ -457,15 +457,22 @@ const STALE_GAME_HOURS = 6;
 
 document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState !== 'visible') return;
-    
+
     const gameId = currentGameIdForPolling;
     if (!gameId) return; // Not in a game
-    
+
     console.log('🎮 Page became visible — recovering game session...');
-    
+
+    // --- Pause game state refresh during recovery ---
+    // Prevents the refresh timer from racing with this handler and making
+    // decisions based on stale controller state.
+    if (typeof stopGameStateRefresh === 'function') {
+        stopGameStateRefresh();
+    }
+
     // --- Check for ended or stale game before attempting recovery ---
     const game = typeof currentGame === 'function' ? currentGame() : null;
-    
+
     if (game) {
         // Refresh game data from cloud to detect if another coach ended the game
         if (typeof refreshGameStateFromCloud === 'function') {
@@ -475,7 +482,7 @@ document.addEventListener('visibilitychange', async () => {
                 console.warn('🎮 Failed to refresh game state on wake:', e);
             }
         }
-        
+
         // Gap 1: Game was ended by another coach while we were away
         if (game.gameEndTimestamp) {
             console.log('🎮 Game ended while away — returning to team selection');
@@ -489,7 +496,7 @@ document.addEventListener('visibilitychange', async () => {
             }
             return; // Skip role recovery
         }
-        
+
         // Gap 2: Game is very old — probably abandoned
         const gameStart = game.gameStartTimestamp
             ? new Date(game.gameStartTimestamp).getTime()
@@ -507,7 +514,7 @@ document.addEventListener('visibilitychange', async () => {
                         ? new Date(lastPoint.startTimestamp).getTime()
                         : gameStart;
                 const hoursSinceActivity = (Date.now() - lastActivity) / (1000 * 60 * 60);
-                
+
                 if (hoursSinceActivity > STALE_GAME_HOURS) {
                     console.log(`🎮 Game idle for ${hoursSinceActivity.toFixed(1)}h — prompting user`);
                     const keepGoing = confirm(
@@ -529,56 +536,67 @@ document.addEventListener('visibilitychange', async () => {
             }
         }
     }
-    
+
     // --- Normal recovery: re-claim roles and restart polling ---
-    
+
     // Remember what roles we had before the sleep
     const hadActiveCoach = controllerState.isActiveCoach;
     const hadLineCoach = controllerState.isLineCoach;
-    
-    // Restart polling interval (it may have drifted or been throttled)
+
+    // Always restart the polling interval unconditionally.
+    // After sleep, the browser may have frozen or invalidated the previous
+    // interval — checking controllerPollIntervalId is unreliable here.
     if (controllerPollIntervalId) {
         clearInterval(controllerPollIntervalId);
-        const hasRole = controllerState.isActiveCoach || controllerState.isLineCoach;
-        const interval = hasRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
-        controllerPollIntervalId = setInterval(() => {
-            if (currentGameIdForPolling) {
-                pingController(currentGameIdForPolling);
-            }
-        }, interval);
     }
-    
-    // Immediately ping to get fresh server state
-    const result = await pingController(gameId);
-    
+    const hasRole = controllerState.isActiveCoach || controllerState.isLineCoach;
+    const interval = hasRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
+    controllerPollIntervalId = setInterval(() => {
+        if (currentGameIdForPolling) {
+            pingController(currentGameIdForPolling);
+        }
+    }, interval);
+
+    // Immediately ping to get fresh server state, with retries.
+    // The first ping after wake may fail if the network is still restoring.
+    let result = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        result = await pingController(gameId);
+        if (result) break;
+        console.warn(`🎮 Wake ping attempt ${attempt}/3 failed — retrying in 1s...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
     if (!result) {
-        console.warn('🎮 Wake ping failed — will retry on next interval');
-        return;
+        console.warn('🎮 All wake ping attempts failed — polling will continue retrying');
+        // Don't return — let polling continue and restart game state refresh below
     }
-    
+
     // Check if roles were lost during sleep and silently re-claim
-    const lostActiveCoach = hadActiveCoach && !controllerState.isActiveCoach;
-    const lostLineCoach = hadLineCoach && !controllerState.isLineCoach;
-    
-    if (lostActiveCoach || lostLineCoach) {
-        console.log(`🎮 Roles lost during sleep — re-claiming (active: ${lostActiveCoach}, line: ${lostLineCoach})`);
-        
-        if (lostActiveCoach) {
-            const claimResult = await claimActiveCoach(gameId);
-            if (claimResult?.success) {
-                console.log('🎮 Re-claimed Active Coach after wake');
+    if (result) {
+        const lostActiveCoach = hadActiveCoach && !controllerState.isActiveCoach;
+        const lostLineCoach = hadLineCoach && !controllerState.isLineCoach;
+
+        if (lostActiveCoach || lostLineCoach) {
+            console.log(`🎮 Roles lost during sleep — re-claiming (active: ${lostActiveCoach}, line: ${lostLineCoach})`);
+
+            if (lostActiveCoach) {
+                const claimResult = await claimActiveCoach(gameId);
+                if (claimResult?.success) {
+                    console.log('🎮 Re-claimed Active Coach after wake');
+                }
             }
-        }
-        
-        if (lostLineCoach) {
-            const claimResult = await claimLineCoach(gameId);
-            if (claimResult?.success) {
-                console.log('🎮 Re-claimed Line Coach after wake');
+
+            if (lostLineCoach) {
+                const claimResult = await claimLineCoach(gameId);
+                if (claimResult?.success) {
+                    console.log('🎮 Re-claimed Line Coach after wake');
+                }
             }
         }
     }
-    
-    // Restart game state refresh if it was stopped
+
+    // Restart game state refresh now that recovery is complete
     if (typeof startGameStateRefresh === 'function') {
         startGameStateRefresh();
     }
