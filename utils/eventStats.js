@@ -25,7 +25,7 @@ async function loadEventGames(event) {
             const game = await loadGameFromCloud(gameId);
             if (game) games.push(game);
         } catch (e) {
-            console.warn('Failed to load game', gameId, e);
+            console.debug('Skipping unavailable game', gameId);
         }
     }
     return games;
