@@ -89,6 +89,10 @@ async function renderEventRosterTable() {
 
     const hasStats = Object.keys(eventPlayerStats).length > 0;
 
+    // Show/hide export button
+    const exportBtn = document.getElementById('exportEventRosterBtn');
+    if (exportBtn) exportBtn.style.display = hasStats ? '' : 'none';
+
     // Clear and rebuild after async load
     tbody.innerHTML = '';
 
@@ -390,12 +394,66 @@ function backFromEventRoster() {
     showScreen('selectTeamScreen');
 }
 
+/**
+ * Export event roster stats to CSV and trigger download
+ */
+function exportEventRosterCSV() {
+    const tbody = document.getElementById('eventRosterList');
+    if (!tbody) return;
+
+    const rows = tbody.querySelectorAll('tr');
+    if (rows.length === 0) return;
+
+    const csvRows = [];
+    rows.forEach(row => {
+        const cells = [];
+        Array.from(row.children).forEach((cell, colIdx) => {
+            if (colIdx === 0) {
+                // Checkbox column → "Yes"/"No"/empty for header/aggregate
+                const cb = cell.querySelector('input[type="checkbox"]');
+                if (cell.tagName === 'TH') {
+                    cells.push('Attending');
+                } else if (cb) {
+                    cells.push(cb.checked ? 'Yes' : 'No');
+                } else if (row.classList.contains('team-aggregate-row')) {
+                    cells.push('');
+                } else {
+                    // Pickup player (no checkbox) — always attending
+                    cells.push('Yes');
+                }
+            } else {
+                // Escape quotes and wrap in quotes if contains comma/quote/newline
+                let text = cell.textContent.trim();
+                if (text.includes('"') || text.includes(',') || text.includes('\n')) {
+                    text = '"' + text.replace(/"/g, '""') + '"';
+                }
+                cells.push(text);
+            }
+        });
+        csvRows.push(cells.join(','));
+    });
+
+    const csv = csvRows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const eventName = currentEventRosterEvent?.name || 'event-roster';
+    const filename = eventName.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-') + '-stats.csv';
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
 // Event listeners (IIFE matching rosterManagement.js pattern)
 (function initializeEventRoster() {
     document.getElementById('eventAddFMPBtn')?.addEventListener('click', () => addEventPickupPlayer(Gender.FMP));
     document.getElementById('eventAddMMPBtn')?.addEventListener('click', () => addEventPickupPlayer(Gender.MMP));
     document.getElementById('saveEventRosterBtn')?.addEventListener('click', saveEventRoster);
     document.getElementById('backFromEventRosterBtn')?.addEventListener('click', backFromEventRoster);
+    document.getElementById('exportEventRosterBtn')?.addEventListener('click', exportEventRosterCSV);
 
     const nameInput = document.getElementById('eventNewPlayerInput');
     if (nameInput) {
