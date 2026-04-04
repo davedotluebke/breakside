@@ -9,6 +9,8 @@ let currentEventRosterEvent = null;
 let eventRosterPlayerIds = new Set();
 let eventRosterPickups = [];
 let cachedEventStats = null; // { eventId, playerStats, record } — avoids re-fetching on re-renders
+let eventRosterSortController = null;
+let eventRosterSortState = null; // persists sort across re-renders
 
 /**
  * Show the event roster UI for editing an event's roster
@@ -17,6 +19,7 @@ let cachedEventStats = null; // { eventId, playerStats, record } — avoids re-f
 function showEventRosterUI(event) {
     currentEventRosterEvent = event;
     cachedEventStats = null; // clear cache for fresh load
+    eventRosterSortState = null; // reset sort for new event
 
     // Clone roster state into local variables
     const existingPlayerIds = event.roster?.playerIds || [];
@@ -51,6 +54,13 @@ function showEventRosterUI(event) {
 async function renderEventRosterTable() {
     const tbody = document.getElementById('eventRosterList');
     if (!tbody) return;
+
+    // Save and detach sort controller before rebuilding
+    if (eventRosterSortController) {
+        eventRosterSortState = eventRosterSortController.getSortState();
+        eventRosterSortController.detach();
+        eventRosterSortController = null;
+    }
 
     // Load event stats and record from cloud (games aren't in local state)
     const event = currentEventRosterEvent;
@@ -185,6 +195,41 @@ async function renderEventRosterTable() {
         });
 
         tbody.appendChild(aggRow);
+    }
+
+    // Attach sort controller
+    if (typeof createTableSortController === 'function') {
+        const columns = [
+            { key: 'checkbox', type: 'checkbox', colIndex: 0 },
+            { key: 'name', type: 'string', colIndex: 1 }
+        ];
+        if (hasStats) {
+            columns.push(
+                { key: 'pts', type: 'number', colIndex: 2 },
+                { key: 'time', type: 'time', colIndex: 3 },
+                { key: 'goals', type: 'number', colIndex: 4 },
+                { key: 'assists', type: 'number', colIndex: 5 },
+                { key: 'compPct', type: 'percentage', colIndex: 6 },
+                { key: 'huckPct', type: 'percentage', colIndex: 7 },
+                { key: 'ds', type: 'number', colIndex: 8 },
+                { key: 'tos', type: 'number', colIndex: 9 },
+                { key: 'plusMinus', type: 'number', colIndex: 10 },
+                { key: 'pmPerPt', type: 'number', colIndex: 11 }
+            );
+        }
+        eventRosterSortController = createTableSortController({
+            getHeaderRow: () => tbody.querySelector('tr:first-child'),
+            getDataRows: () => Array.from(tbody.querySelectorAll('tr:not(:first-child):not(.team-aggregate-row)')),
+            getAggregateRows: () => Array.from(tbody.querySelectorAll('.team-aggregate-row')),
+            getTbody: () => tbody,
+            columns
+        });
+        eventRosterSortController.attach();
+
+        // Restore previous sort state if re-rendering
+        if (eventRosterSortState) {
+            eventRosterSortController.sort(eventRosterSortState.key, eventRosterSortState.direction);
+        }
     }
 }
 
