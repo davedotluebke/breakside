@@ -24,7 +24,8 @@ function getValueFromCell(row, colIndex, type) {
     switch (type) {
         case 'checkbox': {
             const cb = cell.querySelector('input[type="checkbox"]');
-            return cb ? (cb.checked ? 1 : 0) : 0;
+            // No checkbox (e.g. pickup players) treated as checked
+            return cb ? (cb.checked ? 1 : 0) : 1;
         }
         case 'number': {
             const text = cell.textContent.trim().replace('+', '');
@@ -138,20 +139,24 @@ function createTableSortController(options) {
     }
 
     /**
-     * Handle a header click — cycle through asc → desc → clear.
+     * Handle a header click — cycle through default → opposite → clear.
+     * Default direction is 'desc' for most columns, 'asc' for string columns.
      */
     function onHeaderClick(key) {
+        const col = columns.find(c => c.key === key);
+        const defaultDir = (col && col.type === 'string') ? 'asc' : 'desc';
+        const oppositeDir = defaultDir === 'asc' ? 'desc' : 'asc';
+
         if (sortKey === key) {
-            // Cycle: asc → desc → clear
-            if (sortDirection === 'asc') {
-                sortDirection = 'desc';
-            } else if (sortDirection === 'desc') {
+            if (sortDirection === defaultDir) {
+                sortDirection = oppositeDir;
+            } else {
                 sortKey = null;
                 sortDirection = null;
             }
         } else {
             sortKey = key;
-            sortDirection = 'asc';
+            sortDirection = defaultDir;
         }
 
         reorderRows();
