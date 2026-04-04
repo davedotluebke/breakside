@@ -1,20 +1,45 @@
 /*
  * Event-Level Statistics
  * Computes aggregate player stats across all games in a TournamentEvent.
- * Stats are computed on-demand (not stored) — consistent with existing "Total" pattern.
+ * Loads games from cloud via loadGameFromCloud since games aren't bulk-loaded
+ * onto the team object until individually opened.
  */
 
 /**
- * Get aggregate player stats for an event across all its games.
- * @param {string} eventId - The event ID
- * @param {Array} [teamGames] - Optional pre-loaded list of all team games (avoids re-scanning)
- * @returns {Object} Map of playerName → { pointsPlayed, timePlayed, goals, assists, turnovers, plusMinus, pointsWon, pointsLost, completions, huckCompletions, totalThrows, totalHucks, dPlays }
+ * Load all games for an event from cloud storage.
+ * @param {object} event - TournamentEvent with gameIds array
+ * @returns {Promise<Array>} Array of deserialized Game objects
  */
-function getEventPlayerStats(eventId, teamGames) {
-    if (!eventId) return {};
+async function loadEventGames(event) {
+    const gameIds = event?.gameIds || [];
+    if (gameIds.length === 0) return [];
 
-    // Collect games for this event
-    const games = (teamGames || getAllTeamGames()).filter(g => g.eventId === eventId);
+    if (typeof loadGameFromCloud !== 'function') {
+        console.warn('loadGameFromCloud not available');
+        return [];
+    }
+
+    const games = [];
+    for (const gameId of gameIds) {
+        try {
+            const game = await loadGameFromCloud(gameId);
+            if (game) games.push(game);
+        } catch (e) {
+            console.warn('Failed to load game', gameId, e);
+        }
+    }
+    return games;
+}
+
+/**
+ * Get aggregate player stats for an event across all its games.
+ * @param {object} event - TournamentEvent object (must have gameIds)
+ * @returns {Promise<Object>} Map of playerName → stats
+ */
+async function getEventPlayerStats(event) {
+    if (!event) return {};
+
+    const games = await loadEventGames(event);
     const stats = {};
 
     function ensurePlayer(name) {
@@ -61,8 +86,8 @@ function getEventPlayerStats(eventId, teamGames) {
             });
 
             // Count goals, assists, turnovers, completions, hucks, dPlays from events
-            point.possessions.forEach(poss => {
-                poss.events.forEach(event => {
+            (point.possessions || []).forEach(poss => {
+                (poss.events || []).forEach(event => {
                     if (event.type === 'Throw') {
                         const throwerName = event.thrower?.name || event.thrower;
                         if (throwerName) {
@@ -104,21 +129,14 @@ function getEventPlayerStats(eventId, teamGames) {
 }
 
 /**
- * Get all games from the current team (helper for when teamGames isn't passed)
- */
-function getAllTeamGames() {
-    if (!currentTeam) return [];
-    return currentTeam.games || [];
-}
-
-/**
  * Get event W/L record
- * @param {string} eventId
- * @param {Array} [teamGames]
- * @returns {{ wins: number, losses: number, ties: number }}
+ * @param {object} event - TournamentEvent object (must have gameIds)
+ * @returns {Promise<{ wins: number, losses: number, ties: number }>}
  */
-function getEventRecord(eventId, teamGames) {
-    const games = (teamGames || getAllTeamGames()).filter(g => g.eventId === eventId);
+async function getEventRecord(event) {
+    if (!event) return { wins: 0, losses: 0, ties: 0 };
+
+    const games = await loadEventGames(event);
     let wins = 0, losses = 0, ties = 0;
     games.forEach(game => {
         const teamScore = game.scores?.[Role.TEAM] || game.scores?.team || 0;
@@ -132,3 +150,4 @@ function getEventRecord(eventId, teamGames) {
 
 window.getEventPlayerStats = getEventPlayerStats;
 window.getEventRecord = getEventRecord;
+window.loadEventGames = loadEventGames;

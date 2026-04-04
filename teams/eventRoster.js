@@ -8,6 +8,7 @@
 let currentEventRosterEvent = null;
 let eventRosterPlayerIds = new Set();
 let eventRosterPickups = [];
+let cachedEventStats = null; // { eventId, playerStats, record } — avoids re-fetching on re-renders
 
 /**
  * Show the event roster UI for editing an event's roster
@@ -15,6 +16,7 @@ let eventRosterPickups = [];
  */
 function showEventRosterUI(event) {
     currentEventRosterEvent = event;
+    cachedEventStats = null; // clear cache for fresh load
 
     // Clone roster state into local variables
     const existingPlayerIds = event.roster?.playerIds || [];
@@ -29,37 +31,64 @@ function showEventRosterUI(event) {
 
     eventRosterPickups = (event.roster?.pickupPlayers || []).map(p => ({ ...p }));
 
-    // Set header
+    // Set header (will be updated with record after stats load)
     const header = document.getElementById('eventRosterHeader');
-    if (header) header.textContent = `${event.name} — Roster`;
+    if (header) {
+        const hasGameIds = (event.gameIds || []).length > 0;
+        header.textContent = hasGameIds
+            ? `${event.name} — Loading stats...`
+            : `${event.name} — Roster`;
+    }
 
-    renderEventRosterTable();
     showScreen('eventRosterScreen');
+    renderEventRosterTable();
 }
 
 /**
- * Render the event roster table rows with full event statistics
+ * Render the event roster table rows with full event statistics.
+ * Shows roster immediately, then loads stats from cloud asynchronously.
  */
-function renderEventRosterTable() {
+async function renderEventRosterTable() {
     const tbody = document.getElementById('eventRosterList');
     if (!tbody) return;
-    tbody.innerHTML = '';
 
-    // Compute event stats and record
-    const eventId = currentEventRosterEvent ? currentEventRosterEvent.id : null;
-    const eventPlayerStats = eventId && typeof getEventPlayerStats === 'function'
-        ? getEventPlayerStats(eventId) : {};
+    // Load event stats and record from cloud (games aren't in local state)
+    const event = currentEventRosterEvent;
+    let eventPlayerStats = {};
+    let record = null;
+    const eventId = event?.id;
+    const hasGameIds = (event?.gameIds || []).length > 0;
+
+    if (hasGameIds && typeof getEventPlayerStats === 'function') {
+        // Use cache if available for this event (avoids re-fetching on checkbox/pickup changes)
+        if (cachedEventStats && cachedEventStats.eventId === eventId) {
+            eventPlayerStats = cachedEventStats.playerStats;
+            record = cachedEventStats.record;
+        } else {
+            try {
+                [eventPlayerStats, record] = await Promise.all([
+                    getEventPlayerStats(event),
+                    typeof getEventRecord === 'function' ? getEventRecord(event) : null
+                ]);
+                cachedEventStats = { eventId, playerStats: eventPlayerStats, record };
+            } catch (e) {
+                console.error('Error loading event stats:', e);
+            }
+        }
+    }
+
     const hasStats = Object.keys(eventPlayerStats).length > 0;
-    const record = eventId && typeof getEventRecord === 'function'
-        ? getEventRecord(eventId) : null;
+
+    // Clear and rebuild after async load
+    tbody.innerHTML = '';
 
     // Update header with record if available
     const header = document.getElementById('eventRosterHeader');
-    if (header && currentEventRosterEvent) {
+    if (header && event) {
         const recordStr = record && (record.wins + record.losses + record.ties) > 0
             ? ` (${record.wins}W-${record.losses}L${record.ties ? `-${record.ties}T` : ''})`
             : '';
-        header.textContent = `${currentEventRosterEvent.name}${recordStr}`;
+        header.textContent = `${event.name}${recordStr}`;
     }
 
     // Header row
