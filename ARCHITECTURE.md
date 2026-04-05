@@ -701,6 +701,8 @@ Exported via `window.breakside.auth`:
 
 Staging has a purple header (vs production orange) via `body.staging` CSS class. The deploy stamp lets the PWA detect redeploys without a commit — tap Online/About to check for updates. If a label was provided, it appears in the version toast as `[label]`.
 
+**Claude Desktop PATH issue** — Claude Code Desktop strips the shell PATH to a minimal `/usr/bin:/bin:/usr/sbin:/sbin`, so tools like `aws` at `/usr/local/bin` aren't found. This is a [known bug](https://github.com/anthropics/claude-code/issues/3991) — the `env.PATH` key in `settings.json` and shell dotfiles (`.zshenv`, `.zprofile`, `.zshrc`) are all ignored for Bash tool commands. The deploy script works around this by sourcing `~/.zshenv` at the top, which sets the full PATH including `/usr/local/bin` and `/opt/homebrew/bin`. Any new scripts that need tools outside the minimal PATH should do the same: `[[ -f "$HOME/.zshenv" ]] && source "$HOME/.zshenv"`.
+
 ---
 
 ## Quick Reference Commands
