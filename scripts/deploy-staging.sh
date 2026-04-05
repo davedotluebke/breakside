@@ -12,6 +12,9 @@
 #   STAGING_BUCKET    - S3 bucket name (default: staging.breakside.pro)
 #   STAGING_CF_DIST   - CloudFront distribution ID for invalidation (optional)
 
+# Ensure full PATH is available (Claude Desktop strips shell PATH)
+[[ -f "$HOME/.zshenv" ]] && source "$HOME/.zshenv"
+
 set -euo pipefail
 
 BUCKET="${STAGING_BUCKET:-staging.breakside.pro}"
