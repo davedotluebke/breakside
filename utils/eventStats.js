@@ -32,16 +32,12 @@ async function loadEventGames(event) {
 }
 
 /**
- * Get aggregate player stats for an event across all its games.
- * @param {object} event - TournamentEvent object (must have gameIds)
- * @returns {Promise<Object>} Map of playerName → stats
+ * Accumulate stats from a single game into an existing stats map.
+ * Shared by getGamePlayerStats and getEventPlayerStats.
+ * @param {object} game - Deserialized Game object
+ * @param {object} stats - Mutable map of playerName → stats (will be populated)
  */
-async function getEventPlayerStats(event) {
-    if (!event) return {};
-
-    const games = await loadEventGames(event);
-    const stats = {};
-
+function accumulateGameStats(game, stats) {
     function ensurePlayer(name) {
         if (!stats[name]) {
             stats[name] = {
@@ -63,68 +59,90 @@ async function getEventPlayerStats(event) {
         return stats[name];
     }
 
-    games.forEach(game => {
-        const points = game.points || [];
-        points.forEach(point => {
-            if (!point.winner) return; // skip in-progress points
+    const points = game.points || [];
+    points.forEach(point => {
+        if (!point.winner) return; // skip in-progress points
 
-            const pointPlayers = point.players || [];
-            const pointDuration = point.totalPointTime || 0;
-            const isWin = point.winner === 'team' || point.winner === Role.TEAM;
+        const pointPlayers = point.players || [];
+        const pointDuration = point.totalPointTime || 0;
+        const isWin = point.winner === 'team' || point.winner === Role.TEAM;
 
-            pointPlayers.forEach(playerName => {
-                const s = ensurePlayer(playerName);
-                s.pointsPlayed++;
-                s.timePlayed += pointDuration;
-                if (isWin) {
-                    s.pointsWon++;
-                    s.plusMinus++;
-                } else {
-                    s.pointsLost++;
-                    s.plusMinus--;
-                }
-            });
+        pointPlayers.forEach(playerName => {
+            const s = ensurePlayer(playerName);
+            s.pointsPlayed++;
+            s.timePlayed += pointDuration;
+            if (isWin) {
+                s.pointsWon++;
+                s.plusMinus++;
+            } else {
+                s.pointsLost++;
+                s.plusMinus--;
+            }
+        });
 
-            // Count goals, assists, turnovers, completions, hucks, dPlays from events
-            (point.possessions || []).forEach(poss => {
-                (poss.events || []).forEach(event => {
-                    if (event.type === 'Throw') {
-                        const throwerName = event.thrower?.name || event.thrower;
-                        if (throwerName) {
-                            const s = ensurePlayer(throwerName);
-                            s.totalThrows++;
-                            s.completions++;
-                            if (event.huck_flag) {
-                                s.totalHucks++;
-                                s.huckCompletions++;
-                            }
-                            if (event.score_flag) s.assists++;
+        // Count goals, assists, turnovers, completions, hucks, dPlays from events
+        (point.possessions || []).forEach(poss => {
+            (poss.events || []).forEach(event => {
+                if (event.type === 'Throw') {
+                    const throwerName = event.thrower?.name || event.thrower;
+                    if (throwerName) {
+                        const s = ensurePlayer(throwerName);
+                        s.totalThrows++;
+                        s.completions++;
+                        if (event.huck_flag) {
+                            s.totalHucks++;
+                            s.huckCompletions++;
                         }
-                        if (event.score_flag) {
-                            const receiverName = event.receiver?.name || event.receiver;
-                            if (receiverName) ensurePlayer(receiverName).goals++;
-                        }
-                    } else if (event.type === 'Turnover') {
-                        const throwerName = event.thrower?.name || event.thrower;
-                        if (throwerName) {
-                            const s = ensurePlayer(throwerName);
-                            s.turnovers++;
-                            s.totalThrows++;
-                            if (event.huck_flag) s.totalHucks++;
-                        }
-                        if (event.drop_flag) {
-                            const receiverName = event.receiver?.name || event.receiver;
-                            if (receiverName) ensurePlayer(receiverName).turnovers++;
-                        }
-                    } else if (event.type === 'Defense') {
-                        const defenderName = event.defender?.name || event.defender;
-                        if (defenderName) ensurePlayer(defenderName).dPlays++;
+                        if (event.score_flag) s.assists++;
                     }
-                });
+                    if (event.score_flag) {
+                        const receiverName = event.receiver?.name || event.receiver;
+                        if (receiverName) ensurePlayer(receiverName).goals++;
+                    }
+                } else if (event.type === 'Turnover') {
+                    const throwerName = event.thrower?.name || event.thrower;
+                    if (throwerName) {
+                        const s = ensurePlayer(throwerName);
+                        s.turnovers++;
+                        s.totalThrows++;
+                        if (event.huck_flag) s.totalHucks++;
+                    }
+                    if (event.drop_flag) {
+                        const receiverName = event.receiver?.name || event.receiver;
+                        if (receiverName) ensurePlayer(receiverName).turnovers++;
+                    }
+                } else if (event.type === 'Defense') {
+                    const defenderName = event.defender?.name || event.defender;
+                    if (defenderName) ensurePlayer(defenderName).dPlays++;
+                }
             });
         });
     });
+}
 
+/**
+ * Get player stats for a single game.
+ * @param {object} game - Deserialized Game object
+ * @returns {Object} Map of playerName → stats
+ */
+function getGamePlayerStats(game) {
+    if (!game) return {};
+    const stats = {};
+    accumulateGameStats(game, stats);
+    return stats;
+}
+
+/**
+ * Get aggregate player stats for an event across all its games.
+ * @param {object} event - TournamentEvent object (must have gameIds)
+ * @returns {Promise<Object>} Map of playerName → stats
+ */
+async function getEventPlayerStats(event) {
+    if (!event) return {};
+
+    const games = await loadEventGames(event);
+    const stats = {};
+    games.forEach(game => accumulateGameStats(game, stats));
     return stats;
 }
 
@@ -148,6 +166,7 @@ async function getEventRecord(event) {
     return { wins, losses, ties };
 }
 
+window.getGamePlayerStats = getGamePlayerStats;
 window.getEventPlayerStats = getEventPlayerStats;
 window.getEventRecord = getEventRecord;
 window.loadEventGames = loadEventGames;

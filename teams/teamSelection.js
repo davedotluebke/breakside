@@ -725,6 +725,39 @@ async function resumeCloudGame(cloudTeam, gameId, role) {
     }
 }
 
+/**
+ * Open a completed game's summary from the team list.
+ * Loads the game from cloud, adds to local state, then shows the summary screen.
+ */
+async function openCompletedGameSummary(cloudTeam, gameId) {
+    try {
+        await selectCloudTeam(cloudTeam);
+
+        if (typeof loadGameFromCloud !== 'function') {
+            throw new Error('Game loading not available');
+        }
+
+        const game = await loadGameFromCloud(gameId);
+        if (!game) {
+            throw new Error('Failed to load game data');
+        }
+
+        // Ensure game is in local state
+        const existingIndex = currentTeam.games.findIndex(g => g.id === gameId);
+        if (existingIndex !== -1) {
+            currentTeam.games.splice(existingIndex, 1);
+        }
+        currentTeam.games.push(game);
+
+        if (typeof showGameSummaryFromList === 'function') {
+            showGameSummaryFromList(game);
+        }
+    } catch (error) {
+        console.error('Error opening game summary:', error);
+        alert('Failed to load game: ' + error.message);
+    }
+}
+
 // importCloudGame is no longer needed - games are accessed directly from the cloud
 // Keeping a stub for backwards compatibility
 async function importCloudGame(gameId) {
@@ -1582,6 +1615,17 @@ function renderGameItem(game, team, role) {
         };
         line2.appendChild(joinBtn);
     }
+    if (game.game_end_timestamp && role === 'coach') {
+        const reviewBtn = document.createElement('button');
+        reviewBtn.textContent = 'Review';
+        reviewBtn.className = 'game-join-btn game-watch-btn';
+        reviewBtn.title = 'Review Game';
+        reviewBtn.onclick = (e) => {
+            e.stopPropagation();
+            openCompletedGameSummary(team, game.game_id);
+        };
+        line2.appendChild(reviewBtn);
+    }
     if (role === 'viewer') {
         const watchBtn = document.createElement('button');
         watchBtn.textContent = game.game_end_timestamp ? 'Review' : 'Watch';
@@ -1589,7 +1633,11 @@ function renderGameItem(game, team, role) {
         watchBtn.title = game.game_end_timestamp ? 'Review Game' : 'Watch Live';
         watchBtn.onclick = (e) => {
             e.stopPropagation();
-            resumeCloudGame(team, game.game_id, role);
+            if (game.game_end_timestamp) {
+                openCompletedGameSummary(team, game.game_id);
+            } else {
+                resumeCloudGame(team, game.game_id, role);
+            }
         };
         line2.appendChild(watchBtn);
     }
