@@ -1341,28 +1341,11 @@ function handleEndGame() {
         // Exit game screen
         exitGameScreen();
         
-        // Populate and show game summary screen
-        if (typeof currentGame === 'function' && currentGame()) {
-            const game = currentGame();
-            const teamNameEl = document.getElementById('teamName');
-            const teamScoreEl = document.getElementById('teamFinalScore');
-            const opponentNameEl = document.getElementById('opponentName');
-            const opponentScoreEl = document.getElementById('opponentFinalScore');
-            
-            if (teamNameEl) teamNameEl.textContent = game.team || '';
-            if (teamScoreEl) teamScoreEl.textContent = game.scores?.[Role.TEAM] ?? 0;
-            if (opponentNameEl) opponentNameEl.textContent = game.opponent || '';
-            if (opponentScoreEl) opponentScoreEl.textContent = game.scores?.[Role.OPPONENT] ?? 0;
-            
-            if (typeof updateGameSummaryRosterDisplay === 'function') {
-                updateGameSummaryRosterDisplay();
-            }
+        // Show game summary screen
+        if (typeof showGameSummaryPostGame === 'function') {
+            showGameSummaryPostGame();
         }
-        
-        if (typeof showScreen === 'function') {
-            showScreen('gameSummaryScreen');
-        }
-        
+
         // Save data
         if (typeof saveAllTeamsData === 'function') {
             saveAllTeamsData();
@@ -2377,28 +2360,11 @@ function handleGameEventEndGame() {
         // Exit game screen
         exitGameScreen();
         
-        // Populate and show game summary screen
-        if (typeof currentGame === 'function' && currentGame()) {
-            const game = currentGame();
-            const teamNameEl = document.getElementById('teamName');
-            const teamScoreEl = document.getElementById('teamFinalScore');
-            const opponentNameEl = document.getElementById('opponentName');
-            const opponentScoreEl = document.getElementById('opponentFinalScore');
-            
-            if (teamNameEl) teamNameEl.textContent = game.team || '';
-            if (teamScoreEl) teamScoreEl.textContent = game.scores?.[Role.TEAM] ?? 0;
-            if (opponentNameEl) opponentNameEl.textContent = game.opponent || '';
-            if (opponentScoreEl) opponentScoreEl.textContent = game.scores?.[Role.OPPONENT] ?? 0;
-            
-            if (typeof updateGameSummaryRosterDisplay === 'function') {
-                updateGameSummaryRosterDisplay();
-            }
+        // Show game summary screen
+        if (typeof showGameSummaryPostGame === 'function') {
+            showGameSummaryPostGame();
         }
-        
-        if (typeof showScreen === 'function') {
-            showScreen('gameSummaryScreen');
-        }
-        
+
         // Save data
         if (typeof saveAllTeamsData === 'function') {
             saveAllTeamsData();

@@ -510,12 +510,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize app hamburger menu
     initializeAppMenu();
 
-    // Game summary back button
+    // Game summary back button — navigate based on where we came from
     const backFromSummaryBtn = document.getElementById('backFromSummaryBtn');
     if (backFromSummaryBtn) {
         backFromSummaryBtn.addEventListener('click', () => {
-            if (typeof updateTeamRosterDisplay === 'function') updateTeamRosterDisplay();
-            showScreen('teamRosterScreen');
+            const target = typeof getGameSummaryBackTarget === 'function'
+                ? getGameSummaryBackTarget() : 'teamRosterScreen';
+            if (target === 'teamRosterScreen' && typeof updateTeamRosterDisplay === 'function') {
+                updateTeamRosterDisplay();
+            }
+            showScreen(target);
         });
     }
     
