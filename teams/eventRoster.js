@@ -422,8 +422,19 @@ function exportEventRosterCSV() {
                     cells.push('Yes');
                 }
             } else {
-                // Escape quotes and wrap in quotes if contains comma/quote/newline
                 let text = cell.textContent.trim();
+                // Convert MM:SS time column to decimal minutes for spreadsheets
+                if (colIdx === 3 && cell.tagName !== 'TH') {
+                    const parts = text.split(':');
+                    if (parts.length === 2) {
+                        const mins = parseInt(parts[0], 10) || 0;
+                        const secs = parseInt(parts[1], 10) || 0;
+                        text = (mins + secs / 60).toFixed(1);
+                    }
+                } else if (colIdx === 3 && cell.tagName === 'TH') {
+                    text = 'Minutes';
+                }
+                // Escape quotes and wrap in quotes if contains comma/quote/newline
                 if (text.includes('"') || text.includes(',') || text.includes('\n')) {
                     text = '"' + text.replace(/"/g, '""') + '"';
                 }
