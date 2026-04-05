@@ -57,6 +57,14 @@ function renderGameSummary(game) {
 
     renderGameSummaryStatsTable(game);
     renderGameSummaryEventLog(game);
+
+    // Show CSV export button if there are stats
+    const exportBtn = document.getElementById('exportGameSummaryBtn');
+    if (exportBtn) {
+        const hasStats = game.points && game.points.some(p => p.winner);
+        exportBtn.style.display = hasStats ? '' : 'none';
+    }
+
     showScreen('gameSummaryScreen');
 }
 
@@ -331,11 +339,65 @@ function renderGameSummaryEventLog(game) {
 }
 
 /**
+ * Export game summary stats to CSV and trigger download.
+ * Same pattern as exportEventRosterCSV but without the checkbox column.
+ */
+function exportGameSummaryCSV() {
+    const tbody = document.getElementById('gameSummaryRosterList');
+    if (!tbody) return;
+
+    const rows = tbody.querySelectorAll('tr');
+    if (rows.length === 0) return;
+
+    const csvRows = [];
+    rows.forEach(row => {
+        const cells = [];
+        Array.from(row.children).forEach((cell, colIdx) => {
+            let text = cell.textContent.trim();
+            // Convert MM:SS time column to decimal minutes for spreadsheets
+            if (colIdx === 2 && cell.tagName !== 'TH') {
+                const parts = text.split(':');
+                if (parts.length === 2) {
+                    const mins = parseInt(parts[0], 10) || 0;
+                    const secs = parseInt(parts[1], 10) || 0;
+                    text = (mins + secs / 60).toFixed(1);
+                }
+            } else if (colIdx === 2 && cell.tagName === 'TH') {
+                text = 'Minutes';
+            }
+            // Escape quotes and wrap in quotes if contains comma/quote/newline
+            if (text.includes('"') || text.includes(',') || text.includes('\n')) {
+                text = '"' + text.replace(/"/g, '""') + '"';
+            }
+            cells.push(text);
+        });
+        csvRows.push(cells.join(','));
+    });
+
+    const csv = csvRows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    const opponent = game?.opponent || 'game';
+    const filename = opponent.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-') + '-stats.csv';
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+/**
  * Get the back-navigation target for the game summary screen.
  */
 function getGameSummaryBackTarget() {
     return gameSummaryOrigin;
 }
+
+// Wire up CSV export button
+document.getElementById('exportGameSummaryBtn')?.addEventListener('click', exportGameSummaryCSV);
 
 window.showGameSummaryFromList = showGameSummaryFromList;
 window.showGameSummaryPostGame = showGameSummaryPostGame;
