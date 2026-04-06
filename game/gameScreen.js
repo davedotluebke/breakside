@@ -189,12 +189,26 @@ function createHeaderPanel() {
     const panel = document.createElement('div');
     panel.id = 'panel-header';
     panel.className = 'game-panel panel-header';
-    
+
     const titleBar = document.createElement('div');
     titleBar.className = 'panel-title-bar';
     titleBar.appendChild(createHeaderContent());
     panel.appendChild(titleBar);
-    
+
+    // Segmented tab control
+    const segRow = document.createElement('div');
+    segRow.className = 'header-seg-row';
+    segRow.innerHTML = `
+        <div class="header-seg-control" id="headerSegControl">
+            <div class="header-seg-slider" id="headerSegSlider"></div>
+            <button data-tab="play">Play</button>
+            <button data-tab="line">Line</button>
+            <button data-tab="all" class="active">All</button>
+            <button data-tab="log">Log</button>
+        </div>
+    `;
+    panel.appendChild(segRow);
+
     return panel;
 }
 
@@ -1222,6 +1236,41 @@ function wireGameScreenEvents() {
             }
         });
     }
+
+    // Segmented tab control
+    wireTabControlEvents();
+}
+
+/**
+ * Wire up segmented tab control events
+ */
+function wireTabControlEvents() {
+    const segControl = document.getElementById('headerSegControl');
+    if (!segControl) return;
+
+    const buttons = segControl.querySelectorAll('button[data-tab]');
+    buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (btn.classList.contains('disabled')) return;
+            if (typeof switchTab === 'function') {
+                switchTab(btn.dataset.tab);
+            }
+        });
+    });
+
+    // Position slider on initial active button
+    requestAnimationFrame(() => {
+        if (typeof updateSegmentedSlider === 'function') {
+            updateSegmentedSlider();
+        }
+    });
+
+    // Reposition slider on resize
+    window.addEventListener('resize', () => {
+        if (typeof updateSegmentedSlider === 'function') {
+            updateSegmentedSlider();
+        }
+    });
 }
 
 /**
@@ -5075,4 +5124,7 @@ window.isSplitMode = isSplitMode;
 window.enterSplitMode = enterSplitMode;
 window.exitSplitMode = exitSplitMode;
 window.updateSplitPanels = updateSplitPanels;
+
+// Tab control
+window.wireTabControlEvents = wireTabControlEvents;
 

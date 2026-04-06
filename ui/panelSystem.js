@@ -863,13 +863,17 @@ function showGameScreen() {
     if (container) {
         // Hide all legacy screens to prevent them from showing through
         hideLegacyScreens();
-        
+
         // Add body class to override any !important rules on legacy screens
         document.body.classList.add('game-screen-active');
-        
+
         container.classList.add('active');
         loadPanelStates();
+        loadActiveTab();
         applyAllPanelStates();
+        applyTabState();
+        // Position slider after DOM is rendered
+        requestAnimationFrame(() => updateSegmentedSlider());
     }
 }
 
@@ -981,6 +985,11 @@ function updatePanelsForRole() {
     if (playByPlayPanel) {
         playByPlayPanel.classList.toggle('disabled', !hasActiveCoach && hasLineCoach);
     }
+
+    // Re-apply tab state so single-tab mode overrides the visibility changes above
+    if (activeTab !== 'all') {
+        applyTabState();
+    }
 }
 
 /**
@@ -1078,6 +1087,151 @@ function resetAllPanelStates() {
 // Initialize Panel System
 // =============================================================================
 
+// =============================================================================
+// Tab System - Segmented Control Navigation
+// =============================================================================
+
+const TAB_STATE_KEY = 'breakside_active_tab';
+
+// Current active tab: 'play' | 'line' | 'all' | 'log'
+let activeTab = 'all';
+
+// Which panels belong to each tab
+const TAB_PANELS = {
+    play: ['playByPlay'],
+    line: ['selectLine'],
+    all: null, // null = show all panels with normal panel states
+    log: ['follow']
+};
+
+/**
+ * Load active tab from localStorage
+ */
+function loadActiveTab() {
+    try {
+        const saved = localStorage.getItem(TAB_STATE_KEY);
+        if (saved && TAB_PANELS.hasOwnProperty(saved)) {
+            activeTab = saved;
+        }
+    } catch (e) {
+        activeTab = 'all';
+    }
+}
+
+/**
+ * Save active tab to localStorage
+ */
+function saveActiveTab() {
+    try {
+        localStorage.setItem(TAB_STATE_KEY, activeTab);
+    } catch (e) {
+        // ignore
+    }
+}
+
+/**
+ * Switch to a tab
+ * @param {string} tabName - 'play' | 'line' | 'all' | 'log'
+ */
+function switchTab(tabName) {
+    if (!TAB_PANELS.hasOwnProperty(tabName)) return;
+    if (tabName === activeTab) return;
+
+    activeTab = tabName;
+    saveActiveTab();
+    applyTabState();
+    updateSegmentedSlider();
+}
+
+/**
+ * Apply the current tab state to panels
+ * In 'all' mode, restore normal panel behavior.
+ * In single-tab mode, show only that tab's panel(s) full-screen.
+ */
+function applyTabState() {
+    const contentPanels = ['playByPlay', 'selectLine', 'selectOLine', 'selectDLine', 'follow'];
+    const inSplitMode = typeof window.isSplitMode === 'function' && window.isSplitMode();
+
+    if (activeTab === 'all') {
+        // Restore normal panel mode
+        contentPanels.forEach(id => {
+            const panel = getPanelElement(id);
+            if (panel) panel.classList.remove('tab-fullscreen');
+        });
+        // Re-apply saved panel states (restores heights, visibility)
+        applyAllPanelStates();
+        // Respect split mode
+        if (inSplitMode) {
+            setPanelVisible('selectLine', false);
+            setPanelVisible('selectOLine', true);
+            setPanelVisible('selectDLine', true);
+        } else {
+            setPanelVisible('selectLine', true);
+            setPanelVisible('selectOLine', false);
+            setPanelVisible('selectDLine', false);
+        }
+        setPanelVisible('playByPlay', true);
+        setPanelVisible('follow', true);
+    } else {
+        // Single-tab mode: determine which panels to show
+        let showPanels = [...(TAB_PANELS[activeTab] || [])];
+
+        // Line tab: respect split mode
+        if (activeTab === 'line' && inSplitMode) {
+            showPanels = ['selectOLine', 'selectDLine'];
+        }
+
+        contentPanels.forEach(id => {
+            const panel = getPanelElement(id);
+            if (!panel) return;
+            const shouldShow = showPanels.includes(id);
+            panel.classList.toggle('hidden', !shouldShow);
+            panel.classList.toggle('tab-fullscreen', shouldShow);
+            if (shouldShow) {
+                // Clear explicit height so flex-fill works
+                panel.style.height = '';
+                panel.style.flex = '1 1 auto';
+            }
+        });
+    }
+
+    // Update segmented control button states
+    const segControl = document.getElementById('headerSegControl');
+    if (segControl) {
+        segControl.querySelectorAll('button[data-tab]').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === activeTab);
+        });
+    }
+
+    // After tab switch, update PBP layout if visible (it may now have more space)
+    if (typeof updatePlayByPlayLayout === 'function') {
+        requestAnimationFrame(() => updatePlayByPlayLayout());
+    }
+}
+
+/**
+ * Update the segmented control slider position
+ */
+function updateSegmentedSlider() {
+    const slider = document.getElementById('headerSegSlider');
+    const segControl = document.getElementById('headerSegControl');
+    if (!slider || !segControl) return;
+
+    const activeBtn = segControl.querySelector(`button[data-tab="${activeTab}"]`);
+    if (!activeBtn) return;
+
+    slider.style.left = activeBtn.offsetLeft + 'px';
+    slider.style.width = activeBtn.offsetWidth + 'px';
+}
+
+/**
+ * Get the current active tab
+ * @returns {string}
+ */
+function getActiveTab() {
+    return activeTab;
+}
+
 /**
  * Initialize the panel system
  * Called once when the app loads
@@ -1143,4 +1297,10 @@ window.isGameScreenVisible = isGameScreenVisible;
 // Role and state updates
 window.updatePanelsForRole = updatePanelsForRole;
 window.updatePanelsForGameState = updatePanelsForGameState;
+
+// Tab system
+window.switchTab = switchTab;
+window.getActiveTab = getActiveTab;
+window.applyTabState = applyTabState;
+window.updateSegmentedSlider = updateSegmentedSlider;
 
