@@ -66,3 +66,14 @@ ENABLE_GIT_VERSIONING = os.getenv("ULTISTATS_ENABLE_GIT_VERSIONING", "false").lo
 # Set to True to require authentication for all API endpoints
 # Set to False to allow anonymous access (useful during development/migration)
 AUTH_REQUIRED = os.getenv("ULTISTATS_AUTH_REQUIRED", "false").lower() == "true"
+
+# =============================================================================
+# AI Narration (speech-to-events)
+# =============================================================================
+# OpenAI is used for the fast pass (Realtime API ephemeral tokens + streaming
+# ASR / function-calling). Anthropic is used for the optional slow pass that
+# reviews the full transcript and issues corrections. If ANTHROPIC_API_KEY is
+# empty, the slow pass is skipped and all provisional events are confirmed.
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+NARRATION_SLOW_MODEL = os.getenv("NARRATION_SLOW_MODEL", "claude-sonnet-4-5-20250929")
