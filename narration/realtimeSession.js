@@ -136,7 +136,16 @@
                     type: 'server_vad',
                     threshold: 0.5,
                     prefix_padding_ms: 300,
-                    silence_duration_ms: 500
+                    // We intentionally run VAD aggressively (200ms vs the
+                    // 500ms default) because gpt-realtime emits at most
+                    // ONE function call per response. To get multiple
+                    // events from a single narration we need VAD to split
+                    // on between-clause pauses too, not just sentence
+                    // boundaries. Downside: occasional false splits mid-
+                    // thought — but those just create one extra response,
+                    // which the model may either fill with a call or
+                    // leave empty (harmless).
+                    silence_duration_ms: 200
                 }
             }
         });
@@ -311,10 +320,40 @@
                 break;
             }
 
+            case 'response.text.delta':
+                // When the model emits a text response instead of a function
+                // call we want to know — it usually means the prompt wasn't
+                // strong enough to force a tool call, or the audio was
+                // ambiguous. Log it so we can tune.
+                if (msg.delta) {
+                    console.log('[rt] MODEL TEXT OUTPUT (not expected):', msg.delta);
+                }
+                break;
+
+            case 'response.text.done':
+                if (msg.text) {
+                    console.warn('[rt] Full model text output (should have been a function call):', msg.text);
+                }
+                break;
+
             case 'response.done':
                 // Fires at the very end of a response (after all function
                 // calls in the response have been emitted). stop() uses
                 // this to know when it's safe to close the socket.
+                //
+                // When a response finished with zero output items, log a
+                // helpful diagnostic so we can see empty-response cases.
+                try {
+                    const r = msg.response || {};
+                    const items = r.output || [];
+                    const fnCalls = items.filter(i => i.type === 'function_call').length;
+                    const texts = items.filter(i => i.type === 'message').length;
+                    if (fnCalls === 0) {
+                        console.warn(`[rt] response.done with no function calls (status=${r.status}, items: ${items.length}, texts: ${texts})`, r);
+                    } else {
+                        console.log(`[rt] response.done: ${fnCalls} function call(s), status=${r.status}`);
+                    }
+                } catch (_) {}
                 if (pendingResponseDone) {
                     try { pendingResponseDone(); } catch (_) {}
                 }
