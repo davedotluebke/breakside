@@ -162,13 +162,25 @@
         // Stop audio capture first so no more frames go out
         stopAudioCapture();
 
-        // With turn_detection: server_vad the server handles commit and
-        // response.create automatically on silence. Calling them manually
-        // here races with that auto-commit and triggers
-        //   "Error committing input audio buffer: buffer too small"
-        // when the server has already drained the buffer. Just wait briefly
-        // for any in-flight transcriptions to land, then close.
-        await new Promise(r => setTimeout(r, 500));
+        // Force end-of-turn. Server VAD only emits speech_stopped after
+        // silence_duration_ms of silence — but once we stop sending audio,
+        // there's no silence for it to detect either. Without a manual
+        // commit the utterance just sits pending forever.
+        //
+        // The previous "buffer too small" error we were seeing happened
+        // when VAD had already auto-committed (e.g. the coach paused long
+        // enough mid-sentence). In that case the commit is a benign no-op;
+        // we filter the resulting error in handleServerMessage rather than
+        // skipping the commit entirely.
+        try {
+            send({ type: 'input_audio_buffer.commit' });
+            send({ type: 'response.create' });
+        } catch (_) { /* socket may already be closing */ }
+
+        // Wait for the server to emit response.done (or give up). This is
+        // what gives transcription + function-call events time to land
+        // before we close the socket.
+        await waitForResponseDone(4000);
 
         try {
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -178,6 +190,19 @@
 
         ws = null;
         return { transcript: accumulatedTranscript };
+    }
+
+    // One-shot promise that resolves on the next response.done event, or
+    // after a timeout. Used by stop() to flush pending transcription +
+    // function calls before closing the socket.
+    let pendingResponseDone = null;
+    function waitForResponseDone(timeoutMs) {
+        return new Promise((resolve) => {
+            let done = false;
+            const finish = () => { if (!done) { done = true; pendingResponseDone = null; resolve(); } };
+            pendingResponseDone = finish;
+            setTimeout(finish, timeoutMs);
+        });
     }
 
     /**
@@ -299,9 +324,28 @@
                 break;
             }
 
-            case 'error':
-                onErrorCb(new Error(msg.error?.message || 'Realtime API error'));
+            case 'response.done':
+                // Fires at the very end of a response (after all function
+                // calls in the response have been emitted). stop() uses
+                // this to know when it's safe to close the socket.
+                if (pendingResponseDone) {
+                    try { pendingResponseDone(); } catch (_) {}
+                }
                 break;
+
+            case 'error': {
+                const errMsg = msg.error?.message || 'Realtime API error';
+                // "buffer too small" is benign: it means server VAD already
+                // committed the audio before our manual commit in stop()
+                // reached the server. Skip silently — nothing went wrong.
+                if (errMsg.includes('buffer too small') ||
+                    errMsg.includes('buffer_empty')) {
+                    console.log('[rt] (ignored) server already committed buffer:', errMsg);
+                    break;
+                }
+                onErrorCb(new Error(errMsg));
+                break;
+            }
 
             default:
                 // Many event types we don't care about; ignore quietly.
