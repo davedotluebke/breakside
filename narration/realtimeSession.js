@@ -134,18 +134,20 @@
                 },
                 turn_detection: {
                     type: 'server_vad',
-                    threshold: 0.5,
+                    // Higher threshold (0.7 vs default 0.5) so wind/crowd
+                    // noise on the sideline doesn't register as speech.
+                    // Side effect: VAD needs a clearer, louder voice to
+                    // start a turn — important for coaches outdoors.
+                    threshold: 0.7,
                     prefix_padding_ms: 300,
-                    // We intentionally run VAD aggressively (200ms vs the
-                    // 500ms default) because gpt-realtime emits at most
-                    // ONE function call per response. To get multiple
-                    // events from a single narration we need VAD to split
-                    // on between-clause pauses too, not just sentence
-                    // boundaries. Downside: occasional false splits mid-
-                    // thought — but those just create one extra response,
-                    // which the model may either fill with a call or
-                    // leave empty (harmless).
-                    silence_duration_ms: 200
+                    // 400ms silence is a middle ground: short enough to
+                    // split on between-clause pauses in continuous
+                    // narration, long enough not to fire on micro-gaps
+                    // between words or brief noise dropouts. gpt-realtime
+                    // emits at most one function call per response, so we
+                    // need multiple VAD splits to capture a multi-event
+                    // possession.
+                    silence_duration_ms: 400
                 }
             }
         });
