@@ -23,10 +23,10 @@
 
 (function() {
     const FINALIZE_ENDPOINT = '/api/narration/finalize';
-    // OpenAI Realtime API model. `gpt-4o-realtime-preview` is the most broadly
-    // available snapshot; `gpt-realtime` (newer GA) or `gpt-realtime-mini` may
-    // offer better accuracy / cost once account access is verified.
-    const REALTIME_MODEL = 'gpt-4o-realtime-preview';
+    // OpenAI Realtime API GA model. The older `gpt-4o-realtime-preview` has
+    // graduated; `gpt-realtime` is the current production identifier.
+    // `gpt-realtime-mini` is a cheaper variant if cost becomes a concern.
+    const REALTIME_MODEL = 'gpt-realtime';
 
     // -----------------------------------------------------------------
     // State
