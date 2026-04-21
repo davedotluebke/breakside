@@ -347,6 +347,7 @@ Do not produce any text responses — only function calls.`;
 
     /** Dispatch a Realtime API function call to the right applier. */
     function handleFunctionCall(name, args) {
+        console.log(`[narrationEngine] fn call: ${name}`, args);
         const onField = getOnFieldPlayers();
         try {
             switch (name) {
@@ -646,7 +647,11 @@ Do not produce any text responses — only function calls.`;
         stopRecording,
         isRecording,
         getPhase,
-        // Exposed for tests / inspection
+        // Inspection helpers — useful from the devtools console:
+        //   window.narrationEngine.getTranscript()   // accumulated text
+        //   window.narrationEngine.getProvisionals() // events from fast pass
+        getTranscript: () => accumulatedTranscript,
+        getProvisionals: () => provisionalEvents.slice(),
         _resolvePlayerName: resolvePlayerName
     };
 })();

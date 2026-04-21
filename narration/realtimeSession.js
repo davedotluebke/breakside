@@ -211,6 +211,10 @@
 
     function send(obj) {
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        // Log outbound except the avalanche of input_audio_buffer.append chunks.
+        if (window.NARRATION_VERBOSE !== false && obj.type !== 'input_audio_buffer.append') {
+            console.log(`[rt] => ${obj.type}`, obj);
+        }
         ws.send(JSON.stringify(obj));
     }
 
@@ -223,6 +227,12 @@
             msg = JSON.parse(ev.data);
         } catch (_) {
             return;
+        }
+
+        // Verbose diagnostic — logs every event type we receive from OpenAI.
+        // Filter on "[rt]" in console to see the full event sequence.
+        if (window.NARRATION_VERBOSE !== false) {
+            console.log(`[rt] <= ${msg.type}`, msg);
         }
 
         switch (msg.type) {
