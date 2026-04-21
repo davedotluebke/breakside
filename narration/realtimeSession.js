@@ -259,9 +259,30 @@
                     callId: msg.call_id || null,
                     itemId: msg.item_id || null
                 });
-                // We don't need to respond to the tool call with an output for
-                // our use case — we just record the event. Skipping
-                // conversation.item.create for function_call_output is fine.
+
+                // IMPORTANT: the Realtime API, unlike Chat Completions, requires
+                // the client to acknowledge each function call with a
+                // function_call_output conversation item. Without this the
+                // response stays in an "awaiting tool output" state and the
+                // model will not emit subsequent function calls for the rest
+                // of the narration — only the first call in an utterance
+                // makes it through.
+                //
+                // We don't actually care about the tool's return value (we're
+                // just recording the event locally), so an empty ack is fine.
+                // We then trigger response.create to unblock further calls
+                // from any audio already buffered.
+                if (msg.call_id) {
+                    send({
+                        type: 'conversation.item.create',
+                        item: {
+                            type: 'function_call_output',
+                            call_id: msg.call_id,
+                            output: JSON.stringify({ ok: true })
+                        }
+                    });
+                    send({ type: 'response.create' });
+                }
                 break;
             }
 
