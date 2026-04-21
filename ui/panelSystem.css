@@ -2362,7 +2362,7 @@ body.panel-dragging .panel-content {
    ============================================================================= */
 
 .header-seg-row {
-    padding: 0 12px 8px;
+    padding: 0 12px 4px;
 }
 
 .header-seg-control {
@@ -2378,9 +2378,9 @@ body.panel-dragging .panel-content {
     background: none;
     border: none;
     color: rgba(255, 255, 255, 0.65);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
-    padding: 6px 0;
+    padding: 3px 0;
     cursor: pointer;
     position: relative;
     z-index: 1;
