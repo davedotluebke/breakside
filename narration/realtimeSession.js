@@ -80,8 +80,13 @@
         onErrorCb = onError || ((e) => console.error('[realtimeSession]', e));
         accumulatedTranscript = '';
 
+        // Timing breakdown — helps diagnose slow orange→green button transitions.
+        const t0 = performance.now();
+        const logPhase = (label) => console.log(`[realtimeSession] ${label}: ${Math.round(performance.now() - t0)}ms`);
+
         // 1. Fetch ephemeral token from our backend
         const token = await fetchEphemeralToken(model);
+        logPhase('token fetched');
 
         // 2. Open WebSocket to OpenAI with token in subprotocol
         ws = new WebSocket(
@@ -106,6 +111,7 @@
                 reject(new Error('WebSocket connection error'));
             }, { once: true });
         });
+        logPhase('websocket open');
 
         ws.addEventListener('message', handleServerMessage);
         ws.addEventListener('close', handleSocketClose);
@@ -131,9 +137,11 @@
                 }
             }
         });
+        logPhase('session.update sent');
 
         // 4. Open the microphone and start streaming
         await startAudioCapture();
+        logPhase('audio capture started');
 
         sessionActive = true;
     }
@@ -151,15 +159,13 @@
         // Stop audio capture first so no more frames go out
         stopAudioCapture();
 
-        // Tell OpenAI we're done — commit any buffered audio and request a
-        // final response so transcription completes.
-        try {
-            send({ type: 'input_audio_buffer.commit' });
-            send({ type: 'response.create' });
-        } catch (_) { /* socket may be closing */ }
-
-        // Give the server a moment to emit the final transcription event
-        await new Promise(r => setTimeout(r, 300));
+        // With turn_detection: server_vad the server handles commit and
+        // response.create automatically on silence. Calling them manually
+        // here races with that auto-commit and triggers
+        //   "Error committing input audio buffer: buffer too small"
+        // when the server has already drained the buffer. Just wait briefly
+        // for any in-flight transcriptions to land, then close.
+        await new Promise(r => setTimeout(r, 500));
 
         try {
             if (ws && ws.readyState === WebSocket.OPEN) {
