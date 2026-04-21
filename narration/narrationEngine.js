@@ -432,9 +432,14 @@ Do not produce any text responses — only function calls.`;
 
     /**
      * Apply the operations returned by the slow-pass backend.
-     * Each operation: { op: 'CONFIRM' | 'AMEND' | 'RETRACT' | 'ADD', provisional_id, event? }
+     * Each operation: { op: 'CONFIRM' | 'RETRACT' | 'ADD' [+ defensive 'AMEND'], provisional_id, event? }
+     *
+     * AMEND is no longer emitted by the backend prompt — it's handled here as
+     * a defensive fallback (treat as RETRACT) in case Claude ignores the
+     * instructions.
      */
     function applySlowPassOperations(operations) {
+        const onField = getOnFieldPlayers();
         for (const op of operations) {
             switch (op.op) {
                 case 'CONFIRM':
@@ -443,15 +448,14 @@ Do not produce any text responses — only function calls.`;
                 case 'RETRACT':
                     retractProvisional(op.provisional_id);
                     break;
-                case 'AMEND':
-                    amendProvisional(op.provisional_id, op.event);
-                    break;
                 case 'ADD':
-                    // Slow pass discovered an event not in provisionals.
-                    // For now, log it; full "ADD" implementation requires
-                    // building the right Event and inserting at the right
-                    // position. Left for a follow-up iteration.
-                    console.log('[narrationEngine] Slow pass ADD (not yet applied):', op.event);
+                    applySlowPassAdd(op.event, onField);
+                    break;
+                case 'AMEND':
+                    // Defensive: prompt says don't emit this. Treat as retract
+                    // so at minimum we don't leave a wrong event in the log.
+                    console.warn('[narrationEngine] Unexpected AMEND op (should be RETRACT+ADD); treating as retract');
+                    retractProvisional(op.provisional_id);
                     break;
                 default:
                     console.warn('[narrationEngine] Unknown operation:', op);
@@ -461,6 +465,41 @@ Do not produce any text responses — only function calls.`;
         provisionalEvents.forEach(p => {
             if (!p._finalized) markProvisionalStatus(p.id, 'confirmed');
         });
+    }
+
+    /**
+     * Add an event the slow pass discovered. The event spec from the backend
+     * has shape:
+     *   { kind: 'throw'|'turnover'|'defense'|'opponent_score', <flags & names> }
+     *
+     * We route through the SAME fast-pass apply functions (applyThrow, etc.)
+     * so that event creation, possession handling, stats, logging, and bus
+     * publishing all stay consistent.
+     */
+    function applySlowPassAdd(eventSpec, onField) {
+        if (!eventSpec || !eventSpec.kind) {
+            console.warn('[narrationEngine] Slow pass ADD missing kind:', eventSpec);
+            return;
+        }
+        // Translate the backend's snake_case field names to the shape our
+        // fast-pass appliers already expect (they mirror the Realtime tool
+        // schema). Keys are identical by design — forward as-is.
+        switch (eventSpec.kind) {
+            case 'throw':
+                applyThrow(eventSpec, onField);
+                break;
+            case 'turnover':
+                applyTurnover(eventSpec, onField);
+                break;
+            case 'defense':
+                applyDefense(eventSpec, onField);
+                break;
+            case 'opponent_score':
+                applyOpponentScore();
+                break;
+            default:
+                console.warn('[narrationEngine] Slow pass ADD unknown kind:', eventSpec.kind);
+        }
     }
 
     function markProvisionalStatus(provisionalId, status /* 'confirmed' | 'amended' | 'retracted' */) {
@@ -496,19 +535,6 @@ Do not produce any text responses — only function calls.`;
             });
             window.narrationEventBus.publish('provisionalEventFinalized', {
                 provisionalId, status: 'retracted', event: prov.event
-            });
-        }
-    }
-
-    function amendProvisional(provisionalId, newEventSpec) {
-        // For v1, implement AMEND as retract + add. A tighter in-place swap
-        // can be added later.
-        retractProvisional(provisionalId);
-        // TODO (follow-up): build Event from newEventSpec and add it. For now
-        // the slow-pass prompt should prefer RETRACT + ADD over AMEND.
-        if (window.narrationEventBus) {
-            window.narrationEventBus.publish('provisionalEventFinalized', {
-                provisionalId, status: 'amended', newEvent: newEventSpec
             });
         }
     }

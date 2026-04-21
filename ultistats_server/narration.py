@@ -225,20 +225,34 @@ Full transcript (what the coach said):
 A fast-pass model already extracted these provisional events in order:
 {chr(10).join(prov_lines) if prov_lines else "(none)"}
 
-Your task: review the provisional events against the full transcript. For each provisional event, decide:
-  - CONFIRM: the event is correct as-is
-  - RETRACT: the event should not have been recorded (coach corrected themselves, or it was misheard)
-  - AMEND: the event is wrong but something similar did happen (prefer RETRACT + ADD unless in-place swap is clearly simpler)
+Your job: review the provisional events against the full transcript. For each provisional event, emit one of:
+  - CONFIRM  — the event is correct as-is
+  - RETRACT  — the event should not have been recorded (coach corrected themselves, misheard, etc.)
 
-Also: ADD any events that were clearly described in the transcript but were missed by the fast pass.
+Additionally, for any events that were clearly described in the transcript but missed by the fast pass:
+  - ADD      — add the event
+
+If the coach corrected a detail ("Bob threw to Alice — no wait, Carol"), emit RETRACT for the wrong
+event and ADD for the correct one. Do NOT emit an AMEND op — it is not supported.
+
+Event schema for ADD ops — the "event" object must have:
+  - kind: one of "throw" | "turnover" | "defense" | "opponent_score"
+  - For kind=throw: thrower (player name), receiver (player name),
+    and any of huck, break_throw, dump, hammer, sky, layout, score (booleans)
+  - For kind=turnover: thrower, receiver (optional), and any of
+    throwaway, drop, huck, good_defense, stall (booleans)
+  - For kind=defense: defender (player name), and any of
+    interception, layout, sky, callahan (booleans)
+  - For kind=opponent_score: no additional fields
+
+Player names in ADD events must match names from the on-field roster above exactly.
 
 Output ONLY a JSON object of the form:
 {{
   "operations": [
     {{ "op": "CONFIRM", "provisional_id": "..." }},
     {{ "op": "RETRACT", "provisional_id": "..." }},
-    {{ "op": "AMEND",   "provisional_id": "...", "event": {{...}} }},
-    {{ "op": "ADD",     "event": {{...}} }}
+    {{ "op": "ADD",     "event": {{ "kind": "throw", "thrower": "...", "receiver": "...", "score": true }} }}
   ]
 }}
 
