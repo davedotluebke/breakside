@@ -218,6 +218,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount AI narration router (speech-to-events)
+try:
+    from narration import router as narration_router
+except ImportError:
+    from ultistats_server.narration import router as narration_router
+app.include_router(narration_router)
+
 # Mount static files (viewer, etc.) - html=True enables serving index.html for directories
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
@@ -226,7 +233,7 @@ if static_dir.exists():
 # Mount PWA files from parent directory (the main ultistats app)
 pwa_dir = Path(__file__).parent.parent
 pwa_static_files = ["main.css", "main.js", "manifest.json", "service-worker.js", "version.json"]
-pwa_static_dirs = ["data", "game", "playByPlay", "screens", "teams", "ui", "utils", "images", "auth", "landing", "store"]
+pwa_static_dirs = ["data", "game", "playByPlay", "screens", "teams", "ui", "utils", "images", "auth", "landing", "store", "narration"]
 
 # Landing page directory
 landing_dir = pwa_dir / "landing"

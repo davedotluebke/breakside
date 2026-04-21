@@ -1,0 +1,136 @@
+/*
+ * Narration Mic Button
+ *
+ * Floating circular FAB at bottom-center that overlays all content.
+ * States:
+ *   .mic-idle       Red - tap to start recording (or hold for temp recording)
+ *   .mic-recording  Green (pulsing) - tap to stop
+ *   .mic-connecting Amber - briefly while opening the session
+ *   .mic-disabled   Grey - not in a game or recording unavailable
+ * The button is hidden (display:none) when not in a game.
+ */
+
+#narrationMicBtn {
+    position: fixed;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2000;
+
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: none;
+    padding: 0;
+    margin: 0;
+
+    display: none;  /* Shown only when in-game */
+    align-items: center;
+    justify-content: center;
+
+    font-size: 24px;
+    color: #ffffff;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+#narrationMicBtn.visible {
+    display: inline-flex;
+}
+
+#narrationMicBtn:active {
+    transform: translateX(-50%) scale(0.94);
+}
+
+/* Idle: red, ready to record */
+#narrationMicBtn.mic-idle {
+    background-color: #e74c3c;
+}
+#narrationMicBtn.mic-idle:hover {
+    background-color: #d94432;
+}
+
+/* Connecting: amber transient state while opening session */
+#narrationMicBtn.mic-connecting {
+    background-color: #f39c12;
+    cursor: wait;
+}
+
+/* Recording: green with subtle pulse */
+#narrationMicBtn.mic-recording {
+    background-color: #2ecc71;
+    animation: narrationMicPulse 1.4s ease-in-out infinite;
+}
+#narrationMicBtn.mic-recording:hover {
+    background-color: #28b463;
+}
+
+@keyframes narrationMicPulse {
+    0%, 100% {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(46, 204, 113, 0.6);
+    }
+    50% {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 14px rgba(46, 204, 113, 0);
+    }
+}
+
+/* Disabled: grey, non-interactive */
+#narrationMicBtn.mic-disabled {
+    background-color: #999;
+    cursor: not-allowed;
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+/* Finalizing: brief visual state while the slow pass runs after release */
+#narrationMicBtn.mic-finalizing {
+    background-color: #3498db;
+    animation: narrationMicFinalize 0.8s ease-in-out infinite;
+}
+
+@keyframes narrationMicFinalize {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* =============================================================================
+ * Provisional event styling (game log entries produced by fast-pass narration
+ * that have not yet been confirmed by the slow pass).
+ * ============================================================================= */
+
+.narration-provisional {
+    opacity: 0.6;
+    font-style: italic;
+    border-left: 3px solid #f39c12;
+    padding-left: 6px;
+    transition: opacity 0.4s ease, border-left-color 0.4s ease;
+}
+
+.narration-provisional.confirmed {
+    opacity: 1;
+    font-style: normal;
+    border-left-color: #2ecc71;
+}
+
+.narration-provisional.amended {
+    border-left-color: #3498db;
+    animation: narrationAmendedFlash 0.8s ease-out;
+}
+
+@keyframes narrationAmendedFlash {
+    0%   { background-color: rgba(52, 152, 219, 0.25); }
+    100% { background-color: transparent; }
+}
+
+.narration-provisional.retracted {
+    text-decoration: line-through;
+    color: #888;
+    opacity: 0.4;
+}
