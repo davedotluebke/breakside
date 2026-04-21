@@ -129,18 +129,32 @@ ${rosterLines}
 
 Current context: we are on ${gameContext.offense ? 'OFFENSE' : 'DEFENSE'}. Score: our team ${gameContext.ourScore}, opponent ${gameContext.theirScore}.
 
-Convert the coach's narration into game events by calling the provided functions:
-- Call record_throw for completed passes.
+IMPORTANT — a single utterance from the coach often describes MULTIPLE
+events chained together ("A throws to B, who sends it deep to C for the
+score, it's a layout catch"). You MUST emit a SEPARATE function call for
+EACH event before your response ends. Do not stop after the first event.
+Keep calling functions until every event in the utterance has been
+recorded.
+
+Event-to-function mapping:
+- Call record_throw for each completed pass.
 - Call record_turnover for throwaways, drops, or stalls.
 - Call record_defense for interceptions / blocks / layout Ds.
 - Call record_opponent_score when the OTHER team scores.
 - A completed pass into the endzone is a record_throw with score=true.
 - A Callahan (D caught in endzone) is record_defense with callahan=true.
+- A "reset" or "dump" throw is record_throw with dump=true.
+- A "break" (thrower goes around the mark) is record_throw with break_throw=true.
+- A "huck" or "deep throw" or "long throw" is record_throw with huck=true.
+- A "sky" (jumped over defender) is sky=true on the throw or defense.
+- A "layout" (dive) is layout=true on the throw or defense.
 
-Names may be partial, nicknames, or jersey numbers — match to the closest player.
-Call functions as events happen. If the coach corrects themselves mid-sentence,
-use the corrected version. Be lenient: better to emit a best-guess event than nothing.
-Do not produce any text responses — only function calls.`;
+Names may be partial, nicknames, or jersey numbers — match to the closest
+player. If the coach corrects themselves mid-sentence, use the corrected
+version. Be lenient: better to emit a best-guess event than nothing.
+
+Do not produce any text responses — only function calls. Emit one
+function call per event, multiple per response as needed.`;
     }
 
     // -----------------------------------------------------------------

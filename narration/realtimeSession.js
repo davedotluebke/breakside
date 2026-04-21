@@ -127,7 +127,10 @@
                 tool_choice: 'auto',
                 input_audio_format: 'pcm16',
                 input_audio_transcription: {
-                    model: 'whisper-1'
+                    // gpt-4o-mini-transcribe is paired with gpt-realtime;
+                    // whisper-1 does not reliably emit transcription events
+                    // on this path in our testing.
+                    model: 'gpt-4o-mini-transcribe'
                 },
                 turn_detection: {
                     type: 'server_vad',
@@ -270,18 +273,19 @@
                     itemId: msg.item_id || null
                 });
 
-                // IMPORTANT: the Realtime API, unlike Chat Completions, requires
-                // the client to acknowledge each function call with a
-                // function_call_output conversation item. Without this the
-                // response stays in an "awaiting tool output" state and the
-                // model will not emit subsequent function calls for the rest
-                // of the narration — only the first call in an utterance
-                // makes it through.
+                // Acknowledge each function call with a function_call_output
+                // item so the conversation history stays clean. (We don't
+                // actually use the tool's return value — we record the event
+                // locally — so an empty ack is fine.)
                 //
-                // We don't actually care about the tool's return value (we're
-                // just recording the event locally), so an empty ack is fine.
-                // We then trigger response.create to unblock further calls
-                // from any audio already buffered.
+                // Note: we deliberately do NOT send response.create here.
+                // Doing so creates a *new* empty response on top of any
+                // still-in-progress one and seems to confuse gpt-realtime,
+                // which then emits only one call per turn. We rely on the
+                // model following the system-prompt instruction to emit all
+                // events in its current response before ending it, and on
+                // server_vad to trigger the next response when more audio
+                // arrives.
                 if (msg.call_id) {
                     send({
                         type: 'conversation.item.create',
@@ -291,7 +295,6 @@
                             output: JSON.stringify({ ok: true })
                         }
                     });
-                    send({ type: 'response.create' });
                 }
                 break;
             }
