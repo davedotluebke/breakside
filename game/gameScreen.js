@@ -203,8 +203,8 @@ function createHeaderPanel() {
             <div class="header-seg-slider" id="headerSegSlider"></div>
             <button data-tab="play">Play</button>
             <button data-tab="line">Line</button>
-            <button data-tab="all" class="active">All</button>
             <button data-tab="log">Log</button>
+            <button data-tab="all" class="active">All</button>
         </div>
     `;
     panel.appendChild(segRow);
