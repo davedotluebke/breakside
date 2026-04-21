@@ -23,7 +23,10 @@
 
 (function() {
     const FINALIZE_ENDPOINT = '/api/narration/finalize';
-    const REALTIME_MODEL = 'gpt-4o-mini-realtime-preview';
+    // OpenAI Realtime API model. `gpt-4o-realtime-preview` is the most broadly
+    // available snapshot; `gpt-realtime` (newer GA) or `gpt-realtime-mini` may
+    // offer better accuracy / cost once account access is verified.
+    const REALTIME_MODEL = 'gpt-4o-realtime-preview';
 
     // -----------------------------------------------------------------
     // State

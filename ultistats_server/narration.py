@@ -58,7 +58,7 @@ def _anthropic_key() -> Optional[str]:
 # =============================================================================
 
 class TokenRequest(BaseModel):
-    model: str = "gpt-4o-mini-realtime-preview"
+    model: str = "gpt-4o-realtime-preview"
     # Game id lets us authenticate the requester against the game team.
     # Sent in body rather than path because this token is issued, not tied to
     # a specific persistent resource.
