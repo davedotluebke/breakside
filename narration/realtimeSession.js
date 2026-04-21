@@ -298,29 +298,16 @@
                     itemId: msg.item_id || null
                 });
 
-                // Acknowledge each function call with a function_call_output
-                // item so the conversation history stays clean. (We don't
-                // actually use the tool's return value — we record the event
-                // locally — so an empty ack is fine.)
-                //
-                // Note: we deliberately do NOT send response.create here.
-                // Doing so creates a *new* empty response on top of any
-                // still-in-progress one and seems to confuse gpt-realtime,
-                // which then emits only one call per turn. We rely on the
-                // model following the system-prompt instruction to emit all
-                // events in its current response before ending it, and on
-                // server_vad to trigger the next response when more audio
-                // arrives.
-                if (msg.call_id) {
-                    send({
-                        type: 'conversation.item.create',
-                        item: {
-                            type: 'function_call_output',
-                            call_id: msg.call_id,
-                            output: JSON.stringify({ ok: true })
-                        }
-                    });
-                }
+                // DO NOT send a function_call_output ack here. Earlier I
+                // added one based on an incorrect assumption that the
+                // Realtime API required it to unblock further calls. In
+                // practice, sending conversation.item.create while the
+                // model is still mid-response (streaming more function
+                // call deltas) short-circuits the response — the model
+                // treats it as start-of-new-turn and stops emitting. The
+                // v3 code that worked for the user's first successful
+                // multi-event test never sent this ack. Just fire-and-
+                // forget — we record the event locally and move on.
                 break;
             }
 
