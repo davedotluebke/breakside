@@ -7,7 +7,10 @@ PyJWT>=2.8.0
 cryptography>=41.0.0
 Pillow>=10.0.0
 # Test-only deps (used by ultistats_server/tests/narration/):
-#   websockets — direct WebSocket client to OpenAI Realtime API
+#   websockets — direct WebSocket client to OpenAI Realtime API. The runner
+#                uses the legacy connect() API (extra_headers=...) which is
+#                supported on both v10.x and the v12+ legacy shim, so we
+#                allow either.
 #   soundfile  — FLAC encode/decode for committed audio scenarios
-websockets>=12.0
+websockets>=10.0
 soundfile>=0.12.0
