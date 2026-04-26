@@ -101,6 +101,69 @@
 }
 
 /* =============================================================================
+ * Live Transcript Panel
+ *
+ * Floating panel just above the mic button. Shows what the speech-to-text
+ * engine is hearing in real time. Visible only while recording / finalizing.
+ * ============================================================================= */
+
+.narration-transcript-panel {
+    position: fixed;
+    /* Sit directly above the mic button (which is bottom: 20px + 64px tall). */
+    bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1999;  /* one below the mic button */
+
+    width: min(90vw, 520px);
+    max-height: 28vh;
+
+    background: rgba(20, 20, 20, 0.88);
+    color: #f5f5f5;
+    border-radius: 12px;
+    padding: 10px 14px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+
+    font-family: 'Poppins', sans-serif;
+    font-size: 14px;
+    line-height: 1.4;
+
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+    transform: translateX(-50%) translateY(8px);
+}
+
+.narration-transcript-panel.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+
+.narration-transcript-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #aaa;
+    margin-bottom: 4px;
+}
+
+.narration-transcript-text {
+    overflow-y: auto;
+    max-height: calc(28vh - 30px);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.narration-transcript-text:empty::before {
+    content: 'Speak naturally — your words will appear here.';
+    color: #888;
+    font-style: italic;
+}
+
+/* =============================================================================
  * Provisional event styling (game log entries produced by fast-pass narration
  * that have not yet been confirmed by the slow pass).
  * ============================================================================= */
