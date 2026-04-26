@@ -210,30 +210,49 @@ def _build_finalize_prompt(req: FinalizeRequest) -> str:
 
     side = "OFFENSE" if req.game_context.offense else "DEFENSE"
 
-    return f"""You are reviewing a coach's spoken narration of one possession of an ultimate frisbee game.
+    has_provisionals = bool(req.provisional_events)
 
-On-field players:
+    # Mode-specific framing. In transcript-only mode there's nothing to review;
+    # the slow pass is the SOLE source of structured events. In hybrid mode it
+    # reviews the fast pass's output.
+    if has_provisionals:
+        review_section = f"""A fast-pass model already extracted these provisional events in order:
+{chr(10).join(prov_lines)}
+
+For each provisional event, emit one of:
+  - CONFIRM  — the event is correct as-is
+  - RETRACT  — the event should not have been recorded (coach corrected
+               themselves, misheard, etc.)
+
+Additionally, for any events clearly described in the transcript but
+missed by the fast pass, emit ADD.
+
+If the coach corrected a detail ("Bob threw to Alice — no wait, Carol"),
+emit RETRACT for the wrong event and ADD for the correct one. Do NOT
+emit an AMEND op — it is not supported."""
+    else:
+        review_section = """No fast-pass events were extracted live — you are the SOLE source
+of structured events for this narration. Walk through the transcript
+and emit one ADD operation for every distinct game event you find, in
+the order they happened.
+
+Be conservative: if a phrase is too garbled or ambiguous to interpret
+with confidence, skip it rather than guessing. It is better to miss an
+event than to fabricate one."""
+
+    return f"""You are extracting structured ultimate frisbee events from a coach's spoken narration of one possession.
+
+On-field players (use these EXACT spellings for any player names you emit):
 {chr(10).join(roster_lines) if roster_lines else "(none)"}
 
 Game context: our team is on {side}. Score our={req.game_context.our_score}, opponent={req.game_context.their_score}.
 
-Full transcript (what the coach said):
+Full transcript (what the coach said — note transcription may have errors):
 ---
 {req.transcript}
 ---
 
-A fast-pass model already extracted these provisional events in order:
-{chr(10).join(prov_lines) if prov_lines else "(none)"}
-
-Your job: review the provisional events against the full transcript. For each provisional event, emit one of:
-  - CONFIRM  — the event is correct as-is
-  - RETRACT  — the event should not have been recorded (coach corrected themselves, misheard, etc.)
-
-Additionally, for any events that were clearly described in the transcript but missed by the fast pass:
-  - ADD      — add the event
-
-If the coach corrected a detail ("Bob threw to Alice — no wait, Carol"), emit RETRACT for the wrong
-event and ADD for the correct one. Do NOT emit an AMEND op — it is not supported.
+{review_section}
 
 Event schema for ADD ops — the "event" object must have:
   - kind: one of "throw" | "turnover" | "defense" | "opponent_score"
@@ -245,7 +264,22 @@ Event schema for ADD ops — the "event" object must have:
     interception, layout, sky, callahan (booleans)
   - For kind=opponent_score: no additional fields
 
-Player names in ADD events must match names from the on-field roster above exactly.
+Vocabulary mapping:
+  - "reset" or "dump" -> throw with dump=true
+  - "break" or "break-side" or "break mark" -> throw with break_throw=true
+  - "huck" or "deep" or "long" -> throw with huck=true
+  - "hammer" -> throw with hammer=true
+  - "sky" -> sky=true on the relevant throw or defense
+  - "layout" or "lays out" or "diving catch" -> layout=true on the throw or defense
+  - "score" / "goal" / "in the endzone" -> throw with score=true (or defense with callahan=true if a D-line interception in the endzone)
+  - "interception" or "block" or "got the D" -> defense with interception=true (or layout/sky as appropriate)
+  - "throwaway" -> turnover with throwaway=true
+  - "drop" or "missed the catch" -> turnover with drop=true (receiver = the dropper)
+  - "stall" or "stalled out" -> turnover with stall=true
+
+Player names in ADD events must match names from the on-field roster above EXACTLY (case and spelling).
+If a transcribed name is misspelled but clearly corresponds to a roster player (e.g. "Sirius" -> "Cyrus"),
+use the corrected roster spelling.
 
 Output ONLY a JSON object of the form:
 {{

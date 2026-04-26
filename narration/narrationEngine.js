@@ -28,6 +28,22 @@
     // `gpt-realtime-mini` is a cheaper variant if cost becomes a concern.
     const REALTIME_MODEL = 'gpt-realtime';
 
+    // ===== Feature flag =====
+    // When TRUE the fast pass tries to extract structured events live during
+    // recording (function calls from gpt-realtime). This was the original
+    // design but proved unreliable in noisy outdoor conditions: the model
+    // confabulates events from garbled audio fragments. The tools, prompt,
+    // and event-application code are all kept intact — flip this back to
+    // true to re-enable when we want to revisit.
+    //
+    // When FALSE the fast pass does TRANSCRIPTION ONLY. The live transcript
+    // streams to the UI so the coach can see they're being heard, but no
+    // events are produced until the slow pass runs (on stop). This relies
+    // on Claude Sonnet via /api/narration/finalize for event extraction;
+    // the slow pass naturally handles "no provisionals + transcript" via
+    // its existing ADD operation.
+    const FAST_PASS_EVENTS_ENABLED = false;
+
     // -----------------------------------------------------------------
     // State
     // -----------------------------------------------------------------
@@ -155,6 +171,27 @@ version. Be lenient: better to emit a best-guess event than nothing.
 
 Do not produce any text responses — only function calls. Emit one
 function call per event, multiple per response as needed.`;
+    }
+
+    /**
+     * Transcription-only system prompt, used when FAST_PASS_EVENTS_ENABLED is
+     * false. We hand the model the player names so it can transcribe them
+     * accurately (otherwise "Cyrus" might come out as "Sirius" etc.) but
+     * give it nothing else to do — no tools, no event extraction. The slow
+     * pass handles all that on stop.
+     */
+    function buildTranscriptOnlyInstructions(rosterInfo) {
+        const names = rosterInfo
+            .flatMap(p => [p.name, p.nickname].filter(Boolean))
+            .join(', ');
+
+        return `You are passively listening to a coach narrate an ultimate frisbee game.
+Your only job is to enable accurate transcription of the audio.
+
+Player names you may hear (use exact spellings): ${names || '(unknown)'}.
+
+Do not respond. Do not call any tools. Do not produce any text output.
+Just listen. Transcription happens automatically.`;
     }
 
     // -----------------------------------------------------------------
@@ -603,20 +640,46 @@ function call per event, multiple per response as needed.`;
             theirScore: game && game.scores ? game.scores.opponent : 0
         };
 
+        // Build the session config. In transcription-only mode (the default
+        // — see FAST_PASS_EVENTS_ENABLED) we deliberately pass an empty
+        // tools array and a stripped-down system prompt so gpt-realtime
+        // doesn't try to emit function calls. The live transcript still
+        // streams to the UI; events are produced by the slow pass on stop.
+        const sessionInstructions = FAST_PASS_EVENTS_ENABLED
+            ? buildInstructions(rosterInfo, gameContext)
+            : buildTranscriptOnlyInstructions(rosterInfo);
+        const sessionTools = FAST_PASS_EVENTS_ENABLED ? buildTools() : [];
+        const sessionFunctionCallHandler = FAST_PASS_EVENTS_ENABLED
+            ? handleFunctionCall
+            : (() => {});  // ignore any stray calls
+
         try {
             await window.narrationRealtimeSession.start({
                 model: REALTIME_MODEL,
-                instructions: buildInstructions(rosterInfo, gameContext),
-                tools: buildTools(),
-                onFunctionCall: handleFunctionCall,
+                instructions: sessionInstructions,
+                tools: sessionTools,
+                onFunctionCall: sessionFunctionCallHandler,
                 onTranscriptDelta: (delta) => {
                     accumulatedTranscript += delta;
+                    // Publish for the live transcript display UI to render.
+                    if (window.narrationEventBus) {
+                        window.narrationEventBus.publish('transcriptUpdated', {
+                            delta,
+                            full: accumulatedTranscript
+                        });
+                    }
                 },
                 onTranscriptComplete: (utterance) => {
                     // Some servers emit only complete transcripts; merge if we
                     // haven't already picked up this text via deltas.
                     if (utterance && !accumulatedTranscript.endsWith(utterance)) {
                         accumulatedTranscript += utterance;
+                        if (window.narrationEventBus) {
+                            window.narrationEventBus.publish('transcriptUpdated', {
+                                delta: utterance,
+                                full: accumulatedTranscript
+                            });
+                        }
                     }
                 },
                 onError: (err) => console.error('[narrationEngine] Session error:', err)
