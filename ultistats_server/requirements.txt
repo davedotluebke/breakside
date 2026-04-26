@@ -6,3 +6,8 @@ httpx>=0.25.0
 PyJWT>=2.8.0
 cryptography>=41.0.0
 Pillow>=10.0.0
+# Test-only deps (used by ultistats_server/tests/narration/):
+#   websockets — direct WebSocket client to OpenAI Realtime API
+#   soundfile  — FLAC encode/decode for committed audio scenarios
+websockets>=12.0
+soundfile>=0.12.0

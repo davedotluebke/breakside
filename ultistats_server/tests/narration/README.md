@@ -15,23 +15,41 @@ tests/narration/
         ├── transcript.txt   # ground-truth: what the coach is saying
         ├── roster.json      # on-field roster + initial game context
         ├── expected.json    # expected events (list of {kind, thrower, ...})
-        └── audio.pcm        # 24kHz mono PCM16 — generated or hand-recorded
+        ├── audio.flac       # 24kHz mono FLAC — committed canonical audio
+        └── audio.wav        # gitignored preview-only side-file (open in Finder)
 ```
 
-A scenario is "complete" once it has all four files. The audio file can be:
+A scenario is "complete" once it has the four required files (transcript, roster, expected, and one audio file).
 
-- **Generated** from the transcript via `generate_synthetic_audio.py` (OpenAI TTS → 24kHz PCM, free of background noise — good for validating the prompt + extraction pipeline).
-- **Hand-recorded** with the same name (`audio.pcm` or `audio.wav`) — better for testing real-world conditions like wind and accent. Must be **mono PCM16** at 24kHz (matches what the browser sends).
+**Audio formats:**
+
+The committed canonical format is **FLAC** — lossless and ~50% the size of raw PCM. The runner decodes FLAC to PCM in memory and streams that to OpenAI; FLAC compression introduces zero audio differences vs. uncompressed PCM, so test reproducibility is fully preserved.
+
+The generator also writes a sibling `audio.wav` for convenience — playable directly in Finder / Quicklook / `afplay`. The `.wav` files are `.gitignore`d to keep the repo lean.
+
+The audio can come from:
+
+- **TTS** via `generate_synthetic_audio.py` (OpenAI `tts-1` → 24kHz PCM → encoded to FLAC). Cheap (~$0.002/scenario), deterministic, no background noise — good for validating the prompt + extraction pipeline.
+- **Hand-recording** for real-world conditions (wind, accents, distance). Convert your recording to 24kHz mono FLAC and drop it in as `audio.flac`. The runner also accepts `.wav` if you'd rather not encode to FLAC.
+
+Tip — preview without `audio.wav`:
+```bash
+afplay scenarios/001_single_throw/audio.wav     # if generator wrote one
+ffplay -autoexit -nodisp scenarios/001_single_throw/audio.flac    # FLAC directly
+```
 
 ## Running
 
 ### One-time setup
 
 ```bash
-pip install websockets   # only extra dependency
+pip install -r ultistats_server/requirements.txt   # picks up websockets + soundfile
 export OPENAI_API_KEY=sk-...
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+`soundfile` wraps `libsndfile`, which most systems already have. On macOS:
+`brew install libsndfile` if installation fails.
 
 ### Generate audio for a new scenario
 
