@@ -11,6 +11,8 @@
  *   - eventRetracted(payload)          An event was removed/undone
  *   - provisionalEventAdded(payload)   A provisional (unconfirmed) narration event was added
  *   - provisionalEventFinalized(payload)  A provisional event was confirmed (no change needed)
+ *   - transcriptUpdated(payload)       Live transcript got more text from the realtime API
+ *                                       payload: { delta: string, full: string }
  *   - scoreChanged(payload)            The score changed
  *   - pointChanged(payload)            A new point started or ended
  *
@@ -34,6 +36,7 @@
         'eventRetracted',
         'provisionalEventAdded',
         'provisionalEventFinalized',
+        'transcriptUpdated',
         'scoreChanged',
         'pointChanged'
     ];

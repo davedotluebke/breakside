@@ -134,20 +134,14 @@
                 },
                 turn_detection: {
                     type: 'server_vad',
-                    // Higher threshold (0.7 vs default 0.5) so wind/crowd
-                    // noise on the sideline doesn't register as speech.
-                    // Side effect: VAD needs a clearer, louder voice to
-                    // start a turn — important for coaches outdoors.
-                    threshold: 0.7,
+                    // Sane defaults for transcription-only fast pass.
+                    // We're no longer chasing "split as much as possible
+                    // to get more function calls" — we just want clean
+                    // utterance boundaries for the transcription pipeline
+                    // and a reliable VAD on stop.
+                    threshold: 0.5,
                     prefix_padding_ms: 300,
-                    // 400ms silence is a middle ground: short enough to
-                    // split on between-clause pauses in continuous
-                    // narration, long enough not to fire on micro-gaps
-                    // between words or brief noise dropouts. gpt-realtime
-                    // emits at most one function call per response, so we
-                    // need multiple VAD splits to capture a multi-event
-                    // possession.
-                    silence_duration_ms: 400
+                    silence_duration_ms: 500
                 }
             }
         });
