@@ -3,11 +3,13 @@ recv.txt
 api_key.sec
 __pycache__/
 
-# Audio test files
+# Audio test files (raw / preview / lossy formats — FLAC is the committed
+# canonical format; everything else is local-only intermediate or preview).
 *.wav
 *.webm
 *.ogg
 *.m4a
+*.pcm
 
 # Editor configs
 .cursor/
