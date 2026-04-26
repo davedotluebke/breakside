@@ -41,6 +41,16 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
+# Optional dep — only the runner uses soundfile, and only when FLAC scenarios
+# are present. Imported lazily so the rest of the test infrastructure works
+# even on machines without it (e.g. for syntax checks / discovery).
+try:
+    import soundfile as sf  # type: ignore
+    _HAS_SOUNDFILE = True
+except ImportError:
+    sf = None  # type: ignore
+    _HAS_SOUNDFILE = False
+
 try:
     import websockets  # type: ignore
 except ImportError:
@@ -64,17 +74,18 @@ class Scenario:
 
     @classmethod
     def load(cls, scenario_dir: Path) -> "Scenario":
-        # Locate audio file (wav or raw pcm)
+        # Locate audio file. FLAC is the canonical committed format; .wav and
+        # legacy .pcm are accepted as fallbacks.
         audio_path: Optional[Path] = None
         sample_rate = 24000
-        for candidate in ("audio.pcm", "audio.wav"):
+        for candidate in ("audio.flac", "audio.wav", "audio.pcm"):
             p = scenario_dir / candidate
             if p.exists():
                 audio_path = p
                 break
         if audio_path is None:
             raise FileNotFoundError(
-                f"Scenario {scenario_dir.name!r} missing audio.pcm or audio.wav"
+                f"Scenario {scenario_dir.name!r} missing audio.flac, audio.wav, or audio.pcm"
             )
         if audio_path.suffix == ".wav":
             with wave.open(str(audio_path), "rb") as w:
@@ -83,6 +94,16 @@ class Scenario:
                     raise ValueError(f"{audio_path}: expected mono audio")
                 if w.getsampwidth() != 2:
                     raise ValueError(f"{audio_path}: expected 16-bit PCM")
+        elif audio_path.suffix == ".flac":
+            if not _HAS_SOUNDFILE:
+                raise RuntimeError(
+                    "Scenario uses FLAC audio but the 'soundfile' package is "
+                    "not installed. Run: pip install soundfile"
+                )
+            info = sf.info(str(audio_path))
+            sample_rate = info.samplerate
+            if info.channels != 1:
+                raise ValueError(f"{audio_path}: expected mono audio")
 
         transcript_path = scenario_dir / "transcript.txt"
         expected_path = scenario_dir / "expected.json"
@@ -118,16 +139,29 @@ def _default_game_context() -> Dict[str, Any]:
 # Audio helpers
 # =============================================================================
 
-def _read_pcm16_chunks(audio_path: Path, chunk_ms: int = 100, sample_rate: int = 24000):
-    """Yield (base64_payload, real_time_seconds_consumed) for each chunk."""
+def _decode_audio_to_pcm16(audio_path: Path) -> Tuple[bytes, int]:
+    """Decode a scenario audio file (FLAC, WAV, or raw PCM) into raw PCM16
+    little-endian mono bytes + the sample rate. Used by both chunked
+    streaming and any in-memory audio inspection."""
     if audio_path.suffix == ".wav":
         with wave.open(str(audio_path), "rb") as w:
-            sample_rate = w.getframerate()
-            raw = w.readframes(w.getnframes())
-    else:
-        # raw PCM16 little-endian mono at sample_rate
-        raw = audio_path.read_bytes()
+            return w.readframes(w.getnframes()), w.getframerate()
+    if audio_path.suffix == ".flac":
+        if not _HAS_SOUNDFILE:
+            raise RuntimeError("FLAC audio requires the 'soundfile' package")
+        # int16 dtype gives us PCM16 directly; tobytes() is little-endian
+        # on x86/arm which matches what OpenAI Realtime expects.
+        samples, sr = sf.read(str(audio_path), dtype="int16")
+        if samples.ndim > 1:
+            raise ValueError(f"{audio_path}: expected mono audio")
+        return samples.tobytes(), int(sr)
+    # raw .pcm — assume 24kHz mono 16-bit (legacy / hand-prepared)
+    return audio_path.read_bytes(), 24000
 
+
+def _read_pcm16_chunks(audio_path: Path, chunk_ms: int = 100, sample_rate: int = 24000):
+    """Yield (base64_payload, real_time_seconds_consumed) for each chunk."""
+    raw, sample_rate = _decode_audio_to_pcm16(audio_path)
     bytes_per_sample = 2
     samples_per_chunk = int(sample_rate * chunk_ms / 1000)
     bytes_per_chunk = samples_per_chunk * bytes_per_sample
