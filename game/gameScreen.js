@@ -4391,6 +4391,14 @@ function updateGameLogEvents() {
             lineClass += ' game-log-current-score';
         } else if (line.includes('pulls to')) {
             lineClass += ' game-log-pull';
+        } else if (line.startsWith('— ') && / on (offense|defense) —$/.test(line)) {
+            // Possession delimiter line, e.g. "— Breakside on offense —"
+            lineClass += ' game-log-possession-header';
+            if (line.endsWith('on offense —')) {
+                lineClass += ' game-log-possession-offense';
+            } else {
+                lineClass += ' game-log-possession-defense';
+            }
         } else if (line.startsWith('App Version:') || line.startsWith('Game Summary:')) {
             lineClass += ' game-log-header';
         } else if (line.includes('roster:')) {
