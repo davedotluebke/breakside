@@ -211,7 +211,11 @@ async def stream_audio_for_transcription(
     transcript_parts: List[str] = []
     response_done = asyncio.Event()
 
-    async with websockets.connect(url, additional_headers=headers, max_size=2**24) as ws:  # type: ignore[attr-defined]
+    # websockets API note: the legacy `websockets.connect` (v10.x and the
+    # legacy compat shim in v12+) uses `extra_headers=`; the new modern
+    # asyncio API in v12+ would use `additional_headers=`. We use the
+    # legacy name because it's accepted by both major versions.
+    async with websockets.connect(url, extra_headers=headers, max_size=2**24) as ws:  # type: ignore[attr-defined]
         # Configure session: text-only, transcription enabled, no tools.
         await ws.send(
             json.dumps(
