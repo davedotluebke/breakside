@@ -225,6 +225,12 @@ function summarizeGame() {
             summary += `\n${currentGame().team} pulls to ${currentGame().opponent}.`;
         }
         point.possessions.forEach(possession => {
+            // Possession delimiter — surfaces O/D transitions inside a point.
+            // The label uses our team's name + their role in this possession;
+            // a defensive possession means our team is on defense (opponent
+            // has the disc).
+            const role = possession.offensive ? 'offense' : 'defense';
+            summary += `\n— ${currentGame().team} on ${role} —`;
             possession.events.forEach(event => {
                 summary += `\n${event.summarize()}`;
                 if (event.type === 'Other' && event.switchsides_flag) {
