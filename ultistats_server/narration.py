@@ -277,9 +277,16 @@ Vocabulary mapping:
   - "drop" or "missed the catch" -> turnover with drop=true (receiver = the dropper)
   - "stall" or "stalled out" -> turnover with stall=true
 
-Player names in ADD events must match names from the on-field roster above EXACTLY (case and spelling).
-If a transcribed name is misspelled but clearly corresponds to a roster player (e.g. "Sirius" -> "Cyrus"),
-use the corrected roster spelling.
+Player names in ADD events:
+  - Use ONLY the player's name itself, e.g. "Alice", NOT the full roster line.
+  - The roster lines above include nickname (in quotes) and jersey number (#N) as
+    HINTS to help you match what the coach said — never include those in the
+    emitted event. The `thrower`, `receiver`, and `defender` fields must contain
+    just the bare name.
+  - Match case and spelling EXACTLY to the name as it appears at the start of a
+    roster line (e.g. roster line "- Alice "Ace" #7" → emit `"Alice"`).
+  - If a transcribed name is misspelled but clearly corresponds to a roster
+    player (e.g. "Sirius" → "Cyrus"), use the corrected roster spelling.
 
 Output ONLY a JSON object of the form:
 {{
