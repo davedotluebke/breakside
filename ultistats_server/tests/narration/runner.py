@@ -210,6 +210,10 @@ async def stream_audio_for_transcription(
 
     transcript_parts: List[str] = []
     response_done = asyncio.Event()
+    # Transcription is a separate event stream from the model response. For
+    # short audio it sometimes lands AFTER response.done, so we track its
+    # completion independently and wait for whichever happens later.
+    transcription_completed = asyncio.Event()
 
     # websockets API note: the legacy `websockets.connect` (v10.x and the
     # legacy compat shim in v12+) uses `extra_headers=`; the new modern
@@ -255,6 +259,7 @@ async def stream_audio_for_transcription(
                     # have *something* in that case.
                     if text and not "".join(transcript_parts).strip():
                         transcript_parts.append(text)
+                    transcription_completed.set()
                 elif t == "response.done":
                     response_done.set()
                 elif t == "error":
@@ -281,10 +286,22 @@ async def stream_audio_for_transcription(
 
         try:
             await asyncio.wait_for(writer_task, timeout=timeout_s)
-            # After audio is fully sent and committed, wait briefly for the
-            # final transcription event(s).
+            # After audio is fully sent and committed, wait for BOTH:
+            # - response.done (model's reply finishes; for transcription-only
+            #   sessions this is usually a tiny acknowledgment)
+            # - input_audio_transcription.completed (the actual ASR result —
+            #   what we care about)
+            # These come on independent pipelines and can arrive in either
+            # order, especially for short audio. Waiting only for response.done
+            # (the original bug) caused empty transcripts on ~2s scenarios.
             try:
-                await asyncio.wait_for(response_done.wait(), timeout=10.0)
+                await asyncio.wait_for(
+                    asyncio.gather(
+                        response_done.wait(),
+                        transcription_completed.wait(),
+                    ),
+                    timeout=10.0,
+                )
             except asyncio.TimeoutError:
                 pass  # take whatever transcript we have
         finally:
