@@ -17,13 +17,7 @@ Sections, in roughly priority order:
 
 ### AI Narration
 
-Coach speaks naturally; the system extracts structured game events. Implemented on the `claude/pensive-edison` branch (or merged to main; see git history).
-
-**Architecture**: transcription-only fast pass via OpenAI Realtime API streams a live transcript; on stop, the full transcript goes to Claude Sonnet via `/api/narration/finalize` for structured event extraction. The fast-pass-events code path is preserved behind `FAST_PASS_EVENTS_ENABLED = false` for future revisit.
-
-Audio-driven test harness lives in `ultistats_server/tests/narration/`.
-
-Improvements deferred from the initial implementation are listed in the **AI Narration (Post-MVP)** section below.
+MVP shipped. Coach speaks naturally; the system extracts structured game events. See **AI Narration** in [ARCHITECTURE.md](ARCHITECTURE.md) for the full design. Active work going forward is the post-MVP improvements list below.
 
 ---
 
