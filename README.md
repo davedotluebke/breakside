@@ -45,6 +45,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 - **Simple Mode** - Streamlined interface for basic scoring and key play tracking
 - **Detailed Play-by-Play** - Comprehensive event logging for complete game analysis
 - **Key Play Dialog** - Record specific important events without switching modes
+- **AI Speech Narration** - Tap a mic button and describe plays out loud ("Alice throws to Bob, deep huck to Carla for the score") — speech is transcribed live and converted to structured events on stop. Powered by OpenAI Realtime + Claude Sonnet. Optional, opt-in per session.
 
 ### Real-Time Statistics
 - **Player Performance Metrics** - Track goals, assists, turnovers, completed passes, and defensive plays
@@ -159,6 +160,7 @@ The app uses a hierarchical data model to track comprehensive game statistics:
 - **Vanilla JavaScript** - No external frameworks for optimal performance and reliability
 - **Service Worker** - Offline functionality and caching for uninterrupted use
 - **Cloud Sync** - FastAPI backend with JSON file storage
+- **AI Narration Pipeline** - OpenAI Realtime API for streaming transcription, Claude Sonnet for structured event extraction, with an audio-driven regression test suite
 
 ### Key Features
 - **Network-First Strategy** - Optimized loading with fallback to cached content

@@ -1,44 +1,71 @@
-# Breakside: Multi-User Rollout
+# Breakside Roadmap
 
-This document tracks the implementation of multi-user support, enabling coach handoffs and collaborative game tracking.
+This document tracks active work, near-term improvements, and the longer-term backlog. The original framing was a "Multi-user rollout" plan; multi-user shipped, so the scope is now broader.
 
 For deployment info and technical architecture, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
+Sections, in roughly priority order:
+
+- **Active** — what's being worked on right now
+- **Near Term** — small/medium items queued behind active work
+- **Backlog** — solid ideas, not yet scheduled
+- **Future Enhancements** — bigger asks, deferred until after current themes stabilize
+
 ---
 
-## Next Up
+## Active
 
-### Phase 5: Remaining Optimizations
+### AI Narration
+
+Coach speaks naturally; the system extracts structured game events. Implemented on the `claude/pensive-edison` branch (or merged to main; see git history).
+
+**Architecture**: transcription-only fast pass via OpenAI Realtime API streams a live transcript; on stop, the full transcript goes to Claude Sonnet via `/api/narration/finalize` for structured event extraction. The fast-pass-events code path is preserved behind `FAST_PASS_EVENTS_ENABLED = false` for future revisit.
+
+Audio-driven test harness lives in `ultistats_server/tests/narration/`.
+
+Improvements deferred from the initial implementation are listed in the **AI Narration (Post-MVP)** section below.
+
+---
+
+## Near Term
+
+### Multi-user rollout — final items
+
+The multi-user push is mostly done. A few items linger:
+
+- [ ] PWA: Join game via URL (`/view/{game-hash}`)
+- [ ] Landing page: List recent public games
+- [ ] Viewer: Show live score and play-by-play
+- [ ] "Clear pending" button in connection info dialog when sync queue has stuck items
+
+### Multi-user rollout — completed (historical)
+
+<details>
+<summary>Phase 5: optimizations</summary>
 
 - [x] API poll endpoint with version check (avoid fetching unchanged data)
 - [x] Role-based polling intervals (Active Coach: push-only, Viewer: 5s)
 - [x] Server-side version tracking for optimized polling
 - [x] Conflict notification toast: "Game updated by another coach"
-- [x] API: `GET /api/teams/{team_id}/active-game` - Get currently active game for a team
-  - Returns game ID and basic info if a game is in progress
-  - "In progress" = has points, no gameEndTimestamp, started within last 6 hours
+- [x] API: `GET /api/teams/{team_id}/active-game`
 - [x] Auto-join prompt when another coach starts/resumes a game
-  - Toast notification: "[Coach] started a game vs [Opponent]. Join?"
-  - Tap to enter game screen for that game
+
+</details>
+
+<details>
+<summary>Phase 7: viewer experience</summary>
+
+- [x] PWA: Read-only mode for Viewers (hide event buttons, "Spectating" badge, live updates)
+
+</details>
 
 ---
 
-### Phase 7: Viewer Experience
+## AI Narration — improvements
 
-- [x] PWA: Read-only mode for Viewers
-  - Hide event buttons
-  - Show "Spectating" badge
-  - Live-update as events come in
-- [ ] PWA: Join game via URL (`/view/{game-hash}`)
-- [ ] Landing page: List recent public games
-- [ ] Viewer: Show live score and play-by-play
+Improvements deferred from the initial implementation (see Active section above for the architecture summary).
 
----
-
-## AI Narration (Post-MVP)
-
-The narration feature is on the `claude/pensive-edison` branch with a transcription-only fast pass + Claude Sonnet slow pass. Items below are improvements deferred from the initial implementation.
-
+### Quality / accuracy
 - [ ] **Improve transcription accuracy**
   - Try `gpt-4o-transcribe` (more accurate than the `mini` variant currently used)
   - Investigate OpenAI's dedicated **Realtime transcription session** type — pure ASR, no LLM in the loop. Should be more accurate for our use case AND would silence the "Transcription complete." text spam from gpt-realtime emitting acknowledgments despite the don't-respond prompt.
@@ -46,39 +73,33 @@ The narration feature is on the `claude/pensive-edison` branch with a transcript
 - [ ] **Outdoor / multi-speaker robustness**
   - Field-test transcript word error rate against wind, crowd, and bystander voices
   - Now that transcription is decoupled from event extraction, this is a focused, measurable problem
+- [ ] **Possession-boundary handling**
+  - Current slow-pass prompt is told only the starting offense/defense state; doesn't explicitly handle multi-possession narrations
+  - May need prompt strengthening or a more structured event-stream format to track team-side flips
+
+### Coverage
 - [ ] **Add `record_pull` to the slow-pass schema**
   - Currently if a coach narrates a pull (e.g. "Alice flicks an OI pull, brick"), it's ignored
   - Easy add: extend the event schema in `ultistats_server/narration.py` and add an applier in `narration/narrationEngine.js`
-- [ ] **Transcript panel UI polish**
-  - Fade older text so most recent stays prominent
-  - Highlight player names as they're recognized (would need light-weight name detection client-side)
-  - Optionally show a "this will become events when you stop" hint
 - [ ] **Re-evaluate streaming events (fast pass)**
   - Currently disabled via `FAST_PASS_EVENTS_ENABLED = false` in `narrationEngine.js`
   - All code is preserved — flip the flag to re-enable
   - Worth revisiting when we have a story for noisy-environment confidence (e.g. confidence-gating, transcript-stability checks)
-- [ ] **Possession-boundary handling**
-  - Current slow-pass prompt is told only the starting offense/defense state; doesn't explicitly handle multi-possession narrations
-  - May need prompt strengthening or a more structured event-stream format to track team-side flips
-- [ ] **Audio-driven test suite** — see separate section below
-- [ ] **Merge to main once stable on staging**
 
-## Audio-Driven Test Suite (AI Narration)
+### UX
+- [ ] **Transcript panel UI polish**
+  - Fade older text so most recent stays prominent
+  - Highlight player names as they're recognized (would need light-weight name detection client-side)
+  - Optionally show a "this will become events when you stop" hint
 
-Goal: a regression / evaluation harness that takes audio inputs with expected event outputs and reports accuracy. Lets us safely tune prompts, swap models, and measure outdoor robustness without manual ear-testing.
+### Test suite
 
-- [ ] **Test runner skeleton** (Python) that:
-  - Reads test scenarios from a directory of `(audio.wav, expected.json)` pairs
-  - Streams the audio to OpenAI Realtime API server-to-server (no browser needed)
-  - Captures the transcript
-  - Calls `/api/narration/finalize` with the transcript + a fixed roster
-  - Compares the resulting operations to expected, computes metrics
-- [ ] **Initial test corpus** (~10 scenarios): single throw, multi-throw possession, score, turnover types (throwaway/drop/stall), defense (interception/layout D), self-correction, possession boundary, opponent score, Callahan
-- [ ] **Synthetic audio generation** via TTS (OpenAI `tts-1` or similar) for cheap deterministic tests
-- [ ] **Real-game audio corpus** — coach hand-records ~5 narrations during real games, hand-labels expected events. Smaller but higher signal than synthetic.
+The audio-driven test harness is implemented in `ultistats_server/tests/narration/`. Skeleton works end-to-end, three scenarios committed, all currently passing. Remaining work to grow it:
+
+- [ ] **Expand to ~10 scenarios**: turnover types (throwaway/drop/stall), defense (interception/layout D), self-correction, opponent score, Callahan, pulls
+- [ ] **Real-game audio corpus** — coach hand-records ~5 narrations during real games, hand-labels expected events. Smaller corpus but much higher signal than TTS.
 - [ ] **Noise injection** — mix in wind/crowd samples to simulate field conditions, run the same scenarios at varying SNR
-- [ ] **Metrics**: transcript WER, event-set precision/recall (match on type + player + flags), player-resolution accuracy, ordering preservation
-- [ ] **CI integration** — run on PRs that touch `narration/` or `ultistats_server/narration.py`. Fail on metric regression beyond a threshold.
+- [ ] **CI integration** — run on PRs that touch `narration/` or `ultistats_server/narration.py`. Fail on metric regression beyond a threshold. Cost note: ~$0.10 per scenario per run.
 
 ---
 
@@ -98,7 +119,6 @@ Goal: a regression / evaluation harness that takes audio inputs with expected ev
   - Present in all three player-selection contexts: main Select Next Line panel, O/D split panels, and injury substitution dialog.
 - [x] Hide role buttons when only one coach on team or only one coach polling (more room for panels).
 - [x] O/D split panels: O/D button splits "Select Next Line" into two separate panels ("Select Next O Line" / "Select Next D Line").
-- [ ] "Clear pending" button in connection info dialog when sync queue has stuck items.
 - [ ] **Bug**: `point.startTimestamp` is null at score time despite being set at point start
   - **Symptom**: `gameLogic.js` logs `Warning: point.startTimestamp is null; setting to now` during `updateScore()`, then sets it to the current time (score time, not point start time).
   - **Root cause (suspected)**: `pointManagement.js:78` sets `point.startTimestamp = new Date()` immediately after pushing the point to `game.points`. However, `saveAllTeamsData()` serializes the game to localStorage as JSON shortly after. When the game object is later read back (via sync cycle, cloud refresh, or localStorage reload), the `Date` object may not survive deserialization — JSON.stringify converts Dates to ISO strings, but the deserializer may not reconvert them, or the in-memory game reference may get replaced by a freshly deserialized copy that lost the Date.
@@ -107,13 +127,14 @@ Goal: a regression / evaluation harness that takes audio inputs with expected ev
 
 ---
 
-## Future Enhancements (Post-Rollout)
+## Future Enhancements
 
-These are deferred until multi-user basics are stable:
+Bigger asks, deferred until current themes settle.
 
 ### User & Auth
 - [ ] User profile settings (update display name)
-- [ ] Google/Apple OAuth login
+- [x] Google OAuth login
+- [ ] Apple OAuth login
 - [ ] Custom SMTP for Supabase emails (branded sender)
 
 ### Team Management
@@ -184,7 +205,11 @@ pytest test_auth.py -v
 ./scripts/dev-server.sh            # serves on http://localhost:3000
 
 # Deploy to staging (working directory, no commit needed)
-./scripts/deploy-staging.sh
+# ALWAYS pass a short version description as the argument — it's written
+# into version.json as `deployLabel` and shown in the staging Online/About
+# overlay so you and other testers can visually confirm which build is
+# live (especially useful when rapidly iterating).
+./scripts/deploy-staging.sh "test audio narration v2"
 
 # Deploy PWA to production (via GitHub Actions)
 git push origin main

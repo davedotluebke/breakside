@@ -81,6 +81,14 @@ ultistats/
 │   ├── pullDialog.js       # Pull tracking dialog
 │   └── scoreAttribution.js # Score attribution dialog
 │
+├── narration/               # AI speech narration (mic → transcript → events)
+│   ├── micButton.js        # Floating mic FAB (tap or hold-to-record)
+│   ├── micButton.css       # Mic button + transcript panel styles
+│   ├── eventBus.js         # Tiny pub/sub for client update pipeline
+│   ├── realtimeSession.js  # OpenAI Realtime API WebSocket client
+│   ├── narrationEngine.js  # Orchestrator: fast pass + slow pass + apply
+│   └── transcriptDisplay.js # Live transcript panel above the mic button
+│
 ├── ui/                      # UI components
 │   ├── panelSystem.js       # Panel layout and drag-to-resize system
 │   ├── panelSystem.css      # Panel system styles
@@ -206,6 +214,7 @@ The service worker implements a network-first strategy with cache fallback:
 ultistats_server/
 ├── main.py              # FastAPI application and routes
 ├── config.py            # Configuration from environment variables
+├── narration.py         # AI narration router (token + finalize endpoints)
 ├── requirements.txt     # Python dependencies
 │
 ├── storage/             # Data storage layer
@@ -226,10 +235,23 @@ ultistats_server/
 │       ├── viewer.js
 │       └── viewer.css
 │
-└── auth/                # Authentication
-    ├── __init__.py
-    ├── jwt_validation.py   # Supabase JWT verification
-    └── dependencies.py     # FastAPI auth dependencies
+├── auth/                # Authentication
+│   ├── __init__.py
+│   ├── jwt_validation.py   # Supabase JWT verification
+│   └── dependencies.py     # FastAPI auth dependencies
+│
+└── tests/
+    └── narration/       # Audio-driven narration test harness
+        ├── runner.py            # Streams audio → transcript → /finalize → metrics
+        ├── test_scenarios.py    # pytest entry point (auto-discovers scenarios)
+        ├── tools/
+        │   └── generate_synthetic_audio.py   # OpenAI TTS → audio.flac
+        └── scenarios/
+            └── 001_single_throw/
+                ├── transcript.txt   # ground-truth narration
+                ├── roster.json      # on-field players + game context
+                ├── expected.json    # expected events
+                └── audio.flac       # 24kHz mono FLAC, lossless
 ```
 
 ### Data Directory Structure
@@ -298,6 +320,10 @@ ultistats_server/
 - `POST /api/games/{game_id}/release` - Release current role
 - `POST /api/games/{game_id}/request-handoff` - Request handoff of a role from current holder
 - `POST /api/games/{game_id}/handoff-response` - Accept or deny a handoff request
+
+#### AI Narration
+- `POST /api/narration/token` - Mint an ephemeral OpenAI Realtime API session token (so the browser can open a WebSocket without seeing the real API key)
+- `POST /api/narration/finalize` - Run the slow-pass: take the accumulated transcript + roster + game context, return a list of `ADD` operations from Claude Sonnet describing the events found in the narration
 
 ---
 
@@ -434,6 +460,100 @@ When online:
 5. POST to server
 6. Handle conflicts (last-write-wins)
 ```
+
+---
+
+## AI Narration
+
+### Overview
+
+A floating microphone button at the bottom of the game screen lets a coach narrate plays out loud ("Alice throws to Bob, deep huck to Carla for the score"). The system extracts structured `Throw` / `Turnover` / `Defense` / score events from speech and applies them to the game state — the same events a coach would otherwise tap in via the Key Play / Score Attribution dialogs.
+
+The architecture is a **two-pass hybrid**, with the fast pass currently configured for **transcription only** (the structured-extraction fast pass is preserved behind a feature flag for future revisit):
+
+- **Fast pass** (during recording): browser streams audio to OpenAI's Realtime API via a WebSocket. The transcript streams back live and is shown in a floating panel above the mic button — the coach sees they're being heard in real time.
+- **Slow pass** (on stop): the accumulated transcript is POSTed to `/api/narration/finalize`, which calls Claude Sonnet with a structured prompt. Claude returns a list of `ADD` operations (one per event found), which the frontend applies through the same code paths the manual Key Play dialog uses (`ensurePossessionExists`, stat updates, event log, possession transitions).
+
+### Why this split
+
+We tried doing structured event extraction live during recording (gpt-realtime function calling on streaming audio). It worked in quiet conditions but confabulated events in noisy outdoor conditions — extracting structured output from garbled audio fragments is brittle. Decoupling transcription from event extraction gives Claude the full possession context to reason holistically, with much higher accuracy.
+
+The fast-pass-events code path still exists, gated by `FAST_PASS_EVENTS_ENABLED = false` in `narration/narrationEngine.js`. Tools, prompts, and event appliers are all preserved; flip the flag to re-enable.
+
+### Frontend module layout
+
+```
+narration/
+├── micButton.js           # Floating FAB. Tap toggles, hold engages temp recording
+├── micButton.css          # Button + transcript panel styles (also provisional event styles)
+├── eventBus.js            # ~30-LOC pub/sub. Channels: eventAdded, eventAmended,
+│                          # eventRetracted, transcriptUpdated, scoreChanged, etc.
+├── realtimeSession.js     # OpenAI Realtime WebSocket client. PCM16 capture via
+│                          # MediaStream + AudioContext + ScriptProcessorNode.
+├── narrationEngine.js     # Orchestrator. Builds the system prompt, opens the
+│                          # session, accumulates transcript, runs the slow pass,
+│                          # applies returned ops via the same applyThrow/etc.
+│                          # functions used by the manual flow.
+└── transcriptDisplay.js   # Floating panel that shows the live transcript
+                           # (subscribes to transcriptUpdated channel).
+```
+
+### Backend endpoints
+
+`ultistats_server/narration.py` exposes two routes mounted under `/api/narration/`:
+
+- **`POST /token`** — receives `{model}`, calls OpenAI's `https://api.openai.com/v1/realtime/sessions` with the server's `OPENAI_API_KEY`, returns the ephemeral `client_secret` to the browser. Lets the browser open a WebSocket without ever seeing the real API key. Auth: any logged-in user.
+- **`POST /finalize`** — receives `{game_id, transcript, roster, provisional_events, game_context}`, builds a structured prompt (see below), calls Claude Sonnet via the Anthropic Messages API, parses the response, returns `{operations: [...]}`. Auth: any logged-in user. Falls back to confirming all provisionals if `ANTHROPIC_API_KEY` is unset, so the feature degrades gracefully.
+
+### Operation schema
+
+The slow pass returns a list of operations. Each is one of:
+
+- `{op: "CONFIRM", provisional_id}` — leave a fast-pass event as-is (only relevant when the fast pass is enabled)
+- `{op: "RETRACT", provisional_id}` — remove a fast-pass event (coach corrected themselves, mishearing, etc.)
+- `{op: "ADD", event}` — emit a new event from the transcript
+
+The ADD `event` object has shape:
+
+```json
+{
+  "kind": "throw" | "turnover" | "defense" | "opponent_score",
+  "thrower": "Alice", "receiver": "Bob",
+  "huck": true, "break_throw": false, "dump": false, "hammer": false,
+  "sky": false, "layout": false, "score": true,
+  // turnover-specific:  "throwaway", "drop", "good_defense", "stall"
+  // defense-specific:   "defender", "interception", "callahan"
+}
+```
+
+Player names must match roster entries exactly. The slow-pass prompt explicitly tells Claude to emit bare names (not `"Alice #7"`) — this was a real bug caught by the test harness on its first run.
+
+The fast-pass `AMEND` operation is intentionally not emitted by the prompt; corrections are always expressed as `RETRACT` + `ADD` pairs for auditability. The frontend keeps a defensive `AMEND` handler (treats it as retract) in case Claude ignores instructions.
+
+### Environment variables
+
+- `OPENAI_API_KEY` — required for the narration feature to work at all (token endpoint)
+- `ANTHROPIC_API_KEY` — required for the slow pass to actually emit events (without it, the endpoint returns `{operations: []}`)
+- `NARRATION_SLOW_MODEL` — optional override for the Claude model used by the slow pass; defaults to `claude-sonnet-4-5-20250929`
+
+### Cost characteristics
+
+- Fast pass (Realtime API audio in + text out): ~$0.06 per minute of audio
+- Slow pass (Claude Sonnet, ~1-3K tokens per possession): $0.01-0.03 per call
+- A typical full game (~25 possessions, sporadic narration): roughly $2-4 total
+
+### Test harness
+
+Audio-driven regression suite in `ultistats_server/tests/narration/`. Each scenario is a directory of `(audio.flac, transcript.txt, roster.json, expected.json)` files. The runner:
+
+1. Streams the audio to OpenAI Realtime as a transcription-only session
+2. Captures the accumulated transcript
+3. Calls `/api/narration/finalize` via `fastapi.testclient.TestClient` (no separate server needed)
+4. Compares the resulting operations to expected, computes WER + event precision/recall/F1
+
+`tools/generate_synthetic_audio.py` produces FLAC audio from a text script via OpenAI's TTS API for cheap deterministic scenarios (~$0.002 each). Hand-recorded scenarios go in the same shape and let us measure outdoor / multi-speaker robustness.
+
+Test deps (`websockets`, `soundfile`) are listed in `requirements.txt` under a "Test-only deps" comment.
 
 ---
 
@@ -692,14 +812,17 @@ Exported via `window.breakside.auth`:
 - PR merges: CI workflow detects missing `version.json` change and bumps
 - Feature branches: hook skips to avoid merge conflicts across worktrees
 
-**Staging** — Manual deploy via `./scripts/deploy-staging.sh ["optional label"]`:
-1. Generates a deploy timestamp (`deployStamp`) and optional `deployLabel` from `$1`, injected into `version.json`
-2. Syncs current working directory to S3 (`staging.breakside.pro`)
-3. Uploads `version.json` and service worker with no-cache headers
-4. Syncs viewer to S3
-5. Invalidates CloudFront cache (`E12N2STN9MM8FA`)
+**Staging** — Manual deploy via `./scripts/deploy-staging.sh "<short version description>"`:
 
-Staging has a purple header (vs production orange) via `body.staging` CSS class. The deploy stamp lets the PWA detect redeploys without a commit — tap Online/About to check for updates. If a label was provided, it appears in the version toast as `[label]`.
+Always pass a short version description (e.g. `"test audio narration v2"`) so testers can visually verify which build they're running. The label flows through to:
+
+1. `version.json` `deployLabel` field, plus a `deployStamp` timestamp
+2. S3 sync of working directory to `staging.breakside.pro`
+3. `version.json` and service worker uploaded with no-cache headers
+4. Viewer synced to S3
+5. CloudFront cache invalidated (`E12N2STN9MM8FA`)
+
+Staging has a purple header (vs production orange) via `body.staging` CSS class. The deploy stamp lets the PWA detect redeploys without a commit — tap Online/About to check for updates. The label appears in the version toast as `[label]`, making it the easiest way to confirm "am I actually on the build I just deployed?"
 
 **Claude Desktop PATH issue** — Claude Code Desktop strips the shell PATH to a minimal `/usr/bin:/bin:/usr/sbin:/sbin`, so tools like `aws` at `/usr/local/bin` aren't found. This is a [known bug](https://github.com/anthropics/claude-code/issues/3991) — the `env.PATH` key in `settings.json` and shell dotfiles (`.zshenv`, `.zprofile`, `.zshrc`) are all ignored for Bash tool commands. The deploy script works around this by sourcing `~/.zshenv` at the top, which sets the full PATH including `/usr/local/bin` and `/opt/homebrew/bin`. Any new scripts that need tools outside the minimal PATH should do the same: `[[ -f "$HOME/.zshenv" ]] && source "$HOME/.zshenv"`.
 
