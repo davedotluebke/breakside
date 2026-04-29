@@ -70,6 +70,8 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 - **Game History** - View and manage past games for each team
 
 ### User Interface
+- **Tabbed In-Game View** - Switch between focused single-task views (Play, Line, Log) and the full panel layout (All) via a segmented control in the header
+- **Resizable Panel Layout** - In the All tab, drag-to-resize panels let you balance Play-by-Play, Next Line, and Game Log to your preference
 - **Responsive Design** - Optimized for both mobile and desktop use
 - **Touch-Optimized** - Large buttons and gestures designed for sideline use
 - **Offline Capability** - Full functionality without internet connection
