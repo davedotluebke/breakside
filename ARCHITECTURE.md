@@ -71,7 +71,7 @@ ultistats/
 │
 ├── game/                    # Game core logic
 │   ├── gameLogic.js        # Game initialization, scoring, undo
-│   ├── gameScreen.js       # Game screen with panel layout
+│   ├── gameScreen.js       # Game screen with tabbed panel layout (Play / Line / Log / All)
 │   ├── pointManagement.js  # Point creation, timing, transitions
 │   ├── controllerState.js  # Multi-coach role management
 │   └── genderRatioDropdown.js # Gender ratio rule selection
@@ -131,9 +131,24 @@ Manual ──tap──▶ Wholesale ──tap──▶ Auto ──tap──▶ M
 3. Fill the line respecting ratio: pick from the under-represented gender first, then alternate.
 4. If ratio can't be met with available players, fill remaining slots regardless of gender.
 
+### In-Game Tab System
+
+The in-game UI is organized into four tabs, switched via a segmented control in the orange header:
+
+- **Play** — Play-by-Play panel only, full-screen
+- **Line** — Select Next Line panel only, full-screen (in split mode, the O and D panels stack)
+- **Log** — Game Log (Follow) panel only, full-screen
+- **All** — The full vertical panel stack with drag-to-resize (see next section). Default tab.
+
+The segmented control DOM lives in `createHeaderPanel()` (`game/gameScreen.js`); switching logic and persistence live in `panelSystem.js` (`switchTab()`, `applyTabState()`, `updateSegmentedSlider()`). Active tab is persisted in `localStorage` under `breakside_active_tab`.
+
+**Single-tab mode** sets the visible panel's class to `tab-fullscreen`, which hides its title bar and applies `flex: 1 1 auto` so it fills the viewport. All other content panels get `hidden`. **All mode** removes the class and re-applies saved panel states via `applyAllPanelStates()`, restoring drag heights.
+
+`updatePanelsForRole()` re-applies the tab state at the end so role-based visibility (e.g. viewer mode hiding play/line panels) doesn't leak into single-tab mode. `enterSplitMode`/`exitSplitMode` adjust `selectLine` vs `selectOLine`/`selectDLine` visibility independently of the tab state, and the Line tab routes to whichever panels are appropriate.
+
 ### Panel Drag-to-Resize System
 
-The in-game UI is a vertical stack of panels managed by `ui/panelSystem.js`. Panels are resized by dragging their title bars. The last panel (Follow/Game Log) is flex-fill and absorbs remaining space.
+The in-game UI is a vertical stack of panels managed by `ui/panelSystem.js`. Panels are resized by dragging their title bars. The last panel (Follow/Game Log) is flex-fill and absorbs remaining space. This system is active in the **All** tab; in the other tabs, drag handles are hidden and a single panel fills the viewport.
 
 **Layout model:** Panels `P[0], P[1], …, P[N-1]` are stacked vertically. Each has a title bar (~36px) at its top edge and a content area below. Each has a `minHeight` (title-bar-only for most; larger for PBP and Follow). Title bar position of panel `i` equals the sum of heights of panels `0` through `i-1`.
 
