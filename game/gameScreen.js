@@ -201,7 +201,8 @@ function createHeaderPanel() {
     segRow.innerHTML = `
         <div class="header-seg-control" id="headerSegControl">
             <div class="header-seg-slider" id="headerSegSlider"></div>
-            <button data-tab="play">Play</button>
+            <button data-tab="simple">Simple</button>
+            <button data-tab="full">Full</button>
             <button data-tab="line">Line</button>
             <button data-tab="log">Log</button>
             <button data-tab="all" class="active">All</button>
@@ -1045,6 +1046,11 @@ function buildGameScreenContainer() {
     stack.appendChild(createHeaderPanel());
     stack.appendChild(createRoleButtonsPanel());
     stack.appendChild(createPlayByPlayPanel());
+    // Full PBP panel — sibling of the simple Play-by-Play panel. Only
+    // visible when the "Full" tab is active; hidden in All / Simple / Line / Log.
+    if (window.fullPbp && typeof window.fullPbp.createPlayByPlayFullPanel === 'function') {
+        stack.appendChild(window.fullPbp.createPlayByPlayFullPanel());
+    }
     stack.appendChild(createSelectLinePanel());
     stack.appendChild(createFollowPanel());
     

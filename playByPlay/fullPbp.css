@@ -1,0 +1,153 @@
+/*
+ * Full Play-by-Play styles
+ *
+ * Phase 1: skeleton 3-column layout + bottom 20% reserved for the future
+ * ultra-compact game log. Real per-player buttons / modifiers come in
+ * later phases — placeholder text fills the columns for now.
+ */
+
+/* The Full PBP panel only exists in the DOM; visibility is driven by the
+ * tab system via .tab-fullscreen / .hidden classes inherited from the
+ * generic panel system. */
+.panel-playByPlayFull {
+    display: flex;
+    flex-direction: column;
+}
+
+.panel-playByPlayFull .panel-content.full-pbp-content {
+    flex: 1 1 auto;
+    display: flex;
+    padding: 0;
+    overflow: hidden;
+}
+
+.full-pbp-body {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+}
+
+/* Header row — mode pill on the left, undo on the right. */
+.full-pbp-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border-bottom: 1px solid #ddd;
+    gap: 8px;
+}
+
+.full-pbp-mode-pill {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.95em;
+    color: #fff;
+    background: #888;
+}
+
+.full-pbp-mode-pill.mode-offense {
+    background: #2563eb;  /* blue */
+}
+
+.full-pbp-mode-pill.mode-defense {
+    background: #dc2626;  /* red */
+}
+
+.full-pbp-no-point-msg {
+    flex: 1 1 auto;
+    text-align: center;
+    color: #777;
+    font-style: italic;
+    font-size: 0.95em;
+}
+
+.full-pbp-undo-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: 1px solid #bbb;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95em;
+    color: #333;
+}
+
+.full-pbp-undo-btn:hover {
+    background: #f4f4f4;
+}
+
+.full-pbp-undo-btn:active {
+    background: #ececec;
+}
+
+.full-pbp-undo-btn i {
+    font-size: 0.9em;
+}
+
+/* Main row — three equal-width columns occupying ~80% of the panel. */
+.full-pbp-main {
+    flex: 1 1 80%;
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.full-pbp-col {
+    flex: 1 1 33.333%;
+    min-width: 0;
+    overflow-y: auto;
+    border-right: 1px solid #eee;
+    padding: 8px;
+    box-sizing: border-box;
+}
+
+.full-pbp-col:last-child {
+    border-right: none;
+}
+
+.full-pbp-col-players {
+    /* Player names — leftmost column. */
+}
+
+.full-pbp-col-actions {
+    /* Per-player drop/score/throwaway/break/... buttons. */
+}
+
+.full-pbp-col-modifiers {
+    /* "Last pass was a:" panel and (in D mode) "They turnover" button. */
+}
+
+.full-pbp-placeholder {
+    color: #aaa;
+    font-style: italic;
+    text-align: center;
+    padding: 12px 8px;
+    font-size: 0.9em;
+}
+
+/* Reserved bottom strip — ~20% of panel height, for the future
+ * resizable ultra-compact game log. Left intentionally empty in phase 1
+ * so the layout is correct when the log lands. */
+.full-pbp-log-reserve {
+    flex: 0 0 20%;
+    border-top: 1px solid #ddd;
+    background: #fafafa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.full-pbp-log-placeholder {
+    color: #bbb;
+    font-style: italic;
+    font-size: 0.85em;
+}

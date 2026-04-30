@@ -28,13 +28,17 @@ const FOLLOW_MIN_HEIGHT = 80;
 
 // Panel IDs in order (top to bottom)
 // Note: gameEvents removed - now a modal popup from Play-by-Play
-const PANEL_ORDER = ['header', 'roleButtons', 'playByPlay', 'selectLine', 'selectOLine', 'selectDLine', 'follow'];
+// playByPlayFull is the Full-mode PBP panel — only visible when the "Full"
+// tab is active. Hidden by default everywhere else (including the All view,
+// which keeps Simple-mode PBP only — see docs/full-pbp-requirements.md).
+const PANEL_ORDER = ['header', 'roleButtons', 'playByPlay', 'playByPlayFull', 'selectLine', 'selectOLine', 'selectDLine', 'follow'];
 
 // Panels that can be resized via drag (these have draggable title bars)
 // Dragging a title bar resizes that panel and the one above it
 const DRAGGABLE_PANELS = ['selectLine', 'selectOLine', 'selectDLine', 'follow'];
 
 // Panels that CAN be resized (excludes fixed-height header and roleButtons)
+// Note: playByPlayFull is full-tab-only and never resized via drag.
 const RESIZABLE_PANELS = ['playByPlay', 'selectLine', 'selectOLine', 'selectDLine', 'follow'];
 
 // Default panel states
@@ -45,6 +49,7 @@ const DEFAULT_PANEL_STATES = {
     header: { hidden: false, height: null },
     roleButtons: { hidden: false, height: null },
     playByPlay: { hidden: false, height: PBP_MIN_CONTENT_HEIGHT },
+    playByPlayFull: { hidden: true, height: null },
     selectLine: { hidden: false, height: null },
     selectOLine: { hidden: true, height: null },
     selectDLine: { hidden: true, height: null },
@@ -1093,25 +1098,43 @@ function resetAllPanelStates() {
 
 const TAB_STATE_KEY = 'breakside_active_tab';
 
-// Current active tab: 'play' | 'line' | 'all' | 'log'
+// Current active tab: 'simple' | 'full' | 'line' | 'all' | 'log'
+// (Legacy 'play' is migrated to 'simple' on load.)
 let activeTab = 'all';
 
-// Which panels belong to each tab
+// Track which PBP tab the user last visited (Simple or Full). Used by the
+// "Start Point" button on the Line tab to auto-navigate to the coach's
+// preferred play-by-play surface (phase 6).
+const LAST_PBP_TAB_KEY = 'breakside_last_pbp_tab';
+let lastPbpTab = 'simple';
+
+// Which panels belong to each tab. The Full tab uses its own dedicated
+// panel (playByPlayFull); the All tab leaves it hidden and keeps Simple
+// PBP only — screen real estate is too tight to fit Full alongside Line +
+// Log without an iPad-class viewport.
 const TAB_PANELS = {
-    play: ['playByPlay'],
-    line: ['selectLine'],
-    all: null, // null = show all panels with normal panel states
-    log: ['follow']
+    simple: ['playByPlay'],
+    full:   ['playByPlayFull'],
+    line:   ['selectLine'],
+    all:    null, // null = show all panels with normal panel states
+    log:    ['follow']
 };
 
 /**
- * Load active tab from localStorage
+ * Load active tab from localStorage. Migrates legacy 'play' value to
+ * 'simple' (the new name for the simple-mode PBP tab).
  */
 function loadActiveTab() {
     try {
         const saved = localStorage.getItem(TAB_STATE_KEY);
-        if (saved && TAB_PANELS.hasOwnProperty(saved)) {
+        if (saved === 'play') {
+            activeTab = 'simple';
+        } else if (saved && TAB_PANELS.hasOwnProperty(saved)) {
             activeTab = saved;
+        }
+        const savedLast = localStorage.getItem(LAST_PBP_TAB_KEY);
+        if (savedLast === 'simple' || savedLast === 'full') {
+            lastPbpTab = savedLast;
         }
     } catch (e) {
         activeTab = 'all';
@@ -1139,6 +1162,14 @@ function switchTab(tabName) {
 
     activeTab = tabName;
     saveActiveTab();
+
+    // Remember which PBP tab was last used so the Line tab's Start Point
+    // button (phase 6) can auto-navigate back to it.
+    if (tabName === 'simple' || tabName === 'full') {
+        lastPbpTab = tabName;
+        try { localStorage.setItem(LAST_PBP_TAB_KEY, tabName); } catch (e) { /* ignore */ }
+    }
+
     applyTabState();
     updateSegmentedSlider();
 }
@@ -1149,7 +1180,10 @@ function switchTab(tabName) {
  * In single-tab mode, show only that tab's panel(s) full-screen.
  */
 function applyTabState() {
-    const contentPanels = ['playByPlay', 'selectLine', 'selectOLine', 'selectDLine', 'follow'];
+    // playByPlayFull is a content panel like the others, but only ever
+    // visible in the Full tab — never in All. Listed here so the tab
+    // switcher can hide/show it consistently with the rest.
+    const contentPanels = ['playByPlay', 'playByPlayFull', 'selectLine', 'selectOLine', 'selectDLine', 'follow'];
     const inSplitMode = typeof window.isSplitMode === 'function' && window.isSplitMode();
 
     if (activeTab === 'all') {
@@ -1171,6 +1205,8 @@ function applyTabState() {
             setPanelVisible('selectDLine', false);
         }
         setPanelVisible('playByPlay', true);
+        // All view keeps Simple-mode PBP only — Full panel stays hidden.
+        setPanelVisible('playByPlayFull', false);
         setPanelVisible('follow', true);
     } else {
         // Single-tab mode: determine which panels to show
@@ -1193,6 +1229,13 @@ function applyTabState() {
                 panel.style.flex = '1 1 auto';
             }
         });
+
+        // Refresh the Full panel's content when it becomes visible so the
+        // mode pill / "no active point" message reflect current state.
+        if (activeTab === 'full' && window.fullPbp) {
+            if (typeof window.fullPbp.wireEvents === 'function') window.fullPbp.wireEvents();
+            if (typeof window.fullPbp.render === 'function') window.fullPbp.render();
+        }
     }
 
     // Update segmented control button states
@@ -1230,6 +1273,15 @@ function updateSegmentedSlider() {
  */
 function getActiveTab() {
     return activeTab;
+}
+
+/**
+ * Get the most recently visited PBP tab ('simple' or 'full').
+ * Used by the Line-tab Start Point button (phase 6) to auto-navigate
+ * back to the user's preferred play-by-play surface.
+ */
+function getLastPbpTab() {
+    return lastPbpTab;
 }
 
 /**
@@ -1301,6 +1353,7 @@ window.updatePanelsForGameState = updatePanelsForGameState;
 // Tab system
 window.switchTab = switchTab;
 window.getActiveTab = getActiveTab;
+window.getLastPbpTab = getLastPbpTab;
 window.applyTabState = applyTabState;
 window.updateSegmentedSlider = updateSegmentedSlider;
 
