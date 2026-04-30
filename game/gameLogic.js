@@ -224,17 +224,34 @@ function summarizeGame() {
         } else {
             summary += `\n${currentGame().team} pulls to ${currentGame().opponent}.`;
         }
+        // O/D delimiter is emitted per logical possession boundary, not per
+        // Possession object — a Turnover event lives inside the offensive
+        // Possession that just ended (since ensurePossessionExists(true) is
+        // called for it everywhere), so without an inline emission a
+        // possession turned over by Turnover-only events (no following
+        // Defense event yet) wouldn't show the boundary at all. Inline
+        // emission after each Turnover, paired with suppression of the
+        // very next possession's delimiter, gives a correct boundary
+        // either way (Turnover-then-Defense or Turnover-only-so-far).
+        let suppressNextPossessionDelimiter = false;
         point.possessions.forEach(possession => {
-            // Possession delimiter — surfaces O/D transitions inside a point.
-            // The label uses our team's name + their role in this possession;
-            // a defensive possession means our team is on defense (opponent
-            // has the disc).
-            const role = possession.offensive ? 'offense' : 'defense';
-            summary += `\n— ${currentGame().team} on ${role} —`;
+            if (!suppressNextPossessionDelimiter) {
+                const role = possession.offensive ? 'offense' : 'defense';
+                summary += `\n— ${currentGame().team} on ${role} —`;
+            }
+            suppressNextPossessionDelimiter = false;
             possession.events.forEach(event => {
                 summary += `\n${event.summarize()}`;
                 if (event.type === 'Other' && event.switchsides_flag) {
                     switchsides = true;
+                }
+                if (event.type === 'Turnover') {
+                    // Possession just ended — emit the boundary so the log
+                    // shows it even when no Defense event has yet been
+                    // recorded (e.g. inferred Turnover from the pill,
+                    // or a Turnover before the user logs any D events).
+                    summary += `\n— ${currentGame().team} on defense —`;
+                    suppressNextPossessionDelimiter = true;
                 }
             });
         });
