@@ -1236,6 +1236,19 @@ function applyTabState() {
             if (typeof window.fullPbp.wireEvents === 'function') window.fullPbp.wireEvents();
             if (typeof window.fullPbp.render === 'function') window.fullPbp.render();
         }
+
+        // Log tab: auto-scroll the game log to the bottom so the most
+        // recent events are visible immediately on tab entry. Without
+        // this, switching to Log mid-game often shows stale content the
+        // user has to scroll to dismiss.
+        if (activeTab === 'log') {
+            const eventsEl = document.getElementById('gameLogEvents');
+            if (eventsEl) {
+                requestAnimationFrame(() => {
+                    eventsEl.scrollTop = eventsEl.scrollHeight;
+                });
+            }
+        }
     }
 
     // Update segmented control button states
