@@ -1,0 +1,8 @@
+[
+  {
+    "kind": "throw",
+    "thrower": "Alice",
+    "receiver": "Hannah",
+    "score": true
+  }
+]

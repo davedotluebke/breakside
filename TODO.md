@@ -88,11 +88,30 @@ Improvements deferred from the initial implementation (see Active section above 
 
 ### Test suite
 
-The audio-driven test harness is implemented in `ultistats_server/tests/narration/`. Skeleton works end-to-end, three scenarios committed, all currently passing. Remaining work to grow it:
+The audio-driven test harness is implemented in `ultistats_server/tests/narration/`. Skeleton works end-to-end. Scenarios `001`–`003` are the original baseline; `004`–`020` were scaffolded in a corpus-expansion pass (transcript + roster + expected committed; `audio.flac` to be generated via `tools/generate_synthetic_audio.py`). Real-audio variants (`004b`, `008b`, `015b`, `021`) are scaffolded for hand-recording.
 
-- [ ] **Expand to ~10 scenarios**: turnover types (throwaway/drop/stall), defense (interception/layout D), self-correction, opponent score, Callahan, pulls
-- [ ] **Real-game audio corpus** — coach hand-records ~5 narrations during real games, hand-labels expected events. Smaller corpus but much higher signal than TTS.
-- [ ] **Noise injection** — mix in wind/crowd samples to simulate field conditions, run the same scenarios at varying SNR
+Corpus structure:
+
+| Theme | Scenarios |
+|---|---|
+| Baseline | 001 single throw • 002 multi-throw possession • 003 drop + interception + score |
+| Self-correction | 004 name correction • 005 event-type downgrade (huck → throwaway) • 006 score → drop in endzone |
+| Possession flips | 007 D-line layout block → score • 008 multi-flip yo-yo • 009 stall + opp score |
+| End-of-point | 010 Callahan • 011 opp-score-only |
+| Ultimate jargon | 012 reset/swing/IO • 013 hammer + sky combo • 014 footblock + bookends |
+| Side commentary | 015 mid-narration coach chatter • 016 coach uncertainty |
+| Numbers | 017 jersey-number-only references |
+| Long form | 018 multi-possession spanning a point boundary |
+| Alt roster (nicknames + phonetic + name=vocab) | 019 nickname recognition • 020 phonetic similarity + name "Sky" |
+| Real audio (hand-record) | 004b name correction outdoor • 008b yo-yo outdoor • 015b commentary outdoor • 021 adversarial / coach-on-tilt |
+
+Remaining work:
+
+- [ ] **Generate audio for 004–020** via `tools/generate_synthetic_audio.py` (~$0.04 total at TTS rates)
+- [ ] **Hand-record 004b / 008b / 015b / 021** in noisy outdoor conditions; same expected.json, different audio.flac. Built-in regression for outdoor robustness.
+- [ ] **Schema gap: opponent unforced turnover.** Several scenarios above (007, 008, 014) gloss over what happens when the opponent throws it away to us — the narration schema in `ultistats_server/narration.py` has no event for "they turnover". The Full-PBP requirements doc models this as `Defense{unforcedError, defender=null}`. Decide whether to add it to the narration schema or handle implicitly via the next throw being from us.
+- [ ] **Schema gap: `record_pull`.** Multiple scenarios start with "they pull" / "we pull" — currently dropped on the floor. Adding `kind: "pull"` (with `puller`, `out_of_bounds?`, `brick?`, `landed_in_endzone?`) would let those narrations carry their first event.
+- [ ] **Noise injection** — mix in wind/crowd samples to simulate field conditions, run the same scenarios at varying SNR.
 - [ ] **CI integration** — run on PRs that touch `narration/` or `ultistats_server/narration.py`. Fail on metric regression beyond a threshold. Cost note: ~$0.10 per scenario per run.
 
 ---

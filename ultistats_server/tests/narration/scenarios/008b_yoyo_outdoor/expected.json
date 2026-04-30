@@ -1,0 +1,34 @@
+[
+  {
+    "kind": "throw",
+    "thrower": "Alice",
+    "receiver": "Bob"
+  },
+  {
+    "kind": "throw",
+    "thrower": "Bob",
+    "receiver": "Carla"
+  },
+  {
+    "kind": "turnover",
+    "thrower": "Carla",
+    "throwaway": true
+  },
+  {
+    "kind": "defense",
+    "defender": "Felix",
+    "interception": true
+  },
+  {
+    "kind": "throw",
+    "thrower": "Felix",
+    "receiver": "Daniel"
+  },
+  {
+    "kind": "throw",
+    "thrower": "Daniel",
+    "receiver": "Ella",
+    "hammer": true,
+    "score": true
+  }
+]

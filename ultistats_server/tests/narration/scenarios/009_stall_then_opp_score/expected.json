@@ -1,0 +1,10 @@
+[
+  {
+    "kind": "turnover",
+    "thrower": "Alice",
+    "stall": true
+  },
+  {
+    "kind": "opponent_score"
+  }
+]
