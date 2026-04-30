@@ -236,11 +236,18 @@ function Team(name = "My Team", initialRoster = [], id = null) {
 class Event {
     constructor(type) {
         this.type = type;
+        // Whether the event was inferred by the system (e.g. inserted by the
+        // Full PBP O/D pill toggle to represent an unobserved possession
+        // change) rather than being entered as a real observed event. Set
+        // post-construction by callers that synthesize events; defaults
+        // false. Surfaces in summarize() output as an "(inferred)" prefix
+        // so logs/reviewers know the event is the system's best guess.
+        this.inferred_flag = false;
     }
 
     // Default summarize method for generic events
     summarize() {
-        return `Event of type: ${this.type}`;
+        return `${this.inferred_flag ? '(inferred) ' : ''}Event of type: ${this.type}`;
     }
 }
 
@@ -262,7 +269,7 @@ class Throw extends Event {
     // Override summarize for Throw events
     summarize() {
         let verb = `${this.huck_flag ? 'hucks' : 'throws'}`;
-        let summary = `${this.thrower.name} ${verb} `;
+        let summary = `${this.inferred_flag ? '(inferred) ' : ''}${this.thrower.name} ${verb} `;
         let throwType = '';
         let receiver = this.receiver ? this.receiver.name : '';
         if (this.break_flag)        { throwType += 'break '; }
@@ -294,16 +301,17 @@ class Turnover extends Event {
     
     // Override summarize for Turnover events
     summarize() {
+        const prefix = this.inferred_flag ? '(inferred) ' : '';
         const t = this.thrower ? this.thrower.name : "voidthrower"
         const r = this.receiver ? this.receiver.name : "voidreceiver"
         const hucktxt = this.huck_flag ? 'on a huck' : '';
         const defensetxt = this.defense_flag ? 'due to good defense' : '';
-        if (this.throwaway_flag)    { return `${t} throws it away ${hucktxt} ${defensetxt}`; }
-        if (this.drop_flag){ return `${r} misses the catch from ${t} ${hucktxt} ${defensetxt}`; }
-        if (this.defense_flag)  { return `Turnover ${defensetxt}`; }
-        if (this.stall_flag)        { return `${t} gets stalled ${defensetxt}`; }
+        if (this.throwaway_flag)    { return `${prefix}${t} throws it away ${hucktxt} ${defensetxt}`; }
+        if (this.drop_flag){ return `${prefix}${r} misses the catch from ${t} ${hucktxt} ${defensetxt}`; }
+        if (this.defense_flag)  { return `${prefix}Turnover ${defensetxt}`; }
+        if (this.stall_flag)        { return `${prefix}${t} gets stalled ${defensetxt}`; }
         // Fallback for unspecified turnovers
-        return `Turnover by ${t}`;
+        return `${prefix}Turnover by ${t}`;
     }
 }
 
@@ -347,6 +355,7 @@ class Defense extends Event {
     
     // Override summarize for Defense events
     summarize() {
+        const prefix = this.inferred_flag ? '(inferred) ' : '';
         let summary = '';
         let defender = this.defender ? this.defender.name : '';
         if (this.interception_flag)     { summary += 'Interception '; }
@@ -364,7 +373,7 @@ class Defense extends Event {
         } else {
             summary = (summary ? summary : 'Unforced turnover by opponent');
         }
-        return summary;
+        return prefix + summary;
     }
 }
 
