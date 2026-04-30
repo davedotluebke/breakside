@@ -1,0 +1,17 @@
+{
+  "roster": [
+    { "name": "Alice", "nickname": null, "number": "7" },
+    { "name": "Bob",   "nickname": null, "number": "11" },
+    { "name": "Carla", "nickname": null, "number": "3" },
+    { "name": "Daniel","nickname": null, "number": "22" },
+    { "name": "Ella",  "nickname": null, "number": "4" },
+    { "name": "Felix", "nickname": null, "number": "8" },
+    { "name": "Gina",  "nickname": null, "number": "12" }
+  ],
+  "game_context": {
+    "offense": false,
+    "our_score": 0,
+    "their_score": 0,
+    "point": 1
+  }
+}

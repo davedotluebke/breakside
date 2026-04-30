@@ -1,0 +1,13 @@
+[
+  {
+    "kind": "throw",
+    "thrower": "Bob",
+    "receiver": "Ella"
+  },
+  {
+    "kind": "turnover",
+    "thrower": "Bob",
+    "receiver": "Ella",
+    "drop": true
+  }
+]
