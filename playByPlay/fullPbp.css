@@ -156,6 +156,48 @@
 .full-pbp-they-turnover-btn:hover  { background: #fde68a; }
 .full-pbp-they-turnover-btn:active { background: #fcd34d; }
 
+/* Retroactive modifier panel — "Last pass was a:" / "Last D was a:" */
+.full-pbp-modifier-panel {
+    flex: 0 0 auto;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #fff;
+    padding: 6px 8px;
+}
+
+.full-pbp-modifier-title {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 4px;
+}
+
+.full-pbp-modifier-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 8px;
+}
+
+.full-pbp-modifier-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9em;
+    color: #333;
+    cursor: pointer;
+    padding: 2px 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.full-pbp-modifier-checkbox input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.full-pbp-modifier-checkbox span {
+    user-select: none;
+}
+
 /* Player row — name button on the left (≈ half), action buttons on the
  * right (≈ half). The row scales to fit available height; buttons grow
  * vertically as more space allows. */

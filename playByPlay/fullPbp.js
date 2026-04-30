@@ -281,35 +281,167 @@
     }
 
     /**
-     * Right-side column. In D mode it surfaces the "They turnover"
-     * button (real Defense{unforcedError} event — flips us to O with
-     * no holder). The full "Last pass / Last D was a:" modifier panel
-     * lands in phase 4.
+     * Right-side column composition:
+     *   - D mode (always while in a point): "They turnover" button on top
+     *     so a defensive unforced-error turnover is always one tap away.
+     *   - Always (any mode): the retroactive modifier panel for the most
+     *     recent editable event:
+     *         Throw   → "Last pass was a:" {huck, break, hammer, dump, sky, layout}
+     *         Defense → "Last D was a:"    {sky, layout}
+     *     Toggling a checkbox amends the event in place and publishes
+     *     eventAmended to the bus. Modifiers auto-clear when render()
+     *     rebuilds the panel from a new "last event."
+     *
+     *   Turnover events are intentionally non-amendable from this panel —
+     *   the v1 spec only calls out Throw and Defense modifiers. (Editing
+     *   a turnover's flags after the fact is rare and would conflate the
+     *   panel's purpose with a generic event editor.)
      */
     function renderModifiers(state, inPoint) {
         const col = document.getElementById('fullPbpModifiers');
         if (!col) return;
 
-        // Between points: nothing to modify, no defensive turnovers to
-        // record. Show empty.
         if (!inPoint) {
             col.innerHTML = '';
             return;
         }
 
+        col.innerHTML = '';
+
+        // "They turnover" button — top of the column, D mode only.
         if (state.mode === 'defense') {
-            col.innerHTML = `
-                <button class="full-pbp-they-turnover-btn" id="fullPbpTheyTurnoverBtn"
-                        title="Opponent turned it over without a specific defender getting credit">
-                    They turnover
-                </button>
-                <div class="full-pbp-placeholder">Modifiers (phase 4)</div>
-            `;
-            const btn = document.getElementById('fullPbpTheyTurnoverBtn');
-            if (btn) btn.addEventListener('click', handleTheyTurnoverTap);
-        } else {
-            col.innerHTML = `<div class="full-pbp-placeholder">Modifiers (phase 4)</div>`;
+            const btn = document.createElement('button');
+            btn.id = 'fullPbpTheyTurnoverBtn';
+            btn.className = 'full-pbp-they-turnover-btn';
+            btn.title = 'Opponent turned it over without a specific defender getting credit';
+            btn.textContent = 'They turnover';
+            btn.addEventListener('click', handleTheyTurnoverTap);
+            col.appendChild(btn);
         }
+
+        // Modifier panel for the most recent editable event in this point.
+        const editable = findLastEditableEvent(state.point);
+        if (editable) {
+            col.appendChild(buildModifierPanel(editable));
+        }
+    }
+
+    /**
+     * Walk the current point's events backwards, return the first Throw
+     * or Defense found. Returns null if none.
+     *
+     * Crucially, "most recent" includes Throws/Defenses that scored or
+     * caused a Callahan — those events ended the point but are still the
+     * last logged event of *that* point (the new point doesn't yet have
+     * any events). Since we render this panel only while in a point and
+     * a brand-new point has no events to amend, this only matters for
+     * the brief moment after a score before moveToNextPoint() runs.
+     */
+    function findLastEditableEvent(point) {
+        if (!point || !point.possessions) return null;
+        for (let i = point.possessions.length - 1; i >= 0; i--) {
+            const events = point.possessions[i].events;
+            if (!events) continue;
+            for (let j = events.length - 1; j >= 0; j--) {
+                const e = events[j];
+                if (e.type === 'Throw' || e.type === 'Defense') return e;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Per-event-type definitions of which flags are editable from the
+     * modifier panel. Keys are the *visible* checkbox label; values are
+     * the property name on the event object. Order = display order.
+     */
+    const THROW_MODIFIERS = [
+        { label: 'huck',   prop: 'huck_flag'   },
+        { label: 'break',  prop: 'break_flag'  },
+        { label: 'hammer', prop: 'hammer_flag' },
+        { label: 'dump',   prop: 'dump_flag'   },
+        { label: 'sky',    prop: 'sky_flag'    },
+        { label: 'layout', prop: 'layout_flag' }
+    ];
+    const DEFENSE_MODIFIERS = [
+        { label: 'sky',    prop: 'sky_flag'    },
+        { label: 'layout', prop: 'layout_flag' }
+    ];
+
+    function buildModifierPanel(event) {
+        const panel = document.createElement('div');
+        panel.className = 'full-pbp-modifier-panel';
+
+        const isThrow = event.type === 'Throw';
+        const flags = isThrow ? THROW_MODIFIERS : DEFENSE_MODIFIERS;
+        const title = isThrow ? 'Last pass was a:' : 'Last D was a:';
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'full-pbp-modifier-title';
+        titleEl.textContent = title;
+        panel.appendChild(titleEl);
+
+        const grid = document.createElement('div');
+        grid.className = 'full-pbp-modifier-grid';
+
+        flags.forEach(f => {
+            const label = document.createElement('label');
+            label.className = 'full-pbp-modifier-checkbox';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = !!event[f.prop];
+            cb.addEventListener('change', () => handleModifierChange(event, f.prop, cb.checked, f.label));
+            const span = document.createElement('span');
+            span.textContent = f.label;
+            label.appendChild(cb);
+            label.appendChild(span);
+            grid.appendChild(label);
+        });
+
+        panel.appendChild(grid);
+        return panel;
+    }
+
+    /**
+     * Toggle a flag on the most recent Throw/Defense in place. This is
+     * an AMEND, not a RETRACT+ADD — the event keeps its identity and
+     * position in the timeline, stats are unchanged (these are
+     * presentation-only flags), and a single eventAmended bus message
+     * carries the before/after for subscribers.
+     *
+     * For score-flag changes we'd need to handle moveToNextPoint reversal,
+     * but the modifier panel never exposes score_flag — score events are
+     * created by the dedicated Score row button.
+     */
+    function handleModifierChange(event, propName, newValue, displayLabel) {
+        // Clone the prior state for the bus payload so subscribers can
+        // diff "before vs. after". Cheap shallow clone — flags are
+        // primitives and player references are intentionally shared.
+        const previousEvent = Object.assign(
+            Object.create(Object.getPrototypeOf(event)),
+            event
+        );
+
+        event[propName] = !!newValue;
+
+        if (typeof logEvent === 'function') {
+            // Empty description path is fine — logEvent rebuilds the log
+            // textarea from summarizeGame() either way, and our amendment
+            // is reflected in the next event.summarize() call.
+            logEvent(`Amended ${event.type}: ${displayLabel} → ${newValue ? 'on' : 'off'}`);
+        }
+
+        if (window.narrationEventBus) {
+            window.narrationEventBus.publish('eventAmended', {
+                event,
+                previousEvent,
+                source: 'manual',
+                provisionalId: null
+            });
+        }
+
+        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+        render();
     }
 
     /**
