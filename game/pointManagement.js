@@ -28,6 +28,19 @@ function moveToNextPoint() {
     // Start the countdown timer
     startCountdown();
 
+    // Auto-switch to the Line tab for the Line Coach so they immediately
+    // see the lineup-selection UI for the next point. This applies whether
+    // the score came from Simple mode (We Score / They Score / Key Play),
+    // Full mode (score throw / Callahan), or narration. We only switch if
+    // the current user actually holds the Line Coach role — other coaches
+    // and viewers stay on whatever tab they were already on.
+    if (typeof window.isLineCoach === 'function' && window.isLineCoach()
+        && typeof window.switchTab === 'function'
+        && typeof window.getActiveTab === 'function'
+        && window.getActiveTab() !== 'line') {
+        window.switchTab('line');
+    }
+
     // Sync to cloud when point ends (for live viewer updates)
     if (typeof saveAllTeamsData === 'function') {
         saveAllTeamsData();
@@ -85,6 +98,18 @@ function startNextPoint() {
     // For defense points, show Pull dialog on top of game screen
     if (startPointOn === 'defense' && typeof showPullDialog === 'function') {
         showPullDialog();
+    }
+
+    // If the user started this point from the Line tab (e.g. they're a
+    // solo coach who just finished setting the lineup), switch back to
+    // their preferred play-by-play surface so they can immediately enter
+    // events. The lastPbpTab preference is maintained by panelSystem.js.
+    if (typeof window.getActiveTab === 'function'
+        && typeof window.switchTab === 'function'
+        && window.getActiveTab() === 'line') {
+        const target = (typeof window.getLastPbpTab === 'function')
+            ? window.getLastPbpTab() : 'simple';
+        window.switchTab(target);
     }
 
     // Save and Sync on point start

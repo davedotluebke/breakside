@@ -59,6 +59,32 @@
 .full-pbp-mode-pill.mode-offense { background: #2563eb; }   /* blue */
 .full-pbp-mode-pill.mode-defense { background: #dc2626; }   /* red  */
 
+/* Start Point button — replaces the mode pill between points. Same shape
+ * and rough size as the pill so the header layout doesn't jump. */
+.full-pbp-start-point-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 16px;
+    border-radius: 999px;
+    border: none;
+    background: #16a34a;        /* green — go */
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.95em;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.full-pbp-start-point-btn:hover  { background: #15803d; }
+.full-pbp-start-point-btn:active { background: #166534; }
+.full-pbp-start-point-btn.inactive,
+.full-pbp-start-point-btn.feedback-count-warning {
+    background: #d6d6d6;
+    color: #888;
+    cursor: not-allowed;
+}
+.full-pbp-start-point-btn.feedback-gender-warning { background: #f59e0b; color: #fff; }
+.full-pbp-start-point-btn.feedback-ok             { background: #16a34a; color: #fff; }
+
 .full-pbp-no-point-msg {
     flex: 1 1 auto;
     text-align: center;
@@ -129,6 +155,28 @@
     box-shadow: 0 0 0 2px rgba(224, 166, 75, 0.25);
 }
 
+/* Unknown player row — visually distinct so it's easy to skip past when
+ * scanning, but still tappable. */
+.full-pbp-player-row.is-unknown {
+    background: #f3f4f6;
+    border-style: dashed;
+    border-color: #c0c0c0;
+}
+.full-pbp-player-row.is-unknown .full-pbp-name-btn {
+    color: #6b7280;
+    font-style: italic;
+    font-weight: 500;
+}
+
+/* Between-points: rows are visible (so the user sees who played the
+ * previous point) but greyed and non-interactive — no events should
+ * be entered while the Start Point button is showing. */
+.full-pbp-player-row.between-points {
+    opacity: 0.45;
+    pointer-events: none;
+    box-shadow: none;
+}
+
 .full-pbp-name-btn {
     flex: 1 1 50%;
     border: none;
@@ -192,19 +240,28 @@
     font-size: 0.9em;
 }
 
-/* Bottom 20% reservation for the future ultra-compact log. */
+/* Bottom 20% — mini event log for the current point. Plain text for now
+ * (phase 2.5); future iterations can style each event type, add icons,
+ * or adopt the full panel-system drag mechanics if we want a resizable
+ * compact log. */
 .full-pbp-log-reserve {
     flex: 0 0 20%;
     border-top: 1px solid #ddd;
     background: #fafafa;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     overflow: hidden;
+    min-height: 0;
 }
 
-.full-pbp-log-placeholder {
-    color: #bbb;
-    font-style: italic;
-    font-size: 0.85em;
+.full-pbp-log-list {
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    padding: 4px 8px;
+    box-sizing: border-box;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78em;
+    line-height: 1.35;
+    color: #333;
+    white-space: pre-wrap;
+    word-break: break-word;
 }

@@ -180,6 +180,9 @@
         body.className = 'full-pbp-body';
         body.innerHTML = `
             <div class="full-pbp-header">
+                <!-- Between points: Start Point button (replaces the pill).
+                     During point: Offense/Defense mode pill. -->
+                <button class="full-pbp-start-point-btn" id="fullPbpStartPointBtn" style="display:none">Start Point</button>
                 <span class="full-pbp-mode-pill" id="fullPbpModePill">Offense</span>
                 <span class="full-pbp-no-point-msg" id="fullPbpNoPointMsg" style="display:none">No active point</span>
                 <button class="full-pbp-undo-btn" id="fullPbpUndoBtn" title="Undo last event">
@@ -196,7 +199,7 @@
                 </div>
             </div>
             <div class="full-pbp-log-reserve" id="fullPbpLogReserve">
-                <div class="full-pbp-log-placeholder">Compact event log (future)</div>
+                <div class="full-pbp-log-list" id="fullPbpLogList"></div>
             </div>
         `;
         return body;
@@ -210,63 +213,128 @@
      * Repaint the panel. Cheap to call — recomputes state from the event
      * stream every time, so any external mutation (Simple-mode entry,
      * narration, undo) is reflected on the next render.
+     *
+     * Header behavior is driven by isPointInProgress():
+     *   - Point in progress  → mode pill visible, Start Point button hidden,
+     *                          player rows interactive
+     *   - Between points     → Start Point button visible (replaces pill),
+     *                          player rows greyed out and disabled
+     *   - No point at all    → "No active point" message, rows hidden
      */
     function render() {
         const state = reconstructState();
+        const inPoint = (typeof isPointInProgress === 'function') && isPointInProgress();
 
-        // Mode pill + no-point message
         const pill = document.getElementById('fullPbpModePill');
+        const startBtn = document.getElementById('fullPbpStartPointBtn');
+        const msg = document.getElementById('fullPbpNoPointMsg');
+        const hasPoint = !!(state.point && state.point.players && state.point.players.length);
+
+        // Header: between-points → Start Point; in-point → mode pill.
+        // Reuse the existing applyStartPointButtonState so we get the
+        // canonical "Start Point (Offense)" label + feedback class.
+        if (startBtn) {
+            const showStart = !inPoint;
+            startBtn.style.display = showStart ? 'inline-flex' : 'none';
+            if (showStart && typeof applyStartPointButtonState === 'function') {
+                applyStartPointButtonState(startBtn, false);
+            }
+        }
         if (pill) {
+            pill.style.display = inPoint ? 'inline-block' : 'none';
             pill.textContent = state.mode === 'offense' ? 'Offense' : 'Defense';
             pill.classList.toggle('mode-offense', state.mode === 'offense');
             pill.classList.toggle('mode-defense', state.mode === 'defense');
         }
-
-        const hasPoint = !!(state.point && state.point.players && state.point.players.length);
-        const msg = document.getElementById('fullPbpNoPointMsg');
-        if (msg) msg.style.display = hasPoint ? 'none' : '';
+        if (msg) {
+            // Only show the "no point" caption if there's truly nothing —
+            // between points we still want the Start Point button present
+            // and the (last point's) roster faintly visible to avoid an
+            // empty-feeling screen.
+            msg.style.display = (!hasPoint && inPoint) ? '' : 'none';
+        }
 
         const rows = document.getElementById('fullPbpRows');
-        if (!rows) return;
+        if (rows) {
+            if (!hasPoint) {
+                rows.innerHTML = '<div class="full-pbp-placeholder">Start a point to begin entering events.</div>';
+            } else {
+                const holder = inPoint ? effectiveHolder(state) : null;
+                const isOffense = state.mode === 'offense';
+                const names = [UNKNOWN_PLAYER, ...state.point.players];
 
-        if (!hasPoint) {
-            rows.innerHTML = '<div class="full-pbp-placeholder">Start a point to begin entering events.</div>';
+                rows.innerHTML = '';
+                names.forEach(name => {
+                    const player = (typeof getPlayerFromName === 'function') ? getPlayerFromName(name) : null;
+                    if (!player) return;
+
+                    const isHolder = !!(holder && holder.name === name);
+                    const row = renderPlayerRow(player, isHolder, isOffense);
+                    if (!inPoint) row.classList.add('between-points');
+                    rows.appendChild(row);
+                });
+            }
+        }
+
+        renderMiniLog(state.point);
+    }
+
+    /**
+     * Rebuild the bottom-strip mini-log from the current point's event
+     * stream. One line per event, prefixed with O/D so transitions are
+     * obvious in scan-and-skim. Auto-scrolls to bottom so the most recent
+     * event is always visible.
+     *
+     * Built from the source-of-truth event stream rather than incrementally
+     * appending bus events, so it stays correct regardless of who created
+     * the events (Simple, Full, narration) and survives Undo cleanly.
+     */
+    function renderMiniLog(point) {
+        const list = document.getElementById('fullPbpLogList');
+        if (!list) return;
+
+        if (!point || !point.possessions || !point.possessions.length) {
+            list.textContent = '';
             return;
         }
 
-        const holder = effectiveHolder(state);
-        const isOffense = state.mode === 'offense';
-
-        // Collect on-field player names (Unknown first, then roster order).
-        const names = [UNKNOWN_PLAYER, ...state.point.players];
-
-        rows.innerHTML = '';
-        names.forEach(name => {
-            const player = (typeof getPlayerFromName === 'function') ? getPlayerFromName(name) : null;
-            if (!player) return;
-
-            const isHolder = !!(holder && holder.name === name);
-            const row = renderPlayerRow(player, isHolder, isOffense);
-            rows.appendChild(row);
+        const lines = [];
+        point.possessions.forEach(poss => {
+            (poss.events || []).forEach(evt => {
+                const side = poss.offensive ? 'O' : 'D';
+                const summary = (typeof evt.summarize === 'function')
+                    ? evt.summarize() : evt.type;
+                lines.push(`${side}  ${summary}`);
+            });
         });
+
+        list.textContent = lines.join('\n');
+        // Auto-scroll to keep the most recent event in view.
+        list.scrollTop = list.scrollHeight;
     }
 
     /**
      * Build one player row. The per-row button set is contextual:
      *   - O-mode holder      → throwaway / break / …
      *   - O-mode non-holder  → drop / score / …
-     *   - D-mode             → no buttons yet (phase 3 fills these in)
+     *   - D-mode any row     → block / D! / …
      */
     function renderPlayerRow(player, isHolder, isOffense) {
+        const isUnknown = (player.name === UNKNOWN_PLAYER);
         const row = document.createElement('div');
         row.className = 'full-pbp-player-row';
         row.classList.toggle('is-holder', isHolder);
+        row.classList.toggle('is-unknown', isUnknown);
 
         // Player name (left side — the "first column" of the v1 design).
+        // We display "Unknown" rather than the full "Unknown Player" string
+        // because the long label overflows on narrow viewports. The
+        // underlying constant UNKNOWN_PLAYER stays the same so storage,
+        // lookups, and serialization aren't affected.
         const nameBtn = document.createElement('button');
         nameBtn.type = 'button';
         nameBtn.className = 'full-pbp-name-btn';
-        nameBtn.textContent = player.name;
+        nameBtn.textContent = isUnknown ? 'Unknown' : player.name;
         nameBtn.addEventListener('click', () => handlePlayerNameTap(player));
         row.appendChild(nameBtn);
 
@@ -600,6 +668,21 @@
             pill.dataset.wired = 'true';
             pill.addEventListener('click', () => {
                 console.log('[fullPbp] mode pill tap (phase 3 stub)');
+            });
+        }
+
+        // Start Point button — between-points UI. Delegates to the same
+        // global handler the simple PBP panel uses so role/lineup checks
+        // and pull-dialog flow stay consistent across modes.
+        const startBtn = document.getElementById('fullPbpStartPointBtn');
+        if (startBtn && !startBtn.dataset.wired) {
+            startBtn.dataset.wired = 'true';
+            startBtn.addEventListener('click', () => {
+                if (typeof handlePanelStartPoint === 'function') {
+                    handlePanelStartPoint();
+                } else if (typeof startNextPoint === 'function') {
+                    startNextPoint();
+                }
             });
         }
     }
