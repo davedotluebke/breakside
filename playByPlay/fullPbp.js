@@ -276,7 +276,40 @@
             }
         }
 
+        renderModifiers(state, inPoint);
         renderMiniLog(state.point);
+    }
+
+    /**
+     * Right-side column. In D mode it surfaces the "They turnover"
+     * button (real Defense{unforcedError} event — flips us to O with
+     * no holder). The full "Last pass / Last D was a:" modifier panel
+     * lands in phase 4.
+     */
+    function renderModifiers(state, inPoint) {
+        const col = document.getElementById('fullPbpModifiers');
+        if (!col) return;
+
+        // Between points: nothing to modify, no defensive turnovers to
+        // record. Show empty.
+        if (!inPoint) {
+            col.innerHTML = '';
+            return;
+        }
+
+        if (state.mode === 'defense') {
+            col.innerHTML = `
+                <button class="full-pbp-they-turnover-btn" id="fullPbpTheyTurnoverBtn"
+                        title="Opponent turned it over without a specific defender getting credit">
+                    They turnover
+                </button>
+                <div class="full-pbp-placeholder">Modifiers (phase 4)</div>
+            `;
+            const btn = document.getElementById('fullPbpTheyTurnoverBtn');
+            if (btn) btn.addEventListener('click', handleTheyTurnoverTap);
+        } else {
+            col.innerHTML = `<div class="full-pbp-placeholder">Modifiers (phase 4)</div>`;
+        }
     }
 
     /**
@@ -481,6 +514,129 @@
     }
 
     /**
+     * "They turnover" button — always visible in the modifier column
+     * while in D mode. Logs an unforced opponent turnover (defender =
+     * null, unforced error). NOT inferred — this is a real observed
+     * event; the user just doesn't have a specific defender to credit.
+     * Flips us back to O with no holder.
+     */
+    function handleTheyTurnoverTap() {
+        createDefense(null, { unforcedError: true });
+    }
+
+    /**
+     * O/D pill tap. Indicates the user thinks the possession side has
+     * changed in a way that wasn't captured by an explicit event.
+     *
+     * Behavior:
+     *   1. If the most recent event in the current point is itself an
+     *      `inferred=true` event, retract it (the user is undoing a
+     *      previous pill tap that turned out to be wrong).
+     *   2. Otherwise, insert a synthetic event in the appropriate
+     *      direction:
+     *        O → D : Turnover{thrower=Unknown, throwaway, inferred}
+     *        D → O : Defense{defender=null, unforcedError, inferred}
+     *
+     * The retract-first rule means tapping the pill twice in a row
+     * with no events between cleanly cancels — no orphan inferred
+     * events left behind.
+     */
+    function handleModePillTap() {
+        const inPoint = (typeof isPointInProgress === 'function') && isPointInProgress();
+        if (!inPoint) return;
+
+        // Retract a most-recent inferred event if present.
+        if (retractLastInferredEvent()) {
+            manualHolder = null;
+            breakArmed = false;
+            if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+            render();
+            return;
+        }
+
+        // Otherwise insert a new inferred event in the appropriate direction.
+        const state = reconstructState();
+        if (state.mode === 'offense') {
+            // O → D: synthetic turnover charged to Unknown Player so no
+            // real player's stats are affected by an inferred event.
+            const unknown = getUnknown();
+            createInferredTurnover(unknown);
+        } else {
+            // D → O: synthetic unforced opponent error (defender = null).
+            createDefense(null, { unforcedError: true, inferred: true });
+        }
+    }
+
+    /**
+     * Pop the most recent event from the current point if and only if it
+     * is `inferred=true`. Cleans up an empty possession after popping.
+     * Returns the popped event, or null if nothing to retract.
+     *
+     * Doesn't touch stats: inferred Turnovers/Defense{unforcedError}
+     * don't update player stats on creation, so nothing to revert.
+     */
+    function retractLastInferredEvent() {
+        const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
+        if (!point || !point.possessions) return null;
+
+        for (let i = point.possessions.length - 1; i >= 0; i--) {
+            const poss = point.possessions[i];
+            if (!poss.events || !poss.events.length) continue;
+            const lastEvent = poss.events[poss.events.length - 1];
+            if (!lastEvent.inferred_flag) return null;
+
+            poss.events.pop();
+            if (poss.events.length === 0) {
+                point.possessions.splice(i, 1);
+            }
+
+            if (typeof logEvent === 'function') {
+                logEvent(`Retracted inferred event: ${lastEvent.summarize()}`);
+            }
+            if (window.narrationEventBus) {
+                window.narrationEventBus.publish('eventRetracted', {
+                    event: lastEvent,
+                    source: 'manual',
+                    provisionalId: null
+                });
+            }
+            return lastEvent;
+        }
+        return null;
+    }
+
+    /**
+     * Helper: synthetic turnover with thrower/receiver = Unknown so no
+     * real player gets debited. Marks inferred_flag for the log prefix
+     * and the retract-on-double-tap detection.
+     */
+    function createInferredTurnover(unknown) {
+        if (typeof ensurePossessionExists !== 'function') return;
+        const evt = new Turnover({
+            thrower: unknown,
+            receiver: unknown,
+            throwaway: true,
+            huck: false,
+            receiverError: false,
+            goodDefense: false,
+            stall: false
+        });
+        evt.inferred_flag = true;
+
+        const possession = ensurePossessionExists(true);
+        possession.addEvent(evt);
+
+        if (typeof logEvent === 'function') logEvent(evt.summarize());
+        publishAdded(evt);
+
+        manualHolder = null;
+        breakArmed = false;
+
+        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+        render();
+    }
+
+    /**
      * "…" popover. Phase 5 will implement Stall / Good D / Callahan.
      */
     function handleMoreTap(player, isHolder) {
@@ -608,12 +764,20 @@
         render();
     }
 
+    /**
+     * Create a Defense event. `defender` may be null for unforced-error
+     * cases ("They turnover" button, or D→O pill toggle) — the Defense
+     * model explicitly supports null to mean "unforced turnover by
+     * opponent". The `inferred` opt marks system-synthesized events
+     * (currently only used by the O/D pill toggle).
+     */
     function createDefense(defender, opts) {
         if (typeof ensurePossessionExists !== 'function') return;
-        if (!defender) return;
+        // Block / interception need a defender; unforced errors don't.
+        if (!defender && !opts.unforcedError) return;
 
         const evt = new Defense({
-            defender,
+            defender: defender || null,
             interception: !!opts.interception,
             layout: false,
             sky: false,
@@ -621,6 +785,8 @@
             stall: !!opts.stall,
             unforcedError: !!opts.unforcedError
         });
+        if (opts.inferred) evt.inferred_flag = true;
+
         // Defense events live in a defensive possession.
         const possession = ensurePossessionExists(false);
         possession.addEvent(evt);
@@ -632,7 +798,7 @@
         breakArmed = false;
 
         if (evt.Callahan_flag && typeof updateScore === 'function' && typeof Role !== 'undefined') {
-            defender.goals = (defender.goals || 0) + 1;
+            if (defender) defender.goals = (defender.goals || 0) + 1;
             updateScore(Role.TEAM);
             if (typeof moveToNextPoint === 'function') moveToNextPoint();
         }
@@ -661,14 +827,12 @@
             undoBtn.addEventListener('click', handleUndo);
         }
 
-        // Mode pill — phase 3 will hook this for the O/D toggle. Wire it
-        // now so the click handler exists; phase 3 fills in the logic.
+        // Mode pill — tap to toggle O ↔ D. See handleModePillTap for the
+        // inferred-event semantics (insert vs. retract-on-double-tap).
         const pill = document.getElementById('fullPbpModePill');
         if (pill && !pill.dataset.wired) {
             pill.dataset.wired = 'true';
-            pill.addEventListener('click', () => {
-                console.log('[fullPbp] mode pill tap (phase 3 stub)');
-            });
+            pill.addEventListener('click', handleModePillTap);
         }
 
         // Start Point button — between-points UI. Delegates to the same
