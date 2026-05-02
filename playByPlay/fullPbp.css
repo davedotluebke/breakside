@@ -124,9 +124,10 @@
 .full-pbp-main {
     flex: 1 1 80%;
     display: grid;
-    /* 80/20 — player rows get the bulk of the width, modifier panel is
-     * narrow with single-column checkboxes (no two-up grid). */
-    grid-template-columns: minmax(0, 8fr) minmax(0, 2fr);
+    /* 75/25 — modifier column needs 25% so the longest checkbox label
+     * ("hammer", ~6 chars) fits without ellipsizing on phone-width
+     * viewports. Player column still gets the bulk of the width. */
+    grid-template-columns: minmax(0, 75fr) minmax(0, 25fr);
     min-height: 0;
     overflow: hidden;
 }
