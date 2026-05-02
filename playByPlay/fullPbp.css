@@ -212,20 +212,24 @@
     min-width: 0;
 }
 
-/* Player row — grid-based 30/70 split (name / actions). Three action
- * buttons need more horizontal room than a typical roster name, and
- * grid is the only way to enforce the ratio without content-size
- * floors expanding the name column. */
+/* Player row — vertical stack: name on top, three action buttons below.
+ *
+ * Earlier iterations tried horizontal layouts (flex 50/50, grid 30/70).
+ * On phone-width viewports the player column is ~200px after column
+ * padding; splitting that between a name and three buttons leaves so
+ * little for each that names ("Alice") and labels ("Drop", "Throwaway")
+ * universally ellipsize. Stacking gives each part the full row width:
+ * names always fit, and three action buttons share ~180px → ~60px each
+ * which comfortably holds "Throwaway" at 0.78em. Trades vertical density
+ * (rows go from 44px to ~58px) for legibility. */
 .full-pbp-player-row {
-    display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(0, 7fr);
-    align-items: stretch;
+    display: flex;
+    flex-direction: column;
     margin-bottom: 4px;
     border: 1px solid #ddd;
     border-radius: 6px;
     background: #fff;
     overflow: hidden;
-    min-height: 44px;
 }
 
 .full-pbp-player-row.is-holder {
@@ -257,14 +261,16 @@
 }
 
 .full-pbp-name-btn {
-    /* Grid handles the column width; this just inherits its track. */
-    min-width: 0;
+    /* Full-row name on top of the stack. Faint divider below separates
+     * it from the action buttons row. */
+    width: 100%;
     border: none;
+    border-bottom: 1px solid #f0f0f0;
     background: transparent;
     font-size: 0.95em;
     font-weight: 600;
     text-align: left;
-    padding: 8px 8px;
+    padding: 4px 8px;
     cursor: pointer;
     color: #222;
     overflow: hidden;
@@ -278,11 +284,10 @@
  * button is exactly 1/3 of the actions area regardless of label
  * length — no Throwaway-vs-Drop disparity. */
 .full-pbp-row-actions {
-    min-width: 0;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 3px;
-    padding: 3px;
+    gap: 4px;
+    padding: 4px;
 }
 
 .full-pbp-row-actions-defense {
@@ -297,7 +302,7 @@
     font-size: 0.85em;
     font-weight: 500;
     cursor: pointer;
-    padding: 2px 2px;
+    padding: 5px 4px;
     color: #333;
     line-height: 1.15;
     overflow: hidden;
