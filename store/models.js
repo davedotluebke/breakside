@@ -342,22 +342,24 @@ class Violation extends Event {
 
 // Defense event class
 class Defense extends Event {
-    constructor({defender = null, interception = false, layout = false, sky = false, Callahan = false, stall = false, unforcedError = false}) {
+    constructor({defender = null, block = false, interception = false, layout = false, sky = false, Callahan = false, stall = false, unforcedError = false}) {
         super('Defense');
         this.defender = defender;       // null indicates an unforced turnover by opponent
-        this.interception_flag = interception;
+        this.block_flag = block;        // disc deflected (footblock, knockdown) — not caught
+        this.interception_flag = interception;  // disc caught out of the air by defender
         this.layout_flag = layout;
         this.sky_flag = sky;
         this.Callahan_flag = Callahan;
         this.stall_flag = stall;
         this.unforcedError_flag = unforcedError;
     }
-    
+
     // Override summarize for Defense events
     summarize() {
         const prefix = this.inferred_flag ? '(inferred) ' : '';
         let summary = '';
         let defender = this.defender ? this.defender.name : '';
+        if (this.block_flag)            { summary += 'Block '; }
         if (this.interception_flag)     { summary += 'Interception '; }
         if (this.layout_flag)           { summary += 'Layout D '; }
         if (this.sky_flag)              { summary += 'Sky D '; }
