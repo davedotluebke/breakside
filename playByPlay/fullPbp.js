@@ -286,16 +286,19 @@
      *     so a defensive unforced-error turnover is always one tap away.
      *   - Always (any mode): the retroactive modifier panel for the most
      *     recent editable event:
-     *         Throw   → "Last pass was a:" {huck, break, hammer, dump, sky, layout}
-     *         Defense → "Last D was a:"    {sky, layout}
+     *         Throw    → "Last pass was a:"     {huck, break, hammer, dump, sky, layout}
+     *         Turnover → "Last turnover was a:" {huck, good D}
+     *         Defense  → "Last D was a:"        {sky, layout}
      *     Toggling a checkbox amends the event in place and publishes
      *     eventAmended to the bus. Modifiers auto-clear when render()
      *     rebuilds the panel from a new "last event."
      *
-     *   Turnover events are intentionally non-amendable from this panel —
-     *   the v1 spec only calls out Throw and Defense modifiers. (Editing
-     *   a turnover's flags after the fact is rare and would conflate the
-     *   panel's purpose with a generic event editor.)
+     *   Turnover modifiers expose only the orthogonal flags from the
+     *   data model — `huck_flag` ("threw it away on a huck attempt") and
+     *   `defense_flag` ("forced by good D"). The type-defining flags
+     *   (throwaway / drop / stall) are intentionally NOT exposed, since
+     *   toggling those would change what kind of turnover happened
+     *   rather than describing it.
      */
     function renderModifiers(state, inPoint) {
         const col = document.getElementById('fullPbpModifiers');
@@ -327,15 +330,14 @@
     }
 
     /**
-     * Walk the current point's events backwards, return the first Throw
-     * or Defense found. Returns null if none.
+     * Walk the current point's events backwards, return the first
+     * Throw, Turnover, or Defense found. Returns null if none.
      *
-     * Crucially, "most recent" includes Throws/Defenses that scored or
-     * caused a Callahan — those events ended the point but are still the
-     * last logged event of *that* point (the new point doesn't yet have
-     * any events). Since we render this panel only while in a point and
-     * a brand-new point has no events to amend, this only matters for
-     * the brief moment after a score before moveToNextPoint() runs.
+     * Including Turnover here is essential: if the user logs a
+     * Throwaway, the panel needs to amend the *turnover* (e.g. "this
+     * was a huck attempt that turned over"), not the previous
+     * completed Throw — the throw before the turnover is already
+     * complete and accurate, and re-modifying it would be wrong.
      */
     function findLastEditableEvent(point) {
         if (!point || !point.possessions) return null;
@@ -344,7 +346,7 @@
             if (!events) continue;
             for (let j = events.length - 1; j >= 0; j--) {
                 const e = events[j];
-                if (e.type === 'Throw' || e.type === 'Defense') return e;
+                if (e.type === 'Throw' || e.type === 'Turnover' || e.type === 'Defense') return e;
             }
         }
         return null;
@@ -363,6 +365,10 @@
         { label: 'sky',    prop: 'sky_flag'    },
         { label: 'layout', prop: 'layout_flag' }
     ];
+    const TURNOVER_MODIFIERS = [
+        { label: 'huck',   prop: 'huck_flag'    },
+        { label: 'good D', prop: 'defense_flag' }
+    ];
     const DEFENSE_MODIFIERS = [
         { label: 'sky',    prop: 'sky_flag'    },
         { label: 'layout', prop: 'layout_flag' }
@@ -372,9 +378,18 @@
         const panel = document.createElement('div');
         panel.className = 'full-pbp-modifier-panel';
 
-        const isThrow = event.type === 'Throw';
-        const flags = isThrow ? THROW_MODIFIERS : DEFENSE_MODIFIERS;
-        const title = isThrow ? 'Last pass was a:' : 'Last D was a:';
+        let flags, title;
+        if (event.type === 'Throw') {
+            flags = THROW_MODIFIERS;
+            title = 'Last pass was a:';
+        } else if (event.type === 'Turnover') {
+            flags = TURNOVER_MODIFIERS;
+            title = 'Last turnover was a:';
+        } else {
+            // Defense
+            flags = DEFENSE_MODIFIERS;
+            title = 'Last D was a:';
+        }
 
         const titleEl = document.createElement('div');
         titleEl.className = 'full-pbp-modifier-title';
