@@ -60,6 +60,7 @@ The multi-user push is mostly done. A few items linger:
 Improvements deferred from the initial implementation (see Active section above for the architecture summary).
 
 ### Quality / accuracy
+- [ ] **Remove vocabulary-mapping dead code from slow-pass prompt.** A/B test across the test corpus (commit `e24098e`) showed `NARRATION_VOCAB_GUIDANCE=off` (no explicit jargon→flag map) outperformed `=on` by +0.082 mean F1 with no regressions. Default flipped to `off`. Once confidence is high enough — say, after one production cycle with no surprises — delete the `vocab_section` branch in `_build_finalize_prompt` (`ultistats_server/narration.py`) and the env var. Symptoms the vocab map produced: split one play into two events because of "sky"; invented a throw from "deep huck" in the opponent's narration; missed casual "gives it to" because that phrase wasn't in the map.
 - [ ] **Improve transcription accuracy**
   - Try `gpt-4o-transcribe` (more accurate than the `mini` variant currently used)
   - Investigate OpenAI's dedicated **Realtime transcription session** type — pure ASR, no LLM in the loop. Should be more accurate for our use case AND would silence the "Transcription complete." text spam from gpt-realtime emitting acknowledgments despite the don't-respond prompt.
