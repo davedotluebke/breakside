@@ -281,12 +281,13 @@
 
 /* Actions: 3 equal-width columns via grid. minmax(0, 1fr) so each
  * button is exactly 1/3 of the actions area regardless of label
- * length — no Throwaway-vs-Drop disparity. */
+ * length. Gap and padding both 1px / 0 so buttons fill the available
+ * horizontal space — every spare pixel goes to button width. */
 .full-pbp-row-actions {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 4px;
-    padding: 4px;
+    gap: 1px;
+    padding: 0;
 }
 
 .full-pbp-row-actions-defense {
@@ -301,7 +302,7 @@
     font-size: 0.85em;
     font-weight: 500;
     cursor: pointer;
-    padding: 5px 4px;
+    padding: 5px 1px;
     color: #333;
     line-height: 1.15;
     overflow: hidden;
