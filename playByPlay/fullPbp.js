@@ -497,7 +497,7 @@
      * Build one player row. The per-row button set is contextual:
      *   - O-mode holder      → throwaway / break / …
      *   - O-mode non-holder  → drop / score / …
-     *   - D-mode any row     → block / D! / …
+     *   - D-mode any row     → block / Interception / …
      */
     function renderPlayerRow(player, isHolder, isOffense) {
         const isUnknown = (player.name === UNKNOWN_PLAYER);
@@ -529,7 +529,7 @@
             actions.classList.add('full-pbp-row-actions-defense');
             actions.appendChild(makeRowActionBtn('block', 'Block',
                 () => handleBlockTap(player)));
-            actions.appendChild(makeRowActionBtn('interception', 'D!',
+            actions.appendChild(makeRowActionBtn('interception', 'Interception',
                 () => handleInterceptionTap(player)));
             actions.appendChild(makeRowActionBtn('more', '…',
                 () => handleMoreTap(player, false)));
@@ -585,7 +585,7 @@
 
         if (state.mode !== 'offense') {
             // D-mode: tapping a name itself doesn't log a Defense event —
-            // the user picks an action button (Block / D!) on the row to
+            // the user picks an action button (Block / Interception) on the row to
             // disambiguate intent. This is intentional: a name tap during
             // D mode is too ambiguous to commit to a specific Defense
             // event, and we want to avoid silent miscategorization.
