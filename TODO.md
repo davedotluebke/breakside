@@ -80,6 +80,7 @@ Improvements deferred from the initial implementation (see Active section above 
   - Currently disabled via `FAST_PASS_EVENTS_ENABLED = false` in `narrationEngine.js`
   - All code is preserved — flip the flag to re-enable
   - Worth revisiting when we have a story for noisy-environment confidence (e.g. confidence-gating, transcript-stability checks)
+  - **Before turning back on**: the dead `buildInstructions()` system prompt in `narrationEngine.js` (~line 142) contains an "Event-to-function mapping" section that is structurally identical to the slow-pass `vocab_section` we just disabled. Same likely failure modes — split events from "skies", false events from "deep huck for the goal" in opponent narration, missed casual phrases not in the list. Drop or A/B test that section before measuring fast-pass quality. Also worth A/B'ing whether the per-property `description` fields on the tool definitions (e.g. `huck: "A long/deep throw"`) are pulling weight or are just a stealth vocab map.
 
 ### UX
 - [ ] **Transcript panel UI polish**
