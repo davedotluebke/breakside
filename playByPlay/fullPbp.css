@@ -157,9 +157,17 @@
  * wrap to two lines without clipping. */
 .full-pbp-they-turnover-btn,
 .full-pbp-they-score-btn {
+    /* No `width: 100%` — that resolves against the containing block's
+     * content width but in some browser/scrollbar combos still pushes
+     * the button's right edge past the column's right padding. We let
+     * the column's flex `align-items: stretch` (default) size the
+     * buttons across the cross-axis, with `margin: 0` and explicit
+     * border-box to neutralize any UA-default offsets. */
     flex: 0 0 auto;
-    width: 100%;
+    align-self: stretch;
     box-sizing: border-box;
+    margin: 0;
+    min-width: 0;
     padding: 8px 6px;
     border-radius: 6px;
     font-weight: 600;
