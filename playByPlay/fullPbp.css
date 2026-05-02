@@ -144,23 +144,24 @@
 
 .full-pbp-col-modifiers { display: flex; flex-direction: column; gap: 6px; }
 
-/* "They turnover" button — top of the right-side column when in D mode.
- * Real Defense event (unforced opponent error) — distinct from the pill
- * toggle, which is for the "I forgot to log a turnover" inferred case.
+/* "They turnover" / "They score" buttons in the D-mode modifier column.
  *
- * Width 100% + box-sizing: border-box so the button reliably fills the
- * narrow modifier column; white-space: normal lets the label wrap to
- * two lines (which it always will at ~20% viewport width) without
- * clipping. */
-.full-pbp-they-turnover-btn {
+ * Hues match Simple mode's score buttons (We Score green, They Score
+ * red) but at lower saturation since these live alongside checkboxes
+ * and shouldn't dominate visually:
+ *   They turnover → light green (good for us — opponent lost disc)
+ *   They score    → light red   (bad for us — opponent scored)
+ *
+ * Width 100% + box-sizing: border-box so each button reliably fills
+ * the narrow modifier column; white-space: normal lets the label
+ * wrap to two lines without clipping. */
+.full-pbp-they-turnover-btn,
+.full-pbp-they-score-btn {
     flex: 0 0 auto;
     width: 100%;
     box-sizing: border-box;
     padding: 8px 6px;
-    border: 1px solid #b45309;
     border-radius: 6px;
-    background: #fef3c7;
-    color: #92400e;
     font-weight: 600;
     font-size: 0.85em;
     line-height: 1.2;
@@ -168,8 +169,26 @@
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
 }
-.full-pbp-they-turnover-btn:hover  { background: #fde68a; }
-.full-pbp-they-turnover-btn:active { background: #fcd34d; }
+
+.full-pbp-they-turnover-btn {
+    border: 1px solid #16a34a;
+    background: #dcfce7;
+    color: #166534;
+}
+.full-pbp-they-turnover-btn:hover  { background: #bbf7d0; }
+.full-pbp-they-turnover-btn:active { background: #86efac; }
+
+.full-pbp-they-score-btn {
+    border: 1px solid #dc2626;
+    background: #fee2e2;
+    color: #991b1b;
+}
+.full-pbp-they-score-btn:hover  { background: #fecaca; }
+.full-pbp-they-score-btn:active { background: #fca5a5; }
+
+/* Vertical filler that pushes the "They score" button to the bottom
+ * of the modifier column. */
+.full-pbp-modifier-spacer { flex: 1 1 auto; }
 
 /* Retroactive modifier panel — "Last pass was a:" / "Last D was a:" */
 .full-pbp-modifier-panel {

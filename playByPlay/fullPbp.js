@@ -311,21 +311,41 @@
 
         col.innerHTML = '';
 
-        // "They turnover" button — top of the column, D mode only.
-        if (state.mode === 'defense') {
-            const btn = document.createElement('button');
-            btn.id = 'fullPbpTheyTurnoverBtn';
-            btn.className = 'full-pbp-they-turnover-btn';
-            btn.title = 'Opponent turned it over without a specific defender getting credit';
-            btn.textContent = 'They turnover';
-            btn.addEventListener('click', handleTheyTurnoverTap);
-            col.appendChild(btn);
-        }
-
-        // Modifier panel for the most recent editable event in this point.
         const editable = findLastEditableEvent(state.point);
-        if (editable) {
-            col.appendChild(buildModifierPanel(editable));
+
+        if (state.mode === 'defense') {
+            // D-mode column composition (top to bottom):
+            //   1. "They turnover" — quick path to a real opponent unforced
+            //      error (Defense{unforcedError}).
+            //   2. Modifier panel for the most recent editable event.
+            //   3. Flex spacer that absorbs vertical slack.
+            //   4. "They score" — opponent scored without us recording who
+            //      caught it (delegates to handlePbpTheyScore so the score
+            //      bookkeeping matches Simple mode exactly).
+            const tt = document.createElement('button');
+            tt.id = 'fullPbpTheyTurnoverBtn';
+            tt.className = 'full-pbp-they-turnover-btn';
+            tt.title = 'Opponent turned it over without a specific defender getting credit';
+            tt.textContent = 'They turnover';
+            tt.addEventListener('click', handleTheyTurnoverTap);
+            col.appendChild(tt);
+
+            if (editable) col.appendChild(buildModifierPanel(editable));
+
+            const spacer = document.createElement('div');
+            spacer.className = 'full-pbp-modifier-spacer';
+            col.appendChild(spacer);
+
+            const ts = document.createElement('button');
+            ts.id = 'fullPbpTheyScoreBtn';
+            ts.className = 'full-pbp-they-score-btn';
+            ts.title = 'Opponent scored — ends the current point';
+            ts.textContent = 'They score';
+            ts.addEventListener('click', handleTheyScoreTap);
+            col.appendChild(ts);
+        } else {
+            // O mode: modifier panel only (no opponent buttons).
+            if (editable) col.appendChild(buildModifierPanel(editable));
         }
     }
 
@@ -669,6 +689,19 @@
      */
     function handleTheyTurnoverTap() {
         createDefense(null, { unforcedError: true });
+    }
+
+    /**
+     * "They score" button — opponent scored without us recording a
+     * specific event. Delegates to the existing global handlePbpTheyScore
+     * so all the point-timer / score-update / moveToNextPoint plumbing
+     * matches Simple mode exactly. (No event added to possessions, same
+     * as Simple's "They Score" button — point.winner is set instead.)
+     */
+    function handleTheyScoreTap() {
+        if (typeof handlePbpTheyScore === 'function') {
+            handlePbpTheyScore();
+        }
     }
 
     /**
