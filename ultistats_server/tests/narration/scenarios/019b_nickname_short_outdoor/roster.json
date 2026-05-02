@@ -1,6 +1,6 @@
 {
   "roster": [
-    { "name": "Alice",  "nickname": "Acer",   "number": "7" },
+    { "name": "Alice",  "nickname": "Ace",    "number": "7" },
     { "name": "Hannah", "nickname": "Hammer", "number": "2" },
     { "name": "Carla",  "nickname": null,     "number": "3" },
     { "name": "Cara",   "nickname": null,     "number": "5" },
