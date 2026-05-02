@@ -124,7 +124,9 @@
 .full-pbp-main {
     flex: 1 1 80%;
     display: grid;
-    grid-template-columns: minmax(0, 6fr) minmax(0, 4fr);
+    /* 80/20 — player rows get the bulk of the width, modifier panel is
+     * narrow with single-column checkboxes (no two-up grid). */
+    grid-template-columns: minmax(0, 8fr) minmax(0, 2fr);
     min-height: 0;
     overflow: hidden;
 }
@@ -170,19 +172,21 @@
 }
 
 .full-pbp-modifier-title {
-    font-size: 0.82em;
+    font-size: 0.78em;
     font-weight: 600;
     color: #555;
     margin-bottom: 4px;
+    line-height: 1.2;
 }
 
+/* Single-column stack of checkboxes — the modifier column is narrow
+ * (~20% of viewport) so a 2-up grid leaves no room for "hammer" or
+ * "layout" labels. Vertical stack gives each label the full panel
+ * width and trades vertical density for legibility. */
 .full-pbp-modifier-grid {
-    display: grid;
-    /* minmax(0, 1fr) is the canonical "really equal columns" idiom —
-     * default 1fr respects content min-width, which would push wide
-     * labels (hammer / layout / break) past the panel's right edge. */
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 2px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     min-width: 0;
 }
 
@@ -190,10 +194,10 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 0.85em;
+    font-size: 0.82em;
     color: #333;
     cursor: pointer;
-    padding: 2px 0;
+    padding: 1px 0;
     min-width: 0;
     -webkit-tap-highlight-color: transparent;
 }
@@ -212,24 +216,20 @@
     min-width: 0;
 }
 
-/* Player row — vertical stack: name on top, three action buttons below.
- *
- * Earlier iterations tried horizontal layouts (flex 50/50, grid 30/70).
- * On phone-width viewports the player column is ~200px after column
- * padding; splitting that between a name and three buttons leaves so
- * little for each that names ("Alice") and labels ("Drop", "Throwaway")
- * universally ellipsize. Stacking gives each part the full row width:
- * names always fit, and three action buttons share ~180px → ~60px each
- * which comfortably holds "Throwaway" at 0.78em. Trades vertical density
- * (rows go from 44px to ~58px) for legibility. */
+/* Player row — grid-based 25/75 split (name / actions). Now that the
+ * modifier panel is single-column at ~20% viewport width, the player
+ * column gets the other 80% — plenty of horizontal room for both a
+ * readable name and three full-text action buttons. */
 .full-pbp-player-row {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 25fr) minmax(0, 75fr);
+    align-items: stretch;
     margin-bottom: 4px;
     border: 1px solid #ddd;
     border-radius: 6px;
     background: #fff;
     overflow: hidden;
+    min-height: 44px;
 }
 
 .full-pbp-player-row.is-holder {
@@ -261,16 +261,15 @@
 }
 
 .full-pbp-name-btn {
-    /* Full-row name on top of the stack. Faint divider below separates
-     * it from the action buttons row. */
-    width: 100%;
+    /* Grid track handles the column width; name is ellipsized on
+     * overflow so a long name doesn't push the action buttons off. */
+    min-width: 0;
     border: none;
-    border-bottom: 1px solid #f0f0f0;
     background: transparent;
     font-size: 0.95em;
     font-weight: 600;
     text-align: left;
-    padding: 4px 8px;
+    padding: 8px 8px;
     cursor: pointer;
     color: #222;
     overflow: hidden;
