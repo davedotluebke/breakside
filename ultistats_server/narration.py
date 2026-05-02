@@ -213,11 +213,15 @@ def _build_finalize_prompt(req: FinalizeRequest) -> str:
     has_provisionals = bool(req.provisional_events)
 
     # Optional vocabulary section — controls whether we hand-feed Claude an
-    # explicit ultimate-jargon → schema-flag mapping. Default is on (preserves
-    # historical behavior). Set NARRATION_VOCAB_GUIDANCE=off to omit the
-    # section and let Claude lean on its own ultimate domain knowledge —
-    # useful for evaluating whether the guidance helps or hurts.
-    vocab_on = os.getenv("NARRATION_VOCAB_GUIDANCE", "on").lower() != "off"
+    # explicit ultimate-jargon → schema-flag mapping. Default is OFF, since
+    # an A/B run across the test corpus showed the map actively hurt event
+    # extraction in five scenarios with no improvements anywhere (the map
+    # nudged the model toward keyword-pattern-matching over holistic
+    # reasoning — e.g. it would split one play into two events because the
+    # script said "skies", or invent a throw event from "deep huck for the
+    # goal" in the opponent's narration). Set NARRATION_VOCAB_GUIDANCE=on
+    # to opt back into the explicit map for comparison runs.
+    vocab_on = os.getenv("NARRATION_VOCAB_GUIDANCE", "off").lower() == "on"
 
     if vocab_on:
         vocab_section = """Vocabulary mapping:
