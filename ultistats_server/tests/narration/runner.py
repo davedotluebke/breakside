@@ -436,13 +436,30 @@ _EVENT_KEY_FIELDS = (
     "drop",
     "good_defense",
     "stall",
+    "block",
     "interception",
     "callahan",
 )
 
 
 def _event_signature(ev: Dict[str, Any]) -> Dict[str, Any]:
-    return {k: ev.get(k) for k in _EVENT_KEY_FIELDS if k in ev}
+    """
+    Reduce an event dict to its key-field signature for matching.
+
+    Drops boolean flags whose value is False or None — so an event with
+    `dump=False` matches one that omits `dump` entirely. This makes
+    fixtures less brittle: the slow-pass model is free to fully populate
+    schema flags or omit them, as long as the truthy fields agree.
+    """
+    sig: Dict[str, Any] = {}
+    for k in _EVENT_KEY_FIELDS:
+        if k not in ev:
+            continue
+        v = ev[k]
+        if v is False or v is None:
+            continue
+        sig[k] = v
+    return sig
 
 
 def score_events(

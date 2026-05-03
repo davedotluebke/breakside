@@ -60,6 +60,7 @@ The multi-user push is mostly done. A few items linger:
 Improvements deferred from the initial implementation (see Active section above for the architecture summary).
 
 ### Quality / accuracy
+- [ ] **Remove vocabulary-mapping dead code from slow-pass prompt.** A/B test across the test corpus (commit `e24098e`) showed `NARRATION_VOCAB_GUIDANCE=off` (no explicit jargon→flag map) outperformed `=on` by +0.082 mean F1 with no regressions. Default flipped to `off`. Once confidence is high enough — say, after one production cycle with no surprises — delete the `vocab_section` branch in `_build_finalize_prompt` (`ultistats_server/narration.py`) and the env var. Symptoms the vocab map produced: split one play into two events because of "sky"; invented a throw from "deep huck" in the opponent's narration; missed casual "gives it to" because that phrase wasn't in the map.
 - [ ] **Improve transcription accuracy**
   - Try `gpt-4o-transcribe` (more accurate than the `mini` variant currently used)
   - Investigate OpenAI's dedicated **Realtime transcription session** type — pure ASR, no LLM in the loop. Should be more accurate for our use case AND would silence the "Transcription complete." text spam from gpt-realtime emitting acknowledgments despite the don't-respond prompt.
@@ -79,6 +80,7 @@ Improvements deferred from the initial implementation (see Active section above 
   - Currently disabled via `FAST_PASS_EVENTS_ENABLED = false` in `narrationEngine.js`
   - All code is preserved — flip the flag to re-enable
   - Worth revisiting when we have a story for noisy-environment confidence (e.g. confidence-gating, transcript-stability checks)
+  - **Before turning back on**: the dead `buildInstructions()` system prompt in `narrationEngine.js` (~line 142) contains an "Event-to-function mapping" section that is structurally identical to the slow-pass `vocab_section` we just disabled. Same likely failure modes — split events from "skies", false events from "deep huck for the goal" in opponent narration, missed casual phrases not in the list. Drop or A/B test that section before measuring fast-pass quality. Also worth A/B'ing whether the per-property `description` fields on the tool definitions (e.g. `huck: "A long/deep throw"`) are pulling weight or are just a stealth vocab map.
 
 ### UX
 - [ ] **Transcript panel UI polish**
@@ -88,11 +90,30 @@ Improvements deferred from the initial implementation (see Active section above 
 
 ### Test suite
 
-The audio-driven test harness is implemented in `ultistats_server/tests/narration/`. Skeleton works end-to-end, three scenarios committed, all currently passing. Remaining work to grow it:
+The audio-driven test harness is implemented in `ultistats_server/tests/narration/`. Skeleton works end-to-end. Scenarios `001`–`003` are the original baseline; `004`–`020` were scaffolded in a corpus-expansion pass (transcript + roster + expected committed; `audio.flac` to be generated via `tools/generate_synthetic_audio.py`). Real-audio variants (`004b`, `008b`, `015b`, `021`) are scaffolded for hand-recording.
 
-- [ ] **Expand to ~10 scenarios**: turnover types (throwaway/drop/stall), defense (interception/layout D), self-correction, opponent score, Callahan, pulls
-- [ ] **Real-game audio corpus** — coach hand-records ~5 narrations during real games, hand-labels expected events. Smaller corpus but much higher signal than TTS.
-- [ ] **Noise injection** — mix in wind/crowd samples to simulate field conditions, run the same scenarios at varying SNR
+Corpus structure:
+
+| Theme | Scenarios |
+|---|---|
+| Baseline | 001 single throw • 002 multi-throw possession • 003 drop + interception + score |
+| Self-correction | 004 name correction • 005 event-type downgrade (huck → throwaway) • 006 score → drop in endzone |
+| Possession flips | 007 D-line layout block → score • 008 multi-flip yo-yo • 009 stall + opp score |
+| End-of-point | 010 Callahan • 011 opp-score-only |
+| Ultimate jargon | 012 reset/swing/IO • 013 hammer + sky combo • 014 footblock + bookends |
+| Side commentary | 015 mid-narration coach chatter • 016 coach uncertainty |
+| Numbers | 017 jersey-number-only references |
+| Long form | 018 multi-possession spanning a point boundary |
+| Alt roster (nicknames + phonetic + name=vocab) | 019 nickname recognition • 020 phonetic similarity + name "Sky" |
+| Real audio (hand-record) | 004b name correction outdoor • 008b yo-yo outdoor • 015b commentary outdoor • 021 adversarial / coach-on-tilt |
+
+Remaining work:
+
+- [ ] **Generate audio for 004–020** via `tools/generate_synthetic_audio.py` (~$0.04 total at TTS rates)
+- [ ] **Hand-record 004b / 008b / 015b / 021** in noisy outdoor conditions; same expected.json, different audio.flac. Built-in regression for outdoor robustness.
+- [ ] **Schema gap: opponent unforced turnover.** Several scenarios above (007, 008, 014) gloss over what happens when the opponent throws it away to us — the narration schema in `ultistats_server/narration.py` has no event for "they turnover". The Full-PBP requirements doc models this as `Defense{unforcedError, defender=null}`. Decide whether to add it to the narration schema or handle implicitly via the next throw being from us.
+- [ ] **Schema gap: `record_pull`.** Multiple scenarios start with "they pull" / "we pull" — currently dropped on the floor. Adding `kind: "pull"` (with `puller`, `out_of_bounds?`, `brick?`, `landed_in_endzone?`) would let those narrations carry their first event.
+- [ ] **Noise injection** — mix in wind/crowd samples to simulate field conditions, run the same scenarios at varying SNR.
 - [ ] **CI integration** — run on PRs that touch `narration/` or `ultistats_server/narration.py`. Fail on metric regression beyond a threshold. Cost note: ~$0.10 per scenario per run.
 
 ---

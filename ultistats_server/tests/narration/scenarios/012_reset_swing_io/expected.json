@@ -1,0 +1,19 @@
+[
+  {
+    "kind": "throw",
+    "thrower": "Alice",
+    "receiver": "Bob",
+    "dump": true
+  },
+  {
+    "kind": "throw",
+    "thrower": "Bob",
+    "receiver": "Carla"
+  },
+  {
+    "kind": "throw",
+    "thrower": "Carla",
+    "receiver": "Daniel",
+    "score": true
+  }
+]

@@ -1,0 +1,10 @@
+[
+  {
+    "kind": "throw",
+    "thrower": "Felix",
+    "receiver": "Ella",
+    "hammer": true,
+    "sky": true,
+    "score": true
+  }
+]

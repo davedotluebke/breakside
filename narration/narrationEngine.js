@@ -108,15 +108,16 @@
             {
                 type: 'function',
                 name: 'record_defense',
-                description: 'A defensive play that creates a turnover (interception, block, layout D).',
+                description: 'A defensive play that creates a turnover (block, interception, layout D, etc).',
                 parameters: {
                     type: 'object',
                     properties: {
                         defender: { type: 'string', description: 'Name of the defender making the play' },
-                        interception: { type: 'boolean' },
+                        block: { type: 'boolean', description: 'Disc deflected (footblock, knockdown) — defender did not catch it' },
+                        interception: { type: 'boolean', description: 'Defender caught the throw out of the air' },
                         layout: { type: 'boolean' },
                         sky: { type: 'boolean' },
-                        callahan: { type: 'boolean', description: 'Defender caught it in the endzone for a score' }
+                        callahan: { type: 'boolean', description: 'Defender caught the disc in the opponent\'s endzone for a goal' }
                     },
                     required: ['defender']
                 }
@@ -367,6 +368,7 @@ Just listen. Transcription happens automatically.`;
         }
         const evt = new Defense({
             defender: defender,
+            block: !!args.block,
             interception: !!args.interception,
             layout: !!args.layout,
             sky: !!args.sky,

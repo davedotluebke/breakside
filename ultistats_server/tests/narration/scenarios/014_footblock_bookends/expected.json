@@ -1,0 +1,19 @@
+[
+  {
+    "kind": "defense",
+    "defender": "Daniel",
+    "block": true
+  },
+  {
+    "kind": "throw",
+    "thrower": "Daniel",
+    "receiver": "Alice"
+  },
+  {
+    "kind": "throw",
+    "thrower": "Alice",
+    "receiver": "Daniel",
+    "huck": true,
+    "score": true
+  }
+]

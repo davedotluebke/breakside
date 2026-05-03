@@ -1,0 +1,14 @@
+[
+  {
+    "kind": "defense",
+    "defender": "Daniel",
+    "interception": true,
+    "layout": true
+  },
+  {
+    "kind": "throw",
+    "thrower": "Daniel",
+    "receiver": "Alice",
+    "score": true
+  }
+]
