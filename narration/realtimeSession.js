@@ -47,17 +47,31 @@
     let onErrorCb = null;
     let accumulatedTranscript = '';
 
+    // Module-level mode flag, set by start() and read by stop() to decide
+    // whether we need to commit + create a response (conversation) or just
+    // commit and wait for final transcription deltas (transcription-only).
+    let currentMode = 'transcription';
+
     /**
      * Start a realtime session.
      * @param {object} options
-     * @param {string} options.model - e.g. 'gpt-4o-mini-realtime-preview'
-     * @param {string} options.instructions - System prompt for the model
-     * @param {Array} options.tools - Tool definitions (see plan)
-     * @param {function} options.onFunctionCall - Called with (name, args) for each provisional event
-     * @param {function} [options.onTranscriptDelta] - Called with delta transcript text
-     * @param {function} [options.onTranscriptComplete] - Called with full utterance transcript
-     * @param {function} [options.onError] - Called on errors
-     * @returns {Promise<void>} Resolves when session is open and mic is streaming
+     * @param {string} [options.mode] - 'transcription' (default) or 'conversation'.
+     *   - 'transcription' uses the dedicated `?intent=transcription` Realtime
+     *     endpoint with no LLM in the loop (cheaper, no response.* events,
+     *     no acknowledgment-text spam). instructions/tools/onFunctionCall
+     *     are ignored in this mode.
+     *   - 'conversation' is the legacy gpt-realtime path with tools and
+     *     function-call provisional events. Kept reachable for the day we
+     *     re-enable the fast-pass extractor.
+     * @param {string} [options.model] - Conversation-mode model (e.g. 'gpt-realtime').
+     * @param {string} [options.transcriptionModel] - ASR model in transcription mode.
+     * @param {string} [options.instructions] - Conversation-mode system prompt.
+     * @param {Array}  [options.tools] - Conversation-mode tool definitions.
+     * @param {function} [options.onFunctionCall] - Conversation-mode call back.
+     * @param {function} [options.onTranscriptDelta] - Called with delta transcript text.
+     * @param {function} [options.onTranscriptComplete] - Called with full utterance transcript.
+     * @param {function} [options.onError] - Called on errors.
+     * @returns {Promise<void>} Resolves when session is open and mic is streaming.
      */
     async function start(options) {
         if (sessionActive) {
@@ -65,7 +79,9 @@
         }
 
         const {
-            model = 'gpt-4o-mini-realtime-preview',
+            mode = 'transcription',
+            model = 'gpt-realtime',
+            transcriptionModel = 'gpt-4o-mini-transcribe',
             instructions = '',
             tools = [],
             onFunctionCall,
@@ -73,6 +89,8 @@
             onTranscriptComplete,
             onError
         } = options;
+
+        currentMode = (mode === 'conversation') ? 'conversation' : 'transcription';
 
         onFunctionCallCb = onFunctionCall || (() => {});
         onTranscriptDeltaCb = onTranscriptDelta || (() => {});
@@ -84,13 +102,25 @@
         const t0 = performance.now();
         const logPhase = (label) => console.log(`[realtimeSession] ${label}: ${Math.round(performance.now() - t0)}ms`);
 
-        // 1. Fetch ephemeral token from our backend
-        const token = await fetchEphemeralToken(model);
+        // 1. Fetch ephemeral token from our backend (mode determines which
+        //    OpenAI endpoint the server hits; we never see the real key).
+        const token = await fetchEphemeralToken({
+            mode: currentMode,
+            model,
+            transcriptionModel
+        });
         logPhase('token fetched');
 
-        // 2. Open WebSocket to OpenAI with token in subprotocol
+        // 2. Open WebSocket to OpenAI with token in subprotocol.
+        //    URL differs by mode:
+        //      conversation : ?model=<model>
+        //      transcription: ?intent=transcription   (model goes in session.update)
+        const wsUrl = (currentMode === 'transcription')
+            ? `${OPENAI_REALTIME_URL}?intent=transcription`
+            : `${OPENAI_REALTIME_URL}?model=${encodeURIComponent(model)}`;
+
         ws = new WebSocket(
-            `${OPENAI_REALTIME_URL}?model=${encodeURIComponent(model)}`,
+            wsUrl,
             [
                 'realtime',
                 // The ephemeral client_secret is passed as a subprotocol.
@@ -117,34 +147,62 @@
         ws.addEventListener('close', handleSocketClose);
         ws.addEventListener('error', (err) => onErrorCb(err));
 
-        // 3. Configure the session
-        send({
-            type: 'session.update',
-            session: {
-                modalities: ['text'],
-                instructions,
-                tools,
-                tool_choice: 'auto',
-                input_audio_format: 'pcm16',
-                input_audio_transcription: {
-                    // gpt-4o-mini-transcribe is paired with gpt-realtime;
-                    // whisper-1 does not reliably emit transcription events
-                    // on this path in our testing.
-                    model: 'gpt-4o-mini-transcribe'
-                },
-                turn_detection: {
-                    type: 'server_vad',
-                    // Sane defaults for transcription-only fast pass.
-                    // We're no longer chasing "split as much as possible
-                    // to get more function calls" — we just want clean
-                    // utterance boundaries for the transcription pipeline
-                    // and a reliable VAD on stop.
-                    threshold: 0.5,
-                    prefix_padding_ms: 300,
-                    silence_duration_ms: 500
+        // 3. Configure the session.
+        if (currentMode === 'transcription') {
+            // Console-tunable knobs (set window.NARRATION_VAD_EAGERNESS to
+            // 'low' | 'medium' | 'high' | 'auto', and
+            // window.NARRATION_NOISE_REDUCTION to 'near_field' | 'far_field' | 'off'
+            // before tapping the mic to A/B settings without a redeploy).
+            const eagerness = (typeof window !== 'undefined' && window.NARRATION_VAD_EAGERNESS) || 'low';
+            const nrSetting = (typeof window !== 'undefined' && window.NARRATION_NOISE_REDUCTION) || 'near_field';
+            const noiseReduction = (nrSetting === 'off' || nrSetting === 'none')
+                ? null
+                : { type: nrSetting };
+
+            // GA shape: nested under audio.input.* with session.type=transcription.
+            // No tools, no instructions, no response model — pure ASR.
+            const inputCfg = {
+                format: 'audio/pcm',
+                transcription: { model: transcriptionModel },
+                turn_detection: { type: 'semantic_vad', eagerness }
+            };
+            if (noiseReduction) inputCfg.noise_reduction = noiseReduction;
+
+            send({
+                type: 'session.update',
+                session: {
+                    type: 'transcription',
+                    audio: { input: inputCfg }
                 }
-            }
-        });
+            });
+        } else {
+            // Conversation mode: legacy flat shape with gpt-realtime + tools.
+            send({
+                type: 'session.update',
+                session: {
+                    modalities: ['text'],
+                    instructions,
+                    tools,
+                    tool_choice: 'auto',
+                    input_audio_format: 'pcm16',
+                    input_audio_transcription: {
+                        // gpt-4o-mini-transcribe is paired with gpt-realtime;
+                        // whisper-1 does not reliably emit transcription events
+                        // on this path in our testing.
+                        model: transcriptionModel
+                    },
+                    turn_detection: {
+                        type: 'server_vad',
+                        // Sane defaults for the conversational fast pass.
+                        // We're not chasing maximal splits — just clean
+                        // utterance boundaries and reliable VAD on stop.
+                        threshold: 0.5,
+                        prefix_padding_ms: 300,
+                        silence_duration_ms: 500
+                    }
+                }
+            });
+        }
         logPhase('session.update sent');
 
         // 4. Open the microphone and start streaming
@@ -167,24 +225,28 @@
         // Stop audio capture first so no more frames go out
         stopAudioCapture();
 
-        // Force end-of-turn. Server VAD only emits speech_stopped after
-        // silence_duration_ms of silence — but once we stop sending audio,
-        // there's no silence for it to detect either. Without a manual
-        // commit the utterance just sits pending forever.
+        // Force end-of-turn. VAD only commits after a silence window —
+        // once we stop sending audio there's no silence for it to detect
+        // either, so without a manual commit the trailing utterance sits
+        // pending forever. The "buffer too small" error this can produce
+        // (when VAD already committed mid-pause) is filtered in
+        // handleServerMessage as benign rather than skipped here.
         //
-        // The previous "buffer too small" error we were seeing happened
-        // when VAD had already auto-committed (e.g. the coach paused long
-        // enough mid-sentence). In that case the commit is a benign no-op;
-        // we filter the resulting error in handleServerMessage rather than
-        // skipping the commit entirely.
+        // In conversation mode we additionally fire response.create to
+        // flush any pending function calls. Transcription-only sessions
+        // have no response model — sending response.create is meaningless
+        // and will error, so we skip it and just wait for the final
+        // input_audio_transcription.completed event.
         try {
             send({ type: 'input_audio_buffer.commit' });
-            send({ type: 'response.create' });
+            if (currentMode === 'conversation') {
+                send({ type: 'response.create' });
+            }
         } catch (_) { /* socket may already be closing */ }
 
-        // Wait for the server to emit response.done (or give up). This is
-        // what gives transcription + function-call events time to land
-        // before we close the socket.
+        // Wait for the server's end-of-utterance signal (or give up).
+        // Conversation: response.done; transcription: input_audio_transcription.completed
+        // (after the final commit). Both feed the same one-shot promise.
         await waitForResponseDone(4000);
 
         try {
@@ -221,7 +283,7 @@
     // Internals
     // ---------------------------------------------------------------------
 
-    async function fetchEphemeralToken(model) {
+    async function fetchEphemeralToken({ mode, model, transcriptionModel }) {
         // Uses the authFetch helper defined in store/sync.js
         if (typeof authFetch !== 'function') {
             throw new Error('authFetch not available');
@@ -229,7 +291,11 @@
         const apiBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
         const resp = await authFetch(`${apiBase}${TOKEN_ENDPOINT_PATH}`, {
             method: 'POST',
-            body: JSON.stringify({ model })
+            body: JSON.stringify({
+                mode,
+                model,
+                transcription_model: transcriptionModel
+            })
         });
         if (!resp.ok) {
             const text = await resp.text().catch(() => '');
@@ -287,6 +353,13 @@
                     accumulatedTranscript += msg.transcript;
                 }
                 onTranscriptCompleteCb(msg.transcript || '');
+                // Transcription-only sessions never emit response.done —
+                // the final transcription.completed (after our manual
+                // input_audio_buffer.commit on stop) IS the end-of-turn
+                // signal stop() is waiting for.
+                if (currentMode === 'transcription' && pendingResponseDone) {
+                    try { pendingResponseDone(); } catch (_) {}
+                }
                 break;
 
             case 'response.function_call_arguments.done': {

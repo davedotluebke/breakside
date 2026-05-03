@@ -647,6 +647,12 @@ Just listen. Transcription happens automatically.`;
 
         try {
             await window.narrationRealtimeSession.start({
+                // Transcription-only mode is the default path now: no LLM
+                // in the loop, no acknowledgment-text spam, cheaper. The
+                // conversational gpt-realtime path (with tools and live
+                // function calls) is reachable only when we re-enable
+                // FAST_PASS_EVENTS_ENABLED.
+                mode: FAST_PASS_EVENTS_ENABLED ? 'conversation' : 'transcription',
                 model: REALTIME_MODEL,
                 instructions: sessionInstructions,
                 tools: sessionTools,

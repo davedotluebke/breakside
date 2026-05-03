@@ -62,9 +62,10 @@ Improvements deferred from the initial implementation (see Active section above 
 ### Quality / accuracy
 - [x] **Remove vocabulary-mapping dead code from slow-pass prompt.** A/B test across the test corpus (commit `e24098e`) showed `NARRATION_VOCAB_GUIDANCE=off` (no explicit jargon→flag map) outperformed `=on` by +0.082 mean F1 with no regressions. Deleted the `vocab_section` branch in `_build_finalize_prompt`, the `NARRATION_VOCAB_GUIDANCE` env var, and the structurally-identical "Event-to-function mapping" block in the dead `buildInstructions()` in `narration/narrationEngine.js`.
 - [ ] **Improve transcription accuracy**
-  - Try `gpt-4o-transcribe` (more accurate than the `mini` variant currently used)
-  - Investigate OpenAI's dedicated **Realtime transcription session** type — pure ASR, no LLM in the loop. Should be more accurate for our use case AND would silence the "Transcription complete." text spam from gpt-realtime emitting acknowledgments despite the don't-respond prompt.
-  - Stronger client-side noise suppression / windscreen mic recommendation in coach docs
+  - [x] Switch to OpenAI's dedicated **Realtime transcription session** (`?intent=transcription` + `session.type=transcription` minted via `/v1/realtime/client_secrets`). No LLM in the loop, no `response.*` events, kills the "Transcription complete." ack-text spam, cheaper (no output-token billing). Legacy conversational path still reachable via `NARRATION_USE_LEGACY_SESSIONS=1` env var or `mode: 'conversation'` (used when fast-pass is re-enabled).
+  - [x] Adopt `semantic_vad` (eagerness `low` by default — keeps multi-clause narrations like "Alice throws — short pass to Bob — score" together rather than fragmenting on every breath) and `noise_reduction: near_field`. Both are tunable at runtime via `window.NARRATION_VAD_EAGERNESS` and `window.NARRATION_NOISE_REDUCTION` for A/B without redeploy.
+  - [ ] Try `gpt-4o-transcribe` (more accurate than the `mini` variant currently used) — easy switch via the `transcription_model` field on the token request.
+  - [ ] Stronger client-side noise suppression / windscreen mic recommendation in coach docs
 - [ ] **Outdoor / multi-speaker robustness**
   - Field-test transcript word error rate against wind, crowd, and bystander voices
   - Now that transcription is decoupled from event extraction, this is a focused, measurable problem
@@ -81,6 +82,22 @@ Improvements deferred from the initial implementation (see Active section above 
   - All code is preserved — flip the flag to re-enable
   - Worth revisiting when we have a story for noisy-environment confidence (e.g. confidence-gating, transcript-stability checks)
   - **Before turning back on**: the "Event-to-function mapping" section in the dead `buildInstructions()` was already dropped along with the slow-pass vocab map (same failure modes). Still worth A/B'ing whether the per-property `description` fields on the tool definitions (e.g. `huck: "A long/deep throw"`) are pulling weight or are just a stealth vocab map.
+
+### New voice-driven flows
+
+Today the mic only narrates plays *during* a point. Two adjacent flows would extend voice control into the moments around each point:
+
+- [ ] **Speech-driven point start (incl. pull recording)**
+  - Tap mic on the pre-point screen and speak: "Alice, Bob, Carol, Dan, Eve, Frank, Grace — Bob hucks a flick OI pull, brick" → app selects those 7 players, transitions to in-point, and records the pull with puller + flags in one shot.
+  - Requires the `record_pull` schema gap to be closed first (see Coverage above) so the pull leg of this flow has somewhere to land.
+  - Touch points: `narration/narrationEngine.js` (new pre-point intent + applier), new pull schema in `ultistats_server/narration.py`, `pointManagement.js` (programmatic line-select + start-point hook), `game/gameScreen.js` (mic surfaced on Line tab when between points).
+  - Open question: one mic-tap or two? Single tap that handles "line + pull" feels natural orally but mixes two state transitions; safer to gate the pull narration behind the line being confirmed first.
+
+- [ ] **Speech-driven line selection (oral roll-call)**
+  - On the Line tab between points: tap mic, read names ("Alice, Bob, Carol, Dan, Eve, Frank, Grace"), stop. App ticks the matching checkboxes. Works in Manual / Wholesale / Auto modes — Wholesale becomes especially fast (clear all → speak the seven).
+  - Player-name resolution already exists in `narrationEngine.js` (`resolvePlayerName`) including nickname/jersey-number matching; extract it into a shared helper.
+  - Touch points: `narration/narrationEngine.js` (new "name list" intent that maps transcript → player IDs without going through the slow-pass event extractor), `game/playerSelection.js` (programmatic checkbox toggle), gateway in `panelTableContainer{,O,D}` UI.
+  - Edge cases: ambiguous names ("Cyrus" vs "Sirius"), name + jersey number disambiguation ("Alice number seven"), partial lines ("just sub Frank for Dan"), interaction with multi-coach Line Coach role enforcement.
 
 ### UX
 - [ ] **Transcript panel UI polish**
