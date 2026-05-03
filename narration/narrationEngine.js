@@ -153,18 +153,8 @@ EACH event before your response ends. Do not stop after the first event.
 Keep calling functions until every event in the utterance has been
 recorded.
 
-Event-to-function mapping:
-- Call record_throw for each completed pass.
-- Call record_turnover for throwaways, drops, or stalls.
-- Call record_defense for interceptions / blocks / layout Ds.
-- Call record_opponent_score when the OTHER team scores.
-- A completed pass into the endzone is a record_throw with score=true.
-- A Callahan (D caught in endzone) is record_defense with callahan=true.
-- A "reset" or "dump" throw is record_throw with dump=true.
-- A "break" (thrower goes around the mark) is record_throw with break_throw=true.
-- A "huck" or "deep throw" or "long throw" is record_throw with huck=true.
-- A "sky" (jumped over defender) is sky=true on the throw or defense.
-- A "layout" (dive) is layout=true on the throw or defense.
+Use the provided tools to record each event — each tool's description
+and parameter docs explain when to call it and which flags to set.
 
 Names may be partial, nicknames, or jersey numbers — match to the closest
 player. If the coach corrects themselves mid-sentence, use the corrected

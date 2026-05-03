@@ -60,7 +60,7 @@ The multi-user push is mostly done. A few items linger:
 Improvements deferred from the initial implementation (see Active section above for the architecture summary).
 
 ### Quality / accuracy
-- [ ] **Remove vocabulary-mapping dead code from slow-pass prompt.** A/B test across the test corpus (commit `e24098e`) showed `NARRATION_VOCAB_GUIDANCE=off` (no explicit jargon→flag map) outperformed `=on` by +0.082 mean F1 with no regressions. Default flipped to `off`. Once confidence is high enough — say, after one production cycle with no surprises — delete the `vocab_section` branch in `_build_finalize_prompt` (`ultistats_server/narration.py`) and the env var. Symptoms the vocab map produced: split one play into two events because of "sky"; invented a throw from "deep huck" in the opponent's narration; missed casual "gives it to" because that phrase wasn't in the map.
+- [x] **Remove vocabulary-mapping dead code from slow-pass prompt.** A/B test across the test corpus (commit `e24098e`) showed `NARRATION_VOCAB_GUIDANCE=off` (no explicit jargon→flag map) outperformed `=on` by +0.082 mean F1 with no regressions. Deleted the `vocab_section` branch in `_build_finalize_prompt`, the `NARRATION_VOCAB_GUIDANCE` env var, and the structurally-identical "Event-to-function mapping" block in the dead `buildInstructions()` in `narration/narrationEngine.js`.
 - [ ] **Improve transcription accuracy**
   - Try `gpt-4o-transcribe` (more accurate than the `mini` variant currently used)
   - Investigate OpenAI's dedicated **Realtime transcription session** type — pure ASR, no LLM in the loop. Should be more accurate for our use case AND would silence the "Transcription complete." text spam from gpt-realtime emitting acknowledgments despite the don't-respond prompt.
@@ -80,7 +80,7 @@ Improvements deferred from the initial implementation (see Active section above 
   - Currently disabled via `FAST_PASS_EVENTS_ENABLED = false` in `narrationEngine.js`
   - All code is preserved — flip the flag to re-enable
   - Worth revisiting when we have a story for noisy-environment confidence (e.g. confidence-gating, transcript-stability checks)
-  - **Before turning back on**: the dead `buildInstructions()` system prompt in `narrationEngine.js` (~line 142) contains an "Event-to-function mapping" section that is structurally identical to the slow-pass `vocab_section` we just disabled. Same likely failure modes — split events from "skies", false events from "deep huck for the goal" in opponent narration, missed casual phrases not in the list. Drop or A/B test that section before measuring fast-pass quality. Also worth A/B'ing whether the per-property `description` fields on the tool definitions (e.g. `huck: "A long/deep throw"`) are pulling weight or are just a stealth vocab map.
+  - **Before turning back on**: the "Event-to-function mapping" section in the dead `buildInstructions()` was already dropped along with the slow-pass vocab map (same failure modes). Still worth A/B'ing whether the per-property `description` fields on the tool definitions (e.g. `huck: "A long/deep throw"`) are pulling weight or are just a stealth vocab map.
 
 ### UX
 - [ ] **Transcript panel UI polish**
@@ -134,10 +134,8 @@ Remaining work:
   - Present in all three player-selection contexts: main Select Next Line panel, O/D split panels, and injury substitution dialog.
 - [x] Hide role buttons when only one coach on team or only one coach polling (more room for panels).
 - [x] O/D split panels: O/D button splits "Select Next Line" into two separate panels ("Select Next O Line" / "Select Next D Line").
-- [ ] **Bug**: Line panel checkboxes are editable by non-Line-Coach in multi-coach games
-  - When two or more coaches are connected and the current user does not hold the Line Coach role, the player-selection checkboxes on the Line tab (and the panel in All view) should be disabled and visually greyed out — instead they're fully interactive. The single-coach case is fine: when only one coach is present, role enforcement is bypassed by design (the role-claim buttons themselves are hidden via `_multiCoachDetected` latch).
-  - **Where to look**: `panelTableContainer` and `panelTableContainer{O,D}` in `game/gameScreen.js`; the existing `panelReadonlyOverlay` is only applied for the Viewer role. Need to extend disable logic to "multi-coach detected AND not Line Coach AND not Active Coach".
-  - **Edge cases to think through**: coach loses Line Coach role mid-edit (commit or discard pending checkbox changes?); interaction with the Manual / Wholesale / Auto mode toggle (also needs to be disabled); injury-sub dialog table.
+- [x] **Bug**: Line panel checkboxes are editable by non-Line-Coach in multi-coach games
+  - Fixed in `canEditSelectLinePanel` (`game/gameScreen.js`): early-allow now checks the `_multiCoachDetected` latch (exposed via `window.isMultiCoachDetected`) instead of "no role claimed yet", so once a second coach has been seen this session the panel requires holding Line Coach (during point) or Line/Active Coach (between points). The existing `updateSelectLinePanelState` plumbing handles the rest — checkboxes get `disabled=true`, the `.readonly` class greys out the Manual/Wholesale/Auto toggle and the lines/OD buttons, and the "View Only" overlay appears. `cycleSelectionMode` was already gated by `canEditSelectLinePanel`. The injury-sub dialog is gated upstream by Active Coach (`canEditPlayByPlayPanel`) so no changes were needed there.
 - [ ] **Extension**: Richer modifier flags on `Turnover` events
   - The Full PBP "Last turnover was a:" panel currently exposes only `huck` and `good D` because those are the only orthogonal flags on the `Turnover` model today. To support "threw it away while attempting a *break* / *hammer* / *dump*" (and `sky` / `layout` for drops, e.g. receiver tried to layout but missed), add `break_flag`, `hammer_flag`, `dump_flag`, `sky_flag`, `layout_flag` to the `Turnover` constructor in `store/models.js` and surface them in `summarize()`.
   - Touch points: `store/models.js` (constructor + summarize), `playByPlay/fullPbp.js` (extend `TURNOVER_MODIFIERS`), `ultistats_server/narration.py` slow-pass schema (add fields to the turnover event spec), `narration/narrationEngine.js` `applyTurnover` (forward the flags), and possibly `teams/gameSummary.js` if CSV columns enumerate flags.
@@ -203,10 +201,10 @@ Bigger asks, deferred until current themes settle.
 ### UI/UX
 - [ ] Comprehensive UI redesign
 - [ ] Dark mode support
-- [ ] **Compact / roomy density toggle for Full PBP**
-  - User preference (in Settings or inline gear) to swap between two sets of player-row sizing values: a "compact" preset (current build-206 numbers — min-height 40, margin 4, name padding 6/8, action padding 5/10, "…" 5/8) and a "roomy" preset (build-207 numbers — min-height 48, margin 6, name padding 8/10, action padding 7/10, "…" 7/8).
-  - Persist the choice per-user in localStorage, applied as a CSS class on `.panel-playByPlayFull` (e.g. `density-compact` / `density-roomy`).
-  - Default depends on whichever shipped value the user picked first; both presets already proven to fit 8 rows on phone height because the mini-log flexes to absorb the leftover slack (`flex: 1 1 auto` with a 110px floor).
+- [x] **Compact / roomy density toggle for Full PBP**
+  - Inline icon button in the Full PBP header (between mode pill and Undo) toggles between "roomy" (default — build-207 numbers: min-height 48, margin 6, name padding 8/10, action padding 7/10) and "compact" (build-206: min-height 40, margin 4, name padding 6/8, action padding 5/10).
+  - Persisted per-device in localStorage as `breakside_full_pbp_density`, applied as a `density-compact` class on `.panel-playByPlayFull`.
+  - Mini-log absorbs the resulting slack either way (`.full-pbp-log-reserve` is `flex: 1 1 auto`).
 
 ---
 
