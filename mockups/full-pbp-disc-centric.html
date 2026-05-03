@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Full PBP — Disc-Centric</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f5f5f5; color: #222;
+    min-height: 100dvh; display: flex; flex-direction: column;
+  }
+
+  /* ── Header (real-app shape) ── */
+  .header { background: #6b4baa; color: #fff; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .header-top { display: flex; align-items: center; gap: 12px; }
+  .menu, .timer { padding: 4px 10px; background: rgba(0,0,0,.2); border-radius: 6px; font-size: 13px; }
+  .logo { width: 32px; height: 32px; background: #EB8232; border-radius: 50%; display: inline-block; }
+  .score { font-weight: 700; letter-spacing: 1px; flex: 1; }
+
+  .seg { display: flex; gap: 0; background: rgba(255,255,255,.12); padding: 3px; border-radius: 8px; }
+  .seg button { flex: 1; border: none; background: transparent; color: rgba(255,255,255,.7); padding: 6px 0; font-size: 13px; font-weight: 600; border-radius: 6px; cursor: pointer; }
+  .seg button.active { background: #fff; color: #EB8232; }
+
+  /* ── Top row: mode pill + Undo ── */
+  .controls { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #fff; border-bottom: 1px solid #eaeaea; }
+  .mode-pill { padding: 5px 16px; border-radius: 999px; font-weight: 600; font-size: 14px; color: #fff; background: #2563eb; }
+  .undo { padding: 6px 14px; border: 1px solid #bbb; border-radius: 6px; background: #fff; font-weight: 600; font-size: 13px; }
+
+  /* ── Holder card — center stage ── */
+  .holder-stage { padding: 12px; }
+  .holder-card {
+    background: #fff3d6;
+    border: 2px solid #e0a64b;
+    border-radius: 12px;
+    padding: 16px 14px;
+    box-shadow: 0 4px 12px rgba(224,166,75,.25);
+    text-align: center;
+  }
+  .holder-eyebrow { font-size: 12px; color: #92400e; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 4px; }
+  .holder-name { font-size: 32px; font-weight: 700; color: #222; line-height: 1; }
+
+  .holder-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 6px;
+    margin-top: 14px;
+  }
+  .holder-actions button {
+    padding: 10px 8px; border-radius: 6px; font-weight: 600; font-size: 14px;
+    border: 1px solid #c8c8c8; background: #fff;
+  }
+  .holder-actions .throwaway { color: #b91c1c; border-color: #b91c1c; background: #fff5f5; }
+  .holder-actions .break     { color: #1d4ed8; border-color: #1d4ed8; background: #eff6ff; }
+  .holder-actions .break.armed { background: #1d4ed8; color: #fff; }
+  .holder-actions .more      { color: #555; font-weight: 700; padding: 10px 14px; }
+
+  /* ── "Throw to" target grid ── */
+  .targets-section { padding: 4px 12px 8px; }
+  .targets-label {
+    font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .targets-mode {
+    display: inline-flex; gap: 0; background: #ececec; border-radius: 6px; padding: 2px;
+  }
+  .targets-mode button {
+    border: none; background: transparent; padding: 4px 10px; border-radius: 4px;
+    font-size: 11px; font-weight: 600; color: #666; cursor: pointer;
+  }
+  .targets-mode button.active { background: #fff; color: #222; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+
+  .targets {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;
+  }
+  .target {
+    padding: 14px 8px; border: 1px solid #d8d8d8; border-radius: 8px;
+    background: #fff; text-align: center; font-weight: 600; font-size: 14px;
+    cursor: pointer;
+  }
+  .target.unknown {
+    grid-column: 1 / -1;       /* full width on the bottom row */
+    background: #f3f4f6; border-style: dashed; border-color: #c0c0c0;
+    color: #6b7280; font-style: italic;
+  }
+  .target:hover { background: #f4f4f4; }
+
+  .target-hint { font-size: 11px; color: #999; margin-top: 4px; text-align: center; }
+
+  /* ── Modifier strip ── */
+  .modifiers { background: #fff; border-top: 1px solid #ddd; padding: 8px 12px; }
+  .modifiers .title { font-size: 12px; color: #555; font-weight: 600; margin-bottom: 4px; }
+  .modifiers .options { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; }
+  .modifiers label { display: flex; align-items: center; gap: 4px; }
+
+  /* ── Mini log ── */
+  .log { background: #fafafa; border-top: 1px solid #ddd; padding: 6px 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #333; line-height: 1.5; min-height: 70px; max-height: 110px; overflow: auto; }
+
+  /* ── Note ── */
+  .note { position: fixed; top: 0; right: 0; background: rgba(0,0,0,.7); color: #fff; padding: 6px 10px; font-size: 11px; border-bottom-left-radius: 8px; z-index: 100; }
+</style>
+</head>
+<body>
+  <div class="note">Mockup B — Disc-Centric</div>
+
+  <div class="header">
+    <div class="header-top">
+      <span class="menu">☰</span>
+      <span class="logo"></span>
+      <span class="score">US 14 — 2 THEM</span>
+      <span class="timer">0:33 POINT</span>
+    </div>
+    <div class="seg">
+      <button>Simple</button>
+      <button class="active">Full</button>
+      <button>Line</button>
+      <button>Log</button>
+      <button>All</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="mode-pill">Offense</div>
+    <button class="undo">↶ Undo</button>
+  </div>
+
+  <!-- Holder card center stage -->
+  <div class="holder-stage">
+    <div class="holder-card">
+      <div class="holder-eyebrow">Holds the disc</div>
+      <div class="holder-name">Bob</div>
+      <div class="holder-actions">
+        <button class="throwaway">Throwaway</button>
+        <button class="break armed">Break armed ✓</button>
+        <button class="more">…</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Throw-to target grid with mode toggle -->
+  <div class="targets-section">
+    <div class="targets-label">
+      <span>Tap a player to:</span>
+      <span class="targets-mode">
+        <button class="active">Throw</button>
+        <button>Drop</button>
+        <button>Score</button>
+      </span>
+    </div>
+
+    <div class="targets">
+      <div class="target">Alice</div>
+      <div class="target">Carla</div>
+      <div class="target">Daniel</div>
+      <div class="target">Gina</div>
+      <div class="target">Harold</div>
+      <div class="target">John</div>
+      <div class="target unknown">Unknown</div>
+    </div>
+  </div>
+
+  <div class="modifiers">
+    <div class="title">Last pass was a:</div>
+    <div class="options">
+      <label><input type="checkbox"> huck</label>
+      <label><input type="checkbox" checked> break</label>
+      <label><input type="checkbox"> hammer</label>
+      <label><input type="checkbox"> dump</label>
+      <label><input type="checkbox"> sky</label>
+      <label><input type="checkbox"> layout</label>
+    </div>
+  </div>
+
+  <div class="log">
+    <div>D  Pull by Alice (Good Pull)</div>
+    <div>D  Unforced error</div>
+    <div>O  Alice throws to Bob</div>
+    <div>O  Bob throws a break to Alice</div>
+  </div>
+</body>
+</html>

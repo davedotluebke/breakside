@@ -113,145 +113,126 @@
 .full-pbp-undo-btn:active { background: #ececec; }
 .full-pbp-undo-btn i      { font-size: 0.9em; }
 
-/* Main row — player rows column on the left, modifier column on the right.
- * Total height ≈ 80% (the bottom 20% is reserved for the future log).
- *
- * Switched from flex to grid for the column split: flex-grow ratios
- * weren't producing the intended 60/40 in practice (the implicit
- * min-content floor on flex children kept eating into the actions
- * column). minmax(0, Nfr) on a grid is the only layout primitive that
- * truly enforces a ratio regardless of content. */
-.full-pbp-main {
-    flex: 1 1 80%;
-    display: grid;
-    /* 75/25 — modifier column needs 25% so the longest checkbox label
-     * ("hammer", ~6 chars) fits without ellipsizing on phone-width
-     * viewports. Player column still gets the bulk of the width. */
-    grid-template-columns: minmax(0, 75fr) minmax(0, 25fr);
+/* Player rows fill the full panel width — modifier flags moved to a
+ * dedicated horizontal strip below the rows (see .full-pbp-modifier-row).
+ * Frees every horizontal pixel for the player + action button area. */
+.full-pbp-rows-area {
+    flex: 1 1 auto;
     min-height: 0;
-    overflow: hidden;
-}
-
-.full-pbp-col {
-    min-width: 0;
     overflow-y: auto;
-    border-right: 1px solid #eee;
     padding: 6px;
     box-sizing: border-box;
 }
 
-.full-pbp-col:last-child { border-right: none; }
-
-.full-pbp-col-modifiers { display: flex; flex-direction: column; gap: 6px; }
-
-/* "They turnover" / "They score" buttons in the D-mode modifier column.
- *
- * Hues match Simple mode's score buttons (We Score green, They Score
- * red) but at lower saturation since these live alongside checkboxes
- * and shouldn't dominate visually:
- *   They turnover → light green (good for us — opponent lost disc)
- *   They score    → light red   (bad for us — opponent scored)
- *
- * Width 100% + box-sizing: border-box so each button reliably fills
- * the narrow modifier column; white-space: normal lets the label
- * wrap to two lines without clipping. */
-.full-pbp-they-turnover-btn,
-.full-pbp-they-score-btn {
-    /* No `width: 100%` — that resolves against the containing block's
-     * content width but in some browser/scrollbar combos still pushes
-     * the button's right edge past the column's right padding. We let
-     * the column's flex `align-items: stretch` (default) size the
-     * buttons across the cross-axis, with `margin: 0` and explicit
-     * border-box to neutralize any UA-default offsets. */
+/* Modifier row — full-width horizontal strip below the player rows.
+ * Title on the left, then a horizontally scrollable chip list. Active
+ * chips fill in blue to match Simple mode's "armed" look. */
+.full-pbp-modifier-row {
     flex: 0 0 auto;
-    align-self: stretch;
-    box-sizing: border-box;
-    margin: 0;
-    min-width: 0;
-    padding: 8px 6px;
-    border-radius: 6px;
+    background: #fff;
+    border-top: 1px solid #ddd;
+    padding: 6px 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+}
+
+.full-pbp-modifier-row-label {
+    flex: 0 0 auto;
+    font-size: 0.78em;
     font-weight: 600;
-    font-size: 0.85em;
+    color: #555;
+    white-space: nowrap;
+}
+
+.full-pbp-modifier-row-chips {
+    flex: 1 1 auto;
+    display: flex;
+    gap: 4px;
+    flex-wrap: nowrap;
+}
+
+.full-pbp-modifier-chip {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border: 1px solid #cfcfcf;
+    border-radius: 999px;
+    background: #f7f7f7;
+    color: #333;
+    font-size: 0.82em;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    white-space: nowrap;
+}
+.full-pbp-modifier-chip input[type="checkbox"] { display: none; }
+.full-pbp-modifier-chip.checked {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    color: #fff;
+}
+
+/* Bottom action row — full-width strip below the modifier row.
+ *   D-mode: 1fr auto 1fr   (They turnover | Events | They score)
+ *   O-mode: just Events    (centered via auto + grid)
+ *
+ * Hues match Simple mode's score buttons at lower saturation so the
+ * row reads as muted "opponent" actions rather than competing with
+ * the player rows above. */
+.full-pbp-bottom-actions {
+    flex: 0 0 auto;
+    display: grid;
+    gap: 6px;
+    padding: 8px 12px;
+    background: #fff;
+    border-top: 1px solid #ddd;
+}
+.full-pbp-bottom-actions.mode-defense {
+    grid-template-columns: 1fr auto 1fr;
+}
+.full-pbp-bottom-actions.mode-offense {
+    grid-template-columns: 1fr;
+    justify-items: center;
+}
+
+.full-pbp-bottom-actions button {
+    margin: 0;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-weight: 600;
+    font-size: 0.95em;
     line-height: 1.2;
-    white-space: normal;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
 }
-
-.full-pbp-they-turnover-btn {
+.full-pbp-bottom-actions .full-pbp-they-turnover-btn {
     border: 1px solid #16a34a;
     background: #dcfce7;
     color: #166534;
 }
-.full-pbp-they-turnover-btn:hover  { background: #bbf7d0; }
-.full-pbp-they-turnover-btn:active { background: #86efac; }
+.full-pbp-bottom-actions .full-pbp-they-turnover-btn:hover  { background: #bbf7d0; }
+.full-pbp-bottom-actions .full-pbp-they-turnover-btn:active { background: #86efac; }
 
-.full-pbp-they-score-btn {
+.full-pbp-bottom-actions .full-pbp-they-score-btn {
     border: 1px solid #dc2626;
     background: #fee2e2;
     color: #991b1b;
 }
-.full-pbp-they-score-btn:hover  { background: #fecaca; }
-.full-pbp-they-score-btn:active { background: #fca5a5; }
+.full-pbp-bottom-actions .full-pbp-they-score-btn:hover  { background: #fecaca; }
+.full-pbp-bottom-actions .full-pbp-they-score-btn:active { background: #fca5a5; }
 
-/* Vertical filler that pushes the "They score" button to the bottom
- * of the modifier column. */
-.full-pbp-modifier-spacer { flex: 1 1 auto; }
-
-/* Retroactive modifier panel — "Last pass was a:" / "Last D was a:" */
-.full-pbp-modifier-panel {
-    flex: 0 0 auto;
-    min-width: 0;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    background: #fff;
-    padding: 6px 6px;
-}
-
-.full-pbp-modifier-title {
-    font-size: 0.78em;
-    font-weight: 600;
+.full-pbp-bottom-actions .full-pbp-game-events-btn {
+    border: 1px solid #aaa;
+    background: #f4f4f4;
     color: #555;
-    margin-bottom: 4px;
-    line-height: 1.2;
 }
-
-/* Single-column stack of checkboxes — the modifier column is narrow
- * (~20% of viewport) so a 2-up grid leaves no room for "hammer" or
- * "layout" labels. Vertical stack gives each label the full panel
- * width and trades vertical density for legibility. */
-.full-pbp-modifier-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-}
-
-.full-pbp-modifier-checkbox {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.82em;
-    color: #333;
-    cursor: pointer;
-    padding: 1px 0;
-    min-width: 0;
-    -webkit-tap-highlight-color: transparent;
-}
-
-.full-pbp-modifier-checkbox input[type="checkbox"] {
-    margin: 0;
-    cursor: pointer;
-    flex: 0 0 auto;
-}
-
-.full-pbp-modifier-checkbox span {
-    user-select: none;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-}
+.full-pbp-bottom-actions .full-pbp-game-events-btn:hover  { background: #e8e8e8; }
+.full-pbp-bottom-actions .full-pbp-game-events-btn:active { background: #d8d8d8; }
+.full-pbp-bottom-actions .full-pbp-game-events-btn i { margin-right: 4px; opacity: 0.8; }
 
 /* Player row — grid `1fr auto`: name stretches to fill all available
  * horizontal space, actions take only what their content needs. Lets
@@ -382,12 +363,11 @@
     font-size: 0.9em;
 }
 
-/* Bottom 20% — mini event log for the current point. Plain text for now
- * (phase 2.5); future iterations can style each event type, add icons,
- * or adopt the full panel-system drag mechanics if we want a resizable
- * compact log. */
+/* Mini event log — fixed height (was 20% of body, but the modifier row
+ * and bottom action row eat into that budget). Tall enough to show ~5
+ * recent events at the small monospace font. */
 .full-pbp-log-reserve {
-    flex: 0 0 20%;
+    flex: 0 0 110px;
     border-top: 1px solid #ddd;
     background: #fafafa;
     overflow: hidden;
