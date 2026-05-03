@@ -71,15 +71,17 @@ ultistats/
 │
 ├── game/                    # Game core logic
 │   ├── gameLogic.js        # Game initialization, scoring, undo
-│   ├── gameScreen.js       # Game screen with tabbed panel layout (Play / Line / Log / All)
+│   ├── gameScreen.js       # Game screen with tabbed panel layout (Simple / Full / Line / Log / All)
 │   ├── pointManagement.js  # Point creation, timing, transitions
 │   ├── controllerState.js  # Multi-coach role management
 │   └── genderRatioDropdown.js # Gender ratio rule selection
 │
 ├── playByPlay/              # Play-by-play tracking
-│   ├── keyPlayDialog.js    # Key play recording dialog
+│   ├── keyPlayDialog.js    # Key play recording dialog (Simple mode)
 │   ├── pullDialog.js       # Pull tracking dialog
-│   └── scoreAttribution.js # Score attribution dialog
+│   ├── scoreAttribution.js # Score attribution dialog
+│   ├── fullPbp.js          # Full PBP tab — every-event entry surface (see docs/full-pbp-requirements.md)
+│   └── fullPbp.css         # Full PBP layout + density styles
 │
 ├── narration/               # AI speech narration (mic → transcript → events)
 │   ├── micButton.js        # Floating mic FAB (tap or hold-to-record)
@@ -141,14 +143,15 @@ Manual ──tap──▶ Wholesale ──tap──▶ Auto ──tap──▶ M
 
 ### In-Game Tab System
 
-The in-game UI is organized into four tabs, switched via a segmented control in the orange header:
+The in-game UI is organized into five tabs, switched via a segmented control in the orange header:
 
-- **Play** — Play-by-Play panel only, full-screen
-- **Line** — Select Next Line panel only, full-screen (in split mode, the O and D panels stack)
-- **Log** — Game Log (Follow) panel only, full-screen
-- **All** — The full vertical panel stack with drag-to-resize (see next section). Default tab.
+- **Simple** — The legacy Key Play–driven Play-by-Play panel only, full-screen. Streamlined buttons (We Score / They Score / Key Play / Undo / Sub / Events / More) plus the Key Play modal for granular event entry.
+- **Full** — The new every-event-entry panel (`playByPlay/fullPbp.js`), full-screen. Player rows + per-row contextual action buttons (drop / score / throwaway / break / block / interception / …), a horizontal modifier-flag chip strip below, a bottom-row "They turnover / Events / They score" action set in D-mode, and a flex-sized mini event log at the bottom. See **docs/full-pbp-requirements.md** for the full design and **Full PBP integration** below for the runtime architecture.
+- **Line** — Select Next Line panel only, full-screen (in split mode, the O and D panels stack).
+- **Log** — Game Log (Follow) panel only, full-screen.
+- **All** — The full vertical panel stack with drag-to-resize (see next section). Default tab. Uses Simple PBP — the Full PBP layout is excluded from All-view because its custom-shaped panel doesn't compose well with the drag-to-resize stack.
 
-The segmented control DOM lives in `createHeaderPanel()` (`game/gameScreen.js`); switching logic and persistence live in `panelSystem.js` (`switchTab()`, `applyTabState()`, `updateSegmentedSlider()`). Active tab is persisted in `localStorage` under `breakside_active_tab`.
+The segmented control DOM lives in `createHeaderPanel()` (`game/gameScreen.js`); switching logic and persistence live in `panelSystem.js` (`switchTab()`, `applyTabState()`, `updateSegmentedSlider()`). Active tab is persisted in `localStorage` under `breakside_active_tab`. The most-recent PBP tab choice (`simple` or `full`) is separately tracked under `breakside_last_pbp_tab` so post-score auto-navigation (Line tab → user's preferred PBP tab) routes back to whichever the user was last using.
 
 **Single-tab mode** sets the visible panel's class to `tab-fullscreen`, which hides its title bar and applies `flex: 1 1 auto` so it fills the viewport. All other content panels get `hidden`. **All mode** removes the class and re-applies saved panel states via `applyAllPanelStates()`, restoring drag heights.
 
@@ -194,6 +197,20 @@ moveTitleBar(i, delta):
 - Split view is always preserved.
 
 **Split mode:** In split view, the `selectLine` panel is hidden (`display: none`) and two stacked panels `selectOLine`/`selectDLine` are shown. The drag system filters out non-rendered panels (`offsetParent === null`) to avoid dragging invisible elements.
+
+### Full PBP integration
+
+The "Full" tab (`playByPlay/fullPbp.js`) is a self-contained panel that subscribes to `narrationEventBus` and writes events through the same code paths the manual Key Play flow and AI narration use — `ensurePossessionExists`, stat updates, `logEvent`, `updateScore` / `moveToNextPoint`, `saveAllTeamsData`. There's no separate Full-PBP data model.
+
+Key runtime properties:
+
+- **State reconstruction.** Every `render()` call walks the current point's possessions and derives `(mode, holder)` from the most recent event, rather than storing UI state. Drop a Simple Mode event mid-stream, undo via the global Undo, or have narration finalize a slow-pass — the Full panel reflects the new truth on the next render.
+- **Inferred events.** A boolean `inferred_flag` on the base `Event` class (default `false`) is set on synthetic events created by the Full panel's O/D pill toggle (Turnover / Defense{unforcedError}). Surfaces as `(inferred)` prefix in `summarize()` output. Tap the pill twice in a row with no events between → second tap retracts the inferred event rather than stacking another one.
+- **Bus integration.** Full PBP publishes `eventAdded` (source `'manual'`), `eventAmended` (modifier-chip toggles), and `eventRetracted` (Undo, pill-toggle retraction) so other subscribers (transcript display, future ultra-compact log) see all manual edits the same way they see narration events.
+- **Layout.** Player rows fill the panel's full width; modifier chips live in a horizontal strip below the rows; a bottom action row holds `[They turnover] [⚙ Events] [They score]` in D-mode and just `[⚙ Events]` centered in O-mode; a mini event log fills whatever vertical slack remains. Density is governed by a small set of CSS knobs that can be flipped between "compact" (build-206 values) and "roomy" (build-207 values) — the toggle itself is a TODO.
+- **Score auto-tab-switch.** `moveToNextPoint()` (in `game/pointManagement.js`) auto-switches to the **Line** tab if the current user holds the Line Coach role, regardless of which PBP mode (Simple, Full, narration) triggered the score. Conversely, `startNextPoint()` auto-switches from the Line tab back to the user's last-used PBP tab — so a solo coach round-trips Simple/Full → Line → Simple/Full automatically.
+
+Full design + decision history: **docs/full-pbp-requirements.md**.
 
 ### Feature Worktrees
 

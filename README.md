@@ -24,8 +24,8 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
   * Enter a few points! 
     * Try out the `We Score`, `They Score`, and `Key Play` buttons, changing the lineup between points
     * Notice the roster screen updates the time and points played by each player
-  * Tap the `Game Log` button to see a summary of the game events you've entered
-  * Tap the `Simple Mode` toggle and try out full play-by-play mode
+  * Tap the `Log` tab to see a summary of the game events you've entered
+  * Tap the `Full` tab and try out the every-event play-by-play UI (player rows, action buttons, modifier chips, mini log)
   * Tap the `End Game` button and admire your team's statistics!
 * Download a copy of the game database, copy the game log summary to the clipboard for pasting in other apps, or start a new game
 
@@ -42,9 +42,8 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 - **Multi-coach collaboration** - Role-based coach handoffs (Active Coach / Line Coach) with real-time sync
 
 ### Game Tracking Modes
-- **Simple Mode** - Streamlined interface for basic scoring and key play tracking
-- **Detailed Play-by-Play** - Comprehensive event logging for complete game analysis
-- **Key Play Dialog** - Record specific important events without switching modes
+- **Simple Mode** - Streamlined We Score / They Score / Key Play buttons; the Key Play modal captures granular event detail when you want it
+- **Full Play-by-Play** - Dedicated tab for every-event entry: player rows with contextual action buttons (drop, score, throwaway, break, block, interception), a horizontal modifier-chip strip ("Last pass was a: break / huck / reset / hammer / sky catch / layout catch"), an O/D pill that flips state with one tap (and inserts an inferred turnover/Defense if you tap to indicate an unobserved possession change), and a flex-sized mini log at the bottom
 - **AI Speech Narration** - Tap a mic button and describe plays out loud ("Alice throws to Bob, deep huck to Carla for the score") — speech is transcribed live and converted to structured events on stop. Powered by OpenAI Realtime + Claude Sonnet. Optional, opt-in per session.
 
 ### Real-Time Statistics
@@ -71,7 +70,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 - **Game History** - View and manage past games for each team
 
 ### User Interface
-- **Tabbed In-Game View** - Switch between focused single-task views (Play, Line, Log) and the full panel layout (All) via a segmented control in the header
+- **Tabbed In-Game View** - Switch between Simple PBP, Full PBP, Line, Log, and the combined panel layout (All) via a segmented control in the header
 - **Resizable Panel Layout** - In the All tab, drag-to-resize panels let you balance Play-by-Play, Next Line, and Game Log to your preference
 - **Responsive Design** - Optimized for both mobile and desktop use
 - **Touch-Optimized** - Large buttons and gestures designed for sideline use
