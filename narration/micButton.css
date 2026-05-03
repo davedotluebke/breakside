@@ -1,7 +1,11 @@
 /*
  * Narration Mic Button
  *
- * Floating circular FAB at bottom-center that overlays all content.
+ * Floating circular FAB pinned to the bottom-right corner that overlays
+ * all content. (Was bottom-center; moved to bottom-right so the thumb
+ * reach is natural on phone and so it doesn't cover the center of the
+ * mini-log strip in the Full PBP panel.)
+ *
  * States:
  *   .mic-idle       Red - tap to start recording (or hold for temp recording)
  *   .mic-recording  Green (pulsing) - tap to stop
@@ -12,9 +16,10 @@
 
 #narrationMicBtn {
     position: fixed;
-    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-    left: 50%;
-    transform: translateX(-50%);
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    right: calc(16px + env(safe-area-inset-right, 0px));
+    left: auto;
+    transform: none;
     z-index: 2000;
 
     width: 64px;
@@ -46,7 +51,7 @@
 }
 
 #narrationMicBtn:active {
-    transform: translateX(-50%) scale(0.94);
+    transform: scale(0.94);
 }
 
 /* Idle: red, ready to record */
