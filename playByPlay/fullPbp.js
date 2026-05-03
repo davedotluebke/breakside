@@ -180,8 +180,6 @@
         body.className = 'full-pbp-body';
         body.innerHTML = `
             <div class="full-pbp-header">
-                <!-- Between points: Start Point button (replaces the pill).
-                     During point: Offense/Defense mode pill. -->
                 <button class="full-pbp-start-point-btn" id="fullPbpStartPointBtn" style="display:none">Start Point</button>
                 <span class="full-pbp-mode-pill" id="fullPbpModePill">Offense</span>
                 <span class="full-pbp-no-point-msg" id="fullPbpNoPointMsg" style="display:none">No active point</span>
@@ -190,13 +188,15 @@
                     <span>Undo</span>
                 </button>
             </div>
-            <div class="full-pbp-main">
-                <div class="full-pbp-col full-pbp-col-players-wide" id="fullPbpRows">
-                    <!-- Player rows + per-row buttons rendered here -->
-                </div>
-                <div class="full-pbp-col full-pbp-col-modifiers" id="fullPbpModifiers">
-                    <div class="full-pbp-placeholder">Modifiers (phase 4)</div>
-                </div>
+            <div class="full-pbp-rows-area" id="fullPbpRows">
+                <!-- Player rows fill the full width -->
+            </div>
+            <div class="full-pbp-modifier-row" id="fullPbpModifierRow">
+                <!-- Horizontal modifier chips for the most recent editable event -->
+            </div>
+            <div class="full-pbp-bottom-actions" id="fullPbpBottomActions">
+                <!-- D-mode: They turnover / Events / They score
+                     O-mode: just Events (centered) -->
             </div>
             <div class="full-pbp-log-reserve" id="fullPbpLogReserve">
                 <div class="full-pbp-log-list" id="fullPbpLogList"></div>
@@ -276,76 +276,129 @@
             }
         }
 
-        renderModifiers(state, inPoint);
+        renderModifierRow(state, inPoint);
+        renderBottomActions(state, inPoint);
         renderMiniLog(state.point);
     }
 
     /**
-     * Right-side column composition:
-     *   - D mode (always while in a point): "They turnover" button on top
-     *     so a defensive unforced-error turnover is always one tap away.
-     *   - Always (any mode): the retroactive modifier panel for the most
-     *     recent editable event:
-     *         Throw    → "Last pass was a:"     {huck, break, hammer, dump, sky, layout}
-     *         Turnover → "Last turnover was a:" {huck, good D}
-     *         Defense  → "Last D was a:"        {sky, layout}
-     *     Toggling a checkbox amends the event in place and publishes
-     *     eventAmended to the bus. Modifiers auto-clear when render()
-     *     rebuilds the panel from a new "last event."
+     * Modifier row — full-width horizontal strip of pill chips that
+     * sits above the bottom action row. Adapts to the most recent
+     * editable event in the current point:
      *
-     *   Turnover modifiers expose only the orthogonal flags from the
-     *   data model — `huck_flag` ("threw it away on a huck attempt") and
-     *   `defense_flag` ("forced by good D"). The type-defining flags
-     *   (throwaway / drop / stall) are intentionally NOT exposed, since
-     *   toggling those would change what kind of turnover happened
-     *   rather than describing it.
+     *     Throw    → "Last pass was a:"     {break, huck, reset, hammer, sky catch, layout catch}
+     *     Turnover → "Last turnover was a:" {huck, good D}
+     *     Defense  → "Last D was a:"        {sky, layout}
+     *
+     * Toggling a chip amends the event in place and publishes
+     * eventAmended to the bus. Chips auto-clear when render() rebuilds
+     * the row from a new "last event."
+     *
+     * If there's no editable event yet (first point, just-after-pull,
+     * etc.), the row is hidden so it doesn't take up empty space.
      */
-    function renderModifiers(state, inPoint) {
-        const col = document.getElementById('fullPbpModifiers');
-        if (!col) return;
+    function renderModifierRow(state, inPoint) {
+        const row = document.getElementById('fullPbpModifierRow');
+        if (!row) return;
 
-        if (!inPoint) {
-            col.innerHTML = '';
+        const editable = inPoint ? findLastEditableEvent(state.point) : null;
+        if (!editable) {
+            row.style.display = 'none';
+            row.innerHTML = '';
             return;
         }
 
-        col.innerHTML = '';
+        row.style.display = '';
+        row.innerHTML = '';
 
-        const editable = findLastEditableEvent(state.point);
+        const isThrow = editable.type === 'Throw';
+        const isTurnover = editable.type === 'Turnover';
+        const flags = isThrow ? THROW_MODIFIERS
+                    : isTurnover ? TURNOVER_MODIFIERS
+                    : DEFENSE_MODIFIERS;
+        const titleText = isThrow ? 'Last pass was a:'
+                        : isTurnover ? 'Last turnover was a:'
+                        : 'Last D was a:';
+
+        const title = document.createElement('span');
+        title.className = 'full-pbp-modifier-row-label';
+        title.textContent = titleText;
+        row.appendChild(title);
+
+        const chips = document.createElement('div');
+        chips.className = 'full-pbp-modifier-row-chips';
+        flags.forEach(f => {
+            const chip = document.createElement('label');
+            chip.className = 'full-pbp-modifier-chip';
+            if (editable[f.prop]) chip.classList.add('checked');
+
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = !!editable[f.prop];
+            cb.addEventListener('change', () => handleModifierChange(editable, f.prop, cb.checked, f.label));
+
+            const span = document.createElement('span');
+            span.textContent = f.label;
+
+            chip.appendChild(cb);
+            chip.appendChild(span);
+            chips.appendChild(chip);
+        });
+        row.appendChild(chips);
+    }
+
+    /**
+     * Bottom action row — full-width strip below the modifier row.
+     *
+     *   D-mode: [They turnover] [⚙ Events] [They score]
+     *   O-mode: [               ⚙ Events               ]
+     *
+     * "Events" opens the existing Game Events modal (Timeout / Injury
+     * Sub / Halftime / Switch Sides / End Game) — same modal Simple
+     * mode uses. Routes through handlePbpGameEvents so role/permission
+     * checks stay consistent.
+     */
+    function renderBottomActions(state, inPoint) {
+        const bar = document.getElementById('fullPbpBottomActions');
+        if (!bar) return;
+
+        if (!inPoint) {
+            bar.style.display = 'none';
+            bar.innerHTML = '';
+            return;
+        }
+
+        bar.style.display = '';
+        bar.innerHTML = '';
+        bar.classList.toggle('mode-defense', state.mode === 'defense');
+        bar.classList.toggle('mode-offense', state.mode === 'offense');
 
         if (state.mode === 'defense') {
-            // D-mode column composition (top to bottom):
-            //   1. "They turnover" — quick path to a real opponent unforced
-            //      error (Defense{unforcedError}).
-            //   2. Modifier panel for the most recent editable event.
-            //   3. Flex spacer that absorbs vertical slack.
-            //   4. "They score" — opponent scored without us recording who
-            //      caught it (delegates to handlePbpTheyScore so the score
-            //      bookkeeping matches Simple mode exactly).
             const tt = document.createElement('button');
             tt.id = 'fullPbpTheyTurnoverBtn';
             tt.className = 'full-pbp-they-turnover-btn';
             tt.title = 'Opponent turned it over without a specific defender getting credit';
             tt.textContent = 'They turnover';
             tt.addEventListener('click', handleTheyTurnoverTap);
-            col.appendChild(tt);
+            bar.appendChild(tt);
+        }
 
-            if (editable) col.appendChild(buildModifierPanel(editable));
+        const ev = document.createElement('button');
+        ev.id = 'fullPbpGameEventsBtn';
+        ev.className = 'full-pbp-game-events-btn';
+        ev.title = 'Timeout, injury sub, halftime, switch sides, end game';
+        ev.innerHTML = '<i class="fas fa-cog"></i> Events';
+        ev.addEventListener('click', handleGameEventsTap);
+        bar.appendChild(ev);
 
-            const spacer = document.createElement('div');
-            spacer.className = 'full-pbp-modifier-spacer';
-            col.appendChild(spacer);
-
+        if (state.mode === 'defense') {
             const ts = document.createElement('button');
             ts.id = 'fullPbpTheyScoreBtn';
             ts.className = 'full-pbp-they-score-btn';
             ts.title = 'Opponent scored — ends the current point';
             ts.textContent = 'They score';
             ts.addEventListener('click', handleTheyScoreTap);
-            col.appendChild(ts);
-        } else {
-            // O mode: modifier panel only (no opponent buttons).
-            if (editable) col.appendChild(buildModifierPanel(editable));
+            bar.appendChild(ts);
         }
     }
 
@@ -377,13 +430,17 @@
      * modifier panel. Keys are the *visible* checkbox label; values are
      * the property name on the event object. Order = display order.
      */
+    // Order = display order, most-frequent first so common modifiers
+    // show up at the head of the row before any horizontal scroll.
+    // Labels are user-facing text; underlying property names on the
+    // event object stay the same (so existing data is unaffected).
     const THROW_MODIFIERS = [
-        { label: 'huck',   prop: 'huck_flag'   },
-        { label: 'break',  prop: 'break_flag'  },
-        { label: 'hammer', prop: 'hammer_flag' },
-        { label: 'dump',   prop: 'dump_flag'   },
-        { label: 'sky',    prop: 'sky_flag'    },
-        { label: 'layout', prop: 'layout_flag' }
+        { label: 'break',        prop: 'break_flag'  },
+        { label: 'huck',         prop: 'huck_flag'   },
+        { label: 'reset',        prop: 'dump_flag'   },  // displayed as "reset", flag stays dump_flag
+        { label: 'hammer',       prop: 'hammer_flag' },
+        { label: 'sky catch',    prop: 'sky_flag'    },
+        { label: 'layout catch', prop: 'layout_flag' }
     ];
     const TURNOVER_MODIFIERS = [
         { label: 'huck',   prop: 'huck_flag'    },
@@ -393,49 +450,6 @@
         { label: 'sky',    prop: 'sky_flag'    },
         { label: 'layout', prop: 'layout_flag' }
     ];
-
-    function buildModifierPanel(event) {
-        const panel = document.createElement('div');
-        panel.className = 'full-pbp-modifier-panel';
-
-        let flags, title;
-        if (event.type === 'Throw') {
-            flags = THROW_MODIFIERS;
-            title = 'Last pass was a:';
-        } else if (event.type === 'Turnover') {
-            flags = TURNOVER_MODIFIERS;
-            title = 'Last turnover was a:';
-        } else {
-            // Defense
-            flags = DEFENSE_MODIFIERS;
-            title = 'Last D was a:';
-        }
-
-        const titleEl = document.createElement('div');
-        titleEl.className = 'full-pbp-modifier-title';
-        titleEl.textContent = title;
-        panel.appendChild(titleEl);
-
-        const grid = document.createElement('div');
-        grid.className = 'full-pbp-modifier-grid';
-
-        flags.forEach(f => {
-            const label = document.createElement('label');
-            label.className = 'full-pbp-modifier-checkbox';
-            const cb = document.createElement('input');
-            cb.type = 'checkbox';
-            cb.checked = !!event[f.prop];
-            cb.addEventListener('change', () => handleModifierChange(event, f.prop, cb.checked, f.label));
-            const span = document.createElement('span');
-            span.textContent = f.label;
-            label.appendChild(cb);
-            label.appendChild(span);
-            grid.appendChild(label);
-        });
-
-        panel.appendChild(grid);
-        return panel;
-    }
 
     /**
      * Toggle a flag on the most recent Throw/Defense in place. This is
@@ -701,6 +715,18 @@
     function handleTheyScoreTap() {
         if (typeof handlePbpTheyScore === 'function') {
             handlePbpTheyScore();
+        }
+    }
+
+    /**
+     * "Events" button — opens the existing Game Events modal (Timeout
+     * / Injury Sub / Halftime / Switch Sides / End Game). Routes
+     * through handlePbpGameEvents so role/permission checks match
+     * Simple mode exactly. The modal itself is shared across modes.
+     */
+    function handleGameEventsTap() {
+        if (typeof handlePbpGameEvents === 'function') {
+            handlePbpGameEvents();
         }
     }
 

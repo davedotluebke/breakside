@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Full PBP — Modifier Handling Variants</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #efefef; color: #222;
+    min-height: 100dvh; padding: 16px;
+  }
+
+  .page-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .page-sub   { font-size: 13px; color: #666; margin-bottom: 16px; max-width: 640px; }
+
+  .variants {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  .variant {
+    background: #fff; border: 1px solid #ddd; border-radius: 10px;
+    overflow: hidden; display: flex; flex-direction: column;
+    box-shadow: 0 2px 6px rgba(0,0,0,.04);
+  }
+
+  .variant-header {
+    padding: 10px 14px; background: #6b4baa; color: #fff;
+    font-weight: 700; font-size: 14px;
+  }
+  .variant-blurb { padding: 8px 14px; background: #f4ecff; color: #4b1e8b; font-size: 12px; line-height: 1.4; border-bottom: 1px solid #e2d4f7; }
+
+  .variant-body { padding: 12px; flex: 1; }
+
+  /* ---- Shared faux-row look (like the real Full panel) ---- */
+  .row {
+    display: grid; grid-template-columns: 1fr auto;
+    border: 1px solid #ddd; border-radius: 6px; background: #fff;
+    overflow: hidden; min-height: 42px;
+    margin-bottom: 4px;
+  }
+  .row.holder { background: #fff3d6; border-color: #e0a64b; box-shadow: 0 0 0 2px rgba(224,166,75,.25); }
+  .row .name { padding: 8px 10px; font-weight: 600; font-size: 14px; }
+  .row .actions { display: grid; grid-template-columns: auto auto auto; gap: 1px; padding: 0; }
+  .row .actions button { border: 1px solid #c8c8c8; border-radius: 2px; background: #f7f7f7; font-size: 12px; padding: 5px 8px; }
+  .row .actions .throwaway { color: #b91c1c; }
+  .row .actions .break { color: #1d4ed8; }
+  .row .actions .break.armed { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+  .row .actions .drop  { color: #b91c1c; }
+  .row .actions .score { color: #047857; }
+  .row .actions .more  { color: #555; font-weight: 700; }
+
+  .pill { padding: 4px 12px; border-radius: 999px; color: #fff; font-weight: 600; font-size: 12px; background: #2563eb; display: inline-block; }
+
+  .stage-label { font-size: 12px; color: #555; font-weight: 600; margin: 8px 2px 4px; }
+
+  /* ---- Variant A: right-column panel (current) ---- */
+  .v-a-layout {
+    display: grid; grid-template-columns: minmax(0, 75fr) minmax(0, 25fr); gap: 8px;
+  }
+  .modifier-panel {
+    border: 1px solid #ddd; border-radius: 6px; background: #fff; padding: 6px;
+  }
+  .modifier-title { font-size: 11px; font-weight: 600; color: #555; margin-bottom: 4px; }
+  .modifier-list { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+  .modifier-list label { display: flex; align-items: center; gap: 4px; }
+
+  /* ---- Variant B: long-press popover ---- */
+  .popover-anchor { position: relative; }
+  .popover {
+    position: absolute; left: 50%; transform: translateX(-30%);
+    top: -2px;
+    background: #fff; border: 1px solid #888; border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.15);
+    padding: 8px 10px; z-index: 5;
+    min-width: 160px;
+  }
+  .popover::after {
+    content: ''; position: absolute; left: 30%; bottom: -8px;
+    border: 8px solid transparent; border-top-color: #fff;
+    filter: drop-shadow(0 1px 0 #888);
+  }
+  .popover .modifier-title { margin-bottom: 6px; }
+  .longpress-hint {
+    font-size: 11px; color: #888; font-style: italic; margin-top: 8px;
+    text-align: center;
+  }
+  .longpress-hint code { background: #f0f0f0; padding: 1px 5px; border-radius: 3px; font-style: normal; }
+
+  /* ---- Variant C: prev / next sections ---- */
+  .pre-arm {
+    background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px;
+    padding: 6px 8px; margin-bottom: 8px;
+  }
+  .pre-arm .modifier-title { color: #1d4ed8; }
+  .pre-arm .modifier-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .chip {
+    border: 1px solid #bfdbfe; border-radius: 999px;
+    padding: 2px 8px; font-size: 11px; background: #fff; color: #1d4ed8;
+    cursor: pointer;
+  }
+  .chip.armed { background: #1d4ed8; color: #fff; }
+
+  .post-amend {
+    background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px;
+    padding: 6px 8px;
+  }
+  .post-amend .modifier-title { color: #166534; }
+  .post-amend .modifier-list label { color: #166534; }
+</style>
+</head>
+<body>
+  <h1 class="page-title">Modifier handling — three variants</h1>
+  <p class="page-sub">
+    Each pane shows the same Full PBP screen state (Bob just received from Alice),
+    differing only in how throw/D modifiers (huck, break, hammer, sky, layout, dump)
+    are surfaced. The shared mini-log at the bottom of each shows what would be
+    appended for the most recent action.
+  </p>
+
+  <div class="variants">
+
+    <!-- ===== VARIANT A: right-column panel (current) ===== -->
+    <div class="variant">
+      <div class="variant-header">A — Right-column panel (current)</div>
+      <div class="variant-blurb">
+        Modifier panel always visible in a narrow right column.
+        Reflects flags on the most recent event; toggling a checkbox amends
+        the event in place. Auto-clears when a new event arrives.
+      </div>
+      <div class="variant-body">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span class="pill">Offense</span>
+          <button style="font-size:11px; padding:4px 10px; border:1px solid #bbb; border-radius:5px; background:#fff;">↶ Undo</button>
+        </div>
+        <div class="v-a-layout">
+          <div>
+            <div class="row holder">
+              <div class="name">Bob</div>
+              <div class="actions">
+                <button class="throwaway">Throwaway</button>
+                <button class="break">Break</button>
+                <button class="more">…</button>
+              </div>
+            </div>
+            <div class="row">
+              <div class="name">Alice</div>
+              <div class="actions">
+                <button class="drop">Drop</button>
+                <button class="score">Score</button>
+                <button class="more">…</button>
+              </div>
+            </div>
+            <div class="row">
+              <div class="name">Carla</div>
+              <div class="actions">
+                <button class="drop">Drop</button>
+                <button class="score">Score</button>
+                <button class="more">…</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="modifier-panel">
+            <div class="modifier-title">Last pass was a:</div>
+            <div class="modifier-list">
+              <label><input type="checkbox"> huck</label>
+              <label><input type="checkbox" checked> break</label>
+              <label><input type="checkbox"> hammer</label>
+              <label><input type="checkbox"> dump</label>
+              <label><input type="checkbox"> sky</label>
+              <label><input type="checkbox"> layout</label>
+            </div>
+          </div>
+        </div>
+        <div class="stage-label" style="color:#888; font-style:italic;">
+          ✓ One-tap retroactive edits<br>
+          ✗ Always-visible column eats horizontal space
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== VARIANT B: long-press popover ===== -->
+    <div class="variant">
+      <div class="variant-header">B — Long-press popover</div>
+      <div class="variant-blurb">
+        No always-on modifier panel. Long-press the holder's card (or the
+        last log entry) to pop up a checkbox tray. Frees the right column
+        for a wider player list / future ultra-compact log.
+      </div>
+      <div class="variant-body">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span class="pill">Offense</span>
+          <button style="font-size:11px; padding:4px 10px; border:1px solid #bbb; border-radius:5px; background:#fff;">↶ Undo</button>
+        </div>
+
+        <div class="popover-anchor">
+          <div class="row holder">
+            <div class="name">Bob</div>
+            <div class="actions">
+              <button class="throwaway">Throwaway</button>
+              <button class="break">Break</button>
+              <button class="more">…</button>
+            </div>
+          </div>
+          <div class="popover">
+            <div class="modifier-title">Last pass was a:</div>
+            <div class="modifier-list">
+              <label><input type="checkbox"> huck</label>
+              <label><input type="checkbox" checked> break</label>
+              <label><input type="checkbox"> hammer</label>
+              <label><input type="checkbox"> dump</label>
+              <label><input type="checkbox"> sky</label>
+              <label><input type="checkbox"> layout</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="name">Alice</div>
+          <div class="actions">
+            <button class="drop">Drop</button>
+            <button class="score">Score</button>
+            <button class="more">…</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="name">Carla</div>
+          <div class="actions">
+            <button class="drop">Drop</button>
+            <button class="score">Score</button>
+            <button class="more">…</button>
+          </div>
+        </div>
+
+        <div class="longpress-hint">
+          <code>long-press</code> the holder card to amend the last pass
+        </div>
+
+        <div class="stage-label" style="color:#888; font-style:italic;">
+          ✓ Most space possible for player rows<br>
+          ✗ Hidden affordance — coaches must learn the gesture
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== VARIANT C: dual prev/next sections ===== -->
+    <div class="variant">
+      <div class="variant-header">C — Pre-arm + retroactive sections</div>
+      <div class="variant-blurb">
+        Two stacked panels: pre-arm flags for the
+        <strong>next</strong> throw (chips you tap before tapping the
+        receiver), plus a retroactive amend panel for the
+        <strong>last</strong> throw. Best when modifiers are reliably
+        known in advance (e.g. you can see a huck setup).
+      </div>
+      <div class="variant-body">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span class="pill">Offense</span>
+          <button style="font-size:11px; padding:4px 10px; border:1px solid #bbb; border-radius:5px; background:#fff;">↶ Undo</button>
+        </div>
+
+        <!-- Pre-arm row of chips -->
+        <div class="pre-arm">
+          <div class="modifier-title">Next pass will be a:</div>
+          <div class="modifier-chips">
+            <span class="chip">huck</span>
+            <span class="chip armed">break</span>
+            <span class="chip">hammer</span>
+            <span class="chip">dump</span>
+            <span class="chip">sky</span>
+            <span class="chip">layout</span>
+          </div>
+        </div>
+
+        <div class="row holder">
+          <div class="name">Bob</div>
+          <div class="actions">
+            <button class="throwaway">Throwaway</button>
+            <button class="break armed">Break ✓</button>
+            <button class="more">…</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="name">Alice</div>
+          <div class="actions">
+            <button class="drop">Drop</button>
+            <button class="score">Score</button>
+            <button class="more">…</button>
+          </div>
+        </div>
+
+        <!-- Retroactive panel below -->
+        <div class="post-amend" style="margin-top:8px;">
+          <div class="modifier-title">Last pass was a:</div>
+          <div class="modifier-list">
+            <label><input type="checkbox"> huck</label>
+            <label><input type="checkbox" checked> break</label>
+            <label><input type="checkbox"> hammer</label>
+            <label><input type="checkbox"> dump</label>
+            <label><input type="checkbox"> sky</label>
+            <label><input type="checkbox"> layout</label>
+          </div>
+        </div>
+
+        <div class="stage-label" style="color:#888; font-style:italic;">
+          ✓ Pre-arming lets coaches predict obvious modifiers<br>
+          ✓ Retroactive panel still available for surprises<br>
+          ✗ Two competing UI surfaces; doubles the visual noise
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
