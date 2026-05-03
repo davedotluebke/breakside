@@ -58,7 +58,24 @@ def _anthropic_key() -> Optional[str]:
 # =============================================================================
 
 class TokenRequest(BaseModel):
+    # `mode` selects which kind of Realtime session we mint a token for:
+    #   - "transcription"  -> dedicated transcription-only session (no LLM
+    #                         in the loop). This is the default and what
+    #                         the narration UI uses today: it kills the
+    #                         "Transcription complete." text spam from
+    #                         gpt-realtime acks and is cheaper (no output
+    #                         tokens). See `/v1/realtime/client_secrets`
+    #                         with session.type=transcription.
+    #   - "conversation"   -> classic gpt-realtime session with tools +
+    #                         function calls. Kept reachable for if/when
+    #                         we re-enable the fast-pass event extractor
+    #                         (FAST_PASS_EVENTS_ENABLED in narrationEngine).
+    mode: str = "transcription"
+    # Only meaningful for mode="conversation". Ignored for transcription
+    # (transcription-session tokens are model-agnostic; the actual ASR
+    # model is selected via session.update from the client).
     model: str = "gpt-realtime"
+    transcription_model: str = "gpt-4o-mini-transcribe"
     # Game id lets us authenticate the requester against the game team.
     # Sent in body rather than path because this token is issued, not tied to
     # a specific persistent resource.
@@ -77,12 +94,89 @@ async def create_ephemeral_token(
     """
     Create an ephemeral OpenAI Realtime API session token.
 
-    Forwards to OpenAI's `POST /v1/realtime/sessions`, passing through the
-    model. Returns just the client_secret so the browser can open the
-    WebSocket without seeing the real API key.
+    By default (mode="transcription") this hits the GA `client_secrets`
+    endpoint with `session.type=transcription` to mint a token for a
+    transcription-only Realtime session. The legacy `/v1/realtime/sessions`
+    path (which mints a conversational gpt-realtime session) is kept
+    reachable via NARRATION_USE_LEGACY_SESSIONS=1 in case we need to roll
+    back, and is also used when the client explicitly asks for
+    mode="conversation".
     """
     api_key = _openai_key()
 
+    use_legacy = os.getenv("NARRATION_USE_LEGACY_SESSIONS", "").strip() in ("1", "true", "yes")
+    mode = (req.mode or "transcription").lower()
+    if use_legacy or mode == "conversation":
+        return await _mint_legacy_session_token(api_key, req)
+    return await _mint_transcription_session_token(api_key, req)
+
+
+async def _mint_transcription_session_token(api_key: str, req: TokenRequest) -> Dict[str, Any]:
+    """
+    Mint an ephemeral token for a transcription-only Realtime session.
+
+    Hits `POST /v1/realtime/client_secrets` with `session.type=transcription`
+    and a baseline transcription-model selection. The browser is free to
+    refine the session via session.update (e.g. semantic_vad eagerness or
+    noise-reduction profile) once connected.
+    """
+    payload: Dict[str, Any] = {
+        "session": {
+            "type": "transcription",
+            "audio": {
+                "input": {
+                    "transcription": {"model": req.transcription_model},
+                }
+            },
+        }
+    }
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            resp = await client.post(
+                "https://api.openai.com/v1/realtime/client_secrets",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+        except httpx.HTTPError as e:
+            logger.exception("Transcription token mint failed (network error)")
+            raise HTTPException(status_code=502, detail=f"Upstream OpenAI error: {e}") from e
+
+    if resp.status_code != 200:
+        logger.warning(
+            "OpenAI client_secrets returned %s: %s", resp.status_code, resp.text[:500]
+        )
+        raise HTTPException(status_code=resp.status_code, detail=f"OpenAI: {resp.text}")
+
+    data = resp.json()
+    # Response shape (current GA): { "value": "ek_...", "expires_at": ... , "session": {...} }
+    # Older shape may nest under "client_secret"; tolerate both.
+    token = data.get("value")
+    expires_at = data.get("expires_at")
+    if not token:
+        nested = data.get("client_secret") or {}
+        token = nested.get("value")
+        expires_at = nested.get("expires_at") or expires_at
+    if not token:
+        logger.error("OpenAI client_secrets response missing token value: %s", data)
+        raise HTTPException(status_code=502, detail="OpenAI returned no token")
+
+    return {
+        "token": token,
+        "expires_at": expires_at,
+        "mode": "transcription",
+        "model": req.transcription_model,
+    }
+
+
+async def _mint_legacy_session_token(api_key: str, req: TokenRequest) -> Dict[str, Any]:
+    """
+    Legacy path: mint a token for a conversational gpt-realtime session.
+    Used when mode="conversation" or when NARRATION_USE_LEGACY_SESSIONS=1.
+    """
     payload: Dict[str, Any] = {
         "model": req.model,
         # We only need transcription + function calling back, not audio out.
@@ -117,7 +211,12 @@ async def create_ephemeral_token(
         logger.error("OpenAI token response missing client_secret.value: %s", data)
         raise HTTPException(status_code=502, detail="OpenAI returned no token")
 
-    return {"token": token, "expires_at": expires_at, "model": req.model}
+    return {
+        "token": token,
+        "expires_at": expires_at,
+        "mode": "conversation",
+        "model": req.model,
+    }
 
 
 # =============================================================================
