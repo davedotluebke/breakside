@@ -242,12 +242,12 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: stretch;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     border: 1px solid #ddd;
     border-radius: 6px;
     background: #fff;
     overflow: hidden;
-    min-height: 44px;
+    min-height: 32px;
 }
 
 .full-pbp-player-row.is-holder {
@@ -287,7 +287,7 @@
     font-size: 0.95em;
     font-weight: 600;
     text-align: left;
-    padding: 8px 8px;
+    padding: 4px 8px;
     cursor: pointer;
     color: #222;
     overflow: hidden;
@@ -322,7 +322,7 @@
     font-size: 0.85em;
     font-weight: 500;
     cursor: pointer;
-    padding: 5px 8px;
+    padding: 3px 8px;
     color: #333;
     line-height: 1.15;
     overflow: hidden;
@@ -334,7 +334,7 @@
 /* "…" button: narrow, just a few px of breathing room around the
  * three dots so the tap target stays usable on phone. */
 .full-pbp-row-action-more {
-    padding: 5px 6px;
+    padding: 3px 6px;
     color: #555;
     font-weight: 700;
 }
@@ -363,11 +363,11 @@
     font-size: 0.9em;
 }
 
-/* Mini event log — fixed height (was 20% of body, but the modifier row
- * and bottom action row eat into that budget). Tall enough to show ~5
- * recent events at the small monospace font. */
+/* Mini event log — fixed height. Bumped from 110 → 170px after row
+ * compaction freed vertical real estate; ~9 lines visible at the
+ * small monospace font. */
 .full-pbp-log-reserve {
-    flex: 0 0 110px;
+    flex: 0 0 170px;
     border-top: 1px solid #ddd;
     background: #fafafa;
     overflow: hidden;
@@ -378,12 +378,16 @@
     width: 100%;
     height: 100%;
     overflow-y: auto;
-    padding: 4px 8px;
+    /* Left-justified; right padding leaves clearance for the mic FAB
+     * pinned in the bottom-right corner so log lines stay readable
+     * end-to-end without the disc icon obscuring them. */
+    padding: 4px 80px 4px 8px;
     box-sizing: border-box;
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.78em;
     line-height: 1.35;
     color: #333;
+    text-align: left;
     white-space: pre-wrap;
     word-break: break-word;
 }

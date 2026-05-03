@@ -2252,6 +2252,10 @@ function createGameEventsModal() {
                     <i class="fas fa-hand-paper"></i>
                     <span>Timeout</span>
                 </button>
+                <button id="geInjurySubBtn" class="ge-btn ge-btn-injurysub">
+                    <i class="fas fa-exchange-alt"></i>
+                    <span>Injury Sub</span>
+                </button>
                 <button id="geHalfTimeBtn" class="ge-btn ge-btn-halftime">
                     <i class="fas fa-pause-circle"></i>
                     <span>Half Time</span>
@@ -2286,7 +2290,15 @@ function createGameEventsModal() {
     if (timeoutBtn) {
         timeoutBtn.addEventListener('click', handleGameEventTimeout);
     }
-    
+
+    // Injury Sub button — same flow as the top-level Sub button on Simple
+    // mode's PBP panel; available redundantly via the Events modal so
+    // Full mode (which doesn't expose a top-level Sub) can still reach it.
+    const injurySubBtn = modal.querySelector('#geInjurySubBtn');
+    if (injurySubBtn) {
+        injurySubBtn.addEventListener('click', handleGameEventInjurySub);
+    }
+
     // Half Time button
     const halfTimeBtn = modal.querySelector('#geHalfTimeBtn');
     if (halfTimeBtn) {
@@ -2331,18 +2343,39 @@ function updateGameEventsModalState() {
         timeoutBtn.disabled = false;
         timeoutBtn.classList.remove('disabled');
     }
-    
+
+    // Injury Sub: only DURING a point (mid-point sub mechanism)
+    const injurySubBtn = document.getElementById('geInjurySubBtn');
+    if (injurySubBtn) {
+        injurySubBtn.disabled = !duringPoint;
+        injurySubBtn.classList.toggle('disabled', !duringPoint);
+    }
+
     // Half Time, Switch Sides, End Game: only between points
     const halfTimeBtn = document.getElementById('geHalfTimeBtn');
     const switchSidesBtn = document.getElementById('geSwitchSidesBtn');
     const endGameBtn = document.getElementById('geEndGameBtn');
-    
+
     [halfTimeBtn, switchSidesBtn, endGameBtn].forEach(btn => {
         if (btn) {
             btn.disabled = duringPoint;
             btn.classList.toggle('disabled', duringPoint);
         }
     });
+}
+
+/**
+ * Handle Injury Sub from the Game Events modal. Routes through
+ * handlePbpSubPlayers so the role check + point-in-progress guard +
+ * sub-players modal all work the same as Simple mode's top-level Sub
+ * button. Closes this modal first so the user sees the sub-players
+ * UI cleanly.
+ */
+function handleGameEventInjurySub() {
+    hideGameEventsModal();
+    if (typeof handlePbpSubPlayers === 'function') {
+        handlePbpSubPlayers();
+    }
 }
 
 /**
