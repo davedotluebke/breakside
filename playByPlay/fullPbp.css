@@ -123,11 +123,13 @@
 .full-pbp-undo-btn:active { background: #ececec; }
 .full-pbp-undo-btn i      { font-size: 0.9em; }
 
-/* Player rows fill the full panel width — modifier flags moved to a
- * dedicated horizontal strip below the rows (see .full-pbp-modifier-row).
- * Frees every horizontal pixel for the player + action button area. */
+/* Player rows: size to content (8 rows × ~44px ≈ 352px on phone).
+ * The mini-log absorbs whatever vertical slack is left after the
+ * fixed-content strips around it — see .full-pbp-log-reserve below.
+ * `flex: 0 1 auto` lets rows-area shrink under pressure (extreme
+ * narrow viewports) and falls back to scrolling when truly necessary. */
 .full-pbp-rows-area {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-height: 0;
     overflow-y: auto;
     padding: 6px;
@@ -252,12 +254,12 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: stretch;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     border: 1px solid #ddd;
     border-radius: 6px;
     background: #fff;
     overflow: hidden;
-    min-height: 48px;
+    min-height: 40px;
 }
 
 .full-pbp-player-row.is-holder {
@@ -297,7 +299,7 @@
     font-size: 1.05em;
     font-weight: 600;
     text-align: left;
-    padding: 8px 10px;
+    padding: 6px 8px;
     cursor: pointer;
     color: #222;
     overflow: hidden;
@@ -332,7 +334,7 @@
     font-size: 0.95em;
     font-weight: 500;
     cursor: pointer;
-    padding: 7px 10px;
+    padding: 5px 10px;
     color: #333;
     line-height: 1.15;
     overflow: hidden;
@@ -344,7 +346,7 @@
 /* "…" button: narrow, just a few px of breathing room around the
  * three dots so the tap target stays usable on phone. */
 .full-pbp-row-action-more {
-    padding: 7px 8px;
+    padding: 5px 8px;
     color: #555;
     font-weight: 700;
 }
@@ -373,15 +375,16 @@
     font-size: 0.9em;
 }
 
-/* Mini event log — fixed height. Bumped from 110 → 170px after row
- * compaction freed vertical real estate; ~9 lines visible at the
- * small monospace font. */
+/* Mini event log — flexes to absorb whatever vertical slack is left
+ * after the header / rows-area / modifier-row / bottom-actions are
+ * laid out. min-height keeps it usable even on very tall row counts;
+ * on roomy viewports the log just gets bigger. */
 .full-pbp-log-reserve {
-    flex: 0 0 170px;
+    flex: 1 1 auto;
+    min-height: 110px;
     border-top: 1px solid #ddd;
     background: #fafafa;
     overflow: hidden;
-    min-height: 0;
 }
 
 .full-pbp-log-list {
