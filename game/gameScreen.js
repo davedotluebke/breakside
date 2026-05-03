@@ -3512,17 +3512,23 @@ function handlePanelStartingRatioChange(e) {
 function canEditSelectLinePanel() {
     const state = typeof getControllerState === 'function' ? getControllerState() : {};
     const duringPoint = typeof isPointInProgress === 'function' ? isPointInProgress() : false;
-    
-    // If no controller system, allow editing
-    if (!state.activeCoach && !state.lineCoach) {
+    const multiCoach = typeof window.isMultiCoachDetected === 'function'
+        ? window.isMultiCoachDetected()
+        : false;
+
+    // Solo coaching (or pre-multi-coach detection): no role enforcement.
+    // Matches the panelSystem latch that hides the role-claim buttons
+    // until two coaches are seen at least once in the session.
+    if (!multiCoach) {
         return true;
     }
-    
+
     if (duringPoint) {
-        // During point: Line Coach only
+        // During point: Line Coach prepares the next line — only they edit.
         return state.isLineCoach;
     } else {
-        // Between points: Either coach
+        // Between points: Active Coach finalizes the lineup before Start
+        // Point. Line Coach also retains edit access for handoff continuity.
         return state.isLineCoach || state.isActiveCoach;
     }
 }
