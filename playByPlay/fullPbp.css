@@ -375,6 +375,46 @@
     font-size: 0.9em;
 }
 
+/* Density toggle — `.density-compact` on the panel root tightens the
+ * player-row sizing back to the build-206 values (smaller rows fit
+ * more on a short viewport). The default (no class) is the roomier
+ * build-207 values defined above. The mini-log absorbs the resulting
+ * slack either way (`.full-pbp-log-reserve` is `flex: 1 1 auto`). */
+.panel-playByPlayFull.density-compact .full-pbp-player-row {
+    min-height: 40px;
+    margin-bottom: 4px;
+}
+.panel-playByPlayFull.density-compact .full-pbp-name-btn {
+    padding: 6px 8px;
+}
+.panel-playByPlayFull.density-compact .full-pbp-row-action {
+    padding: 5px 10px;
+}
+.panel-playByPlayFull.density-compact .full-pbp-row-action-more {
+    padding: 5px 8px;
+}
+
+/* Density toggle button in the header. Icon-only; small enough not
+ * to compete with the mode pill or Undo. Sits between them. */
+.full-pbp-density-btn {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid #bbb;
+    border-radius: 6px;
+    background: #fff;
+    color: #555;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.full-pbp-density-btn:hover  { background: #f4f4f4; }
+.full-pbp-density-btn:active { background: #ececec; }
+.full-pbp-density-btn i { font-size: 0.9em; }
+
 /* Mini event log — flexes to absorb whatever vertical slack is left
  * after the header / rows-area / modifier-row / bottom-actions are
  * laid out. min-height keeps it usable even on very tall row counts;

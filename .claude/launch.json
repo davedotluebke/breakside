@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "breakside",
+      "runtimeExecutable": "./scripts/dev-server.sh",
+      "runtimeArgs": ["3001"],
+      "port": 3001
+    }
+  ]
+}

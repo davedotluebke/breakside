@@ -1353,6 +1353,7 @@ window.FOLLOW_MIN_HEIGHT = FOLLOW_MIN_HEIGHT;
 // Multi-coach detection controls (latch for role button visibility)
 window.resetMultiCoachDetected = function() { _multiCoachDetected = false; };
 window.forceMultiCoachDetected = function() { _multiCoachDetected = true; };
+window.isMultiCoachDetected = function() { return _multiCoachDetected; };
 
 // Game screen management
 window.showGameScreen = showGameScreen;
