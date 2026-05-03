@@ -252,12 +252,12 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: stretch;
-    margin-bottom: 2px;
+    margin-bottom: 4px;
     border: 1px solid #ddd;
     border-radius: 6px;
     background: #fff;
     overflow: hidden;
-    min-height: 32px;
+    min-height: 40px;
 }
 
 .full-pbp-player-row.is-holder {
@@ -294,10 +294,10 @@
     min-width: 0;
     border: none;
     background: transparent;
-    font-size: 0.95em;
+    font-size: 1.05em;
     font-weight: 600;
     text-align: left;
-    padding: 4px 8px;
+    padding: 6px 8px;
     cursor: pointer;
     color: #222;
     overflow: hidden;
@@ -329,10 +329,10 @@
     border: 1px solid #c8c8c8;
     border-radius: 2px;
     background: #f7f7f7;
-    font-size: 0.85em;
+    font-size: 0.95em;
     font-weight: 500;
     cursor: pointer;
-    padding: 3px 8px;
+    padding: 5px 10px;
     color: #333;
     line-height: 1.15;
     overflow: hidden;
@@ -344,7 +344,7 @@
 /* "…" button: narrow, just a few px of breathing room around the
  * three dots so the tap target stays usable on phone. */
 .full-pbp-row-action-more {
-    padding: 3px 6px;
+    padding: 5px 8px;
     color: #555;
     font-weight: 700;
 }
