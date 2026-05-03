@@ -17,6 +17,16 @@
     flex-direction: column;
 }
 
+/* Reset main.css's global `button { padding: 10px 15px; margin: 10px; }`
+ * for buttons inside this panel — every button class here sets its own
+ * padding, but the 10px global margin leaked through (most visibly on
+ * the name button, which was inflating each row by ~20px vertically).
+ * Setting margin: 0 here ensures the per-button rules below control the
+ * actual size from a clean slate. */
+.panel-playByPlayFull button {
+    margin: 0;
+}
+
 .panel-playByPlayFull .panel-content.full-pbp-content {
     flex: 1 1 auto;
     display: flex;
