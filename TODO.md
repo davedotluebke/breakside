@@ -203,10 +203,10 @@ Bigger asks, deferred until current themes settle.
 ### UI/UX
 - [ ] Comprehensive UI redesign
 - [ ] Dark mode support
-- [ ] **Compact / roomy density toggle for Full PBP**
-  - User preference (in Settings or inline gear) to swap between two sets of player-row sizing values: a "compact" preset (current build-206 numbers — min-height 40, margin 4, name padding 6/8, action padding 5/10, "…" 5/8) and a "roomy" preset (build-207 numbers — min-height 48, margin 6, name padding 8/10, action padding 7/10, "…" 7/8).
-  - Persist the choice per-user in localStorage, applied as a CSS class on `.panel-playByPlayFull` (e.g. `density-compact` / `density-roomy`).
-  - Default depends on whichever shipped value the user picked first; both presets already proven to fit 8 rows on phone height because the mini-log flexes to absorb the leftover slack (`flex: 1 1 auto` with a 110px floor).
+- [x] **Compact / roomy density toggle for Full PBP**
+  - Inline icon button in the Full PBP header (between mode pill and Undo) toggles between "roomy" (default — build-207 numbers: min-height 48, margin 6, name padding 8/10, action padding 7/10) and "compact" (build-206: min-height 40, margin 4, name padding 6/8, action padding 5/10).
+  - Persisted per-device in localStorage as `breakside_full_pbp_density`, applied as a `density-compact` class on `.panel-playByPlayFull`.
+  - Mini-log absorbs the resulting slack either way (`.full-pbp-log-reserve` is `flex: 1 1 auto`).
 
 ---
 
