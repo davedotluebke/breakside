@@ -60,7 +60,7 @@ The multi-user push is mostly done. A few items linger:
 Improvements deferred from the initial implementation (see Active section above for the architecture summary).
 
 ### Quality / accuracy
-- [ ] **Remove vocabulary-mapping dead code from slow-pass prompt.** A/B test across the test corpus (commit `e24098e`) showed `NARRATION_VOCAB_GUIDANCE=off` (no explicit jargon→flag map) outperformed `=on` by +0.082 mean F1 with no regressions. Default flipped to `off`. Once confidence is high enough — say, after one production cycle with no surprises — delete the `vocab_section` branch in `_build_finalize_prompt` (`ultistats_server/narration.py`) and the env var. Symptoms the vocab map produced: split one play into two events because of "sky"; invented a throw from "deep huck" in the opponent's narration; missed casual "gives it to" because that phrase wasn't in the map.
+- [x] **Remove vocabulary-mapping dead code from slow-pass prompt.** A/B test across the test corpus (commit `e24098e`) showed `NARRATION_VOCAB_GUIDANCE=off` (no explicit jargon→flag map) outperformed `=on` by +0.082 mean F1 with no regressions. Deleted the `vocab_section` branch in `_build_finalize_prompt`, the `NARRATION_VOCAB_GUIDANCE` env var, and the structurally-identical "Event-to-function mapping" block in the dead `buildInstructions()` in `narration/narrationEngine.js`.
 - [ ] **Improve transcription accuracy**
   - Try `gpt-4o-transcribe` (more accurate than the `mini` variant currently used)
   - Investigate OpenAI's dedicated **Realtime transcription session** type — pure ASR, no LLM in the loop. Should be more accurate for our use case AND would silence the "Transcription complete." text spam from gpt-realtime emitting acknowledgments despite the don't-respond prompt.
@@ -80,7 +80,7 @@ Improvements deferred from the initial implementation (see Active section above 
   - Currently disabled via `FAST_PASS_EVENTS_ENABLED = false` in `narrationEngine.js`
   - All code is preserved — flip the flag to re-enable
   - Worth revisiting when we have a story for noisy-environment confidence (e.g. confidence-gating, transcript-stability checks)
-  - **Before turning back on**: the dead `buildInstructions()` system prompt in `narrationEngine.js` (~line 142) contains an "Event-to-function mapping" section that is structurally identical to the slow-pass `vocab_section` we just disabled. Same likely failure modes — split events from "skies", false events from "deep huck for the goal" in opponent narration, missed casual phrases not in the list. Drop or A/B test that section before measuring fast-pass quality. Also worth A/B'ing whether the per-property `description` fields on the tool definitions (e.g. `huck: "A long/deep throw"`) are pulling weight or are just a stealth vocab map.
+  - **Before turning back on**: the "Event-to-function mapping" section in the dead `buildInstructions()` was already dropped along with the slow-pass vocab map (same failure modes). Still worth A/B'ing whether the per-property `description` fields on the tool definitions (e.g. `huck: "A long/deep throw"`) are pulling weight or are just a stealth vocab map.
 
 ### UX
 - [ ] **Transcript panel UI polish**
