@@ -183,6 +183,9 @@
                 <button class="full-pbp-start-point-btn" id="fullPbpStartPointBtn" style="display:none">Start Point</button>
                 <span class="full-pbp-mode-pill" id="fullPbpModePill">Offense</span>
                 <span class="full-pbp-no-point-msg" id="fullPbpNoPointMsg" style="display:none">No active point</span>
+                <button class="full-pbp-density-btn" id="fullPbpDensityBtn" title="Toggle row density">
+                    <i class="fas fa-compress"></i>
+                </button>
                 <button class="full-pbp-undo-btn" id="fullPbpUndoBtn" title="Undo last event">
                     <i class="fas fa-undo"></i>
                     <span>Undo</span>
@@ -1023,6 +1026,45 @@
     }
 
     // -----------------------------------------------------------------
+    // Density (compact / roomy) — per-device user preference, persisted
+    // in localStorage and applied as a class on the panel root. The CSS
+    // default (no class) is the roomy build-207 sizing; `density-compact`
+    // overrides to the build-206 numbers. Mini-log absorbs the slack
+    // either way (`.full-pbp-log-reserve` is `flex: 1 1 auto`).
+    // -----------------------------------------------------------------
+
+    const DENSITY_KEY = 'breakside_full_pbp_density';
+
+    function getDensity() {
+        try {
+            return localStorage.getItem(DENSITY_KEY) === 'compact' ? 'compact' : 'roomy';
+        } catch (e) {
+            return 'roomy';
+        }
+    }
+
+    function applyDensity(density) {
+        const panel = document.getElementById('panel-playByPlayFull');
+        if (panel) panel.classList.toggle('density-compact', density === 'compact');
+        const btn = document.getElementById('fullPbpDensityBtn');
+        if (btn) {
+            const icon = btn.querySelector('i');
+            // fa-compress when roomy (tap to compact), fa-expand when compact (tap to relax).
+            if (icon) {
+                icon.classList.remove('fa-compress', 'fa-expand');
+                icon.classList.add(density === 'compact' ? 'fa-expand' : 'fa-compress');
+            }
+            btn.title = density === 'compact' ? 'Switch to roomy rows' : 'Switch to compact rows';
+        }
+    }
+
+    function handleDensityToggle() {
+        const next = getDensity() === 'compact' ? 'roomy' : 'compact';
+        try { localStorage.setItem(DENSITY_KEY, next); } catch (e) { /* ignore */ }
+        applyDensity(next);
+    }
+
+    // -----------------------------------------------------------------
     // Init / wiring
     // -----------------------------------------------------------------
 
@@ -1055,6 +1097,17 @@
                 }
             });
         }
+
+        const densityBtn = document.getElementById('fullPbpDensityBtn');
+        if (densityBtn && !densityBtn.dataset.wired) {
+            densityBtn.dataset.wired = 'true';
+            densityBtn.addEventListener('click', handleDensityToggle);
+        }
+
+        // Re-apply on every wire pass — cheap, and ensures the saved
+        // preference takes effect the first time the panel is built
+        // (which happens lazily in gameScreen, after init() ran).
+        applyDensity(getDensity());
     }
 
     function init() {
