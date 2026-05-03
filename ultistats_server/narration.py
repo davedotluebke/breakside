@@ -212,6 +212,37 @@ def _build_finalize_prompt(req: FinalizeRequest) -> str:
 
     has_provisionals = bool(req.provisional_events)
 
+    # Optional vocabulary section — controls whether we hand-feed Claude an
+    # explicit ultimate-jargon → schema-flag mapping. Default is OFF, since
+    # an A/B run across the test corpus showed the map actively hurt event
+    # extraction in five scenarios with no improvements anywhere (the map
+    # nudged the model toward keyword-pattern-matching over holistic
+    # reasoning — e.g. it would split one play into two events because the
+    # script said "skies", or invent a throw event from "deep huck for the
+    # goal" in the opponent's narration). Set NARRATION_VOCAB_GUIDANCE=on
+    # to opt back into the explicit map for comparison runs.
+    vocab_on = os.getenv("NARRATION_VOCAB_GUIDANCE", "off").lower() == "on"
+
+    if vocab_on:
+        vocab_section = """Vocabulary mapping:
+  - "reset" or "dump" -> throw with dump=true
+  - "break" or "break-side" or "break mark" -> throw with break_throw=true
+  - "huck" or "deep" or "long" -> throw with huck=true
+  - "hammer" -> throw with hammer=true
+  - "sky" -> sky=true on the relevant throw or defense
+  - "layout" or "lays out" or "diving catch" -> layout=true on the throw or defense
+  - "score" / "goal" / "in the endzone" -> throw with score=true
+  - "block" or "footblock" or "knockdown" or "deflection" or "got the D" -> defense with block=true (the disc was deflected; nobody caught it out of the air)
+  - "interception" or "intercepts" or "picks it" or "got the disc out of the air" -> defense with interception=true (the defender caught the throw)
+  - "Callahan" -> defense with callahan=true (catching the opponent's throw in their own endzone for a goal)
+  - "throwaway" -> turnover with throwaway=true
+  - "drop" or "missed the catch" -> turnover with drop=true (receiver = the dropper)
+  - "stall" or "stalled out" -> turnover with stall=true
+
+"""
+    else:
+        vocab_section = ""
+
     # Mode-specific framing. In transcript-only mode there's nothing to review;
     # the slow pass is the SOLE source of structured events. In hybrid mode it
     # reviews the fast pass's output.
@@ -261,23 +292,14 @@ Event schema for ADD ops — the "event" object must have:
   - For kind=turnover: thrower, receiver (optional), and any of
     throwaway, drop, huck, good_defense, stall (booleans)
   - For kind=defense: defender (player name), and any of
-    interception, layout, sky, callahan (booleans)
+    block, interception, layout, sky, callahan (booleans).
+    Note: block and interception are mutually exclusive.
+    block=true means the disc was deflected (footblock, knockdown) and
+    nobody caught it out of the air. interception=true means the defender
+    caught the throw cleanly. Both can carry layout/sky modifiers.
   - For kind=opponent_score: no additional fields
 
-Vocabulary mapping:
-  - "reset" or "dump" -> throw with dump=true
-  - "break" or "break-side" or "break mark" -> throw with break_throw=true
-  - "huck" or "deep" or "long" -> throw with huck=true
-  - "hammer" -> throw with hammer=true
-  - "sky" -> sky=true on the relevant throw or defense
-  - "layout" or "lays out" or "diving catch" -> layout=true on the throw or defense
-  - "score" / "goal" / "in the endzone" -> throw with score=true (or defense with callahan=true if a D-line interception in the endzone)
-  - "interception" or "block" or "got the D" -> defense with interception=true (or layout/sky as appropriate)
-  - "throwaway" -> turnover with throwaway=true
-  - "drop" or "missed the catch" -> turnover with drop=true (receiver = the dropper)
-  - "stall" or "stalled out" -> turnover with stall=true
-
-Player names in ADD events:
+{vocab_section}Player names in ADD events:
   - Use ONLY the player's name itself, e.g. "Alice", NOT the full roster line.
   - The roster lines above include nickname (in quotes) and jersey number (#N) as
     HINTS to help you match what the coach said — never include those in the

@@ -65,7 +65,7 @@ def _scenario_id(p: Path) -> str:
 )
 def test_scenario(scenario_dir: Path, capsys):
     # Quick existence check: skip rather than fail if audio's not generated yet.
-    has_audio = any((scenario_dir / f).exists() for f in ("audio.pcm", "audio.wav"))
+    has_audio = any((scenario_dir / f).exists() for f in ("audio.flac", "audio.wav", "audio.pcm"))
     if not has_audio:
         pytest.skip(f"no audio file in {scenario_dir.name} (run generate_synthetic_audio.py)")
 
