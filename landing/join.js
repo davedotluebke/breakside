@@ -15,8 +15,13 @@ const API_BASE = window.location.hostname === 'localhost'
     ? 'http://localhost:8000'
     : window.location.origin;
 
-// Initialize Supabase client
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Initialize Supabase client. No-op lock function disables the
+// Navigator Locks API — see landing.js for the rationale; same multi-tab
+// failure mode applies here.
+const noOpLock = async (name, acquireTimeout, fn) => fn();
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { lock: noOpLock }
+});
 
 // =============================================================================
 // State

@@ -10,8 +10,20 @@
 const SUPABASE_URL = 'https://mfuziqztsfqaqnnxjcrr.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mdXppcXp0c2ZxYXFubnhqY3JyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU3NTkzMDYsImV4cCI6MjA4MTMzNTMwNn0.ofe60cGBIC82rCoynvngiNEnXIKOyhpF_utezC8KG0w';
 
-// Initialize Supabase client
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Initialize Supabase client.
+//
+// Pass a no-op lock function to disable the Navigator Locks API. Without
+// this, Supabase tries to acquire an exclusive cross-tab lock on
+// "lock:sb-<project-ref>-auth-token" and fails immediately with
+// "Acquiring an exclusive Navigator LockManager lock ... immediately
+// failed" when another tab is open with the app — exactly the scenario
+// multi-coach testing requires. auth/auth.js applied the same fix in
+// commit e147cb4; we mirror it here so the landing page survives the
+// same conditions.
+const noOpLock = async (name, acquireTimeout, fn) => fn();
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { lock: noOpLock }
+});
 
 // =============================================================================
 // DOM Elements
