@@ -53,6 +53,7 @@ Deploys current working directory (not committed state) to S3 + CloudFront inval
 - **Direct commits to main**: pre-commit hook (`.git/hooks/pre-commit`) runs `increment-version.py`
 - **PR merges to main**: GitHub Actions workflow bumps version if the merge commit didn't already include a `version.json` change
 - **Feature branches**: pre-commit hook skips — no version bump (avoids merge conflicts across worktrees)
+- **Cherry-pick caveat**: `git cherry-pick` may skip the pre-commit hook entirely. After cherry-picking onto main, run `python3 increment-version.py build && git add version.json service-worker.js && git commit --amend --no-edit` so the cache version actually moves forward. See ARCHITECTURE.md § Deployment for the full explanation.
 
 On staging, the deploy script also writes a `deployStamp` field so the app detects redeploys even without a build number change.
 
@@ -101,6 +102,8 @@ Keep feature branches after merging — don't delete them. Branch names serve as
 `.worktrees/` is gitignored so other sessions won't accidentally stage worktree files.
 
 ## Architecture
+
+Before debugging any styling issue, skim **ARCHITECTURE.md § CSS Styling Gotchas** — it lists the non-obvious cascade/box-model traps that have bitten layout work here (global `button { margin: 10px }` inheritance, reusable button presets that carry their own size, `width: 100%` + padding interactions, flex/grid `min-width: 0` discipline, service-worker caching of CSS). Add new gotchas there as you find them, not to this file.
 
 ### Frontend (root directory)
 No build system — vanilla JS files loaded in order via `index.html`. No module bundler.

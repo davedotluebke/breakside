@@ -40,6 +40,8 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 - **Roster management** - Add, remove, and edit player information including nicknames
 - **Team data export/import** - Download team data as JSON files for backup or sharing
 - **Multi-coach collaboration** - Role-based coach handoffs (Active Coach / Line Coach) with real-time sync
+- **Lineup Ready ping** - Line Coach taps a button to signal the Active Coach that the next line is set; the indicator turns green on both screens until the point starts. Lineup edits sync continuously regardless — the ping is a notification, not a commit gate.
+- **Rejoin Game** - When the PWA loses its connection (e.g. backgrounded long enough that controller pings expired), a "Rejoin Game" item appears in the in-game menu to re-establish polling without leaving the screen.
 
 ### Game Tracking Modes
 - **Simple Mode** - Streamlined We Score / They Score / Key Play buttons; the Key Play modal captures granular event detail when you want it
@@ -54,8 +56,8 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 
 ### Advanced Game Features
 - **Line Management** - Select active players for each point, or sub in entire lines
-- **Next-line Selection** - Select line for the next point during the current point
-- **O/D Line Views** - Toggle between combined O/D, offense-only, defense-only, or split O|D side-by-side panels for managing separate offensive and defensive lines
+- **Next-line Selection** - Select line for the next point during the current point. The Line tab has its own Start Point and Lineup Ready buttons — feedback colors warn about wrong player count or gender ratio without blocking, so the Active Coach can always start the point with whatever's currently selected.
+- **O/D Line Views** - Toggle between combined O/D, offense-only, defense-only, or split O|D side-by-side panels for managing separate offensive and defensive lines. Once a separate O or D line is set, it persists across points (used for the next offense or defense point even several points later) until you edit the combined OD line more recently. The Start Point button labels itself with which line will be used (`Start Point (O-line)`, `Start Point (Defense)`, etc.).
 - **Score Attribution** - Attribute goals and assists to specific players
 - **Point Timer** - Automatic timing of points with visual indicators
 - **Undo Capability** - Correct mistakes with real-time undo functionality

@@ -1302,6 +1302,76 @@ body.game-screen-active header {
     opacity: 0.7;
 }
 
+/* Inactive + feedback combos: when a non-Active-Coach sees the Start
+ * Point button, the feedback class (red / orange / green) should still
+ * communicate the lineup state — just dimmed to signal "you can't act
+ * on this." Pure grey would erase the warning information. The combined
+ * selectors are more specific than `.inactive` alone, so they win
+ * regardless of source order. */
+.pbp-start-point-btn.inactive.feedback-ok {
+    background: linear-gradient(135deg, #6fae7d 0%, #5e9669 100%); /* desaturated green */
+    box-shadow: 0 3px 8px rgba(40, 167, 69, 0.18);
+    opacity: 0.85;
+}
+.pbp-start-point-btn.inactive.feedback-count-warning {
+    background: linear-gradient(135deg, #b97a82 0%, #a56870 100%); /* desaturated red */
+    box-shadow: 0 3px 8px rgba(220, 53, 69, 0.18);
+    opacity: 0.85;
+}
+.pbp-start-point-btn.inactive.feedback-gender-warning {
+    background: linear-gradient(135deg, #d29a55 0%, #b8843e 100%); /* desaturated orange */
+    box-shadow: 0 3px 8px rgba(255, 136, 0, 0.18);
+    opacity: 0.85;
+}
+
+/* Slim variant used at the top of the Line tab. The PBP-panel button is a
+ * full-bleed CTA in a panel that has nothing else competing for vertical
+ * space; on the Line tab it sits above a dense toolbar + player table, so
+ * we drop the padding and font-size to keep it from dominating. */
+.pbp-start-point-btn.line-tab-start-point-btn,
+.pbp-start-point-btn.line-tab-lineup-ready-btn {
+    padding: 8px 14px;
+    font-size: 1rem;
+    border-radius: 8px;
+}
+
+/* Row that holds Start Point + Lineup Ready side-by-side. When only one
+ * of them is visible (e.g. solo coaching), the visible one expands to
+ * full width via flex:1. */
+.line-tab-action-row {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+
+.line-tab-action-row > .pbp-start-point-btn {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+/* Lineup Ready: blue idle, green when sent, desaturated blue when
+ * disabled. The generic .pbp-start-point-btn.inactive rule above sets a
+ * grey gradient, but the more specific blue rule for this variant wins
+ * on cascade — so we add a sibling rule that overrides the inactive
+ * appearance with a desaturated blue (white text on muted blue stays
+ * legible, unlike grey-on-grey which collides with the white label). */
+.pbp-start-point-btn.line-tab-lineup-ready-btn {
+    background: linear-gradient(135deg, #007bff 0%, #0069d9 100%);
+    box-shadow: 0 3px 8px rgba(0, 123, 255, 0.3);
+}
+
+.pbp-start-point-btn.line-tab-lineup-ready-btn.inactive {
+    /* Desaturated blue (#007bff → #6c8ab0): same hue, lower chroma. */
+    background: linear-gradient(135deg, #6c8ab0 0%, #5a7595 100%);
+    box-shadow: 0 3px 8px rgba(108, 138, 176, 0.25);
+    opacity: 0.85;
+}
+
+.pbp-start-point-btn.line-tab-lineup-ready-btn.sent {
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    box-shadow: 0 3px 8px rgba(40, 167, 69, 0.3);
+}
+
 /* =============================================================================
    Game Events Modal
    ============================================================================= */

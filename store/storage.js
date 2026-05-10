@@ -117,13 +117,19 @@ function serializeGame(game) {
         roundEndTime: game.roundEndTime || null,
         // Phase 6b: Pending next line selections for multi-device sync
         // Note: activeType is local-only (not synced) - each user views/edits independently
+        // lineupReadyAt / lineupReadyBy are the multi-coach "I'm done picking
+        // the line" ping written by the Line Coach and read by the Active
+        // Coach. Without these in the serialized payload they get dropped at
+        // the sync boundary and the ping never crosses the wire.
         pendingNextLine: game.pendingNextLine ? {
             oLine: game.pendingNextLine.oLine || [],
             dLine: game.pendingNextLine.dLine || [],
             odLine: game.pendingNextLine.odLine || [],
             oLineModifiedAt: game.pendingNextLine.oLineModifiedAt || null,
             dLineModifiedAt: game.pendingNextLine.dLineModifiedAt || null,
-            odLineModifiedAt: game.pendingNextLine.odLineModifiedAt || null
+            odLineModifiedAt: game.pendingNextLine.odLineModifiedAt || null,
+            lineupReadyAt: game.pendingNextLine.lineupReadyAt || null,
+            lineupReadyBy: game.pendingNextLine.lineupReadyBy || null
         } : null,
         points: game.points.map(point => ({
             players: point.players,
@@ -390,6 +396,10 @@ function deserializeGame(gameData) {
             oLineModifiedAt: gameData.pendingNextLine.oLineModifiedAt || null,
             dLineModifiedAt: gameData.pendingNextLine.dLineModifiedAt || null,
             odLineModifiedAt: gameData.pendingNextLine.odLineModifiedAt || null,
+            // Lineup Ready ping fields — preserved across serialization so
+            // the Active Coach can read what the Line Coach wrote.
+            lineupReadyAt: gameData.pendingNextLine.lineupReadyAt || null,
+            lineupReadyBy: gameData.pendingNextLine.lineupReadyBy || null,
             activeType: 'od'  // Local-only, always starts at 'od'
         };
     }

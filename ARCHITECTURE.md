@@ -111,6 +111,18 @@ ultistats/
 - Global state is managed through shared variables in `store/storage.js`
 - No circular dependencies - clear data flow: data → utils → features → UI
 
+### CSS Styling Gotchas
+
+A handful of non-obvious cascade and box-model details have bitten layout work in this codebase. Check this list before chasing a "why is the button the wrong size" rabbit hole.
+
+- **Global `button { padding: 10px 15px; margin: 10px; }`** lives in [main.css](main.css). Every panel button inherits both. When a custom button looks too tall, too narrow, or has unexpected gaps, it's almost always the inherited `margin: 10px` (not just padding). Override **both** in the panel/component scope: e.g. `.panel-playByPlayFull button { margin: 0; }`. Forgetting this was the root cause of the Full PBP row-height debugging episode.
+- **Reusable button presets carry their own size.** `.pbp-start-point-btn` (in [ui/panelSystem.css](ui/panelSystem.css)) is a "loud CTA" preset (16px/20px padding, 1.2rem font, 12px radius) designed for the PBP panel where it's the only thing competing for space. Reusing it in denser contexts requires slimming via a sibling class — see `.line-tab-start-point-btn`. Setting only `display` is not enough.
+- **`width: 100%` on flex/grid children resolves against the *containing block including its padding*.** When a 100%-width child overflows on the right, the fix is usually to drop `width: 100%`, use `align-self: stretch`, and add `box-sizing: border-box`. The "They turnover / They score" buttons in Full PBP hit this.
+- **Flex/grid children with their own min-content won't shrink below it** unless you give them `min-width: 0` (flex) or `minmax(0, …fr)` (grid columns). If a 60/40 split is rendering more like 75/25, this is why. Full PBP migrated from flex to grid for exactly this reason.
+- **Service worker caching makes CSS look "stuck."** The PWA serves the cached `service-worker.js` until its `cacheName` constant changes. If a CSS edit isn't visible after deploy, bump `cacheName` in [service-worker.js](service-worker.js) and double-reload. Always verify against build number in version.json before assuming the change didn't deploy.
+
+When CLAUDE finds a *new* gotcha worth remembering across sessions, add it here rather than to CLAUDE.md.
+
 ### Line Selection Mode Toggle
 
 Player-selection tables (main panel, O/D split panels, injury sub dialog) support a three-state mode toggle:
@@ -140,6 +152,43 @@ Manual ──tap──▶ Wholesale ──tap──▶ Auto ──tap──▶ M
 2. Sort roster by points played ascending (fewest first).
 3. Fill the line respecting ratio: pick from the under-represented gender first, then alternate.
 4. If ratio can't be met with available players, fill remaining slots regardless of gender.
+
+### Effective Line for the Next Point
+
+The Line tab maintains up to three independent lineups per game — `oLine`, `dLine`, and `odLine` — under `game.pendingNextLine`. When `startNextPoint()` fires, only one of them gets played. The selection rule (in `getEffectiveLineForNextPoint(game)` in `game/gameScreen.js`) is intentionally simple:
+
+1. Determine whether the next point is offense or defense (via `determineStartingPosition()`).
+2. Compare the matching typed line's `*ModifiedAt` to `odLineModifiedAt`. The most recently edited non-empty line wins.
+3. Fall back to whichever is populated; final fallback is empty `odLine`.
+
+The interesting consequence: a separate O line, once created, persists across points until the OD line is edited *more recently*. Run a separate O line for several offense points without re-touching it, sprinkle in a defense point, run the O line again — all without re-doing the lineup.
+
+`autoSelectActiveTypeForNextPoint()` keeps the visible view in lockstep with the effective line by setting `pendingNextLine.activeType` to match. It runs both at point-end transition (`transitionToBetweenPoints`) and after each `refreshPendingLineFromCloud` poll cycle, so the Active Coach's view follows the Line Coach's edits without any manual toggle. The Start Point button label tags the line type when a separate typed line is in play (`Start Point (O-line)` / `Start Point (D-line)`); the combined OD case stays `Start Point (Offense)` / `Start Point (Defense)`.
+
+Feedback colors (count / gender-ratio warnings) on the Start Point button are computed against the *effective* line, not the visible checkboxes — so even if a coach is browsing a different line at tap time, the feedback hue reflects what would actually start.
+
+### Lineup Ready Signal
+
+Multi-coach coordination ping. The Line Coach taps a button on the Line tab to signal the Active Coach that the next line is set. Implementation:
+
+- `game.pendingNextLine.lineupReadyAt` (ms timestamp) and `lineupReadyBy` (display name) — written by the Line Coach, persisted via `serializeGame` (in `store/storage.js`) so they cross the sync boundary.
+- The Active Coach's existing 3-second pendingLine refresh diffs the timestamp pre/post-merge. New + recent (<60s) → toast `<Coach> says lineup ready`.
+- Visible state machine, shared between both coaches:
+  - **Active** (Line Coach, no ping yet this window): blue button, label `Lineup Ready`, tap sends.
+  - **Sent**: green button/badge, label `✓ Lineup Ready`. Both coaches see it.
+  - **Pending** (Active Coach view, awaiting ping): desaturated-blue read-only badge, label `Lineup Pending`.
+  - **Disabled**: solo coach, point in progress, no peer, etc. — desaturated-blue, tap surfaces a reason toast.
+- Staleness gate: a `lineupReadyAt` from before the most recent `point.startTimestamp` is treated as leftover from a prior between-points window, not the current one. This is also how the field gets implicitly "cleared" cross-device — `startNextPoint` sets the local copy to null, but the staleness check is what makes the UI actually reset.
+
+The ping is **not** a commit gate. Lineup edits sync continuously through `savePanelSelectionsToPendingNextLine` → `saveAllTeamsData()` → server, regardless of whether the Lineup Ready ping has been sent.
+
+### Multi-Coach Connection Recovery
+
+Three layers, in order from least to most invasive:
+
+1. **Server-side role timeout = 120s** (`STALE_TIMEOUT_SECONDS` in `ultistats_server/storage/controller_storage.py`, override via `BREAKSIDE_STALE_TIMEOUT` env var). Mobile browsers aggressively throttle/freeze setInterval when the page is hidden, so a coach pocketing their phone for ~half a minute would lose their roles; 120s gives a more forgiving grace window. Genuine disconnects still free the role eventually.
+2. **Wake-handler fallback** (`document.addEventListener('visibilitychange', ...)` in `game/controllerState.js`). If polling was running before the sleep, immediately re-pings + retries to re-claim any expired roles. New: if `currentGameIdForPolling` is null but `currentGame()` exists (PWA reload from background that didn't restart polling), it now restarts polling from the in-memory game id.
+3. **Manual "Rejoin Game" menu item** (in the in-game hamburger menu). Visible only when controller polling is not active. Tapping it walks `currentGame()` → `teams[].games` (any game without `gameEndTimestamp`) to find the in-progress game and calls `startControllerPolling(gameId)`. Toast: `"Reconnected — tap a role button to reclaim it"`. The fallback path covers cases where the wake handler couldn't fire (e.g. user opened the menu without a sleep/wake cycle).
 
 ### In-Game Tab System
 
@@ -843,6 +892,17 @@ Exported via `window.breakside.auth`:
 - Direct commits to main: pre-commit hook (`.git/hooks/pre-commit`)
 - PR merges: CI workflow detects missing `version.json` change and bumps
 - Feature branches: hook skips to avoid merge conflicts across worktrees
+
+**Cherry-pick gotcha** — `git cherry-pick` does **not** reliably fire the pre-commit hook on every git version, so a cherry-picked commit lands on `main` without the version bump. `git commit --amend` (even with `--no-edit`) does fire the hook, so the workaround is:
+
+```bash
+git cherry-pick <sha>
+python3 increment-version.py build       # bumps version.json + cacheName
+git add version.json service-worker.js
+git commit --amend --no-edit             # fires pre-commit, which re-bumps + re-adds
+```
+
+The amend triggers the hook a second time. That's harmless — the script re-reads `version.json`, increments by one again, re-writes both files. You end up two builds higher than the cherry-pick base, which is fine. Without this workaround the new commit ships with a stale `cacheName` and PWA users won't see the change until the next push. Symptoms to watch for: pushed a fix, GitHub Actions deployed, but the cached PWA still serves the old code.
 
 **Staging** — Manual deploy via `./scripts/deploy-staging.sh "<short version description>"`:
 

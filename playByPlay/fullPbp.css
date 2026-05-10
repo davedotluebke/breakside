@@ -17,6 +17,17 @@
     flex-direction: column;
 }
 
+/* Role-disabled: a non-Active-Coach is viewing the panel. Fade the
+ * interactive surfaces (player rows, modifier chips, bottom actions) so
+ * it's visually clear the buttons aren't actionable. The mini log stays
+ * full-opacity since reading is still useful. The header (mode pill /
+ * Start Point) gets its own per-state styling and isn't faded here. */
+.panel-playByPlayFull.role-disabled .full-pbp-rows-area,
+.panel-playByPlayFull.role-disabled .full-pbp-modifier-row,
+.panel-playByPlayFull.role-disabled .full-pbp-bottom-actions {
+    opacity: 0.55;
+}
+
 /* Reset main.css's global `button { padding: 10px 15px; margin: 10px; }`
  * for buttons inside this panel — every button class here sets its own
  * padding, but the 10px global margin leaked through (most visibly on
