@@ -1102,9 +1102,11 @@ const TAB_STATE_KEY = 'breakside_active_tab';
 // (Legacy 'play' is migrated to 'simple' on load.)
 let activeTab = 'all';
 
-// Track which PBP tab the user last visited (Simple or Full). Used by the
-// "Start Point" button on the Line tab to auto-navigate to the coach's
-// preferred play-by-play surface (phase 6).
+// Track which "play" tab the user last visited (Simple, Full, or All).
+// Used by Start Point flows to auto-navigate to whatever surface the coach
+// was last working from. We include 'all' because that view shows both
+// PBP and Line panels at once, and a coach who came from there expects to
+// land back there — not on a single-tab PBP view they didn't pick.
 const LAST_PBP_TAB_KEY = 'breakside_last_pbp_tab';
 let lastPbpTab = 'simple';
 
@@ -1133,7 +1135,7 @@ function loadActiveTab() {
             activeTab = saved;
         }
         const savedLast = localStorage.getItem(LAST_PBP_TAB_KEY);
-        if (savedLast === 'simple' || savedLast === 'full') {
+        if (savedLast === 'simple' || savedLast === 'full' || savedLast === 'all') {
             lastPbpTab = savedLast;
         }
     } catch (e) {
@@ -1163,9 +1165,11 @@ function switchTab(tabName) {
     activeTab = tabName;
     saveActiveTab();
 
-    // Remember which PBP tab was last used so the Line tab's Start Point
-    // button (phase 6) can auto-navigate back to it.
-    if (tabName === 'simple' || tabName === 'full') {
+    // Remember which "play" tab was last used so the Line tab's Start
+    // Point button can auto-navigate back to it. 'all' counts: a coach
+    // who works from the All view expects to return there after a Line
+    // detour, not be dropped into Simple/Full alone.
+    if (tabName === 'simple' || tabName === 'full' || tabName === 'all') {
         lastPbpTab = tabName;
         try { localStorage.setItem(LAST_PBP_TAB_KEY, tabName); } catch (e) { /* ignore */ }
     }
@@ -1262,6 +1266,12 @@ function applyTabState() {
     // After tab switch, update PBP layout if visible (it may now have more space)
     if (typeof updatePlayByPlayLayout === 'function') {
         requestAnimationFrame(() => updatePlayByPlayLayout());
+    }
+
+    // Refresh the Line-tab Start Point button — its visibility is gated on
+    // the active tab being 'line', so a tab switch can flip it on or off.
+    if (typeof updateLineTabStartPointBtn === 'function') {
+        updateLineTabStartPointBtn();
     }
 }
 

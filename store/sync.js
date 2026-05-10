@@ -1089,14 +1089,24 @@ async function refreshPendingLineFromCloud(gameId) {
             const modKey = lineKey.replace('Line', 'LineModifiedAt');
             const serverModTime = serverPending[modKey] ? new Date(serverPending[modKey]).getTime() : 0;
             const localModTime = localPending[modKey] ? new Date(localPending[modKey]).getTime() : 0;
-            
+
             if (serverModTime > localModTime) {
                 // Server has newer data for this line type
                 localPending[lineKey] = serverPending[lineKey] || [];
                 localPending[modKey] = serverPending[modKey];
             }
         });
-        
+
+        // Merge "Lineup Ready" multi-coach signal. The Line Coach is the
+        // sole writer; Active Coach reads. Last-writer-wins by timestamp,
+        // same as the line-type fields.
+        const serverReadyAt = serverPending.lineupReadyAt || 0;
+        const localReadyAt = localPending.lineupReadyAt || 0;
+        if (serverReadyAt > localReadyAt) {
+            localPending.lineupReadyAt = serverPending.lineupReadyAt;
+            localPending.lineupReadyBy = serverPending.lineupReadyBy || null;
+        }
+
         // Note: activeType is intentionally NOT synced - it's local UI state
         // Each user independently chooses which line type to view/edit
 
@@ -1209,13 +1219,22 @@ async function refreshGameStateFromCloud(gameId) {
                 const modKey = lineKey.replace('Line', 'LineModifiedAt');
                 const serverModTime = serverPending[modKey] ? new Date(serverPending[modKey]).getTime() : 0;
                 const localModTime = localPending[modKey] ? new Date(localPending[modKey]).getTime() : 0;
-                
+
                 if (serverModTime > localModTime) {
                     localPending[lineKey] = serverPending[lineKey] || [];
                     localPending[modKey] = serverPending[modKey];
                 }
             });
-            
+
+            // Lineup Ready multi-coach signal — same merge contract as
+            // refreshPendingLineFromCloud.
+            const serverReadyAt = serverPending.lineupReadyAt || 0;
+            const localReadyAt = localPending.lineupReadyAt || 0;
+            if (serverReadyAt > localReadyAt) {
+                localPending.lineupReadyAt = serverPending.lineupReadyAt;
+                localPending.lineupReadyBy = serverPending.lineupReadyBy || null;
+            }
+
             game.pendingNextLine = localPending;
         }
         

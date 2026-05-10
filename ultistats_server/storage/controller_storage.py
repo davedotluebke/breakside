@@ -45,8 +45,16 @@ class ControllerState(TypedDict):
 # Constants
 # =============================================================================
 
-# Role expires if no ping received within this time
-STALE_TIMEOUT_SECONDS = int(os.getenv("BREAKSIDE_STALE_TIMEOUT", "30"))
+# Role expires if no ping received within this time.
+#
+# Was 30s, but mobile browsers aggressively throttle/freeze setInterval
+# when the page is hidden, so a coach pocketing their phone for ~half a
+# minute would lose their roles. Bumped to 120s to give a more forgiving
+# pocket-time grace window. Genuine disconnects still free the role
+# eventually; the longer window mostly affects the time before another
+# coach can claim an abandoned role, which is rarely time-critical
+# (manual handoff is the normal release path).
+STALE_TIMEOUT_SECONDS = int(os.getenv("BREAKSIDE_STALE_TIMEOUT", "120"))
 
 # Handoff auto-approves after this time (must match client-side HANDOFF_TIMEOUT_SECONDS)
 HANDOFF_EXPIRY_SECONDS = int(os.getenv("BREAKSIDE_HANDOFF_EXPIRY", "10"))

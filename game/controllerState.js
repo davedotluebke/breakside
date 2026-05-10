@@ -458,8 +458,27 @@ const STALE_GAME_HOURS = 6;
 document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState !== 'visible') return;
 
-    const gameId = currentGameIdForPolling;
-    if (!gameId) return; // Not in a game
+    // Primary path: we still know our polling game id. Common case after a
+    // brief screen-off; the in-memory state is intact, we just need to
+    // ping aggressively to re-claim any expired roles.
+    let gameId = currentGameIdForPolling;
+
+    // Fallback: polling was stopped while we were hidden, but the game
+    // screen is still mounted (we have a `currentGame()`). This happens
+    // when the JS context was reset (PWA reload from background) or some
+    // path nulled `currentGameIdForPolling` without navigating away.
+    // Restart polling from the in-memory game id so the user isn't left
+    // stranded with role buttons that error out with "No active game."
+    if (!gameId) {
+        const game = (typeof currentGame === 'function') ? currentGame() : null;
+        if (game?.id) {
+            console.log('🎮 Page became visible — polling was stopped; restarting from currentGame()');
+            startControllerPolling(game.id);
+            gameId = game.id;
+        } else {
+            return; // Not in a game
+        }
+    }
 
     console.log('🎮 Page became visible — recovering game session...');
 
@@ -637,13 +656,24 @@ function isLineCoach() {
 }
 
 /**
- * Check if user can edit play-by-play events
- * Allowed if: Active Coach, or no one has claimed Active Coach
+ * Check if user can edit play-by-play events.
+ *
+ * Mirrors canEditSelectLinePanel's gating pattern (introduced in commit
+ * b952236): in solo / pre-multi-coach sessions there's no role
+ * enforcement; once the panelSystem multi-coach latch flips, PBP edits
+ * are restricted to the Active Coach. The previous fallback ("allow if
+ * no Active Coach claimed") leaked edit access to spectator coaches who
+ * had connected but not yet claimed a role — the same hole b952236
+ * fixed for the Line panel.
+ *
  * @returns {boolean}
  */
 function canEditPlayByPlay() {
     if (typeof window.isViewer === 'function' && window.isViewer()) return false;
-    return controllerState.isActiveCoach || !controllerState.activeCoach;
+    const multiCoach = typeof window.isMultiCoachDetected === 'function'
+        ? window.isMultiCoachDetected() : false;
+    if (!multiCoach) return true;
+    return controllerState.isActiveCoach;
 }
 
 /**

@@ -33,11 +33,14 @@ function moveToNextPoint() {
     // the score came from Simple mode (We Score / They Score / Key Play),
     // Full mode (score throw / Callahan), or narration. We only switch if
     // the current user actually holds the Line Coach role — other coaches
-    // and viewers stay on whatever tab they were already on.
+    // and viewers stay on whatever tab they were already on. Also skip if
+    // they're already on the All tab, which shows the Select Line panel
+    // alongside PBP — switching would be a regression for that workflow.
     if (typeof window.isLineCoach === 'function' && window.isLineCoach()
         && typeof window.switchTab === 'function'
         && typeof window.getActiveTab === 'function'
-        && window.getActiveTab() !== 'line') {
+        && window.getActiveTab() !== 'line'
+        && window.getActiveTab() !== 'all') {
         window.switchTab('line');
     }
 
@@ -63,19 +66,40 @@ function startNextPoint() {
     // Stop the countdown when point starts
     stopCountdown();
 
-    // Get selected players from panel table
+    // Use the effective line for the upcoming point — typically the line
+    // type the user is currently viewing (auto-selected to match), but
+    // the source-of-truth is `getEffectiveLineForNextPoint` so an Active
+    // Coach who happens to be browsing a *different* line at tap time
+    // still starts the right one. The view should already match in the
+    // common case via autoSelectActiveTypeForNextPoint.
+    const game = currentGame();
     let activePlayersForThisPoint = [];
-    const panelCheckboxes = document.querySelectorAll('#panelActivePlayersTable input[type="checkbox"]');
-    panelCheckboxes.forEach(checkbox => {
-        if (checkbox.checked && checkbox.dataset.playerName) {
-            activePlayersForThisPoint.push(checkbox.dataset.playerName);
-        }
-    });
-    console.log('📋 Got players from panel table:', activePlayersForThisPoint);
+    if (game && typeof getEffectiveLineForNextPoint === 'function') {
+        const effective = getEffectiveLineForNextPoint(game);
+        activePlayersForThisPoint = [...(effective.line || [])];
+        console.log(`📋 Effective line for next point: source=${effective.source}, players=`,
+            activePlayersForThisPoint);
+    } else {
+        // Fallback: read from the visible panel checkboxes (legacy path).
+        const panelCheckboxes = document.querySelectorAll('#panelActivePlayersTable input[type="checkbox"]');
+        panelCheckboxes.forEach(checkbox => {
+            if (checkbox.checked && checkbox.dataset.playerName) {
+                activePlayersForThisPoint.push(checkbox.dataset.playerName);
+            }
+        });
+        console.log('📋 Got players from panel table (fallback):', activePlayersForThisPoint);
+    }
 
     // Clear the stored next line selections since we're now using them
     console.log('About to clear next line selections in startNextPoint after using them');
     clearNextLineSelections();
+
+    // Reset the Lineup Ready ping for this point's slot so the Line Coach
+    // can send a fresh one for the next between-points window.
+    if (game && game.pendingNextLine) {
+        game.pendingNextLine.lineupReadyAt = null;
+        game.pendingNextLine.lineupReadyBy = null;
+    }
 
     // determine starting position: check point winners and switchside events
     const startPointOn = determineStartingPosition();

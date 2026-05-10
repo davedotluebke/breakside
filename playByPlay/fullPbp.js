@@ -228,6 +228,19 @@
         const state = reconstructState();
         const inPoint = (typeof isPointInProgress === 'function') && isPointInProgress();
 
+        // Mirror Simple PBP's role-disabled treatment: when the current
+        // user can't write events, the panel content is faded via CSS
+        // (see fullPbp.css `.panel-playByPlayFull.role-disabled`). Each
+        // handler still re-checks via requireActiveCoach() below so a
+        // tap on a faded button surfaces an explanatory toast rather
+        // than silently doing nothing.
+        const panel = document.getElementById('panel-playByPlayFull');
+        if (panel) {
+            const canEdit = (typeof window.canEditPlayByPlay === 'function')
+                ? window.canEditPlayByPlay() : true;
+            panel.classList.toggle('role-disabled', !canEdit);
+        }
+
         const pill = document.getElementById('fullPbpModePill');
         const startBtn = document.getElementById('fullPbpStartPointBtn');
         const msg = document.getElementById('fullPbpNoPointMsg');
@@ -466,6 +479,7 @@
      * created by the dedicated Score row button.
      */
     function handleModifierChange(event, propName, newValue, displayLabel) {
+        if (!requireActiveCoach()) return;
         // Clone the prior state for the bus payload so subscribers can
         // diff "before vs. after". Cheap shallow clone — flags are
         // primitives and player references are intentionally shared.
@@ -610,6 +624,25 @@
     // -----------------------------------------------------------------
 
     /**
+     * Role guard. Returns true if the current user can write events
+     * (Active Coach, or solo / no-roles fallback handled by the global
+     * canEditPlayByPlay). Otherwise surfaces a toast and returns false
+     * so the caller can early-out.
+     *
+     * Centralized here so adding a new handler is one line of guard
+     * instead of a copy-pasted 4-line role check, and so the toast text
+     * stays consistent across every entry point in Full PBP.
+     */
+    function requireActiveCoach() {
+        const ok = (typeof window.canEditPlayByPlay === 'function')
+            ? window.canEditPlayByPlay() : true;
+        if (!ok && typeof showControllerToast === 'function') {
+            showControllerToast('Only the Active Coach can record events', 'warning', 2200);
+        }
+        return ok;
+    }
+
+    /**
      * Tap on a player's name.
      *   - In O-mode, no holder yet  → set initial holder, no event.
      *   - In O-mode, holder exists  → log a Throw (holder → tapped); tapped
@@ -617,6 +650,7 @@
      *   - In D-mode → noop for phase 2 (D-mode interactions land in phase 3).
      */
     function handlePlayerNameTap(player) {
+        if (!requireActiveCoach()) return;
         const state = reconstructState();
         if (!state.point) return;
 
@@ -647,6 +681,7 @@
     }
 
     function handleDropTap(player) {
+        if (!requireActiveCoach()) return;
         const state = reconstructState();
         const holder = effectiveHolder(state);
         if (!holder) {
@@ -660,6 +695,7 @@
     }
 
     function handleThrowawayTap() {
+        if (!requireActiveCoach()) return;
         const state = reconstructState();
         const holder = effectiveHolder(state);
         if (!holder) return; // shouldn't be reachable — button only on holder row
@@ -667,6 +703,7 @@
     }
 
     function handleScoreTap(player) {
+        if (!requireActiveCoach()) return;
         const state = reconstructState();
         const holder = effectiveHolder(state);
         if (!holder) {
@@ -680,11 +717,13 @@
     }
 
     function handleBreakTap() {
+        if (!requireActiveCoach()) return;
         breakArmed = !breakArmed;
         render();
     }
 
     function handleBlockTap(player) {
+        if (!requireActiveCoach()) return;
         // Block: defender knocks the disc down. Possession not yet settled
         // — fall to D side with no holder; first tap on the new O side
         // establishes who picked it up. (Per requirements doc, A.)
@@ -692,6 +731,7 @@
     }
 
     function handleInterceptionTap(player) {
+        if (!requireActiveCoach()) return;
         // Interception: defender catches the disc cleanly. Becomes new
         // holder when we flip to O.
         createDefense(player, { interception: true });
@@ -705,6 +745,7 @@
      * Flips us back to O with no holder.
      */
     function handleTheyTurnoverTap() {
+        if (!requireActiveCoach()) return;
         createDefense(null, { unforcedError: true });
     }
 
@@ -751,6 +792,7 @@
      * events left behind.
      */
     function handleModePillTap() {
+        if (!requireActiveCoach()) return;
         const inPoint = (typeof isPointInProgress === 'function') && isPointInProgress();
         if (!inPoint) return;
 
@@ -860,6 +902,7 @@
      * follow-up worth doing, but out of scope for this phase).
      */
     function handleUndo() {
+        if (!requireActiveCoach()) return;
         if (typeof undoEvent !== 'function') {
             console.warn('[fullPbp] global undoEvent not available');
             return;

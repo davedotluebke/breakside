@@ -47,6 +47,9 @@ function createHeaderContent() {
                 <i class="fas fa-bars"></i>
             </button>
             <div class="header-menu-dropdown" id="gameMenuDropdown">
+                <button class="menu-item" id="menuRejoinGame" style="display: none;">
+                    <i class="fas fa-plug"></i> Rejoin Game
+                </button>
                 <button class="menu-item" id="menuLeaveGame">
                     <i class="fas fa-sign-out-alt"></i> Leave Game
                 </button>
@@ -363,6 +366,14 @@ function createSelectLineContent() {
     content.className = 'select-line-content';
 
     content.innerHTML = `
+        <div class="line-tab-action-row">
+            <button id="lineTabStartPointBtn" class="pbp-start-point-btn line-tab-start-point-btn" style="display: none;">
+                Start Point
+            </button>
+            <button id="lineTabLineupReadyBtn" class="pbp-start-point-btn line-tab-lineup-ready-btn" style="display: none;">
+                Lineup Ready
+            </button>
+        </div>
         <div class="select-line-toolbar">
             <span class="select-line-toolbar-spacer"></span>
             <button class="select-line-lines-btn" id="panelLinesBtn">Lines...</button>
@@ -444,6 +455,7 @@ function createSplitLineContent(lineType) {
         <div class="select-line-toolbar">
             <span class="select-line-toolbar-spacer"></span>
             <span class="select-line-mode-toggle" id="split${suffix}SelectionModeToggle">Manual</span>
+            <button class="select-line-od-toggle" id="split${suffix}ODToggle" title="Switch back to combined O/D view">O|D</button>
         </div>
         <div class="select-line-table-container" id="panelTableContainer${suffix}">
             <table class="panel-player-table" id="panelActivePlayersTable${suffix}">
@@ -647,6 +659,16 @@ function exitSplitMode() {
     updateODToggleButton();
     updateSelectLineSubtitle();
 
+    // Re-apply tab state so single-tab views (e.g. Line tab) hide the
+    // panels they should be hiding. Without this, `setPanelVisible` calls
+    // above show the combined panel but the just-hidden split panels
+    // can leave the layout in a half-broken state on the Line tab —
+    // visible fix: switching tabs and back restored it. Calling
+    // applyTabState directly is the same restoration path.
+    if (typeof window.applyTabState === 'function') {
+        window.applyTabState();
+    }
+
     // Save state
     if (typeof saveAllTeamsData === 'function') {
         saveAllTeamsData();
@@ -680,6 +702,30 @@ function wireSplitPanelEvents() {
         splitDToggle.addEventListener('click', () => cycleSelectionMode('splitD'));
         splitDToggle._modeWired = true;
     }
+
+    // O|D escape buttons in each split panel — let the user exit split
+    // view without having to cycle through od → o → d → split → od. The
+    // main-panel OD toggle is in the hidden panel, so without these the
+    // user is stuck in split mode. Both buttons just call exitSplitMode
+    // which restores the combined view.
+    ['O', 'D'].forEach(suffix => {
+        const odToggle = document.getElementById(`split${suffix}ODToggle`);
+        if (odToggle && !odToggle._wired) {
+            odToggle.addEventListener('click', () => {
+                if (!canEditSelectLinePanel()) {
+                    if (typeof showControllerToast === 'function') {
+                        showControllerToast('You need a coach role to change line type', 'warning');
+                    }
+                    return;
+                }
+                exitSplitMode();
+                if (typeof showControllerToast === 'function') {
+                    showControllerToast('Switched to combined O/D line', 'info');
+                }
+            });
+            odToggle._wired = true;
+        }
+    });
 }
 
 /**
@@ -1098,6 +1144,11 @@ function wireGameScreenEvents() {
     }
     
     // Menu dropdown items
+    const rejoinGameBtn = document.getElementById('menuRejoinGame');
+    if (rejoinGameBtn) {
+        rejoinGameBtn.addEventListener('click', handleRejoinGame);
+    }
+
     const leaveGameBtn = document.getElementById('menuLeaveGame');
     if (leaveGameBtn) {
         leaveGameBtn.addEventListener('click', handleLeaveGame);
@@ -1287,7 +1338,28 @@ function handleGameMenuClick(e) {
     const dropdown = document.getElementById('gameMenuDropdown');
     if (dropdown) {
         dropdown.classList.toggle('visible');
-        
+
+        // Show "Rejoin Game" whenever controller polling isn't active.
+        // The previous version also required `currentGame()` to return a
+        // game with an id, but in the PWA-reload-from-background case
+        // `currentTeam` may not have been restored yet — leaving the
+        // user looking at a stale game-screen DOM with no live state, and
+        // hiding the very button they need. The handler itself bails
+        // gracefully if there's nothing to rejoin.
+        const rejoinGameBtn = document.getElementById('menuRejoinGame');
+        if (rejoinGameBtn) {
+            const pollingActive = (typeof window.isControllerPollingActive === 'function')
+                && window.isControllerPollingActive();
+            const showRejoin = !pollingActive;
+            rejoinGameBtn.style.display = showRejoin ? '' : 'none';
+            console.log('🔌 Rejoin Game visibility:',
+                { pollingActive, showRejoin,
+                  pollingGameId: (typeof window.getPollingGameId === 'function') ? window.getPollingGameId() : '(unavailable)',
+                  hasCurrentGame: !!(typeof currentGame === 'function' && currentGame()?.id) });
+        } else {
+            console.warn('🔌 Rejoin Game button not found in DOM — HTML may be stale');
+        }
+
         // Update role buttons toggle label
         const toggleRoleBtn = document.getElementById('menuToggleRoleButtons');
         if (toggleRoleBtn) {
@@ -1322,6 +1394,64 @@ function closeGameMenu() {
     const dropdown = document.getElementById('gameMenuDropdown');
     if (dropdown) {
         dropdown.classList.remove('visible');
+    }
+}
+
+/**
+ * Handle "Rejoin Game" — re-establish controller polling without
+ * leaving the game screen.
+ *
+ * Triggered when the user is still on the game screen but polling has
+ * been stopped (PWA reload from background, network blip, etc.). The
+ * fix is just to call startControllerPolling with the current in-memory
+ * game id; that re-installs the ping interval, fetches fresh server
+ * state, and the existing role-claim UI handles re-acquiring roles.
+ */
+function handleRejoinGame() {
+    closeGameMenu();
+
+    // Try a couple of paths to find the in-progress game id. The
+    // straightforward `currentGame()` works in the common case, but if
+    // the JS context restarted (PWA reloaded from background) and
+    // `currentTeam` hasn't been restored yet, we may need to look in
+    // localStorage. As a last resort, walk the in-memory `teams` array
+    // for any non-ended game.
+    let game = (typeof currentGame === 'function') ? currentGame() : null;
+    let resolvedFrom = 'currentGame()';
+
+    if (!game?.id && typeof teams !== 'undefined' && Array.isArray(teams)) {
+        for (const team of teams) {
+            if (!team?.games?.length) continue;
+            const inProgress = team.games.find(g => g && !g.gameEndTimestamp);
+            if (inProgress?.id) {
+                game = inProgress;
+                resolvedFrom = `teams[${team.teamName || '?'}].games`;
+                break;
+            }
+        }
+    }
+
+    console.log('🔌 Rejoin Game tapped — resolved:', { game: game?.id, resolvedFrom });
+
+    if (!game?.id) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast(
+                'No in-progress game found — leave and rejoin from the team list',
+                'warning', 4000);
+        }
+        return;
+    }
+
+    if (typeof window.startControllerPolling === 'function') {
+        window.startControllerPolling(game.id);
+    }
+    // Game-state refresh may also have been stopped — restart it so the
+    // viewer/Line-Coach branches see live updates again.
+    if (typeof startGameStateRefresh === 'function') {
+        startGameStateRefresh();
+    }
+    if (typeof showControllerToast === 'function') {
+        showControllerToast('Reconnected — tap a role button to reclaim it', 'success', 3500);
     }
 }
 
@@ -2523,9 +2653,225 @@ function updatePlayByPlayPanelState() {
     
     // Update panel layout based on height
     updatePlayByPlayLayout();
-    
+
+    // Keep the Line-tab Start Point button (a parallel control on the Line
+    // tab — same shared state machine, different home) in sync.
+    updateLineTabStartPointBtn();
+
+    // Re-render Full PBP so its role-disabled fade and start-point button
+    // reflect the current role. updatePlayByPlayPanelState is the
+    // canonical "role/state changed" entry point — see controllerState.js
+    // calling it on role transitions.
+    if (window.fullPbp && typeof window.fullPbp.render === 'function') {
+        window.fullPbp.render();
+    }
+
     // Update Game Events modal buttons if it's open
     updateGameEventsModalState();
+}
+
+/**
+ * Update the Line tab's Start Point button.
+ *
+ * The button mirrors the PBP panel's Start Point button (label, feedback
+ * color, "Point in progress" disabled state) but lives at the top of the
+ * Select Line panel and is only visible when the Line tab itself is the
+ * active tab. In the All view we hide it because the PBP panel's own
+ * button is already on screen — showing both would be redundant.
+ */
+function updateLineTabStartPointBtn() {
+    const btn = document.getElementById('lineTabStartPointBtn');
+    if (!btn) return;
+
+    const onLineTab = (typeof getActiveTab === 'function') && getActiveTab() === 'line';
+
+    // Always show on the Line tab. applyStartPointButtonState handles the
+    // not-Active-Coach case with grey/inactive styling and leaves the
+    // button clickable so handlePanelStartPoint can surface the
+    // "only the Active Coach can start a point" toast.
+    if (!onLineTab) {
+        btn.style.display = 'none';
+        return;
+    }
+
+    btn.style.display = 'flex';
+    applyStartPointButtonState(btn, true);
+
+    // Keep the Lineup Ready sibling in sync with the same lifecycle.
+    updateLineTabLineupReadyBtn();
+}
+
+/**
+ * Update the Line tab's "Lineup Ready" button.
+ *
+ * Multi-coach coordination signal. The Line Coach taps to ping the Active
+ * Coach that the next lineup is set — useful when the two coaches aren't
+ * standing next to each other. The button is intentionally narrow in
+ * scope:
+ *   - Only visible when the user is a *pure* Line Coach (i.e. someone
+ *     else holds Active Coach). A solo coach sees nothing because the
+ *     signal has no recipient. An Active-Coach-only user is the recipient,
+ *     not the sender.
+ *   - Only between points. During a point the lineup is committed; there's
+ *     nothing to "be ready" with.
+ *   - After tap, locks into a green "✓ Sent" state until the next point
+ *     starts (which clears `lineupReadyAt` in startNextPoint).
+ *
+ * The actual ping is just a timestamp + coach name written to
+ * `pendingNextLine.lineupReadyAt` / `lineupReadyBy`. The Active Coach's
+ * existing 3-second pendingLine refresh poll picks it up and surfaces a
+ * toast — see handleLineupReadyAckOnRefresh.
+ */
+/**
+ * Compute the current Lineup Ready button state.
+ *
+ * The Lineup Ready surface is shared between roles but plays different
+ * parts on each side:
+ *   - Line Coach: it's a *button* — tap to send a ping signaling "I'm
+ *     done picking this line."
+ *   - Active Coach: it's a *status indicator* — read-only badge that
+ *     shows whether the Line Coach has signaled ready. Useful as one of
+ *     two coloured cues (alongside Start Point's count/ratio feedback)
+ *     when deciding whether to start the point.
+ *
+ * Both roles share the same compute → render path; differences are
+ * encoded in the returned `state` string. Lineup Ready is *never* a
+ * commit gate — it never blocks Start Point, and the lineup itself
+ * syncs continuously regardless of whether the ping has been sent.
+ *
+ * Returned `state` values:
+ *   - 'active'     → blue button, label "Lineup Ready", tap sends (Line Coach idle)
+ *   - 'sent'       → green button/badge, label "✓ Lineup Ready" (someone pinged this window)
+ *   - 'pending'    → desaturated-blue badge, label "Lineup Pending" — Active Coach
+ *                    sees this when the Line Coach hasn't pinged yet.
+ *   - 'disabled'   → desaturated-blue button, label "Lineup Ready"; tap surfaces
+ *                    the toast in `disabledReason` (Line Coach can't currently send)
+ */
+function computeLineupReadyState() {
+    const ctrlState = (typeof getControllerState === 'function') ? getControllerState() : {};
+    const game = (typeof currentGame === 'function') ? currentGame() : null;
+    const pending = game && game.pendingNextLine;
+    const sentAtRaw = pending && pending.lineupReadyAt;
+    const pointInProgress = (typeof isPointInProgress === 'function') && isPointInProgress();
+
+    // Staleness gate: a `lineupReadyAt` from before the most recent
+    // point's start is leftover from a prior between-points window. The
+    // stored field outlives any one window (it's persisted with the
+    // game), so without this comparison the button would read "✓ Sent"
+    // forever after the first ping ever sent.
+    const points = (game && game.points) || [];
+    const latestPoint = points[points.length - 1];
+    const latestPointStart = (latestPoint && latestPoint.startTimestamp)
+        ? new Date(latestPoint.startTimestamp).getTime() : 0;
+    const sentForCurrentWindow = sentAtRaw && sentAtRaw > latestPointStart;
+
+    // Sent state wins regardless of who's looking — it's a shared status.
+    if (sentForCurrentWindow) {
+        return { state: 'sent', label: '✓ Lineup Ready' };
+    }
+
+    // Active Coach branch: read-only indicator.
+    if (ctrlState.isActiveCoach && !ctrlState.isLineCoach) {
+        // No ping yet from the Line Coach.
+        return { state: 'pending', label: 'Lineup Pending' };
+    }
+
+    // Solo coach (both roles): button has no recipient.
+    if (ctrlState.isActiveCoach && ctrlState.isLineCoach) {
+        return {
+            state: 'disabled', label: 'Lineup Ready',
+            disabledReason: 'You hold both roles — no other coach to ping'
+        };
+    }
+
+    // Spectator coach (no roles, multi-coach session) and Line-Coach branches:
+    if (pointInProgress) {
+        return {
+            state: 'disabled', label: 'Lineup Ready',
+            disabledReason: 'Lineup Ready can only be sent between points'
+        };
+    }
+    if (!ctrlState.isLineCoach) {
+        return {
+            state: 'disabled', label: 'Lineup Ready',
+            disabledReason: 'Only the Line Coach can send a Lineup Ready ping'
+        };
+    }
+    if (!ctrlState.activeCoach) {
+        return {
+            state: 'disabled', label: 'Lineup Ready',
+            disabledReason: 'No Active Coach connected — nobody to ping'
+        };
+    }
+    return { state: 'active', label: 'Lineup Ready' };
+}
+
+function updateLineTabLineupReadyBtn() {
+    const btn = document.getElementById('lineTabLineupReadyBtn');
+    if (!btn) return;
+
+    const onLineTab = (typeof getActiveTab === 'function') && getActiveTab() === 'line';
+    if (!onLineTab) {
+        btn.style.display = 'none';
+        return;
+    }
+
+    btn.style.display = 'flex';
+    btn.classList.remove('sent', 'inactive');
+    btn.disabled = false;
+
+    const { state, label } = computeLineupReadyState();
+    btn.textContent = label;
+
+    if (state === 'sent') {
+        btn.classList.add('sent');
+        btn.disabled = true;  // Already sent — no further action.
+    } else if (state === 'pending') {
+        // Active Coach view, awaiting Line Coach ping. Read-only badge —
+        // hard-disabled so it doesn't invite a tap (no toast, nothing to do).
+        btn.classList.add('inactive');
+        btn.disabled = true;
+    } else if (state === 'disabled') {
+        // Visually disabled but kept clickable so a tap can surface the
+        // reason via toast (handleLineupReadyTap re-checks state).
+        btn.classList.add('inactive');
+    }
+    // state === 'active' → leave default blue style from CSS.
+}
+
+/**
+ * "Lineup Ready" tap handler. When state is 'active', writes the ping
+ * fields onto pendingNextLine and persists. When state is 'disabled',
+ * surfaces a toast explaining why nothing happened. When state is 'sent'
+ * the button itself is hard-disabled, so this handler doesn't run.
+ */
+function handleLineupReadyTap() {
+    const { state, disabledReason } = computeLineupReadyState();
+
+    if (state === 'disabled') {
+        if (typeof showControllerToast === 'function' && disabledReason) {
+            showControllerToast(disabledReason, 'info', 2500);
+        }
+        return;
+    }
+    if (state !== 'active') return;
+
+    const game = (typeof currentGame === 'function') ? currentGame() : null;
+    if (!game) return;
+    if (!game.pendingNextLine) game.pendingNextLine = {};
+
+    const ctrlState = (typeof getControllerState === 'function') ? getControllerState() : {};
+    const myName = (ctrlState.lineCoach && ctrlState.lineCoach.displayName) || 'Line Coach';
+
+    game.pendingNextLine.lineupReadyAt = Date.now();
+    game.pendingNextLine.lineupReadyBy = myName;
+
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    if (typeof showControllerToast === 'function') {
+        showControllerToast('Lineup ready ping sent', 'success', 1800);
+    }
+
+    updateLineTabLineupReadyBtn();
 }
 
 // =============================================================================
@@ -2538,48 +2884,58 @@ function updatePlayByPlayPanelState() {
  * @returns {object} { feedbackClass, startOnLabel, pointInProgress }
  */
 function getStartPointButtonState() {
-    const selectedPlayers = typeof getSelectedPlayersFromPanel === 'function' 
-        ? getSelectedPlayersFromPanel() 
-        : [];
     const expectedCount = parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
     const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
-    
-    // Calculate feedback state
     const game = typeof currentGame === 'function' ? currentGame() : null;
+
+    // Compute feedback against the line that will *actually* be played,
+    // not what's currently visible in the panel. The Active Coach may be
+    // browsing the OD line while the upcoming point uses the separate O
+    // line — the button color should reflect the lineup that'll start.
+    let effectivePlayers = [];
+    let lineSource = 'od';
+    if (game && typeof getEffectiveLineForNextPoint === 'function') {
+        const effective = getEffectiveLineForNextPoint(game);
+        effectivePlayers = effective.line || [];
+        lineSource = effective.source;
+    } else if (typeof getSelectedPlayersFromPanel === 'function') {
+        effectivePlayers = getSelectedPlayersFromPanel();
+    }
+
     let genderRatioWarning = false;
     let startingRatioRequired = false;
-    
+
     if (game && game.alternateGenderRatio && game.alternateGenderRatio !== 'No') {
         if (game.alternateGenderRatio === 'Alternating' && !game.startingGenderRatio && game.points.length === 0) {
             startingRatioRequired = true;
-        } else if (selectedPlayers.length === expectedCount) {
-            genderRatioWarning = typeof checkPanelGenderRatio === 'function' 
-                ? !checkPanelGenderRatio(selectedPlayers, expectedCount)
+        } else if (effectivePlayers.length === expectedCount) {
+            genderRatioWarning = typeof checkPanelGenderRatio === 'function'
+                ? !checkPanelGenderRatio(effectivePlayers, expectedCount)
                 : false;
         }
     }
-    
+
     // Determine feedback class
     let feedbackClass = '';
-    if (selectedPlayers.length === 0) {
+    if (effectivePlayers.length === 0) {
         feedbackClass = 'inactive';
     } else if (startingRatioRequired) {
         feedbackClass = 'inactive';
-    } else if (selectedPlayers.length !== expectedCount) {
+    } else if (effectivePlayers.length !== expectedCount) {
         feedbackClass = 'feedback-count-warning';  // Wrong player count (red)
     } else if (genderRatioWarning) {
         feedbackClass = 'feedback-gender-warning';  // Wrong gender ratio (orange)
     } else {
         feedbackClass = 'feedback-ok';  // All good (green)
     }
-    
+
     // Determine starting position
-    const startOn = typeof determineStartingPosition === 'function' 
-        ? determineStartingPosition() 
+    const startOn = typeof determineStartingPosition === 'function'
+        ? determineStartingPosition()
         : 'offense';
     const startOnLabel = startOn.charAt(0).toUpperCase() + startOn.slice(1);
-    
-    return { feedbackClass, startOnLabel, pointInProgress };
+
+    return { feedbackClass, startOnLabel, pointInProgress, lineSource };
 }
 
 /**
@@ -2590,31 +2946,54 @@ function getStartPointButtonState() {
  */
 function applyStartPointButtonState(btn, showPointInProgress = true) {
     if (!btn) return;
-    
-    const { feedbackClass, startOnLabel, pointInProgress } = getStartPointButtonState();
-    
+
+    const { feedbackClass, startOnLabel, pointInProgress, lineSource }
+        = getStartPointButtonState();
+    const hasActiveCoachRole = (typeof canEditPlayByPlayPanel === 'function')
+        ? canEditPlayByPlayPanel() : true;
+
     // Reset all states
-    btn.classList.remove('warning', 'inactive', 'point-in-progress', 
+    btn.classList.remove('warning', 'inactive', 'point-in-progress',
         'feedback-ok', 'feedback-count-warning', 'feedback-gender-warning');
     btn.disabled = false;
-    
-    // If point is in progress and this button should show that state
+
+    // Point in progress: grey-on-grey, hard-disabled. Any selection-color
+    // hint (red/orange/green) here would be misleading — the button is
+    // not actionable mid-point.
     if (pointInProgress && showPointInProgress) {
         btn.textContent = 'Point in progress';
-        btn.classList.add('point-in-progress');
-        if (feedbackClass) {
-            btn.classList.add(feedbackClass);
-        }
+        btn.classList.add('point-in-progress', 'inactive');
         btn.disabled = true;
         return;
     }
-    
-    // Set button text
-    btn.textContent = `Start Point (${startOnLabel})`;
-    
-    // Apply the feedback class
+
+    // Label parenthetical:
+    //   - O-line being used  → "Start Point (O-line)"  (offense implied)
+    //   - D-line being used  → "Start Point (D-line)"  (defense implied)
+    //   - Combined OD line   → "Start Point (Offense)" / "(Defense)"
+    // The line type implies the side, so we don't double up.
+    let label;
+    if (lineSource === 'o')      label = 'Start Point (O-line)';
+    else if (lineSource === 'd') label = 'Start Point (D-line)';
+    else                         label = `Start Point (${startOnLabel})`;
+    btn.textContent = label;
+
+    // Apply the feedback class (green/orange/red) reflecting the current
+    // line. Non-Active-Coach also gets the feedback class — they need to
+    // see the same lineup warnings the Active Coach sees, just dimmed to
+    // signal "you can't act on this." Combined `.inactive.feedback-*`
+    // CSS rules render as desaturated red/orange/green rather than pure
+    // grey-on-grey (which loses the warning information).
     if (feedbackClass) {
         btn.classList.add(feedbackClass);
+    }
+
+    // Not Active Coach: still clickable (handlePanelStartPoint surfaces
+    // the role-warning toast), but visually marked as inactive. The
+    // combined CSS rule keeps the feedback hue, dropping saturation +
+    // dimming opacity.
+    if (!hasActiveCoachRole) {
+        btn.classList.add('inactive');
     }
 }
 
@@ -2765,6 +3144,23 @@ function wireSelectLineEvents() {
     const linesBtn = document.getElementById('panelLinesBtn');
     if (linesBtn) {
         linesBtn.addEventListener('click', handlePanelLinesClick);
+    }
+
+    // Line-tab Start Point button. Visible only when the Line tab is the
+    // active tab (so it doesn't clutter the All view, which already shows
+    // the PBP panel's own Start Point button) and the user has the Active
+    // Coach role. Reuses the same handler as the PBP panel's button.
+    const lineTabStartPointBtn = document.getElementById('lineTabStartPointBtn');
+    if (lineTabStartPointBtn) {
+        lineTabStartPointBtn.addEventListener('click', handlePanelStartPoint);
+    }
+
+    // Line-tab "Lineup Ready" button. Multi-coach signal — Line Coach
+    // pings Active Coach that the next line is set. See
+    // handleLineupReadyTap for the cross-coach state flow.
+    const lineTabLineupReadyBtn = document.getElementById('lineTabLineupReadyBtn');
+    if (lineTabLineupReadyBtn) {
+        lineTabLineupReadyBtn.addEventListener('click', handleLineupReadyTap);
     }
     
     // Player table checkbox changes (delegated)
@@ -3746,72 +4142,89 @@ function updatePanelGenderRatioDisplay() {
  * - If O/D line was modified after the point started, use O/D line
  * - Otherwise, use O line (if team will be on offense) or D line (if team will be on defense)
  */
-function selectAppropriateLineAtPointEnd() {
+/**
+ * Determine which line will be used for the next point.
+ *
+ * Rule (intentionally simple, per design discussion):
+ *   - For an upcoming offense point, compare oLine vs odLine modification
+ *     timestamps. Whichever was edited more recently and is non-empty
+ *     wins. Defense point uses dLine vs odLine the same way.
+ *   - The separate O/D line, once created, *persists* across multiple
+ *     points until the OD line is edited more recently. We don't apply
+ *     a per-window freshness gate — the Line Coach saying "here's our O
+ *     line" should hold until they say otherwise.
+ *   - If both are empty / unset, return an empty line tagged 'od'.
+ *
+ * Returns `{ source, line }` where `source` is `'o' | 'd' | 'od'` and
+ * `line` is the array of player names. Used by:
+ *   - `startNextPoint` to decide which player set actually starts the point
+ *   - `applyStartPointButtonState` to label the button ("— O line", etc.)
+ *   - `autoSelectActiveTypeForNextPoint` to keep the visible view in sync
+ */
+function getEffectiveLineForNextPoint(game) {
+    if (!game || !game.pendingNextLine) return { source: 'od', line: [] };
+
+    const isOffense = (typeof determineStartingPosition === 'function')
+        ? determineStartingPosition() === 'offense'
+        : true;
+    const typeKey = isOffense ? 'o' : 'd';
+
+    const p = game.pendingNextLine;
+    const typedLine = p[typeKey + 'Line']    || [];
+    const typedMod  = p[typeKey + 'LineModifiedAt'];
+    const odLine    = p.odLine               || [];
+    const odMod     = p.odLineModifiedAt;
+    const typedTime = typedMod ? new Date(typedMod).getTime() : 0;
+    const odTime    = odMod    ? new Date(odMod).getTime()    : 0;
+
+    if (typedTime > odTime && typedLine.length > 0) {
+        return { source: typeKey, line: typedLine };
+    }
+    if (odLine.length > 0) {
+        return { source: 'od', line: odLine };
+    }
+    if (typedLine.length > 0) {
+        return { source: typeKey, line: typedLine };  // OD empty fallback
+    }
+    return { source: 'od', line: [] };
+}
+
+/**
+ * Set `pendingNextLine.activeType` to match whichever line will be used
+ * for the next point. Skipped in split mode (the user is intentionally
+ * looking at both at once). Also skipped if no change is needed.
+ *
+ * Called both at point end (from selectAppropriateLineAtPointEnd) and
+ * after cloud refresh (so the Active Coach's view follows the Line
+ * Coach's edits without a manual toggle).
+ */
+function autoSelectActiveTypeForNextPoint() {
     const game = typeof currentGame === 'function' ? currentGame() : null;
     if (!game || !game.pendingNextLine) return;
-    
-    // Get the last completed point
-    const latestPoint = typeof getLatestPoint === 'function' ? getLatestPoint() : null;
-    if (!latestPoint || !latestPoint.winner) return; // No completed point yet
-    
-    const pointStartTime = latestPoint.startTimestamp 
-        ? new Date(latestPoint.startTimestamp).getTime() 
-        : 0;
-    
-    // Get modification timestamps for all line types
-    const odLineModTime = game.pendingNextLine.odLineModifiedAt
-        ? new Date(game.pendingNextLine.odLineModifiedAt).getTime()
-        : 0;
-    const oLineModTime = game.pendingNextLine.oLineModifiedAt
-        ? new Date(game.pendingNextLine.oLineModifiedAt).getTime()
-        : 0;
-    const dLineModTime = game.pendingNextLine.dLineModifiedAt
-        ? new Date(game.pendingNextLine.dLineModifiedAt).getTime()
-        : 0;
-    
-    let selectedType;
-    
-    const currentType = game.pendingNextLine.activeType || 'od';
+    if (isSplitMode()) return;
 
-    // Priority 1: If user is currently on the combined O/D view, stay there.
-    // Coaches who use O/D don't want to be forced into separate O/D lines
-    // just because they once toggled through the other views.
-    if (currentType === 'od') {
-        selectedType = 'od';
-        console.log('📋 Staying on O/D line (user is in combined view)');
-    }
-    // Priority 2: If O/D line was modified DURING this point, switch to it
-    else if (odLineModTime > pointStartTime) {
-        selectedType = 'od';
-        console.log('📋 Auto-selecting O/D line (modified during point)');
-    }
-    // Priority 3: Use O or D line based on who scored
-    else {
-        if (latestPoint.winner === 'team') {
-            // Team scored - will be on defense next
-            selectedType = 'd';
-            console.log('📋 Auto-selecting D line (team scored, will be on defense)');
-        } else {
-            // Opponent scored - will be on offense next
-            selectedType = 'o';
-            console.log('📋 Auto-selecting O line (opponent scored, will be on offense)');
-        }
-    }
-    
-    // In split mode, don't change activeType
-    if (isSplitMode()) {
-        return;
-    }
-
-    // Only update if different from current (local-only, not synced)
-    if (game.pendingNextLine.activeType !== selectedType) {
-        game.pendingNextLine.activeType = selectedType;
-
-        // Save game state (activeType won't be synced to cloud)
+    const { source } = getEffectiveLineForNextPoint(game);
+    if (game.pendingNextLine.activeType !== source) {
+        game.pendingNextLine.activeType = source;
+        // activeType is local UI state — saveAllTeamsData persists to
+        // localStorage but it's filtered out of the cloud sync (see
+        // serializeGame). No multi-device cross-talk on this field.
         if (typeof saveAllTeamsData === 'function') {
             saveAllTeamsData();
         }
     }
+}
+
+function selectAppropriateLineAtPointEnd() {
+    // Delegate to the shared helper. The historical version of this
+    // function had a 3-priority rule (stay on OD, then OD-modified-during-
+    // point, then who-scored) — but that meant a separately-prepared O or
+    // D line never got applied unless the user was already viewing it,
+    // which contradicted the design intent that o/d lines persist across
+    // points. The new rule (most recent edit between typed-vs-OD wins) is
+    // simpler and matches what coaches actually expect. See
+    // getEffectiveLineForNextPoint for the rule.
+    autoSelectActiveTypeForNextPoint();
 }
 
 /**
@@ -4983,6 +5396,16 @@ function startGameStateRefresh() {
             // They are the authoritative source for game data
             if (typeof isPointInProgress === 'function' && !isPointInProgress()) {
                 if (typeof refreshPendingLineFromCloud === 'function') {
+                    // Snapshot lineupReadyAt before refresh so we can
+                    // detect a *new* "Lineup Ready" ping from the Line
+                    // Coach. The merge happens in-place inside the
+                    // refresh function; comparing pre/post tells us
+                    // whether to surface a toast.
+                    const gameForSnapshot = (typeof currentGame === 'function') ? currentGame() : null;
+                    const prevLineupReadyAt = (gameForSnapshot
+                        && gameForSnapshot.pendingNextLine
+                        && gameForSnapshot.pendingNextLine.lineupReadyAt) || 0;
+
                     const result = await refreshPendingLineFromCloud(gameId);
                     if (result && typeof result === 'object' && result.gameJustEnded) {
                         // Game ended by another session/device
@@ -4998,7 +5421,44 @@ function startGameStateRefresh() {
                         return;
                     }
                     if (result) {
+                        // Re-evaluate which line will be used for the
+                        // next point now that we have fresh data — the
+                        // Line Coach may have switched between OD / O /
+                        // D since our last poll. autoSelect updates
+                        // activeType so updateSelectLinePanel below
+                        // renders the line that will actually start.
+                        if (typeof autoSelectActiveTypeForNextPoint === 'function') {
+                            autoSelectActiveTypeForNextPoint();
+                        }
                         updateSelectLinePanel();
+
+                        // Refresh PBP-side button state too. updateSelect-
+                        // LinePanel only touches the Line tab's table —
+                        // the Start Point buttons on Simple, Full, AND
+                        // Line tabs all read from updatePlayByPlayPanel-
+                        // State. Without this, the Active Coach who's
+                        // sitting on Full or Simple sees stale button
+                        // colors (and the Line tab's own button doesn't
+                        // refresh either, since its state is hung off
+                        // updatePlayByPlayPanelState via
+                        // updateLineTabStartPointBtn).
+                        if (typeof updatePlayByPlayPanelState === 'function') {
+                            updatePlayByPlayPanelState();
+                        }
+
+                        // Surface a Lineup Ready ping if this refresh
+                        // brought one. Skip if the timestamp is stale
+                        // (>60s old) — could be a leftover from a
+                        // previous between-points window that we just
+                        // happened to refresh into now.
+                        const newReadyAt = (result && result.lineupReadyAt) || 0;
+                        if (newReadyAt > prevLineupReadyAt
+                            && (Date.now() - newReadyAt) < 60000) {
+                            const who = (result.lineupReadyBy || 'Line Coach');
+                            if (typeof showControllerToast === 'function') {
+                                showControllerToast(`${who} says lineup ready`, 'success', 4000);
+                            }
+                        }
                     }
                 }
             }
