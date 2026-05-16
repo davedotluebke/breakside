@@ -2248,6 +2248,25 @@ section > .panel-title-bar {
     color: white;
 }
 
+/* Primary commit action in the Score Attribution dialog. Used when the
+ * dialog is opened with both thrower and receiver pre-selected (the
+ * Full-PBP Score-button path), where the existing auto-fire-on-both-
+ * selected behavior is suppressed and the user needs an explicit
+ * "commit" tap so they have time to toggle modifier flags first. In
+ * Simple mode the auto-fire still fires before the user could reach
+ * this button — it just sits as a visible affordance. */
+.primary-action-btn {
+    background-color: #16a34a;
+    color: white;
+}
+.primary-action-btn.inactive,
+.primary-action-btn:disabled {
+    background-color: #cccccc;
+    color: #666666;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
 
 /* Point clock container styles */
 .point-clock-container {

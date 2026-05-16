@@ -704,16 +704,49 @@
 
     function handleScoreTap(player) {
         if (!requireActiveCoach()) return;
+        // Open the same Score Attribution dialog Simple mode uses — with
+        // thrower (current holder, if any) and receiver (the tapped
+        // player's row) pre-selected, plus the breakArmed state carried
+        // over. The dialog lets the user toggle modifier flags (huck,
+        // break, hammer, sky, layout) before committing via its Score
+        // button. The previous behavior fired the throw immediately with
+        // no chance to add flags.
         const state = reconstructState();
         const holder = effectiveHolder(state);
-        if (!holder) {
-            // No holder yet but user is claiming a score — treat the tapped
-            // player as catching from Unknown. Edge case; keeps the button
-            // from being a dead end.
-            createThrow(getUnknown(), player, { score: true });
-        } else {
-            createThrow(holder, player, { score: true });
+
+        // Stop the point timer before the dialog opens — matches what
+        // the Simple-mode We Score handler does so the displayed point
+        // duration doesn't keep ticking while the user fiddles with
+        // modifier checkboxes.
+        const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
+        if (point && point.startTimestamp) {
+            point.totalPointTime = (point.totalPointTime || 0)
+                + (Date.now() - new Date(point.startTimestamp).getTime());
+            point.startTimestamp = null;
         }
+
+        // Ensure dialog is visible (moves it to body if needed — same as
+        // gameScreen.js does before invoking the Simple-mode flow).
+        if (typeof ensureDialogVisible === 'function') {
+            ensureDialogVisible('scoreAttributionDialog');
+        }
+
+        if (typeof showScoreAttributionDialog === 'function') {
+            showScoreAttributionDialog({
+                thrower: holder || null,
+                receiver: player,
+                breakArmed: !!breakArmed
+            });
+        } else {
+            // Fallback if the dialog isn't loaded for some reason.
+            console.warn('[fullPbp] showScoreAttributionDialog unavailable; falling back to direct createThrow');
+            if (holder) createThrow(holder, player, { score: true });
+            else        createThrow(getUnknown(), player, { score: true });
+        }
+
+        // Clear the local arming so it doesn't bleed into the next event.
+        breakArmed = false;
+        render();
     }
 
     function handleBreakTap() {
