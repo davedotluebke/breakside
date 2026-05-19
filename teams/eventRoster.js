@@ -233,7 +233,7 @@ async function renderEventRosterTable() {
         const pmPerPt = totalPoints > 0 ? (totals.plusMinus / totalPoints).toFixed(2) : '0.0';
 
         const aggValues = [
-            '', // Pts — not meaningful as team total
+            totals.pointsPlayed,
             typeof formatPlayTime === 'function' ? formatPlayTime(totals.timePlayed) : '',
             totals.goals,
             totals.assists,
@@ -292,6 +292,9 @@ async function renderEventRosterTable() {
         if (eventRosterSortState) {
             eventRosterSortController.sort(eventRosterSortState.key, eventRosterSortState.direction);
         }
+    }
+    if (typeof attachStatsColumnHelp === 'function') {
+        attachStatsColumnHelp(tbody.querySelector('tr:first-child'));
     }
 }
 
@@ -470,19 +473,21 @@ function exportEventRosterCSV() {
 
     const csvRows = [];
     rows.forEach(row => {
+        // Skip unchecked team players — natural "players who actually attended"
+        // export. Header, aggregate, and pickup rows are always included.
+        const firstCell = row.children[0];
+        const cb = firstCell ? firstCell.querySelector('input[type="checkbox"]') : null;
+        if (cb && !cb.checked) return;
+
         const cells = [];
         Array.from(row.children).forEach((cell, colIdx) => {
             if (colIdx === 0) {
-                // Checkbox column → "Yes"/"No"/empty for header/aggregate
-                const cb = cell.querySelector('input[type="checkbox"]');
+                // Checkbox column → "Yes" for everything that made it past the filter
                 if (cell.tagName === 'TH') {
                     cells.push('Attending');
-                } else if (cb) {
-                    cells.push(cb.checked ? 'Yes' : 'No');
                 } else if (row.classList.contains('team-aggregate-row')) {
                     cells.push('');
                 } else {
-                    // Pickup player (no checkbox) — always attending
                     cells.push('Yes');
                 }
             } else {

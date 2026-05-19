@@ -165,16 +165,20 @@ function classifyPoint(point) {
  * Aggregate team-level point classifications for a single game.
  * @param {object} game - Deserialized Game object
  * @returns {object} { breaks, opponentBreaks, cleanHolds, dirtyHolds,
- *                     holdOpps, breakOpps, total }
+ *                     holdOpps, breakOpps, breakPossOpps, total }
  *   - holdOpps = number of points started on O (chances to hold)
  *   - breakOpps = number of points started on D (chances to break)
+ *   - breakPossOpps = number of defensive possessions across all completed
+ *     points (a D-point can contain multiple D-possessions if the team
+ *     gives the disc back; per-possession break rate is the truer measure
+ *     of D-line conversion efficiency)
  *   - opponentBreaks = points we started on O but lost (= got broken)
  */
 function getGameTeamStats(game) {
     const totals = {
         breaks: 0, opponentBreaks: 0,
         cleanHolds: 0, dirtyHolds: 0,
-        holdOpps: 0, breakOpps: 0,
+        holdOpps: 0, breakOpps: 0, breakPossOpps: 0,
         total: 0
     };
     if (!game) return totals;
@@ -184,6 +188,9 @@ function getGameTeamStats(game) {
         totals.total++;
         if (point.startingPosition === 'offense') totals.holdOpps++;
         else totals.breakOpps++;
+        (point.possessions || []).forEach(p => {
+            if (p && p.offensive === false) totals.breakPossOpps++;
+        });
         if (kind === 'break') totals.breaks++;
         else if (kind === 'cleanHold') totals.cleanHolds++;
         else if (kind === 'hold') totals.dirtyHolds++;
@@ -202,7 +209,7 @@ async function getEventTeamStats(event, options = {}) {
     const totals = {
         breaks: 0, opponentBreaks: 0,
         cleanHolds: 0, dirtyHolds: 0,
-        holdOpps: 0, breakOpps: 0,
+        holdOpps: 0, breakOpps: 0, breakPossOpps: 0,
         total: 0
     };
     if (!event) return totals;
@@ -217,21 +224,27 @@ async function getEventTeamStats(event, options = {}) {
         totals.dirtyHolds += g.dirtyHolds;
         totals.holdOpps += g.holdOpps;
         totals.breakOpps += g.breakOpps;
+        totals.breakPossOpps += g.breakPossOpps;
         totals.total += g.total;
     });
     return totals;
 }
 
 /**
- * Format a team-stats object as a short human-readable summary line.
+ * Format a team-stats object as a human-readable summary, one stat per line
+ * so the breakdown doesn't wrap mid-stat on narrow phone screens.
  * @param {object} t - team stats from getGameTeamStats / getEventTeamStats
- * @returns {string} e.g. "Breaks: 3/5 D-points • Holds: 4 clean + 2 dirty / 6 O-points"
+ * @returns {string} newline-separated lines (render with CSS white-space: pre-line)
  */
 function formatTeamStatsLine(t) {
     if (!t || t.total === 0) return '';
-    const breakStr = `Breaks: ${t.breaks}/${t.breakOpps} D-point${t.breakOpps === 1 ? '' : 's'}`;
-    const holdsStr = `Holds: ${t.cleanHolds} clean + ${t.dirtyHolds} dirty / ${t.holdOpps} O-point${t.holdOpps === 1 ? '' : 's'}`;
-    return `${breakStr}  •  ${holdsStr}`;
+    const lines = [];
+    lines.push(`Breaks: ${t.breaks}/${t.breakOpps} D-point${t.breakOpps === 1 ? '' : 's'}` +
+               (t.breakPossOpps > 0
+                    ? ` (${t.breaks}/${t.breakPossOpps} D-possession${t.breakPossOpps === 1 ? '' : 's'})`
+                    : ''));
+    lines.push(`Holds: ${t.cleanHolds} clean + ${t.dirtyHolds} dirty / ${t.holdOpps} O-point${t.holdOpps === 1 ? '' : 's'}`);
+    return lines.join('\n');
 }
 
 /**

@@ -133,7 +133,7 @@ function renderGameSummaryStatsTable(game) {
         const pmPerPt = totalPoints > 0 ? (totals.plusMinus / totalPoints).toFixed(2) : '0.0';
 
         const aggValues = [
-            '',
+            totals.pointsPlayed,
             typeof formatPlayTime === 'function' ? formatPlayTime(totals.timePlayed) : '',
             totals.goals,
             totals.assists,
@@ -182,6 +182,9 @@ function renderGameSummaryStatsTable(game) {
             columns
         });
         gameSummarySortController.attach();
+    }
+    if (typeof attachStatsColumnHelp === 'function') {
+        attachStatsColumnHelp(tbody.querySelector('tr:first-child'));
     }
 }
 

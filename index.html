@@ -417,8 +417,8 @@
                 <i class="fas fa-arrow-left"></i> Back
             </button>
             <h2 id="eventRosterHeader">Event Roster</h2>
-            <button id="exportEventRosterBtn" class="back-button" title="Export to CSV" style="display:none;">
-                <i class="fas fa-file-csv"></i> CSV
+            <button id="exportEventRosterBtn" class="back-button" title="Export attending players to CSV" style="display:none;">
+                <i class="fas fa-file-csv"></i> Export to CSV
             </button>
         </div>
         <div id="eventRosterPhaseFilterRow" class="event-roster-filter-row" style="display:none;">
@@ -678,7 +678,7 @@
             </button>
             <span class="panel-title">Game Summary</span>
             <button id="exportGameSummaryBtn" class="back-button" title="Export to CSV" style="display:none;">
-                <i class="fas fa-file-csv"></i> CSV
+                <i class="fas fa-file-csv"></i> Export to CSV
             </button>
         </div>
 
@@ -695,11 +695,13 @@
         <!-- Player Statistics -->
         <div id="playerStats">
             <h3>Player Stats</h3>
-            <table>
-                <tbody id="gameSummaryRosterList">
-                    <!-- Player stats will be dynamically populated here -->
-                </tbody>
-            </table>
+            <div class="roster-table-container">
+                <table id="gameSummaryTable">
+                    <tbody id="gameSummaryRosterList">
+                        <!-- Player stats will be dynamically populated here -->
+                    </tbody>
+                </table>
+            </div>
             <div id="gameSummaryTeamStats" class="team-stats-line" style="display:none;"></div>
         </div>
 
@@ -733,6 +735,7 @@
     <script src="utils/statistics.js"></script>
     <script src="utils/eventStats.js"></script>
     <script src="utils/tableSort.js"></script>
+    <script src="utils/statsHelp.js"></script>
 
     <!-- UI modules -->
     <script src="ui/activePlayersDisplay.js"></script>
