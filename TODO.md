@@ -153,6 +153,24 @@ Remaining work:
 - [x] O/D split panels: O/D button splits "Select Next Line" into two separate panels ("Select Next O Line" / "Select Next D Line").
 - [x] **Bug**: Line panel checkboxes are editable by non-Line-Coach in multi-coach games
   - Fixed in `canEditSelectLinePanel` (`game/gameScreen.js`): early-allow now checks the `_multiCoachDetected` latch (exposed via `window.isMultiCoachDetected`) instead of "no role claimed yet", so once a second coach has been seen this session the panel requires holding Line Coach (during point) or Line/Active Coach (between points). The existing `updateSelectLinePanelState` plumbing handles the rest — checkboxes get `disabled=true`, the `.readonly` class greys out the Manual/Wholesale/Auto toggle and the lines/OD buttons, and the "View Only" overlay appears. `cycleSelectionMode` was already gated by `canEditSelectLinePanel`. The injury-sub dialog is gated upstream by Active Coach (`canEditPlayByPlayPanel`) so no changes were needed there.
+- [ ] **Feature**: Per-possession defensive/offensive set flag (zone tracking, etc.)
+  - Tag each possession with the set being played (zone, ho-stack, vert-stack, force-middle, junk…). Primary v1 use case is marking which defensive possessions were played in zone, so that "breaks while running zone" type splits become possible later. Must stay invisible for teams that don't opt in.
+  - **Data model**:
+    - `Team.setsEnabled: boolean` (default `false`) — team-level opt-in.
+    - `Team.sets: { offensive: string[], defensive: string[] }` — team-configurable label lists.
+    - `Possession.set: string | null` — single label per possession; null = unspecified.
+  - **Serialization** (`store/storage.js`): round-trip `setsEnabled` + `sets` in `serializeTeam`/`deserializeTeams`; round-trip `set` on each possession in `serializeGame`/`deserializeGame`. `Possession` constructor takes optional `set = null`. Server payloads are schema-loose, so no API changes.
+  - **Backwards compat**: missing fields default to `false` / `[]` / `null`; UI hidden everywhere unless `setsEnabled` is on.
+  - **UI surfaces** (all guarded by `team.setsEnabled === true`):
+    1. **Team settings opt-in** (`teams/teamSettings.js`): toggle + two editable lists (offensive sets, defensive sets).
+    2. **Defensive picker — pull dialog** (`playByPlay/pullDialog.js`): `<select>` populated from `currentTeam.sets.defensive`, only rendered if enabled and non-empty. Thread chosen value through `ensurePossessionExists(false)` (currently at `playByPlay/keyPlayDialog.js:607`).
+    3. **Offensive picker — Full PBP modifier strip** (`playByPlay/fullPbp.js`): small cycling chip on the modifier-chips row; taps advance through `[null, ...currentTeam.sets.offensive]` and write to the current possession. Skip Simple mode for v1.
+    4. **Display in event log** (`ui/eventLogDisplay.js` and game summary log): prepend possession blocks with `[Zone]` etc. when `possession.set` is set.
+    5. **Aggregation hook** (later): `getGameTeamStats(game, {set})` / `getEventTeamStats(event, {set})` so set composes with the existing phase filter — "breaks while running zone: 4 of 7".
+  - **Undo**: set lives on the possession itself, so existing undo handling needs no changes.
+  - **Ship order**: schema + serialization → team settings opt-in → defensive picker (zone use case) → offensive chip → event-log display → aggregation filters.
+  - **Cross-cutting**: bump `cacheName` in `service-worker.js` on any deploy touching CSS or top-level files; add a round-trip test for `setsEnabled`/`sets` in the server test suite.
+
 - [ ] **Extension**: Richer modifier flags on `Turnover` events
   - The Full PBP "Last turnover was a:" panel currently exposes only `huck` and `good D` because those are the only orthogonal flags on the `Turnover` model today. To support "threw it away while attempting a *break* / *hammer* / *dump*" (and `sky` / `layout` for drops, e.g. receiver tried to layout but missed), add `break_flag`, `hammer_flag`, `dump_flag`, `sky_flag`, `layout_flag` to the `Turnover` constructor in `store/models.js` and surface them in `summarize()`.
   - Touch points: `store/models.js` (constructor + summarize), `playByPlay/fullPbp.js` (extend `TURNOVER_MODIFIERS`), `ultistats_server/narration.py` slow-pass schema (add fields to the turnover event spec), `narration/narrationEngine.js` `applyTurnover` (forward the flags), and possibly `teams/gameSummary.js` if CSV columns enumerate flags.
