@@ -8,7 +8,7 @@
 let currentEventRosterEvent = null;
 let eventRosterPlayerIds = new Set();
 let eventRosterPickups = [];
-let cachedEventStats = null; // { eventId, playerStats, record } — avoids re-fetching on re-renders
+let cachedEventStats = null; // { eventId, playerStats, teamStats, record } — avoids re-fetching on re-renders
 let eventRosterSortController = null;
 let eventRosterSortState = null; // persists sort across re-renders
 
@@ -66,6 +66,7 @@ async function renderEventRosterTable() {
     const event = currentEventRosterEvent;
     let eventPlayerStats = {};
     let record = null;
+    let teamStats = null;
     const eventId = event?.id;
     const hasGameIds = (event?.gameIds || []).length > 0;
 
@@ -74,13 +75,15 @@ async function renderEventRosterTable() {
         if (cachedEventStats && cachedEventStats.eventId === eventId) {
             eventPlayerStats = cachedEventStats.playerStats;
             record = cachedEventStats.record;
+            teamStats = cachedEventStats.teamStats;
         } else {
             try {
-                [eventPlayerStats, record] = await Promise.all([
+                [eventPlayerStats, record, teamStats] = await Promise.all([
                     getEventPlayerStats(event),
-                    typeof getEventRecord === 'function' ? getEventRecord(event) : null
+                    typeof getEventRecord === 'function' ? getEventRecord(event) : null,
+                    typeof getEventTeamStats === 'function' ? getEventTeamStats(event) : null
                 ]);
-                cachedEventStats = { eventId, playerStats: eventPlayerStats, record };
+                cachedEventStats = { eventId, playerStats: eventPlayerStats, teamStats, record };
             } catch (e) {
                 console.error('Error loading event stats:', e);
             }
@@ -105,6 +108,18 @@ async function renderEventRosterTable() {
         header.textContent = `${event.name}${recordStr}`;
     }
 
+    // Team-level breaks/holds line
+    const teamStatsEl = document.getElementById('eventRosterTeamStats');
+    if (teamStatsEl) {
+        if (teamStats && teamStats.total > 0 && typeof formatTeamStatsLine === 'function') {
+            teamStatsEl.textContent = formatTeamStatsLine(teamStats);
+            teamStatsEl.style.display = '';
+        } else {
+            teamStatsEl.style.display = 'none';
+            teamStatsEl.textContent = '';
+        }
+    }
+
     // Header row
     const headerRow = document.createElement('tr');
     const thCheckbox = document.createElement('th');
@@ -118,7 +133,7 @@ async function renderEventRosterTable() {
     headerRow.appendChild(thName);
 
     if (hasStats) {
-        ['Pts', 'Time', 'Goals', 'Assists', 'Comp%', 'Huck%', 'Ds', 'TOs', '+/-', '..per pt'].forEach(text => {
+        ['Pts', 'Time', 'Goals', 'Assists', 'HA', 'Huck HA', 'Comp%', 'Huck%', 'Ds', 'TOs', '+/-', '..per pt'].forEach(text => {
             const th = document.createElement('th');
             th.textContent = text;
             th.classList.add('roster-header');
@@ -130,6 +145,7 @@ async function renderEventRosterTable() {
     // Aggregate totals
     const totals = {
         pointsPlayed: 0, timePlayed: 0, goals: 0, assists: 0,
+        hockeyAssists: 0, huckHockeyAssists: 0,
         completions: 0, totalThrows: 0, huckCompletions: 0, totalHucks: 0,
         dPlays: 0, turnovers: 0, plusMinus: 0
     };
@@ -183,6 +199,8 @@ async function renderEventRosterTable() {
             typeof formatPlayTime === 'function' ? formatPlayTime(totals.timePlayed) : '',
             totals.goals,
             totals.assists,
+            totals.hockeyAssists,
+            totals.huckHockeyAssists,
             teamCompPct !== '-' ? `${teamCompPct}%` : teamCompPct,
             teamHuckPct !== '-' ? `${teamHuckPct}%` : teamHuckPct,
             totals.dPlays,
@@ -213,12 +231,14 @@ async function renderEventRosterTable() {
                 { key: 'time', type: 'time', colIndex: 3 },
                 { key: 'goals', type: 'number', colIndex: 4 },
                 { key: 'assists', type: 'number', colIndex: 5 },
-                { key: 'compPct', type: 'percentage', colIndex: 6 },
-                { key: 'huckPct', type: 'percentage', colIndex: 7 },
-                { key: 'ds', type: 'number', colIndex: 8 },
-                { key: 'tos', type: 'number', colIndex: 9 },
-                { key: 'plusMinus', type: 'number', colIndex: 10 },
-                { key: 'pmPerPt', type: 'number', colIndex: 11 }
+                { key: 'hockeyAssists', type: 'number', colIndex: 6 },
+                { key: 'huckHockeyAssists', type: 'number', colIndex: 7 },
+                { key: 'compPct', type: 'percentage', colIndex: 8 },
+                { key: 'huckPct', type: 'percentage', colIndex: 9 },
+                { key: 'ds', type: 'number', colIndex: 10 },
+                { key: 'tos', type: 'number', colIndex: 11 },
+                { key: 'plusMinus', type: 'number', colIndex: 12 },
+                { key: 'pmPerPt', type: 'number', colIndex: 13 }
             );
         }
         eventRosterSortController = createTableSortController({
@@ -289,6 +309,8 @@ function createEventRosterPlayerRow(player, eventPlayerStats, hasStats, totals, 
         const time = ps.timePlayed || 0;
         const goals = ps.goals || 0;
         const assists = ps.assists || 0;
+        const hockeyAssists = ps.hockeyAssists || 0;
+        const huckHockeyAssists = ps.huckHockeyAssists || 0;
         const completions = ps.completions || 0;
         const totalThrows = ps.totalThrows || 0;
         const huckCompletions = ps.huckCompletions || 0;
@@ -302,6 +324,8 @@ function createEventRosterPlayerRow(player, eventPlayerStats, hasStats, totals, 
         totals.timePlayed += time;
         totals.goals += goals;
         totals.assists += assists;
+        totals.hockeyAssists += hockeyAssists;
+        totals.huckHockeyAssists += huckHockeyAssists;
         totals.completions += completions;
         totals.totalThrows += totalThrows;
         totals.huckCompletions += huckCompletions;
@@ -319,6 +343,8 @@ function createEventRosterPlayerRow(player, eventPlayerStats, hasStats, totals, 
             typeof formatPlayTime === 'function' ? formatPlayTime(time) : '0:00',
             goals,
             assists,
+            hockeyAssists,
+            huckHockeyAssists,
             compPct !== '-' ? `${compPct}%` : compPct,
             huckPct !== '-' ? `${huckPct}%` : huckPct,
             dPlays,

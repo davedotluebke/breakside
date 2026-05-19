@@ -140,6 +140,17 @@ th {
     font-weight: 600;
 }
 
+/* Team-level breaks / holds summary line under the player stats table */
+.team-stats-line {
+    margin: 8px 10px 0;
+    padding: 6px 10px;
+    font-size: 0.9em;
+    color: #333;
+    background-color: #f4f4f4;
+    border-left: 3px solid #888;
+    border-radius: 2px;
+}
+
 /* Sortable table headers */
 .sortable-header {
     cursor: pointer;
