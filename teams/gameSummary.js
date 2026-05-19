@@ -56,6 +56,7 @@ function renderGameSummary(game) {
     }
 
     renderGameSummaryStatsTable(game);
+    renderGameSummaryTeamStats(game);
     renderGameSummaryEventLog(game);
 
     // Show CSV export button if there are stats
@@ -90,7 +91,7 @@ function renderGameSummaryStatsTable(game) {
 
     // Header row
     const headerRow = document.createElement('tr');
-    const headers = ['Name', 'Pts', 'Time', 'Goals', 'Assists', 'Comp%', 'Huck%', 'Ds', 'TOs', '+/-', '..per pt'];
+    const headers = ['Name', 'Pts', 'Time', 'Goals', 'Assists', 'HA', 'Huck HA', 'Comp%', 'Huck%', 'Ds', 'TOs', '+/-', '..per pt'];
     headers.forEach(text => {
         const th = document.createElement('th');
         th.textContent = text;
@@ -102,6 +103,7 @@ function renderGameSummaryStatsTable(game) {
     // Aggregate totals
     const totals = {
         pointsPlayed: 0, timePlayed: 0, goals: 0, assists: 0,
+        hockeyAssists: 0, huckHockeyAssists: 0,
         completions: 0, totalThrows: 0, huckCompletions: 0, totalHucks: 0,
         dPlays: 0, turnovers: 0, plusMinus: 0
     };
@@ -135,6 +137,8 @@ function renderGameSummaryStatsTable(game) {
             typeof formatPlayTime === 'function' ? formatPlayTime(totals.timePlayed) : '',
             totals.goals,
             totals.assists,
+            totals.hockeyAssists,
+            totals.huckHockeyAssists,
             teamCompPct !== '-' ? `${teamCompPct}%` : teamCompPct,
             teamHuckPct !== '-' ? `${teamHuckPct}%` : teamHuckPct,
             totals.dPlays,
@@ -161,12 +165,14 @@ function renderGameSummaryStatsTable(game) {
             { key: 'time', type: 'time', colIndex: 2 },
             { key: 'goals', type: 'number', colIndex: 3 },
             { key: 'assists', type: 'number', colIndex: 4 },
-            { key: 'compPct', type: 'percentage', colIndex: 5 },
-            { key: 'huckPct', type: 'percentage', colIndex: 6 },
-            { key: 'ds', type: 'number', colIndex: 7 },
-            { key: 'tos', type: 'number', colIndex: 8 },
-            { key: 'plusMinus', type: 'number', colIndex: 9 },
-            { key: 'pmPerPt', type: 'number', colIndex: 10 }
+            { key: 'hockeyAssists', type: 'number', colIndex: 5 },
+            { key: 'huckHockeyAssists', type: 'number', colIndex: 6 },
+            { key: 'compPct', type: 'percentage', colIndex: 7 },
+            { key: 'huckPct', type: 'percentage', colIndex: 8 },
+            { key: 'ds', type: 'number', colIndex: 9 },
+            { key: 'tos', type: 'number', colIndex: 10 },
+            { key: 'plusMinus', type: 'number', colIndex: 11 },
+            { key: 'pmPerPt', type: 'number', colIndex: 12 }
         ];
         gameSummarySortController = createTableSortController({
             getHeaderRow: () => tbody.querySelector('tr:first-child'),
@@ -197,6 +203,8 @@ function createGameSummaryPlayerRow(player, ps, totals) {
     const time = ps.timePlayed || 0;
     const goals = ps.goals || 0;
     const assists = ps.assists || 0;
+    const hockeyAssists = ps.hockeyAssists || 0;
+    const huckHockeyAssists = ps.huckHockeyAssists || 0;
     const completions = ps.completions || 0;
     const totalThrows = ps.totalThrows || 0;
     const huckCompletions = ps.huckCompletions || 0;
@@ -210,6 +218,8 @@ function createGameSummaryPlayerRow(player, ps, totals) {
     totals.timePlayed += time;
     totals.goals += goals;
     totals.assists += assists;
+    totals.hockeyAssists += hockeyAssists;
+    totals.huckHockeyAssists += huckHockeyAssists;
     totals.completions += completions;
     totals.totalThrows += totalThrows;
     totals.huckCompletions += huckCompletions;
@@ -227,6 +237,8 @@ function createGameSummaryPlayerRow(player, ps, totals) {
         typeof formatPlayTime === 'function' ? formatPlayTime(time) : '0:00',
         goals,
         assists,
+        hockeyAssists,
+        huckHockeyAssists,
         compPct !== '-' ? `${compPct}%` : compPct,
         huckPct !== '-' ? `${huckPct}%` : huckPct,
         dPlays,
@@ -242,6 +254,42 @@ function createGameSummaryPlayerRow(player, ps, totals) {
     });
 
     return row;
+}
+
+/**
+ * Render the team-level stats line (breaks, clean/dirty holds) below the
+ * player stats table. Hidden if the game has no completed points.
+ */
+function renderGameSummaryTeamStats(game) {
+    const el = document.getElementById('gameSummaryTeamStats');
+    if (!el) return;
+    if (typeof getGameTeamStats !== 'function') {
+        el.style.display = 'none';
+        return;
+    }
+    const stats = getGameTeamStats(game);
+    if (!stats || stats.total === 0) {
+        el.style.display = 'none';
+        el.textContent = '';
+        return;
+    }
+    el.textContent = formatTeamStatsLine(stats);
+    el.style.display = '';
+}
+
+/**
+ * Human-readable label for a point classification.
+ * @param {string} kind - return value of classifyPoint
+ * @returns {string|null}
+ */
+function pointClassificationLabel(kind) {
+    switch (kind) {
+        case 'break': return 'break';
+        case 'cleanHold': return 'clean hold';
+        case 'hold': return 'hold';
+        case 'broken': return 'broken';
+        default: return null; // opponentHold gets no badge
+    }
 }
 
 /**
@@ -284,12 +332,15 @@ function renderGameSummaryEventLog(game) {
             });
         });
 
+        const kindLabel = typeof classifyPoint === 'function'
+            ? pointClassificationLabel(classifyPoint(point)) : null;
+        const badgeSuffix = kindLabel ? `  [${kindLabel}]` : '';
         if (point.winner === 'team') {
-            summary += `\n${teamName} scores! `;
+            summary += `\n${teamName} scores!${badgeSuffix} `;
             runningScoreUs++;
         }
         if (point.winner === 'opponent') {
-            summary += `\n${opponent} scores! `;
+            summary += `\n${opponent} scores!${badgeSuffix} `;
             runningScoreThem++;
         }
         if (point.winner) {

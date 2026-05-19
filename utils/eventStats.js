@@ -45,6 +45,8 @@ function accumulateGameStats(game, stats) {
                 timePlayed: 0,
                 goals: 0,
                 assists: 0,
+                hockeyAssists: 0,
+                huckHockeyAssists: 0,
                 turnovers: 0,
                 plusMinus: 0,
                 pointsWon: 0,
@@ -82,7 +84,8 @@ function accumulateGameStats(game, stats) {
 
         // Count goals, assists, turnovers, completions, hucks, dPlays from events
         (point.possessions || []).forEach(poss => {
-            (poss.events || []).forEach(event => {
+            const events = poss.events || [];
+            events.forEach((event, idx) => {
                 if (event.type === 'Throw') {
                     const throwerName = event.thrower?.name || event.thrower;
                     if (throwerName) {
@@ -98,6 +101,21 @@ function accumulateGameStats(game, stats) {
                     if (event.score_flag) {
                         const receiverName = event.receiver?.name || event.receiver;
                         if (receiverName) ensurePlayer(receiverName).goals++;
+
+                        // Hockey assist: previous Throw in this possession.
+                        // Walk back, skipping non-Throw events (Violations etc).
+                        for (let j = idx - 1; j >= 0; j--) {
+                            const prev = events[j];
+                            if (prev.type === 'Throw') {
+                                const haName = prev.thrower?.name || prev.thrower;
+                                if (haName) {
+                                    const s = ensurePlayer(haName);
+                                    s.hockeyAssists++;
+                                    if (prev.huck_flag) s.huckHockeyAssists++;
+                                }
+                                break;
+                            }
+                        }
                     }
                 } else if (event.type === 'Turnover') {
                     const throwerName = event.thrower?.name || event.thrower;
@@ -118,6 +136,99 @@ function accumulateGameStats(game, stats) {
             });
         });
     });
+}
+
+/**
+ * Classify a completed point from the tracking team's perspective.
+ * @param {object} point - Point with startingPosition, winner, possessions
+ * @returns {'break' | 'cleanHold' | 'hold' | 'broken' | 'opponentHold' | null}
+ *   - 'break'        — started on D, we scored
+ *   - 'cleanHold'    — started on O, we scored with no turnovers
+ *   - 'hold'         — started on O, we scored after at least one turnover
+ *   - 'broken'       — started on O, opponent scored
+ *   - 'opponentHold' — started on D, opponent scored (we failed to break)
+ *   - null           — point is not yet complete or data is missing
+ */
+function classifyPoint(point) {
+    if (!point || !point.winner) return null;
+    const startedOnO = point.startingPosition === 'offense';
+    const weWon = point.winner === 'team' || point.winner === Role.TEAM;
+    const numPoss = (point.possessions || []).length;
+
+    if (startedOnO && weWon) return numPoss <= 1 ? 'cleanHold' : 'hold';
+    if (startedOnO && !weWon) return 'broken';
+    if (!startedOnO && weWon) return 'break';
+    return 'opponentHold';
+}
+
+/**
+ * Aggregate team-level point classifications for a single game.
+ * @param {object} game - Deserialized Game object
+ * @returns {object} { breaks, opponentBreaks, cleanHolds, dirtyHolds,
+ *                     holdOpps, breakOpps, total }
+ *   - holdOpps = number of points started on O (chances to hold)
+ *   - breakOpps = number of points started on D (chances to break)
+ *   - opponentBreaks = points we started on O but lost (= got broken)
+ */
+function getGameTeamStats(game) {
+    const totals = {
+        breaks: 0, opponentBreaks: 0,
+        cleanHolds: 0, dirtyHolds: 0,
+        holdOpps: 0, breakOpps: 0,
+        total: 0
+    };
+    if (!game) return totals;
+    (game.points || []).forEach(point => {
+        const kind = classifyPoint(point);
+        if (!kind) return;
+        totals.total++;
+        if (point.startingPosition === 'offense') totals.holdOpps++;
+        else totals.breakOpps++;
+        if (kind === 'break') totals.breaks++;
+        else if (kind === 'cleanHold') totals.cleanHolds++;
+        else if (kind === 'hold') totals.dirtyHolds++;
+        else if (kind === 'broken') totals.opponentBreaks++;
+    });
+    return totals;
+}
+
+/**
+ * Aggregate team-level point classifications across an event.
+ * @param {object} event - TournamentEvent
+ * @returns {Promise<object>} Same shape as getGameTeamStats
+ */
+async function getEventTeamStats(event) {
+    const totals = {
+        breaks: 0, opponentBreaks: 0,
+        cleanHolds: 0, dirtyHolds: 0,
+        holdOpps: 0, breakOpps: 0,
+        total: 0
+    };
+    if (!event) return totals;
+    const games = await loadEventGames(event);
+    games.forEach(game => {
+        const g = getGameTeamStats(game);
+        totals.breaks += g.breaks;
+        totals.opponentBreaks += g.opponentBreaks;
+        totals.cleanHolds += g.cleanHolds;
+        totals.dirtyHolds += g.dirtyHolds;
+        totals.holdOpps += g.holdOpps;
+        totals.breakOpps += g.breakOpps;
+        totals.total += g.total;
+    });
+    return totals;
+}
+
+/**
+ * Format a team-stats object as a short human-readable summary line.
+ * @param {object} t - team stats from getGameTeamStats / getEventTeamStats
+ * @returns {string} e.g. "Breaks: 3/5 D-points • Holds: 4 clean + 2 dirty / 6 O-points"
+ */
+function formatTeamStatsLine(t) {
+    if (!t || t.total === 0) return '';
+    const breakStr = `Breaks: ${t.breaks}/${t.breakOpps} D-point${t.breakOpps === 1 ? '' : 's'}`;
+    const holdsStr = `Holds: ${t.cleanHolds} clean + ${t.dirtyHolds} dirty / ${t.holdOpps} O-point${t.holdOpps === 1 ? '' : 's'}`;
+    return `${breakStr}  •  ${holdsStr}`;
 }
 
 /**
@@ -170,3 +281,7 @@ window.getGamePlayerStats = getGamePlayerStats;
 window.getEventPlayerStats = getEventPlayerStats;
 window.getEventRecord = getEventRecord;
 window.loadEventGames = loadEventGames;
+window.getGameTeamStats = getGameTeamStats;
+window.getEventTeamStats = getEventTeamStats;
+window.classifyPoint = classifyPoint;
+window.formatTeamStatsLine = formatTeamStatsLine;
