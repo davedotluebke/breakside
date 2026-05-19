@@ -140,6 +140,19 @@ th {
     font-weight: 600;
 }
 
+/* Stats column-help modal (triggered by long-pressing a header cell) */
+.stats-help-modal-content {
+    max-width: 90vw;
+    width: 360px;
+}
+
+.stats-help-body {
+    padding: 16px 20px;
+    font-size: 1em;
+    line-height: 1.4;
+    color: #333;
+}
+
 /* Team-level breaks / holds summary line under the player stats table */
 .team-stats-line {
     margin: 8px 10px 0;
@@ -149,6 +162,8 @@ th {
     background-color: #f4f4f4;
     border-left: 3px solid #888;
     border-radius: 2px;
+    /* Preserve newlines from formatTeamStatsLine() so each stat stays on its own line */
+    white-space: pre-line;
 }
 
 /* Phase filter row above the event roster stats table */
@@ -179,22 +194,13 @@ th {
     color: #999;
 }
 
-/* Per-game phase picker on event game items */
-.game-phase-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 4px;
-    font-size: 0.85em;
-}
-
-.game-phase-label {
-    color: #666;
-}
-
+/* Per-game phase picker on event game items — lives inline next to
+   Review/trash in .game-line2, so just needs to size sensibly. */
 .game-phase-select {
-    padding: 2px 4px;
-    font-size: 0.95em;
+    padding: 4px 6px;
+    margin: 0 8px;
+    font-size: 0.9em;
+    max-width: 50%;
 }
 
 /* Phases editor inside the event settings dialog */
@@ -245,6 +251,28 @@ th {
     border: none;
     border-radius: 4px;
     cursor: pointer;
+}
+
+.event-phase-auto-btn {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: #f0f0f0;
+    color: #333;
+    border: 1px solid #bbb;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.95em;
+}
+
+.event-phase-auto-btn:hover:not(:disabled) {
+    background: #e5e5e5;
+}
+
+.event-phase-auto-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
 }
 
 /* Sortable table headers */
@@ -404,25 +432,76 @@ ul {
     width: max-content;
 }
 
-/* Roster table scrollable container */
+/* Roster table scrollable container — scrolls both axes so sticky header
+   and sticky left columns work in the same container. max-height keeps
+   the table from pushing other UI off-screen on tall pages. */
 .roster-table-container {
-    overflow-x: auto;
+    overflow: auto;
+    max-height: 70vh;
     width: 100%;
     margin: 0 20px;
     box-sizing: border-box;
 }
 
-#rosterTable, #eventRosterTable {
-    border-collapse: collapse;
+#rosterTable, #eventRosterTable, #gameSummaryTable {
+    border-collapse: separate;  /* collapse breaks sticky cell backgrounds */
+    border-spacing: 0;
     width: max-content;
     min-width: 100%;
 }
 
 #rosterTable th, #rosterTable td,
-#eventRosterTable th, #eventRosterTable td {
+#eventRosterTable th, #eventRosterTable td,
+#gameSummaryTable th, #gameSummaryTable td {
     border: 1px solid grey;
     padding: 5px;
     white-space: nowrap;
+    background-color: white;  /* opaque so sticky cells don't bleed-through */
+}
+
+/* Sticky header row on stats tables */
+#eventRosterTable tr:first-child th,
+#gameSummaryTable tr:first-child th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: #f4f4f4;
+}
+
+/* Sticky left columns: checkbox + name on event roster, name only on game summary */
+#eventRosterTable tr td:nth-child(1),
+#eventRosterTable tr th:nth-child(1) {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+}
+#eventRosterTable tr td:nth-child(2),
+#eventRosterTable tr th:nth-child(2) {
+    position: sticky;
+    left: 40px;  /* width of checkbox column (30px + padding) */
+    z-index: 1;
+    box-shadow: 2px 0 0 -1px #ccc;  /* subtle divider */
+}
+#eventRosterTable tr:first-child th:nth-child(1),
+#eventRosterTable tr:first-child th:nth-child(2) {
+    z-index: 3;  /* header-row corner cells must outrank both axes */
+}
+
+#gameSummaryTable tr td:nth-child(1),
+#gameSummaryTable tr th:nth-child(1) {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    box-shadow: 2px 0 0 -1px #ccc;
+}
+#gameSummaryTable tr:first-child th:nth-child(1) {
+    z-index: 3;
+}
+
+/* Team aggregate cells need to stay opaque when sticky-overlapped */
+#eventRosterTable .team-aggregate-row td,
+#gameSummaryTable .team-aggregate-row td {
+    background-color: #e8e8e8;
 }
 
 #activePlayersTable th, #activePlayersTable td {

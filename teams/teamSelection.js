@@ -1646,6 +1646,41 @@ function renderGameItem(game, team, role, parentEvent) {
         line2.appendChild(watchBtn);
     }
 
+    // --- Inline phase picker (event games with phases configured, coach only) ---
+    // Sits between the Review/Join button and the trash icon so each game item
+    // stays one row tall.
+    if (role === 'coach' && parentEvent && (parentEvent.phases || []).length > 0) {
+        const select = document.createElement('select');
+        select.className = 'game-phase-select';
+        const noneOpt = document.createElement('option');
+        noneOpt.value = '';
+        noneOpt.textContent = 'Select phase';
+        select.appendChild(noneOpt);
+        parentEvent.phases.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p;
+            opt.textContent = p;
+            select.appendChild(opt);
+        });
+        select.value = game.phase || '';
+        select.onclick = (e) => e.stopPropagation();
+        select.onchange = async (e) => {
+            e.stopPropagation();
+            const newPhase = select.value || null;
+            select.disabled = true;
+            try {
+                await updateGamePhase(game.game_id, newPhase);
+                game.phase = newPhase;
+            } catch (err) {
+                alert('Failed to update phase: ' + err.message);
+                select.value = game.phase || '';
+            } finally {
+                select.disabled = false;
+            }
+        };
+        line2.appendChild(select);
+    }
+
     const spacer = document.createElement('span');
     spacer.style.flex = '1';
     line2.appendChild(spacer);
@@ -1674,46 +1709,6 @@ function renderGameItem(game, team, role, parentEvent) {
         activeBadge.title = 'Active coaches in this game';
         line3.appendChild(activeBadge);
         gameItem.appendChild(line3);
-    }
-
-    // --- Phase picker (event games with phases configured, coach only) ---
-    if (role === 'coach' && parentEvent && (parentEvent.phases || []).length > 0) {
-        const phaseRow = document.createElement('div');
-        phaseRow.className = 'game-phase-row';
-        const label = document.createElement('label');
-        label.textContent = 'Phase:';
-        label.className = 'game-phase-label';
-        const select = document.createElement('select');
-        select.className = 'game-phase-select';
-        const noneOpt = document.createElement('option');
-        noneOpt.value = '';
-        noneOpt.textContent = '—';
-        select.appendChild(noneOpt);
-        parentEvent.phases.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p;
-            opt.textContent = p;
-            select.appendChild(opt);
-        });
-        select.value = game.phase || '';
-        select.onclick = (e) => e.stopPropagation();
-        select.onchange = async (e) => {
-            e.stopPropagation();
-            const newPhase = select.value || null;
-            select.disabled = true;
-            try {
-                await updateGamePhase(game.game_id, newPhase);
-                game.phase = newPhase;
-            } catch (err) {
-                alert('Failed to update phase: ' + err.message);
-                select.value = game.phase || '';
-            } finally {
-                select.disabled = false;
-            }
-        };
-        phaseRow.appendChild(label);
-        phaseRow.appendChild(select);
-        gameItem.appendChild(phaseRow);
     }
 
     return gameItem;
@@ -1998,6 +1993,9 @@ function showEventSettingsDialog(event, team) {
                         <input type="text" id="editEventPhaseInput" placeholder="Add phase…" class="event-dialog-input">
                         <button type="button" id="editEventPhaseAddBtn" class="event-phase-add-btn">Add</button>
                     </div>
+                    <button type="button" id="editEventAutoPhaseByDayBtn" class="event-phase-auto-btn">
+                        Auto-label phases by day
+                    </button>
                 </div>
                 <button id="saveEventSettingsBtn" class="event-dialog-submit">Save</button>
                 <button id="deleteEventBtn" class="event-dialog-delete">Delete Event</button>
@@ -2081,6 +2079,98 @@ function showEventSettingsDialog(event, team) {
     phaseInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); addPhase(); }
     });
+
+    // Auto-label phases by day — groups the event's games by calendar start
+    // date (local time), assigns "Day 1", "Day 2", … phases in date order,
+    // and PATCHes each game. One-shot action; warns before overwriting
+    // existing phase labels.
+    const autoBtn = document.getElementById('editEventAutoPhaseByDayBtn');
+    if (autoBtn) {
+        autoBtn.onclick = async () => {
+            const eventGameIds = new Set(event.gameIds || []);
+            if (eventGameIds.size === 0) {
+                alert('This event has no games yet.');
+                return;
+            }
+            autoBtn.disabled = true;
+            const origText = autoBtn.textContent;
+            autoBtn.textContent = 'Loading games…';
+            try {
+                const allGames = typeof listServerGames === 'function'
+                    ? await listServerGames() : [];
+                const games = allGames
+                    .filter(g => eventGameIds.has(g.game_id) && g.game_start_timestamp)
+                    .map(g => ({
+                        id: g.game_id,
+                        start: new Date(g.game_start_timestamp),
+                        currentPhase: g.phase || null
+                    }))
+                    .sort((a, b) => a.start - b.start);
+
+                if (games.length === 0) {
+                    alert('No games with start timestamps found in this event.');
+                    return;
+                }
+
+                // Group by local calendar day
+                const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                const dayOrder = [];
+                const dayToGames = new Map();
+                games.forEach(g => {
+                    const k = dayKey(g.start);
+                    if (!dayToGames.has(k)) { dayToGames.set(k, []); dayOrder.push(k); }
+                    dayToGames.get(k).push(g);
+                });
+
+                const numDays = dayOrder.length;
+                const newPhases = Array.from({length: numDays}, (_, i) => `Day ${i + 1}`);
+                const overwriteCount = games.filter(g => g.currentPhase && !newPhases.includes(g.currentPhase)).length;
+
+                const warning = overwriteCount > 0
+                    ? `\n\nThis will overwrite ${overwriteCount} existing phase label${overwriteCount === 1 ? '' : 's'} that don't match Day 1 / Day 2 / …`
+                    : '';
+                const ok = confirm(
+                    `Auto-label phases by day:\n` +
+                    `  • ${games.length} game${games.length === 1 ? '' : 's'} across ${numDays} day${numDays === 1 ? '' : 's'}\n` +
+                    `  • Creates phases: ${newPhases.join(', ')}` +
+                    warning +
+                    `\n\nContinue?`
+                );
+                if (!ok) return;
+
+                // Merge new Day-N phases into the editor's working list (don't
+                // drop user-added phases like "Bracket" — append Day labels at
+                // the front, preserve order of any non-Day phases at the end)
+                const preservedExtras = editPhases.filter(p => !/^Day \d+$/.test(p));
+                editPhases = [...newPhases, ...preservedExtras];
+                renderPhasesList();
+
+                // PATCH each game to its Day-N phase
+                autoBtn.textContent = `Saving 0/${games.length}…`;
+                let saved = 0;
+                for (let i = 0; i < dayOrder.length; i++) {
+                    const phaseLabel = newPhases[i];
+                    for (const g of dayToGames.get(dayOrder[i])) {
+                        try {
+                            await updateGamePhase(g.id, phaseLabel);
+                        } catch (err) {
+                            console.error(`Failed to set phase for ${g.id}:`, err);
+                        }
+                        saved++;
+                        autoBtn.textContent = `Saving ${saved}/${games.length}…`;
+                    }
+                }
+                autoBtn.textContent = `Done — ${saved}/${games.length} labeled`;
+                setTimeout(() => { autoBtn.textContent = origText; }, 2500);
+            } catch (err) {
+                console.error('Auto-label failed:', err);
+                alert('Auto-label failed: ' + err.message);
+                autoBtn.textContent = origText;
+            } finally {
+                autoBtn.disabled = false;
+            }
+        };
+    }
 
     // Populate gender ratio dropdown
     const playerCountInput = document.getElementById('editEventPlayersPerSide');
