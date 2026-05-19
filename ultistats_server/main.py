@@ -21,6 +21,7 @@ try:
         game_exists,
         delete_game,
         list_all_games,
+        update_game_metadata,
         # Player storage
         save_player,
         get_player,
@@ -117,6 +118,7 @@ except ImportError:
         game_exists,
         delete_game,
         list_all_games,
+        update_game_metadata,
         # Player storage
         save_player,
         get_player,
@@ -897,6 +899,27 @@ async def list_games_endpoint(user: Optional[dict] = Depends(get_optional_user))
     filtered = [g for g in all_games if g.get("teamId") in accessible_teams]
     
     return {"games": filtered, "count": len(filtered)}
+
+
+@app.patch("/api/games/{game_id}/phase")
+async def patch_game_phase(
+    game_id: str,
+    body: dict,
+    user: dict = Depends(require_game_team_coach)
+):
+    """
+    Update only the `phase` label on a game (retroactive labeling within
+    an event). Does not create a new version backup — phase is metadata.
+
+    Body: { "phase": "Day 1" | null }
+    """
+    if not game_exists(game_id):
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+    phase = body.get("phase")
+    if phase is not None and not isinstance(phase, str):
+        raise HTTPException(status_code=400, detail="phase must be a string or null")
+    updated = update_game_metadata(game_id, {"phase": phase})
+    return {"status": "updated", "game_id": game_id, "phase": updated.get("phase")}
 
 
 @app.delete("/api/games/{game_id}")

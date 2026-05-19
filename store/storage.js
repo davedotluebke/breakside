@@ -101,6 +101,7 @@ function serializeGame(game) {
         id: game.id,
         teamId: game.teamId,  // New: reference to team by ID
         eventId: game.eventId || null,  // TournamentEvent ID
+        phase: game.phase || null,  // Optional phase label within the event
         team: game.team,       // Legacy: team name string
         opponent: game.opponent,
         startingPosition: game.startingPosition,
@@ -364,6 +365,7 @@ function deserializeGame(gameData) {
     
     game.id = gameData.id;
     game.eventId = gameData.eventId || null;
+    game.phase = gameData.phase || null;
     game.gameStartTimestamp = new Date(gameData.gameStartTimestamp);
     game.gameEndTimestamp = gameData.gameEndTimestamp ? new Date(gameData.gameEndTimestamp) : null;
     
@@ -571,6 +573,7 @@ function serializeTournamentEvent(event) {
         defaults: event.defaults || {},
         roster: event.roster || { playerIds: [], pickupPlayers: [] },
         gameIds: event.gameIds || [],
+        phases: event.phases || [],
         createdAt: event.createdAt,
         updatedAt: event.updatedAt
     };
@@ -585,6 +588,7 @@ function deserializeTournamentEvent(data) {
     event.defaults = data.defaults || {};
     event.roster = data.roster || { playerIds: [], pickupPlayers: [] };
     event.gameIds = data.gameIds || [];
+    event.phases = data.phases || [];
     event.createdAt = data.createdAt || new Date().toISOString();
     event.updatedAt = data.updatedAt || event.createdAt;
     return event;

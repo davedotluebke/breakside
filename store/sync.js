@@ -793,6 +793,30 @@ window.updateEventOnCloud = updateEventOnCloud;
 window.deleteEventFromCloud = deleteEventFromCloud;
 window.listTeamEvents = listTeamEvents;
 
+/**
+ * Update only a game's phase label (retroactive labeling).
+ * @param {string} gameId
+ * @param {string|null} phase - Phase label, or null to clear
+ */
+async function updateGamePhase(gameId, phase) {
+    const response = await authFetch(`${API_BASE_URL}/api/games/${gameId}/phase`, {
+        method: 'PATCH',
+        body: JSON.stringify({ phase: phase })
+    });
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to update game phase: ${errorText}`);
+    }
+    // Mirror change into local cache so subsequent loads see the new phase
+    if (localGames[gameId]) {
+        localGames[gameId].phase = phase;
+        saveLocalGames();
+    }
+    return response.json();
+}
+
+window.updateGamePhase = updateGamePhase;
+
 // =============================================================================
 // Game Sync Functions
 // =============================================================================
