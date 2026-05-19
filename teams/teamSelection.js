@@ -1580,8 +1580,12 @@ startAutoRefresh();
 
 /**
  * Render a single game list item
+ * @param {object} game - Game metadata from the server
+ * @param {object} team - Parent team
+ * @param {string} role - 'coach' | 'viewer'
+ * @param {object} [parentEvent] - If set and event has phases, render a phase picker
  */
-function renderGameItem(game, team, role) {
+function renderGameItem(game, team, role, parentEvent) {
     const gameItem = document.createElement('li');
     gameItem.className = 'game-item';
     if (isGameActive(game)) {
@@ -1672,6 +1676,46 @@ function renderGameItem(game, team, role) {
         gameItem.appendChild(line3);
     }
 
+    // --- Phase picker (event games with phases configured, coach only) ---
+    if (role === 'coach' && parentEvent && (parentEvent.phases || []).length > 0) {
+        const phaseRow = document.createElement('div');
+        phaseRow.className = 'game-phase-row';
+        const label = document.createElement('label');
+        label.textContent = 'Phase:';
+        label.className = 'game-phase-label';
+        const select = document.createElement('select');
+        select.className = 'game-phase-select';
+        const noneOpt = document.createElement('option');
+        noneOpt.value = '';
+        noneOpt.textContent = '—';
+        select.appendChild(noneOpt);
+        parentEvent.phases.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p;
+            opt.textContent = p;
+            select.appendChild(opt);
+        });
+        select.value = game.phase || '';
+        select.onclick = (e) => e.stopPropagation();
+        select.onchange = async (e) => {
+            e.stopPropagation();
+            const newPhase = select.value || null;
+            select.disabled = true;
+            try {
+                await updateGamePhase(game.game_id, newPhase);
+                game.phase = newPhase;
+            } catch (err) {
+                alert('Failed to update phase: ' + err.message);
+                select.value = game.phase || '';
+            } finally {
+                select.disabled = false;
+            }
+        };
+        phaseRow.appendChild(label);
+        phaseRow.appendChild(select);
+        gameItem.appendChild(phaseRow);
+    }
+
     return gameItem;
 }
 
@@ -1726,14 +1770,54 @@ function renderEventContainer(event, games, team, role) {
 
     container.appendChild(header);
 
-    // Event games
+    // Event games — bucket by phase if phases configured
     if (games.length > 0) {
-        const gamesList = document.createElement('ul');
-        gamesList.className = 'games-list event-games-list';
-        games.forEach(game => {
-            gamesList.appendChild(renderGameItem(game, team, role));
-        });
-        container.appendChild(gamesList);
+        const phases = event.phases || [];
+        if (phases.length === 0) {
+            const gamesList = document.createElement('ul');
+            gamesList.className = 'games-list event-games-list';
+            games.forEach(game => {
+                gamesList.appendChild(renderGameItem(game, team, role, event));
+            });
+            container.appendChild(gamesList);
+        } else {
+            // Group into ordered phase buckets, then an "Unassigned" bucket
+            const buckets = new Map();
+            phases.forEach(p => buckets.set(p, []));
+            const unassigned = [];
+            games.forEach(g => {
+                if (g.phase && buckets.has(g.phase)) {
+                    buckets.get(g.phase).push(g);
+                } else {
+                    unassigned.push(g);
+                }
+            });
+            buckets.forEach((bucketGames, phaseLabel) => {
+                if (bucketGames.length === 0) return;
+                const phaseHeader = document.createElement('div');
+                phaseHeader.className = 'event-phase-header';
+                phaseHeader.textContent = phaseLabel;
+                container.appendChild(phaseHeader);
+                const gamesList = document.createElement('ul');
+                gamesList.className = 'games-list event-games-list';
+                bucketGames.forEach(game => {
+                    gamesList.appendChild(renderGameItem(game, team, role, event));
+                });
+                container.appendChild(gamesList);
+            });
+            if (unassigned.length > 0) {
+                const phaseHeader = document.createElement('div');
+                phaseHeader.className = 'event-phase-header event-phase-unassigned';
+                phaseHeader.textContent = 'Unassigned';
+                container.appendChild(phaseHeader);
+                const gamesList = document.createElement('ul');
+                gamesList.className = 'games-list event-games-list';
+                unassigned.forEach(game => {
+                    gamesList.appendChild(renderGameItem(game, team, role, event));
+                });
+                container.appendChild(gamesList);
+            }
+        }
     }
 
     // "New Event Game" button for coaches (only open events)
@@ -1907,6 +1991,14 @@ function showEventSettingsDialog(event, team) {
                         <option value="closed">Closed</option>
                     </select>
                 </div>
+                <div class="event-phases-section">
+                    <label class="event-phases-label">Phases (Day 1, Pool play, Bracket, …):</label>
+                    <ul id="editEventPhasesList" class="event-phases-list"></ul>
+                    <div class="event-phases-add-row">
+                        <input type="text" id="editEventPhaseInput" placeholder="Add phase…" class="event-dialog-input">
+                        <button type="button" id="editEventPhaseAddBtn" class="event-phase-add-btn">Add</button>
+                    </div>
+                </div>
                 <button id="saveEventSettingsBtn" class="event-dialog-submit">Save</button>
                 <button id="deleteEventBtn" class="event-dialog-delete">Delete Event</button>
             </div>
@@ -1920,6 +2012,75 @@ function showEventSettingsDialog(event, team) {
     document.getElementById('editEventPlayersPerSide').value = event.defaults?.playersPerSide || 7;
     document.getElementById('editEventAltPulls').checked = event.defaults?.alternateGenderPulls || false;
     document.getElementById('editEventStatus').value = event.status || 'open';
+
+    // Phases editor — mutable working copy, persisted on Save
+    let editPhases = [...(event.phases || [])];
+    function renderPhasesList() {
+        const list = document.getElementById('editEventPhasesList');
+        if (!list) return;
+        list.innerHTML = '';
+        editPhases.forEach((p, idx) => {
+            const li = document.createElement('li');
+            li.className = 'event-phases-item';
+            const label = document.createElement('span');
+            label.textContent = p;
+            label.className = 'event-phases-item-label';
+            const upBtn = document.createElement('button');
+            upBtn.type = 'button';
+            upBtn.innerHTML = '<i class="fas fa-arrow-up"></i>';
+            upBtn.className = 'icon-button';
+            upBtn.title = 'Move up';
+            upBtn.disabled = idx === 0;
+            upBtn.onclick = () => {
+                [editPhases[idx - 1], editPhases[idx]] = [editPhases[idx], editPhases[idx - 1]];
+                renderPhasesList();
+            };
+            const downBtn = document.createElement('button');
+            downBtn.type = 'button';
+            downBtn.innerHTML = '<i class="fas fa-arrow-down"></i>';
+            downBtn.className = 'icon-button';
+            downBtn.title = 'Move down';
+            downBtn.disabled = idx === editPhases.length - 1;
+            downBtn.onclick = () => {
+                [editPhases[idx + 1], editPhases[idx]] = [editPhases[idx], editPhases[idx + 1]];
+                renderPhasesList();
+            };
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.innerHTML = '<i class="fas fa-trash" style="color:#dc3545;"></i>';
+            delBtn.className = 'icon-button';
+            delBtn.title = 'Remove phase';
+            delBtn.onclick = () => {
+                editPhases.splice(idx, 1);
+                renderPhasesList();
+            };
+            li.appendChild(label);
+            li.appendChild(upBtn);
+            li.appendChild(downBtn);
+            li.appendChild(delBtn);
+            list.appendChild(li);
+        });
+    }
+    renderPhasesList();
+
+    const phaseInput = document.getElementById('editEventPhaseInput');
+    const phaseAddBtn = document.getElementById('editEventPhaseAddBtn');
+    function addPhase() {
+        const v = (phaseInput.value || '').trim();
+        if (!v) return;
+        if (editPhases.includes(v)) {
+            alert('Phase already exists');
+            return;
+        }
+        editPhases.push(v);
+        phaseInput.value = '';
+        renderPhasesList();
+        phaseInput.focus();
+    }
+    phaseAddBtn.onclick = addPhase;
+    phaseInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); addPhase(); }
+    });
 
     // Populate gender ratio dropdown
     const playerCountInput = document.getElementById('editEventPlayersPerSide');
@@ -1958,7 +2119,8 @@ function showEventSettingsDialog(event, team) {
                 alternateGenderRatio: ratioSelect.value,
                 alternateGenderPulls: document.getElementById('editEventAltPulls').checked,
                 playersPerSide: parseInt(playerCountInput.value) || 7
-            }
+            },
+            phases: editPhases
         };
 
         try {

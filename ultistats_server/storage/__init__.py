@@ -9,6 +9,7 @@ from .game_storage import (
     game_exists,
     delete_game,
     list_all_games,
+    update_game_metadata,
 )
 
 from .player_storage import (
@@ -133,6 +134,7 @@ __all__ = [
     "game_exists",
     "delete_game",
     "list_all_games",
+    "update_game_metadata",
     # Player storage
     "generate_player_id",
     "save_player",

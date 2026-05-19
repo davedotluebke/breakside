@@ -8,9 +8,10 @@
 let currentEventRosterEvent = null;
 let eventRosterPlayerIds = new Set();
 let eventRosterPickups = [];
-let cachedEventStats = null; // { eventId, playerStats, teamStats, record } — avoids re-fetching on re-renders
+let cachedEventStats = null; // { eventId, phase, playerStats, teamStats, record } — avoids re-fetching on re-renders
 let eventRosterSortController = null;
 let eventRosterSortState = null; // persists sort across re-renders
+let eventRosterPhaseFilter = null; // null = "All phases"
 
 /**
  * Show the event roster UI for editing an event's roster
@@ -20,6 +21,8 @@ function showEventRosterUI(event) {
     currentEventRosterEvent = event;
     cachedEventStats = null; // clear cache for fresh load
     eventRosterSortState = null; // reset sort for new event
+    eventRosterPhaseFilter = null; // reset to "All" when opening a new event
+    renderEventRosterPhaseFilter();
 
     // Clone roster state into local variables
     const existingPlayerIds = event.roster?.playerIds || [];
@@ -48,6 +51,38 @@ function showEventRosterUI(event) {
 }
 
 /**
+ * Render the phase-filter row. Hidden if the event has no phases defined.
+ */
+function renderEventRosterPhaseFilter() {
+    const row = document.getElementById('eventRosterPhaseFilterRow');
+    const select = document.getElementById('eventRosterPhaseFilter');
+    if (!row || !select) return;
+    const phases = currentEventRosterEvent?.phases || [];
+    if (phases.length === 0) {
+        row.style.display = 'none';
+        return;
+    }
+    row.style.display = '';
+    select.innerHTML = '';
+    const allOpt = document.createElement('option');
+    allOpt.value = '';
+    allOpt.textContent = 'All phases';
+    select.appendChild(allOpt);
+    phases.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p;
+        select.appendChild(opt);
+    });
+    select.value = eventRosterPhaseFilter || '';
+    select.onchange = () => {
+        eventRosterPhaseFilter = select.value || null;
+        cachedEventStats = null;
+        renderEventRosterTable();
+    };
+}
+
+/**
  * Render the event roster table rows with full event statistics.
  * Shows roster immediately, then loads stats from cloud asynchronously.
  */
@@ -68,22 +103,24 @@ async function renderEventRosterTable() {
     let record = null;
     let teamStats = null;
     const eventId = event?.id;
+    const phase = eventRosterPhaseFilter;
     const hasGameIds = (event?.gameIds || []).length > 0;
 
     if (hasGameIds && typeof getEventPlayerStats === 'function') {
-        // Use cache if available for this event (avoids re-fetching on checkbox/pickup changes)
-        if (cachedEventStats && cachedEventStats.eventId === eventId) {
+        // Use cache if available for this event + phase
+        if (cachedEventStats && cachedEventStats.eventId === eventId && cachedEventStats.phase === phase) {
             eventPlayerStats = cachedEventStats.playerStats;
             record = cachedEventStats.record;
             teamStats = cachedEventStats.teamStats;
         } else {
             try {
+                const opts = phase ? { phase } : {};
                 [eventPlayerStats, record, teamStats] = await Promise.all([
-                    getEventPlayerStats(event),
-                    typeof getEventRecord === 'function' ? getEventRecord(event) : null,
-                    typeof getEventTeamStats === 'function' ? getEventTeamStats(event) : null
+                    getEventPlayerStats(event, opts),
+                    typeof getEventRecord === 'function' ? getEventRecord(event, opts) : null,
+                    typeof getEventTeamStats === 'function' ? getEventTeamStats(event, opts) : null
                 ]);
-                cachedEventStats = { eventId, playerStats: eventPlayerStats, teamStats, record };
+                cachedEventStats = { eventId, phase, playerStats: eventPlayerStats, teamStats, record };
             } catch (e) {
                 console.error('Error loading event stats:', e);
             }
@@ -105,7 +142,8 @@ async function renderEventRosterTable() {
         const recordStr = record && (record.wins + record.losses + record.ties) > 0
             ? ` (${record.wins}W-${record.losses}L${record.ties ? `-${record.ties}T` : ''})`
             : '';
-        header.textContent = `${event.name}${recordStr}`;
+        const phaseStr = phase ? ` — ${phase}` : '';
+        header.textContent = `${event.name}${phaseStr}${recordStr}`;
     }
 
     // Team-level breaks/holds line

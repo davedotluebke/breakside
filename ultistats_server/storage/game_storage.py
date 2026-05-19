@@ -176,6 +176,37 @@ def list_game_versions(game_id: str) -> List[str]:
     return versions
 
 
+def update_game_metadata(game_id: str, updates: dict) -> dict:
+    """
+    Update lightweight metadata fields on the current game JSON without
+    creating a new version. Intended for retroactive labels (phase, etc.).
+
+    Args:
+        game_id: Unique game identifier
+        updates: Dict of fields to merge into the current game JSON
+
+    Returns:
+        Updated game data dict
+
+    Raises:
+        FileNotFoundError: If game doesn't exist
+    """
+    current_file = GAMES_DIR / game_id / "current.json"
+    if not current_file.exists():
+        raise FileNotFoundError(f"Game {game_id} not found")
+
+    with open(current_file, 'r') as f:
+        game_data = json.load(f)
+
+    game_data.update(updates)
+
+    with open(current_file, 'w') as f:
+        json.dump(game_data, f, indent=2)
+
+    _update_index_for_game(game_id, game_data)
+    return game_data
+
+
 def game_exists(game_id: str) -> bool:
     """
     Check if a game exists.
@@ -239,6 +270,7 @@ def list_all_games() -> List[Dict[str, any]]:
                 "scores": game_data.get("scores", {}),
                 "points_count": len(game_data.get("points", [])),
                 "eventId": game_data.get("eventId"),
+                "phase": game_data.get("phase"),
             })
         except (json.JSONDecodeError, KeyError):
             # Skip invalid game files

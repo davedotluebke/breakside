@@ -118,6 +118,7 @@ function Game(teamName, opponentName, startOn, teamId = null) {
     };
     this.id = null; // Unique Game ID (e.g., YYYY-MM-DD_Team_vs_Opponent_Timestamp)
     this.eventId = null; // TournamentEvent ID if game is part of an event
+    this.phase = null; // Optional phase label within the event (e.g. "Day 1", "Pool play")
     this.points = [];  // An array of Point objects
     this.gameStartTimestamp = new Date();
     this.gameEndTimestamp = null;
@@ -500,6 +501,7 @@ function TournamentEvent(name = "New Event", teamId = null, id = null) {
         pickupPlayers: [] // [{id, name, gender, number}]
     };
     this.gameIds = [];
+    this.phases = []; // Ordered list of free-form phase labels (e.g. ["Day 1", "Day 2"])
     this.createdAt = new Date().toISOString();
     this.updatedAt = new Date().toISOString();
 }

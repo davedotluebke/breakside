@@ -195,9 +195,10 @@ function getGameTeamStats(game) {
 /**
  * Aggregate team-level point classifications across an event.
  * @param {object} event - TournamentEvent
+ * @param {object} [options] - { phase: string | null } to filter by phase
  * @returns {Promise<object>} Same shape as getGameTeamStats
  */
-async function getEventTeamStats(event) {
+async function getEventTeamStats(event, options = {}) {
     const totals = {
         breaks: 0, opponentBreaks: 0,
         cleanHolds: 0, dirtyHolds: 0,
@@ -206,7 +207,9 @@ async function getEventTeamStats(event) {
     };
     if (!event) return totals;
     const games = await loadEventGames(event);
+    const phaseFilter = options.phase;
     games.forEach(game => {
+        if (phaseFilter !== undefined && phaseFilter !== null && game.phase !== phaseFilter) return;
         const g = getGameTeamStats(game);
         totals.breaks += g.breaks;
         totals.opponentBreaks += g.opponentBreaks;
@@ -246,28 +249,36 @@ function getGamePlayerStats(game) {
 /**
  * Get aggregate player stats for an event across all its games.
  * @param {object} event - TournamentEvent object (must have gameIds)
+ * @param {object} [options] - { phase: string } to restrict to one phase label
  * @returns {Promise<Object>} Map of playerName → stats
  */
-async function getEventPlayerStats(event) {
+async function getEventPlayerStats(event, options = {}) {
     if (!event) return {};
 
     const games = await loadEventGames(event);
     const stats = {};
-    games.forEach(game => accumulateGameStats(game, stats));
+    const phaseFilter = options.phase;
+    games.forEach(game => {
+        if (phaseFilter !== undefined && phaseFilter !== null && game.phase !== phaseFilter) return;
+        accumulateGameStats(game, stats);
+    });
     return stats;
 }
 
 /**
  * Get event W/L record
  * @param {object} event - TournamentEvent object (must have gameIds)
+ * @param {object} [options] - { phase: string } to restrict to one phase label
  * @returns {Promise<{ wins: number, losses: number, ties: number }>}
  */
-async function getEventRecord(event) {
+async function getEventRecord(event, options = {}) {
     if (!event) return { wins: 0, losses: 0, ties: 0 };
 
     const games = await loadEventGames(event);
     let wins = 0, losses = 0, ties = 0;
+    const phaseFilter = options.phase;
     games.forEach(game => {
+        if (phaseFilter !== undefined && phaseFilter !== null && game.phase !== phaseFilter) return;
         const teamScore = game.scores?.[Role.TEAM] || game.scores?.team || 0;
         const oppScore = game.scores?.[Role.OPPONENT] || game.scores?.opponent || 0;
         if (teamScore > oppScore) wins++;
