@@ -7,6 +7,7 @@
 // Track where we came from so back button navigates correctly
 let gameSummaryOrigin = 'teamRosterScreen'; // default for post-game flow
 let gameSummarySortController = null;
+let _lastRenderedGame = null; // the game currently shown on the summary screen
 
 /**
  * Show game summary for a completed game loaded from the team list.
@@ -32,6 +33,7 @@ function showGameSummaryPostGame() {
  */
 function renderGameSummary(game) {
     if (!game) return;
+    _lastRenderedGame = game;
 
     // Detach previous sort controller
     if (gameSummarySortController) {
@@ -393,54 +395,37 @@ function renderGameSummaryEventLog(game) {
 }
 
 /**
- * Export game summary stats to CSV and trigger download.
- * Same pattern as exportEventRosterCSV but without the checkbox column.
+ * Export game summary stats to an .xlsx workbook (single sheet) and
+ * trigger download. Builds the same player table + team-stats footer
+ * shown on screen, with proper Excel number / percent / time types.
  */
-function exportGameSummaryCSV() {
-    const tbody = document.getElementById('gameSummaryRosterList');
-    if (!tbody) return;
+function exportGameSummaryXLSX() {
+    const game = _lastRenderedGame || (typeof currentGame === 'function' ? currentGame() : null);
+    if (!game) { alert('No game to export.'); return; }
 
-    const rows = tbody.querySelectorAll('tr');
-    if (rows.length === 0) return;
+    const playerStats = typeof getGamePlayerStats === 'function'
+        ? getGamePlayerStats(game) : {};
+    const teamStats = typeof getGameTeamStats === 'function'
+        ? getGameTeamStats(game) : null;
 
-    const csvRows = [];
-    rows.forEach(row => {
-        const cells = [];
-        Array.from(row.children).forEach((cell, colIdx) => {
-            let text = cell.textContent.trim();
-            // Convert MM:SS time column to decimal minutes for spreadsheets
-            if (colIdx === 2 && cell.tagName !== 'TH') {
-                const parts = text.split(':');
-                if (parts.length === 2) {
-                    const mins = parseInt(parts[0], 10) || 0;
-                    const secs = parseInt(parts[1], 10) || 0;
-                    text = (mins + secs / 60).toFixed(1);
-                }
-            } else if (colIdx === 2 && cell.tagName === 'TH') {
-                text = 'Minutes';
-            }
-            // Escape quotes and wrap in quotes if contains comma/quote/newline
-            if (text.includes('"') || text.includes(',') || text.includes('\n')) {
-                text = '"' + text.replace(/"/g, '""') + '"';
-            }
-            cells.push(text);
-        });
-        csvRows.push(cells.join(','));
-    });
+    let players = [];
+    if (game.rosterSnapshot && game.rosterSnapshot.players) {
+        players = game.rosterSnapshot.players;
+    } else if (typeof currentTeam !== 'undefined' && currentTeam) {
+        players = currentTeam.teamRoster || [];
+    }
 
-    const csv = csvRows.join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
+    const teamName = game.team || 'Team';
+    const opponent = game.opponent || 'Opponent';
+    const teamScore = game.scores?.[Role.TEAM] || game.scores?.team || 0;
+    const oppScore = game.scores?.[Role.OPPONENT] || game.scores?.opponent || 0;
+    const titleRow = `${teamName} ${teamScore} — ${oppScore} ${opponent}`;
 
-    const game = typeof currentGame === 'function' ? currentGame() : null;
-    const opponent = game?.opponent || 'game';
-    const filename = opponent.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-') + '-stats.csv';
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+    const aoa = buildStatsSheetAoA(players, playerStats, teamStats, { titleRow });
+    const ws = aoaToFormattedSheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, safeSheetName(opponent));
+    downloadWorkbook(wb, `${safeFilename(opponent)}-stats.xlsx`);
 }
 
 /**
@@ -450,8 +435,8 @@ function getGameSummaryBackTarget() {
     return gameSummaryOrigin;
 }
 
-// Wire up CSV export button
-document.getElementById('exportGameSummaryBtn')?.addEventListener('click', exportGameSummaryCSV);
+// Wire up XLSX export button
+document.getElementById('exportGameSummaryBtn')?.addEventListener('click', exportGameSummaryXLSX);
 
 window.showGameSummaryFromList = showGameSummaryFromList;
 window.showGameSummaryPostGame = showGameSummaryPostGame;
