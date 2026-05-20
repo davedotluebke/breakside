@@ -462,69 +462,52 @@ function backFromEventRoster() {
 }
 
 /**
- * Export event roster stats to CSV and trigger download
+ * Export event roster stats to an .xlsx workbook with one sheet per phase
+ * (plus an "All phases" sheet at the front when phases are configured).
+ * Only checked team players are included; pickups always export.
  */
-function exportEventRosterCSV() {
-    const tbody = document.getElementById('eventRosterList');
-    if (!tbody) return;
+async function exportEventRosterXLSX() {
+    const event = currentEventRosterEvent;
+    if (!event) return;
+    const exportBtn = document.getElementById('exportEventRosterBtn');
+    const origText = exportBtn ? exportBtn.innerHTML : '';
+    if (exportBtn) { exportBtn.disabled = true; exportBtn.textContent = 'Building…'; }
 
-    const rows = tbody.querySelectorAll('tr');
-    if (rows.length === 0) return;
+    try {
+        // Build the attending-players list once (checked team + pickups)
+        const roster = currentTeam ? currentTeam.teamRoster : [];
+        const attendingTeamPlayers = roster.filter(p => eventRosterPlayerIds.has(p.id));
+        const players = [...attendingTeamPlayers, ...eventRosterPickups];
 
-    const csvRows = [];
-    rows.forEach(row => {
-        // Skip unchecked team players — natural "players who actually attended"
-        // export. Header, aggregate, and pickup rows are always included.
-        const firstCell = row.children[0];
-        const cb = firstCell ? firstCell.querySelector('input[type="checkbox"]') : null;
-        if (cb && !cb.checked) return;
+        // Build the sheet list: "All phases" first, then one per phase.
+        // (If no phases configured, just one "All" sheet.)
+        const phases = event.phases || [];
+        const sheetSpecs = [{ label: 'All phases', phase: null }];
+        phases.forEach(p => sheetSpecs.push({ label: p, phase: p }));
 
-        const cells = [];
-        Array.from(row.children).forEach((cell, colIdx) => {
-            if (colIdx === 0) {
-                // Checkbox column → "Yes" for everything that made it past the filter
-                if (cell.tagName === 'TH') {
-                    cells.push('Attending');
-                } else if (row.classList.contains('team-aggregate-row')) {
-                    cells.push('');
-                } else {
-                    cells.push('Yes');
-                }
-            } else {
-                let text = cell.textContent.trim();
-                // Convert MM:SS time column to decimal minutes for spreadsheets
-                if (colIdx === 3 && cell.tagName !== 'TH') {
-                    const parts = text.split(':');
-                    if (parts.length === 2) {
-                        const mins = parseInt(parts[0], 10) || 0;
-                        const secs = parseInt(parts[1], 10) || 0;
-                        text = (mins + secs / 60).toFixed(1);
-                    }
-                } else if (colIdx === 3 && cell.tagName === 'TH') {
-                    text = 'Minutes';
-                }
-                // Escape quotes and wrap in quotes if contains comma/quote/newline
-                if (text.includes('"') || text.includes(',') || text.includes('\n')) {
-                    text = '"' + text.replace(/"/g, '""') + '"';
-                }
-                cells.push(text);
-            }
-        });
-        csvRows.push(cells.join(','));
-    });
+        const wb = XLSX.utils.book_new();
+        for (const spec of sheetSpecs) {
+            const opts = spec.phase ? { phase: spec.phase } : {};
+            const [playerStats, teamStats] = await Promise.all([
+                getEventPlayerStats(event, opts),
+                typeof getEventTeamStats === 'function' ? getEventTeamStats(event, opts) : null
+            ]);
+            // Skip empty phase sheets (no points played in that phase)
+            if (spec.phase && (!teamStats || teamStats.total === 0)) continue;
 
-    const csv = csvRows.join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
+            const title = `${event.name} — ${spec.label}`;
+            const aoa = buildStatsSheetAoA(players, playerStats, teamStats, { titleRow: title });
+            const ws = aoaToFormattedSheet(aoa);
+            XLSX.utils.book_append_sheet(wb, ws, safeSheetName(spec.label));
+        }
 
-    const eventName = currentEventRosterEvent?.name || 'event-roster';
-    const filename = eventName.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-') + '-stats.csv';
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+        downloadWorkbook(wb, `${safeFilename(event.name)}-stats.xlsx`);
+    } catch (e) {
+        console.error('Event xlsx export failed:', e);
+        alert('Export failed: ' + e.message);
+    } finally {
+        if (exportBtn) { exportBtn.disabled = false; exportBtn.innerHTML = origText; }
+    }
 }
 
 // Event listeners (IIFE matching rosterManagement.js pattern)
@@ -533,7 +516,7 @@ function exportEventRosterCSV() {
     document.getElementById('eventAddMMPBtn')?.addEventListener('click', () => addEventPickupPlayer(Gender.MMP));
     document.getElementById('saveEventRosterBtn')?.addEventListener('click', saveEventRoster);
     document.getElementById('backFromEventRosterBtn')?.addEventListener('click', backFromEventRoster);
-    document.getElementById('exportEventRosterBtn')?.addEventListener('click', exportEventRosterCSV);
+    document.getElementById('exportEventRosterBtn')?.addEventListener('click', exportEventRosterXLSX);
 
     const nameInput = document.getElementById('eventNewPlayerInput');
     if (nameInput) {

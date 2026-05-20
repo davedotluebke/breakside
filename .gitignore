@@ -1,6 +1,7 @@
 .DS_Store
 recv.txt
 api_key.sec
+test-credentials.local
 __pycache__/
 
 # Audio test files (raw / preview / lossy formats — FLAC is the committed

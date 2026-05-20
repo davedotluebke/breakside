@@ -272,6 +272,9 @@
                     <i class="fas fa-arrow-left"></i>
                 </button>
                 <span class="panel-title" id="teamRosterHeader">Edit Roster</span>
+                <button id="exportTeamRosterBtn" class="back-button" title="Export team roster + lifetime stats to Excel (.xlsx)">
+                    <i class="fas fa-file-excel"></i> Export
+                </button>
             </div>
             <div class="subscreen-content">
                 <div class="roster-table-container">
@@ -417,8 +420,8 @@
                 <i class="fas fa-arrow-left"></i> Back
             </button>
             <h2 id="eventRosterHeader">Event Roster</h2>
-            <button id="exportEventRosterBtn" class="back-button" title="Export attending players to CSV" style="display:none;">
-                <i class="fas fa-file-csv"></i> Export to CSV
+            <button id="exportEventRosterBtn" class="back-button" title="Export attending players to Excel (.xlsx) — one sheet per phase" style="display:none;">
+                <i class="fas fa-file-excel"></i> Export
             </button>
         </div>
         <div id="eventRosterPhaseFilterRow" class="event-roster-filter-row" style="display:none;">
@@ -677,8 +680,8 @@
                 <i class="fas fa-arrow-left"></i>
             </button>
             <span class="panel-title">Game Summary</span>
-            <button id="exportGameSummaryBtn" class="back-button" title="Export to CSV" style="display:none;">
-                <i class="fas fa-file-csv"></i> Export to CSV
+            <button id="exportGameSummaryBtn" class="back-button" title="Export to Excel (.xlsx)" style="display:none;">
+                <i class="fas fa-file-excel"></i> Export
             </button>
         </div>
 
@@ -736,6 +739,8 @@
     <script src="utils/eventStats.js"></script>
     <script src="utils/tableSort.js"></script>
     <script src="utils/statsHelp.js"></script>
+    <script src="vendor/xlsx.mini.min.js"></script>
+    <script src="utils/xlsxExport.js"></script>
 
     <!-- UI modules -->
     <script src="ui/activePlayersDisplay.js"></script>

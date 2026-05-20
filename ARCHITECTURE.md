@@ -922,6 +922,21 @@ Staging has a purple header (vs production orange) via `body.staging` CSS class.
 
 ## Quick Reference Commands
 
+### Test account (browser preview)
+
+Claude Code uses a dedicated Supabase account when verifying changes in
+the in-IDE browser preview. Email + password live in `test-credentials.local`
+(gitignored, never committed). To drive preview against the real backend:
+
+```js
+localStorage.setItem('ultistats_api_url', 'https://api.breakside.pro');
+location.reload();
+// then sign in with the credentials from test-credentials.local
+```
+
+To create or rotate the account: sign up at `test@luebke.us`, confirm
+the verification email, and update `test-credentials.local`.
+
 ### EC2 / API
 
 ```bash
