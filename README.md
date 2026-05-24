@@ -39,6 +39,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 - **Cloud-first team/game selection** - Teams and games stored in the cloud with automatic 10-second refresh; unified bidirectional sync (push local changes + pull cloud updates in a single button)
 - **Roster management** - Add, remove, and edit player information including nicknames
 - **Team data export/import** - Download team data as JSON files for backup or sharing
+- **Tournament Events** - Group games under an event (tournament/league) for aggregate stats and a shared event roster. Tag games with free-form **phases** (Day 1, Day 2, Pool Play, Bracket, …) retroactively — or auto-label by day — then filter and group stats by phase
 - **Multi-coach collaboration** - Role-based coach handoffs (Active Coach / Line Coach) with real-time sync
 - **Lineup Ready ping** - Line Coach taps a button to signal the Active Coach that the next line is set; the indicator turns green on both screens until the point starts. Lineup edits sync continuously regardless — the ping is a notification, not a commit gate.
 - **Rejoin Game** - When the PWA loses its connection (e.g. backgrounded long enough that controller pings expired), a "Rejoin Game" item appears in the in-game menu to re-establish polling without leaving the screen.
@@ -49,9 +50,10 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 - **AI Speech Narration** - Tap a mic button and describe plays out loud ("Alice throws to Bob, deep huck to Carla for the score") — speech is transcribed live and converted to structured events on stop. Powered by OpenAI Realtime + Claude Sonnet. Optional, opt-in per session.
 
 ### Real-Time Statistics
-- **Player Performance Metrics** - Track goals, assists, turnovers, completed passes, and defensive plays
+- **Player Performance Metrics** - Track goals, assists, hockey assists (incl. huck hockey assists), turnovers, completed passes, completion/huck percentages, and defensive plays
+- **Team Metrics** - Breaks (scoring on defense), clean holds (scoring on offense untouched), and dirty holds (scoring on offense after a turnover), reported per D-point and per D-possession
 - **Playing Time Tracking** - Monitor exact time on field for each player
-- **Point-by-Point Analysis** - See which players were active in each point
+- **Point-by-Point Analysis** - See which players were active in each point, with per-point break/hold badges in the game log
 - **Game vs. Season Stats** - Toggle between current game and cumulative statistics
 
 ### Advanced Game Features
@@ -65,7 +67,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 
 ### Data & Export
 - **Game Summary** - Review completed games with sortable player stats table and full event log
-- **CSV Export** - Export player statistics from game summaries and event rosters to spreadsheet-ready CSV
+- **Excel (.xlsx) Export** - Export player + team statistics from game summaries, event rosters, and team rosters. Multi-sheet workbooks split by phase (event roster) or by event (team roster), with real Excel number/percent types and click-to-sort column headers
 - **JSON Export** - Export complete game data for analysis
 - **Local Storage** - Automatic saving of all team and game data
 - **Resume Games** - Pick up where you left off with in-progress games

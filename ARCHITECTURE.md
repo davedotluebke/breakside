@@ -59,7 +59,15 @@ ultistats/
 │
 ├── utils/                   # Utility functions
 │   ├── helpers.js          # Pure utility functions and state accessors
-│   └── statistics.js       # Statistics calculation and game summaries
+│   ├── statistics.js       # Legacy statistics calculation and game summaries
+│   ├── eventStats.js       # Player + team stat aggregation (goals, assists,
+│   │                       # hockey assists, breaks/holds), event/phase filters
+│   ├── statsHelp.js        # Long-press column-header help modal for stats tables
+│   ├── tableSort.js        # Click-to-sort controller for on-screen stats tables
+│   └── xlsxExport.js       # Excel (.xlsx) export builders (SheetJS-backed)
+│
+├── vendor/                  # Third-party libraries (vendored for offline use)
+│   └── xlsx.mini.min.js    # SheetJS community build (xlsx read/write)
 │
 ├── screens/                 # Screen management
 │   └── navigation.js       # Screen navigation and state management
@@ -120,6 +128,7 @@ A handful of non-obvious cascade and box-model details have bitten layout work i
 - **`width: 100%` on flex/grid children resolves against the *containing block including its padding*.** When a 100%-width child overflows on the right, the fix is usually to drop `width: 100%`, use `align-self: stretch`, and add `box-sizing: border-box`. The "They turnover / They score" buttons in Full PBP hit this.
 - **Flex/grid children with their own min-content won't shrink below it** unless you give them `min-width: 0` (flex) or `minmax(0, …fr)` (grid columns). If a 60/40 split is rendering more like 75/25, this is why. Full PBP migrated from flex to grid for exactly this reason.
 - **Service worker caching makes CSS look "stuck."** The PWA serves the cached `service-worker.js` until its `cacheName` constant changes. If a CSS edit isn't visible after deploy, bump `cacheName` in [service-worker.js](service-worker.js) and double-reload. Always verify against build number in version.json before assuming the change didn't deploy.
+- **`position: sticky` table cells need `border-collapse: separate`.** The stats tables (game summary, event/team roster) use sticky header rows and sticky leftmost columns. With the default `border-collapse: collapse`, sticky cell backgrounds render transparent and other rows bleed through on scroll. The fix (in [main.css](main.css)) is `border-collapse: separate; border-spacing: 0;` plus an opaque `background-color` on every `th`/`td`, and a raised `z-index` on the header-row corner cells so they outrank both the sticky row and sticky column. Sticky also silently no-ops unless the scroll container (`.roster-table-container`) is the actual `overflow: auto` ancestor.
 
 When CLAUDE finds a *new* gotcha worth remembering across sessions, add it here rather than to CLAUDE.md.
 
@@ -360,13 +369,21 @@ ultistats_server/
 #### Games
 - `POST /api/games/{game_id}/sync` - Sync complete game state
 - `GET /api/games/{game_id}` - Get current game state
-- `GET /api/games` - List all games
+- `GET /api/games` - List all games (list metadata includes each game's `phase`)
+- `PATCH /api/games/{game_id}/phase` - Update only a game's `phase` label (retroactive event-phase labeling). Metadata-only write — does **not** create a version backup like a full sync does
 - `DELETE /api/games/{game_id}` - Delete game
 
 #### Teams
 - `POST /api/teams/{team_id}/sync` - Sync team data
 - `GET /api/teams/{team_id}` - Get team
 - `GET /api/teams` - List all teams
+- `GET /api/teams/{team_id}/events` - List a team's tournament events
+
+#### Events
+- `POST /api/events` - Create a tournament event
+- `GET /api/events/{event_id}` - Get an event
+- `PUT /api/events/{event_id}` - Update an event (name, defaults, roster, `phases`)
+- `DELETE /api/events/{event_id}` - Delete an event (games become standalone)
 
 #### Players
 - `POST /api/players/{player_id}/sync` - Sync player data
@@ -496,6 +513,45 @@ Events reference players by ID:
   // ... flags
 }
 ```
+
+### Tournament Events and Phases
+
+A `TournamentEvent` groups a team's games (tournament, league, etc.) for aggregate stats and a shared event roster. Stored server-side one JSON file per event (`storage/event_storage.py`), referenced from each game via `game.eventId`.
+
+Events carry an ordered, free-form **phases** list, and each game carries an optional `phase` label:
+
+```javascript
+// TournamentEvent
+{ id, name, teamId, status, defaults, roster, gameIds,
+  phases: ["Day 1", "Day 2", "Bracket"] }   // ordered, free-form
+
+// Game
+{ /* … */ eventId: "HS-States-a3f2", phase: "Day 1" | null }
+```
+
+- **Retroactive & backwards-compatible.** Both fields default to `[]` / `null`. Games predating the feature read back as `phase: null` ("Unassigned"); events without phases behave exactly as before. The schema-loose JSON storage round-trips both with no migration.
+- **Phase writes are metadata-only.** The per-game phase picker calls `PATCH /api/games/{id}/phase` rather than a full game sync, so labeling doesn't spawn a version backup of the whole game.
+- **Stats are phase-aware.** `getEventPlayerStats`, `getEventRecord`, and `getEventTeamStats` take an optional `{ phase }` filter to scope aggregation to one phase ("Day 1 holds", "bracket-only hockey assists").
+
+### Derived Statistics
+
+All stats are computed on demand from the event stream — none are stored on players. The live aggregation path is `utils/eventStats.js` (the older `utils/statistics.js` is legacy):
+
+- **Player stats** (`accumulateGameStats`): goals, assists, **hockey assists** (the thrower of the pass *before* the assist) and **huck hockey assists** (a hockey assist that was itself a huck — counted in the HA total too), completions, completion %, hucks, defensive plays, turnovers, +/-, points/time played.
+- **Team point classification** (`classifyPoint`): each completed point is one of `break` (scored on D), `cleanHold` (scored on O, no turnover), `hold`/dirty (scored on O after ≥1 turnover), `broken` (started O, lost), or `opponentHold` (started D, lost). Surfaced as per-point badges in the game log and as a per-game / per-event summary line.
+- **Break denominators.** `getGameTeamStats` reports breaks per D-point *and* per D-possession. A D-point can contain multiple defensive possessions (turnover-back), so the per-possession rate is the truer measure of D-line conversion.
+
+### Statistics Export (.xlsx)
+
+`utils/xlsxExport.js` builds Excel workbooks via the vendored SheetJS (`vendor/xlsx.mini.min.js`, precached by the service worker for offline use). Three entry points:
+
+| Screen | Workbook layout |
+|--------|-----------------|
+| Game Summary | One sheet (titled by opponent) |
+| Event Roster | "All phases" sheet + one sheet per phase; only attending players; team-stats footer per sheet |
+| Team Roster (Edit Roster) | "All games" sheet + one sheet per event the team played + a "Standalone" sheet |
+
+Each sheet is a header + player rows + a Team aggregate row + a breaks/holds footer. Numbers are written as real Excel types (percentages, decimal minutes), and an `!autofilter` scoped to just the header+player rows gives click-to-sort/filter column dropdowns without dragging the title or footer into the sort. Honored by Google Sheets on import.
 
 ---
 
