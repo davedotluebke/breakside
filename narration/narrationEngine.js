@@ -645,6 +645,14 @@ Just listen. Transcription happens automatically.`;
             ? handleFunctionCall
             : (() => {});  // ignore any stray calls
 
+        // Per-device tunables from Advanced Settings (VAD eagerness, noise
+        // reduction, transcription model, vocabulary biasing, force-English,
+        // browser audio constraints). Falls back to module defaults when the
+        // settings module isn't loaded.
+        const advOpts = (window.advancedSettings && window.advancedSettings.getNarrationSessionOptions)
+            ? window.advancedSettings.getNarrationSessionOptions(rosterInfo)
+            : {};
+
         try {
             await window.narrationRealtimeSession.start({
                 // Transcription-only mode is the default path now: no LLM
@@ -656,6 +664,10 @@ Just listen. Transcription happens automatically.`;
                 model: REALTIME_MODEL,
                 instructions: sessionInstructions,
                 tools: sessionTools,
+                // Spread Advanced Settings: vadEagerness, noiseReduction,
+                // transcriptionModel, transcriptionLanguage, transcriptionPrompt,
+                // audioConstraints.
+                ...advOpts,
                 onFunctionCall: sessionFunctionCallHandler,
                 onTranscriptDelta: (delta) => {
                     accumulatedTranscript += delta;

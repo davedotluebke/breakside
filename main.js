@@ -459,6 +459,13 @@ function initializeAppMenu() {
         if (typeof showTeamSettingsScreen === 'function') showTeamSettingsScreen();
     });
 
+    document.getElementById('menuAppAdvancedSettings')?.addEventListener('click', () => {
+        closeAppMenu();
+        if (window.advancedSettings && typeof window.advancedSettings.showAdvancedSettings === 'function') {
+            window.advancedSettings.showAdvancedSettings();
+        }
+    });
+
     document.getElementById('menuAppFeedback')?.addEventListener('click', () => {
         closeAppMenu();
         openAppFeedback();

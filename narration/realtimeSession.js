@@ -51,6 +51,9 @@
     // whether we need to commit + create a response (conversation) or just
     // commit and wait for final transcription deltas (transcription-only).
     let currentMode = 'transcription';
+    // getUserMedia constraints chosen by start() (from Advanced Settings),
+    // read by startAudioCapture which takes no args.
+    let currentAudioConstraints = null;
 
     /**
      * Start a realtime session.
@@ -65,6 +68,14 @@
      *     re-enable the fast-pass extractor.
      * @param {string} [options.model] - Conversation-mode model (e.g. 'gpt-realtime').
      * @param {string} [options.transcriptionModel] - ASR model in transcription mode.
+     * @param {string} [options.transcriptionLanguage] - ISO code (e.g. 'en') to pin
+     *   recognition language, or undefined to auto-detect.
+     * @param {string} [options.transcriptionPrompt] - Free-text vocabulary hint to
+     *   bias the recognizer toward expected names/jargon.
+     * @param {string} [options.vadEagerness] - semantic_vad eagerness: low|medium|high|auto.
+     * @param {string} [options.noiseReduction] - near_field|far_field|off.
+     * @param {object} [options.audioConstraints] - getUserMedia audio constraints
+     *   (echoCancellation/noiseSuppression/autoGainControl/channelCount).
      * @param {string} [options.instructions] - Conversation-mode system prompt.
      * @param {Array}  [options.tools] - Conversation-mode tool definitions.
      * @param {function} [options.onFunctionCall] - Conversation-mode call back.
@@ -82,6 +93,11 @@
             mode = 'transcription',
             model = 'gpt-realtime',
             transcriptionModel = 'gpt-4o-mini-transcribe',
+            transcriptionLanguage,
+            transcriptionPrompt,
+            vadEagerness,
+            noiseReduction,
+            audioConstraints,
             instructions = '',
             tools = [],
             onFunctionCall,
@@ -91,6 +107,8 @@
         } = options;
 
         currentMode = (mode === 'conversation') ? 'conversation' : 'transcription';
+        // Stash for startAudioCapture (called below without args).
+        currentAudioConstraints = audioConstraints || null;
 
         onFunctionCallCb = onFunctionCall || (() => {});
         onTranscriptDeltaCb = onTranscriptDelta || (() => {});
@@ -149,24 +167,32 @@
 
         // 3. Configure the session.
         if (currentMode === 'transcription') {
-            // Console-tunable knobs (set window.NARRATION_VAD_EAGERNESS to
-            // 'low' | 'medium' | 'high' | 'auto', and
-            // window.NARRATION_NOISE_REDUCTION to 'near_field' | 'far_field' | 'off'
-            // before tapping the mic to A/B settings without a redeploy).
-            const eagerness = (typeof window !== 'undefined' && window.NARRATION_VAD_EAGERNESS) || 'low';
-            const nrSetting = (typeof window !== 'undefined' && window.NARRATION_NOISE_REDUCTION) || 'near_field';
-            const noiseReduction = (nrSetting === 'off' || nrSetting === 'none')
+            // Knobs come from Advanced Settings (passed in by the engine);
+            // fall back to the legacy console globals, then sane defaults.
+            // window.NARRATION_VAD_EAGERNESS / NARRATION_NOISE_REDUCTION still
+            // work as quick dev overrides without opening the settings UI.
+            const eagerness = vadEagerness
+                || (typeof window !== 'undefined' && window.NARRATION_VAD_EAGERNESS)
+                || 'medium';
+            const nrSetting = noiseReduction
+                || (typeof window !== 'undefined' && window.NARRATION_NOISE_REDUCTION)
+                || 'near_field';
+            const noiseReductionObj = (nrSetting === 'off' || nrSetting === 'none')
                 ? null
                 : { type: nrSetting };
 
             // GA shape: nested under audio.input.* with session.type=transcription.
             // No tools, no instructions, no response model — pure ASR.
+            const transcription = { model: transcriptionModel };
+            if (transcriptionLanguage) transcription.language = transcriptionLanguage;
+            if (transcriptionPrompt) transcription.prompt = transcriptionPrompt;
+
             const inputCfg = {
                 format: 'audio/pcm',
-                transcription: { model: transcriptionModel },
+                transcription,
                 turn_detection: { type: 'semantic_vad', eagerness }
             };
-            if (noiseReduction) inputCfg.noise_reduction = noiseReduction;
+            if (noiseReductionObj) inputCfg.noise_reduction = noiseReductionObj;
 
             send({
                 type: 'session.update',
@@ -462,13 +488,16 @@
     // ---------------------------------------------------------------------
 
     async function startAudioCapture() {
+        // Constraints come from Advanced Settings via start(); default to the
+        // browser-processing-on profile when unset.
+        const audioConstraints = currentAudioConstraints || {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1
+        };
         mediaStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-                channelCount: 1
-            }
+            audio: audioConstraints
         });
 
         // Create AudioContext at the target sample rate (24kHz). Most browsers
