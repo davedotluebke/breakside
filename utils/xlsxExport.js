@@ -81,11 +81,16 @@ function aggregateTotalsRow(label, perPlayerPs) {
  * @param {object} [teamStats] - output of getGameTeamStats (drives footer)
  * @param {object} [opts]
  * @param {string} [opts.titleRow] - optional title above the table
- * @returns {Array<Array>} 2D array (Array of Arrays) for SheetJS aoa_to_sheet
+ * @returns {{aoa: Array<Array>, autofilterRef: string}} the 2D array plus
+ *   the A1-style range covering the header row + player rows, so the caller
+ *   can scope an AutoFilter to just the sortable table (excluding the title
+ *   above and the Team total + footer below).
  */
 function buildStatsSheetAoA(players, playerStats, teamStats, opts = {}) {
     const aoa = [];
     if (opts.titleRow) aoa.push([opts.titleRow]);
+
+    const headerRowIdx = aoa.length;   // 0-based row of the column headers
     aoa.push(STATS_COLUMNS.slice());
 
     const psList = [];
@@ -94,8 +99,10 @@ function buildStatsSheetAoA(players, playerStats, teamStats, opts = {}) {
         psList.push(ps);
         aoa.push(buildPlayerStatsRow(p.name, ps));
     });
+    const lastPlayerRowIdx = aoa.length - 1; // 0-based; == headerRowIdx if no players
 
-    // Team aggregate row
+    // Team aggregate row (kept OUTSIDE the autofilter range so it stays put
+    // when the user sorts the player rows)
     aoa.push(aggregateTotalsRow('Team', psList));
 
     // Team-stats footer (breaks/holds)
@@ -106,14 +113,24 @@ function buildStatsSheetAoA(players, playerStats, teamStats, opts = {}) {
             lines.forEach(line => aoa.push([line]));
         }
     }
-    return aoa;
+
+    const autofilterRef = XLSX.utils.encode_range(
+        { r: headerRowIdx, c: 0 },
+        { r: Math.max(lastPlayerRowIdx, headerRowIdx), c: STATS_COLUMNS.length - 1 }
+    );
+    return { aoa, autofilterRef };
 }
 
 /**
- * Convert a 2D array to a SheetJS worksheet with sensible column widths
- * and percentage formatting on the Comp%/Huck% columns (indices 7, 8).
+ * Convert a stats sheet to a SheetJS worksheet with sensible column widths,
+ * percentage formatting on Comp%/Huck%, decimal Minutes, and an AutoFilter
+ * scoped to the player table so column headers get click-to-sort dropdowns.
+ * @param {{aoa: Array<Array>, autofilterRef?: string} | Array<Array>} sheet
+ *   Either the object returned by buildStatsSheetAoA, or a bare 2D array.
  */
-function aoaToFormattedSheet(aoa) {
+function aoaToFormattedSheet(sheet) {
+    const aoa = Array.isArray(sheet) ? sheet : sheet.aoa;
+    const autofilterRef = Array.isArray(sheet) ? null : sheet.autofilterRef;
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     // Column widths
     ws['!cols'] = [
@@ -147,6 +164,11 @@ function aoaToFormattedSheet(aoa) {
         if (minCell && typeof minCell.v === 'number') {
             minCell.z = '0.00';
         }
+    }
+    // AutoFilter on the header+player rows → per-column sort/filter dropdowns,
+    // scoped so the title row and Team total + footer stay out of the sort.
+    if (autofilterRef) {
+        ws['!autofilter'] = { ref: autofilterRef };
     }
     return ws;
 }
