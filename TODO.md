@@ -160,6 +160,16 @@ Remaining work:
   - **Stats-screen polish.** Long-press column-header help modal (`utils/statsHelp.js`); two-line team-stats summary; points-played team total; sticky header row + sticky leftmost columns on both tables.
   - **Excel (.xlsx) export** replacing CSV on game summary, event roster (phase tabs), and team roster (event tabs); SheetJS vendored in `vendor/`; scoped AutoFilter for click-to-sort; real number/percent/time cell types. See `utils/xlsxExport.js`.
 
+- [ ] **Refinement**: Hockey assists as an explicit judgment call (not auto-derived)
+  - **Problem with current behavior.** Today a hockey assist is awarded automatically to whoever threw the pass *before* the scoring pass (`accumulateGameStats` in `utils/eventStats.js` walks back through the possession). But like hockey / other sports that track pre-assists, a hockey assist is really a judgment call — was the goal *notably enabled* by that prior pass, or was it just the previous touch? Auto-derivation over-counts (every dump-swing-score gets one) and can't be recorded at all in Simple mode where the prior pass usually isn't entered.
+  - **Proposed model.** Make the hockey assist an explicit attribution captured in the Score Attribution dialog (`playByPlay/scoreAttribution.js`), alongside the existing goal + assist pickers:
+    - Add a "Hockey assist" control: a player dropdown.
+    - **Full mode**: pre-select the thrower of the recorded pass-before-the-assist (the current auto-derivation result) but leave it editable — and allow clearing it to "no hockey assist."
+    - **Simple mode**: default the dropdown to a placeholder like "Select HA passer" (the prior pass usually wasn't recorded, so there's nothing to pre-fill); coach picks from the roster or leaves it unset.
+  - **Storage.** Record the chosen HA player on the scoring `Throw` event (e.g. `hockeyAssistId` / `hockeyAssist` name) rather than re-deriving it. Honor the huck case: a separate flag (or derive huck-HA from whether the recorded HA pass was a huck — only possible in Full mode where that pass exists).
+  - **Stat computation.** `accumulateGameStats` reads the explicit HA attribution instead of walking the possession. **Backwards compat:** games played before this change have no explicit field — decide whether to (a) fall back to the existing auto-derivation for those, or (b) show them as having no HA. Leaning toward (a) so the tournament data already collected keeps its (approximate) HA numbers.
+  - **Touch points:** `playByPlay/scoreAttribution.js` (dialog UI + new picker), `store/models.js` (Throw field), `store/storage.js` (serialize/deserialize the field), `utils/eventStats.js` (read explicit field, fall back to derivation), and the AI narration path (`narration/narrationEngine.js` + `ultistats_server/narration.py`) if we want narrated scores to capture HA too.
+
 - [ ] **Feature**: Per-possession defensive/offensive set flag (zone tracking, etc.)
   - Tag each possession with the set being played (zone, ho-stack, vert-stack, force-middle, junk…). Primary v1 use case is marking which defensive possessions were played in zone, so that "breaks while running zone" type splits become possible later. Must stay invisible for teams that don't opt in.
   - **Data model**:
