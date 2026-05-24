@@ -1367,7 +1367,7 @@ function startRosterPolling() {
         } catch (error) {
             console.warn('Roster poll failed:', error);
         }
-    }, ROSTER_POLL_INTERVAL);
+    }, (window.advancedSettings?.getRefreshIntervalMs?.() || ROSTER_POLL_INTERVAL));
     
     console.log('🔄 Started roster polling');
 }

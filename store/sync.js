@@ -1666,7 +1666,7 @@ function startAutoSync() {
         } catch (error) {
             console.warn('Auto-sync check failed:', error);
         }
-    }, AUTO_SYNC_INTERVAL);
+    }, (window.advancedSettings?.getRefreshIntervalMs?.() || AUTO_SYNC_INTERVAL));
 }
 
 /**

@@ -1561,7 +1561,7 @@ function startAutoRefresh() {
         if (syncContainer && selectScreen && selectScreen.style.display !== 'none') {
             doFullRefresh(true); // silent refresh
         }
-    }, 10000);
+    }, (window.advancedSettings?.getRefreshIntervalMs?.() || 10000));
 }
 
 function stopAutoRefresh() {
