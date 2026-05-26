@@ -1614,6 +1614,21 @@ body.game-screen-active header {
     flex-shrink: 0;
 }
 
+/* Active Coach awareness label: "Line Coach: viewing the D line".
+   Rendered by updateLineCoachViewingLabel; hidden by JS when the AC's
+   own view matches the LC's, when no LC is claimed, when AC == LC, or
+   for non-AC users. Small italic so it doesn't compete with the table. */
+.select-line-lc-viewing {
+    font-size: 0.78rem;
+    font-style: italic;
+    color: #666;
+    padding: 0 12px 2px 12px;
+    flex-shrink: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .select-line-toolbar-spacer {
     flex: 1; /* pushes everything right, reserves left space */
 }
