@@ -5652,12 +5652,21 @@ function startGameStateRefresh() {
                 }
                 if (result) {
                     // Re-evaluate which line will be used for the
-                    // next point now that we have fresh data — the
-                    // Line Coach may have switched between OD / O /
-                    // D since our last poll. autoSelect updates
-                    // activeType so updateSelectLinePanel below
-                    // renders the line that will actually start.
-                    if (typeof autoSelectActiveTypeForNextPoint === 'function') {
+                    // next point now that we have fresh data — but
+                    // ONLY between points. autoSelect overrides
+                    // activeType to whatever the Intent Rule picks,
+                    // which is the right behavior at point-end (snap
+                    // the AC's view to the line that will actually
+                    // start) but the wrong behavior mid-point: a
+                    // manual O|D toggle by the AC or LC gets reverted
+                    // on the next 3s poll. The refresh-gate removal
+                    // (this commit's parent) is for keeping line
+                    // *data* and the LC-viewing label fresh during a
+                    // point — not for forcing view auto-selection.
+                    const pointInProgress = typeof isPointInProgress === 'function'
+                        && isPointInProgress();
+                    if (!pointInProgress
+                        && typeof autoSelectActiveTypeForNextPoint === 'function') {
                         autoSelectActiveTypeForNextPoint();
                     }
                     updateSelectLinePanel();
