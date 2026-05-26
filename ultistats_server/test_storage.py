@@ -706,5 +706,132 @@ class TestFullWorkflow:
         assert len(game["rosterSnapshot"]["players"]) == 2
 
 
+# =============================================================================
+# Multi-Coach Sync Merge Tests
+# =============================================================================
+
+class TestPendingLineMerge:
+    """Regression tests for the field-merge that protects concurrent coaches
+    from clobbering each other's line / game-data edits.
+    """
+
+    def _pnl(self, **fields):
+        """Build a pendingNextLine dict with the standard empty defaults."""
+        base = {"oLine": [], "dLine": [], "odLine": [],
+                "oLineModifiedAt": None, "dLineModifiedAt": None,
+                "odLineModifiedAt": None}
+        base.update(fields)
+        return base
+
+    def test_per_field_merge_keeps_newer_line_edit(self, isolate_test_data):
+        """A stale full-sync (older oLineModifiedAt) must NOT clobber a newer
+        oLine edit already on the server — the bug a Line Coach hit when the
+        Active Coach kept syncing mid-point with their old line snapshot.
+        """
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "merge-line-001"
+        # Server already has the Line Coach's freshly-prepared O line.
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    oLine=["A", "B", "C", "D", "E", "F", "X"],
+                                    oLineModifiedAt="2026-05-24T18:01:00.000Z")})
+        # Active Coach now syncs with their stale (empty) oLine copy.
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl()})
+
+        pnl = get_game_current(gid)["pendingNextLine"]
+        assert pnl["oLine"] == ["A", "B", "C", "D", "E", "F", "X"]
+        assert pnl["oLineModifiedAt"] == "2026-05-24T18:01:00.000Z"
+
+    def test_per_field_merge_takes_newer_line_edit(self, isolate_test_data):
+        """The mirror case: an incoming line edit newer than the server's must
+        be applied.
+        """
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "merge-line-002"
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    oLine=["A"],
+                                    oLineModifiedAt="2026-05-24T18:00:00.000Z")})
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    oLine=["B"],
+                                    oLineModifiedAt="2026-05-24T18:02:00.000Z")})
+
+        pnl = get_game_current(gid)["pendingNextLine"]
+        assert pnl["oLine"] == ["B"]
+
+    def test_o_d_and_od_lines_merge_independently(self, isolate_test_data):
+        """O / D / O-D lines have independent timestamps; an edit to one must
+        not regress the others.
+        """
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "merge-line-003"
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    oLine=["O1"], oLineModifiedAt="2026-05-24T18:00:00.000Z",
+                                    dLine=["D1"], dLineModifiedAt="2026-05-24T18:00:00.000Z",
+                                    odLine=["OD1"], odLineModifiedAt="2026-05-24T18:00:00.000Z")})
+        # Edit only D line; O and OD lines are absent (None timestamps).
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    dLine=["D2"], dLineModifiedAt="2026-05-24T18:05:00.000Z")})
+
+        pnl = get_game_current(gid)["pendingNextLine"]
+        assert pnl["dLine"] == ["D2"]
+        assert pnl["oLine"] == ["O1"]
+        assert pnl["odLine"] == ["OD1"]
+
+    def test_non_authoritative_writer_preserves_game_data(self, isolate_test_data):
+        """A non-authoritative writer (e.g. a Line Coach) must NOT roll back
+        the play data — only their line edits land.
+        """
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "merge-auth-001"
+        # Active Coach has recorded 9 points / 6-3.
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "scores": {"team": 6, "opponent": 3},
+                                "points": [{"i": i} for i in range(9)],
+                                "pendingNextLine": self._pnl()})
+        # Line Coach syncs a stale 8-point / 5-3 snapshot WITH a line edit.
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "scores": {"team": 5, "opponent": 3},
+                                "points": [{"i": i} for i in range(8)],
+                                "pendingNextLine": self._pnl(
+                                    dLine=["A", "B", "C", "D", "E", "F", "G"],
+                                    dLineModifiedAt="2026-05-24T18:05:00.000Z")},
+                           authoritative_game_data=False)
+
+        cur = get_game_current(gid)
+        assert cur["scores"] == {"team": 6, "opponent": 3}
+        assert len(cur["points"]) == 9
+        # Line edit still propagated.
+        assert cur["pendingNextLine"]["dLine"] == ["A", "B", "C", "D", "E", "F", "G"]
+
+    def test_authoritative_writer_can_reduce_points(self, isolate_test_data):
+        """The authoritative writer (Active Coach) must be able to legitimately
+        reduce point count — undo must not be blocked.
+        """
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "merge-auth-002"
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "scores": {"team": 6, "opponent": 3},
+                                "points": [{"i": i} for i in range(9)]})
+        # Authoritative undo: 9 -> 8 points.
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "scores": {"team": 5, "opponent": 3},
+                                "points": [{"i": i} for i in range(8)]},
+                           authoritative_game_data=True)
+
+        cur = get_game_current(gid)
+        assert cur["scores"] == {"team": 5, "opponent": 3}
+        assert len(cur["points"]) == 8
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
