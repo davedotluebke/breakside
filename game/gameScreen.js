@@ -5510,72 +5510,76 @@ function startGameStateRefresh() {
         const isActiveCoach = state.isActiveCoach;
         
         if (isActiveCoach) {
-            // Active Coach: Only refresh pending line (between points)
-            // They are the authoritative source for game data
-            if (typeof isPointInProgress === 'function' && !isPointInProgress()) {
-                if (typeof refreshPendingLineFromCloud === 'function') {
-                    // Snapshot lineupReadyAt before refresh so we can
-                    // detect a *new* "Lineup Ready" ping from the Line
-                    // Coach. The merge happens in-place inside the
-                    // refresh function; comparing pre/post tells us
-                    // whether to surface a toast.
-                    const gameForSnapshot = (typeof currentGame === 'function') ? currentGame() : null;
-                    const prevLineupReadyAt = (gameForSnapshot
-                        && gameForSnapshot.pendingNextLine
-                        && gameForSnapshot.pendingNextLine.lineupReadyAt) || 0;
+            // Active Coach: refresh the pending line continuously, including
+            // during a live point. Originally gated on !isPointInProgress()
+            // to protect mid-point edits from being clobbered by Line Coach
+            // syncs — that risk was eliminated by the server-side per-field
+            // merge + non-authoritative writer guard (commit 9fadda1), so
+            // the gate can now go. With it gone, the AC sees the LC's view
+            // switches and line edits live, which is what the LC-viewing
+            // sub-header (rendered below) needs to stay accurate.
+            if (typeof refreshPendingLineFromCloud === 'function') {
+                // Snapshot lineupReadyAt before refresh so we can
+                // detect a *new* "Lineup Ready" ping from the Line
+                // Coach. The merge happens in-place inside the
+                // refresh function; comparing pre/post tells us
+                // whether to surface a toast.
+                const gameForSnapshot = (typeof currentGame === 'function') ? currentGame() : null;
+                const prevLineupReadyAt = (gameForSnapshot
+                    && gameForSnapshot.pendingNextLine
+                    && gameForSnapshot.pendingNextLine.lineupReadyAt) || 0;
 
-                    const result = await refreshPendingLineFromCloud(gameId);
-                    if (result && typeof result === 'object' && result.gameJustEnded) {
-                        // Game ended by another session/device
-                        console.log('🏁 Game ended by another session — leaving game screen');
-                        if (typeof showControllerToast === 'function') {
-                            showControllerToast('Game has ended', 'info', 4000);
-                        }
-                        stopControllerPolling();
-                        exitGameScreen();
-                        if (typeof showSelectTeamScreen === 'function') {
-                            showSelectTeamScreen();
-                        }
-                        return;
+                const result = await refreshPendingLineFromCloud(gameId);
+                if (result && typeof result === 'object' && result.gameJustEnded) {
+                    // Game ended by another session/device
+                    console.log('🏁 Game ended by another session — leaving game screen');
+                    if (typeof showControllerToast === 'function') {
+                        showControllerToast('Game has ended', 'info', 4000);
                     }
-                    if (result) {
-                        // Re-evaluate which line will be used for the
-                        // next point now that we have fresh data — the
-                        // Line Coach may have switched between OD / O /
-                        // D since our last poll. autoSelect updates
-                        // activeType so updateSelectLinePanel below
-                        // renders the line that will actually start.
-                        if (typeof autoSelectActiveTypeForNextPoint === 'function') {
-                            autoSelectActiveTypeForNextPoint();
-                        }
-                        updateSelectLinePanel();
+                    stopControllerPolling();
+                    exitGameScreen();
+                    if (typeof showSelectTeamScreen === 'function') {
+                        showSelectTeamScreen();
+                    }
+                    return;
+                }
+                if (result) {
+                    // Re-evaluate which line will be used for the
+                    // next point now that we have fresh data — the
+                    // Line Coach may have switched between OD / O /
+                    // D since our last poll. autoSelect updates
+                    // activeType so updateSelectLinePanel below
+                    // renders the line that will actually start.
+                    if (typeof autoSelectActiveTypeForNextPoint === 'function') {
+                        autoSelectActiveTypeForNextPoint();
+                    }
+                    updateSelectLinePanel();
 
-                        // Refresh PBP-side button state too. updateSelect-
-                        // LinePanel only touches the Line tab's table —
-                        // the Start Point buttons on Simple, Full, AND
-                        // Line tabs all read from updatePlayByPlayPanel-
-                        // State. Without this, the Active Coach who's
-                        // sitting on Full or Simple sees stale button
-                        // colors (and the Line tab's own button doesn't
-                        // refresh either, since its state is hung off
-                        // updatePlayByPlayPanelState via
-                        // updateLineTabStartPointBtn).
-                        if (typeof updatePlayByPlayPanelState === 'function') {
-                            updatePlayByPlayPanelState();
-                        }
+                    // Refresh PBP-side button state too. updateSelect-
+                    // LinePanel only touches the Line tab's table —
+                    // the Start Point buttons on Simple, Full, AND
+                    // Line tabs all read from updatePlayByPlayPanel-
+                    // State. Without this, the Active Coach who's
+                    // sitting on Full or Simple sees stale button
+                    // colors (and the Line tab's own button doesn't
+                    // refresh either, since its state is hung off
+                    // updatePlayByPlayPanelState via
+                    // updateLineTabStartPointBtn).
+                    if (typeof updatePlayByPlayPanelState === 'function') {
+                        updatePlayByPlayPanelState();
+                    }
 
-                        // Surface a Lineup Ready ping if this refresh
-                        // brought one. Skip if the timestamp is stale
-                        // (>60s old) — could be a leftover from a
-                        // previous between-points window that we just
-                        // happened to refresh into now.
-                        const newReadyAt = (result && result.lineupReadyAt) || 0;
-                        if (newReadyAt > prevLineupReadyAt
-                            && (Date.now() - newReadyAt) < 60000) {
-                            const who = (result.lineupReadyBy || 'Line Coach');
-                            if (typeof showControllerToast === 'function') {
-                                showControllerToast(`${who} says lineup ready`, 'success', 4000);
-                            }
+                    // Surface a Lineup Ready ping if this refresh
+                    // brought one. Skip if the timestamp is stale
+                    // (>60s old) — could be a leftover from a
+                    // previous between-points window that we just
+                    // happened to refresh into now.
+                    const newReadyAt = (result && result.lineupReadyAt) || 0;
+                    if (newReadyAt > prevLineupReadyAt
+                        && (Date.now() - newReadyAt) < 60000) {
+                        const who = (result.lineupReadyBy || 'Line Coach');
+                        if (typeof showControllerToast === 'function') {
+                            showControllerToast(`${who} says lineup ready`, 'success', 4000);
                         }
                     }
                 }
