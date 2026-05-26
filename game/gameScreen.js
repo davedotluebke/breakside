@@ -2313,14 +2313,32 @@ function transitionToBetweenPoints() {
         // O and D lines: overwrite only if they have NEVER been modified this game (separate O/D pools).
         const lastPoint = game.points.length > 0 ? game.points[game.points.length - 1] : null;
         if (lastPoint && lastPoint.players && lastPoint.players.length > 0 && game.pendingNextLine) {
-            const pointStartTime = lastPoint.startTimestamp
-                ? new Date(lastPoint.startTimestamp).getTime()
-                : 0;
+            // Reliable "this point started" reference for the OD-line "modified
+            // during this point?" check. We can't use lastPoint.startTimestamp
+            // because the score handlers (Simple-mode and Full-mode score taps,
+            // and opponent-score) null it to stop the timer, and updateScore
+            // then re-sets it to `new Date()` — making it equal to score-time
+            // rather than actual point-start. That breaks the original check:
+            // any odLine edit made during the point ends up older than the
+            // (artificial) "point start" and the line gets clobbered.
+            //
+            // Use the *previous* point's endTimestamp instead — it's never
+            // mutated, and "after the previous point ended" naturally covers
+            // both the between-points window AND the current live point, which
+            // is what "modified for this upcoming next-point" should mean.
+            // For the first point, fall back to gameStartTimestamp.
+            const previousPoint = game.points.length > 1
+                ? game.points[game.points.length - 2]
+                : null;
+            const pointStartTime = previousPoint && previousPoint.endTimestamp
+                ? new Date(previousPoint.endTimestamp).getTime()
+                : (game.gameStartTimestamp
+                    ? new Date(game.gameStartTimestamp).getTime()
+                    : 0);
             const endingLine = [...lastPoint.players];
-            // O/D line: reset to ending 7 unless user explicitly changed mode (wholesale/auto)
-            // or modified during this point.
-            // Note: startTimestamp may be set at score-time (not point-start), so also
-            // check selection mode as a reliable signal of intentional changes.
+            // O/D line: reset to ending 7 unless user explicitly changed mode
+            // (wholesale/auto) or modified at any time during this point's
+            // window (since the previous point ended).
             const odModTime = game.pendingNextLine.odLineModifiedAt
                 ? new Date(game.pendingNextLine.odLineModifiedAt).getTime()
                 : 0;
