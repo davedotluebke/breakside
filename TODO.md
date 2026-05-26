@@ -242,6 +242,40 @@ Bigger asks, deferred until current themes settle.
 - [ ] "Publish" games to make them searchable/discoverable
 - [ ] Git-based backup and version history
 
+### Battery
+
+Field reports: phones don't last a full day of 3–4 games. Battery sinks ranked by suspected impact (no instrumentation yet — confirm before optimizing):
+
+1. **Screen-on time for hours** — by far the dominant drain. CPU, radio, and display all stay warm any time the screen is lit.
+2. **In-game polling for non-Active-Coach roles** — Line Coach / Viewer poll the game state on a short cadence even when nothing has changed. Active Coach is push-only, so this only hits the secondary devices.
+3. **Audio pipeline while mic is active** — `ScriptProcessorNode` resampling + base64 PCM frames over WebSocket every ~170ms. Modest when running, zero when idle. Worth measuring before changing anything; AudioWorklet may be more efficient than the deprecated ScriptProcessor we use now.
+4. **Light HTTP polling between games** — what the Advanced Settings "Cloud refresh interval" controls. Almost certainly noise compared to (1) and (2), but exposing it means a power-user can dial it down.
+
+Higher-leverage interventions, in roughly priority order:
+
+- [ ] **Screen Wake Lock API + brightness guidance**
+  - Acquire a wake lock during active game so the OS keeps the screen on even at very low brightness — coaches can then dim aggressively (the dominant battery saver) without their session dying.
+  - Show a small "screen lock active" indicator + an explicit unlock affordance for when the user wants to pocket the phone.
+  - Falls back gracefully on browsers that don't support the API.
+
+- [ ] **Pause polling when tab is backgrounded / phone is pocketed**
+  - The Page Visibility API hook already exists for wake recovery — extend it to suspend all setInterval polling loops while `document.visibilityState === 'hidden'`.
+  - Resume + immediate-refresh on visibility change.
+  - Risk: a backgrounded Line Coach misses an Active Coach handoff. Acceptable — wake recovery already handles re-sync on resume.
+
+- [ ] **Audit Full PBP for persistent repaints / animations**
+  - Long-running CSS animations and frequent DOM mutation force the compositor to stay active. Audit for: animated icons that never stop, the mini-log auto-scroll on each event, gradient/box-shadow that triggers full-layer repaints.
+
+- [ ] **AudioWorklet migration for the narration mic path**
+  - `ScriptProcessorNode` runs on the main thread and is deprecated; AudioWorklet runs on the audio thread and is the documented modern replacement. Should reduce per-frame CPU + main-thread jank during narration.
+  - Bundled with the speech-driven flows when those land (less churn to do it once).
+
+- [ ] **WebSockets for non-Active-Coach in-game sync** — see `### Infrastructure` above
+  - Less polling overhead on the secondary devices. Modest savings; only worth it after (1) and (2) above are shipped.
+
+- [ ] **Instrument before you optimize**
+  - Add a lightweight battery-impact log: timestamp + `navigator.getBattery()` snapshots at session start, point boundaries, and game end. Even rough deltas across 2–3 games would tell us which intervention matters before we build it.
+
 ### Line Selection
 - [ ] Smarter auto-lineup tiebreaking
   - Break ties (same points played) by preferring players who have sat out for more consecutive points
