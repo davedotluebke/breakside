@@ -4210,15 +4210,27 @@ function updatePanelGenderRatioDisplay() {
 /**
  * Determine which line will be used for the next point.
  *
- * Rule (intentionally simple, per design discussion):
- *   - For an upcoming offense point, compare oLine vs odLine modification
- *     timestamps. Whichever was edited more recently and is non-empty
- *     wins. Defense point uses dLine vs odLine the same way.
- *   - The separate O/D line, once created, *persists* across multiple
- *     points until the OD line is edited more recently. We don't apply
- *     a per-window freshness gate — the Line Coach saying "here's our O
- *     line" should hold until they say otherwise.
- *   - If both are empty / unset, return an empty line tagged 'od'.
+ * Three-priority Intent Rule (TODO.md § "Multi-Coach Line Selection:
+ * Intent Rule & LC-Viewing Label"):
+ *
+ *   1. Lineup Ready latch. If the LC pressed "Lineup Ready" with a
+ *      specific view selected (lineupReadyMode) and that latch is
+ *      newer than every relevant line *ModifiedAt and points at a
+ *      non-empty line, use it. Strongest signal — explicit "I'm done."
+ *
+ *   2. Per-axis most-recent edit. For an upcoming O point, compare
+ *      oLine vs odLine timestamps; for a D point, dLine vs odLine.
+ *      Newer non-empty side wins. Per-axis (not global) so prepping a
+ *      D line for the next defense point can't surface an empty O line
+ *      if the team scores instead.
+ *
+ *   3. Empty-axis fallback. If the most-recent-edit winner was empty,
+ *      surface anything non-empty rather than handing the AC a blank
+ *      lineup: this-axis typed → odLine → other-axis → empty.
+ *
+ * The O/D line, once created, persists across multiple points until OD
+ * is edited more recently — no per-window freshness gate. The Line
+ * Coach saying "here's our O line" should hold until they say otherwise.
  *
  * Returns `{ source, line }` where `source` is `'o' | 'd' | 'od'` and
  * `line` is the array of player names. Used by:
@@ -4232,24 +4244,65 @@ function getEffectiveLineForNextPoint(game) {
     const isOffense = (typeof determineStartingPosition === 'function')
         ? determineStartingPosition() === 'offense'
         : true;
-    const typeKey = isOffense ? 'o' : 'd';
+    const typeKey  = isOffense ? 'o' : 'd';
+    const otherKey = isOffense ? 'd' : 'o';
 
     const p = game.pendingNextLine;
-    const typedLine = p[typeKey + 'Line']    || [];
-    const typedMod  = p[typeKey + 'LineModifiedAt'];
-    const odLine    = p.odLine               || [];
-    const odMod     = p.odLineModifiedAt;
-    const typedTime = typedMod ? new Date(typedMod).getTime() : 0;
-    const odTime    = odMod    ? new Date(odMod).getTime()    : 0;
+    const typedLine = p[typeKey  + 'Line'] || [];
+    const odLine    = p.odLine             || [];
+    const otherLine = p[otherKey + 'Line'] || [];
+    const typedTime = p[typeKey + 'LineModifiedAt']
+        ? new Date(p[typeKey + 'LineModifiedAt']).getTime() : 0;
+    const odTime    = p.odLineModifiedAt
+        ? new Date(p.odLineModifiedAt).getTime() : 0;
 
-    if (typedTime > odTime && typedLine.length > 0) {
+    // ── Priority 1: Lineup Ready latch ────────────────────────────────
+    // The LC pressed "Lineup Ready" with a specific view selected. Use
+    // the line type they were viewing at press time (lineupReadyMode).
+    // Strongest signal — explicit "I'm done, this is the line."
+    //
+    // Defense against stale latches: a peer device may retain an old
+    // lineupReadyAt because the value→null clear-on-edit doesn't
+    // propagate via the server merge. We require lineupReadyAt to be
+    // newer than every relevant line's *ModifiedAt before honoring it.
+    // Line edits DO propagate, so this naturally suppresses superseded
+    // latches everywhere.
+    const readyAt   = p.lineupReadyAt || 0;
+    const readyMode = p.lineupReadyMode;
+    if (readyAt && readyMode
+        && readyAt > typedTime && readyAt > odTime) {
+        const latchLine = p[readyMode + 'Line'] || [];
+        if (latchLine.length > 0) {
+            return { source: readyMode, line: latchLine };
+        }
+        // Latch points to an empty line — fall through to the fallbacks.
+    }
+
+    // ── Priority 2: per-axis most-recent edit ─────────────────────────
+    // For an upcoming O point compare oLine vs odLine timestamps; for D
+    // compare dLine vs odLine. Newer non-empty side wins. Per-axis (not
+    // global) so that prepping a D line for the next defense point
+    // doesn't surface an empty O line if the team scores instead.
+    const typedNewer = typedTime > odTime;
+    if (typedNewer && typedLine.length > 0) {
+        return { source: typeKey, line: typedLine };
+    }
+    if (!typedNewer && odLine.length > 0) {
+        return { source: 'od', line: odLine };
+    }
+
+    // ── Priority 3: empty-axis fallback ───────────────────────────────
+    // The most-recent-edit winner was empty. Surface anything non-empty
+    // rather than handing the AC a blank lineup. Order:
+    //   this-axis typed → odLine → other-axis → empty.
+    if (typedLine.length > 0) {
         return { source: typeKey, line: typedLine };
     }
     if (odLine.length > 0) {
         return { source: 'od', line: odLine };
     }
-    if (typedLine.length > 0) {
-        return { source: typeKey, line: typedLine };  // OD empty fallback
+    if (otherLine.length > 0) {
+        return { source: otherKey, line: otherLine };
     }
     return { source: 'od', line: [] };
 }
