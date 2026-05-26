@@ -55,6 +55,80 @@ The multi-user push is mostly done. A few items linger:
 
 ---
 
+## Multi-Coach Line Selection: Intent Rule & LC-Viewing Label
+
+> **Status:** designed, not implemented. Server-side sync fix landed in `9fadda1` (multi-coach sync: merge `pendingNextLine` per-field + non-authoritative writer guard). This section is the client-side follow-up and is the agreed-upon design after a May 2026 review.
+>
+> **Note for sibling sessions** (e.g. an "on-deck"/"next next line" feature): if you're adding new fields to `pendingNextLine`, follow the conventions called out under [Data model additions](#data-model-additions) below — pair each new value-field with its own `*ModifiedAt` so the server's `merge_pending_next_line` picks it up automatically, and apply the same greying / role-based editability rules to any new line-selection surface.
+
+### Context
+
+The Line Coach (LC) plans the next line; the Active Coach (AC) records play. Today the AC has no clear signal of what the LC is currently doing, and the auto-pick rule for the "intended next line" is per-axis only (compares `oLine` vs `odLine` for an O-point, `dLine` vs `odLine` for a D-point), with no explicit "I'm done — use this" override. Field testing surfaced that the AC has to manually toggle views to discover whether the LC has prepared a separate O / D line, and the LC can't directly express the intent "use separate lines" vs "use the combined line."
+
+### Goals
+
+- The AC always knows what the LC is currently doing without having to ask, without forcing the AC's own view to mirror the LC's.
+- The "intended next line" at point-end follows a clear rule that honors both the LC's most recent action and an explicit "Lineup Ready" intent signal.
+- Solo coaching behavior is unchanged — these rules only activate when two coaches hold distinct roles.
+
+### Design
+
+1. **LC-viewing label, not view-following.** The AC's line panel header shows a small sub-line — e.g. `"Line Coach: viewing the D line"` — whenever the LC's view differs from the AC's local view. The AC's view is never auto-switched between points (except at point-end via the intent rule below). This replaces an earlier "AC view follows LC view" design that introduced a follow / manual-override state machine; the label gives the same information without coercion and naturally collapses to silence when nobody uses anything but O/D.
+
+2. **Label is hidden in three cases:**
+   - The AC's local view already matches the LC's view (no signal to convey).
+   - No LC role is currently claimed.
+   - The AC and LC are the same user (solo / dual-role).
+
+3. **Viewing vs. editing distinction.** If the LC has edited any line in the last ~10s, the label reads `"Line Coach: editing the D line"`. Otherwise `"Line Coach: viewing the D line"`. The editing variant is a stronger nudge for the AC to look. The `*ModifiedAt` timestamps already on each line make this free.
+
+4. **Intent rule (corrected) for point-end auto-switch.** When a point ends, `autoSelectActiveTypeForNextPoint` picks which line the AC's panel jumps to. Rule, in priority order:
+   1. **Lineup Ready latch.** If the LC pressed Lineup Ready since the last point ended, use the line type they were viewing when they pressed it (new field `lineupReadyMode`). Strongest signal — explicit "I'm done, this is the line."
+   2. **Most recent edit, per axis.** For an upcoming O-point, compare `oLineModifiedAt` vs `odLineModifiedAt`; for a D-point, compare `dLineModifiedAt` vs `odLineModifiedAt`. Newer non-empty side wins. (This is the current code — per-axis comparison is intentional and stays.)
+   3. **Empty-axis fallback.** If the choice above is empty, fall through: typed-for-axis (non-empty) → `odLine` (non-empty) → whatever's non-empty → empty.
+
+   Rejected alternative: a "global separate-intent" rule (any edit to *either* of `oLine`/`dLine` means the LC intends separate lines regardless of which axis was touched). That surfaces empty rosters when the LC only prepared one side — e.g. prepping D for the next defense point shouldn't make the AC see an empty O line if the team scores instead.
+
+5. **Lineup Ready latch lifecycle.**
+   - **Set** when the LC presses the Lineup Ready button. Records `lineupReadyAt`, `lineupReadyBy`, and (new) `lineupReadyMode` ∈ `'o' | 'd' | 'od'` capturing the LC's view at press time.
+   - **Cleared** by: (a) the LC editing any line (the edit supersedes), (b) the LC pressing Lineup Ready again from a different view (new latch overwrites), (c) the next point starting (current behavior, already in `startNextPoint`).
+
+6. **Greying / read-only rules for the AC's line panel.**
+   - **Fully editable** iff the same user holds both AC and LC roles (solo or dual-role). This is the default coming out of `auto_assign_roles_if_unclaimed`.
+   - **Read-only (greyed)** in all other cases: LC claimed by a different user, OR LC role vacant while AC is claimed by someone. The vacant case forces the AC to explicitly claim LC to edit — quick to do (single tap) and keeps line-editing always tied to the LC role. This also cleanly handles "LC went AFK": AC claims LC, edits, optionally releases.
+   - The O|D toggle stays interactive in the greyed state — viewing different line types is independent of editability.
+
+7. **Drop the `!isPointInProgress()` refresh gate.** With the server-side merge from `9fadda1`, it's safe to pull `pendingNextLine` during a live point too. This lets the LC-viewing label and any line edits update live for the AC instead of waiting for the next between-points window. The gate exists at [`game/gameScreen.js:5397`](game/gameScreen.js#L5397) — remove the `!isPointInProgress()` condition around `refreshPendingLineFromCloud`.
+
+### Data model additions
+
+In `Game.pendingNextLine` ([store/models.js](store/models.js)) and the server-side payload. The server's `merge_pending_next_line` in [ultistats_server/storage/game_storage.py](ultistats_server/storage/game_storage.py) already preserves unknown keys, but it needs to be extended to merge the new timestamp-keyed fields the same way it handles `oLine` / `dLine` / `odLine`:
+
+```
+lineCoachViewing:     'o' | 'd' | 'od' | 'split' | null   // LC writes their activeType
+lineCoachViewingAt:   ISO timestamp                       // merge key — most recent writer wins
+lineupReadyMode:      'o' | 'd' | 'od' | null             // alongside existing lineupReadyAt/By
+```
+
+**Convention for any new fields** (including any added by the on-deck feature): pair each value field with a `*ModifiedAt` ISO timestamp, and extend `merge_pending_next_line` to compare timestamps. That keeps the multi-coach sync robust for free.
+
+### Implementation pointers
+
+- **LC writes `lineCoachViewing`** wherever they change `activeType` — currently `enterSplitMode`, `exitSplitMode`, and the O|D toggle handler in [game/gameScreen.js](game/gameScreen.js). Gate on `isLineCoach` so the AC's local activeType never leaks into the synced field.
+- **AC reads `lineCoachViewing`** in the panel header render path (alongside `updateSelectLineSubtitle`). Render the label per #1–#3 above.
+- **Greying logic** lives in `canEditSelectLinePanel` ([game/controllerState.js](game/controllerState.js)). Today: editable when "Line Coach OR Active Coach OR both roles unclaimed." Replace with: editable iff the same user holds both AC and LC (`isActiveCoach && isLineCoach`); read-only otherwise. Update `updateSelectLinePanelState` to surface the new condition in the read-only overlay.
+- **Intent rule corrections** go in `getEffectiveLineForNextPoint` at [game/gameScreen.js:4164](game/gameScreen.js#L4164). Add the Lineup Ready latch check before the timestamp comparison; add the empty-axis fallback after.
+- **Lineup Ready cleared on line edit** — augment `handleSplitCheckboxChange`, `savePanelSelectionsToPendingNextLine`, and `saveSplitPanelSelections` to clear `lineupReadyAt`/`lineupReadyMode` when the LC modifies any line.
+- **Refresh-gate removal** at [game/gameScreen.js:5397](game/gameScreen.js#L5397).
+
+### Out of scope (deliberately)
+
+- **Tap-to-switch on the label** (one-tap mirror of the LC's view). Easy to add later if coaches ask; start informational only.
+- **Spectator / viewer behavior** stays unchanged — they continue to see the AC's view.
+- **The "AC view follows LC view" design** discussed earlier (with manual-override breaking the follow until point-end + a "resume sync" affordance) is **rejected** in favor of the simpler label-based approach.
+
+---
+
 ## AI Narration — improvements
 
 Improvements deferred from the initial implementation (see Active section above for the architecture summary).

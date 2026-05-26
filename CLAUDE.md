@@ -59,7 +59,9 @@ On staging, the deploy script also writes a `deployStamp` field so the app detec
 
 ## Multi-Session Development
 
-Each Claude Code session MUST work in its own worktree. Never edit files directly on main.
+Each Claude Code session MUST work in its own worktree for code changes. Never edit code files directly on main.
+
+**Exception:** purely informational docs (`TODO.md`, `README.md`, `ARCHITECTURE.md`, etc.) may be edited directly on main and committed/pushed without a worktree. The worktree rule exists to prevent concurrent code edits from stepping on each other; single-section additions to a shared docs file don't have that problem and often need to land *now* so a sibling session can see them.
 
 ### Starting a session
 ```bash
