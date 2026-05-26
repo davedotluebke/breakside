@@ -516,6 +516,29 @@ function isSplitMode() {
 }
 
 /**
+ * If the current user is the Line Coach, mirror their just-set activeType
+ * into the synced `lineCoachViewing` field (with timestamp) so the Active
+ * Coach's panel can render a "Line Coach: viewing the X line" sub-header.
+ *
+ * Gated on `isLineCoach()` so the AC's own local view never leaks into the
+ * synced field. No-op when the current user doesn't hold the LC role.
+ *
+ * Call this from every site that writes `pendingNextLine.activeType` as a
+ * direct result of a user view-toggle (currently: `enterSplitMode`,
+ * `exitSplitMode`, the normal-transition path of `handleODToggle`).
+ * Auto-sync writes from `autoSelectActiveTypeForNextPoint` are intentionally
+ * NOT instrumented — that function fires on both AC and LC devices and
+ * isn't an explicit LC viewing action.
+ */
+function noteLineCoachViewing() {
+    if (typeof isLineCoach !== 'function' || !isLineCoach()) return;
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !game.pendingNextLine) return;
+    game.pendingNextLine.lineCoachViewing = game.pendingNextLine.activeType || 'od';
+    game.pendingNextLine.lineCoachViewingAt = new Date().toISOString();
+}
+
+/**
  * Enter split mode: hide the single selectLine panel, show O and D panels
  */
 function enterSplitMode() {
@@ -564,6 +587,7 @@ function enterSplitMode() {
 
     // Set active type to split
     game.pendingNextLine.activeType = 'split';
+    noteLineCoachViewing();
 
     // Populate both tables
     updateSplitPanelTable('o');
@@ -653,6 +677,7 @@ function exitSplitMode() {
 
     // Set active type back to od
     game.pendingNextLine.activeType = 'od';
+    noteLineCoachViewing();
 
     // Refresh the single panel
     updateSelectLineTable();
@@ -3511,6 +3536,7 @@ function handleODToggle() {
 
     // Normal (non-split) transition
     game.pendingNextLine.activeType = nextType;
+    noteLineCoachViewing();
 
     // Save game state
     if (typeof saveAllTeamsData === 'function') {
