@@ -382,6 +382,10 @@ function createSelectLineContent() {
             <span class="select-line-gender-badge" id="panelGenderBadge" style="display: none;"></span>
             <button class="select-line-od-toggle" id="panelODToggle" title="Toggle O/D line mode">O/D</button>
         </div>
+        <!-- AC-only awareness label: rendered by updateLineCoachViewingLabel
+             when the LC is viewing/editing a different line type than the AC.
+             Hidden in solo / dual-role / matching-view cases. -->
+        <div class="select-line-lc-viewing" id="selectLineLcViewing" style="display: none;"></div>
         <div class="select-line-starting-ratio" id="panelStartingRatioSelection" style="display: none;">
             <label>Starting Ratio: </label>
             <input type="radio" id="panelStartingRatioFMP" name="panelStartingRatio" value="FMP">
@@ -4593,12 +4597,84 @@ function updateSelectLineTimeCells() {
 }
 
 /**
+ * Render the "Line Coach: viewing/editing the X line" awareness label on
+ * the Active Coach's Select Line panel.
+ *
+ * Reads the synced lineCoachViewing field (written only by the LC via
+ * noteLineCoachViewing) and compares against the AC's local activeType.
+ * Per TODO design, the label is hidden in three cases:
+ *   (a) AC's local view already matches the LC's view (no new info).
+ *   (b) No LC role is currently claimed.
+ *   (c) AC and LC are the same user (solo / dual-role).
+ * Additionally only rendered for the Active Coach — the LC themselves
+ * has no use for it.
+ *
+ * Viewing vs editing distinction: if any line *ModifiedAt is within the
+ * last ~10s, the verb is "editing" (stronger nudge for the AC to look);
+ * otherwise "viewing".
+ */
+function updateLineCoachViewingLabel() {
+    const el = document.getElementById('selectLineLcViewing');
+    if (!el) return;
+
+    const hide = () => {
+        el.style.display = 'none';
+        el.textContent = '';
+    };
+
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !game.pendingNextLine) { hide(); return; }
+
+    const ctrl = (typeof getControllerState === 'function') ? getControllerState() : {};
+
+    // (b) No LC claimed → nothing to label.
+    if (!ctrl.lineCoach) { hide(); return; }
+    // (c) Same user holds both roles → no awareness gap.
+    if (ctrl.activeCoach && ctrl.lineCoach.userId === ctrl.activeCoach.userId) {
+        hide(); return;
+    }
+    // Only render for the Active Coach. The Line Coach already knows their
+    // own view; viewers see the AC's view per existing design.
+    if (!ctrl.isActiveCoach) { hide(); return; }
+
+    const lcView = game.pendingNextLine.lineCoachViewing;
+    if (!lcView) { hide(); return; }
+
+    // (a) AC's local view already matches LC's view → no signal to convey.
+    const localView = game.pendingNextLine.activeType || 'od';
+    if (lcView === localView) { hide(); return; }
+
+    // Pick verb based on recent line-edit activity (any axis).
+    const now = Date.now();
+    const recentEdit = ['oLineModifiedAt', 'dLineModifiedAt', 'odLineModifiedAt'].some((k) => {
+        const t = game.pendingNextLine[k] ? new Date(game.pendingNextLine[k]).getTime() : 0;
+        return t && (now - t) < 10000;
+    });
+    const verb = recentEdit ? 'editing' : 'viewing';
+
+    const viewLabels = {
+        o: 'the O line', d: 'the D line', od: 'the O/D line', split: 'split (O & D)'
+    };
+    const targetLabel = viewLabels[lcView] || `the ${lcView} line`;
+    const lcName = (ctrl.lineCoach.displayName) || 'Line Coach';
+
+    el.textContent = `${lcName}: ${verb} ${targetLabel}`;
+    el.style.display = '';
+}
+
+/**
  * Update the Select Line panel subtitle (shown in title bar when minimized)
  * Shows the selected player names as a compact, comma-separated list
  */
 function updateSelectLineSubtitle() {
+    // Keep the LC-viewing awareness label in sync on every subtitle refresh —
+    // updateSelectLineSubtitle is already invoked at every panel lifecycle
+    // moment (toggle, point end, cloud refresh, etc.) so piggy-backing here
+    // avoids new wiring.
+    updateLineCoachViewingLabel();
+
     if (typeof setPanelSubtitle !== 'function') return;
-    
+
     const game = typeof currentGame === 'function' ? currentGame() : null;
     if (!game) {
         setPanelSubtitle('selectLine', '');
