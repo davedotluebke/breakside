@@ -96,9 +96,12 @@ function startNextPoint() {
 
     // Reset the Lineup Ready ping for this point's slot so the Line Coach
     // can send a fresh one for the next between-points window.
+    // lineupReadyMode (the LC's view at press time) is cleared alongside
+    // so the Intent Rule starts the next window with no latched signal.
     if (game && game.pendingNextLine) {
         game.pendingNextLine.lineupReadyAt = null;
         game.pendingNextLine.lineupReadyBy = null;
+        game.pendingNextLine.lineupReadyMode = null;
     }
 
     // determine starting position: check point winners and switchside events

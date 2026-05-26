@@ -815,6 +815,8 @@ function handleSplitCheckboxChange(e, lineType) {
         game.pendingNextLine[lineType + 'Line'] = selectedPlayers;
         game.pendingNextLine[lineType + 'LineModifiedAt'] = new Date().toISOString();
         localLineEditTimestamps[lineType + 'Line'] = Date.now();
+        // The edit supersedes any prior Lineup Ready latch.
+        clearLineupReadyLatch(game);
     }
 
     if (typeof saveAllTeamsData === 'function') {
@@ -835,17 +837,24 @@ function saveSplitPanelSelections() {
     const oPlayers = getSelectedPlayersFromTable('panelActivePlayersTableO');
     const dPlayers = getSelectedPlayersFromTable('panelActivePlayersTableD');
 
+    let touchedAny = false;
     if (oPlayers.length > 0 || document.getElementById('panelActivePlayersTableO')) {
         game.pendingNextLine.oLine = oPlayers;
         game.pendingNextLine.oLineModifiedAt = new Date().toISOString();
         localLineEditTimestamps['oLine'] = Date.now();
+        touchedAny = true;
     }
 
     if (dPlayers.length > 0 || document.getElementById('panelActivePlayersTableD')) {
         game.pendingNextLine.dLine = dPlayers;
         game.pendingNextLine.dLineModifiedAt = new Date().toISOString();
         localLineEditTimestamps['dLine'] = Date.now();
+        touchedAny = true;
     }
+
+    // Match the existing behavior: any *LineModifiedAt bump treats this
+    // as an "edit" and supersedes the Lineup Ready latch.
+    if (touchedAny) clearLineupReadyLatch(game);
 
     if (typeof saveAllTeamsData === 'function') {
         saveAllTeamsData();
@@ -2865,6 +2874,28 @@ function updateLineTabLineupReadyBtn() {
 }
 
 /**
+ * Clear the Lineup Ready latch (lineupReadyAt + lineupReadyMode) locally.
+ * Called when the LC modifies any line — per the Intent Rule, an explicit
+ * edit supersedes a prior "I'm done" signal.
+ *
+ * Sync note: a value→null transition does NOT propagate via the server's
+ * last-writer-wins merge (null sorts as oldest by `_ts`). That's why the
+ * Intent Rule in `getEffectiveLineForNextPoint` also defends by requiring
+ * `lineupReadyAt` to be newer than the relevant line's *ModifiedAt — the
+ * line edit's timestamp DOES propagate, and naturally supersedes a stale
+ * latch on peer devices too. The local clear here is for the editing
+ * device's own immediate UI/intent feedback.
+ *
+ * lineupReadyBy is preserved as a historical record of the most recent
+ * presser; it's only read in concert with a non-null lineupReadyAt.
+ */
+function clearLineupReadyLatch(game) {
+    if (!game || !game.pendingNextLine) return;
+    game.pendingNextLine.lineupReadyAt = null;
+    game.pendingNextLine.lineupReadyMode = null;
+}
+
+/**
  * "Lineup Ready" tap handler. When state is 'active', writes the ping
  * fields onto pendingNextLine and persists. When state is 'disabled',
  * surfaces a toast explaining why nothing happened. When state is 'sent'
@@ -2890,6 +2921,12 @@ function handleLineupReadyTap() {
 
     game.pendingNextLine.lineupReadyAt = Date.now();
     game.pendingNextLine.lineupReadyBy = myName;
+    // Capture the LC's currently-viewed line type. The Intent Rule in
+    // getEffectiveLineForNextPoint uses lineupReadyMode as the strongest
+    // signal at point-end: "the LC explicitly said this is the line."
+    // If the LC re-presses Ready from a different view, this overwrites
+    // (and the server merge picks the newer lineupReadyAt + its mode).
+    game.pendingNextLine.lineupReadyMode = game.pendingNextLine.activeType || 'od';
 
     if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
     if (typeof showControllerToast === 'function') {
@@ -4002,8 +4039,10 @@ function savePanelSelectionsToPendingNextLine(updateTimestamp = true) {
         game.pendingNextLine[activeType + 'LineModifiedAt'] = new Date().toISOString();
         // Track our local edit time for conflict detection
         localLineEditTimestamps[activeType + 'Line'] = Date.now();
+        // The edit supersedes any prior Lineup Ready latch.
+        clearLineupReadyLatch(game);
     }
-    
+
     // Save (triggers sync)
     if (typeof saveAllTeamsData === 'function') {
         saveAllTeamsData();
