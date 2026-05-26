@@ -1123,12 +1123,26 @@ async function refreshPendingLineFromCloud(gameId) {
 
         // Merge "Lineup Ready" multi-coach signal. The Line Coach is the
         // sole writer; Active Coach reads. Last-writer-wins by timestamp,
-        // same as the line-type fields.
+        // same as the line-type fields. lineupReadyMode is captured atomically
+        // with the press, so we adopt it whenever lineupReadyAt advances.
         const serverReadyAt = serverPending.lineupReadyAt || 0;
         const localReadyAt = localPending.lineupReadyAt || 0;
         if (serverReadyAt > localReadyAt) {
             localPending.lineupReadyAt = serverPending.lineupReadyAt;
             localPending.lineupReadyBy = serverPending.lineupReadyBy || null;
+            localPending.lineupReadyMode = serverPending.lineupReadyMode || null;
+        }
+
+        // Merge LC-viewing signal (only the LC writes this). Independent
+        // last-writer-wins on lineCoachViewingAt — AC reads to render the
+        // "Line Coach: viewing the X line" sub-header.
+        const serverViewingAt = serverPending.lineCoachViewingAt
+            ? new Date(serverPending.lineCoachViewingAt).getTime() : 0;
+        const localViewingAt = localPending.lineCoachViewingAt
+            ? new Date(localPending.lineCoachViewingAt).getTime() : 0;
+        if (serverViewingAt > localViewingAt) {
+            localPending.lineCoachViewing = serverPending.lineCoachViewing || null;
+            localPending.lineCoachViewingAt = serverPending.lineCoachViewingAt;
         }
 
         // Note: activeType is intentionally NOT synced - it's local UI state
@@ -1251,12 +1265,24 @@ async function refreshGameStateFromCloud(gameId) {
             });
 
             // Lineup Ready multi-coach signal — same merge contract as
-            // refreshPendingLineFromCloud.
+            // refreshPendingLineFromCloud. lineupReadyMode rides along
+            // atomically with lineupReadyAt.
             const serverReadyAt = serverPending.lineupReadyAt || 0;
             const localReadyAt = localPending.lineupReadyAt || 0;
             if (serverReadyAt > localReadyAt) {
                 localPending.lineupReadyAt = serverPending.lineupReadyAt;
                 localPending.lineupReadyBy = serverPending.lineupReadyBy || null;
+                localPending.lineupReadyMode = serverPending.lineupReadyMode || null;
+            }
+
+            // LC-viewing signal — independent timestamp merge.
+            const serverViewingAt = serverPending.lineCoachViewingAt
+                ? new Date(serverPending.lineCoachViewingAt).getTime() : 0;
+            const localViewingAt = localPending.lineCoachViewingAt
+                ? new Date(localPending.lineCoachViewingAt).getTime() : 0;
+            if (serverViewingAt > localViewingAt) {
+                localPending.lineCoachViewing = serverPending.lineCoachViewing || null;
+                localPending.lineCoachViewingAt = serverPending.lineCoachViewingAt;
             }
 
             game.pendingNextLine = localPending;

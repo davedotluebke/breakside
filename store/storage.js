@@ -118,10 +118,12 @@ function serializeGame(game) {
         roundEndTime: game.roundEndTime || null,
         // Phase 6b: Pending next line selections for multi-device sync
         // Note: activeType is local-only (not synced) - each user views/edits independently
-        // lineupReadyAt / lineupReadyBy are the multi-coach "I'm done picking
-        // the line" ping written by the Line Coach and read by the Active
-        // Coach. Without these in the serialized payload they get dropped at
-        // the sync boundary and the ping never crosses the wire.
+        // lineupReadyAt / lineupReadyBy / lineupReadyMode are the multi-coach
+        // "I'm done picking the line" ping written by the Line Coach and read
+        // by the Active Coach. lineCoachViewing / lineCoachViewingAt let the
+        // AC's panel show "Line Coach: viewing the X line" without forcing
+        // the AC's own view to follow. Without these in the serialized
+        // payload they get dropped at the sync boundary.
         pendingNextLine: game.pendingNextLine ? {
             oLine: game.pendingNextLine.oLine || [],
             dLine: game.pendingNextLine.dLine || [],
@@ -130,7 +132,10 @@ function serializeGame(game) {
             dLineModifiedAt: game.pendingNextLine.dLineModifiedAt || null,
             odLineModifiedAt: game.pendingNextLine.odLineModifiedAt || null,
             lineupReadyAt: game.pendingNextLine.lineupReadyAt || null,
-            lineupReadyBy: game.pendingNextLine.lineupReadyBy || null
+            lineupReadyBy: game.pendingNextLine.lineupReadyBy || null,
+            lineupReadyMode: game.pendingNextLine.lineupReadyMode || null,
+            lineCoachViewing: game.pendingNextLine.lineCoachViewing || null,
+            lineCoachViewingAt: game.pendingNextLine.lineCoachViewingAt || null
         } : null,
         points: game.points.map(point => ({
             players: point.players,
@@ -402,6 +407,11 @@ function deserializeGame(gameData) {
             // the Active Coach can read what the Line Coach wrote.
             lineupReadyAt: gameData.pendingNextLine.lineupReadyAt || null,
             lineupReadyBy: gameData.pendingNextLine.lineupReadyBy || null,
+            lineupReadyMode: gameData.pendingNextLine.lineupReadyMode || null,
+            // LC-viewing fields — the LC's currently-viewed activeType,
+            // synced so the AC's panel can render an awareness sub-header.
+            lineCoachViewing: gameData.pendingNextLine.lineCoachViewing || null,
+            lineCoachViewingAt: gameData.pendingNextLine.lineCoachViewingAt || null,
             activeType: 'od'  // Local-only, always starts at 'od'
         };
     }
