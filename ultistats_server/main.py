@@ -806,8 +806,23 @@ async def sync_game(
             # Non-fatal: log but don't fail the sync
             print(f"Warning: could not add game {game_id} to event {event_id}: {e}")
 
+    # Determine whether this writer owns the game's play data. The Active
+    # Coach owns points/scores/events; a Line Coach (or any other coach)
+    # syncing while someone else holds the Active Coach role may only
+    # contribute line selections — their possibly-stale game data must not
+    # roll back the Active Coach's recorded play. With no Active Coach claimed
+    # (solo coaching), the writer is authoritative.
+    authoritative = True
+    try:
+        active_coach = get_controller_state(game_id).get("activeCoach")
+        if active_coach and active_coach.get("userId") != user.get("id"):
+            authoritative = False
+    except Exception:
+        authoritative = True
+
     # Save with versioning
-    version_file = save_game_version(game_id, game_data)
+    version_file = save_game_version(game_id, game_data,
+                                     authoritative_game_data=authoritative)
     version_timestamp = Path(version_file).stem
 
     return {
