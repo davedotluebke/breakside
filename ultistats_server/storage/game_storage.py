@@ -70,9 +70,20 @@ def merge_pending_next_line(existing: Optional[dict], incoming: Optional[dict]) 
             merged[mod_key] = incoming.get(mod_key)
 
     # "Lineup Ready" signal: Line Coach writes, Active Coach reads.
+    # lineupReadyMode (the LC's view at press time) is captured atomically
+    # with the press and rides along whenever lineupReadyAt advances.
     if _ts(incoming.get("lineupReadyAt")) > _ts(existing.get("lineupReadyAt")):
         merged["lineupReadyAt"] = incoming.get("lineupReadyAt")
         merged["lineupReadyBy"] = incoming.get("lineupReadyBy")
+        merged["lineupReadyMode"] = incoming.get("lineupReadyMode")
+
+    # LC-viewing signal: only the Line Coach writes lineCoachViewing /
+    # lineCoachViewingAt (client gates on isLineCoach). The Active Coach
+    # reads it to render the "Line Coach: viewing the X line" sub-header.
+    # Independent last-writer-wins on lineCoachViewingAt.
+    if _ts(incoming.get("lineCoachViewingAt")) > _ts(existing.get("lineCoachViewingAt")):
+        merged["lineCoachViewing"] = incoming.get("lineCoachViewing")
+        merged["lineCoachViewingAt"] = incoming.get("lineCoachViewingAt")
 
     # activeType is local UI state; honor the most recent writer's value if set.
     if "activeType" in incoming:
