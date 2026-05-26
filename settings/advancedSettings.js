@@ -21,6 +21,24 @@
 (function() {
     const STORAGE_KEY = 'breakside_advanced_settings';
 
+    // Common ultimate-frisbee jargon to bias transcription toward. Spelled
+    // into the default template below; users can edit/extend in the modal.
+    const JARGON = [
+        'huck', 'hammer', 'scoober', 'blade', 'break', 'break mark', 'dump',
+        'swing', 'reset', 'sky', 'layout', 'bid', 'Callahan', 'brick', 'pull',
+        'stall', 'stall out', 'poach', 'force', 'flick', 'backhand', 'IO', 'OI',
+        'inside-out', 'outside-in', 'endzone', 'throwaway', 'drop', 'footblock',
+        'bookends', 'Greatest', 'handler', 'cutter', 'give-and-go', 'strike',
+        'under', 'deep', 'goal', 'assist', 'turnover', 'interception', 'block'
+    ];
+
+    // Default vocabulary-prompt template. `{names}` is substituted at session
+    // start with the current on-field roster (names + nicknames). Users can
+    // edit this freely in the modal — remove `{names}` to skip auto-injection
+    // of roster names, add their own terms, or rewrite entirely.
+    const DEFAULT_VOCAB_PROMPT =
+        `Ultimate frisbee game. Likely names and terms: {names}, ${JARGON.join(', ')}.`;
+
     const DEFAULTS = {
         // --- Audio Narration ---
         'narration.vadEagerness': 'medium',              // low | medium | high | auto
@@ -28,9 +46,13 @@
         'narration.transcriptionModel': 'gpt-4o-mini-transcribe', // or gpt-4o-transcribe
         'narration.forceEnglish': true,                  // true -> language 'en'; false -> auto-detect
         'narration.vocabularyHint': true,                // bias ASR toward roster names + ultimate jargon
+        'narration.vocabularyPrompt': DEFAULT_VOCAB_PROMPT, // editable template; {names} -> roster
         'narration.echoCancellation': true,              // getUserMedia audio constraints
         'narration.noiseSuppression': true,
-        'narration.autoGainControl': true,               // AGC can pump up wind outdoors — toggle off to test
+        // AGC default OFF: it pumps gain during quiet moments outdoors and
+        // amplifies wind/crowd noise, which hurts transcription far more than
+        // it helps with a phone held near the coach's mouth.
+        'narration.autoGainControl': false,
         // --- Sync ---
         'sync.refreshIntervalSec': 10                    // cloud auto-refresh cadence (applies after reload)
     };
@@ -42,17 +64,6 @@
         'narration.noiseReduction': 'NARRATION_NOISE_REDUCTION',
         'narration.transcriptionModel': 'NARRATION_TRANSCRIPTION_MODEL'
     };
-
-    // Common ultimate-frisbee jargon to bias transcription toward. Player
-    // names are appended at session start (they're roster-dependent).
-    const JARGON = [
-        'huck', 'hammer', 'scoober', 'blade', 'break', 'break mark', 'dump',
-        'swing', 'reset', 'sky', 'layout', 'bid', 'Callahan', 'brick', 'pull',
-        'stall', 'stall out', 'poach', 'force', 'flick', 'backhand', 'IO', 'OI',
-        'inside-out', 'outside-in', 'endzone', 'throwaway', 'drop', 'footblock',
-        'bookends', 'Greatest', 'handler', 'cutter', 'give-and-go', 'strike',
-        'under', 'deep', 'goal', 'assist', 'turnover', 'interception', 'block'
-    ];
 
     function readStore() {
         try {
@@ -108,19 +119,24 @@
     }
 
     /**
-     * Build the transcription `prompt` biasing string from on-field player
-     * names plus ultimate jargon. Returns '' when the vocabulary hint is off.
+     * Build the transcription `prompt` biasing string. The template is
+     * user-editable in Advanced Settings; `{names}` is substituted with the
+     * current on-field roster (names + nicknames). Returns '' when the
+     * vocabulary hint is off.
      * @param {Array<{name:string,nickname?:string}>} rosterInfo
      */
     function buildNarrationVocabularyPrompt(rosterInfo) {
         if (!get('narration.vocabularyHint')) return '';
+        const template = String(get('narration.vocabularyPrompt') || DEFAULT_VOCAB_PROMPT);
         const names = (rosterInfo || [])
-            .flatMap(p => [p.name, p.nickname].filter(Boolean));
-        const terms = names.concat(JARGON);
-        // The transcription prompt is a free-text hint; a comma-joined list of
-        // expected words nudges the recognizer without constraining it.
-        return `Ultimate frisbee game. Likely names and terms: ${terms.join(', ')}.`;
+            .flatMap(p => [p.name, p.nickname].filter(Boolean))
+            .join(', ');
+        // If the template doesn't contain {names}, the user has chosen to
+        // skip auto-roster injection — respect that and pass through verbatim.
+        return template.replace(/\{names\}/g, names);
     }
+
+    function getDefault(key) { return DEFAULTS[key]; }
 
     /** Narration settings bundled for narrationRealtimeSession.start(). */
     function getNarrationSessionOptions(rosterInfo) {
@@ -180,6 +196,14 @@
                     type: 'toggle'
                 },
                 {
+                    key: 'narration.vocabularyPrompt', label: 'Vocabulary prompt',
+                    help: 'Free-text hint passed to the transcription model. <code>{names}</code> is replaced with on-field player names at session start. Edit to add team-specific terms, opponent names, or your own jargon — or remove <code>{names}</code> to skip auto-roster injection.',
+                    type: 'textarea',
+                    rows: 5,
+                    showWhen: 'narration.vocabularyHint',
+                    resettable: true
+                },
+                {
                     key: 'narration.forceEnglish', label: 'Force English',
                     help: 'Pin recognition to English so unusual names are not misread as another language.',
                     type: 'toggle'
@@ -220,12 +244,25 @@
         }
     ];
 
+    function escapeHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
     function renderField(field) {
         const current = get(field.key);
+        // Rows that are gated on another setting carry data-show-when so the
+        // modal init can hide them when the gating toggle is off, and unhide
+        // them when the user flips it on.
+        const showWhenAttr = field.showWhen ? ` data-show-when="${field.showWhen}"` : '';
+
         if (field.type === 'toggle') {
             const checked = current ? 'checked' : '';
             return `
-                <div class="adv-setting-row">
+                <div class="adv-setting-row"${showWhenAttr}>
                     <div class="adv-setting-text">
                         <label class="adv-setting-label" for="adv_${field.key}">${field.label}</label>
                         <div class="adv-setting-help">${field.help}</div>
@@ -236,13 +273,30 @@
                     </label>
                 </div>`;
         }
+        if (field.type === 'textarea') {
+            const rows = field.rows || 4;
+            const resetBtn = field.resettable
+                ? `<button type="button" class="adv-reset-btn" data-reset-key="${field.key}">Reset to default</button>`
+                : '';
+            return `
+                <div class="adv-setting-row adv-setting-stack"${showWhenAttr}>
+                    <div class="adv-setting-text">
+                        <label class="adv-setting-label" for="adv_${field.key}">${field.label}</label>
+                        <div class="adv-setting-help">${field.help}</div>
+                    </div>
+                    <div class="adv-textarea-wrap">
+                        <textarea id="adv_${field.key}" class="adv-textarea" data-key="${field.key}" data-type="textarea" rows="${rows}">${escapeHtml(current)}</textarea>
+                        ${resetBtn}
+                    </div>
+                </div>`;
+        }
         // select
         const opts = field.options.map(([val, lbl]) => {
             const sel = String(current) === String(val) ? 'selected' : '';
             return `<option value="${val}" ${sel}>${lbl}</option>`;
         }).join('');
         return `
-            <div class="adv-setting-row">
+            <div class="adv-setting-row"${showWhenAttr}>
                 <div class="adv-setting-text">
                     <label class="adv-setting-label" for="adv_${field.key}">${field.label}</label>
                     <div class="adv-setting-help">${field.help}</div>
@@ -285,10 +339,22 @@
             </div>`;
         document.body.appendChild(modal);
 
+        // Show/hide gated rows based on their `data-show-when` toggle's
+        // current value. Called on init and whenever a toggle changes.
+        const refreshShowWhen = () => {
+            modal.querySelectorAll('[data-show-when]').forEach(row => {
+                const gatingKey = row.getAttribute('data-show-when');
+                row.classList.toggle('adv-hidden', !get(gatingKey));
+            });
+        };
+        refreshShowWhen();
+
         // Live-save on every change. Narration knobs take effect next session;
         // the sync interval note tells the user a reload is needed.
+        // Textareas get `input` events too so typing persists keystroke-by-
+        // keystroke without waiting for blur.
         modal.querySelectorAll('[data-key]').forEach(el => {
-            el.addEventListener('change', () => {
+            const persist = () => {
                 const key = el.getAttribute('data-key');
                 const type = el.getAttribute('data-type');
                 if (type === 'toggle') {
@@ -296,6 +362,25 @@
                 } else {
                     set(key, el.value);
                 }
+                // A toggle flip may unhide a gated row (e.g. flipping the
+                // vocabulary hint on reveals the prompt textarea).
+                if (type === 'toggle') refreshShowWhen();
+            };
+            el.addEventListener('change', persist);
+            if (el.getAttribute('data-type') === 'textarea') {
+                el.addEventListener('input', persist);
+            }
+        });
+
+        // Reset-to-default buttons restore the built-in default for their
+        // setting and refresh the visible textarea content.
+        modal.querySelectorAll('.adv-reset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const key = btn.getAttribute('data-reset-key');
+                const def = getDefault(key);
+                set(key, def);
+                const ta = modal.querySelector(`#adv_${CSS.escape(key)}`);
+                if (ta) ta.value = def == null ? '' : String(def);
             });
         });
 

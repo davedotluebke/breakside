@@ -3910,6 +3910,68 @@ body.staging .panel-header {
     font-size: 0.9rem;
 }
 
+/* Hidden by show-when gating (e.g. the vocabulary prompt textarea when
+   the vocabulary-hint toggle is off). */
+.adv-setting-row.adv-hidden {
+    display: none;
+}
+
+/* Stacked rows: label/help on top, control beneath (used for the
+   vocabulary-prompt textarea which would never fit at the right edge). */
+.adv-setting-row.adv-setting-stack {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.adv-textarea-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+}
+
+.adv-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background: #fff;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    color: #2c2c2c;
+    resize: vertical;
+    min-height: 80px;
+}
+
+.adv-reset-btn {
+    align-self: flex-end;
+    margin: 0;
+    padding: 5px 12px;
+    background: #f3f3f3;
+    color: #555;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.adv-reset-btn:hover {
+    background: #e8e8e8;
+    color: #333;
+}
+
+/* Help text in setting rows allows inline <code> for placeholders like {names}. */
+.adv-setting-help code {
+    background: #f0f0f0;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    color: #444;
+}
+
 /* iOS toggle switch */
 .adv-switch {
     position: relative;
