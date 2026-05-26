@@ -1866,9 +1866,12 @@ body.game-screen-active header {
     font-weight: 500;
 }
 
-/* Readonly state */
-.panel-selectLine.readonly .select-line-lines-btn,
-.panel-selectLine.readonly .select-line-od-toggle {
+/* Readonly state. The O|D toggle is intentionally NOT disabled here —
+   per the Intent Rule TODO, viewing different line types is independent
+   of editability, so an AC who doesn't hold LC still needs to be able to
+   follow along by toggling O / D / OD views. The Lines... button stays
+   disabled because it opens an editing dialog. */
+.panel-selectLine.readonly .select-line-lines-btn {
     opacity: 0.6;
     pointer-events: none;
 }

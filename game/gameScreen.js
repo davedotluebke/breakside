@@ -3527,13 +3527,16 @@ function handleODToggle() {
     const game = typeof currentGame === 'function' ? currentGame() : null;
     if (!game || !game.pendingNextLine) return;
 
-    // Check if user can edit
-    if (!canEditSelectLinePanel()) {
-        if (typeof showControllerToast === 'function') {
-            showControllerToast('You need a coach role to change line type', 'warning');
-        }
-        return;
-    }
+    // No editability check: per TODO design, the O|D toggle stays
+    // interactive even when the panel is greyed (read-only). Viewing
+    // different line types is independent of editing — the AC who
+    // doesn't hold LC needs to follow along visually.
+    //
+    // activeType writes are local-only (filtered out of cloud sync per
+    // store/storage.js), so a non-coach toggle has no cross-device
+    // side-effects. The LC-viewing instrumentation in
+    // noteLineCoachViewing is gated on isLineCoach() and only fires
+    // for an actual LC, never for a viewer or greyed-out AC.
 
     // Reset main mode on OD toggle
     lineSelectionModes.main = 'manual';
@@ -3967,33 +3970,43 @@ function handlePanelStartingRatioChange(e) {
 }
 
 /**
- * Check if user can edit the Select Line panel
- * During point: Only Line Coach
- * Between points: Line Coach OR Active Coach
+ * Check if the current user can edit the Select Line panel checkboxes.
+ *
+ * New rule (TODO.md § "Multi-Coach Line Selection: Intent Rule & LC-Viewing
+ * Label"): editable iff the SAME user holds both Active Coach AND Line
+ * Coach. Read-only in all other multi-coach configurations:
+ *
+ *   - LC claimed by a different user → AC observes only (with the
+ *     "Line Coach: viewing/editing the X line" awareness label).
+ *   - LC role vacant while AC is claimed → AC must explicitly claim
+ *     LC (single tap) to edit. Keeps line-editing always tied to the
+ *     LC role and handles "LC went AFK" cleanly: AC claims LC, edits,
+ *     optionally releases.
+ *
+ * Solo coaching (no multi-coach detection): unchanged, no role
+ * enforcement. Matches the panelSystem latch that hides the role-claim
+ * buttons until two coaches are seen at least once in the session.
+ *
+ * Note: the O|D toggle (`handleODToggle`) is intentionally NOT gated on
+ * this — viewing different line types is independent of editability,
+ * so a greyed-out AC can still browse O / D / OD views to follow
+ * along with what the LC is preparing.
+ *
  * @returns {boolean}
  */
 function canEditSelectLinePanel() {
     const state = typeof getControllerState === 'function' ? getControllerState() : {};
-    const duringPoint = typeof isPointInProgress === 'function' ? isPointInProgress() : false;
     const multiCoach = typeof window.isMultiCoachDetected === 'function'
         ? window.isMultiCoachDetected()
         : false;
 
     // Solo coaching (or pre-multi-coach detection): no role enforcement.
-    // Matches the panelSystem latch that hides the role-claim buttons
-    // until two coaches are seen at least once in the session.
     if (!multiCoach) {
         return true;
     }
 
-    if (duringPoint) {
-        // During point: Line Coach prepares the next line — only they edit.
-        return state.isLineCoach;
-    } else {
-        // Between points: Active Coach finalizes the lineup before Start
-        // Point. Line Coach also retains edit access for handoff continuity.
-        return state.isLineCoach || state.isActiveCoach;
-    }
+    // Multi-coach: dual-role (same user holds AC and LC) only.
+    return state.isLineCoach && state.isActiveCoach;
 }
 
 /**
