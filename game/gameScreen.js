@@ -3990,15 +3990,20 @@ function handlePanelStartingRatioChange(e) {
 /**
  * Check if the current user can edit the Select Line panel checkboxes.
  *
- * New rule (TODO.md § "Multi-Coach Line Selection: Intent Rule & LC-Viewing
- * Label"): editable iff the SAME user holds both Active Coach AND Line
- * Coach. Read-only in all other multi-coach configurations:
+ * Multi-coach rule (TODO.md § "Multi-Coach Line Selection: Intent Rule &
+ * LC-Viewing Label"): editable iff the current user holds the Line Coach
+ * role. The TODO's implementation pointer ("isActiveCoach && isLineCoach")
+ * was an internal inconsistency with the rest of the design — which
+ * explicitly describes the LC editing lines and the AC observing via the
+ * "Line Coach: viewing/editing the X line" label. The right invariant is
+ * "editing is tied to the LC role" so every configuration falls out
+ * cleanly:
  *
- *   - LC claimed by a different user → AC observes only (with the
- *     "Line Coach: viewing/editing the X line" awareness label).
- *   - LC role vacant while AC is claimed → AC must explicitly claim
- *     LC (single tap) to edit. Keeps line-editing always tied to the
- *     LC role and handles "LC went AFK" cleanly: AC claims LC, edits,
+ *   - Two users, AC ≠ LC → LC user edits; AC user observes (greyed).
+ *   - Dual-role (same user holds both) → editable (holds LC).
+ *   - LC role vacant while AC is claimed → AC sees the panel greyed
+ *     until they explicitly claim LC (single tap). Keeps editing always
+ *     tied to LC and handles "LC went AFK": AC claims LC, edits,
  *     optionally releases.
  *
  * Solo coaching (no multi-coach detection): unchanged, no role
@@ -4023,8 +4028,8 @@ function canEditSelectLinePanel() {
         return true;
     }
 
-    // Multi-coach: dual-role (same user holds AC and LC) only.
-    return state.isLineCoach && state.isActiveCoach;
+    // Multi-coach: editable iff the current user holds the Line Coach role.
+    return state.isLineCoach;
 }
 
 /**
