@@ -93,10 +93,15 @@ The Line Coach (LC) plans the next line; the Active Coach (AC) records play. Tod
    - **Set** when the LC presses the Lineup Ready button. Records `lineupReadyAt`, `lineupReadyBy`, and (new) `lineupReadyMode` ∈ `'o' | 'd' | 'od'` capturing the LC's view at press time.
    - **Cleared** by: (a) the LC editing any line (the edit supersedes), (b) the LC pressing Lineup Ready again from a different view (new latch overwrites), (c) the next point starting (current behavior, already in `startNextPoint`).
 
-6. **Greying / read-only rules for the AC's line panel.**
-   - **Fully editable** iff the same user holds both AC and LC roles (solo or dual-role). This is the default coming out of `auto_assign_roles_if_unclaimed`.
-   - **Read-only (greyed)** in all other cases: LC claimed by a different user, OR LC role vacant while AC is claimed by someone. The vacant case forces the AC to explicitly claim LC to edit — quick to do (single tap) and keeps line-editing always tied to the LC role. This also cleanly handles "LC went AFK": AC claims LC, edits, optionally releases.
+6. **Greying / read-only rules for the line panel.**
+   - **Editable** iff the current user holds the Line Coach role. Editing is always tied to the LC role; the AC observes via the LC-viewing label.
+   - Concretely:
+     - **Two users, AC ≠ LC** → LC user edits; AC user observes (greyed).
+     - **Dual-role** (same user holds both, e.g. coming out of `auto_assign_roles_if_unclaimed`) → editable (holds LC).
+     - **LC vacant while AC is claimed** → AC sees the panel greyed until they explicitly claim LC (single tap). Handles "LC went AFK" cleanly: AC claims LC, edits, optionally releases.
+   - Solo coaching (no multi-coach detection) is unchanged — no role enforcement, panel always editable.
    - The O|D toggle stays interactive in the greyed state — viewing different line types is independent of editability.
+   - **Historical note:** an earlier draft of this design said "editable iff `isActiveCoach && isLineCoach`" (i.e. dual-role only). That was a misstatement — it would have prevented the LC from editing in the most common multi-coach case (AC ≠ LC), which is the very situation the LC role exists for. The rule above is the corrected version.
 
 7. **Drop the `!isPointInProgress()` refresh gate.** With the server-side merge from `9fadda1`, it's safe to pull `pendingNextLine` during a live point too. This lets the LC-viewing label and any line edits update live for the AC instead of waiting for the next between-points window. The gate exists at [`game/gameScreen.js:5397`](game/gameScreen.js#L5397) — remove the `!isPointInProgress()` condition around `refreshPendingLineFromCloud`.
 
@@ -116,7 +121,7 @@ lineupReadyMode:      'o' | 'd' | 'od' | null             // alongside existing 
 
 - **LC writes `lineCoachViewing`** wherever they change `activeType` — currently `enterSplitMode`, `exitSplitMode`, and the O|D toggle handler in [game/gameScreen.js](game/gameScreen.js). Gate on `isLineCoach` so the AC's local activeType never leaks into the synced field.
 - **AC reads `lineCoachViewing`** in the panel header render path (alongside `updateSelectLineSubtitle`). Render the label per #1–#3 above.
-- **Greying logic** lives in `canEditSelectLinePanel` ([game/controllerState.js](game/controllerState.js)). Today: editable when "Line Coach OR Active Coach OR both roles unclaimed." Replace with: editable iff the same user holds both AC and LC (`isActiveCoach && isLineCoach`); read-only otherwise. Update `updateSelectLinePanelState` to surface the new condition in the read-only overlay.
+- **Greying logic** lives in `canEditSelectLinePanel` ([game/gameScreen.js](game/gameScreen.js)). Today: editable when "Line Coach OR Active Coach OR both roles unclaimed." Replace with: editable iff the current user holds the Line Coach role (`state.isLineCoach`) in multi-coach mode; always editable in solo. Update `updateSelectLinePanelState` to surface the new condition in the read-only overlay. The `.panel-selectLine.readonly .select-line-od-toggle` CSS rule in [ui/panelSystem.css](ui/panelSystem.css) needs to be removed so the O|D toggle stays interactive in the greyed state.
 - **Intent rule corrections** go in `getEffectiveLineForNextPoint` at [game/gameScreen.js:4164](game/gameScreen.js#L4164). Add the Lineup Ready latch check before the timestamp comparison; add the empty-axis fallback after.
 - **Lineup Ready cleared on line edit** — augment `handleSplitCheckboxChange`, `savePanelSelectionsToPendingNextLine`, and `saveSplitPanelSelections` to clear `lineupReadyAt`/`lineupReadyMode` when the LC modifies any line.
 - **Refresh-gate removal** at [game/gameScreen.js:5397](game/gameScreen.js#L5397).
