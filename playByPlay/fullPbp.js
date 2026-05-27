@@ -48,6 +48,14 @@
      * the previous receiver), the user should Undo and re-tap.
      */
     let manualHolder = null;
+    // Tracks the Point object reference last seen by reconstructState so we
+    // can detect crossing a point boundary and clear stale manualHolder.
+    // Without this, a user-tapped holder from the previous point survives
+    // into a new point (especially when the point ends via a path that
+    // doesn't pass through createThrow / createTurnover / createDefense —
+    // e.g. Simple-mode "They Score" or narration) and prevents tapping
+    // someone else to indicate the pull catcher on the new O point.
+    let _lastSeenPointRef = null;
 
     /**
      * Whether the next Throw will have its break_flag set. Toggled by the
@@ -77,6 +85,18 @@
      */
     function reconstructState() {
         const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
+
+        // Point-boundary detection: if getLatestPoint() returns a different
+        // Point instance than the last call, we've crossed a boundary —
+        // drop any stale manualHolder from the previous point. The first
+        // render after the boundary clears it; subsequent calls in the
+        // same render pass see the same point ref and don't re-clear, so
+        // a fresh tap that sets manualHolder in the new point survives.
+        if (point !== _lastSeenPointRef) {
+            manualHolder = null;
+            _lastSeenPointRef = point;
+        }
+
         if (!point) {
             return { mode: 'offense', holder: null, point: null };
         }
