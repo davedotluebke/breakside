@@ -1842,28 +1842,28 @@ body.game-screen-active header {
     background-color: rgba(45, 134, 89, 0.2);
 }
 
-/* Readonly overlay */
+/* Readonly indicator. A subtle corner badge rather than a full-table
+   veil — the AC needs to *see* what the LC has selected (which players
+   are checked, gender ratio, playing-time stats). The "Line Coach:
+   viewing/editing the X line" sub-line + the disabled cursor convey
+   read-only-ness without obscuring the data. */
 .select-line-readonly-overlay {
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255, 255, 255, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    top: 6px;
+    right: 8px;
     z-index: 10;
     pointer-events: none;
+    background: transparent;
 }
 
 .readonly-badge {
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.55);
     color: #fff;
-    padding: 8px 16px;
-    border-radius: 20px;
-    font-size: 0.85rem;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
     font-weight: 500;
+    letter-spacing: 0.02em;
 }
 
 /* Readonly state. The O|D toggle is intentionally NOT disabled here —
@@ -1876,8 +1876,11 @@ body.game-screen-active header {
     pointer-events: none;
 }
 
+/* Disabled checkboxes — keep them visible (no extra opacity dimming).
+   The browser's native disabled rendering + the not-allowed cursor
+   already indicate they can't be toggled; further dimming made the
+   AC unable to read what the LC had selected. */
 .panel-selectLine.readonly .panel-player-table .active-checkbox {
-    opacity: 0.6;
     cursor: not-allowed;
 }
 
