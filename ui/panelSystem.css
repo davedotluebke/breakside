@@ -1842,28 +1842,34 @@ body.game-screen-active header {
     background-color: rgba(45, 134, 89, 0.2);
 }
 
-/* Readonly indicator. A subtle corner badge rather than a full-table
-   veil — the AC needs to *see* what the LC has selected (which players
-   are checked, gender ratio, playing-time stats). The "Line Coach:
-   viewing/editing the X line" sub-line + the disabled cursor convey
-   read-only-ness without obscuring the data. */
+/* Readonly indicator. Centered badge over the table — the previous
+   corner placement collided with the Lineup Pending button. The full-
+   table white veil that used to back this badge is gone, though: the
+   AC needs to *see* what the LC has selected (which players are
+   checked, gender ratio, playing-time stats), and the centered badge
+   over the mid-table point cells (older / less-relevant ones) is an
+   acceptable trade — the user can horizontally scroll past it. */
 .select-line-readonly-overlay {
     position: absolute;
-    top: 6px;
-    right: 8px;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     z-index: 10;
     pointer-events: none;
-    background: transparent;
 }
 
 .readonly-badge {
-    background: rgba(0, 0, 0, 0.55);
+    background: rgba(0, 0, 0, 0.6);
     color: #fff;
-    padding: 3px 8px;
-    border-radius: 10px;
-    font-size: 0.7rem;
+    padding: 6px 14px;
+    border-radius: 16px;
+    font-size: 0.8rem;
     font-weight: 500;
-    letter-spacing: 0.02em;
 }
 
 /* Readonly state. The O|D toggle is intentionally NOT disabled here —
