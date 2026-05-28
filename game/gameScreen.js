@@ -2881,7 +2881,13 @@ function updateLineTabLineupReadyBtn() {
 
     if (state === 'sent') {
         btn.classList.add('sent');
-        btn.disabled = true;  // Already sent — no further action.
+        // The Line Coach can re-press to update the latch with their
+        // current view (e.g. after switching from OD to D and wanting
+        // the D-line latched instead). For everyone else 'sent' is a
+        // read-only status badge — hard-disabled.
+        const ctrl = (typeof getControllerState === 'function')
+            ? getControllerState() : {};
+        btn.disabled = !ctrl.isLineCoach;
     } else if (state === 'pending') {
         // Active Coach view, awaiting Line Coach ping. Read-only badge —
         // hard-disabled so it doesn't invite a tap (no toast, nothing to do).
@@ -2932,13 +2938,23 @@ function handleLineupReadyTap() {
         }
         return;
     }
-    if (state !== 'active') return;
+    // 'active' = first press in this between-points window.
+    // 'sent' = LC re-pressing to update the latch (e.g. after switching
+    //  views) — TODO design: "Cleared by ... LC pressing Lineup Ready
+    //  again from a different view, new latch overwrites." This re-press
+    //  overwrites lineupReadyMode with the LC's current activeType so the
+    //  Intent Rule honors the latest intent.
+    if (state !== 'active' && state !== 'sent') return;
+
+    const ctrlState = (typeof getControllerState === 'function') ? getControllerState() : {};
+    // Defensive: only the Line Coach can send/update the latch. The
+    // button shouldn't be tappable for non-LC users in these states.
+    if (!ctrlState.isLineCoach) return;
 
     const game = (typeof currentGame === 'function') ? currentGame() : null;
     if (!game) return;
     if (!game.pendingNextLine) game.pendingNextLine = {};
 
-    const ctrlState = (typeof getControllerState === 'function') ? getControllerState() : {};
     const myName = (ctrlState.lineCoach && ctrlState.lineCoach.displayName) || 'Line Coach';
 
     game.pendingNextLine.lineupReadyAt = Date.now();
@@ -2952,7 +2968,10 @@ function handleLineupReadyTap() {
 
     if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
     if (typeof showControllerToast === 'function') {
-        showControllerToast('Lineup ready ping sent', 'success', 1800);
+        const msg = state === 'sent'
+            ? 'Lineup Ready updated'
+            : 'Lineup ready ping sent';
+        showControllerToast(msg, 'success', 1800);
     }
 
     updateLineTabLineupReadyBtn();
