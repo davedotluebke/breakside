@@ -2338,24 +2338,37 @@ function transitionToBetweenPoints() {
             const endingLine = [...lastPoint.players];
             // O/D line: reset to ending 7 unless user explicitly changed mode
             // (wholesale/auto) or modified at any time during this point's
-            // window (since the previous point ended).
+            // window. ALSO reset if the line is currently empty — a
+            // *ModifiedAt timestamp doesn't mean the line is useful; an LC
+            // who cleared all checkboxes (or any path that left it empty)
+            // shouldn't poison every subsequent point with an unstartable
+            // empty lineup.
+            const odLineCur = game.pendingNextLine.odLine || [];
             const odModTime = game.pendingNextLine.odLineModifiedAt
                 ? new Date(game.pendingNextLine.odLineModifiedAt).getTime()
                 : 0;
-            if (odModTime <= pointStartTime && lineSelectionModes.main === 'manual') {
+            if ((odModTime <= pointStartTime || odLineCur.length === 0)
+                && lineSelectionModes.main === 'manual') {
                 game.pendingNextLine.odLine = endingLine;
             }
-            // O and D lines: reset only if never modified this game (compare to game start)
+            // O and D lines: reset if never modified this game OR currently
+            // empty (same empty-line reasoning as above). Without the
+            // empty-fallback, an emptied O/D line stays empty across points
+            // and — combined with fix8's same-side-only invariant — leaves
+            // the AC's Start Point button greyed forever after the line is
+            // ever cleared.
             const gameStartTime = game.gameStartTimestamp
                 ? new Date(game.gameStartTimestamp).getTime()
                 : 0;
             ['o', 'd'].forEach(type => {
-                const modKey = type + 'LineModifiedAt';
+                const lineKey = type + 'Line';
+                const modKey = lineKey + 'ModifiedAt';
+                const lineCur = game.pendingNextLine[lineKey] || [];
                 const modTime = game.pendingNextLine[modKey]
                     ? new Date(game.pendingNextLine[modKey]).getTime()
                     : 0;
-                if (modTime <= gameStartTime) {
-                    game.pendingNextLine[type + 'Line'] = endingLine;
+                if (modTime <= gameStartTime || lineCur.length === 0) {
+                    game.pendingNextLine[lineKey] = endingLine;
                 }
             });
         }
@@ -4391,15 +4404,26 @@ function getEffectiveLineForNextPoint(game) {
     // option (this-side typed ↔ odLine) rather than a blank lineup — but
     // NEVER the opposite side's line. Falling back to the opposite side
     // would flip O↔D, contradicting who scored (this was the bug behind
-    // "Start Point (O-line)" showing up right after we scored). In
-    // practice transitionToBetweenPoints pre-fills these from the ending
-    // lineup, so the empty case is rare; when it does happen, an empty
-    // same-side line is correct (and the AC can pick players).
+    // "Start Point (O-line)" showing up right after we scored).
     if (typedLine.length > 0) {
         return { source: typeKey, line: typedLine };
     }
     if (odLine.length > 0) {
         return { source: 'od', line: odLine };
+    }
+
+    // ── Priority 4: last-point safety net ─────────────────────────────
+    // Both same-side options are empty. transitionToBetweenPoints normally
+    // pre-fills these from the just-played lineup, but defend against
+    // cross-device sync lag (the AC may see this function run before the
+    // LC's edits or the reset has reached this client). Surfacing the
+    // most recent lineup keeps the Start Point button actionable — better
+    // than a permanently greyed button stuck with no players. Tagged as
+    // the determined side so the label matches reality.
+    const lastPoint = game.points && game.points[game.points.length - 1];
+    const lastPlayers = (lastPoint && lastPoint.players) || [];
+    if (lastPlayers.length > 0) {
+        return { source: typeKey, line: [...lastPlayers] };
     }
     return { source: typeKey, line: [] };
 }
