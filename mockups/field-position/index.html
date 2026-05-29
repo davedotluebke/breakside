@@ -311,8 +311,13 @@ function lastThrowIdx(){for(let i=S.events.length-1;i>=0;i--){if(['completion','
 function modColHTML(){
   const idx=lastThrowIdx(), ev=idx>=0?S.events[idx]:null;
   let sub='';
-  if(ev){const who=ev.by?ROSTER.find(p=>p.id===ev.by):null; sub=`<div class="msub">${who?('#'+who.num+' '+who.name):ev.type}</div>`;}
-  else sub=`<div class="msub" style="font-style:italic">no pass yet</div>`;
+  if(ev){
+    const nm=id=>{const p=ROSTER.find(r=>r.id===id);return p?p.name:'';};
+    const thr=ev.thrower?nm(ev.thrower):'', rcv=ev.by?nm(ev.by):'';
+    let label = thr&&rcv ? `${thr} to ${rcv}` : thr ? `${thr} (throwaway)` : rcv;
+    if(ev.type==='drop') label+=' (drop)';
+    sub=`<div class="msub">${label}</div>`;
+  } else sub=`<div class="msub" style="font-style:italic">no pass yet</div>`;
   return `<div class="mh">Last Pass:</div>${sub}`+MODS.map(m=>{
     const on=ev&&ev.mods&&ev.mods.includes(m);
     return `<div class="modbtn ${on?'on':''} ${ev?'':'disabled'}" data-mod="${m}">${m}</div>`;
@@ -380,12 +385,12 @@ function placeAt(l,w){
     if(t==='interception'){S.disc=to;S.holder=S.armed;S.mode='offense';}
     S.armed=null;S.pending=null;render();return;
   }
-  if(S.pending==='throwaway'){snap();S.events.push({type:'throwaway',from,to});S.disc=to;S.pending=null;S.armed=null;S.holder=null;render();return;}
+  if(S.pending==='throwaway'){snap();S.events.push({type:'throwaway',from,to,thrower:S.holder});S.disc=to;S.pending=null;S.armed=null;S.holder=null;render();return;}
   if(!S.armed)return;
   snap();
-  if(S.pending==='drop'){S.events.push({type:'drop',from,to,by:S.armed});S.disc=to;S.armed=null;S.pending=null;S.holder=null;render();return;}
+  if(S.pending==='drop'){S.events.push({type:'drop',from,to,thrower:S.holder,by:S.armed});S.disc=to;S.armed=null;S.pending=null;S.holder=null;render();return;}
   const isScore=S.pending==='score'||inAttackEZ(to);
-  S.events.push({type:isScore?'score':'completion',from,to,by:S.armed});
+  S.events.push({type:isScore?'score':'completion',from,to,thrower:S.holder,by:S.armed});
   S.disc=to;S.holder=S.armed;S.armed=null;S.pending=null;render();
 }
 
