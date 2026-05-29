@@ -6,6 +6,12 @@
       "runtimeExecutable": "./scripts/dev-server.sh",
       "runtimeArgs": ["3001"],
       "port": 3001
+    },
+    {
+      "name": "field-mockup",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "4173", "--directory", "mockups/field-position"],
+      "port": 4173
     }
   ]
 }
