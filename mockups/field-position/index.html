@@ -74,7 +74,8 @@
   .field{position:relative;background:linear-gradient(var(--field),var(--field2));
     border:2px solid #fff;border-radius:3px;flex:0 0 auto;touch-action:none}
   .phone[data-o="portrait"] .field{width:230px;height:690px}
-  .phone[data-o="landscape"] .field{width:840px;height:280px}
+  .phone[data-o="landscape"] .field{width:720px;height:240px}
+  .phone[data-o="landscape"] .fieldwrap{justify-content:flex-start;padding-left:6px}
   .ezfill{position:absolute;background:var(--ez)}
   .line{position:absolute;background:var(--line)}
   .gline{position:absolute;background:repeating-linear-gradient(to right,var(--guide) 0 6px,transparent 6px 12px)}
@@ -133,6 +134,16 @@
   .ebtn.theyscore{color:#b91c1c}
   .ebtn.more{flex:0 0 auto;min-width:auto;color:#666}
   .ebtn.on{background:var(--armbg);border-color:var(--armbg);color:#fff}
+
+  /* landscape lower split: field/status/events on the left, modifier column on the right */
+  .lower{flex:1 1 auto;display:flex;min-height:0;min-width:0}
+  .leftcol{flex:1 1 auto;display:flex;flex-direction:column;min-width:0;min-height:0;position:relative}
+  .modcol{flex:0 0 158px;display:flex;flex-direction:column;gap:5px;padding:7px 8px 10px;background:#fff;border-left:1px solid #ddd;overflow:auto}
+  .modcol .mh{font-size:12.5px;font-weight:700;color:#444;text-align:left;padding:1px 2px}
+  .modcol .msub{font:600 11px 'JetBrains Mono',monospace;color:#9a9a9a;text-align:left;padding:0 2px 2px}
+  .modbtn{flex:0 0 auto;border:1px solid #cfcfcf;border-radius:6px;background:#f7f7f7;padding:7px 8px;font-size:13px;font-weight:600;color:#333;cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent}
+  .modbtn.on{background:var(--armbg);border-color:var(--armbg);color:#fff}
+  .modbtn.disabled{opacity:.38;pointer-events:none}
 
   /* mic FAB */
   .mic{position:absolute;right:14px;bottom:12px;width:54px;height:54px;border-radius:50%;background:#e0533a;
@@ -295,6 +306,20 @@ function eventsHTML(){
     <div class="ebtn more" data-act="more">⋯ more</div>`;
 }
 
+const MODS=['Break','Reset','Huck','Hammer','Layout','Sky'];
+function lastThrowIdx(){for(let i=S.events.length-1;i>=0;i--){if(['completion','score','drop','throwaway'].includes(S.events[i].type))return i;}return -1;}
+function modColHTML(){
+  const idx=lastThrowIdx(), ev=idx>=0?S.events[idx]:null;
+  let sub='';
+  if(ev){const who=ev.by?ROSTER.find(p=>p.id===ev.by):null; sub=`<div class="msub">${who?('#'+who.num+' '+who.name):ev.type}</div>`;}
+  else sub=`<div class="msub" style="font-style:italic">no pass yet</div>`;
+  return `<div class="mh">Last Pass:</div>${sub}`+MODS.map(m=>{
+    const on=ev&&ev.mods&&ev.mods.includes(m);
+    return `<div class="modbtn ${on?'on':''} ${ev?'':'disabled'}" data-mod="${m}">${m}</div>`;
+  }).join('');
+}
+function toggleMod(m){const idx=lastThrowIdx();if(idx<0)return;const ev=S.events[idx];ev.mods=ev.mods||[];const k=ev.mods.indexOf(m);if(k>=0)ev.mods.splice(k,1);else ev.mods.push(m);render();}
+
 function render(){
   document.querySelectorAll('#segO button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.o));
   document.querySelectorAll('#segM button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.mode));
@@ -329,12 +354,15 @@ function render(){
         <button class="expand" id="expand" title="Exit full-screen">⤢</button>
       </div>
       <div class="players">${ROSTER.map(chipHTML).join('')}</div>
-      <div class="play">
-        ${fieldBox}
-        <div class="statusbar">${statusText()}</div>
-        <div class="events">${eventsHTML()}</div>
-        <button class="mic" title="Narration mic">🎙️</button>
-      </div></div>`;
+      <div class="play"><div class="lower">
+        <div class="leftcol">
+          ${fieldBox}
+          <div class="statusbar">${statusText()}</div>
+          <div class="events">${eventsHTML()}</div>
+          <button class="mic" title="Narration mic">🎙️</button>
+        </div>
+        <div class="modcol">${modColHTML()}</div>
+      </div></div></div>`;
   }
   wire();
 }
@@ -428,6 +456,7 @@ function popPicker(cx,cy,cb){
 
 function wire(){
   phone.querySelectorAll('.ebtn').forEach(b=>b.onclick=()=>onEvent(b.dataset.act));
+  phone.querySelectorAll('.modbtn').forEach(b=>b.onclick=()=>toggleMod(b.dataset.mod));
   const u=phone.querySelector('#undo'); if(u)u.onclick=doUndo;
   const x=phone.querySelector('#expand'); if(x)x.onclick=()=>{S.o=S.o==='portrait'?'landscape':'portrait';render();};
 }
