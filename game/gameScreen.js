@@ -4290,10 +4290,18 @@ function updatePanelGenderRatioDisplay() {
  * Three-priority Intent Rule (TODO.md § "Multi-Coach Line Selection:
  * Intent Rule & LC-Viewing Label"):
  *
- *   1. Lineup Ready latch. If the LC pressed "Lineup Ready" with a
- *      specific view selected (lineupReadyMode) and that latch is
- *      newer than every relevant line *ModifiedAt and points at a
- *      non-empty line, use it. Strongest signal — explicit "I'm done."
+ * CRITICAL INVARIANT: the returned `source` is always side-consistent
+ * with `determineStartingPosition()` — either `typeKey` (the determined
+ * side) or `'od'` (the combined line). It is NEVER the opposite side.
+ * The side is fixed by who scored; this function only chooses WHICH line
+ * to use on that side. (Downstream, applyStartPointButtonState reads
+ * source 'o'→offense / 'd'→defense, so a side-flipped source would
+ * mislabel the button and field the wrong unit.)
+ *
+ *   1. Lineup Ready latch. If the LC pressed "Lineup Ready" (newer than
+ *      every relevant *ModifiedAt), honor it — but lineupReadyMode only
+ *      disambiguates combined-OD vs side-specific, not the side: 'od' →
+ *      odLine; anything else → the determined side's line.
  *
  *   2. Per-axis most-recent edit. For an upcoming O point, compare
  *      oLine vs odLine timestamps; for a D point, dLine vs odLine.
@@ -4301,9 +4309,9 @@ function updatePanelGenderRatioDisplay() {
  *      D line for the next defense point can't surface an empty O line
  *      if the team scores instead.
  *
- *   3. Empty-axis fallback. If the most-recent-edit winner was empty,
- *      surface anything non-empty rather than handing the AC a blank
- *      lineup: this-axis typed → odLine → other-axis → empty.
+ *   3. Same-side fallback. If the winner was empty, fall through to the
+ *      other same-side option (this-side typed ↔ odLine) — never the
+ *      opposite side. Then empty.
  *
  * The O/D line, once created, persists across multiple points until OD
  * is edited more recently — no per-window freshness gate. The Line
@@ -4322,37 +4330,47 @@ function getEffectiveLineForNextPoint(game) {
         ? determineStartingPosition() === 'offense'
         : true;
     const typeKey  = isOffense ? 'o' : 'd';
-    const otherKey = isOffense ? 'd' : 'o';
 
     const p = game.pendingNextLine;
     const typedLine = p[typeKey  + 'Line'] || [];
     const odLine    = p.odLine             || [];
-    const otherLine = p[otherKey + 'Line'] || [];
     const typedTime = p[typeKey + 'LineModifiedAt']
         ? new Date(p[typeKey + 'LineModifiedAt']).getTime() : 0;
     const odTime    = p.odLineModifiedAt
         ? new Date(p.odLineModifiedAt).getTime() : 0;
 
+    // INVARIANT: the returned `source` must be side-consistent — `typeKey`
+    // (the side who-scored determined, via determineStartingPosition) or
+    // `'od'` (the combined line, valid for either side). It must NEVER be
+    // the opposite side. Downstream (applyStartPointButtonState) treats
+    // source 'o' as offense and 'd' as defense and labels/uses the line
+    // accordingly, so a source that disagrees with the determined side
+    // would put the wrong unit on the field and mislabel the button
+    // ("Start Point (O-line)" after we scored, etc.).
+
     // ── Priority 1: Lineup Ready latch ────────────────────────────────
-    // The LC pressed "Lineup Ready" with a specific view selected. Use
-    // the line type they were viewing at press time (lineupReadyMode).
-    // Strongest signal — explicit "I'm done, this is the line."
+    // The LC pressed "Lineup Ready" — an explicit "I'm done, this is the
+    // line." But lineupReadyMode captures only WHICH line they were
+    // viewing (o/d/od/split), NOT the side; the side is fixed by who
+    // scored. So the latch disambiguates *combined-OD vs side-specific*
+    // and nothing more: 'od' → use odLine; anything else → use the
+    // determined side's line. A latch captured on the opposite side
+    // (LC viewing the O line, then we score → D point) thus resolves to
+    // the D line, never flips the point to offense.
     //
-    // Defense against stale latches: a peer device may retain an old
-    // lineupReadyAt because the value→null clear-on-edit doesn't
-    // propagate via the server merge. We require lineupReadyAt to be
-    // newer than every relevant line's *ModifiedAt before honoring it.
-    // Line edits DO propagate, so this naturally suppresses superseded
-    // latches everywhere.
+    // Stale-latch defense: require lineupReadyAt newer than the relevant
+    // *ModifiedAt (the value→null clear-on-edit doesn't propagate via the
+    // server merge, but line-edit timestamps do).
     const readyAt   = p.lineupReadyAt || 0;
     const readyMode = p.lineupReadyMode;
     if (readyAt && readyMode
         && readyAt > typedTime && readyAt > odTime) {
-        const latchLine = p[readyMode + 'Line'] || [];
+        const latchSource = (readyMode === 'od') ? 'od' : typeKey;
+        const latchLine = p[latchSource + 'Line'] || [];
         if (latchLine.length > 0) {
-            return { source: readyMode, line: latchLine };
+            return { source: latchSource, line: latchLine };
         }
-        // Latch points to an empty line — fall through to the fallbacks.
+        // Latched line is empty — fall through to the fallbacks.
     }
 
     // ── Priority 2: per-axis most-recent edit ─────────────────────────
@@ -4369,19 +4387,21 @@ function getEffectiveLineForNextPoint(game) {
     }
 
     // ── Priority 3: empty-axis fallback ───────────────────────────────
-    // The most-recent-edit winner was empty. Surface anything non-empty
-    // rather than handing the AC a blank lineup. Order:
-    //   this-axis typed → odLine → other-axis → empty.
+    // The most-recent-edit winner was empty. Surface the OTHER same-side
+    // option (this-side typed ↔ odLine) rather than a blank lineup — but
+    // NEVER the opposite side's line. Falling back to the opposite side
+    // would flip O↔D, contradicting who scored (this was the bug behind
+    // "Start Point (O-line)" showing up right after we scored). In
+    // practice transitionToBetweenPoints pre-fills these from the ending
+    // lineup, so the empty case is rare; when it does happen, an empty
+    // same-side line is correct (and the AC can pick players).
     if (typedLine.length > 0) {
         return { source: typeKey, line: typedLine };
     }
     if (odLine.length > 0) {
         return { source: 'od', line: odLine };
     }
-    if (otherLine.length > 0) {
-        return { source: otherKey, line: otherLine };
-    }
-    return { source: 'od', line: [] };
+    return { source: typeKey, line: [] };
 }
 
 /**
