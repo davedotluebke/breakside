@@ -2768,15 +2768,20 @@ function updateLineTabStartPointBtn() {
  *     else holds Active Coach). A solo coach sees nothing because the
  *     signal has no recipient. An Active-Coach-only user is the recipient,
  *     not the sender.
- *   - Only between points. During a point the lineup is committed; there's
- *     nothing to "be ready" with.
- *   - After tap, locks into a green "✓ Sent" state until the next point
- *     starts (which clears `lineupReadyAt` in startNextPoint).
+ *   - Available *during a live point too*, not just between points — the
+ *     LC's job is to prepare the NEXT line while the current point is
+ *     being played, so "the next line is ready" is exactly the signal
+ *     they want to send mid-point. (This used to be gated to
+ *     between-points only, which contradicted the prepare-ahead workflow.)
+ *   - After tap, shows a green "✓ Lineup Ready" state. The LC can re-tap
+ *     to update the latch (e.g. after switching views); it clears when
+ *     the next point starts (`startNextPoint` nulls `lineupReadyAt`).
  *
- * The actual ping is just a timestamp + coach name written to
- * `pendingNextLine.lineupReadyAt` / `lineupReadyBy`. The Active Coach's
- * existing 3-second pendingLine refresh poll picks it up and surfaces a
- * toast — see handleLineupReadyAckOnRefresh.
+ * The actual ping is just a timestamp + coach name + view-mode written to
+ * `pendingNextLine.lineupReadyAt` / `lineupReadyBy` / `lineupReadyMode`.
+ * The Active Coach's 3-second pendingLine refresh poll picks it up and
+ * surfaces a toast — including during a live point, since the refresh
+ * gate was removed.
  */
 /**
  * Compute the current Lineup Ready button state.
@@ -2808,17 +2813,34 @@ function computeLineupReadyState() {
     const game = (typeof currentGame === 'function') ? currentGame() : null;
     const pending = game && game.pendingNextLine;
     const sentAtRaw = pending && pending.lineupReadyAt;
-    const pointInProgress = (typeof isPointInProgress === 'function') && isPointInProgress();
 
-    // Staleness gate: a `lineupReadyAt` from before the most recent
-    // point's start is leftover from a prior between-points window. The
-    // stored field outlives any one window (it's persisted with the
-    // game), so without this comparison the button would read "✓ Sent"
-    // forever after the first ping ever sent.
+    // Staleness gate: a `lineupReadyAt` from before the most recent point
+    // started is leftover from a prior window. The stored field outlives
+    // any one window (it's persisted with the game and the null-on-
+    // startNextPoint clear doesn't propagate cross-device), so without
+    // this comparison the button would read "✓ Lineup Ready" forever
+    // after the first ping ever sent.
+    //
+    // We need the latest point's TRUE start time. For an in-progress
+    // point, startTimestamp is correct. For an ENDED point, startTimestamp
+    // has been corrupted to ~score-time by the score handlers (they null
+    // it to stop the timer and updateScore re-sets it to now — same root
+    // cause as the fix1 OD-line bug), so reconstruct it from
+    // endTimestamp − totalPointTime. Without this, a ping sent DURING the
+    // point would wrongly read as stale the moment the point ends, hiding
+    // the "✓ Lineup Ready" status in the very between-points window the
+    // ping was meant for.
     const points = (game && game.points) || [];
     const latestPoint = points[points.length - 1];
-    const latestPointStart = (latestPoint && latestPoint.startTimestamp)
-        ? new Date(latestPoint.startTimestamp).getTime() : 0;
+    let latestPointStart = 0;
+    if (latestPoint) {
+        if (latestPoint.endTimestamp) {
+            latestPointStart = new Date(latestPoint.endTimestamp).getTime()
+                - (latestPoint.totalPointTime || 0);
+        } else if (latestPoint.startTimestamp) {
+            latestPointStart = new Date(latestPoint.startTimestamp).getTime();
+        }
+    }
     const sentForCurrentWindow = sentAtRaw && sentAtRaw > latestPointStart;
 
     // Sent state wins regardless of who's looking — it's a shared status.
@@ -2840,13 +2862,9 @@ function computeLineupReadyState() {
         };
     }
 
-    // Spectator coach (no roles, multi-coach session) and Line-Coach branches:
-    if (pointInProgress) {
-        return {
-            state: 'disabled', label: 'Lineup Ready',
-            disabledReason: 'Lineup Ready can only be sent between points'
-        };
-    }
+    // Spectator coach (no roles, multi-coach session) and Line-Coach
+    // branches. No point-in-progress gate: the LC prepares the next line
+    // during a live point, so they can ping "next lineup ready" mid-point.
     if (!ctrlState.isLineCoach) {
         return {
             state: 'disabled', label: 'Lineup Ready',
