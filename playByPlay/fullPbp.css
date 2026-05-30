@@ -100,14 +100,25 @@
 }
 .full-pbp-start-point-btn:hover  { background: #15803d; }
 .full-pbp-start-point-btn:active { background: #166534; }
-.full-pbp-start-point-btn.inactive,
-.full-pbp-start-point-btn.feedback-count-warning {
+/* Feedback colors — match the Select Line / PBP panel palette
+   (panelSystem.css ~1285) so the same lineup state reads the same way
+   wherever the Start Point button appears. count-warning was previously
+   collapsed with `.inactive` (both grey) which made a real wrong-count
+   warning look like a disabled button to the AC. */
+.full-pbp-start-point-btn.feedback-count-warning  { background: #dc3545; color: #fff; }
+.full-pbp-start-point-btn.feedback-gender-warning { background: #f59e0b; color: #fff; }
+.full-pbp-start-point-btn.feedback-ok             { background: #16a34a; color: #fff; }
+.full-pbp-start-point-btn.inactive {
     background: #d6d6d6;
     color: #888;
     cursor: not-allowed;
 }
-.full-pbp-start-point-btn.feedback-gender-warning { background: #f59e0b; color: #fff; }
-.full-pbp-start-point-btn.feedback-ok             { background: #16a34a; color: #fff; }
+/* Inactive + feedback combos: dimmed but the warning hue still shows
+   through, so a non-Active-Coach can read the lineup state without
+   acting on it (pure grey would erase the warning info). */
+.full-pbp-start-point-btn.inactive.feedback-ok             { background: #6fae7d; color: #fff; opacity: 0.85; }
+.full-pbp-start-point-btn.inactive.feedback-count-warning  { background: #b97a82; color: #fff; opacity: 0.85; }
+.full-pbp-start-point-btn.inactive.feedback-gender-warning { background: #d29a55; color: #fff; opacity: 0.85; }
 
 .full-pbp-no-point-msg {
     flex: 1 1 auto;
