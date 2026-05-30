@@ -396,6 +396,13 @@ function deserializeGame(gameData) {
     // Phase 6b: Pending next line selections (migrate from existing games)
     // Note: activeType is local-only - each user manages their own view state
     if (gameData.pendingNextLine) {
+        // Normalize any legacy 'split' values to 'od' — split view was
+        // removed in the simplify-line-selection branch. activeType is
+        // forced to 'od' on every load anyway, but lineCoachViewing is
+        // a synced field that can carry an old 'split' value across
+        // devices; coerce it.
+        const lcViewRaw = gameData.pendingNextLine.lineCoachViewing;
+        const lcView = (lcViewRaw === 'split') ? 'od' : (lcViewRaw || null);
         game.pendingNextLine = {
             oLine: gameData.pendingNextLine.oLine || [],
             dLine: gameData.pendingNextLine.dLine || [],
@@ -407,10 +414,11 @@ function deserializeGame(gameData) {
             // the Active Coach can read what the Line Coach wrote.
             lineupReadyAt: gameData.pendingNextLine.lineupReadyAt || null,
             lineupReadyBy: gameData.pendingNextLine.lineupReadyBy || null,
-            lineupReadyMode: gameData.pendingNextLine.lineupReadyMode || null,
             // LC-viewing fields — the LC's currently-viewed activeType,
-            // synced so the AC's panel can render an awareness sub-header.
-            lineCoachViewing: gameData.pendingNextLine.lineCoachViewing || null,
+            // synced so the AC's panel can render an awareness sub-header
+            // and so the Intent Rule's Priority 1 can pick combined-OD vs
+            // side-specific.
+            lineCoachViewing: lcView,
             lineCoachViewingAt: gameData.pendingNextLine.lineCoachViewingAt || null,
             activeType: 'od'  // Local-only, always starts at 'od'
         };

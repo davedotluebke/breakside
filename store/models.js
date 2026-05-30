@@ -154,23 +154,25 @@ function Game(teamName, opponentName, startOn, teamId = null) {
         oLineModifiedAt: null,      // ISO timestamp of last modification
         dLineModifiedAt: null,      // ISO timestamp of last modification
         odLineModifiedAt: null,     // ISO timestamp of last modification
-        activeType: 'od',           // Locally-viewed line type: 'o' | 'd' | 'od' | 'split' (NOT synced)
+        activeType: 'od',           // Locally-viewed line type: 'o' | 'd' | 'od' (NOT synced)
 
-        // Lineup Ready signal: LC presses "Lineup Ready" to tell the AC the
-        // line is finalized. lineupReadyMode captures which view (o/d/od)
-        // the LC was looking at when they pressed — the Intent Rule uses
-        // this as the strongest signal in `getEffectiveLineForNextPoint`.
+        // Lineup Ready signal: LC presses "Lineup Ready" to tell the AC
+        // the line is finalized. Fire-and-forget: the AC's polling refresh
+        // sees the new timestamp and shows a toast. Not used by the Intent
+        // Rule — the LC's actual VIEW (lineCoachViewing below) is what
+        // drives auto-select at point-end.
         lineupReadyAt: null,        // epoch ms timestamp of most recent press
         lineupReadyBy: null,        // Display name of who pressed (informational)
-        lineupReadyMode: null,      // 'o' | 'd' | 'od' captured at press time
 
         // LC-viewing signal: the Line Coach (only) writes their current
         // activeType here so the AC's panel can render a "Line Coach:
         // viewing/editing the X line" sub-header without the AC's own
-        // view being forced to follow. Gated on `isLineCoach()` at write
-        // time so the AC's local activeType never leaks. The local
-        // `activeType` field above is intentionally NOT synced.
-        lineCoachViewing: null,     // 'o' | 'd' | 'od' | 'split' | null
+        // view being forced to follow. Also drives Priority 1 of the
+        // Intent Rule at point-end (combined-OD vs side-specific).
+        // Gated on `isLineCoach()` at write time so the AC's local
+        // activeType never leaks. The local `activeType` field above is
+        // intentionally NOT synced.
+        lineCoachViewing: null,     // 'o' | 'd' | 'od' | null
         lineCoachViewingAt: null    // ISO timestamp of most recent write
     };
 }
