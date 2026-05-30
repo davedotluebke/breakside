@@ -88,6 +88,13 @@
   .brick{position:absolute;color:rgba(255,255,255,.5);font-size:12px;transform:translate(-50%,-50%);pointer-events:none;font-weight:700}
   .ezlabel{position:absolute;color:rgba(255,255,255,.5);font-size:9px;letter-spacing:.1em;text-transform:uppercase;transform:translate(-50%,-50%);pointer-events:none}
   .sidelbl{position:absolute;color:rgba(255,255,255,.34);font-size:10px;letter-spacing:.18em;text-transform:uppercase;pointer-events:none;font-weight:600}
+  /* long-pressable orientation labels */
+  .flbl{transform:translate(-50%,-50%);pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .fliptoast{position:fixed;z-index:999;transform:translate(-50%,-115%);background:#23262b;color:#fff;
+    border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.4);padding:9px 11px;display:flex;flex-direction:column;
+    gap:7px;align-items:center;font-size:12px;white-space:nowrap}
+  .fliptoast button{background:var(--orange);color:#fff;border:none;border-radius:6px;padding:7px 12px;
+    font-size:12.5px;font-weight:700;cursor:pointer}
   svg.arrows{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 
   .disc{position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;border:2px solid #111;
@@ -111,6 +118,16 @@
     box-shadow:0 8px 24px rgba(0,0,0,.3);padding:7px;display:flex;flex-wrap:wrap;gap:5px;max-width:250px;
     transform:translate(-50%,-112%)}
   .picker .ttl{flex:1 1 100%;font-size:11px;color:#888;text-align:center;margin-bottom:2px}
+
+  /* score attribution dialog */
+  .scoredlg-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:998;display:flex;align-items:center;justify-content:center}
+  .scoredlg{position:relative;background:#fff;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.4);padding:18px 20px 16px;width:236px;text-align:center}
+  .sd-x{position:absolute;top:7px;right:9px;border:none;background:transparent;font-size:16px;color:#999;cursor:pointer;line-height:1}
+  .sd-title{font-size:17px;font-weight:700;color:var(--green);margin-bottom:12px}
+  .sd-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0}
+  .sd-lbl{font-size:13px;color:#555;font-weight:600}
+  .sd-chip{border:1px solid #cfcfcf;border-radius:999px;background:#f7f7f7;padding:7px 14px;font-size:14px;font-weight:600;color:#222;cursor:pointer}
+  .sd-confirm{margin-top:14px;width:100%;border:none;border-radius:8px;background:var(--green);color:#fff;padding:11px;font-size:14px;font-weight:700;cursor:pointer}
 
   /* ---- chips ---- */
   .chip{display:flex;align-items:center;gap:7px;background:#f7f7f7;border:1px solid #cfcfcf;border-radius:999px;
@@ -229,16 +246,27 @@ function pname(id){return id==='unknown'?'Unknown':(ROSTER.find(r=>r.id===id)?.n
 let S;
 function reset(){
   S={ o:S?S.o:'portrait', mode:S?S.mode:'offense',
-      holder:'p1', disc:{l:EZ+8,w:W/2}, armed:null, pending:null, dPlacing:null, dMods:[], events:[], undo:[] };
+      flipHA:S?S.flipHA:false, flipAD:S?S.flipAD:false,   // sideline & attacking-direction orientation
+      holder:'p1', disc:{l:EZ+8,w:W/2}, armed:null, pending:null, dPlacing:null, events:[], undo:[] };
   render();
 }
 function snap(){ S.undo.push({disc:{...S.disc},holder:S.holder,mode:S.mode,len:S.events.length}); }
 function doUndo(){ const u=S.undo.pop(); if(!u)return; S.disc=u.disc;S.holder=u.holder;S.mode=u.mode;S.events.length=u.len; S.armed=null;S.pending=null; render(); }
 
 /* ===================== coord mapping ===================== */
-// canonical (l,w) -> percent in field box; portrait attacks up, landscape attacks right
-function pct(l,w){ return S.o==='portrait' ? {x:(w/W)*100,y:((L-l)/L)*100} : {x:(l/L)*100,y:(w/W)*100}; }
-function toField(fx,fy){ return S.o==='portrait' ? {l:L-fy*L,w:fx*W} : {l:fx*L,w:fy*W}; }
+// canonical (l,w) -> percent in field box. flipAD mirrors the attacking
+// direction (length); flipHA mirrors which sideline is Home (width).
+// Default: portrait attacks up + Home on the right; landscape attacks right
+// + Home on the bottom.
+function pct(l,w){
+  const dl=S.flipAD?(L-l):l, dw=S.flipHA?(W-w):w;
+  return S.o==='portrait' ? {x:(dw/W)*100,y:((L-dl)/L)*100} : {x:(dl/L)*100,y:(dw/W)*100};
+}
+function toField(fx,fy){
+  let dl,dw;
+  if(S.o==='portrait'){dw=fx*W;dl=L-fy*L;} else {dl=fx*L;dw=fy*W;}
+  return {l:S.flipAD?(L-dl):dl, w:S.flipHA?(W-dw):dw};
+}
 function inAttackEZ(p){return p.l>=L-EZ;}
 function clamp(l,w){return {l:Math.max(1,Math.min(L-1,l)),w:Math.max(1,Math.min(W-1,w))};}
 
@@ -274,21 +302,20 @@ function fieldHTML(){
     [EZ,L-EZ].forEach(l=>h+=`<div class="line" style="left:0;right:0;top:${((L-l)/L)*100}%;height:2px"></div>`);
     RZ.forEach(l=>h+=`<div class="gline rz" style="left:3%;right:3%;top:${((L-l)/L)*100}%;height:2px"></div>`);
     LANES.forEach(w=>h+=`<div class="gline v" style="top:${(EZ/L)*100}%;bottom:${(EZ/L)*100}%;left:${(w/W)*100}%;width:2px"></div>`);
-    h+=`<div class="ezlabel" style="left:50%;top:${(EZ/2/L)*100}%">Attack</div>`;
-    h+=`<div class="ezlabel" style="left:50%;top:${((L-EZ/2)/L)*100}%">Defend</div>`;
-    h+=`<div class="sidelbl" style="left:5px;top:50%;writing-mode:vertical-rl;transform:translateY(-50%) rotate(180deg)">Home</div>`;
-    h+=`<div class="sidelbl" style="right:5px;top:50%;writing-mode:vertical-rl;transform:translateY(-50%)">Away</div>`;
   }else{
     h+=`<div class="ezfill" style="top:0;bottom:0;right:0;width:${(EZ/L)*100}%"></div>`;
     h+=`<div class="ezfill" style="top:0;bottom:0;left:0;width:${(EZ/L)*100}%"></div>`;
     [EZ,L-EZ].forEach(l=>h+=`<div class="line" style="top:0;bottom:0;left:${(l/L)*100}%;width:2px"></div>`);
     RZ.forEach(l=>h+=`<div class="gline rz v" style="top:3%;bottom:3%;left:${(l/L)*100}%;width:2px"></div>`);
     LANES.forEach(w=>h+=`<div class="gline" style="left:${(EZ/L)*100}%;right:${(EZ/L)*100}%;top:${(w/W)*100}%;height:2px"></div>`);
-    h+=`<div class="ezlabel" style="top:50%;left:${((L-EZ/2)/L)*100}%">Attack</div>`;
-    h+=`<div class="ezlabel" style="top:50%;left:${(EZ/2/L)*100}%">Defend</div>`;
-    h+=`<div class="sidelbl" style="top:4px;left:50%;transform:translateX(-50%)">Away</div>`;
-    h+=`<div class="sidelbl" style="bottom:4px;left:50%;transform:translateX(-50%)">Home</div>`;
   }
+  // Word labels positioned by canonical coords so flips relocate them. Each is
+  // long-pressable (data-flip) to bring up its flip toast.
+  const lab=(txt,l,w,flip,cls)=>{const p=pct(l,w);return `<div class="${cls} flbl" data-flip="${flip}" style="left:${p.x}%;top:${p.y}%${port&&flip==='ha'?';writing-mode:vertical-rl':''}">${txt}</div>`;};
+  h+=lab('Attack', L-EZ/2, W/2, 'ad', 'ezlabel');
+  h+=lab('Defend', EZ/2,   W/2, 'ad', 'ezlabel');
+  h+=lab('Home', L/2, W*0.93, 'ha', 'sidelbl');
+  h+=lab('Away', L/2, W*0.07, 'ha', 'sidelbl');
   BRICK.forEach(l=>{const p=pct(l,W/2);h+=`<div class="brick" style="left:${p.x}%;top:${p.y}%">×</div>`;});
 
   // arrows (fade older)
@@ -343,34 +370,35 @@ function eventsHTML(){
     <div class="ebtn more" data-act="more">⋯ more</div>`;
 }
 
-const MODS=['Break','Reset','Huck','Hammer','Layout','Sky'];
-const DMODS=['Layout','Sky','Stall'];
-function lastThrowIdx(){for(let i=S.events.length-1;i>=0;i--){if(['completion','score','drop','throwaway'].includes(S.events[i].type))return i;}return -1;}
-function modColHTML(){
-  if(S.mode==='defense') return dModColHTML();
-  const idx=lastThrowIdx(), ev=idx>=0?S.events[idx]:null;
-  let sub='';
-  if(ev){
-    const thr=ev.thrower?pname(ev.thrower):'', rcv=ev.by?pname(ev.by):'';
-    let label = thr&&rcv ? `${thr} to ${rcv}` : thr ? `${thr} (throwaway)` : rcv;
-    if(ev.type==='drop') label+=' (drop)';
-    sub=`<div class="msub">${label}</div>`;
-  } else sub=`<div class="msub" style="font-style:italic">no pass yet</div>`;
-  return `<div class="mh">Last Pass:</div>${sub}`+MODS.map(m=>{
-    const on=ev&&ev.mods&&ev.mods.includes(m);
-    return `<div class="modbtn ${on?'on':''} ${ev?'':'disabled'}" data-mod="${m}">${m}</div>`;
-  }).join('');
-}
-function toggleMod(m){const idx=lastThrowIdx();if(idx<0)return;const ev=S.events[idx];ev.mods=ev.mods||[];const k=ev.mods.indexOf(m);if(k>=0)ev.mods.splice(k,1);else ev.mods.push(m);render();}
+const MODS=['Break','Reset','Huck','Hammer','Layout','Sky'];   // throw modifiers
+const DMODS=['Layout','Sky','Stall'];                          // D modifiers
+const TAGGABLE=['completion','score','drop','throwaway','block','interception'];
+function lastModIdx(){for(let i=S.events.length-1;i>=0;i--){if(TAGGABLE.includes(S.events[i].type))return i;}return -1;}
 
-// Defense: modifiers are pre-selected for the D being recorded (a block/INT
-// flips us to offense immediately, so there's no "last D" to tag afterward).
-function dModColHTML(){
-  const sub = S.dPlacing ? (S.dPlacing==='interception'?'Interception':'Block') : 'tap Block / Interception';
-  return `<div class="mh">Last D was a:</div><div class="msub">${sub}</div>`+
-    DMODS.map(m=>`<div class="modbtn ${S.dMods.includes(m)?'on':''}" data-dmod="${m}">${m}</div>`).join('');
+// One column that tags the last recorded event. If that event is a D
+// (block/interception) it shows "Last D was a:" with D modifiers; this carries
+// onto the offense screen after a D and stays until the first completed pass,
+// after which the last event is a throw and it reads "Last throw was a:".
+function modColHTML(){
+  const idx=lastModIdx(), ev=idx>=0?S.events[idx]:null;
+  const isD = ev && (ev.type==='block'||ev.type==='interception');
+  const set = isD ? DMODS : MODS;
+  let header, sub;
+  if(isD){
+    header='Last D was a:';
+    sub=`${ev.by?pname(ev.by)+' — ':''}${ev.type==='interception'?'interception':'block'}`;
+  }else{
+    header='Last throw was a:';
+    if(ev){const thr=ev.thrower?pname(ev.thrower):'', rcv=ev.by?pname(ev.by):'';
+      sub = thr&&rcv ? `${thr} to ${rcv}` : thr ? `${thr} (throwaway)` : rcv;
+      if(ev.type==='drop') sub+=' (drop)';
+    } else sub='<i>no play yet</i>';
+  }
+  return `<div class="mh">${header}</div><div class="msub">${sub}</div>`+
+    set.map(m=>{const on=ev&&ev.mods&&ev.mods.includes(m);
+      return `<div class="modbtn ${on?'on':''} ${ev?'':'disabled'}" data-mod="${m}">${m}</div>`;}).join('');
 }
-function toggleDMod(m){const k=S.dMods.indexOf(m);if(k>=0)S.dMods.splice(k,1);else S.dMods.push(m);render();}
+function toggleMod(m){const idx=lastModIdx();if(idx<0)return;const ev=S.events[idx];ev.mods=ev.mods||[];const k=ev.mods.indexOf(m);if(k>=0)ev.mods.splice(k,1);else ev.mods.push(m);render();}
 
 function render(){
   document.querySelectorAll('#segO button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.o));
@@ -439,20 +467,47 @@ function placeAt(l,w){
     if(!S.armed)return;
     snap();
     const t=S.dPlacing==='interception'?'interception':'block';
-    S.events.push({type:t,from:null,to,by:S.armed,mods:S.dMods.length?S.dMods.slice():undefined});
+    S.events.push({type:t,from:null,to,by:S.armed});   // modifiers tagged after, on the O screen
     // A D (block or interception) is a turnover → we're now on offense.
     // NOTE (real impl): an interception → that player holds; a block leaves
     // no holder (disc on the ground, someone picks up). Mock keeps it simple.
     S.disc=to; S.holder=S.armed; S.mode='offense';
-    S.armed=null;S.pending=null;S.dPlacing=null;S.dMods=[];render();return;
+    S.armed=null;S.pending=null;S.dPlacing=null;render();return;
   }
   if(S.pending==='throwaway'){snap();S.events.push({type:'throwaway',from,to,thrower:S.holder});S.disc=to;S.pending=null;S.armed=null;S.holder=null;S.mode='defense';render();return;}
   if(!S.armed)return;
   snap();
   if(S.pending==='drop'){S.events.push({type:'drop',from,to,thrower:S.holder,by:S.armed});S.disc=to;S.armed=null;S.pending=null;S.holder=null;S.mode='defense';render();return;}
   const isScore=S.pending==='score'||inAttackEZ(to);
-  S.events.push({type:isScore?'score':'completion',from,to,thrower:S.holder,by:S.armed});
+  S.events.push({type:isScore?'score':'completion',from,to,thrower:S.holder,by:S.armed,assist:isScore?S.holder:undefined});
   S.disc=to;S.holder=S.armed;S.armed=null;S.pending=null;render();
+  if(isScore) openScoreDialog(S.events.length-1);   // confirm goal + assist (pre-filled)
+}
+
+// Score attribution: opens with goal (receiver) + assist (thrower) pre-filled.
+// Confirm keeps the goal; ✕ ("wasn't a score") downgrades it to a plain
+// completion — the throw stays, so the user can Undo or drag the catch just
+// out of the endzone for a not-quite-in.
+function openScoreDialog(idx){
+  document.querySelectorAll('.scoredlg-overlay').forEach(n=>n.remove());
+  const ev=S.events[idx]; if(!ev) return;
+  const ov=document.createElement('div'); ov.className='scoredlg-overlay';
+  document.body.appendChild(ov);
+  (function draw(){
+    ov.innerHTML=`<div class="scoredlg">
+      <button class="sd-x" title="Wasn't a score">✕</button>
+      <div class="sd-title">🥏&nbsp; Goal!</div>
+      <div class="sd-row"><span class="sd-lbl">Goal</span><button class="sd-chip" data-role="goal">${pname(ev.by)||'—'}</button></div>
+      <div class="sd-row"><span class="sd-lbl">Assist</span><button class="sd-chip" data-role="assist">${ev.assist?pname(ev.assist):'(none)'}</button></div>
+      <button class="sd-confirm">Confirm goal</button>
+    </div>`;
+    ov.querySelector('.sd-x').onclick=()=>{ev.type='completion';delete ev.assist;ov.remove();render();};
+    ov.querySelector('.sd-confirm').onclick=()=>{ov.remove();render();};
+    ov.querySelectorAll('.sd-chip').forEach(c=>c.onclick=()=>{
+      const role=c.dataset.role,r=c.getBoundingClientRect();
+      popPicker(r.left+r.width/2,r.top,pid=>{if(role==='goal')ev.by=pid;else ev.assist=pid;draw();},role==='goal'?'Goal scorer':'Assist');
+    });
+  })();
 }
 
 function fieldTap(l,w,cx,cy){
@@ -479,7 +534,27 @@ function onEvent(act){
   S.pending=S.pending===act?null:act; render();        // offense drop / throwaway / score toggles
 }
 function setDPlacing(t){S.dPlacing=t;S.pending=t;S.armed=null;render();}
-function cancelDPlacing(){S.dPlacing=null;S.pending=null;S.armed=null;S.dMods=[];render();}
+function cancelDPlacing(){S.dPlacing=null;S.pending=null;S.armed=null;render();}
+
+/* ---- long-press an orientation label → flip toast ---- */
+let lpTimer=null;
+function startLongPress(kind,cx,cy){
+  const cancel=()=>{if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}window.removeEventListener('pointermove',mv);window.removeEventListener('pointerup',up);};
+  const mv=e=>{if(Math.hypot(e.clientX-cx,e.clientY-cy)>8)cancel();};
+  const up=()=>cancel();
+  window.addEventListener('pointermove',mv);window.addEventListener('pointerup',up);
+  lpTimer=setTimeout(()=>{lpTimer=null;window.removeEventListener('pointermove',mv);window.removeEventListener('pointerup',up);showFlipToast(kind,cx,cy);},450);
+}
+function showFlipToast(kind,cx,cy){
+  document.querySelectorAll('.fliptoast').forEach(n=>n.remove());
+  const isHA=kind==='ha';
+  const t=document.createElement('div');t.className='fliptoast';t.style.left=cx+'px';t.style.top=cy+'px';
+  t.innerHTML=`<span>${isHA?'Home / Away sidelines':'Attacking direction'}</span>
+    <button>Flip ${isHA?'Home ⇄ Away':'Attack ⇄ Defend'}</button>`;
+  document.body.appendChild(t);
+  t.querySelector('button').onclick=()=>{if(isHA)S.flipHA=!S.flipHA;else S.flipAD=!S.flipAD;t.remove();render();};
+  setTimeout(()=>{const close=ev=>{if(!t.contains(ev.target)){t.remove();document.removeEventListener('pointerdown',close);}};document.addEventListener('pointerdown',close);},0);
+}
 
 /* ---- unified pointer drag/tap (chips, markers, field) ---- */
 let drag=null, peg=null;
@@ -492,6 +567,7 @@ function onDown(e){
   const t=e.target;
   const chip=t.closest('[data-pid]'); if(chip){drag={kind:'chip',pid:chip.dataset.pid,moved:false,sx:e.clientX,sy:e.clientY};arm();return;}
   const mk=t.closest('[data-mkidx]'); if(mk){drag={kind:'marker',idx:+mk.dataset.mkidx,moved:false,sx:e.clientX,sy:e.clientY};arm();return;}
+  const fl=t.closest('[data-flip]'); if(fl){startLongPress(fl.dataset.flip,e.clientX,e.clientY);return;}  // label long-press
   if(t.closest('#field')){drag={kind:'field',moved:false,sx:e.clientX,sy:e.clientY};arm();return;}
 }
 function arm(){window.addEventListener('pointermove',onMove);window.addEventListener('pointerup',onUp);}
@@ -525,10 +601,11 @@ function onUp(e){
   }
 }
 
-function popPicker(cx,cy,cb){
+function popPicker(cx,cy,cb,title){
   document.querySelectorAll('.picker').forEach(n=>n.remove());
   const m=document.createElement('div');m.className='picker';m.style.left=cx+'px';m.style.top=cy+'px';
-  const ttl=S.mode==='defense'?(S.dPlacing==='interception'?'Who intercepted?':'Who got the block?'):'Who caught it?';
+  const ttl=title||(S.mode==='defense'?(S.dPlacing==='interception'?'Who intercepted?':'Who got the block?')
+    :(S.pending==='drop'?'Who dropped it?':'Who caught it?'));
   m.innerHTML=`<div class="ttl">${ttl}</div>`+PICKABLES.map(p=>{
     const lead=p.id==='unknown'?`<span class="umark">?</span>`:`<span class="num">${p.num}</span>`;
     return `<div class="chip ${p.g}" data-pid="${p.id}">${lead}${p.name}</div>`;
@@ -541,7 +618,6 @@ function popPicker(cx,cy,cb){
 function wire(){
   phone.querySelectorAll('.ebtn').forEach(b=>b.onclick=()=>onEvent(b.dataset.act));
   phone.querySelectorAll('.modbtn[data-mod]').forEach(b=>b.onclick=()=>toggleMod(b.dataset.mod));
-  phone.querySelectorAll('.modbtn[data-dmod]').forEach(b=>b.onclick=()=>toggleDMod(b.dataset.dmod));
   phone.querySelectorAll('.dtypebtn').forEach(b=>b.onclick=()=>setDPlacing(b.dataset.dtype));
   const dc=phone.querySelector('.dcancel'); if(dc)dc.onclick=cancelDPlacing;
   fitPlayers();
@@ -552,7 +628,7 @@ phone.addEventListener('pointerdown',onDown);
 
 /* ===================== toolbar ===================== */
 document.getElementById('segO').onclick=e=>{if(e.target.dataset.v){S.o=e.target.dataset.v;render();}};
-document.getElementById('segM').onclick=e=>{if(e.target.dataset.v){S.mode=e.target.dataset.v;S.armed=null;S.pending=null;S.dPlacing=null;S.dMods=[];render();}};
+document.getElementById('segM').onclick=e=>{if(e.target.dataset.v){S.mode=e.target.dataset.v;S.armed=null;S.pending=null;S.dPlacing=null;render();}};
 document.getElementById('reset').onclick=reset;
 
 document.getElementById('notes').innerHTML=`
@@ -574,9 +650,23 @@ document.getElementById('notes').innerHTML=`
     <li>The player slot shows <b>Block</b> / <b>Interception</b> until you tap one — then it becomes the player row (+ a ✕ cancel).</li>
     <li>Place the D by tapping the spot (→ "Who got the block?" popover) or dragging a defender onto it. Tap-player-then-spot works too.</li>
     <li>Bottom bar: <b>They turnover</b> · <b>They score</b> · <b>⋯ more</b>.</li>
-    <li>The right column mirrors offense — <b>Last D was a:</b> with Layout / Sky / Stall. Because a D flips you to offense immediately, these are <i>pre-selected</i> for the D you're about to place (not applied after).</li>
     <li>A D — or "they turnover" — is a change of possession, so it flips you to the offense screen. Throwing it away on offense flips you here.</li>
     <li>An <b>Unknown</b> (dashed "?") chip is available on O and D for when you didn't catch who made the play; it collapses to just "?" if the landscape row gets tight.</li>
+  </ul>
+  <h2>One modifier column, tags the last play</h2>
+  <ul>
+    <li>The right column always tags the <i>last recorded event</i>. After a throw it reads <b>Last throw was a:</b> (Break/Reset/Huck/Hammer/Layout/Sky); after a block/INT it reads <b>Last D was a:</b> (Layout/Sky/Stall).</li>
+    <li>Because a D flips you to offense, the <b>Last D was a:</b> menu <i>persists on the O screen until the first completed pass</i> — so you can still tag the layout block after picking it up.</li>
+  </ul>
+  <h2>Score → attribution dialog</h2>
+  <ul>
+    <li>A completion in the attacking endzone opens a <b>Goal!</b> dialog with goal (receiver) + assist (thrower) pre-filled and editable.</li>
+    <li><b>✕ "wasn't a score"</b> downgrades it to a plain completion (the throw stays) — then Undo it, or drag the catch just outside the endzone for a not-quite-in.</li>
+  </ul>
+  <h2>Field orientation</h2>
+  <ul>
+    <li><b>Home</b> is fixed to one side by default (right in portrait, bottom in landscape); direction of play is shown by <b>Attack/Defend</b>.</li>
+    <li><b>Long-press</b> any of Home / Away / Attack / Defend to flip that pair — for a coach on the away sideline, or to set the attacking end at the start / half. (Real impl: Attack/Defend also auto-flips each point.)</li>
   </ul>
 
   <h2>Real-implementation TODOs (not in this mock)</h2>
@@ -587,12 +677,9 @@ document.getElementById('notes').innerHTML=`
 
   <h2>Open questions</h2>
   <ul>
-    <li><span class="q">Field tab vs. full-screen:</span> should portrait stay in-tab and only landscape go full-screen (current), or should both offer full-screen?</li>
-    <li><span class="q">Drop:</span> still "arm receiver → Drop → spot" (or tap Drop → spot → pick). Cheaper as a swipe-down on the catch?</li>
-    <li><span class="q">Home/Away</span> orientation &amp; which sideline is "Home" — placeholder; should it follow the pull direction / which end we're attacking?</li>
-    <li><span class="q">Modifier timing mismatch:</span> O modifiers tag the <i>last</i> pass; D modifiers are <i>pre-selected</i> for the next D (because a D flips to offense). Acceptable, or confusing?</li>
-    <li><span class="q">"Stall" placement:</span> it's a forced turnover, not really a block descriptor — keep it among the D modifiers, or make it its own outcome alongside Block/Interception?</li>
-    <li><span class="q">Score attribution:</span> does an in-endzone completion open the existing assist/score-attribution dialog, or is the assist just inferred from the prior throw?</li>
+    <li><span class="q">Drop gesture:</span> "tap Drop → tap spot → pick who" works; would a swipe-down on the catch be cheaper?</li>
+    <li><span class="q">"Stall" placement:</span> it's a forced turnover, not really a block descriptor — keep it among the D modifiers (current), or make it its own outcome alongside Block/Interception?</li>
+    <li><span class="q">Label discoverability:</span> long-press on Home/Away/Attack/Defend is hidden — enough, or add a small settings affordance too?</li>
   </ul>
   <p style="color:#8b9096;margin-top:12px">Mockup only — not wired to the real <code>Throw</code>/<code>Turnover</code> model or <code>fullPbp.js</code> yet.</p>`;
 
