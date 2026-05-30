@@ -161,9 +161,14 @@
     border:1px solid #d9534f;color:#d9534f;background:#fff;border-radius:999px;padding:7px 12px;
     font-size:13px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}
 
-  /* landscape defense has no modifier column → center a slightly larger field */
-  .phone[data-o="landscape"][data-mode="defense"] .fieldwrap{justify-content:center;padding:8px}
-  .phone[data-o="landscape"][data-mode="defense"] .field{width:750px;height:250px}
+  /* Unknown player chip — dashed/grey, matches Full PBP's is-unknown look.
+     Collapses to just "?" when the landscape row is tight (.unknown-compact). */
+  .chip.unknown{background:#f3f4f6;border:1px dashed #b9bdc4;color:#6b7280;font-style:italic}
+  .chip.unknown.armed{background:var(--armbg);border-color:var(--armbg);color:#fff;font-style:normal}
+  .chip .umark{font:700 12px 'JetBrains Mono',monospace;color:#9aa0a6}
+  .chip.unknown.armed .umark{color:#cdd9ff}
+  .players .chip.unknown{flex:0 1 auto}                        /* size to content, not an equal 8th */
+  .players.unknown-compact .chip.unknown .nm{display:none}     /* collapse to "?" */
 
   /* mic FAB */
   .mic{position:absolute;right:14px;bottom:12px;width:54px;height:54px;border-radius:50%;background:#e0533a;
@@ -217,11 +222,14 @@ const ROSTER=[
   {id:'p6',name:'Finn',num:9,g:'mmp'},
   {id:'p7',name:'Gina',num:44,g:'fmp'},
 ];
+const UNKNOWN={id:'unknown',name:'Unknown',num:'?',g:'unknown'};
+const PICKABLES=[...ROSTER,UNKNOWN];
+function pname(id){return id==='unknown'?'Unknown':(ROSTER.find(r=>r.id===id)?.name||'');}
 
 let S;
 function reset(){
   S={ o:S?S.o:'portrait', mode:S?S.mode:'offense',
-      holder:'p1', disc:{l:EZ+8,w:W/2}, armed:null, pending:null, dPlacing:null, events:[], undo:[] };
+      holder:'p1', disc:{l:EZ+8,w:W/2}, armed:null, pending:null, dPlacing:null, dMods:[], events:[], undo:[] };
   render();
 }
 function snap(){ S.undo.push({disc:{...S.disc},holder:S.holder,mode:S.mode,len:S.events.length}); }
@@ -243,7 +251,7 @@ function playerSlot(){
   if(S.mode==='defense' && !S.dPlacing)
     return `<div class="dtypebtn block" data-dtype="block">⛔ Block</div>`+
            `<div class="dtypebtn int" data-dtype="interception">Interception</div>`;
-  let chips=ROSTER.map(chipHTML).join('');
+  let chips=ROSTER.map(chipHTML).join('')+chipHTML(UNKNOWN);   // 7 on the field + an Unknown option
   if(S.mode==='defense' && S.dPlacing)
     chips=`<div class="dcancel" data-dcancel="1">✕ ${S.dPlacing==='interception'?'Interception':'Block'}</div>`+chips;
   return chips;
@@ -253,7 +261,8 @@ function chipHTML(p){
   const cls=['chip',p.g];
   if(p.id===S.holder)cls.push('holder');
   if(p.id===S.armed)cls.push('armed');
-  return `<div class="${cls.join(' ')}" data-pid="${p.id}"><span class="num">${p.num}</span><span class="nm">${p.name}</span></div>`;
+  const lead = p.id==='unknown' ? `<span class="umark">?</span>` : `<span class="num">${p.num}</span>`;
+  return `<div class="${cls.join(' ')}" data-pid="${p.id}">${lead}<span class="nm">${p.name}</span></div>`;
 }
 
 function fieldHTML(){
@@ -309,20 +318,17 @@ function fieldHTML(){
 }
 
 function statusText(){
-  const hp=ROSTER.find(p=>p.id===S.holder), mode=`<span class="modepill ${S.mode}">${S.mode==='offense'?'OFFENSE':'DEFENSE'}</span>`;
+  const mode=`<span class="modepill ${S.mode}">${S.mode==='offense'?'OFFENSE':'DEFENSE'}</span>`;
   if(S.mode==='defense'){
     const t=S.dPlacing==='interception'?'interception':'block';
-    if(S.armed)return `${mode} Tap where <b>${ROSTER.find(p=>p.id===S.armed).name}</b> got the ${t}`;
+    if(S.armed)return `${mode} Tap where <b>${pname(S.armed)}</b> got the ${t}`;
     if(S.dPlacing)return `${mode} <b>${S.dPlacing==='interception'?'Interception':'Block'}</b> — tap the spot &amp; pick the defender, or drag one on`;
     return `${mode} On defense`;
   }
   if(S.pending==='throwaway')return `${mode} Tap where the throwaway landed`;
-  if(S.armed){
-    const a=ROSTER.find(p=>p.id===S.armed).name;
-    return `${mode} Tap where <b>${a}</b> caught it${S.pending==='drop'?' (drop)':S.pending==='score'?' (score)':''}`;
-  }
+  if(S.armed)return `${mode} Tap where <b>${pname(S.armed)}</b> caught it${S.pending==='drop'?' (drop)':S.pending==='score'?' (score)':''}`;
   if(S.pending==='drop')return `${mode} Tap the drop spot, then pick who dropped it`;
-  return `${mode} <b>${hp?hp.name:'?'}</b> has the disc`;
+  return `${mode} <b>${pname(S.holder)||'?'}</b> has the disc`;
 }
 
 function eventsHTML(){
@@ -338,13 +344,14 @@ function eventsHTML(){
 }
 
 const MODS=['Break','Reset','Huck','Hammer','Layout','Sky'];
+const DMODS=['Layout','Sky','Stall'];
 function lastThrowIdx(){for(let i=S.events.length-1;i>=0;i--){if(['completion','score','drop','throwaway'].includes(S.events[i].type))return i;}return -1;}
 function modColHTML(){
+  if(S.mode==='defense') return dModColHTML();
   const idx=lastThrowIdx(), ev=idx>=0?S.events[idx]:null;
   let sub='';
   if(ev){
-    const nm=id=>{const p=ROSTER.find(r=>r.id===id);return p?p.name:'';};
-    const thr=ev.thrower?nm(ev.thrower):'', rcv=ev.by?nm(ev.by):'';
+    const thr=ev.thrower?pname(ev.thrower):'', rcv=ev.by?pname(ev.by):'';
     let label = thr&&rcv ? `${thr} to ${rcv}` : thr ? `${thr} (throwaway)` : rcv;
     if(ev.type==='drop') label+=' (drop)';
     sub=`<div class="msub">${label}</div>`;
@@ -355,6 +362,15 @@ function modColHTML(){
   }).join('');
 }
 function toggleMod(m){const idx=lastThrowIdx();if(idx<0)return;const ev=S.events[idx];ev.mods=ev.mods||[];const k=ev.mods.indexOf(m);if(k>=0)ev.mods.splice(k,1);else ev.mods.push(m);render();}
+
+// Defense: modifiers are pre-selected for the D being recorded (a block/INT
+// flips us to offense immediately, so there's no "last D" to tag afterward).
+function dModColHTML(){
+  const sub = S.dPlacing ? (S.dPlacing==='interception'?'Interception':'Block') : 'tap Block / Interception';
+  return `<div class="mh">Mark the D:</div><div class="msub">${sub}</div>`+
+    DMODS.map(m=>`<div class="modbtn ${S.dMods.includes(m)?'on':''}" data-dmod="${m}">${m}</div>`).join('');
+}
+function toggleDMod(m){const k=S.dMods.indexOf(m);if(k>=0)S.dMods.splice(k,1);else S.dMods.push(m);render();}
 
 function render(){
   document.querySelectorAll('#segO button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.o));
@@ -375,7 +391,7 @@ function render(){
         <span style="flex:1 1 auto"></span>
         <button class="undo" id="undo">↺ Undo</button></div>
       <div class="play">
-        <div class="prow"><div class="sidebar">${playerSlot()}${S.mode==='offense'?`<div class="modsep"></div>${modColHTML()}`:''}</div>${fieldBox}</div>
+        <div class="prow"><div class="sidebar">${playerSlot()}<div class="modsep"></div>${modColHTML()}</div>${fieldBox}</div>
         <div class="statusbar">${statusText()}</div>
         <div class="events">${eventsHTML()}</div>
         <button class="mic" title="Narration mic">🎙️</button>
@@ -397,7 +413,7 @@ function render(){
           <div class="events">${eventsHTML()}</div>
           <button class="mic" title="Narration mic">🎙️</button>
         </div>
-        ${S.mode==='offense'?`<div class="modcol">${modColHTML()}</div>`:''}
+        <div class="modcol">${modColHTML()}</div>
       </div></div></div>`;
   }
   wire();
@@ -409,9 +425,10 @@ function render(){
 // width for the names. Names still ellipsize as a last resort.
 function fitPlayers(){
   const row=phone.querySelector('.players'); if(!row)return;
-  row.classList.remove('hide-nums');
-  const clipped=[...row.querySelectorAll('.nm')].some(n=>n.scrollWidth>n.offsetWidth+1);
-  if(clipped) row.classList.add('hide-nums');
+  row.classList.remove('hide-nums','unknown-compact');
+  // Only the 7 real players must stay legible; the Unknown chip can collapse to "?".
+  const clipped=()=>[...row.querySelectorAll('.chip:not(.unknown) .nm')].some(n=>n.scrollWidth>n.offsetWidth+1);
+  if(clipped()){ row.classList.add('hide-nums'); if(clipped()) row.classList.add('unknown-compact'); }
 }
 
 function armPlayer(pid){ S.armed = (S.armed===pid? null : pid); render(); }
@@ -422,10 +439,12 @@ function placeAt(l,w){
     if(!S.armed)return;
     snap();
     const t=S.dPlacing==='interception'?'interception':'block';
-    S.events.push({type:t,from:null,to,by:S.armed});
+    S.events.push({type:t,from:null,to,by:S.armed,mods:S.dMods.length?S.dMods.slice():undefined});
     // A D (block or interception) is a turnover → we're now on offense.
+    // NOTE (real impl): an interception → that player holds; a block leaves
+    // no holder (disc on the ground, someone picks up). Mock keeps it simple.
     S.disc=to; S.holder=S.armed; S.mode='offense';
-    S.armed=null;S.pending=null;S.dPlacing=null;render();return;
+    S.armed=null;S.pending=null;S.dPlacing=null;S.dMods=[];render();return;
   }
   if(S.pending==='throwaway'){snap();S.events.push({type:'throwaway',from,to,thrower:S.holder});S.disc=to;S.pending=null;S.armed=null;S.holder=null;S.mode='defense';render();return;}
   if(!S.armed)return;
@@ -460,7 +479,7 @@ function onEvent(act){
   S.pending=S.pending===act?null:act; render();        // offense drop / throwaway / score toggles
 }
 function setDPlacing(t){S.dPlacing=t;S.pending=t;S.armed=null;render();}
-function cancelDPlacing(){S.dPlacing=null;S.pending=null;S.armed=null;render();}
+function cancelDPlacing(){S.dPlacing=null;S.pending=null;S.armed=null;S.dMods=[];render();}
 
 /* ---- unified pointer drag/tap (chips, markers, field) ---- */
 let drag=null, peg=null;
@@ -481,11 +500,14 @@ function onMove(e){
   if(!drag)return;
   if(!drag.moved){if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)<6)return; drag.moved=true; if(drag.kind==='marker')snap();}
   if(drag.kind==='chip'){
-    if(!peg){const p=ROSTER.find(r=>r.id===drag.pid);peg=document.createElement('div');peg.className='pegman';peg.innerHTML=`🧍 ${p.name}`;document.body.appendChild(peg);}
+    if(!peg){peg=document.createElement('div');peg.className='pegman';peg.innerHTML=`🧍 ${pname(drag.pid)}`;document.body.appendChild(peg);}
     peg.style.left=e.clientX+'px';peg.style.top=(e.clientY-6)+'px';
   }else if(drag.kind==='marker'){
     const p=pointInField(e.clientX,e.clientY); if(!p)return;
     const c=clamp(p.l,p.w); S.events[drag.idx].to=c;
+    // Keep the throw chain intact: the next throw started from this catch, so
+    // move its origin too (the outgoing line followed the old spot otherwise).
+    if(S.events[drag.idx+1] && S.events[drag.idx+1].from) S.events[drag.idx+1].from=c;
     if(drag.idx===S.events.length-1 && ['completion','score','throwaway','drop','pull','interception'].includes(S.events[drag.idx].type)) S.disc=c;
     render();
   }
@@ -507,7 +529,10 @@ function popPicker(cx,cy,cb){
   document.querySelectorAll('.picker').forEach(n=>n.remove());
   const m=document.createElement('div');m.className='picker';m.style.left=cx+'px';m.style.top=cy+'px';
   const ttl=S.mode==='defense'?(S.dPlacing==='interception'?'Who intercepted?':'Who got the block?'):'Who caught it?';
-  m.innerHTML=`<div class="ttl">${ttl}</div>`+ROSTER.map(p=>`<div class="chip ${p.g}" data-pid="${p.id}"><span class="num">${p.num}</span>${p.name}</div>`).join('');
+  m.innerHTML=`<div class="ttl">${ttl}</div>`+PICKABLES.map(p=>{
+    const lead=p.id==='unknown'?`<span class="umark">?</span>`:`<span class="num">${p.num}</span>`;
+    return `<div class="chip ${p.g}" data-pid="${p.id}">${lead}${p.name}</div>`;
+  }).join('');
   document.body.appendChild(m);
   m.querySelectorAll('.chip').forEach(c=>c.onclick=ev=>{ev.stopPropagation();const pid=c.dataset.pid;m.remove();cb(pid);});
   setTimeout(()=>{const close=ev=>{if(!m.contains(ev.target)){m.remove();document.removeEventListener('pointerdown',close);}};document.addEventListener('pointerdown',close);},0);
@@ -515,7 +540,8 @@ function popPicker(cx,cy,cb){
 
 function wire(){
   phone.querySelectorAll('.ebtn').forEach(b=>b.onclick=()=>onEvent(b.dataset.act));
-  phone.querySelectorAll('.modbtn').forEach(b=>b.onclick=()=>toggleMod(b.dataset.mod));
+  phone.querySelectorAll('.modbtn[data-mod]').forEach(b=>b.onclick=()=>toggleMod(b.dataset.mod));
+  phone.querySelectorAll('.modbtn[data-dmod]').forEach(b=>b.onclick=()=>toggleDMod(b.dataset.dmod));
   phone.querySelectorAll('.dtypebtn').forEach(b=>b.onclick=()=>setDPlacing(b.dataset.dtype));
   const dc=phone.querySelector('.dcancel'); if(dc)dc.onclick=cancelDPlacing;
   fitPlayers();
@@ -526,7 +552,7 @@ phone.addEventListener('pointerdown',onDown);
 
 /* ===================== toolbar ===================== */
 document.getElementById('segO').onclick=e=>{if(e.target.dataset.v){S.o=e.target.dataset.v;render();}};
-document.getElementById('segM').onclick=e=>{if(e.target.dataset.v){S.mode=e.target.dataset.v;S.armed=null;S.pending=null;S.dPlacing=null;render();}};
+document.getElementById('segM').onclick=e=>{if(e.target.dataset.v){S.mode=e.target.dataset.v;S.armed=null;S.pending=null;S.dPlacing=null;S.dMods=[];render();}};
 document.getElementById('reset').onclick=reset;
 
 document.getElementById('notes').innerHTML=`
@@ -547,8 +573,16 @@ document.getElementById('notes').innerHTML=`
   <ul>
     <li>The player slot shows <b>Block</b> / <b>Interception</b> until you tap one — then it becomes the player row (+ a ✕ cancel).</li>
     <li>Place the D by tapping the spot (→ "Who got the block?" popover) or dragging a defender onto it. Tap-player-then-spot works too.</li>
-    <li>Bottom bar: <b>They turnover</b> · <b>They score</b> · <b>⋯ more</b> (rare D modifiers: layout/sky/footblock…).</li>
-    <li>A D — or "they turnover" — is a change of possession, so it flips you to the offense screen. Throwing it away on offense flips you here. Landscape drops the modifier column on D and centers a wider field.</li>
+    <li>Bottom bar: <b>They turnover</b> · <b>They score</b> · <b>⋯ more</b>.</li>
+    <li>The right column mirrors offense — <b>Mark the D:</b> with Layout / Sky / Stall. Because a D flips you to offense immediately, these are <i>pre-selected</i> for the D you're about to place (not applied after).</li>
+    <li>A D — or "they turnover" — is a change of possession, so it flips you to the offense screen. Throwing it away on offense flips you here.</li>
+    <li>An <b>Unknown</b> (dashed "?") chip is available on O and D for when you didn't catch who made the play; it collapses to just "?" if the landscape row gets tight.</li>
+  </ul>
+
+  <h2>Real-implementation TODOs (not in this mock)</h2>
+  <ul>
+    <li><b>Block ≠ holder.</b> An interception → that defender holds; a <i>block</i> should leave no holder (disc on the ground) — prompt to tap who picks it up / a new spot, defaulting to "thrower picks up where the block happened" if they just start throwing.</li>
+    <li><b>Pull pickup.</b> O-possession shouldn't assume Alice has the disc — the first action is choosing who picks up the pull / catches it (and where).</li>
   </ul>
 
   <h2>Open questions</h2>
