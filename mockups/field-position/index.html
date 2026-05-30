@@ -95,6 +95,12 @@
     gap:7px;align-items:center;font-size:12px;white-space:nowrap}
   .fliptoast button{background:var(--orange);color:#fff;border:none;border-radius:6px;padding:7px 12px;
     font-size:12.5px;font-weight:700;cursor:pointer}
+  /* hamburger menu */
+  .hmenu{position:fixed;z-index:999;background:#fff;border:1px solid #ccc;border-radius:10px;
+    box-shadow:0 8px 24px rgba(0,0,0,.25);padding:6px;min-width:218px}
+  .hm-cat{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#999;padding:7px 10px 3px;font-weight:700}
+  .hm-item{padding:9px 10px;font-size:14px;color:#222;cursor:pointer;border-radius:6px}
+  .hm-item:hover{background:#f2f2f2}
   svg.arrows{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 
   .disc{position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;border:2px solid #111;
@@ -171,6 +177,8 @@
     padding:13px 10px;font-size:15px;font-weight:700;cursor:pointer;border:1px solid;-webkit-tap-highlight-color:transparent}
   .dtypebtn.block{background:#e7f7f0;border-color:#86d3b3;color:var(--green)}
   .dtypebtn.int{background:#eef4ff;border-color:#9bb8f5;color:var(--armbg)}
+  .dtypebtn.stall{background:#fff7e6;border-color:#e0a64b;color:#92600b}
+  .dtypebtn.cal{background:#f3e8ff;border-color:#c084fc;color:#7c3aed}
   .dtypebtn:active{filter:brightness(.96)}
   .players .dtypebtn{flex:1 1 0;min-width:0}      /* landscape: split the row */
   .sidebar .dtypebtn{flex:0 0 auto}               /* portrait: stack at top of rail */
@@ -247,7 +255,7 @@ let S;
 function reset(){
   S={ o:S?S.o:'portrait', mode:S?S.mode:'offense',
       flipHA:S?S.flipHA:false, flipAD:S?S.flipAD:false,   // sideline & attacking-direction orientation
-      holder:'p1', disc:{l:EZ+8,w:W/2}, armed:null, pending:null, dPlacing:null, events:[], undo:[] };
+      holder:'p1', disc:{l:EZ+8,w:W/2}, armed:null, pending:null, dPlacing:null, dMods:[], events:[], undo:[] };
   render();
 }
 function snap(){ S.undo.push({disc:{...S.disc},holder:S.holder,mode:S.mode,len:S.events.length}); }
@@ -260,11 +268,13 @@ function doUndo(){ const u=S.undo.pop(); if(!u)return; S.disc=u.disc;S.holder=u.
 // + Home on the bottom.
 function pct(l,w){
   const dl=S.flipAD?(L-l):l, dw=S.flipHA?(W-w):w;
-  return S.o==='portrait' ? {x:(dw/W)*100,y:((L-dl)/L)*100} : {x:(dl/L)*100,y:(dw/W)*100};
+  // Default Home (w≈W): LEFT in portrait, BOTTOM in landscape. Portrait
+  // therefore mirrors the width axis relative to landscape.
+  return S.o==='portrait' ? {x:((W-dw)/W)*100,y:((L-dl)/L)*100} : {x:(dl/L)*100,y:(dw/W)*100};
 }
 function toField(fx,fy){
   let dl,dw;
-  if(S.o==='portrait'){dw=fx*W;dl=L-fy*L;} else {dl=fx*L;dw=fy*W;}
+  if(S.o==='portrait'){dw=W-fx*W;dl=L-fy*L;} else {dl=fx*L;dw=fy*W;}
   return {l:S.flipAD?(L-dl):dl, w:S.flipHA?(W-dw):dw};
 }
 function inAttackEZ(p){return p.l>=L-EZ;}
@@ -278,10 +288,12 @@ const phone=document.getElementById('phone');
 function playerSlot(){
   if(S.mode==='defense' && !S.dPlacing)
     return `<div class="dtypebtn block" data-dtype="block">⛔ Block</div>`+
-           `<div class="dtypebtn int" data-dtype="interception">Interception</div>`;
+           `<div class="dtypebtn int" data-dtype="interception">Interception</div>`+
+           `<div class="dtypebtn stall" data-dtype="stall">Stall</div>`+
+           `<div class="dtypebtn cal" data-dtype="callahan">Callahan</div>`;
   let chips=ROSTER.map(chipHTML).join('')+chipHTML(UNKNOWN);   // 7 on the field + an Unknown option
   if(S.mode==='defense' && S.dPlacing)
-    chips=`<div class="dcancel" data-dcancel="1">✕ ${S.dPlacing==='interception'?'Interception':'Block'}</div>`+chips;
+    chips=`<div class="dcancel" data-dcancel="1">✕ ${cap(S.dPlacing)}</div>`+chips;
   return chips;
 }
 
@@ -335,8 +347,8 @@ function fieldHTML(){
     if(!e.to)return;
     const rec=S.events.length-1-i, op=rec<VISIBLE?(1-rec*0.2):0.1, drag=rec<VISIBLE;
     const p=pct(e.to.l,e.to.w);
-    const cls=e.type==='score'?'score':e.type==='completion'?'completion':e.type==='block'?'block':'turn';
-    const glyph=e.type==='score'?'G':e.type==='block'?'D':e.type==='interception'?'I':e.type==='completion'?(i+1):'✗';
+    const cls=(e.type==='score'||e.type==='callahan')?'score':['block','interception','stall'].includes(e.type)?'block':e.type==='completion'?'completion':'turn';
+    const glyph=e.type==='score'?'G':e.type==='callahan'?'C':e.type==='block'?'D':e.type==='interception'?'I':e.type==='stall'?'S':e.type==='completion'?(i+1):'✗';
     h+=`<div class="marker ${cls}" ${drag?`data-mkidx="${i}"`:''} style="left:${p.x}%;top:${p.y}%;opacity:${op.toFixed(2)}">${glyph}</div>`;
   });
   const d=pct(S.disc.l,S.disc.w);
@@ -347,9 +359,8 @@ function fieldHTML(){
 function statusText(){
   const mode=`<span class="modepill ${S.mode}">${S.mode==='offense'?'OFFENSE':'DEFENSE'}</span>`;
   if(S.mode==='defense'){
-    const t=S.dPlacing==='interception'?'interception':'block';
-    if(S.armed)return `${mode} Tap where <b>${pname(S.armed)}</b> got the ${t}`;
-    if(S.dPlacing)return `${mode} <b>${S.dPlacing==='interception'?'Interception':'Block'}</b> — tap the spot &amp; pick the defender, or drag one on`;
+    if(S.armed)return `${mode} Tap where <b>${pname(S.armed)}</b> made the ${S.dPlacing}`;
+    if(S.dPlacing)return `${mode} <b>${cap(S.dPlacing)}</b> — tap the spot &amp; pick the defender, or drag one on`;
     return `${mode} On defense`;
   }
   if(S.pending==='throwaway')return `${mode} Tap where the throwaway landed`;
@@ -371,22 +382,29 @@ function eventsHTML(){
 }
 
 const MODS=['Break','Reset','Huck','Hammer','Layout','Sky'];   // throw modifiers
-const DMODS=['Layout','Sky','Stall'];                          // D modifiers
-const TAGGABLE=['completion','score','drop','throwaway','block','interception'];
+const DMODS=['Layout','Sky'];                                  // D modifiers (Stall/Callahan are their own actions)
+const DTYPES=['block','interception','stall','callahan'];
+const TAGGABLE=['completion','score','drop','throwaway',...DTYPES];
+const cap=s=>s?s[0].toUpperCase()+s.slice(1):'';
 function lastModIdx(){for(let i=S.events.length-1;i>=0;i--){if(TAGGABLE.includes(S.events[i].type))return i;}return -1;}
 
-// One column that tags the last recorded event. If that event is a D
-// (block/interception) it shows "Last D was a:" with D modifiers; this carries
-// onto the offense screen after a D and stays until the first completed pass,
-// after which the last event is a throw and it reads "Last throw was a:".
+// One column that tags the last recorded event. If that event is a D it shows
+// "Last D was a:" with D modifiers; this carries onto the offense screen after
+// a D and stays until the first completed pass, after which it reads
+// "Last throw was a:". While a D is being placed (dPlacing set) it pre-labels
+// the D you're about to record — before player/location are chosen.
 function modColHTML(){
+  if(S.mode==='defense' && S.dPlacing){
+    return `<div class="mh">Last D was a:</div><div class="msub">${cap(S.dPlacing)}</div>`+
+      DMODS.map(m=>`<div class="modbtn ${S.dMods.includes(m)?'on':''}" data-pdmod="${m}">${m}</div>`).join('');
+  }
   const idx=lastModIdx(), ev=idx>=0?S.events[idx]:null;
-  const isD = ev && (ev.type==='block'||ev.type==='interception');
+  const isD = ev && DTYPES.includes(ev.type);
   const set = isD ? DMODS : MODS;
   let header, sub;
   if(isD){
     header='Last D was a:';
-    sub=`${ev.by?pname(ev.by)+' — ':''}${ev.type==='interception'?'interception':'block'}`;
+    sub=`${ev.by?pname(ev.by)+' — ':''}${ev.type}`;
   }else{
     header='Last throw was a:';
     if(ev){const thr=ev.thrower?pname(ev.thrower):'', rcv=ev.by?pname(ev.by):'';
@@ -399,6 +417,7 @@ function modColHTML(){
       return `<div class="modbtn ${on?'on':''} ${ev?'':'disabled'}" data-mod="${m}">${m}</div>`;}).join('');
 }
 function toggleMod(m){const idx=lastModIdx();if(idx<0)return;const ev=S.events[idx];ev.mods=ev.mods||[];const k=ev.mods.indexOf(m);if(k>=0)ev.mods.splice(k,1);else ev.mods.push(m);render();}
+function togglePDMod(m){const k=S.dMods.indexOf(m);if(k>=0)S.dMods.splice(k,1);else S.dMods.push(m);render();}  // pre-label the D being placed
 
 function render(){
   document.querySelectorAll('#segO button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.o));
@@ -409,7 +428,7 @@ function render(){
   if(S.o==='portrait'){
     phone.innerHTML=`<div class="screen">
       <div class="apphdr">
-        <div class="ico">☰</div><div class="ico">🥏</div>
+        <div class="ico" id="hamburger" style="cursor:pointer">☰</div><div class="ico">🥏</div>
         <div class="score">US 30 <small>–</small> 17 <small>THEM</small></div>
         <div class="timer"><b>01:30</b><span>NEXT POINT</span></div>
       </div>
@@ -466,13 +485,18 @@ function placeAt(l,w){
   if(S.mode==='defense'){
     if(!S.armed)return;
     snap();
-    const t=S.dPlacing==='interception'?'interception':'block';
-    S.events.push({type:t,from:null,to,by:S.armed});   // modifiers tagged after, on the O screen
-    // A D (block or interception) is a turnover → we're now on offense.
-    // NOTE (real impl): an interception → that player holds; a block leaves
-    // no holder (disc on the ground, someone picks up). Mock keeps it simple.
-    S.disc=to; S.holder=S.armed; S.mode='offense';
-    S.armed=null;S.pending=null;S.dPlacing=null;render();return;
+    const t=S.dPlacing;   // block | interception | stall | callahan
+    S.events.push({type:t,from:null,to,by:S.armed,mods:S.dMods.length?S.dMods.slice():undefined});
+    if(t==='callahan'){
+      // Defender catches in their defending endzone → a goal for us; point ends.
+      S.disc=to; S.holder=null;   // mock: stay on D (next point is a fresh pull)
+    }else{
+      // Block / interception / stall are turnovers → we're now on offense.
+      // NOTE (real impl): interception → that player holds; a block leaves no
+      // holder (disc on the ground, someone picks up). Mock keeps it simple.
+      S.disc=to; S.holder=S.armed; S.mode='offense';
+    }
+    S.armed=null;S.pending=null;S.dPlacing=null;S.dMods=[];render();return;
   }
   if(S.pending==='throwaway'){snap();S.events.push({type:'throwaway',from,to,thrower:S.holder});S.disc=to;S.pending=null;S.armed=null;S.holder=null;S.mode='defense';render();return;}
   if(!S.armed)return;
@@ -534,7 +558,21 @@ function onEvent(act){
   S.pending=S.pending===act?null:act; render();        // offense drop / throwaway / score toggles
 }
 function setDPlacing(t){S.dPlacing=t;S.pending=t;S.armed=null;render();}
-function cancelDPlacing(){S.dPlacing=null;S.pending=null;S.armed=null;render();}
+function cancelDPlacing(){S.dPlacing=null;S.pending=null;S.armed=null;S.dMods=[];render();}
+
+// Hamburger menu — categorized items (mock shows just the orientation swaps).
+function openHamburger(r){
+  document.querySelectorAll('.hmenu').forEach(n=>n.remove());
+  const m=document.createElement('div');m.className='hmenu';m.style.left=r.left+'px';m.style.top=(r.bottom+6)+'px';
+  m.innerHTML=`<div class="hm-cat">UI</div>
+    <div class="hm-item" data-act="swapHA">Swap Home and Away</div>
+    <div class="hm-cat">Gameplay</div>
+    <div class="hm-item" data-act="swapAD">Swap Attack / Defend Endzones</div>`;
+  document.body.appendChild(m);
+  m.querySelector('[data-act="swapHA"]').onclick=()=>{S.flipHA=!S.flipHA;m.remove();render();};
+  m.querySelector('[data-act="swapAD"]').onclick=()=>{S.flipAD=!S.flipAD;m.remove();render();};
+  setTimeout(()=>{const close=ev=>{if(!m.contains(ev.target)){m.remove();document.removeEventListener('pointerdown',close);}};document.addEventListener('pointerdown',close);},0);
+}
 
 /* ---- long-press an orientation label → flip toast ---- */
 let lpTimer=null;
@@ -618,7 +656,9 @@ function popPicker(cx,cy,cb,title){
 function wire(){
   phone.querySelectorAll('.ebtn').forEach(b=>b.onclick=()=>onEvent(b.dataset.act));
   phone.querySelectorAll('.modbtn[data-mod]').forEach(b=>b.onclick=()=>toggleMod(b.dataset.mod));
+  phone.querySelectorAll('.modbtn[data-pdmod]').forEach(b=>b.onclick=()=>togglePDMod(b.dataset.pdmod));
   phone.querySelectorAll('.dtypebtn').forEach(b=>b.onclick=()=>setDPlacing(b.dataset.dtype));
+  const ham=phone.querySelector('#hamburger'); if(ham)ham.onclick=()=>openHamburger(ham.getBoundingClientRect());
   const dc=phone.querySelector('.dcancel'); if(dc)dc.onclick=cancelDPlacing;
   fitPlayers();
   const u=phone.querySelector('#undo'); if(u)u.onclick=doUndo;
@@ -647,7 +687,7 @@ document.getElementById('notes').innerHTML=`
   </ul>
   <h2>Defense (D-possession) screen</h2>
   <ul>
-    <li>The player slot shows <b>Block</b> / <b>Interception</b> until you tap one — then it becomes the player row (+ a ✕ cancel).</li>
+    <li>The player slot shows the D actions <b>Block · Interception · Stall · Callahan</b> until you tap one — then it becomes the player row (+ a ✕ cancel). Stall/INT/Block flip you to offense; Callahan is a defensive goal.</li>
     <li>Place the D by tapping the spot (→ "Who got the block?" popover) or dragging a defender onto it. Tap-player-then-spot works too.</li>
     <li>Bottom bar: <b>They turnover</b> · <b>They score</b> · <b>⋯ more</b>.</li>
     <li>A D — or "they turnover" — is a change of possession, so it flips you to the offense screen. Throwing it away on offense flips you here.</li>
@@ -657,6 +697,7 @@ document.getElementById('notes').innerHTML=`
   <ul>
     <li>The right column always tags the <i>last recorded event</i>. After a throw it reads <b>Last throw was a:</b> (Break/Reset/Huck/Hammer/Layout/Sky); after a block/INT it reads <b>Last D was a:</b> (Layout/Sky/Stall).</li>
     <li>Because a D flips you to offense, the <b>Last D was a:</b> menu <i>persists on the O screen until the first completed pass</i> — so you can still tag the layout block after picking it up.</li>
+    <li>It also appears <i>while you're placing a D</i> (right after tapping Block/Interception/Stall/Callahan) so you can pre-label Layout/Sky before the player &amp; spot are set.</li>
   </ul>
   <h2>Score → attribution dialog</h2>
   <ul>
@@ -665,8 +706,8 @@ document.getElementById('notes').innerHTML=`
   </ul>
   <h2>Field orientation</h2>
   <ul>
-    <li><b>Home</b> is fixed to one side by default (right in portrait, bottom in landscape); direction of play is shown by <b>Attack/Defend</b>.</li>
-    <li><b>Long-press</b> any of Home / Away / Attack / Defend to flip that pair — for a coach on the away sideline, or to set the attacking end at the start / half. (Real impl: Attack/Defend also auto-flips each point.)</li>
+    <li><b>Home</b> is fixed to one side by default (left in portrait, bottom in landscape); direction of play is shown by <b>Attack/Defend</b>.</li>
+    <li>Flip via <b>long-press</b> on Home / Away / Attack / Defend, or the <b>☰ menu</b> (UI → Swap Home/Away, Gameplay → Swap Attack/Defend). For a coach on the away sideline, or to set the attacking end at start / half. (Real impl: Attack/Defend also auto-flips each point.)</li>
   </ul>
 
   <h2>Real-implementation TODOs (not in this mock)</h2>
@@ -678,8 +719,8 @@ document.getElementById('notes').innerHTML=`
   <h2>Open questions</h2>
   <ul>
     <li><span class="q">Drop gesture:</span> "tap Drop → tap spot → pick who" works; would a swipe-down on the catch be cheaper?</li>
-    <li><span class="q">"Stall" placement:</span> it's a forced turnover, not really a block descriptor — keep it among the D modifiers (current), or make it its own outcome alongside Block/Interception?</li>
-    <li><span class="q">Label discoverability:</span> long-press on Home/Away/Attack/Defend is hidden — enough, or add a small settings affordance too?</li>
+    <li><span class="q">Callahan flow:</span> mock records it and stays on D (point's over). Real impl: does it open the score dialog (goal = defender) and advance to the next pull?</li>
+    <li><span class="q">Discoverability:</span> the flip long-press is hidden (now also in the ☰ menu); a "tips &amp; hints" surface someday?</li>
   </ul>
   <p style="color:#8b9096;margin-top:12px">Mockup only — not wired to the real <code>Throw</code>/<code>Turnover</code> model or <code>fullPbp.js</code> yet.</p>`;
 
