@@ -188,6 +188,10 @@
   .dcancel{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:5px;
     border:1px solid #d9534f;color:#d9534f;background:#fff;border-radius:999px;padding:7px 12px;
     font-size:13px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  /* "Pick Puller:" label — above the chips in portrait, leading them in landscape */
+  .slotlbl{font-size:12px;font-weight:700;color:#555}
+  .sidebar .slotlbl{padding:2px 4px 5px}
+  .players .slotlbl{flex:0 0 auto;align-self:center;white-space:nowrap;margin-right:2px}
 
   /* Unknown player chip — dashed/grey, matches Full PBP's is-unknown look.
      Collapses to just "?" when the landscape row is tight (.unknown-compact). */
@@ -292,7 +296,7 @@ const phone=document.getElementById('phone');
 // The player-row slot. On defense it shows Block/Interception until one is
 // tapped, then becomes the player row (+ a cancel) to attribute the D.
 function playerSlot(){
-  if(S.pulling) return ROSTER.map(chipHTML).join('')+chipHTML(UNKNOWN);   // pick the puller
+  if(S.pulling) return `<div class="slotlbl">Pick Puller:</div>`+ROSTER.map(chipHTML).join('')+chipHTML(UNKNOWN);
   if(S.mode==='defense' && !S.dPlacing)
     return `<div class="dtypebtn block" data-dtype="block">⛔ Block</div>`+
            `<div class="dtypebtn int" data-dtype="interception">Interception</div>`+
@@ -413,10 +417,10 @@ function lastModIdx(){for(let i=S.events.length-1;i>=0;i--){if(TAGGABLE.includes
 // a D and stays until the first completed pass, after which it reads
 // "Last throw was a:". While a D is being placed (dPlacing set) it pre-labels
 // the D you're about to record — before player/location are chosen.
-const PMODS=['OB','Roller','OI','IO'];   // rare pull tags
+const PMODS=['Rolled out','Roller','OI','IO'];   // rare pull tags
 function modColHTML(){
   if(S.pulling){
-    return `<div class="mh">This pull:</div><div class="msub">${S.puller?pname(S.puller):'pick a puller'}</div>`+
+    return `<div class="mh">This pull:</div><div class="msub">${S.puller?pname(S.puller):'—'}</div>`+
       PMODS.map(m=>`<div class="modbtn ${S.pullMods.includes(m)?'on':''}" data-pmod="${m}">${m}</div>`).join('');
   }
   if(S.mode==='defense' && S.dPlacing){
@@ -602,6 +606,9 @@ function toggleHang(){
 }
 function togglePMod(m){const k=S.pullMods.indexOf(m);if(k>=0)S.pullMods.splice(k,1);else S.pullMods.push(m);render();}
 function placePull(l,w,brick){
+  // If the hang clock is still running, placing the landing also stops it —
+  // so you can either tap "on landing" first, or just tap the field directly.
+  if(S.pullRunning){S.pullMs=performance.now()-S.pullStart;S.pullRunning=false;if(pullTimer)clearInterval(pullTimer);}
   const goal = S.flipAD ? L-EZ : EZ;                 // we pull from our defending goal line
   const to = brick ? {l:(S.flipAD?BRICK[1]:BRICK[0]), w:W/2} : clamp(l,w);
   snap();
@@ -759,7 +766,7 @@ document.getElementById('notes').innerHTML=`
   <ul>
     <li>Use the <b>⏱ Start D-point (pull)</b> button above to enter it (in the real app it fires automatically when a D-point starts).</li>
     <li>The player row becomes a <b>puller picker</b>; the bottom bar shows a <b>hangtime stopwatch</b> (tap on release → tap on landing) and a <b>Brick</b> button; the right column carries rare tags (OB / Roller / OI / IO).</li>
-    <li>Finish by <b>tapping the field</b> where the pull landed (or drag the puller there, or hit <b>Brick</b>). That records the pull (puller, hangtime, flags, dashed trajectory) and drops you into the D screen with the opponent receiving.</li>
+    <li>Finish by <b>tapping the field</b> where the pull landed (or drag the puller there, or hit <b>Brick</b>). If the hang clock is still running, tapping the field stops it <i>and</i> records the landing in one gesture — or tap "on landing" first, then the spot.</li>
   </ul>
   <h2>One modifier column, tags the last play</h2>
   <ul>
