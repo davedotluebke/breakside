@@ -55,11 +55,43 @@ The multi-user push is mostly done. A few items linger:
 
 ---
 
-## Multi-Coach Line Selection: Intent Rule & LC-Viewing Label
+## Multi-Coach Line Selection: Intent Rule & LC-Viewing Label — ✅ SHIPPED
 
-> **Status:** designed, not implemented. Server-side sync fix landed in `9fadda1` (multi-coach sync: merge `pendingNextLine` per-field + non-authoritative writer guard). This section is the client-side follow-up and is the agreed-upon design after a May 2026 review.
+> **Status: implemented and merged to main (May 2026).** Server-side
+> sync fix landed earlier in `9fadda1`; the client-side intent rule,
+> LC-viewing label, dual-role greying, and live mid-point refresh landed
+> via the `intent-rule-lc-label` branch, then were simplified by
+> `simplify-line-selection` (split view removed; Lineup Ready reduced to
+> a fire-and-forget ping). Both merged together.
 >
-> **Note for sibling sessions** (e.g. an "on-deck"/"next next line" feature): if you're adding new fields to `pendingNextLine`, follow the conventions called out under [Data model additions](#data-model-additions) below — pair each new value-field with its own `*ModifiedAt` so the server's `merge_pending_next_line` picks it up automatically, and apply the same greying / role-based editability rules to any new line-selection surface.
+> **What's live now** (so a future on-deck/"next next line" session has the
+> current shape, not the original design):
+> - `getEffectiveLineForNextPoint` picks the next line with the **side
+>   fixed by who-scored** (never flipped). Priority: (1) LC's current
+>   view (`lineCoachViewing`) if newer than every `*ModifiedAt` — `'od'`
+>   → odLine, else the determined side's line; (2) per-axis most-recent
+>   edit; (3) same-side fallback; (4) last-point safety net.
+> - **LC-viewing label** on the AC's panel ("Line Coach: viewing the X
+>   line") via synced `lineCoachViewing` / `lineCoachViewingAt`.
+> - **Greying:** line panel editable iff the current user holds the Line
+>   Coach role (solo coaching unrestricted). O|D toggle stays interactive
+>   even when greyed.
+> - **Lineup Ready** is a fire-and-forget ping (toast on both ends); no
+>   persistent badge, no latch, no `lineupReadyMode`. Visible only to a
+>   pure LC.
+> - The `!isPointInProgress()` refresh gate is gone — the AC sees LC
+>   edits + the viewing label live during a point.
+> - **Split view removed.** `activeType` is `'o' | 'd' | 'od'` only.
+>
+> **Conventions for new `pendingNextLine` fields** (e.g. on-deck): pair
+> each value field with its own `*ModifiedAt`/`*At` timestamp and extend
+> `merge_pending_next_line` in `ultistats_server/storage/game_storage.py`
+> (+ the read-merge in `store/sync.js` and serialize/deserialize in
+> `store/storage.js`) to resolve it last-writer-wins. Apply the same
+> role-based greying to any new line-selection surface.
+
+<details>
+<summary>Original design notes (superseded — kept for history)</summary>
 
 ### Context
 
@@ -131,6 +163,8 @@ lineupReadyMode:      'o' | 'd' | 'od' | null             // alongside existing 
 - **Tap-to-switch on the label** (one-tap mirror of the LC's view). Easy to add later if coaches ask; start informational only.
 - **Spectator / viewer behavior** stays unchanged — they continue to see the AC's view.
 - **The "AC view follows LC view" design** discussed earlier (with manual-override breaking the follow until point-end + a "resume sync" affordance) is **rejected** in favor of the simpler label-based approach.
+
+</details>
 
 ---
 
