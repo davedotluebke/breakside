@@ -149,6 +149,22 @@
   .modbtn.disabled{opacity:.38;pointer-events:none}
   .modsep{flex:0 0 auto;height:1px;background:#e3e3e3;margin:8px 2px 4px}
 
+  /* D-possession: Block / Interception occupy the player-row slot until tapped */
+  .dtypebtn{display:flex;align-items:center;justify-content:center;gap:7px;border-radius:8px;
+    padding:13px 10px;font-size:15px;font-weight:700;cursor:pointer;border:1px solid;-webkit-tap-highlight-color:transparent}
+  .dtypebtn.block{background:#e7f7f0;border-color:#86d3b3;color:var(--green)}
+  .dtypebtn.int{background:#eef4ff;border-color:#9bb8f5;color:var(--armbg)}
+  .dtypebtn:active{filter:brightness(.96)}
+  .players .dtypebtn{flex:1 1 0;min-width:0}      /* landscape: split the row */
+  .sidebar .dtypebtn{flex:0 0 auto}               /* portrait: stack at top of rail */
+  .dcancel{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:5px;
+    border:1px solid #d9534f;color:#d9534f;background:#fff;border-radius:999px;padding:7px 12px;
+    font-size:13px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}
+
+  /* landscape defense has no modifier column → center a slightly larger field */
+  .phone[data-o="landscape"][data-mode="defense"] .fieldwrap{justify-content:center;padding:8px}
+  .phone[data-o="landscape"][data-mode="defense"] .field{width:750px;height:250px}
+
   /* mic FAB */
   .mic{position:absolute;right:14px;bottom:12px;width:54px;height:54px;border-radius:50%;background:#e0533a;
     color:#fff;border:none;display:flex;align-items:center;justify-content:center;font-size:20px;z-index:20;
@@ -205,7 +221,7 @@ const ROSTER=[
 let S;
 function reset(){
   S={ o:S?S.o:'portrait', mode:S?S.mode:'offense',
-      holder:'p1', disc:{l:EZ+8,w:W/2}, armed:null, pending:null, events:[], undo:[] };
+      holder:'p1', disc:{l:EZ+8,w:W/2}, armed:null, pending:null, dPlacing:null, events:[], undo:[] };
   render();
 }
 function snap(){ S.undo.push({disc:{...S.disc},holder:S.holder,mode:S.mode,len:S.events.length}); }
@@ -220,6 +236,18 @@ function clamp(l,w){return {l:Math.max(1,Math.min(L-1,l)),w:Math.max(1,Math.min(
 
 /* ===================== rendering ===================== */
 const phone=document.getElementById('phone');
+
+// The player-row slot. On defense it shows Block/Interception until one is
+// tapped, then becomes the player row (+ a cancel) to attribute the D.
+function playerSlot(){
+  if(S.mode==='defense' && !S.dPlacing)
+    return `<div class="dtypebtn block" data-dtype="block">⛔ Block</div>`+
+           `<div class="dtypebtn int" data-dtype="interception">Interception</div>`;
+  let chips=ROSTER.map(chipHTML).join('');
+  if(S.mode==='defense' && S.dPlacing)
+    chips=`<div class="dcancel" data-dcancel="1">✕ ${S.dPlacing==='interception'?'Interception':'Block'}</div>`+chips;
+  return chips;
+}
 
 function chipHTML(p){
   const cls=['chip',p.g];
@@ -283,9 +311,10 @@ function fieldHTML(){
 function statusText(){
   const hp=ROSTER.find(p=>p.id===S.holder), mode=`<span class="modepill ${S.mode}">${S.mode==='offense'?'OFFENSE':'DEFENSE'}</span>`;
   if(S.mode==='defense'){
-    if(S.armed)return `${mode} Tap where <b>${ROSTER.find(p=>p.id===S.armed).name}</b> got the ${S.pending==='interception'?'interception':'block'}`;
-    if(S.pending==='interception')return `${mode} Pick the defender who intercepted, then tap the spot`;
-    return `${mode} Tap/drag a defender for a Block, or use the buttons below`;
+    const t=S.dPlacing==='interception'?'interception':'block';
+    if(S.armed)return `${mode} Tap where <b>${ROSTER.find(p=>p.id===S.armed).name}</b> got the ${t}`;
+    if(S.dPlacing)return `${mode} <b>${S.dPlacing==='interception'?'Interception':'Block'}</b> — tap the spot &amp; pick the defender, or drag one on`;
+    return `${mode} On defense`;
   }
   if(S.pending==='throwaway')return `${mode} Tap where the throwaway landed`;
   if(S.armed){
@@ -298,11 +327,9 @@ function statusText(){
 
 function eventsHTML(){
   if(S.mode==='defense')return `
-    <div class="ebtn block ${S.pending!=='interception'?'':''}" data-act="block">⛔ Block / D</div>
-    <div class="ebtn ${S.pending==='interception'?'on':''}" data-act="interception" style="color:var(--green)">Interception</div>
     <div class="ebtn" data-act="theyturn" style="color:var(--green)">They turnover</div>
     <div class="ebtn theyscore" data-act="theyscore">They score</div>
-    <div class="ebtn more" data-act="more">⋯</div>`;
+    <div class="ebtn more" data-act="more">⋯ more</div>`;
   return `
     <div class="ebtn drop ${S.pending==='drop'?'on':''}" data-act="drop">Drop</div>
     <div class="ebtn throwaway ${S.pending==='throwaway'?'on':''}" data-act="throwaway">Throwaway</div>
@@ -332,7 +359,7 @@ function toggleMod(m){const idx=lastThrowIdx();if(idx<0)return;const ev=S.events
 function render(){
   document.querySelectorAll('#segO button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.o));
   document.querySelectorAll('#segM button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.mode));
-  phone.dataset.o=S.o;
+  phone.dataset.o=S.o; phone.dataset.mode=S.mode;
   const fieldBox=`<div class="fieldwrap"><div class="field" id="field">${fieldHTML()}</div></div>`;
 
   if(S.o==='portrait'){
@@ -348,7 +375,7 @@ function render(){
         <span style="flex:1 1 auto"></span>
         <button class="undo" id="undo">↺ Undo</button></div>
       <div class="play">
-        <div class="prow"><div class="sidebar">${ROSTER.map(chipHTML).join('')}<div class="modsep"></div>${modColHTML()}</div>${fieldBox}</div>
+        <div class="prow"><div class="sidebar">${playerSlot()}${S.mode==='offense'?`<div class="modsep"></div>${modColHTML()}`:''}</div>${fieldBox}</div>
         <div class="statusbar">${statusText()}</div>
         <div class="events">${eventsHTML()}</div>
         <button class="mic" title="Narration mic">🎙️</button>
@@ -362,7 +389,7 @@ function render(){
         <button class="undo" id="undo" style="margin-left:auto">↺ Undo</button>
         <button class="expand" id="expand" title="Exit full-screen">⤢</button>
       </div>
-      <div class="players">${ROSTER.map(chipHTML).join('')}</div>
+      <div class="players">${playerSlot()}</div>
       <div class="play"><div class="lower">
         <div class="leftcol">
           ${fieldBox}
@@ -370,7 +397,7 @@ function render(){
           <div class="events">${eventsHTML()}</div>
           <button class="mic" title="Narration mic">🎙️</button>
         </div>
-        <div class="modcol">${modColHTML()}</div>
+        ${S.mode==='offense'?`<div class="modcol">${modColHTML()}</div>`:''}
       </div></div></div>`;
   }
   wire();
@@ -394,34 +421,46 @@ function placeAt(l,w){
   if(S.mode==='defense'){
     if(!S.armed)return;
     snap();
-    const t=S.pending==='interception'?'interception':'block';
+    const t=S.dPlacing==='interception'?'interception':'block';
     S.events.push({type:t,from:null,to,by:S.armed});
-    if(t==='interception'){S.disc=to;S.holder=S.armed;S.mode='offense';}
-    S.armed=null;S.pending=null;render();return;
+    // A D (block or interception) is a turnover → we're now on offense.
+    S.disc=to; S.holder=S.armed; S.mode='offense';
+    S.armed=null;S.pending=null;S.dPlacing=null;render();return;
   }
-  if(S.pending==='throwaway'){snap();S.events.push({type:'throwaway',from,to,thrower:S.holder});S.disc=to;S.pending=null;S.armed=null;S.holder=null;render();return;}
+  if(S.pending==='throwaway'){snap();S.events.push({type:'throwaway',from,to,thrower:S.holder});S.disc=to;S.pending=null;S.armed=null;S.holder=null;S.mode='defense';render();return;}
   if(!S.armed)return;
   snap();
-  if(S.pending==='drop'){S.events.push({type:'drop',from,to,thrower:S.holder,by:S.armed});S.disc=to;S.armed=null;S.pending=null;S.holder=null;render();return;}
+  if(S.pending==='drop'){S.events.push({type:'drop',from,to,thrower:S.holder,by:S.armed});S.disc=to;S.armed=null;S.pending=null;S.holder=null;S.mode='defense';render();return;}
   const isScore=S.pending==='score'||inAttackEZ(to);
   S.events.push({type:isScore?'score':'completion',from,to,thrower:S.holder,by:S.armed});
   S.disc=to;S.holder=S.armed;S.armed=null;S.pending=null;render();
 }
 
 function fieldTap(l,w,cx,cy){
+  if(S.mode==='defense'){
+    if(!S.dPlacing)return;                  // must choose Block / Interception first
+    if(S.armed){placeAt(l,w);return;}
+    popPicker(cx,cy,pid=>{S.armed=pid;placeAt(l,w);});
+    return;
+  }
   if(S.armed||S.pending==='throwaway'){placeAt(l,w);return;}
   // nothing armed → field-first popover (also handles pending drop/score by arming then placing)
-  popPicker(cx,cy,pid=>{S.armed=pid; if(S.mode==='defense'&&!S.pending)S.pending='block'; placeAt(l,w);});
+  popPicker(cx,cy,pid=>{S.armed=pid;placeAt(l,w);});
 }
 
 function onEvent(act){
-  if(act==='more'){alert('Overflow sheet (rare / non-quick-access):\nlayout · sky · footblock · greatest · Callahan · stall · hand/foot block · OI/IO/flick/backhand · roller · injury sub …\n\nModifiers attach to the most recent event.');return;}
-  if(act==='theyscore'){snap();S.events.push({type:'theyscore'});render();return;}
-  if(act==='theyturn'){snap();S.events.push({type:'theyturn'});S.mode='offense';render();return;}
-  if(act==='interception'){S.pending=S.pending==='interception'?null:'interception';render();return;}
-  if(act==='block'){S.pending=null;render();return;}  // block is the default defensive placement
-  S.pending=S.pending===act?null:act; render();        // drop / throwaway / score toggles
+  if(act==='more'){
+    const msg=S.mode==='defense'
+      ? 'D overflow (rare): layout · sky · footblock · handblock · Callahan · stall-out · bid …'
+      : 'Overflow (rare): greatest · stall · OI/IO/flick/backhand · roller · scoober · injury sub …';
+    alert(msg+'\n\nModifiers attach to the most recent event.');return;
+  }
+  if(act==='theyscore'){snap();S.events.push({type:'theyscore'});render();return;}             // point ends
+  if(act==='theyturn'){snap();S.events.push({type:'theyturn'});S.holder=null;S.mode='offense';render();return;} // unforced → our disc
+  S.pending=S.pending===act?null:act; render();        // offense drop / throwaway / score toggles
 }
+function setDPlacing(t){S.dPlacing=t;S.pending=t;S.armed=null;render();}
+function cancelDPlacing(){S.dPlacing=null;S.pending=null;S.armed=null;render();}
 
 /* ---- unified pointer drag/tap (chips, markers, field) ---- */
 let drag=null, peg=null;
@@ -467,7 +506,8 @@ function onUp(e){
 function popPicker(cx,cy,cb){
   document.querySelectorAll('.picker').forEach(n=>n.remove());
   const m=document.createElement('div');m.className='picker';m.style.left=cx+'px';m.style.top=cy+'px';
-  m.innerHTML=`<div class="ttl">${S.mode==='defense'?'Who got the block?':'Who caught it?'}</div>`+ROSTER.map(p=>`<div class="chip ${p.g}" data-pid="${p.id}"><span class="num">${p.num}</span>${p.name}</div>`).join('');
+  const ttl=S.mode==='defense'?(S.dPlacing==='interception'?'Who intercepted?':'Who got the block?'):'Who caught it?';
+  m.innerHTML=`<div class="ttl">${ttl}</div>`+ROSTER.map(p=>`<div class="chip ${p.g}" data-pid="${p.id}"><span class="num">${p.num}</span>${p.name}</div>`).join('');
   document.body.appendChild(m);
   m.querySelectorAll('.chip').forEach(c=>c.onclick=ev=>{ev.stopPropagation();const pid=c.dataset.pid;m.remove();cb(pid);});
   setTimeout(()=>{const close=ev=>{if(!m.contains(ev.target)){m.remove();document.removeEventListener('pointerdown',close);}};document.addEventListener('pointerdown',close);},0);
@@ -476,6 +516,8 @@ function popPicker(cx,cy,cb){
 function wire(){
   phone.querySelectorAll('.ebtn').forEach(b=>b.onclick=()=>onEvent(b.dataset.act));
   phone.querySelectorAll('.modbtn').forEach(b=>b.onclick=()=>toggleMod(b.dataset.mod));
+  phone.querySelectorAll('.dtypebtn').forEach(b=>b.onclick=()=>setDPlacing(b.dataset.dtype));
+  const dc=phone.querySelector('.dcancel'); if(dc)dc.onclick=cancelDPlacing;
   fitPlayers();
   const u=phone.querySelector('#undo'); if(u)u.onclick=doUndo;
   const x=phone.querySelector('#expand'); if(x)x.onclick=()=>{S.o=S.o==='portrait'?'landscape':'portrait';render();};
@@ -484,7 +526,7 @@ phone.addEventListener('pointerdown',onDown);
 
 /* ===================== toolbar ===================== */
 document.getElementById('segO').onclick=e=>{if(e.target.dataset.v){S.o=e.target.dataset.v;render();}};
-document.getElementById('segM').onclick=e=>{if(e.target.dataset.v){S.mode=e.target.dataset.v;S.armed=null;S.pending=null;render();}};
+document.getElementById('segM').onclick=e=>{if(e.target.dataset.v){S.mode=e.target.dataset.v;S.armed=null;S.pending=null;S.dPlacing=null;render();}};
 document.getElementById('reset').onclick=reset;
 
 document.getElementById('notes').innerHTML=`
@@ -501,6 +543,14 @@ document.getElementById('notes').innerHTML=`
     <li><b>Mic FAB</b> reserved bottom-right in both layouts; the events row leaves clearance.</li>
     <li>Auto-score still applies: a completion placed in the attacking endzone records a goal.</li>
   </ul>
+  <h2>Defense (D-possession) screen</h2>
+  <ul>
+    <li>The player slot shows <b>Block</b> / <b>Interception</b> until you tap one — then it becomes the player row (+ a ✕ cancel).</li>
+    <li>Place the D by tapping the spot (→ "Who got the block?" popover) or dragging a defender onto it. Tap-player-then-spot works too.</li>
+    <li>Bottom bar: <b>They turnover</b> · <b>They score</b> · <b>⋯ more</b> (rare D modifiers: layout/sky/footblock…).</li>
+    <li>A D — or "they turnover" — is a change of possession, so it flips you to the offense screen. Throwing it away on offense flips you here. Landscape drops the modifier column on D and centers a wider field.</li>
+  </ul>
+
   <h2>Open questions</h2>
   <ul>
     <li><span class="q">Field tab vs. full-screen:</span> should portrait stay in-tab and only landscape go full-screen (current), or should both offer full-screen?</li>
