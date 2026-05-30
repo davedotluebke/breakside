@@ -142,8 +142,8 @@
   .lower{flex:1 1 auto;display:flex;min-height:0;min-width:0}
   .leftcol{flex:1 1 auto;display:flex;flex-direction:column;min-width:0;min-height:0;position:relative}
   .modcol{flex:0 0 158px;display:flex;flex-direction:column;gap:5px;padding:7px 8px 10px;background:#fff;border-left:1px solid #ddd;overflow:auto}
-  .modcol .mh{font-size:12.5px;font-weight:700;color:#444;text-align:left;padding:1px 2px}
-  .modcol .msub{font:600 11px 'JetBrains Mono',monospace;color:#9a9a9a;text-align:left;padding:0 2px 2px}
+  .mh{font-size:12.5px;font-weight:700;color:#333;text-align:left;padding:1px 2px}
+  .msub{font:600 11.5px 'JetBrains Mono',monospace;color:#555;text-align:left;padding:0 2px 2px}
   .modbtn{flex:0 0 auto;border:1px solid #cfcfcf;border-radius:6px;background:#f7f7f7;padding:7px 8px;font-size:13px;font-weight:600;color:#333;cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent}
   .modbtn.on{background:var(--armbg);border-color:var(--armbg);color:#fff}
   .modbtn.disabled{opacity:.38;pointer-events:none}
@@ -293,7 +293,7 @@ function statusText(){
     return `${mode} Tap where <b>${a}</b> caught it${S.pending==='drop'?' (drop)':S.pending==='score'?' (score)':''}`;
   }
   if(S.pending==='drop')return `${mode} Tap the drop spot, then pick who dropped it`;
-  return `${mode} <b>${hp?hp.name:'?'}</b> has the disc — tap receiver &amp; spot, tap a spot to pick, or drag a player on`;
+  return `${mode} <b>${hp?hp.name:'?'}</b> has the disc`;
 }
 
 function eventsHTML(){
