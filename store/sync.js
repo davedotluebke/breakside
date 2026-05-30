@@ -1123,12 +1123,25 @@ async function refreshPendingLineFromCloud(gameId) {
 
         // Merge "Lineup Ready" multi-coach signal. The Line Coach is the
         // sole writer; Active Coach reads. Last-writer-wins by timestamp,
-        // same as the line-type fields.
+        // same as the line-type fields. Fire-and-forget — the AC's polling
+        // shows a toast on advance; no persistent latch.
         const serverReadyAt = serverPending.lineupReadyAt || 0;
         const localReadyAt = localPending.lineupReadyAt || 0;
         if (serverReadyAt > localReadyAt) {
             localPending.lineupReadyAt = serverPending.lineupReadyAt;
             localPending.lineupReadyBy = serverPending.lineupReadyBy || null;
+        }
+
+        // Merge LC-viewing signal (only the LC writes this). Independent
+        // last-writer-wins on lineCoachViewingAt — AC reads to render the
+        // "Line Coach: viewing the X line" sub-header.
+        const serverViewingAt = serverPending.lineCoachViewingAt
+            ? new Date(serverPending.lineCoachViewingAt).getTime() : 0;
+        const localViewingAt = localPending.lineCoachViewingAt
+            ? new Date(localPending.lineCoachViewingAt).getTime() : 0;
+        if (serverViewingAt > localViewingAt) {
+            localPending.lineCoachViewing = serverPending.lineCoachViewing || null;
+            localPending.lineCoachViewingAt = serverPending.lineCoachViewingAt;
         }
 
         // Note: activeType is intentionally NOT synced - it's local UI state
@@ -1257,6 +1270,16 @@ async function refreshGameStateFromCloud(gameId) {
             if (serverReadyAt > localReadyAt) {
                 localPending.lineupReadyAt = serverPending.lineupReadyAt;
                 localPending.lineupReadyBy = serverPending.lineupReadyBy || null;
+                }
+
+            // LC-viewing signal — independent timestamp merge.
+            const serverViewingAt = serverPending.lineCoachViewingAt
+                ? new Date(serverPending.lineCoachViewingAt).getTime() : 0;
+            const localViewingAt = localPending.lineCoachViewingAt
+                ? new Date(localPending.lineCoachViewingAt).getTime() : 0;
+            if (serverViewingAt > localViewingAt) {
+                localPending.lineCoachViewing = serverPending.lineCoachViewing || null;
+                localPending.lineCoachViewingAt = serverPending.lineCoachViewingAt;
             }
 
             game.pendingNextLine = localPending;

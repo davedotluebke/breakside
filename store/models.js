@@ -138,15 +138,42 @@ function Game(teamName, opponentName, startOn, teamId = null) {
     
     // Phase 6b: Pending next line selections (for multi-coach sync)
     // Tracks three separate lines: O (offense), D (defense), O/D (unified/must-win)
-    // Timestamps track when each line was last modified for auto-selection logic
+    // Timestamps track when each line was last modified for auto-selection logic.
+    //
+    // Multi-coach sync convention: every value field is paired with its own
+    // ISO `*ModifiedAt` (or epoch-ms `*At`) timestamp so the server-side
+    // `merge_pending_next_line` and client-side sync read-merge can resolve
+    // conflicts last-writer-wins per field. When adding new fields here,
+    // also extend `merge_pending_next_line` in
+    // `ultistats_server/storage/game_storage.py` and the read-merge in
+    // `store/sync.js`. See TODO.md § "Multi-Coach Line Selection".
     this.pendingNextLine = {
-        oLine: [],              // Player names for O line (used when team loses)
-        dLine: [],              // Player names for D line (used when team wins)
-        odLine: [],             // Player names for O/D (must-win) line
-        oLineModifiedAt: null,  // ISO timestamp of last modification
-        dLineModifiedAt: null,  // ISO timestamp of last modification
-        odLineModifiedAt: null, // ISO timestamp of last modification
-        activeType: 'od'        // Currently displayed line type: 'o', 'd', or 'od'
+        oLine: [],                  // Player names for O line (used when team loses)
+        dLine: [],                  // Player names for D line (used when team wins)
+        odLine: [],                 // Player names for O/D (must-win) line
+        oLineModifiedAt: null,      // ISO timestamp of last modification
+        dLineModifiedAt: null,      // ISO timestamp of last modification
+        odLineModifiedAt: null,     // ISO timestamp of last modification
+        activeType: 'od',           // Locally-viewed line type: 'o' | 'd' | 'od' (NOT synced)
+
+        // Lineup Ready signal: LC presses "Lineup Ready" to tell the AC
+        // the line is finalized. Fire-and-forget: the AC's polling refresh
+        // sees the new timestamp and shows a toast. Not used by the Intent
+        // Rule — the LC's actual VIEW (lineCoachViewing below) is what
+        // drives auto-select at point-end.
+        lineupReadyAt: null,        // epoch ms timestamp of most recent press
+        lineupReadyBy: null,        // Display name of who pressed (informational)
+
+        // LC-viewing signal: the Line Coach (only) writes their current
+        // activeType here so the AC's panel can render a "Line Coach:
+        // viewing/editing the X line" sub-header without the AC's own
+        // view being forced to follow. Also drives Priority 1 of the
+        // Intent Rule at point-end (combined-OD vs side-specific).
+        // Gated on `isLineCoach()` at write time so the AC's local
+        // activeType never leaks. The local `activeType` field above is
+        // intentionally NOT synced.
+        lineCoachViewing: null,     // 'o' | 'd' | 'od' | null
+        lineCoachViewingAt: null    // ISO timestamp of most recent write
     };
 }
 

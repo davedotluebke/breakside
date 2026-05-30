@@ -94,12 +94,12 @@ function startNextPoint() {
     console.log('About to clear next line selections in startNextPoint after using them');
     clearNextLineSelections();
 
-    // Reset the Lineup Ready ping for this point's slot so the Line Coach
-    // can send a fresh one for the next between-points window.
-    if (game && game.pendingNextLine) {
-        game.pendingNextLine.lineupReadyAt = null;
-        game.pendingNextLine.lineupReadyBy = null;
-    }
+    // No need to clear lineupReadyAt/By on point start — the toast-only
+    // ping fires on `serverReadyAt > prevReadyAt && now-newReadyAt < 60s`
+    // in the AC's polling, so a ping from the previous between-points
+    // window naturally falls out of the 60-second relevance window
+    // without an explicit clear (which wouldn't propagate cross-device
+    // anyway, since null < value in the merge).
 
     // determine starting position: check point winners and switchside events
     const startPointOn = determineStartingPosition();

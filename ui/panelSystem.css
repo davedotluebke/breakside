@@ -1614,6 +1614,21 @@ body.game-screen-active header {
     flex-shrink: 0;
 }
 
+/* Active Coach awareness label: "Line Coach: viewing the D line".
+   Rendered by updateLineCoachViewingLabel; hidden by JS when the AC's
+   own view matches the LC's, when no LC is claimed, when AC == LC, or
+   for non-AC users. Small italic so it doesn't compete with the table. */
+.select-line-lc-viewing {
+    font-size: 0.78rem;
+    font-style: italic;
+    color: #666;
+    padding: 0 12px 2px 12px;
+    flex-shrink: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .select-line-toolbar-spacer {
     flex: 1; /* pushes everything right, reserves left space */
 }
@@ -1629,9 +1644,7 @@ body.game-screen-active header {
     text-decoration: underline;
 }
 
-.panel-selectLine.readonly .select-line-mode-toggle,
-.panel-selectOLine.readonly .select-line-mode-toggle,
-.panel-selectDLine.readonly .select-line-mode-toggle {
+.panel-selectLine.readonly .select-line-mode-toggle {
     pointer-events: none;
     opacity: 0.5;
 }
@@ -1827,14 +1840,20 @@ body.game-screen-active header {
     background-color: rgba(45, 134, 89, 0.2);
 }
 
-/* Readonly overlay */
+/* Readonly indicator. Centered badge over the table — the previous
+   corner placement collided with the Lineup Pending button. The full-
+   table white veil that used to back this badge is gone, though: the
+   AC needs to *see* what the LC has selected (which players are
+   checked, gender ratio, playing-time stats), and the centered badge
+   over the mid-table point cells (older / less-relevant ones) is an
+   acceptable trade — the user can horizontally scroll past it. */
 .select-line-readonly-overlay {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(255, 255, 255, 0.7);
+    background: transparent;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1843,23 +1862,29 @@ body.game-screen-active header {
 }
 
 .readonly-badge {
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.6);
     color: #fff;
-    padding: 8px 16px;
-    border-radius: 20px;
-    font-size: 0.85rem;
+    padding: 6px 14px;
+    border-radius: 16px;
+    font-size: 0.8rem;
     font-weight: 500;
 }
 
-/* Readonly state */
-.panel-selectLine.readonly .select-line-lines-btn,
-.panel-selectLine.readonly .select-line-od-toggle {
+/* Readonly state. The O|D toggle is intentionally NOT disabled here —
+   per the Intent Rule TODO, viewing different line types is independent
+   of editability, so an AC who doesn't hold LC still needs to be able to
+   follow along by toggling O / D / OD views. The Lines... button stays
+   disabled because it opens an editing dialog. */
+.panel-selectLine.readonly .select-line-lines-btn {
     opacity: 0.6;
     pointer-events: none;
 }
 
+/* Disabled checkboxes — keep them visible (no extra opacity dimming).
+   The browser's native disabled rendering + the not-allowed cursor
+   already indicate they can't be toggled; further dimming made the
+   AC unable to read what the LC had selected. */
 .panel-selectLine.readonly .panel-player-table .active-checkbox {
-    opacity: 0.6;
     cursor: not-allowed;
 }
 
@@ -2304,49 +2329,6 @@ body.panel-dragging .panel-content {
    ============================================================================= */
 
 /* Panel animations are now handled via height changes with CSS transitions */
-
-/* =============================================================================
-   O/D Split Panels - Stacked O and D line selection panels
-   ============================================================================= */
-
-.panel-selectOLine {
-    background: #fff;
-}
-
-
-.panel-selectOLine .panel-content {
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-height: 0;
-}
-
-.panel-selectDLine {
-    background: #fff;
-}
-
-
-.panel-selectDLine .panel-content {
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-height: 0;
-}
-
-/* Split panel readonly state */
-.panel-selectOLine.readonly .select-line-lines-btn,
-.panel-selectDLine.readonly .select-line-lines-btn {
-    opacity: 0.6;
-    pointer-events: none;
-}
-
-.panel-selectOLine.readonly .panel-player-table .active-checkbox,
-.panel-selectDLine.readonly .panel-player-table .active-checkbox {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
 
 /* =============================================================================
    Game Settings Dialog
