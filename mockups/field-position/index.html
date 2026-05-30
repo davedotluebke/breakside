@@ -367,7 +367,7 @@ function toggleMod(m){const idx=lastThrowIdx();if(idx<0)return;const ev=S.events
 // flips us to offense immediately, so there's no "last D" to tag afterward).
 function dModColHTML(){
   const sub = S.dPlacing ? (S.dPlacing==='interception'?'Interception':'Block') : 'tap Block / Interception';
-  return `<div class="mh">Last D was:</div><div class="msub">${sub}</div>`+
+  return `<div class="mh">Last D was a:</div><div class="msub">${sub}</div>`+
     DMODS.map(m=>`<div class="modbtn ${S.dMods.includes(m)?'on':''}" data-dmod="${m}">${m}</div>`).join('');
 }
 function toggleDMod(m){const k=S.dMods.indexOf(m);if(k>=0)S.dMods.splice(k,1);else S.dMods.push(m);render();}
@@ -574,7 +574,7 @@ document.getElementById('notes').innerHTML=`
     <li>The player slot shows <b>Block</b> / <b>Interception</b> until you tap one — then it becomes the player row (+ a ✕ cancel).</li>
     <li>Place the D by tapping the spot (→ "Who got the block?" popover) or dragging a defender onto it. Tap-player-then-spot works too.</li>
     <li>Bottom bar: <b>They turnover</b> · <b>They score</b> · <b>⋯ more</b>.</li>
-    <li>The right column mirrors offense — <b>Last D was:</b> with Layout / Sky / Stall. Because a D flips you to offense immediately, these are <i>pre-selected</i> for the D you're about to place (not applied after).</li>
+    <li>The right column mirrors offense — <b>Last D was a:</b> with Layout / Sky / Stall. Because a D flips you to offense immediately, these are <i>pre-selected</i> for the D you're about to place (not applied after).</li>
     <li>A D — or "they turnover" — is a change of possession, so it flips you to the offense screen. Throwing it away on offense flips you here.</li>
     <li>An <b>Unknown</b> (dashed "?") chip is available on O and D for when you didn't catch who made the play; it collapses to just "?" if the landscape row gets tight.</li>
   </ul>
@@ -589,8 +589,10 @@ document.getElementById('notes').innerHTML=`
   <ul>
     <li><span class="q">Field tab vs. full-screen:</span> should portrait stay in-tab and only landscape go full-screen (current), or should both offer full-screen?</li>
     <li><span class="q">Drop:</span> still "arm receiver → Drop → spot" (or tap Drop → spot → pick). Cheaper as a swipe-down on the catch?</li>
-    <li><span class="q">Landscape player row</span> — 7 chips fit; on a 20+ roster it scrolls. Acceptable, or do we need a compact jersey-number grid?</li>
     <li><span class="q">Home/Away</span> orientation &amp; which sideline is "Home" — placeholder; should it follow the pull direction / which end we're attacking?</li>
+    <li><span class="q">Modifier timing mismatch:</span> O modifiers tag the <i>last</i> pass; D modifiers are <i>pre-selected</i> for the next D (because a D flips to offense). Acceptable, or confusing?</li>
+    <li><span class="q">"Stall" placement:</span> it's a forced turnover, not really a block descriptor — keep it among the D modifiers, or make it its own outcome alongside Block/Interception?</li>
+    <li><span class="q">Score attribution:</span> does an in-endzone completion open the existing assist/score-attribution dialog, or is the assist just inferred from the prior throw?</li>
   </ul>
   <p style="color:#8b9096;margin-top:12px">Mockup only — not wired to the real <code>Throw</code>/<code>Turnover</code> model or <code>fullPbp.js</code> yet.</p>`;
 
