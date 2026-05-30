@@ -2172,118 +2172,26 @@ function updateLineTabStartPointBtn() {
 }
 
 /**
- * Update the Line tab's "Lineup Ready" button.
+ * "Lineup Ready" — multi-coach coordination signal, fire-and-forget.
  *
- * Multi-coach coordination signal. The Line Coach taps to ping the Active
- * Coach that the next lineup is set — useful when the two coaches aren't
- * standing next to each other. The button is intentionally narrow in
- * scope:
- *   - Only visible when the user is a *pure* Line Coach (i.e. someone
- *     else holds Active Coach). A solo coach sees nothing because the
- *     signal has no recipient. An Active-Coach-only user is the recipient,
- *     not the sender.
- *   - Available *during a live point too*, not just between points — the
- *     LC's job is to prepare the NEXT line while the current point is
- *     being played, so "the next line is ready" is exactly the signal
- *     they want to send mid-point. (This used to be gated to
- *     between-points only, which contradicted the prepare-ahead workflow.)
- *   - After tap, shows a green "✓ Lineup Ready" state. The LC can re-tap
- *     to update the latch (e.g. after switching views); it clears when
- *     the next point starts (`startNextPoint` nulls `lineupReadyAt`).
+ * The Line Coach taps to ping the Active Coach that the next lineup is
+ * set. The AC's 3-second polling refresh sees `lineupReadyAt` advance and
+ * shows a toast ("X says lineup ready") — that's the whole thing. No
+ * persistent "sent" badge, no per-mode disambiguation, no Intent Rule
+ * branch. The LC's actual view (`lineCoachViewing`) drives auto-select at
+ * point-end via Priority 1 in `getEffectiveLineForNextPoint`.
  *
- * The actual ping is just a timestamp + coach name + view-mode written to
- * `pendingNextLine.lineupReadyAt` / `lineupReadyBy` / `lineupReadyMode`.
- * The Active Coach's 3-second pendingLine refresh poll picks it up and
- * surfaces a toast — including during a live point, since the refresh
- * gate was removed.
- */
-/**
- * Compute the current Lineup Ready button state.
- *
- * The Lineup Ready surface is shared between roles but plays different
- * parts on each side:
- *   - Line Coach: it's a *button* — tap to send a ping signaling "I'm
- *     done picking this line."
- *   - Active Coach: it's a *status indicator* — read-only badge that
- *     shows whether the Line Coach has signaled ready. Useful as one of
- *     two coloured cues (alongside Start Point's count/ratio feedback)
- *     when deciding whether to start the point.
- *
- * Both roles share the same compute → render path; differences are
- * encoded in the returned `state` string. Lineup Ready is *never* a
- * commit gate — it never blocks Start Point, and the lineup itself
- * syncs continuously regardless of whether the ping has been sent.
- *
- * Returned `state` values:
- *   - 'active'     → blue button, label "Lineup Ready", tap sends (Line Coach idle)
- *   - 'sent'       → green button/badge, label "✓ Lineup Ready" (someone pinged this window)
- *   - 'pending'    → desaturated-blue badge, label "Lineup Pending" — Active Coach
- *                    sees this when the Line Coach hasn't pinged yet.
- *   - 'disabled'   → desaturated-blue button, label "Lineup Ready"; tap surfaces
- *                    the toast in `disabledReason` (Line Coach can't currently send)
+ * Visibility: only the pure Line Coach sees the button. Solo coaches,
+ * pure Active Coach, spectators, and viewers see nothing.
  */
 function computeLineupReadyState() {
     const ctrlState = (typeof getControllerState === 'function') ? getControllerState() : {};
-    const game = (typeof currentGame === 'function') ? currentGame() : null;
-    const pending = game && game.pendingNextLine;
-    const sentAtRaw = pending && pending.lineupReadyAt;
 
-    // Staleness gate: a `lineupReadyAt` from before the most recent point
-    // started is leftover from a prior window. The stored field outlives
-    // any one window (it's persisted with the game and the null-on-
-    // startNextPoint clear doesn't propagate cross-device), so without
-    // this comparison the button would read "✓ Lineup Ready" forever
-    // after the first ping ever sent.
-    //
-    // We need the latest point's TRUE start time. For an in-progress
-    // point, startTimestamp is correct. For an ENDED point, startTimestamp
-    // has been corrupted to ~score-time by the score handlers (they null
-    // it to stop the timer and updateScore re-sets it to now — same root
-    // cause as the fix1 OD-line bug), so reconstruct it from
-    // endTimestamp − totalPointTime. Without this, a ping sent DURING the
-    // point would wrongly read as stale the moment the point ends, hiding
-    // the "✓ Lineup Ready" status in the very between-points window the
-    // ping was meant for.
-    const points = (game && game.points) || [];
-    const latestPoint = points[points.length - 1];
-    let latestPointStart = 0;
-    if (latestPoint) {
-        if (latestPoint.endTimestamp) {
-            latestPointStart = new Date(latestPoint.endTimestamp).getTime()
-                - (latestPoint.totalPointTime || 0);
-        } else if (latestPoint.startTimestamp) {
-            latestPointStart = new Date(latestPoint.startTimestamp).getTime();
-        }
-    }
-    const sentForCurrentWindow = sentAtRaw && sentAtRaw > latestPointStart;
-
-    // Sent state wins regardless of who's looking — it's a shared status.
-    if (sentForCurrentWindow) {
-        return { state: 'sent', label: '✓ Lineup Ready' };
-    }
-
-    // Active Coach branch: read-only indicator.
-    if (ctrlState.isActiveCoach && !ctrlState.isLineCoach) {
-        // No ping yet from the Line Coach.
-        return { state: 'pending', label: 'Lineup Pending' };
-    }
-
-    // Solo coach (both roles): button has no recipient.
-    if (ctrlState.isActiveCoach && ctrlState.isLineCoach) {
-        return {
-            state: 'disabled', label: 'Lineup Ready',
-            disabledReason: 'You hold both roles — no other coach to ping'
-        };
-    }
-
-    // Spectator coach (no roles, multi-coach session) and Line-Coach
-    // branches. No point-in-progress gate: the LC prepares the next line
-    // during a live point, so they can ping "next lineup ready" mid-point.
-    if (!ctrlState.isLineCoach) {
-        return {
-            state: 'disabled', label: 'Lineup Ready',
-            disabledReason: 'Only the Line Coach can send a Lineup Ready ping'
-        };
+    // Visible only to a pure Line Coach. (A user who holds BOTH roles
+    // has no one else to ping, and the AC / spectators / viewers don't
+    // send pings.)
+    if (!ctrlState.isLineCoach || ctrlState.isActiveCoach) {
+        return { state: 'hidden' };
     }
     if (!ctrlState.activeCoach) {
         return {
@@ -2299,7 +2207,9 @@ function updateLineTabLineupReadyBtn() {
     if (!btn) return;
 
     const onLineTab = (typeof getActiveTab === 'function') && getActiveTab() === 'line';
-    if (!onLineTab) {
+    const { state, label } = computeLineupReadyState();
+
+    if (!onLineTab || state === 'hidden') {
         btn.style.display = 'none';
         return;
     }
@@ -2307,26 +2217,10 @@ function updateLineTabLineupReadyBtn() {
     btn.style.display = 'flex';
     btn.classList.remove('sent', 'inactive');
     btn.disabled = false;
-
-    const { state, label } = computeLineupReadyState();
     btn.textContent = label;
 
-    if (state === 'sent') {
-        btn.classList.add('sent');
-        // The Line Coach can re-press to update the latch with their
-        // current view (e.g. after switching from OD to D and wanting
-        // the D-line latched instead). For everyone else 'sent' is a
-        // read-only status badge — hard-disabled.
-        const ctrl = (typeof getControllerState === 'function')
-            ? getControllerState() : {};
-        btn.disabled = !ctrl.isLineCoach;
-    } else if (state === 'pending') {
-        // Active Coach view, awaiting Line Coach ping. Read-only badge —
-        // hard-disabled so it doesn't invite a tap (no toast, nothing to do).
-        btn.classList.add('inactive');
-        btn.disabled = true;
-    } else if (state === 'disabled') {
-        // Visually disabled but kept clickable so a tap can surface the
+    if (state === 'disabled') {
+        // Visually disabled but kept clickable so a tap surfaces the
         // reason via toast (handleLineupReadyTap re-checks state).
         btn.classList.add('inactive');
     }
@@ -2334,79 +2228,32 @@ function updateLineTabLineupReadyBtn() {
 }
 
 /**
- * Clear the Lineup Ready latch (lineupReadyAt + lineupReadyMode) locally.
- * Called when the LC modifies any line — per the Intent Rule, an explicit
- * edit supersedes a prior "I'm done" signal.
- *
- * Sync note: a value→null transition does NOT propagate via the server's
- * last-writer-wins merge (null sorts as oldest by `_ts`). That's why the
- * Intent Rule in `getEffectiveLineForNextPoint` also defends by requiring
- * `lineupReadyAt` to be newer than the relevant line's *ModifiedAt — the
- * line edit's timestamp DOES propagate, and naturally supersedes a stale
- * latch on peer devices too. The local clear here is for the editing
- * device's own immediate UI/intent feedback.
- *
- * lineupReadyBy is preserved as a historical record of the most recent
- * presser; it's only read in concert with a non-null lineupReadyAt.
- */
-function clearLineupReadyLatch(game) {
-    if (!game || !game.pendingNextLine) return;
-    game.pendingNextLine.lineupReadyAt = null;
-    game.pendingNextLine.lineupReadyMode = null;
-}
-
-/**
- * "Lineup Ready" tap handler. When state is 'active', writes the ping
- * fields onto pendingNextLine and persists. When state is 'disabled',
- * surfaces a toast explaining why nothing happened. When state is 'sent'
- * the button itself is hard-disabled, so this handler doesn't run.
+ * "Lineup Ready" tap handler. Fire-and-forget: write a timestamp + name,
+ * show a toast. The AC's polling picks up the new timestamp and shows
+ * its own toast on the receiving side.
  */
 function handleLineupReadyTap() {
     const { state, disabledReason } = computeLineupReadyState();
-
-    if (state === 'disabled') {
-        if (typeof showControllerToast === 'function' && disabledReason) {
+    if (state !== 'active') {
+        if (state === 'disabled' && typeof showControllerToast === 'function' && disabledReason) {
             showControllerToast(disabledReason, 'info', 2500);
         }
         return;
     }
-    // 'active' = first press in this between-points window.
-    // 'sent' = LC re-pressing to update the latch (e.g. after switching
-    //  views) — TODO design: "Cleared by ... LC pressing Lineup Ready
-    //  again from a different view, new latch overwrites." This re-press
-    //  overwrites lineupReadyMode with the LC's current activeType so the
-    //  Intent Rule honors the latest intent.
-    if (state !== 'active' && state !== 'sent') return;
 
     const ctrlState = (typeof getControllerState === 'function') ? getControllerState() : {};
-    // Defensive: only the Line Coach can send/update the latch. The
-    // button shouldn't be tappable for non-LC users in these states.
-    if (!ctrlState.isLineCoach) return;
-
     const game = (typeof currentGame === 'function') ? currentGame() : null;
     if (!game) return;
     if (!game.pendingNextLine) game.pendingNextLine = {};
 
     const myName = (ctrlState.lineCoach && ctrlState.lineCoach.displayName) || 'Line Coach';
-
     game.pendingNextLine.lineupReadyAt = Date.now();
     game.pendingNextLine.lineupReadyBy = myName;
-    // Capture the LC's currently-viewed line type. The Intent Rule in
-    // getEffectiveLineForNextPoint uses lineupReadyMode as the strongest
-    // signal at point-end: "the LC explicitly said this is the line."
-    // If the LC re-presses Ready from a different view, this overwrites
-    // (and the server merge picks the newer lineupReadyAt + its mode).
-    game.pendingNextLine.lineupReadyMode = game.pendingNextLine.activeType || 'od';
 
     if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
     if (typeof showControllerToast === 'function') {
-        const msg = state === 'sent'
-            ? 'Lineup Ready updated'
-            : 'Lineup ready ping sent';
-        showControllerToast(msg, 'success', 1800);
+        showControllerToast('Lineup ready ping sent', 'success', 1800);
     }
-
-    updateLineTabLineupReadyBtn();
 }
 
 // =============================================================================
@@ -3497,8 +3344,6 @@ function savePanelSelectionsToPendingNextLine(updateTimestamp = true) {
         game.pendingNextLine[activeType + 'LineModifiedAt'] = new Date().toISOString();
         // Track our local edit time for conflict detection
         localLineEditTimestamps[activeType + 'Line'] = Date.now();
-        // The edit supersedes any prior Lineup Ready latch.
-        clearLineupReadyLatch(game);
     }
 
     // Save (triggers sync)
@@ -3656,9 +3501,6 @@ function updatePanelGenderRatioDisplay() {
 /**
  * Determine which line will be used for the next point.
  *
- * Three-priority Intent Rule (TODO.md § "Multi-Coach Line Selection:
- * Intent Rule & LC-Viewing Label"):
- *
  * CRITICAL INVARIANT: the returned `source` is always side-consistent
  * with `determineStartingPosition()` — either `typeKey` (the determined
  * side) or `'od'` (the combined line). It is NEVER the opposite side.
@@ -3667,30 +3509,27 @@ function updatePanelGenderRatioDisplay() {
  * source 'o'→offense / 'd'→defense, so a side-flipped source would
  * mislabel the button and field the wrong unit.)
  *
- *   1. Lineup Ready latch. If the LC pressed "Lineup Ready" (newer than
- *      every relevant *ModifiedAt), honor it — but lineupReadyMode only
- *      disambiguates combined-OD vs side-specific, not the side: 'od' →
- *      odLine; anything else → the determined side's line.
+ * Priority order:
  *
- *   2. Per-axis most-recent edit. For an upcoming O point, compare
- *      oLine vs odLine timestamps; for a D point, dLine vs odLine.
- *      Newer non-empty side wins. Per-axis (not global) so prepping a
- *      D line for the next defense point can't surface an empty O line
- *      if the team scores instead.
+ *   1. LC view preference. If `lineCoachViewing` is set and its
+ *      timestamp is newer than every relevant *ModifiedAt, honor the
+ *      LC's current view — but only as combined-OD vs side-specific:
+ *      'od' → odLine; anything else → the determined side's line. The
+ *      LC's view never flips the side.
+ *
+ *   2. Per-axis most-recent edit. For an upcoming O point compare oLine
+ *      vs odLine timestamps; for a D point, dLine vs odLine. Newer
+ *      non-empty side wins.
  *
  *   3. Same-side fallback. If the winner was empty, fall through to the
  *      other same-side option (this-side typed ↔ odLine) — never the
- *      opposite side. Then empty.
+ *      opposite side.
  *
- * The O/D line, once created, persists across multiple points until OD
- * is edited more recently — no per-window freshness gate. The Line
- * Coach saying "here's our O line" should hold until they say otherwise.
+ *   4. lastPoint safety net. If all same-side options are still empty
+ *      (cross-device sync lag, edge case), surface the just-played
+ *      lineup so the AC's Start Point button stays actionable.
  *
- * Returns `{ source, line }` where `source` is `'o' | 'd' | 'od'` and
- * `line` is the array of player names. Used by:
- *   - `startNextPoint` to decide which player set actually starts the point
- *   - `applyStartPointButtonState` to label the button ("— O line", etc.)
- *   - `autoSelectActiveTypeForNextPoint` to keep the visible view in sync
+ * Returns `{ source, line }` where `source` is `'o' | 'd' | 'od'`.
  */
 function getEffectiveLineForNextPoint(game) {
     if (!game || !game.pendingNextLine) return { source: 'od', line: [] };
@@ -3708,38 +3547,22 @@ function getEffectiveLineForNextPoint(game) {
     const odTime    = p.odLineModifiedAt
         ? new Date(p.odLineModifiedAt).getTime() : 0;
 
-    // INVARIANT: the returned `source` must be side-consistent — `typeKey`
-    // (the side who-scored determined, via determineStartingPosition) or
-    // `'od'` (the combined line, valid for either side). It must NEVER be
-    // the opposite side. Downstream (applyStartPointButtonState) treats
-    // source 'o' as offense and 'd' as defense and labels/uses the line
-    // accordingly, so a source that disagrees with the determined side
-    // would put the wrong unit on the field and mislabel the button
-    // ("Start Point (O-line)" after we scored, etc.).
-
-    // ── Priority 1: Lineup Ready latch ────────────────────────────────
-    // The LC pressed "Lineup Ready" — an explicit "I'm done, this is the
-    // line." But lineupReadyMode captures only WHICH line they were
-    // viewing (o/d/od/split), NOT the side; the side is fixed by who
-    // scored. So the latch disambiguates *combined-OD vs side-specific*
-    // and nothing more: 'od' → use odLine; anything else → use the
-    // determined side's line. A latch captured on the opposite side
-    // (LC viewing the O line, then we score → D point) thus resolves to
-    // the D line, never flips the point to offense.
-    //
-    // Stale-latch defense: require lineupReadyAt newer than the relevant
-    // *ModifiedAt (the value→null clear-on-edit doesn't propagate via the
-    // server merge, but line-edit timestamps do).
-    const readyAt   = p.lineupReadyAt || 0;
-    const readyMode = p.lineupReadyMode;
-    if (readyAt && readyMode
-        && readyAt > typedTime && readyAt > odTime) {
-        const latchSource = (readyMode === 'od') ? 'od' : typeKey;
-        const latchLine = p[latchSource + 'Line'] || [];
-        if (latchLine.length > 0) {
-            return { source: latchSource, line: latchLine };
+    // ── Priority 1: LC view preference ────────────────────────────────
+    // The LC's current view (synced via lineCoachViewing) is a soft
+    // tiebreaker. If it's newer than every relevant *ModifiedAt, treat
+    // it as "this is what they're planning around" — 'od' means combined
+    // OD line, anything else means use the determined side's line. The
+    // side itself is fixed by who scored; the view never flips it.
+    const lcView   = p.lineCoachViewing;
+    const lcViewAt = p.lineCoachViewingAt
+        ? new Date(p.lineCoachViewingAt).getTime() : 0;
+    if (lcView && lcViewAt > typedTime && lcViewAt > odTime) {
+        const viewSource = (lcView === 'od') ? 'od' : typeKey;
+        const viewLine = p[viewSource + 'Line'] || [];
+        if (viewLine.length > 0) {
+            return { source: viewSource, line: viewLine };
         }
-        // Latched line is empty — fall through to the fallbacks.
+        // View points at an empty line — fall through.
     }
 
     // ── Priority 2: per-axis most-recent edit ─────────────────────────
