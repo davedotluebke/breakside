@@ -832,6 +832,79 @@ class TestPendingLineMerge:
         assert cur["scores"] == {"team": 5, "opponent": 3}
         assert len(cur["points"]) == 8
 
+    # ---------------------------------------------------------------------
+    # LC-viewing signal (lineCoachViewing / lineCoachViewingAt). Drives
+    # Priority 1 of the Intent Rule and the AC's "Line Coach: viewing the
+    # X line" sub-label.
+    # ---------------------------------------------------------------------
+
+    def test_line_coach_viewing_merges_independently(self, isolate_test_data):
+        """lineCoachViewing has its own timestamp and merges independently
+        of the line-edit and Lineup Ready timestamps.
+        """
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "merge-viewing-001"
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    lineCoachViewing="o",
+                                    lineCoachViewingAt="2026-05-24T18:00:00.000Z")})
+        # LC switches view; newer lineCoachViewingAt wins.
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    lineCoachViewing="d",
+                                    lineCoachViewingAt="2026-05-24T18:05:00.000Z")})
+
+        pnl = get_game_current(gid)["pendingNextLine"]
+        assert pnl["lineCoachViewing"] == "d"
+        assert pnl["lineCoachViewingAt"] == "2026-05-24T18:05:00.000Z"
+
+    def test_stale_line_coach_viewing_does_not_clobber(self, isolate_test_data):
+        """A stale lineCoachViewing write (e.g. an out-of-order sync from a
+        device with a slow connection) must NOT roll back a newer view value.
+        """
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "merge-viewing-002"
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    lineCoachViewing="od",
+                                    lineCoachViewingAt="2026-05-24T18:05:00.000Z")})
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    lineCoachViewing="d",
+                                    lineCoachViewingAt="2026-05-24T18:00:00.000Z")})
+
+        pnl = get_game_current(gid)["pendingNextLine"]
+        assert pnl["lineCoachViewing"] == "od"
+        assert pnl["lineCoachViewingAt"] == "2026-05-24T18:05:00.000Z"
+
+    def test_viewing_and_ready_merge_independently(self, isolate_test_data):
+        """lineCoachViewingAt and lineupReadyAt have separate timestamps;
+        advancing one must not affect the other.
+        """
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "merge-viewing-003"
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    lineupReadyAt=1716576060000,
+                                    lineupReadyBy="Coach A",
+                                    lineCoachViewing="d",
+                                    lineCoachViewingAt="2026-05-24T18:00:00.000Z")})
+        # LC switches view to "o" but does NOT re-press Ready.
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    lineCoachViewing="o",
+                                    lineCoachViewingAt="2026-05-24T18:05:00.000Z")})
+
+        pnl = get_game_current(gid)["pendingNextLine"]
+        # Viewing advanced.
+        assert pnl["lineCoachViewing"] == "o"
+        # Ready ping unchanged.
+        assert pnl["lineupReadyAt"] == 1716576060000
+        assert pnl["lineupReadyBy"] == "Coach A"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
