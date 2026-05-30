@@ -55,7 +55,7 @@
 
   .actionrow{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:7px 12px;background:#fff;border-bottom:1px solid #eee}
   .modepill{display:inline-block;padding:5px 14px;border-radius:999px;font-weight:600;font-size:12px;color:#fff}
-  .modepill.offense{background:var(--blue)}.modepill.defense{background:var(--red)}
+  .modepill.offense{background:var(--blue)}.modepill.defense{background:var(--red)}.modepill.pull{background:#e0a64b}
   .iconbtn{width:34px;height:34px;border:1px solid #ccc;border-radius:7px;background:#fff;color:#555;cursor:pointer;font-size:14px}
   .undo{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border:1px solid #bbb;border-radius:7px;background:#fff;color:#333;font-weight:600;font-size:12.5px;cursor:pointer}
 
@@ -113,6 +113,7 @@
   .marker.score{background:var(--green)}
   .marker.turn{background:var(--red)}
   .marker.block{background:var(--green)}
+  .marker.pull{background:rgba(80,80,80,.85)}
 
   /* drag ghost (pegman) + field-first popover */
   .pegman{position:fixed;z-index:999;pointer-events:none;transform:translate(-50%,-100%);
@@ -159,6 +160,8 @@
   .ebtn.block{color:var(--green);flex:1 1 100%;background:#e7f7f0;border-color:#86d3b3}
   .ebtn.theyscore{color:#b91c1c}
   .ebtn.more{flex:0 0 auto;min-width:auto;color:#666}
+  .ebtn.pullhang{flex:1 1 100%;background:#fff7e6;border-color:#e0a64b;color:#92600b;font:700 14px 'JetBrains Mono',monospace}
+  .ebtn.pullbrick{flex:1 1 auto;background:#fff;border-color:#e0a64b;color:#92600b}
   .ebtn.on{background:var(--armbg);border-color:var(--armbg);color:#fff}
 
   /* landscape lower split: field/status/events on the left, modifier column on the right */
@@ -221,6 +224,7 @@ Drag any of the last 4 markers to fine-tune; older plays fade.</p>
     <div class="seg" id="segO"><button data-v="portrait" class="on">Portrait (in-tab)</button><button data-v="landscape">Landscape (full-screen)</button></div></div>
   <div class="tgroup"><label>Mode</label>
     <div class="seg" id="segM"><button data-v="offense" class="on">Offense</button><button data-v="defense">Defense</button></div></div>
+  <button class="resetbtn" id="startpull">⏱ Start D-point (pull)</button>
   <button class="resetbtn" id="reset">↺ Reset point</button>
 </div>
 <p class="hint">Tip: the ⛶ button in the header toggles portrait ⇄ landscape full-screen, the same affordance a coach would use mid-game.</p>
@@ -255,7 +259,9 @@ let S;
 function reset(){
   S={ o:S?S.o:'portrait', mode:S?S.mode:'offense',
       flipHA:S?S.flipHA:false, flipAD:S?S.flipAD:false,   // sideline & attacking-direction orientation
-      holder:'p1', disc:{l:EZ+8,w:W/2}, armed:null, pending:null, dPlacing:null, dMods:[], events:[], undo:[] };
+      holder:'p1', disc:{l:EZ+8,w:W/2}, armed:null, pending:null, dPlacing:null, dMods:[],
+      pulling:false, puller:null, pullRunning:false, pullStart:0, pullMs:null, pullMods:[],
+      events:[], undo:[] };
   render();
 }
 function snap(){ S.undo.push({disc:{...S.disc},holder:S.holder,mode:S.mode,len:S.events.length}); }
@@ -286,6 +292,7 @@ const phone=document.getElementById('phone');
 // The player-row slot. On defense it shows Block/Interception until one is
 // tapped, then becomes the player row (+ a cancel) to attribute the D.
 function playerSlot(){
+  if(S.pulling) return ROSTER.map(chipHTML).join('')+chipHTML(UNKNOWN);   // pick the puller
   if(S.mode==='defense' && !S.dPlacing)
     return `<div class="dtypebtn block" data-dtype="block">⛔ Block</div>`+
            `<div class="dtypebtn int" data-dtype="interception">Interception</div>`+
@@ -300,7 +307,7 @@ function playerSlot(){
 function chipHTML(p){
   const cls=['chip',p.g];
   if(p.id===S.holder)cls.push('holder');
-  if(p.id===S.armed)cls.push('armed');
+  if(p.id===S.armed || (S.pulling && p.id===S.puller))cls.push('armed');
   const lead = p.id==='unknown' ? `<span class="umark">?</span>` : `<span class="num">${p.num}</span>`;
   return `<div class="${cls.join(' ')}" data-pid="${p.id}">${lead}<span class="nm">${p.name}</span></div>`;
 }
@@ -338,8 +345,9 @@ function fieldHTML(){
     if(!e.from||!e.to)return;
     const rec=S.events.length-1-i, op=rec<VISIBLE?(1-rec*0.2):0.1;
     const a=pct(e.from.l,e.from.w), b=pct(e.to.l,e.to.w);
-    const col=e.type==='score'?'#34d399':(['turn','drop','throwaway'].includes(e.type))?'#fca5a5':e.type==='block'?'#34d399':'#bfdbfe';
-    h+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col}" stroke-width="0.8" marker-end="url(#ah)" vector-effect="non-scaling-stroke" opacity="${op.toFixed(2)}"/>`;
+    const col=e.type==='pull'?'#e5e7eb':e.type==='score'?'#34d399':(['turn','drop','throwaway'].includes(e.type))?'#fca5a5':e.type==='block'?'#34d399':'#bfdbfe';
+    const dash=e.type==='pull'?'stroke-dasharray="3 2"':'';
+    h+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col}" stroke-width="0.8" marker-end="url(#ah)" ${dash} vector-effect="non-scaling-stroke" opacity="${op.toFixed(2)}"/>`;
   });
   h+=`</svg>`;
   // markers (fade older; last VISIBLE are draggable)
@@ -347,8 +355,8 @@ function fieldHTML(){
     if(!e.to)return;
     const rec=S.events.length-1-i, op=rec<VISIBLE?(1-rec*0.2):0.1, drag=rec<VISIBLE;
     const p=pct(e.to.l,e.to.w);
-    const cls=(e.type==='score'||e.type==='callahan')?'score':['block','interception','stall'].includes(e.type)?'block':e.type==='completion'?'completion':'turn';
-    const glyph=e.type==='score'?'G':e.type==='callahan'?'C':e.type==='block'?'D':e.type==='interception'?'I':e.type==='stall'?'S':e.type==='completion'?(i+1):'✗';
+    const cls=e.type==='pull'?'pull':(e.type==='score'||e.type==='callahan')?'score':['block','interception','stall'].includes(e.type)?'block':e.type==='completion'?'completion':'turn';
+    const glyph=e.type==='pull'?'P':e.type==='score'?'G':e.type==='callahan'?'C':e.type==='block'?'D':e.type==='interception'?'I':e.type==='stall'?'S':e.type==='completion'?(i+1):'✗';
     h+=`<div class="marker ${cls}" ${drag?`data-mkidx="${i}"`:''} style="left:${p.x}%;top:${p.y}%;opacity:${op.toFixed(2)}">${glyph}</div>`;
   });
   const d=pct(S.disc.l,S.disc.w);
@@ -357,6 +365,10 @@ function fieldHTML(){
 }
 
 function statusText(){
+  if(S.pulling){
+    const who=S.puller?`<b>${pname(S.puller)}</b> pulls — `:'';
+    return `<span class="modepill pull">PULL</span> ${who}time the hang, then tap where it landed (or Brick)`;
+  }
   const mode=`<span class="modepill ${S.mode}">${S.mode==='offense'?'OFFENSE':'DEFENSE'}</span>`;
   if(S.mode==='defense'){
     if(S.armed)return `${mode} Tap where <b>${pname(S.armed)}</b> made the ${S.dPlacing}`;
@@ -369,7 +381,15 @@ function statusText(){
   return `${mode} <b>${pname(S.holder)||'?'}</b> has the disc`;
 }
 
+function hangLabel(){
+  if(S.pullRunning) return '⏱ '+((performance.now()-S.pullStart)/1000).toFixed(1)+'s — tap on landing';
+  if(S.pullMs) return '⏱ '+(S.pullMs/1000).toFixed(1)+'s hang';
+  return '⏱ Tap on release';
+}
 function eventsHTML(){
+  if(S.pulling)return `
+    <div class="ebtn pullhang" data-pull="hang">${hangLabel()}</div>
+    <div class="ebtn pullbrick" data-pull="brick">Brick</div>`;
   if(S.mode==='defense')return `
     <div class="ebtn" data-act="theyturn" style="color:var(--green)">They turnover</div>
     <div class="ebtn theyscore" data-act="theyscore">They score</div>
@@ -393,7 +413,12 @@ function lastModIdx(){for(let i=S.events.length-1;i>=0;i--){if(TAGGABLE.includes
 // a D and stays until the first completed pass, after which it reads
 // "Last throw was a:". While a D is being placed (dPlacing set) it pre-labels
 // the D you're about to record — before player/location are chosen.
+const PMODS=['OB','Roller','OI','IO'];   // rare pull tags
 function modColHTML(){
+  if(S.pulling){
+    return `<div class="mh">This pull:</div><div class="msub">${S.puller?pname(S.puller):'pick a puller'}</div>`+
+      PMODS.map(m=>`<div class="modbtn ${S.pullMods.includes(m)?'on':''}" data-pmod="${m}">${m}</div>`).join('');
+  }
   if(S.mode==='defense' && S.dPlacing){
     return `<div class="mh">Last D was a:</div><div class="msub">${cap(S.dPlacing)}</div>`+
       DMODS.map(m=>`<div class="modbtn ${S.dMods.includes(m)?'on':''}" data-pdmod="${m}">${m}</div>`).join('');
@@ -478,7 +503,10 @@ function fitPlayers(){
   if(clipped()){ row.classList.add('hide-nums'); if(clipped()) row.classList.add('unknown-compact'); }
 }
 
-function armPlayer(pid){ S.armed = (S.armed===pid? null : pid); render(); }
+function armPlayer(pid){
+  if(S.pulling){ S.puller = (S.puller===pid?null:pid); render(); return; }
+  S.armed = (S.armed===pid? null : pid); render();
+}
 
 function placeAt(l,w){
   const to=clamp(l,w), from={...S.disc};
@@ -535,6 +563,7 @@ function openScoreDialog(idx){
 }
 
 function fieldTap(l,w,cx,cy){
+  if(S.pulling){placePull(l,w);return;}            // tap = pull landing spot
   if(S.mode==='defense'){
     if(!S.dPlacing)return;                  // must choose Block / Interception first
     if(S.armed){placeAt(l,w);return;}
@@ -557,6 +586,34 @@ function onEvent(act){
   if(act==='theyturn'){snap();S.events.push({type:'theyturn'});S.holder=null;S.mode='offense';render();return;} // unforced → our disc
   S.pending=S.pending===act?null:act; render();        // offense drop / throwaway / score toggles
 }
+/* ---- pull (D-point start): puller + hangtime stopwatch + landing/brick ---- */
+let pullTimer=null;
+function startPull(){
+  S.mode='defense';S.pulling=true;S.dPlacing=null;S.armed=null;S.pending=null;
+  S.puller=null;S.pullMs=null;S.pullRunning=false;S.pullMods=[];
+  if(pullTimer)clearInterval(pullTimer);render();
+}
+function toggleHang(){
+  if(S.pullRunning){S.pullRunning=false;S.pullMs=performance.now()-S.pullStart;if(pullTimer)clearInterval(pullTimer);render();}
+  else{S.pullRunning=true;S.pullStart=performance.now();S.pullMs=0;
+    if(pullTimer)clearInterval(pullTimer);
+    pullTimer=setInterval(()=>{const b=phone.querySelector('.pullhang');if(b)b.textContent='⏱ '+((performance.now()-S.pullStart)/1000).toFixed(1)+'s — tap on landing';},100);
+    render();}
+}
+function togglePMod(m){const k=S.pullMods.indexOf(m);if(k>=0)S.pullMods.splice(k,1);else S.pullMods.push(m);render();}
+function placePull(l,w,brick){
+  const goal = S.flipAD ? L-EZ : EZ;                 // we pull from our defending goal line
+  const to = brick ? {l:(S.flipAD?BRICK[1]:BRICK[0]), w:W/2} : clamp(l,w);
+  snap();
+  S.events.push({type:'pull', from:{l:goal,w:W/2}, to, by:S.puller||undefined,
+    hang:(S.pullMs?S.pullMs:undefined), brick:!!brick,
+    mods:S.pullMods.length?S.pullMods.slice():undefined});
+  S.disc=to; S.holder=null;                          // opponent receives → we're on defense
+  if(pullTimer)clearInterval(pullTimer);
+  S.pulling=false;S.pullRunning=false;S.pullMs=null;S.pullMods=[];S.puller=null;
+  render();
+}
+
 function setDPlacing(t){S.dPlacing=t;S.pending=t;S.armed=null;render();}
 function cancelDPlacing(){S.dPlacing=null;S.pending=null;S.armed=null;S.dMods=[];render();}
 
@@ -632,7 +689,9 @@ function onUp(e){
   if(d.kind==='chip'){
     if(!d.moved){armPlayer(d.pid);return;}
     const p=pointInField(e.clientX,e.clientY);
-    if(p){S.armed=d.pid; if(S.mode==='defense'&&!S.pending)S.pending='block'; placeAt(p.l,p.w);} else render();
+    if(p){ if(S.pulling){S.puller=d.pid;placePull(p.l,p.w);}    // drag puller → landing spot
+           else {S.armed=d.pid; placeAt(p.l,p.w);} }
+    else render();
   }else if(d.kind==='marker'){ render(); }
   else if(d.kind==='field'){
     if(!d.moved){const p=pointInField(e.clientX,e.clientY); if(p)fieldTap(p.l,p.w,e.clientX,e.clientY);}
@@ -657,6 +716,8 @@ function wire(){
   phone.querySelectorAll('.ebtn').forEach(b=>b.onclick=()=>onEvent(b.dataset.act));
   phone.querySelectorAll('.modbtn[data-mod]').forEach(b=>b.onclick=()=>toggleMod(b.dataset.mod));
   phone.querySelectorAll('.modbtn[data-pdmod]').forEach(b=>b.onclick=()=>togglePDMod(b.dataset.pdmod));
+  phone.querySelectorAll('.modbtn[data-pmod]').forEach(b=>b.onclick=()=>togglePMod(b.dataset.pmod));
+  phone.querySelectorAll('[data-pull]').forEach(b=>b.onclick=()=>{b.dataset.pull==='hang'?toggleHang():placePull(0,0,true);});
   phone.querySelectorAll('.dtypebtn').forEach(b=>b.onclick=()=>setDPlacing(b.dataset.dtype));
   const ham=phone.querySelector('#hamburger'); if(ham)ham.onclick=()=>openHamburger(ham.getBoundingClientRect());
   const dc=phone.querySelector('.dcancel'); if(dc)dc.onclick=cancelDPlacing;
@@ -668,8 +729,9 @@ phone.addEventListener('pointerdown',onDown);
 
 /* ===================== toolbar ===================== */
 document.getElementById('segO').onclick=e=>{if(e.target.dataset.v){S.o=e.target.dataset.v;render();}};
-document.getElementById('segM').onclick=e=>{if(e.target.dataset.v){S.mode=e.target.dataset.v;S.armed=null;S.pending=null;S.dPlacing=null;render();}};
+document.getElementById('segM').onclick=e=>{if(e.target.dataset.v){S.mode=e.target.dataset.v;S.armed=null;S.pending=null;S.dPlacing=null;S.pulling=false;render();}};
 document.getElementById('reset').onclick=reset;
+document.getElementById('startpull').onclick=startPull;
 
 document.getElementById('notes').innerHTML=`
   <h2>What changed from v1</h2>
@@ -681,7 +743,7 @@ document.getElementById('notes').innerHTML=`
       <br>• tap player → tap spot &nbsp; • tap empty spot → pick from popover &nbsp; • drag player (🧍 pegman) → drop on field.</li>
     <li><b>Drag to fine-tune.</b> Grab any of the last ${VISIBLE} catch markers (or the disc) and slide it; the arrow follows.</li>
     <li><b>Older plays fade</b> — only the last ${VISIBLE} stay solid &amp; draggable, so the field doesn't clog.</li>
-    <li><b>No Pull/Brick buttons.</b> Those belong to the D-point start dialog (hangtime stopwatch + brick), not the always-on bar — deferred to that flow.</li>
+    <li><b>Pull is its own D-point-start flow</b> (not on the always-on bar) — see below.</li>
     <li><b>Mic FAB</b> reserved bottom-right in both layouts; the events row leaves clearance.</li>
     <li>Auto-score still applies: a completion placed in the attacking endzone records a goal.</li>
   </ul>
@@ -692,6 +754,12 @@ document.getElementById('notes').innerHTML=`
     <li>Bottom bar: <b>They turnover</b> · <b>They score</b> · <b>⋯ more</b>.</li>
     <li>A D — or "they turnover" — is a change of possession, so it flips you to the offense screen. Throwing it away on offense flips you here.</li>
     <li>An <b>Unknown</b> (dashed "?") chip is available on O and D for when you didn't catch who made the play; it collapses to just "?" if the landscape row gets tight.</li>
+  </ul>
+  <h2>Pull (D-point start)</h2>
+  <ul>
+    <li>Use the <b>⏱ Start D-point (pull)</b> button above to enter it (in the real app it fires automatically when a D-point starts).</li>
+    <li>The player row becomes a <b>puller picker</b>; the bottom bar shows a <b>hangtime stopwatch</b> (tap on release → tap on landing) and a <b>Brick</b> button; the right column carries rare tags (OB / Roller / OI / IO).</li>
+    <li>Finish by <b>tapping the field</b> where the pull landed (or drag the puller there, or hit <b>Brick</b>). That records the pull (puller, hangtime, flags, dashed trajectory) and drops you into the D screen with the opponent receiving.</li>
   </ul>
   <h2>One modifier column, tags the last play</h2>
   <ul>
