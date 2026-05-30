@@ -1644,9 +1644,7 @@ body.game-screen-active header {
     text-decoration: underline;
 }
 
-.panel-selectLine.readonly .select-line-mode-toggle,
-.panel-selectOLine.readonly .select-line-mode-toggle,
-.panel-selectDLine.readonly .select-line-mode-toggle {
+.panel-selectLine.readonly .select-line-mode-toggle {
     pointer-events: none;
     opacity: 0.5;
 }
@@ -2331,49 +2329,6 @@ body.panel-dragging .panel-content {
    ============================================================================= */
 
 /* Panel animations are now handled via height changes with CSS transitions */
-
-/* =============================================================================
-   O/D Split Panels - Stacked O and D line selection panels
-   ============================================================================= */
-
-.panel-selectOLine {
-    background: #fff;
-}
-
-
-.panel-selectOLine .panel-content {
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-height: 0;
-}
-
-.panel-selectDLine {
-    background: #fff;
-}
-
-
-.panel-selectDLine .panel-content {
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-height: 0;
-}
-
-/* Split panel readonly state */
-.panel-selectOLine.readonly .select-line-lines-btn,
-.panel-selectDLine.readonly .select-line-lines-btn {
-    opacity: 0.6;
-    pointer-events: none;
-}
-
-.panel-selectOLine.readonly .panel-player-table .active-checkbox,
-.panel-selectDLine.readonly .panel-player-table .active-checkbox {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
 
 /* =============================================================================
    Game Settings Dialog
