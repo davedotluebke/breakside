@@ -67,8 +67,11 @@
   /* portrait: single left name rail */
   .sidebar{flex:0 0 152px;display:flex;flex-direction:column;gap:7px;padding:12px 8px;overflow:auto;background:#fff;border-right:1px solid #e3e3e3}
 
-  /* landscape: players across the top */
-  .players{flex:0 0 auto;display:flex;gap:6px;padding:7px 10px;background:#fff;border-bottom:1px solid #ddd;overflow-x:auto}
+  /* landscape: players across the top — exactly 7, never scroll; shrink to fit */
+  .players{flex:0 0 auto;display:flex;flex-wrap:nowrap;gap:6px;padding:7px 10px;background:#fff;border-bottom:1px solid #ddd}
+  .players .chip{flex:1 1 0;min-width:0;justify-content:center;gap:5px}
+  .players .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .players.hide-nums .num{display:none}     /* first thing to drop when tight */
 
   /* ---- field ---- */
   .field{position:relative;background:linear-gradient(var(--field),var(--field2));
@@ -144,6 +147,7 @@
   .modbtn{flex:0 0 auto;border:1px solid #cfcfcf;border-radius:6px;background:#f7f7f7;padding:7px 8px;font-size:13px;font-weight:600;color:#333;cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent}
   .modbtn.on{background:var(--armbg);border-color:var(--armbg);color:#fff}
   .modbtn.disabled{opacity:.38;pointer-events:none}
+  .modsep{flex:0 0 auto;height:1px;background:#e3e3e3;margin:8px 2px 4px}
 
   /* mic FAB */
   .mic{position:absolute;right:14px;bottom:12px;width:54px;height:54px;border-radius:50%;background:#e0533a;
@@ -221,7 +225,7 @@ function chipHTML(p){
   const cls=['chip',p.g];
   if(p.id===S.holder)cls.push('holder');
   if(p.id===S.armed)cls.push('armed');
-  return `<div class="${cls.join(' ')}" data-pid="${p.id}"><span class="num">${p.num}</span>${p.name}</div>`;
+  return `<div class="${cls.join(' ')}" data-pid="${p.id}"><span class="num">${p.num}</span><span class="nm">${p.name}</span></div>`;
 }
 
 function fieldHTML(){
@@ -344,7 +348,7 @@ function render(){
         <span style="flex:1 1 auto"></span>
         <button class="undo" id="undo">↺ Undo</button></div>
       <div class="play">
-        <div class="prow"><div class="sidebar">${ROSTER.map(chipHTML).join('')}</div>${fieldBox}</div>
+        <div class="prow"><div class="sidebar">${ROSTER.map(chipHTML).join('')}<div class="modsep"></div>${modColHTML()}</div>${fieldBox}</div>
         <div class="statusbar">${statusText()}</div>
         <div class="events">${eventsHTML()}</div>
         <button class="mic" title="Narration mic">🎙️</button>
@@ -373,6 +377,16 @@ function render(){
 }
 
 /* ===================== interaction ===================== */
+// Keep all 7 player chips on one row: if any name is being clipped, drop the
+// jersey numbers first (numbers matter little for your own team), reclaiming
+// width for the names. Names still ellipsize as a last resort.
+function fitPlayers(){
+  const row=phone.querySelector('.players'); if(!row)return;
+  row.classList.remove('hide-nums');
+  const clipped=[...row.querySelectorAll('.nm')].some(n=>n.scrollWidth>n.offsetWidth+1);
+  if(clipped) row.classList.add('hide-nums');
+}
+
 function armPlayer(pid){ S.armed = (S.armed===pid? null : pid); render(); }
 
 function placeAt(l,w){
@@ -462,6 +476,7 @@ function popPicker(cx,cy,cb){
 function wire(){
   phone.querySelectorAll('.ebtn').forEach(b=>b.onclick=()=>onEvent(b.dataset.act));
   phone.querySelectorAll('.modbtn').forEach(b=>b.onclick=()=>toggleMod(b.dataset.mod));
+  fitPlayers();
   const u=phone.querySelector('#undo'); if(u)u.onclick=doUndo;
   const x=phone.querySelector('#expand'); if(x)x.onclick=()=>{S.o=S.o==='portrait'?'landscape':'portrait';render();};
 }
