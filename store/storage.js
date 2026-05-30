@@ -118,12 +118,11 @@ function serializeGame(game) {
         roundEndTime: game.roundEndTime || null,
         // Phase 6b: Pending next line selections for multi-device sync
         // Note: activeType is local-only (not synced) - each user views/edits independently
-        // lineupReadyAt / lineupReadyBy / lineupReadyMode are the multi-coach
-        // "I'm done picking the line" ping written by the Line Coach and read
-        // by the Active Coach. lineCoachViewing / lineCoachViewingAt let the
-        // AC's panel show "Line Coach: viewing the X line" without forcing
-        // the AC's own view to follow. Without these in the serialized
-        // payload they get dropped at the sync boundary.
+        // lineupReadyAt / lineupReadyBy are the LC→AC ping (fire-and-forget,
+        // surfaces a toast on the AC's polling refresh; no persistent latch
+        // beyond that). lineCoachViewing / lineCoachViewingAt let the AC's
+        // panel show "Line Coach: viewing the X line" without forcing the
+        // AC's own view to follow, and drive Priority 1 of the Intent Rule.
         pendingNextLine: game.pendingNextLine ? {
             oLine: game.pendingNextLine.oLine || [],
             dLine: game.pendingNextLine.dLine || [],
@@ -133,7 +132,6 @@ function serializeGame(game) {
             odLineModifiedAt: game.pendingNextLine.odLineModifiedAt || null,
             lineupReadyAt: game.pendingNextLine.lineupReadyAt || null,
             lineupReadyBy: game.pendingNextLine.lineupReadyBy || null,
-            lineupReadyMode: game.pendingNextLine.lineupReadyMode || null,
             lineCoachViewing: game.pendingNextLine.lineCoachViewing || null,
             lineCoachViewingAt: game.pendingNextLine.lineCoachViewingAt || null
         } : null,
