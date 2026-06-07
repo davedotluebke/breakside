@@ -1,0 +1,186 @@
+/*
+ * Field Play-by-Play styles. See playByPlay/fieldPbp.js and the mockup at
+ * mockups/field-position/index.html for the canonical look.
+ *
+ * The field itself is sized by aspect-ratio so it fits any panel size while
+ * keeping the 120:40 (length:width) proportion; all on-field elements are
+ * %-positioned so they don't depend on the pixel size.
+ */
+
+:root {
+    --fp-field: #3a7d44;
+    --fp-field2: #347040;
+    --fp-line: rgba(255, 255, 255, .85);
+    --fp-guide: rgba(255, 255, 255, .34);
+    --fp-rz: rgba(255, 80, 80, .72);
+    --fp-ez: rgba(255, 255, 255, .13);
+    --fp-blue: #2563eb;
+    --fp-red: #dc2626;
+    --fp-hold: #e0a64b;
+    --fp-holdbg: #fff3d6;
+}
+
+/* Panel shell — mirrors the Full PBP panel: full-tab-only, no drag resize. */
+.panel-playByPlayField {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.panel-playByPlayField .panel-content.field-pbp-content {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #eef0f2;
+}
+/* Role-disabled fade, matching Full PBP. */
+.panel-playByPlayField.role-disabled .fp-play {
+    opacity: .5;
+    pointer-events: none;
+}
+
+/* Action row: mode pill + orientation toggle + Undo. */
+.fp-actionrow {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    background: #fff;
+    border-bottom: 1px solid #eee;
+}
+.fp-actionrow-spacer { flex: 1 1 auto; }
+.fp-modepill {
+    display: inline-block;
+    padding: 5px 14px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 12px;
+    color: #fff;
+}
+.fp-modepill.offense { background: var(--fp-blue); }
+.fp-modepill.defense { background: var(--fp-red); }
+.fp-iconbtn {
+    width: 34px; height: 34px;
+    border: 1px solid #ccc; border-radius: 7px;
+    background: #fff; color: #555; cursor: pointer; font-size: 14px;
+}
+.fp-undo {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 13px;
+    border: 1px solid #bbb; border-radius: 7px;
+    background: #fff; color: #333; font-weight: 600; font-size: 12.5px; cursor: pointer;
+}
+
+/* Play area = field + status + events. */
+.fp-play {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    position: relative;
+}
+.fp-prow {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+    min-width: 0;
+    background: #eef0f2;
+}
+
+/* Portrait: left name rail; landscape: players across the top. */
+.field-pbp-content[data-o="portrait"] .fp-sidebar {
+    flex: 0 0 152px;
+    display: flex; flex-direction: column; gap: 7px;
+    padding: 12px 8px; overflow: auto;
+    background: #fff; border-right: 1px solid #e3e3e3;
+}
+.field-pbp-content[data-o="landscape"] .fp-prow { flex-direction: column; }
+.field-pbp-content[data-o="landscape"] .fp-sidebar {
+    flex: 0 0 auto;
+    display: flex; flex-direction: row; flex-wrap: nowrap; gap: 6px;
+    padding: 7px 10px; overflow: hidden;
+    background: #fff; border-bottom: 1px solid #ddd;
+}
+.field-pbp-content[data-o="landscape"] .fp-rail {
+    display: flex; flex-direction: row; flex: 1 1 auto; gap: 6px; min-width: 0;
+}
+.field-pbp-content[data-o="landscape"] .fp-rail .fp-chip { flex: 1 1 0; min-width: 0; justify-content: center; }
+.field-pbp-content[data-o="landscape"] .fp-modsep { display: none; }
+.field-pbp-content[data-o="landscape"] .fp-modcol { display: none; }
+
+.fp-rail { display: flex; flex-direction: column; gap: 7px; }
+.fp-rail-placeholder { color: #888; font-size: 13px; padding: 6px 2px; }
+.fp-modsep { flex: 0 0 auto; height: 1px; background: #e3e3e3; margin: 8px 2px 4px; }
+.fp-modcol { display: flex; flex-direction: column; gap: 5px; }
+.fp-modcol-label { font-size: 12.5px; font-weight: 700; color: #333; }
+.fp-modcol-sub { font: 600 11.5px 'JetBrains Mono', monospace; color: #555; }
+
+/* Player chips. */
+.fp-chip {
+    display: flex; align-items: center; gap: 7px;
+    background: #f7f7f7; border: 1px solid #cfcfcf; border-radius: 999px;
+    padding: 8px 14px; font-size: 14px; font-weight: 600; color: #222;
+    cursor: pointer; user-select: none; white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+}
+.fp-chip .fp-num { font: 700 11px 'JetBrains Mono', monospace; color: #888; }
+.fp-chip .fp-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.fp-chip.holder { background: var(--fp-holdbg); border-color: var(--fp-hold); box-shadow: 0 0 0 2px rgba(224, 166, 75, .3); }
+.fp-chip.unknown { background: #f3f4f6; border: 1px dashed #b9bdc4; color: #6b7280; font-style: italic; }
+.fp-chip .fp-umark { font: 700 12px 'JetBrains Mono', monospace; color: #9aa0a6; }
+
+/* Field box. */
+.fp-fieldwrap {
+    flex: 1 1 auto;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 0; min-width: 0; padding: 8px;
+}
+.fp-field {
+    position: relative;
+    background: linear-gradient(var(--fp-field), var(--fp-field2));
+    border: 2px solid #fff; border-radius: 3px;
+    touch-action: none;
+    flex: 0 0 auto;
+}
+/* Keep the 120:40 proportion; size to the constraining dimension. */
+.field-pbp-content[data-o="portrait"] .fp-field { height: 100%; aspect-ratio: 40 / 120; max-width: 100%; }
+.field-pbp-content[data-o="landscape"] .fp-field { width: 100%; aspect-ratio: 120 / 40; max-height: 100%; }
+
+.fp-ezfill { position: absolute; background: var(--fp-ez); }
+.fp-line { position: absolute; background: var(--fp-line); }
+.fp-gline { position: absolute; background: repeating-linear-gradient(to right, var(--fp-guide) 0 6px, transparent 6px 12px); }
+.fp-gline.v { background: repeating-linear-gradient(to bottom, var(--fp-guide) 0 6px, transparent 6px 12px); }
+.fp-gline.rz { background: repeating-linear-gradient(to right, var(--fp-rz) 0 7px, transparent 7px 13px); }
+.fp-gline.rz.v { background: repeating-linear-gradient(to bottom, var(--fp-rz) 0 7px, transparent 7px 13px); }
+.fp-brick { position: absolute; color: rgba(255, 255, 255, .5); font-size: 12px; font-weight: 700; transform: translate(-50%, -50%); pointer-events: none; }
+.fp-ezlabel { position: absolute; color: rgba(255, 255, 255, .5); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; transform: translate(-50%, -50%); }
+.fp-sidelbl { position: absolute; color: rgba(255, 255, 255, .34); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; font-weight: 600; transform: translate(-50%, -50%); }
+.fp-flbl { pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+
+/* Status + events strips. */
+.fp-statusbar {
+    flex: 0 0 auto;
+    background: #fff; border-top: 1px solid #ddd;
+    padding: 7px 12px; font-size: 12.5px; color: #444;
+    display: flex; align-items: center; gap: 8px; min-height: 34px;
+}
+.fp-statusbar b { color: #111; }
+.fp-events {
+    flex: 0 0 auto;
+    background: #fff; border-top: 1px solid #ddd;
+    padding: 8px 74px 8px 8px;
+    display: flex; flex-wrap: wrap; gap: 6px; min-height: 8px;
+}
+
+/* Mic FAB, reserved bottom-right in both layouts. */
+.fp-mic {
+    position: absolute; right: 14px; bottom: 12px;
+    width: 54px; height: 54px; border-radius: 50%;
+    background: #e0533a; color: #fff; border: none;
+    display: flex; align-items: center; justify-content: center; font-size: 20px;
+    z-index: 20; box-shadow: 0 4px 14px rgba(0, 0, 0, .3); cursor: pointer;
+}
