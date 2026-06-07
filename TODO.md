@@ -15,6 +15,18 @@ Sections, in roughly priority order:
 
 ## Active
 
+### ⚠️ Temp ops cleanup — remove localhost from prod CORS
+
+Added `http://localhost:3002` (and possibly `:3001`/`:3000`) to `ULTISTATS_ALLOWED_ORIGINS`
+in `/etc/breakside/env` on EC2 so the localhost-only Claude preview could hit the prod API
+while building the **Field tab** (`field-position` branch). Low risk (auth is a Bearer JWT in
+`localStorage`, not reachable cross-origin), but remove it once Field-tab dev wraps up:
+
+- [ ] `ssh ec2-user@3.212.138.180`; edit `/etc/breakside/env`, drop the `http://localhost:*`
+      origin(s) from `ULTISTATS_ALLOWED_ORIGINS`; `sudo systemctl restart breakside`
+- [ ] Also revert the `field-tab-phase0` staging deploy when done (redeploy whatever should
+      live on staging), and remove the `field-app` entry from `.claude/launch.json`
+
 ### AI Narration
 
 MVP shipped. Coach speaks naturally; the system extracts structured game events. See **AI Narration** in [ARCHITECTURE.md](ARCHITECTURE.md) for the full design. Active work going forward is the post-MVP improvements list below.
