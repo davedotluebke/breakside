@@ -48,7 +48,25 @@
  *
  ************************************************************************/
 
-if ('serviceWorker' in navigator) {
+// Skip the service worker during local development (localhost / 127.0.0.1).
+// Its offline precache otherwise serves stale JS/CSS across edits, so source
+// changes appear to have no effect until a manual cache purge. On localhost we
+// also proactively unregister any SW + clear its caches left over from a prior
+// session. Production and staging register it normally for offline support.
+const SW_DISABLED_HOSTS = ['localhost', '127.0.0.1'];
+const swDisabledForDev = SW_DISABLED_HOSTS.includes(location.hostname);
+
+if ('serviceWorker' in navigator && swDisabledForDev) {
+    navigator.serviceWorker.getRegistrations()
+        .then(regs => regs.forEach(r => r.unregister()))
+        .catch(() => {});
+    if (window.caches && caches.keys) {
+        caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
+    }
+    console.log('Service Worker: disabled on localhost (dev)');
+}
+
+if ('serviceWorker' in navigator && !swDisabledForDev) {
     window.addEventListener('load', () => {
         navigator.serviceWorker
             .register('./service-worker.js')
