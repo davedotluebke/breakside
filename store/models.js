@@ -254,7 +254,7 @@ class Event {
 
 // Throw event class
 class Throw extends Event {
-    constructor({thrower = "voidthrower", receiver = "voidreceiver", huck = false, breakmark = false, dump = false, hammer = false, sky = false, layout = false, score = false}) {
+    constructor({thrower = "voidthrower", receiver = "voidreceiver", huck = false, breakmark = false, dump = false, hammer = false, sky = false, layout = false, score = false, from = null, to = null, assist = null}) {
         super('Throw');
         this.thrower = thrower;
         this.receiver = receiver;
@@ -265,6 +265,15 @@ class Throw extends Event {
         this.sky_flag = sky;
         this.layout_flag = layout;
         this.score_flag = score;
+        // Field-position (canonical orientation-independent coords; see
+        // playByPlay/fieldPbp.js). from = release point, to = catch point,
+        // each {l, w} or null. Optional — only the Field tab populates them.
+        this.from = from;   // {l, w} | null
+        this.to = to;       // {l, w} | null
+        // Explicit assist attribution for scores. Defaults to null; the Field
+        // tab pre-fills it with the thrower for a goal and lets the coach edit
+        // it (e.g. to credit a hockey assist). A Player reference, like thrower.
+        this.assist = assist;
     }
 
     // Override summarize for Throw events
@@ -289,7 +298,7 @@ class Throw extends Event {
 
 // Turnover event class
 class Turnover extends Event {
-    constructor({thrower = null, receiver = null, throwaway = false, huck = false, receiverError = false, goodDefense = false, stall = false}) {
+    constructor({thrower = null, receiver = null, throwaway = false, huck = false, receiverError = false, goodDefense = false, stall = false, from = null, to = null}) {
         super('Turnover');
         this.thrower = thrower;
         this.receiver = receiver;
@@ -298,6 +307,10 @@ class Turnover extends Event {
         this.drop_flag = receiverError;
         this.defense_flag = goodDefense;
         this.stall_flag = stall;
+        // Field-position (canonical coords; see playByPlay/fieldPbp.js).
+        // from = release point, to = where it landed / the drop spot. Optional.
+        this.from = from;   // {l, w} | null
+        this.to = to;       // {l, w} | null
     }
     
     // Override summarize for Turnover events
@@ -343,7 +356,7 @@ class Violation extends Event {
 
 // Defense event class
 class Defense extends Event {
-    constructor({defender = null, block = false, interception = false, layout = false, sky = false, Callahan = false, stall = false, unforcedError = false}) {
+    constructor({defender = null, block = false, interception = false, layout = false, sky = false, Callahan = false, stall = false, unforcedError = false, to = null}) {
         super('Defense');
         this.defender = defender;       // null indicates an unforced turnover by opponent
         this.block_flag = block;        // disc deflected (footblock, knockdown) — not caught
@@ -353,6 +366,10 @@ class Defense extends Event {
         this.Callahan_flag = Callahan;
         this.stall_flag = stall;
         this.unforcedError_flag = unforcedError;
+        // Field-position (canonical coords; see playByPlay/fieldPbp.js).
+        // to = where the block / interception / stall happened. Optional;
+        // a Defense has no meaningful "from" so only `to` is tracked.
+        this.to = to;       // {l, w} | null
     }
 
     // Override summarize for Defense events
@@ -407,7 +424,7 @@ class Other extends Event {
 
 // Pull event class
 class Pull extends Event {
-    constructor({puller = null, pullerGender = Gender.UNKNOWN, quality = null, flick = false, roller = false, io = false, oi = false}) {
+    constructor({puller = null, pullerGender = Gender.UNKNOWN, quality = null, flick = false, roller = false, io = false, oi = false, from = null, to = null, hang = null, brick = false}) {
         super('Pull');
         this.puller = puller; // Player object or null for Unknown Player
         this.pullerGender = pullerGender; // 'FMP', 'MMP', or 'Unknown'
@@ -416,6 +433,12 @@ class Pull extends Event {
         this.roller_flag = roller;
         this.io_flag = io;
         this.oi_flag = oi;
+        // Field-position (canonical coords; see playByPlay/fieldPbp.js).
+        // from = the defending goal line we pull from, to = where it landed.
+        this.from = from;       // {l, w} | null
+        this.to = to;           // {l, w} | null
+        this.hang = hang;       // hang time in milliseconds | null
+        this.brick_flag = brick; // landed out the back / brought to the brick
     }
     
     // Override summarize for Pull events
