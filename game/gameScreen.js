@@ -206,6 +206,7 @@ function createHeaderPanel() {
             <div class="header-seg-slider" id="headerSegSlider"></div>
             <button data-tab="simple">Simple</button>
             <button data-tab="full">Full</button>
+            <button data-tab="field">Field</button>
             <button data-tab="line">Line</button>
             <button data-tab="log">Log</button>
             <button data-tab="all" class="active">All</button>
@@ -1096,6 +1097,11 @@ function buildGameScreenContainer() {
     // visible when the "Full" tab is active; hidden in All / Simple / Line / Log.
     if (window.fullPbp && typeof window.fullPbp.createPlayByPlayFullPanel === 'function') {
         stack.appendChild(window.fullPbp.createPlayByPlayFullPanel());
+    }
+    // Field PBP panel — spatial play-by-play entry. Sibling of the simple
+    // and full PBP panels; only visible when the "Field" tab is active.
+    if (window.fieldPbp && typeof window.fieldPbp.createPlayByPlayFieldPanel === 'function') {
+        stack.appendChild(window.fieldPbp.createPlayByPlayFieldPanel());
     }
     stack.appendChild(createSelectLinePanel());
     stack.appendChild(createFollowPanel());

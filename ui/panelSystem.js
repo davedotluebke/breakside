@@ -31,7 +31,7 @@ const FOLLOW_MIN_HEIGHT = 80;
 // playByPlayFull is the Full-mode PBP panel — only visible when the "Full"
 // tab is active. Hidden by default everywhere else (including the All view,
 // which keeps Simple-mode PBP only — see docs/full-pbp-requirements.md).
-const PANEL_ORDER = ['header', 'roleButtons', 'playByPlay', 'playByPlayFull', 'selectLine', 'selectOLine', 'selectDLine', 'follow'];
+const PANEL_ORDER = ['header', 'roleButtons', 'playByPlay', 'playByPlayFull', 'playByPlayField', 'selectLine', 'selectOLine', 'selectDLine', 'follow'];
 
 // Panels that can be resized via drag (these have draggable title bars)
 // Dragging a title bar resizes that panel and the one above it
@@ -50,6 +50,7 @@ const DEFAULT_PANEL_STATES = {
     roleButtons: { hidden: false, height: null },
     playByPlay: { hidden: false, height: PBP_MIN_CONTENT_HEIGHT },
     playByPlayFull: { hidden: true, height: null },
+    playByPlayField: { hidden: true, height: null },
     selectLine: { hidden: false, height: null },
     selectOLine: { hidden: true, height: null },
     selectDLine: { hidden: true, height: null },
@@ -1117,6 +1118,7 @@ let lastPbpTab = 'simple';
 const TAB_PANELS = {
     simple: ['playByPlay'],
     full:   ['playByPlayFull'],
+    field:  ['playByPlayField'],
     line:   ['selectLine'],
     all:    null, // null = show all panels with normal panel states
     log:    ['follow']
@@ -1135,7 +1137,7 @@ function loadActiveTab() {
             activeTab = saved;
         }
         const savedLast = localStorage.getItem(LAST_PBP_TAB_KEY);
-        if (savedLast === 'simple' || savedLast === 'full' || savedLast === 'all') {
+        if (savedLast === 'simple' || savedLast === 'full' || savedLast === 'field' || savedLast === 'all') {
             lastPbpTab = savedLast;
         }
     } catch (e) {
@@ -1169,7 +1171,7 @@ function switchTab(tabName) {
     // Point button can auto-navigate back to it. 'all' counts: a coach
     // who works from the All view expects to return there after a Line
     // detour, not be dropped into Simple/Full alone.
-    if (tabName === 'simple' || tabName === 'full' || tabName === 'all') {
+    if (tabName === 'simple' || tabName === 'full' || tabName === 'field' || tabName === 'all') {
         lastPbpTab = tabName;
         try { localStorage.setItem(LAST_PBP_TAB_KEY, tabName); } catch (e) { /* ignore */ }
     }
@@ -1187,7 +1189,7 @@ function applyTabState() {
     // playByPlayFull is a content panel like the others, but only ever
     // visible in the Full tab — never in All. Listed here so the tab
     // switcher can hide/show it consistently with the rest.
-    const contentPanels = ['playByPlay', 'playByPlayFull', 'selectLine', 'selectOLine', 'selectDLine', 'follow'];
+    const contentPanels = ['playByPlay', 'playByPlayFull', 'playByPlayField', 'selectLine', 'selectOLine', 'selectDLine', 'follow'];
     const inSplitMode = typeof window.isSplitMode === 'function' && window.isSplitMode();
 
     if (activeTab === 'all') {
@@ -1209,8 +1211,9 @@ function applyTabState() {
             setPanelVisible('selectDLine', false);
         }
         setPanelVisible('playByPlay', true);
-        // All view keeps Simple-mode PBP only — Full panel stays hidden.
+        // All view keeps Simple-mode PBP only — Full + Field panels stay hidden.
         setPanelVisible('playByPlayFull', false);
+        setPanelVisible('playByPlayField', false);
         setPanelVisible('follow', true);
     } else {
         // Single-tab mode: determine which panels to show
@@ -1239,6 +1242,13 @@ function applyTabState() {
         if (activeTab === 'full' && window.fullPbp) {
             if (typeof window.fullPbp.wireEvents === 'function') window.fullPbp.wireEvents();
             if (typeof window.fullPbp.render === 'function') window.fullPbp.render();
+        }
+
+        // Same for the Field panel — refresh its render when it becomes
+        // the active tab so the field, player rail, and mode reflect state.
+        if (activeTab === 'field' && window.fieldPbp) {
+            if (typeof window.fieldPbp.wireEvents === 'function') window.fieldPbp.wireEvents();
+            if (typeof window.fieldPbp.render === 'function') window.fieldPbp.render();
         }
 
         // Log tab: auto-scroll the game log to the bottom so the most
