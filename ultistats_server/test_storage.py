@@ -717,9 +717,9 @@ class TestPendingLineMerge:
 
     def _pnl(self, **fields):
         """Build a pendingNextLine dict with the standard empty defaults."""
-        base = {"oLine": [], "dLine": [], "odLine": [],
+        base = {"oLine": [], "dLine": [], "odLine": [], "odOnDeckLine": [],
                 "oLineModifiedAt": None, "dLineModifiedAt": None,
-                "odLineModifiedAt": None}
+                "odLineModifiedAt": None, "odOnDeckLineModifiedAt": None}
         base.update(fields)
         return base
 
@@ -743,6 +743,47 @@ class TestPendingLineMerge:
         pnl = get_game_current(gid)["pendingNextLine"]
         assert pnl["oLine"] == ["A", "B", "C", "D", "E", "F", "X"]
         assert pnl["oLineModifiedAt"] == "2026-05-24T18:01:00.000Z"
+
+    def test_on_deck_line_not_clobbered_by_stale_sync(self, isolate_test_data):
+        """The On Deck line (odOnDeckLine) merges per-axis like the others: a
+        stale full-sync must not clobber a newer On Deck edit on the server.
+        """
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "merge-ondeck-001"
+        # Line Coach has prepared the point-after-next On Deck line.
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    odOnDeckLine=["A", "B", "C", "D", "E", "F", "X"],
+                                    odOnDeckLineModifiedAt="2026-05-24T18:01:00.000Z")})
+        # Active Coach syncs with their stale (empty) On Deck copy.
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl()})
+
+        pnl = get_game_current(gid)["pendingNextLine"]
+        assert pnl["odOnDeckLine"] == ["A", "B", "C", "D", "E", "F", "X"]
+        assert pnl["odOnDeckLineModifiedAt"] == "2026-05-24T18:01:00.000Z"
+
+    def test_on_deck_line_merges_independently_of_other_axes(self, isolate_test_data):
+        """An On Deck edit and a separate odLine edit don't overwrite each
+        other — each axis carries its own timestamp.
+        """
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "merge-ondeck-002"
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    odLine=["O1"],
+                                    odLineModifiedAt="2026-05-24T18:00:00.000Z")})
+        # Newer On Deck edit; odLine edit is older and must be preserved.
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    odOnDeckLine=["N1"],
+                                    odOnDeckLineModifiedAt="2026-05-24T18:05:00.000Z")})
+
+        pnl = get_game_current(gid)["pendingNextLine"]
+        assert pnl["odOnDeckLine"] == ["N1"]
+        assert pnl["odLine"] == ["O1"]
 
     def test_per_field_merge_takes_newer_line_edit(self, isolate_test_data):
         """The mirror case: an incoming line edit newer than the server's must

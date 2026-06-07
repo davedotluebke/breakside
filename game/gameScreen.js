@@ -2858,14 +2858,17 @@ function handleODToggle() {
     // Save current selections before switching (don't update timestamp - just viewing)
     savePanelSelectionsToPendingNextLine(false);
 
-    // Cycle to next type: od → o → d → od
+    // Cycle to next type: od → o → d → odOnDeck → od
+    // 'odOnDeck' is the On Deck line (point-after-next); concatenating with
+    // 'Line' resolves to the odOnDeckLine bucket, same as the other types.
     const currentType = game.pendingNextLine.activeType || 'od';
     let nextType;
     switch (currentType) {
-        case 'od': nextType = 'o'; break;
-        case 'o':  nextType = 'd'; break;
-        case 'd':  nextType = 'od'; break;
-        default:   nextType = 'od';
+        case 'od':       nextType = 'o'; break;
+        case 'o':        nextType = 'd'; break;
+        case 'd':        nextType = 'odOnDeck'; break;
+        case 'odOnDeck': nextType = 'od'; break;
+        default:         nextType = 'od';
     }
 
     game.pendingNextLine.activeType = nextType;
@@ -2889,7 +2892,7 @@ function handleODToggle() {
     updatePlayByPlayPanelState();
 
     // Show feedback
-    const typeLabels = { od: 'O/D', o: 'Offense', d: 'Defense' };
+    const typeLabels = { od: 'O/D', o: 'Offense', d: 'Defense', odOnDeck: 'On Deck' };
     if (typeof showControllerToast === 'function') {
         showControllerToast(`Switched to ${typeLabels[nextType]} line`, 'info');
     }
@@ -2906,17 +2909,18 @@ function updateODToggleButton() {
     const activeType = game?.pendingNextLine?.activeType || 'od';
     
     // Update button text
-    const typeLabels = { od: 'O/D', o: 'O', d: 'D', split: 'O|D' };
+    const typeLabels = { od: 'O/D', o: 'O', d: 'D', odOnDeck: 'On Deck', split: 'O|D' };
     btn.textContent = typeLabels[activeType] || 'O/D';
 
     // Update title/tooltip
     const typeDescriptions = {
         od: 'Combined line (tap to switch to Offense)',
         o: 'Offense line (tap to switch to Defense)',
-        d: 'Defense line (tap to split O and D)',
+        d: 'Defense line (tap to plan the On Deck line)',
+        odOnDeck: 'On Deck line — the point after Next (tap to switch back to O/D)',
         split: 'Split view (tap to merge back to O/D)'
     };
-    btn.title = typeDescriptions[activeType] || 'Toggle O/D/O-D line';
+    btn.title = typeDescriptions[activeType] || 'Toggle O/D/On-Deck line';
 }
 
 /**
@@ -3553,7 +3557,10 @@ function getEffectiveLineForNextPoint(game) {
     // it as "this is what they're planning around" — 'od' means combined
     // OD line, anything else means use the determined side's line. The
     // side itself is fixed by who scored; the view never flips it.
-    const lcView   = p.lineCoachViewing;
+    // 'odOnDeck' is NOT a Next-line view — it's the point-after-next. Treat it
+    // as "no Next-line view preference" here, else Priority 1 would resolve an
+    // On Deck view into a Next bucket (it falls through to typeKey).
+    const lcView   = (p.lineCoachViewing === 'odOnDeck') ? null : p.lineCoachViewing;
     const lcViewAt = p.lineCoachViewingAt
         ? new Date(p.lineCoachViewingAt).getTime() : 0;
     if (lcView && lcViewAt > typedTime && lcViewAt > odTime) {
@@ -3620,6 +3627,11 @@ function autoSelectActiveTypeForNextPoint() {
     const game = typeof currentGame === 'function' ? currentGame() : null;
     if (!game || !game.pendingNextLine) return;
 
+    // Don't yank a coach off the On Deck view when a point ends. If they're
+    // planning the point-after-next, Next is presumably already set — leave
+    // them where they are rather than auto-switching to the resolved Next side.
+    if (game.pendingNextLine.activeType === 'odOnDeck') return;
+
     const { source } = getEffectiveLineForNextPoint(game);
     if (game.pendingNextLine.activeType !== source) {
         game.pendingNextLine.activeType = source;
@@ -3671,6 +3683,23 @@ function updateSelectLineTable() {
     const activeType = pendingLine.activeType || 'od';
     const selectedPlayers = pendingLine[activeType + 'Line'] || [];
 
+    // On Deck view adds a read-only "tentative next" projection column so the
+    // LC planning the point-after-next can see who's already slated for the
+    // *immediate* next point (and balance rest). Pure-derived, recomputed each
+    // render. Source of the tentative-next set depends on phase: while a point
+    // is in progress the O/D side is genuinely unknown, so use the combined
+    // odLine; between points the side is resolved, so use the effective Next.
+    const isOnDeckView = activeType === 'odOnDeck';
+    let tentativeNextSet = [];
+    if (isOnDeckView) {
+        const inProgress = typeof isPointInProgress === 'function' && isPointInProgress();
+        tentativeNextSet = inProgress
+            ? (pendingLine.odLine || [])
+            : (typeof getEffectiveLineForNextPoint === 'function'
+                ? (getEffectiveLineForNextPoint(game).line || [])
+                : []);
+    }
+
     // Create header rows (score display)
     const runningScores = typeof getRunningScores === 'function'
         ? getRunningScores()
@@ -3714,7 +3743,19 @@ function updateSelectLineTable() {
     
     addScoreCells(teamScoreRow, game.team, runningScores.team);
     addScoreCells(opponentScoreRow, game.opponent, runningScores.opponent);
-    
+
+    // On Deck: trailing header for the tentative-next projection column.
+    // rowspan 2 so only the team row carries it; the opponent row keeps its
+    // column count without an extra cell.
+    if (isOnDeckView) {
+        const projHeader = document.createElement('th');
+        projHeader.textContent = 'Next';
+        projHeader.setAttribute('rowspan', '2');
+        projHeader.title = 'Projected points played after the immediate next point';
+        projHeader.classList.add('active-ondeck-projection');
+        teamScoreRow.appendChild(projHeader);
+    }
+
     tableHead.appendChild(teamScoreRow);
     tableHead.appendChild(opponentScoreRow);
     
@@ -3827,7 +3868,18 @@ function updateSelectLineTable() {
             }
             row.appendChild(pointCell);
         });
-        
+
+        // On Deck: tentative-next projection — points played so far, +1 if this
+        // player is slated for the immediate next point. Read-only/greyed; it's
+        // a planning aid, not an editable column.
+        if (isOnDeckView) {
+            const projCell = document.createElement('td');
+            projCell.classList.add('active-ondeck-projection');
+            const projected = runningPointTotal + (tentativeNextSet.includes(player.name) ? 1 : 0);
+            projCell.textContent = `${projected}`;
+            row.appendChild(projCell);
+        }
+
         tableBody.appendChild(row);
     });
     
@@ -3948,7 +4000,8 @@ function updateLineCoachViewingLabel() {
     const verb = recentEdit ? 'editing' : 'viewing';
 
     const viewLabels = {
-        o: 'the O line', d: 'the D line', od: 'the O/D line', split: 'split (O & D)'
+        o: 'the O line', d: 'the D line', od: 'the O/D line',
+        odOnDeck: 'the On Deck line', split: 'split (O & D)'
     };
     const targetLabel = viewLabels[lcView] || `the ${lcView} line`;
     const lcName = (ctrl.lineCoach.displayName) || 'Line Coach';
@@ -3982,8 +4035,8 @@ function updateSelectLineSubtitle() {
     const lineKey = activeType + 'Line';
     const selectedNames = pendingLine[lineKey] || [];
     
-    // Update panel title based on line type: "Next D Line", "Next O Line", or "Next Line"
-    const titleLabels = { o: 'Next O Line', d: 'Next D Line', od: 'Next Line', split: 'Next Line' };
+    // Update panel title based on line type: "Next D Line", "Next O Line", "Next Line", or "On Deck Line"
+    const titleLabels = { o: 'Next O Line', d: 'Next D Line', od: 'Next Line', odOnDeck: 'On Deck Line', split: 'Next Line' };
     const panelTitle = titleLabels[activeType] || 'Next Line';
     if (typeof setPanelTitle === 'function') {
         setPanelTitle('selectLine', panelTitle);
