@@ -1817,6 +1817,19 @@ body.game-screen-active header {
     opacity: 0.85;
 }
 
+/* On Deck "tentative next" projection column — read-only planning aid, greyed
+   and visually separated from the editable point-history columns. */
+.panel-player-table .active-ondeck-projection {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    text-align: center;
+    min-width: 30px;
+    color: var(--text-secondary, #888);
+    background: rgba(128, 128, 128, 0.08);
+    border-left: 2px solid rgba(128, 128, 128, 0.3);
+    font-weight: 600;
+}
+
 .panel-player-table .active-header-teams {
     font-size: 0.7rem;
     text-align: center;

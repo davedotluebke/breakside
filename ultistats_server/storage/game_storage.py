@@ -29,7 +29,9 @@ except ImportError:
 # the same instant can't interleave and lose each other's edits.
 _SAVE_LOCK = threading.Lock()
 
-_LINE_KEYS = ("oLine", "dLine", "odLine")
+# odOnDeckLine is the side-agnostic "On Deck" line (point-after-next); it
+# merges with the same per-axis last-writer-wins rule as the O/D/OD lines.
+_LINE_KEYS = ("oLine", "dLine", "odLine", "odOnDeckLine")
 
 
 def _ts(value) -> float:
