@@ -22,7 +22,7 @@ function serializeEvent(event, useIds = true) {
 
     // Player reference ID fields are handled separately in the player reference section below
     // We must exclude them here to avoid duplicating IDs when player lookup fails during deserialization
-    const playerIdFields = ['throwerId', 'receiverId', 'pullerId', 'defenderId'];
+    const playerIdFields = ['throwerId', 'receiverId', 'pullerId', 'defenderId', 'assistId'];
 
     // Serialize only the properties that are different from the default instance
     for (const prop in event) {
@@ -60,6 +60,14 @@ function serializeEvent(event, useIds = true) {
         serializedEvent.defender = event.defender.name;
         if (useIds && event.defender.id) {
             serializedEvent.defenderId = event.defender.id;
+        }
+    }
+    // Assist (Throw scores) is a Player reference like the others — store
+    // name + id rather than the full object the generic loop would copy.
+    if (event.assist) {
+        serializedEvent.assist = event.assist.name;
+        if (useIds && event.assist.id) {
+            serializedEvent.assistId = event.assist.id;
         }
     }
 
@@ -252,6 +260,9 @@ function deserializeEvent(eventData) {
         case 'Throw':
             event.thrower = resolvePlayerReference(eventData.throwerId, eventData.thrower);
             event.receiver = resolvePlayerReference(eventData.receiverId, eventData.receiver);
+            if (eventData.assist || eventData.assistId) {
+                event.assist = resolvePlayerReference(eventData.assistId, eventData.assist);
+            }
             break;
         case 'Turnover':
             if (eventData.thrower || eventData.throwerId) {

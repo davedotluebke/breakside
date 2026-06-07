@@ -454,7 +454,63 @@ class TestGameStorage:
         
         current = get_game_current(game_id)
         assert current["version"] == 2
-    
+
+    def test_field_position_event_fields_round_trip(self, isolate_test_data):
+        """Field-tab spatial event fields survive a save -> load round trip.
+
+        The server stores game JSON verbatim (schemaless dict), so the
+        canonical (l,w) locations, assist attribution, pull hang/brick, and
+        Defense location added for the Field tab must come back unchanged.
+        Guards against a future schema/model tightening that would silently
+        drop unknown event keys.
+        """
+        from storage.game_storage import save_game_version, get_game_current
+
+        game_id = "test-game-field-pos"
+        game_data = {
+            "team": "Team", "opponent": "Opp",
+            "points": [{
+                "players": ["Alice", "Bob"],
+                "startingPosition": "defense",
+                "possessions": [{
+                    "offensive": False,
+                    "events": [
+                        {"type": "Pull", "puller": "Alice", "pullerId": "alice-1",
+                         "from": {"l": 25, "w": 20}, "to": {"l": 78, "w": 9},
+                         "hang": 4200, "brick_flag": False},
+                        {"type": "Defense", "defender": "Bob", "defenderId": "bob-1",
+                         "block_flag": True, "to": {"l": 60, "w": 31}},
+                    ],
+                }, {
+                    "offensive": True,
+                    "events": [
+                        {"type": "Throw", "thrower": "Bob", "throwerId": "bob-1",
+                         "receiver": "Alice", "receiverId": "alice-1",
+                         "score_flag": True, "assist": "Bob", "assistId": "bob-1",
+                         "from": {"l": 60, "w": 31}, "to": {"l": 110, "w": 20}},
+                    ],
+                }],
+            }],
+        }
+        save_game_version(game_id, game_data)
+
+        current = get_game_current(game_id)
+        possessions = current["points"][0]["possessions"]
+        pull = possessions[0]["events"][0]
+        defense = possessions[0]["events"][1]
+        throw = possessions[1]["events"][0]
+
+        assert pull["from"] == {"l": 25, "w": 20}
+        assert pull["to"] == {"l": 78, "w": 9}
+        assert pull["hang"] == 4200
+        assert pull["brick_flag"] is False
+        assert defense["to"] == {"l": 60, "w": 31}
+        assert throw["from"] == {"l": 60, "w": 31}
+        assert throw["to"] == {"l": 110, "w": 20}
+        # Assist serialized as name + id (not a dumped Player object)
+        assert throw["assist"] == "Bob"
+        assert throw["assistId"] == "bob-1"
+
     def test_get_game_version_returns_specific(self, isolate_test_data):
         """Test getting a specific version of a game."""
         from storage.game_storage import save_game_version, get_game_version, list_game_versions
