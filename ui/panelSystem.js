@@ -1140,6 +1140,12 @@ function loadActiveTab() {
         if (savedLast === 'simple' || savedLast === 'full' || savedLast === 'field' || savedLast === 'all') {
             lastPbpTab = savedLast;
         }
+        // If we restored onto a PBP surface, treat that as the last PBP tab so
+        // Start Point returns here even if the user never tapped the tab this
+        // session (avoids a stale lastPbpTab pointing at a different surface).
+        if (activeTab === 'simple' || activeTab === 'full' || activeTab === 'field' || activeTab === 'all') {
+            lastPbpTab = activeTab;
+        }
     } catch (e) {
         activeTab = 'all';
     }
@@ -1318,6 +1324,20 @@ function getLastPbpTab() {
 }
 
 /**
+ * Snapshot the currently-active tab as the "last PBP surface" if it is one
+ * (Simple / Full / Field / All). Called right before the app auto-switches to
+ * the Line tab on a score, so the next Start Point returns the coach to the
+ * surface they were actually working from — even if they reached it via
+ * restored state rather than an explicit tab tap (which would have set it).
+ */
+function rememberCurrentPbpTab() {
+    if (activeTab === 'simple' || activeTab === 'full' || activeTab === 'field' || activeTab === 'all') {
+        lastPbpTab = activeTab;
+        try { localStorage.setItem(LAST_PBP_TAB_KEY, activeTab); } catch (e) { /* ignore */ }
+    }
+}
+
+/**
  * Initialize the panel system
  * Called once when the app loads
  */
@@ -1388,6 +1408,7 @@ window.updatePanelsForGameState = updatePanelsForGameState;
 window.switchTab = switchTab;
 window.getActiveTab = getActiveTab;
 window.getLastPbpTab = getLastPbpTab;
+window.rememberCurrentPbpTab = rememberCurrentPbpTab;
 window.applyTabState = applyTabState;
 window.updateSegmentedSlider = updateSegmentedSlider;
 

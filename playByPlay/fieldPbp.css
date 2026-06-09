@@ -229,16 +229,14 @@
 }
 .fp-modbtn.on { background: var(--fp-blue); border-color: var(--fp-blue); color: #fff; }
 
-/* Defense: D-action buttons fill the player slot until one is chosen. */
+/* Defense: D-action buttons fill the player slot until one is chosen.
+   Plain/neutral styling — same look as the other buttons, no color coding. */
 .fp-dtypebtn {
     display: flex; align-items: center; justify-content: center; gap: 7px;
     border-radius: 8px; padding: 13px 10px; font-size: 15px; font-weight: 700;
-    cursor: pointer; border: 1px solid; -webkit-tap-highlight-color: transparent;
+    cursor: pointer; border: 1px solid #cfcfcf; background: #f7f7f7; color: #333;
+    -webkit-tap-highlight-color: transparent;
 }
-.fp-dtypebtn.block { background: #e7f7f0; border-color: #86d3b3; color: #047857; }
-.fp-dtypebtn.int { background: #eef4ff; border-color: #9bb8f5; color: var(--fp-blue); }
-.fp-dtypebtn.stall { background: #fff7e6; border-color: var(--fp-hold); color: #92600b; }
-.fp-dtypebtn.cal { background: #f3e8ff; border-color: #c084fc; color: #7c3aed; }
 .fp-dtypebtn:active { filter: brightness(.96); }
 /* Landscape: D actions split the row. */
 .field-pbp-content[data-o="landscape"] .fp-rail .fp-dtypebtn { flex: 1 1 0; min-width: 0; }

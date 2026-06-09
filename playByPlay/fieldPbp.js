@@ -72,10 +72,10 @@
     ];
     // D actions shown in the player slot until one is chosen.
     const DTYPES = [
-        { type: 'block', label: '⛔ Block', cls: 'block' },
-        { type: 'interception', label: 'Interception', cls: 'int' },
-        { type: 'stall', label: 'Stall', cls: 'stall' },
-        { type: 'callahan', label: 'Callahan', cls: 'cal' }
+        { type: 'block', label: 'Block' },
+        { type: 'interception', label: 'Interception' },
+        { type: 'stall', label: 'Stall' },
+        { type: 'callahan', label: 'Callahan' }
     ];
     const cap = s => s ? s[0].toUpperCase() + s.slice(1) : '';
 
@@ -231,7 +231,7 @@
         // actions instead of player chips.
         if (!S.pulling && inPoint && state.mode === 'defense' && !S.dPlacing) {
             return DTYPES.map(d =>
-                `<div class="fp-dtypebtn ${d.cls}" data-dtype="${d.type}">${d.label}</div>`
+                `<div class="fp-dtypebtn" data-dtype="${d.type}">${d.label}</div>`
             ).join('');
         }
 
