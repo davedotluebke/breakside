@@ -202,8 +202,8 @@
 
     /**
      * @param defender Player|null (null = unforced opponent error)
-     * @param opts {interception, Callahan, stall, unforcedError, layout, sky,
-     *              to, inferred}
+     * @param opts {block, interception, Callahan, stall, unforcedError,
+     *              layout, sky, to, inferred}
      */
     function createDefense(defender, opts) {
         opts = opts || {};
@@ -212,6 +212,7 @@
 
         const evt = new Defense({
             defender: defender || null,
+            block: !!opts.block,
             interception: !!opts.interception,
             layout: !!opts.layout,
             sky: !!opts.sky,

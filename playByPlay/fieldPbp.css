@@ -229,6 +229,43 @@
 }
 .fp-modbtn.on { background: var(--fp-blue); border-color: var(--fp-blue); color: #fff; }
 
+/* Defense: D-action buttons fill the player slot until one is chosen. */
+.fp-dtypebtn {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    border-radius: 8px; padding: 13px 10px; font-size: 15px; font-weight: 700;
+    cursor: pointer; border: 1px solid; -webkit-tap-highlight-color: transparent;
+}
+.fp-dtypebtn.block { background: #e7f7f0; border-color: #86d3b3; color: #047857; }
+.fp-dtypebtn.int { background: #eef4ff; border-color: #9bb8f5; color: var(--fp-blue); }
+.fp-dtypebtn.stall { background: #fff7e6; border-color: var(--fp-hold); color: #92600b; }
+.fp-dtypebtn.cal { background: #f3e8ff; border-color: #c084fc; color: #7c3aed; }
+.fp-dtypebtn:active { filter: brightness(.96); }
+/* Landscape: D actions split the row. */
+.field-pbp-content[data-o="landscape"] .fp-rail .fp-dtypebtn { flex: 1 1 0; min-width: 0; }
+
+/* ✕ cancel chip leading the defender picker while placing a D. */
+.fp-dcancel {
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    border: 1px solid #d9534f; color: #d9534f; background: #fff; border-radius: 999px;
+    padding: 7px 12px; font-size: 13px; font-weight: 700; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Defense bottom bar action colors. */
+.fp-ebtn.theyturn { color: #047857; }
+.fp-ebtn.theyscore { color: #b91c1c; }
+.fp-ebtn.more { flex: 0 0 auto; min-width: auto; color: #666; }
+
+/* Field-side popover picker ("Who got the block?"). */
+.fp-picker {
+    position: fixed; z-index: 999; background: #fff; border: 1px solid #bbb;
+    border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+    padding: 7px; display: flex; flex-wrap: wrap; gap: 5px; max-width: 250px;
+    transform: translate(-50%, -112%);
+}
+.fp-picker .fp-picker-ttl { flex: 1 1 100%; font-size: 11px; color: #888; text-align: center; margin-bottom: 2px; }
+.fp-picker .fp-chip { padding: 7px 12px; font-size: 14px; }
+
 /* Mic FAB, reserved bottom-right in both layouts. */
 .fp-mic {
     position: absolute; right: 14px; bottom: 12px;

@@ -52,7 +52,12 @@
         pullRunning: false,
         pullStart: 0,
         pullMs: null,
-        pullMods: []         // subset of PMODS
+        pullMods: [],        // subset of PMODS
+        // defense flow
+        dPlacing: null,      // 'block'|'interception'|'stall'|'callahan' | null
+        dMods: [],           // subset of DMODS (Layout / Sky)
+        // shared placement: a player armed (picked) awaiting a field tap
+        armed: null          // Player object | null
     };
     let pullTimer = null;
 
@@ -61,6 +66,18 @@
         { label: 'OI', prop: 'oi' },
         { label: 'IO', prop: 'io' }
     ];
+    const DMODS = [
+        { label: 'Layout', prop: 'layout' },
+        { label: 'Sky', prop: 'sky' }
+    ];
+    // D actions shown in the player slot until one is chosen.
+    const DTYPES = [
+        { type: 'block', label: '⛔ Block', cls: 'block' },
+        { type: 'interception', label: 'Interception', cls: 'int' },
+        { type: 'stall', label: 'Stall', cls: 'stall' },
+        { type: 'callahan', label: 'Callahan', cls: 'cal' }
+    ];
+    const cap = s => s ? s[0].toUpperCase() + s.slice(1) : '';
 
     // -----------------------------------------------------------------
     // Coordinate mapping (mirrors the mockup's pct()/toField()).
@@ -210,19 +227,34 @@
             return `<div class="fp-rail-placeholder">Start a point to begin entering events.</div>`;
         }
 
+        // Defense, before choosing a D action: the slot shows the four D
+        // actions instead of player chips.
+        if (!S.pulling && inPoint && state.mode === 'defense' && !S.dPlacing) {
+            return DTYPES.map(d =>
+                `<div class="fp-dtypebtn ${d.cls}" data-dtype="${d.type}">${d.label}</div>`
+            ).join('');
+        }
+
         let lead = '';
-        if (S.pulling) lead = `<div class="fp-slotlbl">Pick Puller:</div>`;
+        if (S.pulling) {
+            lead = `<div class="fp-slotlbl">Pick Puller:</div>`;
+        } else if (S.dPlacing) {
+            // Placing a D: a cancel chip leads the defender picker.
+            lead = `<div class="fp-dcancel" data-dcancel="1">✕ ${cap(S.dPlacing)}</div>`;
+        }
 
         const holder = state.holder;
+        const armedName = S.pulling ? (S.puller && S.puller.name)
+            : (S.armed && S.armed.name);
         let html = lead + point.players.map(name => {
             const player = (typeof getPlayerFromName === 'function') ? getPlayerFromName(name) : null;
             if (!player) return '';
             const isHolder = !!(holder && holder.name === name);
-            const isPuller = !!(S.pulling && S.puller && S.puller.name === name);
-            return chipHTML(player, { holder: isHolder, armed: isPuller });
+            const isArmed = !!(armedName && armedName === name);
+            return chipHTML(player, { holder: isHolder, armed: isArmed });
         }).join('');
         const unknown = (typeof getPlayerFromName === 'function') ? getPlayerFromName(UNKNOWN_PLAYER) : null;
-        if (unknown) html += chipHTML(unknown, { unknown: true, armed: !!(S.pulling && S.puller && S.puller.name === UNKNOWN_PLAYER) });
+        if (unknown) html += chipHTML(unknown, { unknown: true, armed: armedName === UNKNOWN_PLAYER });
         return html;
     }
 
@@ -253,7 +285,12 @@
             return `<button class="fp-ebtn pullhang" data-pull="hang">${hangLabel()}</button>`
                 + `<button class="fp-ebtn pullbrick" data-pull="brick">Brick</button>`;
         }
-        // Offense / defense action buttons land in Phases 4–5.
+        if (inPoint && state.mode === 'defense') {
+            return `<button class="fp-ebtn theyturn" data-act="theyturn">They turnover</button>`
+                + `<button class="fp-ebtn theyscore" data-act="theyscore">They score</button>`
+                + `<button class="fp-ebtn more" data-act="more">⋯ more</button>`;
+        }
+        // Offense action buttons land in Phase 5.
         return '';
     }
 
@@ -263,7 +300,12 @@
             return `<div class="fp-modcol-label">This pull:</div><div class="fp-modcol-sub">${sub}</div>`
                 + PMODS.map(m => `<button class="fp-modbtn ${S.pullMods.includes(m.label) ? 'on' : ''}" data-pmod="${m.label}">${m.label}</button>`).join('');
         }
-        // Modifier strip for the last play lands in Phase 7.
+        if (S.dPlacing) {
+            // Pre-label the D being placed (before player/spot are set).
+            return `<div class="fp-modcol-label">Last D was a:</div><div class="fp-modcol-sub">${cap(S.dPlacing)}</div>`
+                + DMODS.map(m => `<button class="fp-modbtn ${S.dMods.includes(m.label) ? 'on' : ''}" data-dmod="${m.label}">${m.label}</button>`).join('');
+        }
+        // Modifier strip for the last completed play lands in Phase 7.
         return `<div class="fp-modcol-label">Last throw was a:</div><div class="fp-modcol-sub"><i>no play yet</i></div>`;
     }
 
@@ -273,7 +315,11 @@
             return `${who}time the hang, then tap where it landed (or Brick)`;
         }
         if (!inPoint) return 'Between points — start a point to begin.';
-        if (state.mode === 'defense') return 'On defense';
+        if (state.mode === 'defense') {
+            if (S.armed && S.dPlacing) return `Tap where <b>${S.armed.name}</b> made the ${S.dPlacing}`;
+            if (S.dPlacing) return `<b>${cap(S.dPlacing)}</b> — tap the spot &amp; pick the defender`;
+            return 'On defense — pick a D action';
+        }
         const holder = state.holder;
         return holder ? `<b>${holder.name}</b> has the disc` : 'Pick up / who has the disc?';
     }
@@ -462,35 +508,130 @@
 
     function handleChipTap(name) {
         if (!requireActiveCoach()) return;
+        const p = playerByName(name);
         if (S.pulling) {
-            const p = playerByName(name);
             S.puller = (S.puller && S.puller.name === name) ? null : p;
             render();
             return;
         }
-        // Offense/defense chip taps land in Phases 4–5.
+        if (S.dPlacing) {
+            // Arm/disarm the defender for the D being placed.
+            S.armed = (S.armed && S.armed.name === name) ? null : p;
+            render();
+            return;
+        }
+        // Offense chip taps land in Phase 5.
     }
 
-    function handleFieldTap(loc) {
+    function handleFieldTap(loc, cx, cy) {
         if (S.pulling) { placePull(loc.l, loc.w, false); return; }
-        // Offense/defense field placement lands in Phases 4–5.
+        if (S.dPlacing) {
+            if (S.armed) { placeD(loc.l, loc.w); return; }
+            // No defender picked yet — pick from a field-side popover, then place.
+            popPicker(cx, cy, player => { S.armed = player; placeD(loc.l, loc.w); });
+            return;
+        }
+        // Offense field placement lands in Phase 5.
+    }
+
+    // ---- Defense (D-possession) ----
+    function setDPlacing(type) {
+        if (!requireActiveCoach()) return;
+        S.dPlacing = type;
+        S.armed = null;
+        S.dMods = [];
+        render();
+    }
+    function cancelDPlacing() {
+        S.dPlacing = null;
+        S.armed = null;
+        S.dMods = [];
+        render();
+    }
+    function toggleDMod(label) {
+        const k = S.dMods.indexOf(label);
+        if (k >= 0) S.dMods.splice(k, 1); else S.dMods.push(label);
+        render();
+    }
+    function placeD(l, w) {
+        if (!requireActiveCoach()) return;
+        if (!S.armed || !S.dPlacing) return;
+        const opts = { to: clampLoc(l, w) };
+        if (S.dPlacing === 'block') opts.block = true;
+        else if (S.dPlacing === 'interception') opts.interception = true;
+        else if (S.dPlacing === 'stall') opts.stall = true;
+        else if (S.dPlacing === 'callahan') opts.Callahan = true;
+        S.dMods.forEach(label => { const m = DMODS.find(dm => dm.label === label); if (m) opts[m.prop] = true; });
+        // Block/Interception/Stall flip us to offense; Callahan is a defensive
+        // goal (createDefense scores + advances the point). Interception → that
+        // defender holds; Block leaves no holder (disc on the ground).
+        window.pbpPossession.createDefense(S.armed, opts);
+        S.dPlacing = null; S.armed = null; S.dMods = [];
+        render();
+    }
+    function handleTheyTurnover() {
+        if (!requireActiveCoach()) return;
+        // Unforced opponent turnover (no specific defender) → flip to offense.
+        window.pbpPossession.createDefense(null, { unforcedError: true });
+        S.dPlacing = null; S.armed = null; S.dMods = [];
+        render();
+    }
+    function handleTheyScore() {
+        if (!requireActiveCoach()) return;
+        // Delegate to the shared They-Score handler (point-timer / score /
+        // moveToNextPoint plumbing), same as Simple/Full.
+        if (typeof handlePbpTheyScore === 'function') handlePbpTheyScore();
+        render();
+    }
+    function handleMore() {
+        // D overflow (footblock / handblock / bid / …) lands in Phase 7.
+        console.log('[fieldPbp] D "⋯ more" overflow (phase 7)');
+    }
+
+    // Field-side popover to pick a player when none is armed yet.
+    function popPicker(cx, cy, cb, title) {
+        document.querySelectorAll('.fp-picker').forEach(n => n.remove());
+        const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
+        const names = (point && point.players) ? point.players.slice() : [];
+        const m = document.createElement('div');
+        m.className = 'fp-picker';
+        m.style.left = cx + 'px';
+        m.style.top = cy + 'px';
+        const ttl = title || (S.dPlacing === 'interception' ? 'Who intercepted?'
+            : S.dPlacing ? `Who got the ${S.dPlacing}?` : 'Who?');
+        let html = `<div class="fp-picker-ttl">${ttl}</div>`;
+        names.forEach(name => {
+            const p = playerByName(name); if (!p) return;
+            const lead = (p.number != null) ? `<span class="fp-num">${p.number}</span>` : '';
+            html += `<div class="fp-chip" data-pname="${name}">${lead}<span class="fp-nm">${name}</span></div>`;
+        });
+        html += `<div class="fp-chip unknown" data-pname="${UNKNOWN_PLAYER}"><span class="fp-umark">?</span><span class="fp-nm">Unknown</span></div>`;
+        m.innerHTML = html;
+        document.body.appendChild(m);
+        m.querySelectorAll('.fp-chip[data-pname]').forEach(c => {
+            c.onclick = ev => { ev.stopPropagation(); const name = c.dataset.pname; m.remove(); cb(playerByName(name)); };
+        });
+        setTimeout(() => {
+            const close = ev => { if (!m.contains(ev.target)) { m.remove(); document.removeEventListener('pointerdown', close); } };
+            document.addEventListener('pointerdown', close);
+        }, 0);
     }
 
     function handleUndo() {
         if (!requireActiveCoach()) return;
-        // Bail out of an in-progress pull cleanly rather than undoing a prior
-        // event when the coach hasn't placed the pull yet.
+        // Bail out of an in-progress pull / D placement cleanly rather than
+        // undoing a prior committed event.
         if (S.pulling && S.pullMs === null && !S.puller) {
             S.pulling = false;
             if (pullTimer) { clearInterval(pullTimer); pullTimer = null; }
             render();
             return;
         }
+        if (S.dPlacing) { cancelDPlacing(); return; }
+
         if (typeof undoEvent === 'function') undoEvent();
-        S.pulling = false;
-        S.puller = null;
-        S.pullMs = null;
-        S.pullMods = [];
+        S.pulling = false; S.puller = null; S.pullMs = null; S.pullMods = [];
+        S.dPlacing = null; S.armed = null; S.dMods = [];
         if (pullTimer) { clearInterval(pullTimer); pullTimer = null; }
         render();
     }
@@ -531,6 +672,24 @@
             b.onclick = () => togglePullMod(b.dataset.pmod);
         });
 
+        // Defense: D-action buttons, cancel, bottom-bar actions, D modifiers
+        root.querySelectorAll('.fp-dtypebtn[data-dtype]').forEach(b => {
+            b.onclick = () => setDPlacing(b.dataset.dtype);
+        });
+        const dcancel = root.querySelector('.fp-dcancel[data-dcancel]');
+        if (dcancel) dcancel.onclick = cancelDPlacing;
+        root.querySelectorAll('.fp-ebtn[data-act]').forEach(b => {
+            b.onclick = () => {
+                const act = b.dataset.act;
+                if (act === 'theyturn') handleTheyTurnover();
+                else if (act === 'theyscore') handleTheyScore();
+                else if (act === 'more') handleMore();
+            };
+        });
+        root.querySelectorAll('.fp-modbtn[data-dmod]').forEach(b => {
+            b.onclick = () => toggleDMod(b.dataset.dmod);
+        });
+
         // Field tap → canonical coords. Click is sufficient for placement in
         // these phases; drag (pegman / marker fine-tune) lands in Phase 5.
         const field = root.querySelector('#fpField');
@@ -540,7 +699,7 @@
                 const fx = (e.clientX - r.left) / r.width;
                 const fy = (e.clientY - r.top) / r.height;
                 if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return;
-                handleFieldTap(toField(fx, fy));
+                handleFieldTap(toField(fx, fy), e.clientX, e.clientY);
             };
         }
     }
