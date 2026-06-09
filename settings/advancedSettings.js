@@ -54,7 +54,9 @@
         // it helps with a phone held near the coach's mouth.
         'narration.autoGainControl': false,
         // --- Sync ---
-        'sync.refreshIntervalSec': 10                    // cloud auto-refresh cadence (applies after reload)
+        'sync.refreshIntervalSec': 10,                   // cloud auto-refresh cadence (applies after reload)
+        // --- Field ---
+        'field.endzoneYards': 20                         // endzone depth drawn on the Field tab (20 = USAU, 25 = some leagues)
     };
 
     // Back-compat: console globals we advertised before this UI existed.
@@ -137,6 +139,13 @@
     }
 
     function getDefault(key) { return DEFAULTS[key]; }
+
+    /** Endzone depth (yards) for the Field tab. Defaults to 20 (USAU). */
+    function getEndzoneYards() {
+        let y = parseInt(get('field.endzoneYards'), 10);
+        if (!Number.isFinite(y)) y = DEFAULTS['field.endzoneYards'];
+        return y;
+    }
 
     /** Narration settings bundled for narrationRealtimeSession.start(). */
     function getNarrationSessionOptions(rosterInfo) {
@@ -238,6 +247,21 @@
                         ['10', 'Every 10 seconds'],
                         ['30', 'Every 30 seconds'],
                         ['60', 'Every 60 seconds']
+                    ]
+                }
+            ]
+        },
+        {
+            group: 'Field',
+            note: 'Used by the Field tab; applies the next time it redraws.',
+            fields: [
+                {
+                    key: 'field.endzoneYards', label: 'Endzone depth',
+                    help: 'Depth of each endzone drawn on the Field tab. USAU is 20 yards; some leagues use 25.',
+                    type: 'select',
+                    options: [
+                        ['20', '20 yards (USAU)'],
+                        ['25', '25 yards']
                     ]
                 }
             ]
@@ -398,6 +422,7 @@
         getNarrationAudioConstraints,
         buildNarrationVocabularyPrompt,
         getNarrationSessionOptions,
+        getEndzoneYards,
         showAdvancedSettings
     };
 })();
