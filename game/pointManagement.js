@@ -119,8 +119,16 @@ function startNextPoint() {
         enterGameScreen();
     }
 
-    // For defense points, show Pull dialog on top of game screen
-    if (startPointOn === 'defense' && typeof showPullDialog === 'function') {
+    // For defense points, capture the pull. The Field tab records the pull
+    // in-field (pick puller, time the hang, tap the landing spot) so it can
+    // store pull location + hangtime; every other tab uses the modal pull
+    // dialog. When the Field tab is active we suppress the modal and let
+    // fieldPbp drive the in-field pull flow instead.
+    const fieldTabActiveForPull = (typeof window.getActiveTab === 'function') && window.getActiveTab() === 'field';
+    if (startPointOn === 'defense' && fieldTabActiveForPull
+        && window.fieldPbp && typeof window.fieldPbp.beginPull === 'function') {
+        window.fieldPbp.beginPull();
+    } else if (startPointOn === 'defense' && typeof showPullDialog === 'function') {
         showPullDialog();
     }
 

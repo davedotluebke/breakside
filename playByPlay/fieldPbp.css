@@ -176,6 +176,59 @@
     display: flex; flex-wrap: wrap; gap: 6px; min-height: 8px;
 }
 
+/* Armed chip (puller picked; later: armed player awaiting placement). */
+.fp-chip.armed { background: var(--fp-blue); border-color: var(--fp-blue); color: #fff; }
+.fp-chip.armed .fp-num { color: #cdd9ff; }
+.fp-chip.unknown.armed { background: var(--fp-blue); border-color: var(--fp-blue); color: #fff; font-style: normal; }
+
+/* "Pick Puller:" / slot label. */
+.fp-slotlbl { font-size: 12px; font-weight: 700; color: #555; padding: 2px 4px 5px; }
+
+/* PULL mode pill + Start Point button in the action row. */
+.fp-modepill.pull { background: var(--fp-hold); }
+.fp-start-point-btn {
+    border: none; border-radius: 7px; background: var(--fp-blue); color: #fff;
+    padding: 6px 16px; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+
+/* On-field located-event markers, the disc, and arrows. */
+.fp-arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.fp-disc {
+    position: absolute; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; border: 2px solid #111; transform: translate(-50%, -50%);
+    pointer-events: none; z-index: 7; box-shadow: 0 0 0 3px rgba(255, 255, 255, .35);
+}
+.fp-marker {
+    position: absolute; transform: translate(-50%, -50%); z-index: 5;
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    width: 21px; height: 21px; border-radius: 50%;
+    color: #fff; border: 1.5px solid #fff; pointer-events: none;
+}
+.fp-marker.completion { background: rgba(37, 99, 235, .85); }
+.fp-marker.score { background: var(--fp-green, #047857); }
+.fp-marker.turn { background: var(--fp-red); }
+.fp-marker.block { background: #047857; }
+.fp-marker.pull { background: rgba(80, 80, 80, .85); }
+
+/* Events bar buttons (pull hangtime + brick; offense/defense buttons later). */
+.fp-ebtn {
+    flex: 1 1 auto; min-width: 74px;
+    border: 1px solid #c8c8c8; border-radius: 6px; background: #f7f7f7;
+    padding: 10px 8px; font-size: 13px; font-weight: 600; color: #333;
+    cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent;
+}
+.fp-ebtn.pullhang { flex: 3 1 0; background: #fff7e6; border-color: var(--fp-hold); color: #92600b; font: 700 13px 'JetBrains Mono', monospace; }
+.fp-ebtn.pullbrick { flex: 1 1 0; background: #fff; border-color: var(--fp-hold); color: #92600b; }
+
+/* Modifier-column buttons (pull tags now; throw/D modifiers in Phase 7). */
+.fp-modbtn {
+    flex: 0 0 auto; border: 1px solid #cfcfcf; border-radius: 6px; background: #f7f7f7;
+    padding: 7px 8px; font-size: 13px; font-weight: 600; color: #333;
+    cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent;
+}
+.fp-modbtn.on { background: var(--fp-blue); border-color: var(--fp-blue); color: #fff; }
+
 /* Mic FAB, reserved bottom-right in both layouts. */
 .fp-mic {
     position: absolute; right: 14px; bottom: 12px;
