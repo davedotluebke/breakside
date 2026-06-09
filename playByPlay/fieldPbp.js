@@ -89,8 +89,10 @@
     // (Phase 9 extracts this into a shared module; for now we read it.)
     // -----------------------------------------------------------------
     function reconstructState() {
-        if (window.fullPbp && typeof window.fullPbp._reconstruct === 'function') {
-            return window.fullPbp._reconstruct();
+        // Shared possession core (playByPlay/pbpPossession.js) — same source
+        // of truth the Full tab uses, so the two never disagree.
+        if (window.pbpPossession && typeof window.pbpPossession.reconstructState === 'function') {
+            return window.pbpPossession.reconstructState();
         }
         const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
         const mode = (point && point.startingPosition === 'defense') ? 'defense' : 'offense';
