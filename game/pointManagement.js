@@ -41,6 +41,10 @@ function moveToNextPoint() {
         && typeof window.getActiveTab === 'function'
         && window.getActiveTab() !== 'line'
         && window.getActiveTab() !== 'all') {
+        // Snapshot the surface we're leaving so the next Start Point returns
+        // here (e.g. back to Field for the in-field pull) rather than a stale
+        // default.
+        if (typeof window.rememberCurrentPbpTab === 'function') window.rememberCurrentPbpTab();
         window.switchTab('line');
     }
 
@@ -119,29 +123,32 @@ function startNextPoint() {
         enterGameScreen();
     }
 
-    // For defense points, capture the pull. The Field tab records the pull
-    // in-field (pick puller, time the hang, tap the landing spot) so it can
-    // store pull location + hangtime; every other tab uses the modal pull
-    // dialog. When the Field tab is active we suppress the modal and let
-    // fieldPbp drive the in-field pull flow instead.
-    const fieldTabActiveForPull = (typeof window.getActiveTab === 'function') && window.getActiveTab() === 'field';
-    if (startPointOn === 'defense' && fieldTabActiveForPull
-        && window.fieldPbp && typeof window.fieldPbp.beginPull === 'function') {
-        window.fieldPbp.beginPull();
-    } else if (startPointOn === 'defense' && typeof showPullDialog === 'function') {
-        showPullDialog();
-    }
-
     // If the user started this point from the Line tab (e.g. they're a
-    // solo coach who just finished setting the lineup), switch back to
-    // their preferred play-by-play surface so they can immediately enter
-    // events. The lastPbpTab preference is maintained by panelSystem.js.
+    // solo coach who just finished setting the lineup, or were auto-switched
+    // to Line when the previous point scored), switch back to their preferred
+    // play-by-play surface so they can immediately enter events. Do this
+    // BEFORE capturing the pull below, so the pull decision sees the surface
+    // we're actually returning to (e.g. Field). lastPbpTab is maintained by
+    // panelSystem.js (and snapshotted in moveToNextPoint before the Line jump).
     if (typeof window.getActiveTab === 'function'
         && typeof window.switchTab === 'function'
         && window.getActiveTab() === 'line') {
         const target = (typeof window.getLastPbpTab === 'function')
             ? window.getLastPbpTab() : 'simple';
         window.switchTab(target);
+    }
+
+    // For defense points, capture the pull. The Field tab records the pull
+    // in-field (pick puller, time the hang, tap the landing spot) so it can
+    // store pull location + hangtime; every other tab uses the modal pull
+    // dialog. When the Field tab is the active surface we suppress the modal
+    // and let fieldPbp drive the in-field pull flow instead.
+    const fieldTabActiveForPull = (typeof window.getActiveTab === 'function') && window.getActiveTab() === 'field';
+    if (startPointOn === 'defense' && fieldTabActiveForPull
+        && window.fieldPbp && typeof window.fieldPbp.beginPull === 'function') {
+        window.fieldPbp.beginPull();
+    } else if (startPointOn === 'defense' && typeof showPullDialog === 'function') {
+        showPullDialog();
     }
 
     // Save and Sync on point start
