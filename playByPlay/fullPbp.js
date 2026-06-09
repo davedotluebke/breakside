@@ -76,57 +76,16 @@
      * Returns { mode, holder } where holder is a Player or null.
      */
     function reconstructState() {
+        // Delegate to the shared possession core (playByPlay/pbpPossession.js)
+        // so the Full and Field tabs always agree on (mode, holder).
+        if (window.pbpPossession && typeof window.pbpPossession.reconstructState === 'function') {
+            return window.pbpPossession.reconstructState();
+        }
+        // Fallback if the shared module isn't loaded: mode from the point's
+        // starting position, no holder.
         const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
-        if (!point) {
-            return { mode: 'offense', holder: null, point: null };
-        }
-
-        // Default mode from point's starting position.
-        let mode = (point.startingPosition === 'defense') ? 'defense' : 'offense';
-        let holder = null;
-
-        // Find the most recent event across all possessions in this point.
-        // We trust event semantics, not possession.offensive — possession
-        // boundaries can lag (e.g. a Turnover event lives in the offensive
-        // possession that just ended; the new D possession isn't created
-        // until the next D event).
-        let lastEvent = null;
-        if (point.possessions) {
-            for (let i = point.possessions.length - 1; i >= 0; i--) {
-                const events = point.possessions[i].events;
-                if (events && events.length) {
-                    lastEvent = events[events.length - 1];
-                    break;
-                }
-            }
-        }
-
-        if (lastEvent) {
-            if (lastEvent.type === 'Throw') {
-                // Score-flag Throws end the point — moveToNextPoint advances
-                // game.points so the *current* point is now empty. We won't
-                // typically see one here unless the next point hasn't been
-                // initialized yet; fall through to mode default.
-                if (!lastEvent.score_flag) {
-                    mode = 'offense';
-                    holder = lastEvent.receiver || null;
-                }
-            } else if (lastEvent.type === 'Turnover') {
-                mode = 'defense';
-                holder = null;
-            } else if (lastEvent.type === 'Defense') {
-                if (lastEvent.Callahan_flag) {
-                    // Point ended; mode falls back to default. Same caveat
-                    // as score-flag Throw above.
-                } else {
-                    mode = 'offense';
-                    holder = lastEvent.interception_flag ? (lastEvent.defender || null) : null;
-                }
-            }
-            // Pull / Violation / Other don't change mode or holder here.
-        }
-
-        return { mode, holder, point };
+        const mode = (point && point.startingPosition === 'defense') ? 'defense' : 'offense';
+        return { mode, holder: null, point };
     }
 
     /**
@@ -429,14 +388,8 @@
      * complete and accurate, and re-modifying it would be wrong.
      */
     function findLastEditableEvent(point) {
-        if (!point || !point.possessions) return null;
-        for (let i = point.possessions.length - 1; i >= 0; i--) {
-            const events = point.possessions[i].events;
-            if (!events) continue;
-            for (let j = events.length - 1; j >= 0; j--) {
-                const e = events[j];
-                if (e.type === 'Throw' || e.type === 'Turnover' || e.type === 'Defense') return e;
-            }
+        if (window.pbpPossession && typeof window.pbpPossession.findLastEditableEvent === 'function') {
+            return window.pbpPossession.findLastEditableEvent(point);
         }
         return null;
     }
@@ -895,28 +848,13 @@
      * and the retract-on-double-tap detection.
      */
     function createInferredTurnover(unknown) {
-        if (typeof ensurePossessionExists !== 'function') return;
-        const evt = new Turnover({
-            thrower: unknown,
-            receiver: unknown,
+        const evt = window.pbpPossession.createTurnover(unknown, unknown, {
             throwaway: true,
-            huck: false,
-            receiverError: false,
-            goodDefense: false,
-            stall: false
+            inferred: true
         });
-        evt.inferred_flag = true;
-
-        const possession = ensurePossessionExists(true);
-        possession.addEvent(evt);
-
-        if (typeof logEvent === 'function') logEvent(evt.summarize());
-        publishAdded(evt);
-
+        if (!evt) return;
         manualHolder = null;
         breakArmed = false;
-
-        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
         render();
     }
 
@@ -979,73 +917,34 @@
             : null;
     }
 
+    // These now delegate to the shared possession core
+    // (playByPlay/pbpPossession.js): it appends the event, updates stats,
+    // advances the score/point, logs, publishes, and persists. Full PBP only
+    // layers on its own UI state (manualHolder / breakArmed) and a re-render.
+
     function createThrow(thrower, receiver, opts) {
-        if (typeof ensurePossessionExists !== 'function') return;
-        if (!thrower || !receiver) return;
-
-        const evt = new Throw({
-            thrower,
-            receiver,
-            huck: false,
-            breakmark: !!breakArmed,
-            dump: false,
-            hammer: false,
-            sky: false,
-            layout: false,
-            score: !!opts.score
+        opts = opts || {};
+        const evt = window.pbpPossession.createThrow(thrower, receiver, {
+            score: !!opts.score,
+            breakmark: !!breakArmed
         });
-        const possession = ensurePossessionExists(true);
-        possession.addEvent(evt);
-
-        // Stats: every throw counts as a completed pass; a score also
-        // earns the thrower an assist and the receiver a goal.
-        if (typeof thrower.completedPasses !== 'number') thrower.completedPasses = 0;
-        thrower.completedPasses += 1;
-        if (evt.score_flag) {
-            thrower.assists = (thrower.assists || 0) + 1;
-            receiver.goals = (receiver.goals || 0) + 1;
-        }
-
-        if (typeof logEvent === 'function') logEvent(evt.summarize());
-        publishAdded(evt);
-
-        // Once any event is added, clear the manual holder override and
-        // disarm the break flag so they don't bleed into subsequent
-        // events.
+        if (!evt) return;
         manualHolder = null;
         breakArmed = false;
-
-        if (evt.score_flag && typeof updateScore === 'function' && typeof Role !== 'undefined') {
-            updateScore(Role.TEAM);
-            if (typeof moveToNextPoint === 'function') moveToNextPoint();
-        }
-
-        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
         render();
     }
 
     function createTurnover(thrower, receiver, opts) {
-        if (typeof ensurePossessionExists !== 'function') return;
-        const evt = new Turnover({
-            thrower: thrower || null,
-            receiver: receiver || null,
+        opts = opts || {};
+        const evt = window.pbpPossession.createTurnover(thrower, receiver, {
             throwaway: !!opts.throwaway,
-            huck: false,
-            receiverError: !!opts.drop,
+            drop: !!opts.drop,
             goodDefense: !!opts.goodDefense,
             stall: !!opts.stall
         });
-        // Turnovers live in the offensive possession that just ended.
-        const possession = ensurePossessionExists(true);
-        possession.addEvent(evt);
-
-        if (typeof logEvent === 'function') logEvent(evt.summarize());
-        publishAdded(evt);
-
+        if (!evt) return;
         manualHolder = null;
         breakArmed = false;
-
-        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
         render();
     }
 
@@ -1057,48 +956,18 @@
      * (currently only used by the O/D pill toggle).
      */
     function createDefense(defender, opts) {
-        if (typeof ensurePossessionExists !== 'function') return;
-        // Block / interception need a defender; unforced errors don't.
-        if (!defender && !opts.unforcedError) return;
-
-        const evt = new Defense({
-            defender: defender || null,
+        opts = opts || {};
+        const evt = window.pbpPossession.createDefense(defender, {
             interception: !!opts.interception,
-            layout: false,
-            sky: false,
             Callahan: !!opts.Callahan,
             stall: !!opts.stall,
-            unforcedError: !!opts.unforcedError
+            unforcedError: !!opts.unforcedError,
+            inferred: !!opts.inferred
         });
-        if (opts.inferred) evt.inferred_flag = true;
-
-        // Defense events live in a defensive possession.
-        const possession = ensurePossessionExists(false);
-        possession.addEvent(evt);
-
-        if (typeof logEvent === 'function') logEvent(evt.summarize());
-        publishAdded(evt);
-
+        if (!evt) return;
         manualHolder = null;
         breakArmed = false;
-
-        if (evt.Callahan_flag && typeof updateScore === 'function' && typeof Role !== 'undefined') {
-            if (defender) defender.goals = (defender.goals || 0) + 1;
-            updateScore(Role.TEAM);
-            if (typeof moveToNextPoint === 'function') moveToNextPoint();
-        }
-
-        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
         render();
-    }
-
-    function publishAdded(evt) {
-        if (!window.narrationEventBus) return;
-        window.narrationEventBus.publish('eventAdded', {
-            event: evt,
-            source: 'manual',
-            provisionalId: null
-        });
     }
 
     // -----------------------------------------------------------------
