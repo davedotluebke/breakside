@@ -30,13 +30,33 @@
 
 (function() {
     // -----------------------------------------------------------------
-    // Field geometry constants (canonical yards)
+    // Field geometry (canonical yards). Width and the playing field proper are
+    // fixed; endzone depth (EZ) comes from Advanced Settings (default 20 yd,
+    // USAU; some leagues use 25). L and the red-zone/brick lines derive from
+    // EZ, so they're refreshed from the setting on every render.
+    //
+    // NOTE: stored event coordinates are in these canonical yards, so changing
+    // the endzone depth re-scales the field a past game was recorded in. This
+    // is fine for the (new, data-free) Field tab; if real spatial data later
+    // needs to survive a depth change, persist EZ per game and map on read.
     // -----------------------------------------------------------------
-    const L = 120, W = 40, EZ = 25;
-    const RZ = [EZ + 20, L - EZ - 20];   // 45, 75
+    const W = 40;                         // field width (fixed)
+    const PLAYING = 70;                   // playing field proper, between goal lines (fixed)
     const LANES = [W / 3, 2 * W / 3];
-    const BRICK = RZ.slice();
     const VISIBLE = 4;                    // recent markers/arrows kept solid
+    let EZ = 20;                          // endzone depth (refreshed from settings)
+    let L = PLAYING + 2 * EZ;             // total length
+    let RZ = [EZ + 20, L - EZ - 20];      // red-zone / brick lines (20 yd off each goal line)
+    let BRICK = RZ.slice();
+
+    function refreshGeometry() {
+        const y = (window.advancedSettings && typeof window.advancedSettings.getEndzoneYards === 'function')
+            ? window.advancedSettings.getEndzoneYards() : 20;
+        EZ = (Number.isFinite(y) && y > 0) ? y : 20;
+        L = PLAYING + 2 * EZ;
+        RZ = [EZ + 20, L - EZ - 20];
+        BRICK = RZ.slice();
+    }
 
     // -----------------------------------------------------------------
     // View + interaction state. Mode/holder are derived from the event
@@ -359,6 +379,7 @@
         const content = document.getElementById('panel-playByPlayField-content');
         if (!content) return;
 
+        refreshGeometry();   // pick up the current endzone-depth setting
         const state = reconstructState();
         const inPoint = (typeof isPointInProgress === 'function') && isPointInProgress();
 
