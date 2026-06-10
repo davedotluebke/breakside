@@ -172,8 +172,8 @@
 .fp-events {
     flex: 0 0 auto;
     background: #fff; border-top: 1px solid #ddd;
-    padding: 8px 74px 8px 8px;
-    display: flex; flex-wrap: wrap; gap: 6px; min-height: 8px;
+    padding: 8px 72px 8px 8px;   /* right pad keeps clear of the mic FAB */
+    display: flex; flex-wrap: nowrap; gap: 6px; min-height: 8px;
 }
 
 /* Armed chip (puller picked; later: armed player awaiting placement). */
@@ -213,10 +213,13 @@
 
 /* Events bar buttons (pull hangtime + brick; offense/defense buttons later). */
 .fp-ebtn {
-    flex: 1 1 auto; min-width: 74px;
+    /* basis = content so labels show in full; grow to share the row. nowrap
+       keeps them on one line; they size to their text and fit the row. */
+    flex: 1 1 auto; min-width: 0;
     border: 1px solid #c8c8c8; border-radius: 6px; background: #f7f7f7;
-    padding: 10px 8px; font-size: 13px; font-weight: 600; color: #333;
-    cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent;
+    padding: 10px 7px; font-size: 12.5px; font-weight: 600; color: #333;
+    cursor: pointer; text-align: center; white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
 }
 .fp-ebtn.pullhang { flex: 3 1 0; background: #fff7e6; border-color: var(--fp-hold); color: #92600b; font: 700 13px 'JetBrains Mono', monospace; }
 .fp-ebtn.pullbrick { flex: 1 1 0; background: #fff; border-color: var(--fp-hold); color: #92600b; }
