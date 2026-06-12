@@ -3749,10 +3749,24 @@ function updateSelectLineTable() {
     // column count without an extra cell.
     if (isOnDeckView) {
         const projHeader = document.createElement('th');
-        projHeader.textContent = 'Next';
+        // Line break stacks "On / Deck" vertically (CSS white-space: pre-line)
+        // to keep the column narrow.
+        projHeader.textContent = 'On\nDeck';
         projHeader.setAttribute('rowspan', '2');
-        projHeader.title = 'Projected points played after the immediate next point';
+        projHeader.title = 'On Deck point — projected points played by each player going in';
         projHeader.classList.add('active-ondeck-projection');
+        // Color the header by the On Deck point's gender ratio, matching the
+        // score-cell coloring used on the other headers. The ratio is
+        // deterministic (fixed A-B-B-A alternation, independent of who wins),
+        // so the point two ahead is known: its 0-based index is points.length+1
+        // (the next point is points.length per getExpectedGenderRatio).
+        if (game.alternateGenderRatio === 'Alternating' && game.startingGenderRatio) {
+            const onDeckRatio = typeof getGenderRatioForPoint === 'function'
+                ? getGenderRatioForPoint(game, game.points.length + 1)
+                : null;
+            if (onDeckRatio === 'FMP') projHeader.classList.add('score-cell-fmp');
+            else if (onDeckRatio === 'MMP') projHeader.classList.add('score-cell-mmp');
+        }
         teamScoreRow.appendChild(projHeader);
     }
 
@@ -3875,8 +3889,14 @@ function updateSelectLineTable() {
         if (isOnDeckView) {
             const projCell = document.createElement('td');
             projCell.classList.add('active-ondeck-projection');
-            const projected = runningPointTotal + (tentativeNextSet.includes(player.name) ? 1 : 0);
-            projCell.textContent = `${projected}`;
+            // Like every other point column: show the (incremented) running
+            // total only for players slated for the immediate next point; a
+            // dash for those sitting it out, matching the table's "-" idiom.
+            if (tentativeNextSet.includes(player.name)) {
+                projCell.textContent = `${runningPointTotal + 1}`;
+            } else {
+                projCell.textContent = '-';
+            }
             row.appendChild(projCell);
         }
 
