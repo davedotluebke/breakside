@@ -125,6 +125,8 @@
     background: #f7f7f7; border: 1px solid #cfcfcf; border-radius: 999px;
     padding: 8px 14px; font-size: 14px; font-weight: 600; color: #222;
     cursor: pointer; user-select: none; white-space: nowrap;
+    /* touch-action none so a chip drag becomes a pegman, not a scroll */
+    touch-action: none;
     -webkit-tap-highlight-color: transparent;
 }
 .fp-chip .fp-num { font: 700 11px 'JetBrains Mono', monospace; color: #888; }
@@ -210,6 +212,8 @@
 .fp-marker.turn { background: var(--fp-red); }
 .fp-marker.block { background: #047857; }
 .fp-marker.pull { background: rgba(80, 80, 80, .85); }
+/* Recent markers are draggable for fine-tuning (older ones stay frozen). */
+.fp-marker[data-mkidx] { pointer-events: auto; cursor: grab; touch-action: none; }
 
 /* Events bar buttons (pull hangtime + brick; offense/defense buttons later). */
 .fp-ebtn {
@@ -256,6 +260,24 @@
 .fp-ebtn.theyturn { color: #047857; }
 .fp-ebtn.theyscore { color: #b91c1c; }
 .fp-ebtn.more { flex: 0 0 auto; min-width: auto; color: #666; }
+
+/* Offense bottom bar: Drop / Throwaway / Score toggles. `.on` = armed. */
+.fp-ebtn.drop, .fp-ebtn.throwaway { color: #b91c1c; }
+.fp-ebtn.score { color: #047857; border-color: #86d3b3; background: #e7f7f0; }
+.fp-ebtn.on { background: var(--fp-blue); border-color: var(--fp-blue); color: #fff; }
+
+/* Pegman ghost while dragging a player chip onto the field. */
+.fp-pegman {
+    position: fixed; z-index: 999; pointer-events: none;
+    transform: translate(-50%, -100%);
+    background: var(--fp-blue); color: #fff; border-radius: 999px;
+    padding: 4px 11px 4px 7px; font-size: 13px; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .35); white-space: nowrap;
+}
+.fp-pegman::after {
+    content: ""; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%);
+    border: 6px solid transparent; border-top-color: var(--fp-blue);
+}
 
 /* Field-side popover picker ("Who got the block?"). */
 .fp-picker {
