@@ -77,7 +77,15 @@
         dPlacing: null,      // 'block'|'interception'|'stall'|'callahan' | null
         dMods: [],           // subset of DMODS (Layout / Sky)
         // shared placement: a player armed (picked) awaiting a field tap
-        armed: null          // Player object | null
+        armed: null,         // Player object | null
+        // offense flow
+        pending: null,       // null | 'drop' | 'throwaway' | 'score'
+        // Manual holder override — set when the coach picks who picked up the
+        // disc (start of possession / after a block) where the event stream
+        // has no holder. Cleared whenever a real event is added or undone, so
+        // the derived state stays the source of truth otherwise.
+        manualHolder: null,  // Player object | null
+        pickupLoc: null      // {l,w} | null — where the pickup happened (next throw's from)
     };
     let pullTimer = null;
 
@@ -150,6 +158,34 @@
         return null;
     }
 
+    /**
+     * Effective holder = event-stream-derived holder, falling back to the
+     * manual pickup override when derivation says "nobody" (start of
+     * possession, after a block, after the pull).
+     */
+    function effectiveHolder(state) {
+        return state.holder || S.manualHolder;
+    }
+
+    /**
+     * Where the disc currently is, for use as a throw's `from`: an explicit
+     * pickup spot if one was just recorded, else the last located event's
+     * landing point, else null (no arrow drawn for the first throw).
+     */
+    function discLoc(state) {
+        if (S.pickupLoc) return S.pickupLoc;
+        const le = lastLocatedEvent(state.point);
+        return le ? le.to : null;
+    }
+
+    /** Clear the transient offense-entry UI state after any committed event. */
+    function clearEntryState() {
+        S.armed = null;
+        S.pending = null;
+        S.manualHolder = null;
+        S.pickupLoc = null;
+    }
+
     // -----------------------------------------------------------------
     // Field rendering: static geometry + located-event arrows/markers/disc.
     // -----------------------------------------------------------------
@@ -205,7 +241,10 @@
             const rec = evs.length - 1 - i, op = rec < VISIBLE ? (1 - rec * 0.2) : 0.1;
             const p = pct(e.to.l, e.to.w);
             const m = markerStyle(e, i);
-            h += `<div class="fp-marker ${m.cls}" style="left:${p.x}%;top:${p.y}%;opacity:${op.toFixed(2)}">${m.glyph}</div>`;
+            // The most recent VISIBLE markers stay draggable for fine-tuning
+            // (drag re-anchors the adjacent throw); older ones fade + freeze.
+            const dragAttr = rec < VISIBLE ? ` data-mkidx="${i}"` : '';
+            h += `<div class="fp-marker ${m.cls}"${dragAttr} style="left:${p.x}%;top:${p.y}%;opacity:${op.toFixed(2)}">${m.glyph}</div>`;
         });
 
         const le = lastLocatedEvent(state.point);
@@ -263,7 +302,7 @@
             lead = `<div class="fp-dcancel" data-dcancel="1">✕ ${cap(S.dPlacing)}</div>`;
         }
 
-        const holder = state.holder;
+        const holder = effectiveHolder(state);
         const armedName = S.pulling ? (S.puller && S.puller.name)
             : (S.armed && S.armed.name);
         let html = lead + point.players.map(name => {
@@ -310,7 +349,13 @@
                 + `<button class="fp-ebtn theyscore" data-act="theyscore">They score</button>`
                 + `<button class="fp-ebtn more" data-act="more">⋯ more</button>`;
         }
-        // Offense action buttons land in Phase 5.
+        if (inPoint && state.mode === 'offense') {
+            const on = a => S.pending === a ? ' on' : '';
+            return `<button class="fp-ebtn drop${on('drop')}" data-act="drop">Drop</button>`
+                + `<button class="fp-ebtn throwaway${on('throwaway')}" data-act="throwaway">Throwaway</button>`
+                + `<button class="fp-ebtn score${on('score')}" data-act="score">Score</button>`
+                + `<button class="fp-ebtn more" data-act="more">⋯ more</button>`;
+        }
         return '';
     }
 
@@ -325,8 +370,26 @@
             return `<div class="fp-modcol-label">Last D was a:</div><div class="fp-modcol-sub">${cap(S.dPlacing)}</div>`
                 + DMODS.map(m => `<button class="fp-modbtn ${S.dMods.includes(m.label) ? 'on' : ''}" data-dmod="${m.label}">${m.label}</button>`).join('');
         }
-        // Modifier strip for the last completed play lands in Phase 7.
-        return `<div class="fp-modcol-label">Last throw was a:</div><div class="fp-modcol-sub"><i>no play yet</i></div>`;
+        // Modifier chips for the last completed play land in Phase 7; for now
+        // the column names the last play so the coach can see what's tagged.
+        let label = 'Last throw was a:';
+        let sub = '<i>no play yet</i>';
+        const le = (window.pbpPossession && state.point)
+            ? window.pbpPossession.findLastEditableEvent(state.point) : null;
+        if (le) {
+            const nm = p => (p && p.name === UNKNOWN_PLAYER) ? 'Unknown' : (p && p.name) || '';
+            if (le.type === 'Defense') {
+                label = 'Last D was a:';
+                const kind = le.Callahan_flag ? 'Callahan' : le.interception_flag ? 'interception'
+                    : le.stall_flag ? 'stall' : le.unforcedError_flag ? 'their turnover' : 'block';
+                sub = `${nm(le.defender) ? nm(le.defender) + ' — ' : ''}${kind}`;
+            } else if (le.type === 'Turnover') {
+                sub = le.drop_flag ? `${nm(le.receiver)} (drop)` : `${nm(le.thrower)} (throwaway)`;
+            } else {
+                sub = `${nm(le.thrower)} to ${nm(le.receiver)}${le.score_flag ? ' — goal!' : ''}`;
+            }
+        }
+        return `<div class="fp-modcol-label">${label}</div><div class="fp-modcol-sub">${sub}</div>`;
     }
 
     function statusText(state, inPoint) {
@@ -340,8 +403,17 @@
             if (S.dPlacing) return `<b>${cap(S.dPlacing)}</b> — tap the spot &amp; pick the defender`;
             return 'On defense — pick a D action';
         }
-        const holder = state.holder;
-        return holder ? `<b>${holder.name}</b> has the disc` : 'Pick up / who has the disc?';
+        // Offense
+        if (S.pending === 'throwaway') return 'Tap where the throwaway landed';
+        if (S.armed) {
+            const suffix = S.pending === 'drop' ? ' (drop)' : S.pending === 'score' ? ' (score)' : '';
+            return `Tap where <b>${S.armed.name}</b> caught it${suffix}`;
+        }
+        if (S.pending === 'drop') return 'Tap the drop spot, then pick who dropped it';
+        if (S.pending === 'score') return '<b>Score</b> — pick the receiver, then the spot';
+        const holder = effectiveHolder(state);
+        return holder ? `<b>${holder.name}</b> has the disc`
+            : 'Who picked it up? Tap the player (or drag them to the spot)';
     }
 
     function modeLabel(mode) { return mode === 'offense' ? 'OFFENSE' : 'DEFENSE'; }
@@ -541,7 +613,24 @@
             render();
             return;
         }
-        // Offense chip taps land in Phase 5.
+        // Offense
+        const state = reconstructState();
+        if (state.mode !== 'offense') return;
+        const holder = effectiveHolder(state);
+        if (!holder && !S.pending) {
+            // No holder yet — this tap establishes who picked up the disc.
+            // No event is logged; the next throw starts from this player.
+            S.manualHolder = p;
+            render();
+            return;
+        }
+        if (holder && holder.name === name && !S.pending) {
+            // Tapping the holder is a no-op (nothing to throw to themselves).
+            return;
+        }
+        // Arm/disarm as the receiver (or dropper, if a drop is pending).
+        S.armed = (S.armed && S.armed.name === name) ? null : p;
+        render();
     }
 
     function handleFieldTap(loc, cx, cy) {
@@ -552,7 +641,92 @@
             popPicker(cx, cy, player => { S.armed = player; placeD(loc.l, loc.w); });
             return;
         }
-        // Offense field placement lands in Phase 5.
+        // Offense
+        const state = reconstructState();
+        if (state.mode !== 'offense') return;
+        if (S.pending === 'throwaway') { placeThrowaway(loc); return; }
+        if (S.armed) { placeOffense(S.armed, loc); return; }
+        if (!effectiveHolder(state) && !S.pending) {
+            // No holder yet — field-first tap picks who picked it up *and*
+            // where, anchoring the next throw at that spot.
+            popPicker(cx, cy, player => {
+                S.manualHolder = player;
+                S.pickupLoc = clampLoc(loc.l, loc.w);
+                render();
+            }, 'Who picked it up?');
+            return;
+        }
+        // Nothing armed — field-first popover picks the receiver (or dropper).
+        popPicker(cx, cy, player => { S.armed = player; placeOffense(player, loc); });
+    }
+
+    // ---- Offense placement ----
+
+    /**
+     * Commit an offense placement for `receiver` at `loc`: a drop if one is
+     * pending, otherwise a completion — auto-promoted to a score when the
+     * catch is in the attacking endzone (or Score is pending).
+     */
+    function placeOffense(receiver, loc) {
+        if (!requireActiveCoach()) return;
+        const state = reconstructState();
+        const holder = effectiveHolder(state);
+        const from = discLoc(state);
+        const to = clampLoc(loc.l, loc.w);
+
+        if (S.pending === 'drop') {
+            // Drop: thrower = holder (Unknown if nobody established), the
+            // armed/picked player is the one who dropped it. Flips to defense.
+            const thrower = holder || (window.pbpPossession && window.pbpPossession.getUnknown());
+            window.pbpPossession.createTurnover(thrower, receiver, { drop: true, from, to });
+            clearEntryState();
+            render();
+            return;
+        }
+
+        if (!holder) {
+            // No thrower known — credit the Unknown player so the completion
+            // still lands (matches Full PBP's convention).
+            const unknown = window.pbpPossession && window.pbpPossession.getUnknown();
+            if (!unknown) return;
+            commitThrow(unknown, receiver, from, to);
+            return;
+        }
+        commitThrow(holder, receiver, from, to);
+    }
+
+    function commitThrow(thrower, receiver, from, to) {
+        const isScore = S.pending === 'score' || inAttackEZ(to);
+        window.pbpPossession.createThrow(thrower, receiver, {
+            score: isScore,
+            from, to,
+            // Default assist = thrower; Phase 6's attribution dialog makes
+            // this editable before/after confirm.
+            assist: isScore ? thrower : null
+        });
+        clearEntryState();
+        render();
+    }
+
+    function placeThrowaway(loc) {
+        if (!requireActiveCoach()) return;
+        const state = reconstructState();
+        const holder = effectiveHolder(state);
+        const thrower = holder || (window.pbpPossession && window.pbpPossession.getUnknown());
+        if (!thrower) return;
+        window.pbpPossession.createTurnover(thrower, null, {
+            throwaway: true,
+            from: discLoc(state),
+            to: clampLoc(loc.l, loc.w)
+        });
+        clearEntryState();
+        render();
+    }
+
+    function togglePending(action) {
+        if (!requireActiveCoach()) return;
+        S.pending = (S.pending === action) ? null : action;
+        render();
     }
 
     // ---- Defense (D-possession) ----
@@ -619,7 +793,8 @@
         m.style.left = cx + 'px';
         m.style.top = cy + 'px';
         const ttl = title || (S.dPlacing === 'interception' ? 'Who intercepted?'
-            : S.dPlacing ? `Who got the ${S.dPlacing}?` : 'Who?');
+            : S.dPlacing ? `Who got the ${S.dPlacing}?`
+            : S.pending === 'drop' ? 'Who dropped it?' : 'Who caught it?');
         let html = `<div class="fp-picker-ttl">${ttl}</div>`;
         names.forEach(name => {
             const p = playerByName(name); if (!p) return;
@@ -649,10 +824,18 @@
             return;
         }
         if (S.dPlacing) { cancelDPlacing(); return; }
+        if (S.armed || S.pending || S.manualHolder) {
+            // In-progress offense entry (armed receiver / pending action /
+            // pickup choice) — clear it rather than undoing a committed event.
+            clearEntryState();
+            render();
+            return;
+        }
 
         if (typeof undoEvent === 'function') undoEvent();
         S.pulling = false; S.puller = null; S.pullMs = null; S.pullMods = [];
-        S.dPlacing = null; S.armed = null; S.dMods = [];
+        S.dPlacing = null; S.dMods = [];
+        clearEntryState();
         if (pullTimer) { clearInterval(pullTimer); pullTimer = null; }
         render();
     }
@@ -660,6 +843,137 @@
     function handleStartPoint() {
         if (typeof handlePanelStartPoint === 'function') handlePanelStartPoint();
         else if (typeof startNextPoint === 'function') startNextPoint();
+    }
+
+    // -----------------------------------------------------------------
+    // Unified pointer layer — distinguishes tap from drag so all three
+    // placement gestures coexist: tap chip → tap spot, tap empty spot →
+    // popover, drag chip (pegman) → drop on field. Recent markers drag to
+    // fine-tune (re-anchoring the adjacent throw). Listeners for move/up sit
+    // on window, so per-render DOM rebuilds don't break an active drag.
+    // -----------------------------------------------------------------
+    const DRAG_THRESHOLD_PX = 6;
+    let drag = null;     // {kind:'chip'|'marker'|'field', ...}
+    let pegEl = null;    // floating pegman element while dragging a chip
+
+    function fieldEl() { return document.querySelector('#panel-playByPlayField-content #fpField'); }
+
+    function pointInField(cx, cy) {
+        const f = fieldEl();
+        if (!f) return null;
+        const r = f.getBoundingClientRect();
+        const fx = (cx - r.left) / r.width, fy = (cy - r.top) / r.height;
+        if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return null;
+        return toField(fx, fy);
+    }
+
+    function onPointerDown(e) {
+        const chip = e.target.closest('.fp-chip[data-pname]');
+        if (chip) { startDrag({ kind: 'chip', name: chip.dataset.pname }, e); return; }
+        const mk = e.target.closest('.fp-marker[data-mkidx]');
+        if (mk) { startDrag({ kind: 'marker', idx: +mk.dataset.mkidx }, e); return; }
+        if (e.target.closest('#fpField')) { startDrag({ kind: 'field' }, e); return; }
+    }
+
+    function startDrag(d, e) {
+        drag = Object.assign({ sx: e.clientX, sy: e.clientY, moved: false }, d);
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+    }
+
+    function onPointerMove(e) {
+        if (!drag) return;
+        if (!drag.moved) {
+            if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < DRAG_THRESHOLD_PX) return;
+            drag.moved = true;
+        }
+        if (drag.kind === 'chip') {
+            if (!pegEl) {
+                pegEl = document.createElement('div');
+                pegEl.className = 'fp-pegman';
+                pegEl.textContent = '🧍 ' + (drag.name === UNKNOWN_PLAYER ? 'Unknown' : drag.name);
+                document.body.appendChild(pegEl);
+            }
+            pegEl.style.left = e.clientX + 'px';
+            pegEl.style.top = (e.clientY - 6) + 'px';
+        } else if (drag.kind === 'marker') {
+            const loc = pointInField(e.clientX, e.clientY);
+            if (loc) moveMarker(drag.idx, clampLoc(loc.l, loc.w));
+        }
+    }
+
+    function onPointerUp(e) {
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        if (pegEl) { pegEl.remove(); pegEl = null; }
+        const d = drag; drag = null;
+        if (!d) return;
+
+        if (d.kind === 'chip') {
+            if (!d.moved) { handleChipTap(d.name); return; }
+            const loc = pointInField(e.clientX, e.clientY);
+            if (!loc) { render(); return; }
+            // Chip dropped on the field — one-gesture pick + place.
+            handleChipDrop(d.name, loc);
+        } else if (d.kind === 'marker') {
+            if (d.moved) finishMarkerDrag(d.idx);
+        } else if (d.kind === 'field') {
+            if (!d.moved) {
+                const loc = pointInField(e.clientX, e.clientY);
+                if (loc) handleFieldTap(loc, e.clientX, e.clientY);
+            }
+        }
+    }
+
+    /** Chip dragged onto the field: same as arming the player then tapping. */
+    function handleChipDrop(name, loc) {
+        if (!requireActiveCoach()) return;
+        const p = playerByName(name);
+        if (!p) return;
+        if (S.pulling) { S.puller = p; placePull(loc.l, loc.w, false); return; }
+        if (S.dPlacing) { S.armed = p; placeD(loc.l, loc.w); return; }
+        const state = reconstructState();
+        if (state.mode !== 'offense') return;
+        if (!effectiveHolder(state) && !S.pending) {
+            // No holder — dragging a player to a spot records the pickup
+            // (player + location), no event.
+            S.manualHolder = p;
+            S.pickupLoc = clampLoc(loc.l, loc.w);
+            render();
+            return;
+        }
+        placeOffense(p, loc);
+    }
+
+    // ---- Marker fine-tune ----
+
+    /**
+     * Live-update a located event's landing point while dragging its marker.
+     * Keeps the throw chain intact: the next event's `from` was this catch,
+     * so it moves too. Persisting + bus publish happen once, on release.
+     */
+    function moveMarker(idx, loc) {
+        const state = reconstructState();
+        const evs = pointEvents(state.point);
+        const ev = evs[idx];
+        if (!ev || !ev.to) return;
+        ev.to = loc;
+        if (evs[idx + 1] && evs[idx + 1].from) evs[idx + 1].from = loc;
+        render();
+    }
+
+    function finishMarkerDrag(idx) {
+        const state = reconstructState();
+        const evs = pointEvents(state.point);
+        const ev = evs[idx];
+        if (!ev) return;
+        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+        if (window.narrationEventBus) {
+            window.narrationEventBus.publish('eventAmended', {
+                event: ev, previousEvent: null, source: 'manual', provisionalId: null
+            });
+        }
+        render();
     }
 
     // -----------------------------------------------------------------
@@ -678,10 +992,9 @@
         const startBtn = root.querySelector('#fpStartPointBtn');
         if (startBtn) startBtn.onclick = handleStartPoint;
 
-        // Player / puller chips
-        root.querySelectorAll('.fp-chip[data-pname]').forEach(chip => {
-            chip.onclick = () => handleChipTap(chip.dataset.pname);
-        });
+        // Chips, markers, and the field all route through the unified pointer
+        // layer (tap vs drag) — a single pointerdown hook on the panel root.
+        root.onpointerdown = onPointerDown;
 
         // Pull hang/brick buttons
         root.querySelectorAll('.fp-ebtn[data-pull]').forEach(b => {
@@ -705,24 +1018,14 @@
                 if (act === 'theyturn') handleTheyTurnover();
                 else if (act === 'theyscore') handleTheyScore();
                 else if (act === 'more') handleMore();
+                else if (act === 'drop' || act === 'throwaway' || act === 'score') togglePending(act);
             };
         });
         root.querySelectorAll('.fp-modbtn[data-dmod]').forEach(b => {
             b.onclick = () => toggleDMod(b.dataset.dmod);
         });
 
-        // Field tap → canonical coords. Click is sufficient for placement in
-        // these phases; drag (pegman / marker fine-tune) lands in Phase 5.
-        const field = root.querySelector('#fpField');
-        if (field) {
-            field.onclick = (e) => {
-                const r = field.getBoundingClientRect();
-                const fx = (e.clientX - r.left) / r.width;
-                const fy = (e.clientY - r.top) / r.height;
-                if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return;
-                handleFieldTap(toField(fx, fy), e.clientX, e.clientY);
-            };
-        }
+        // (Field taps are handled by the pointer layer above — no onclick.)
     }
 
     function wireEvents() { /* stable wiring handled per-render in wireDynamic */ }
