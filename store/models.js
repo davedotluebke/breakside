@@ -154,7 +154,15 @@ function Game(teamName, opponentName, startOn, teamId = null) {
         oLineModifiedAt: null,      // ISO timestamp of last modification
         dLineModifiedAt: null,      // ISO timestamp of last modification
         odLineModifiedAt: null,     // ISO timestamp of last modification
-        activeType: 'od',           // Locally-viewed line type: 'o' | 'd' | 'od' (NOT synced)
+
+        // On Deck line: a single, side-agnostic line the Line Coach can
+        // prepare for the point *after* Next ("two points ahead"), so an
+        // otherwise-idle LC can plan while the current point is in progress.
+        // Promoted into odLine at point start (see startNextPoint) — NOT a
+        // full o/d/od mirror. Empty = "not set" = promotion no-op.
+        odOnDeckLine: [],           // Player names for the point-after-next
+        odOnDeckLineModifiedAt: null, // ISO timestamp of last modification
+        activeType: 'od',           // Locally-viewed line type: 'o' | 'd' | 'od' | 'odOnDeck' (NOT synced)
 
         // Lineup Ready signal: LC presses "Lineup Ready" to tell the AC
         // the line is finalized. Fire-and-forget: the AC's polling refresh

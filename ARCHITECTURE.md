@@ -298,6 +298,48 @@ The service worker implements a network-first strategy with cache fallback:
 | **Data Storage** | JSON files on filesystem |
 | **SSL** | Let's Encrypt (certbot) |
 
+### TLS Certificate Renewal (and the PATH gotcha)
+
+nginx terminates TLS using Let's Encrypt certs under `/etc/letsencrypt/live/`. Two
+lineages exist: `api.breakside.pro` (covers `api.breakside.pro` + `api.breakside.us`,
+both served from EC2) and `api.breakside.us` (the apex/redirect block). **`www.breakside.pro`
+must NOT be on any EC2 cert** — it's served by CloudFront, so its http-01 challenge
+404s on EC2 and fails the whole renewal.
+
+Renewal runs from `/etc/cron.d/certbot` (`certbot renew --quiet`, twice daily) using the
+**nginx authenticator plugin**.
+
+**Historical root cause (June 2026 outage):** the `api.breakside.pro` cert silently failed
+to auto-renew for ~3 months and eventually expired, taking the API down. The cron job *was*
+running certbot twice daily the whole time, but every run failed with `The nginx plugin is
+not working`. The real reason buried in `/var/log/letsencrypt/letsencrypt.log` was
+`Could not find a usable 'nginx' binary ... your PATH`: **cron's default PATH
+(`/usr/bin:/bin`) does not include `/usr/sbin`, where the `nginx` binary lives.** The nginx
+plugin shells out to `nginx`, couldn't find it, and aborted — but only under cron. Run by
+hand (login PATH includes `/usr/sbin`) it always worked, which masked the bug. Fix: a
+`PATH=...:/usr/sbin:...` line at the top of `/etc/cron.d/certbot`. Verify with
+`sudo env -i PATH=/usr/bin:/bin certbot renew --dry-run` (reproduces the failure) vs
+adding `/usr/sbin` (succeeds).
+
+**Expiry tripwire:** Let's Encrypt stopped emailing expiry warnings in 2025, so the silent
+failure went unnoticed until the API died. `/usr/local/bin/cert-expiry-check.sh` (daily via
+`/etc/cron.d/cert-expiry-check`) checks days-to-expiry on every `live/*/fullchain.pem` and,
+under 20 days, logs to syslog (`logger -t cert-expiry`) **and** emails dave@luebke.us — an
+alarm independent of whatever certbot does, so it catches any future cause.
+
+### Outbound Mail (Postfix → Gmail relay)
+
+The box sends mail (cert alarm; also the old text-adventure game's git-sync/db-backup
+notices) via local **Postfix**. EC2 blocks outbound port 25 to the internet, so Postfix
+cannot deliver directly — it **must** relay through an authenticated SMTP service. It's
+configured to relay through Gmail (`relayhost = [smtp.gmail.com]:587`, SASL creds in
+`/etc/postfix/sasl_passwd`, perms 600). The auth account is a `luebke.us` Google account
+using an **app password** (not the login password; requires 2FA). If mail stops delivering,
+check `sudo postqueue -p` and `/var/log/maillog` — `relay=none ... Network is unreachable`
+on port 25 means the relay config was lost; `535 Username and Password not accepted` means
+the app password is stale. The harmless `connect to smtp.gmail.com[<ipv6>]:587: Network is
+unreachable` log lines are just the box falling back from IPv6 to IPv4.
+
 ### Server File Structure
 
 ```
