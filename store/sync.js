@@ -1109,7 +1109,7 @@ async function refreshPendingLineFromCloud(gameId) {
         const localPending = game.pendingNextLine || {};
         
         // Check each line type and use whichever is newer
-        ['oLine', 'dLine', 'odLine'].forEach(lineKey => {
+        ['oLine', 'dLine', 'odLine', 'odOnDeckLine'].forEach(lineKey => {
             const modKey = lineKey.replace('Line', 'LineModifiedAt');
             const serverModTime = serverPending[modKey] ? new Date(serverPending[modKey]).getTime() : 0;
             const localModTime = localPending[modKey] ? new Date(localPending[modKey]).getTime() : 0;
@@ -1252,7 +1252,7 @@ async function refreshGameStateFromCloud(gameId) {
             const serverPending = gameData.pendingNextLine;
             const localPending = game.pendingNextLine || {};
             
-            ['oLine', 'dLine', 'odLine'].forEach(lineKey => {
+            ['oLine', 'dLine', 'odLine', 'odOnDeckLine'].forEach(lineKey => {
                 const modKey = lineKey.replace('Line', 'LineModifiedAt');
                 const serverModTime = serverPending[modKey] ? new Date(serverPending[modKey]).getTime() : 0;
                 const localModTime = localPending[modKey] ? new Date(localPending[modKey]).getTime() : 0;

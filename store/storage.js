@@ -130,6 +130,9 @@ function serializeGame(game) {
             oLineModifiedAt: game.pendingNextLine.oLineModifiedAt || null,
             dLineModifiedAt: game.pendingNextLine.dLineModifiedAt || null,
             odLineModifiedAt: game.pendingNextLine.odLineModifiedAt || null,
+            // On Deck line (point-after-next). Synced, unlike activeType.
+            odOnDeckLine: game.pendingNextLine.odOnDeckLine || [],
+            odOnDeckLineModifiedAt: game.pendingNextLine.odOnDeckLineModifiedAt || null,
             lineupReadyAt: game.pendingNextLine.lineupReadyAt || null,
             lineupReadyBy: game.pendingNextLine.lineupReadyBy || null,
             lineCoachViewing: game.pendingNextLine.lineCoachViewing || null,
@@ -408,6 +411,10 @@ function deserializeGame(gameData) {
             oLineModifiedAt: gameData.pendingNextLine.oLineModifiedAt || null,
             dLineModifiedAt: gameData.pendingNextLine.dLineModifiedAt || null,
             odLineModifiedAt: gameData.pendingNextLine.odLineModifiedAt || null,
+            // On Deck line (point-after-next) — synced; promoted into odLine
+            // at point start.
+            odOnDeckLine: gameData.pendingNextLine.odOnDeckLine || [],
+            odOnDeckLineModifiedAt: gameData.pendingNextLine.odOnDeckLineModifiedAt || null,
             // Lineup Ready ping fields — preserved across serialization so
             // the Active Coach can read what the Line Coach wrote.
             lineupReadyAt: gameData.pendingNextLine.lineupReadyAt || null,
