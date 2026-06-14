@@ -440,9 +440,17 @@
 /* Mini event log — flexes to absorb whatever vertical slack is left
  * after the header / rows-area / modifier-row / bottom-actions are
  * laid out. min-height keeps it usable even on very tall row counts;
- * on roomy viewports the log just gets bigger. */
+ * on roomy viewports the log just gets bigger.
+ *
+ * flex-basis MUST be 0 (not auto): with `auto` the basis is the log's
+ * own content height, so as events accumulate during a point the log's
+ * basis grows and the flex-shrink pass steals space from the shrinkable
+ * rows-area above (flex: 0 1 auto) — progressively squeezing the player
+ * action buttons until they need scrolling. Basis 0 sizes the log purely
+ * from leftover free space; its internal overflow-y:auto handles scroll,
+ * so log length no longer affects the rows-area. */
 .full-pbp-log-reserve {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 110px;
     border-top: 1px solid #ddd;
     background: #fafafa;
