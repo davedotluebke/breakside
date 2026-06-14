@@ -176,6 +176,22 @@ The interesting consequence: a separate O line, once created, persists across po
 
 Feedback colors (count / gender-ratio warnings) on the Start Point button are computed against the *effective* line, not the visible checkboxes — so even if a coach is browsing a different line at tap time, the feedback hue reflects what would actually start.
 
+### On Deck Line (planning two points ahead)
+
+The Line Coach can prepare the line for the point *after* the next one while the current point is still in progress. This is a single, **side-agnostic** lineup (not a full O/D/OD mirror): `game.pendingNextLine.odOnDeckLine`, paired with `odOnDeckLineModifiedAt`. The motivation: once the next line is set, the Line Coach was otherwise idle and would start points early just to advance the panel.
+
+**Toggle / storage.** The O/D toggle gains a fourth state, so the cycle is `od → o → d → odOnDeck → od`. The `activeType` value `'odOnDeck'` is chosen so the existing `activeType + 'Line'` string-concatenation pattern (used throughout `savePanelSelectionsToPendingNextLine`, `updateSelectLineTable`, `updateSelectLineSubtitle`) resolves to the `odOnDeckLine` bucket with no special-casing.
+
+**Promotion.** In `startNextPoint()` (`game/pointManagement.js`), *after* the effective line for the point being started has been read, a non-empty `odOnDeckLine` is promoted into the next-line bucket: `odLine = [...odOnDeckLine]; odLineModifiedAt = now`, then `odOnDeckLine` is cleared. Promotion is side-agnostic — it always seeds `odLine`, dodging the O/D side-consistency logic entirely; `getEffectiveLineForNextPoint` then resolves the side normally at the following point. Stamping `odLineModifiedAt = now` (a time *during* the just-started point) is load-bearing: it keeps the promoted line from being overwritten by the ending-7 reseed in `transitionToBetweenPoints`, whose reference time is the *previous* point's end. Empty On Deck = no-op; the cleared view re-renders to its empty default for fresh planning.
+
+**Projection column.** In the On Deck view only, `updateSelectLineTable` appends one read-only column: each player's points-played-so-far, `+1` if they're in the *tentative next* set (a dash otherwise, matching the table's points-not-played idiom). The tentative-next set is phase-dependent — `isPointInProgress() ? odLine : getEffectiveLineForNextPoint(game).line` — because the O/D side is genuinely unknown until the in-progress point ends. The column is pure-derived (recomputed each render, no stored projection state). Its header is colored by the on-deck point's gender ratio via `getGenderRatioForPoint(game, game.points.length + 1)` — deterministic because the alternation schedule doesn't depend on who wins.
+
+**Two guards** keep the new view from leaking into the next-line logic:
+- `getEffectiveLineForNextPoint` treats a `lineCoachViewing` value of `'odOnDeck'` as "no Next-line view preference" (Priority 1 is skipped) — an On Deck view must never resolve into a Next bucket.
+- `autoSelectActiveTypeForNextPoint` returns early when `activeType === 'odOnDeck'`, so a coach planning On Deck isn't yanked back to the Next view when a point ends.
+
+**Sync.** `odOnDeckLine` merges per-axis by `odOnDeckLineModifiedAt`, exactly like the O/D/OD lines: added to `_LINE_KEYS` in `merge_pending_next_line` (`ultistats_server/storage/game_storage.py`), to both client read-merge sites in `store/sync.js`, and to `serializeGame`/`deserializeGame` in `store/storage.js`. (`activeType` itself stays local-only, as before.)
+
 ### Lineup Ready Signal
 
 Multi-coach coordination ping. The Line Coach taps a button on the Line tab to signal the Active Coach that the next line is set. Implementation:
@@ -205,7 +221,7 @@ The in-game UI is organized into five tabs, switched via a segmented control in 
 
 - **Simple** — The legacy Key Play–driven Play-by-Play panel only, full-screen. Streamlined buttons (We Score / They Score / Key Play / Undo / Sub / Events / More) plus the Key Play modal for granular event entry.
 - **Full** — The new every-event-entry panel (`playByPlay/fullPbp.js`), full-screen. Player rows + per-row contextual action buttons (drop / score / throwaway / break / block / interception / …), a horizontal modifier-flag chip strip below, a bottom-row "They turnover / Events / They score" action set in D-mode, and a flex-sized mini event log at the bottom. See **docs/full-pbp-requirements.md** for the full design and **Full PBP integration** below for the runtime architecture.
-- **Line** — Select Next Line panel only, full-screen (in split mode, the O and D panels stack).
+- **Line** — Select Next Line panel only, full-screen (the O/D toggle switches the single panel between combined, O, D, and On Deck views).
 - **Log** — Game Log (Follow) panel only, full-screen.
 - **All** — The full vertical panel stack with drag-to-resize (see next section). Default tab. Uses Simple PBP — the Full PBP layout is excluded from All-view because its custom-shaped panel doesn't compose well with the drag-to-resize stack.
 
@@ -249,12 +265,10 @@ moveTitleBar(i, delta):
 - **Spring-back (default):** Each frame resets heights to their start-of-drag values and applies the absolute delta from the drag start position. When the finger reverses, all panels spring back to their original sizes.
 - **Physical:** Each frame applies an incremental delta from the previous frame's position. Pushed panels stay where they are because nothing asks them to move back — the recursion only pushes, never pulls.
 
-**Line type toggle:** The O/D button on the Select Next Line toolbar cycles through four modes: `od` → `o` → `d` → `split` → `od`. Each mode manages a separate player selection stored in `pendingNextLine` (`odLine`, `oLine`, `dLine`). When a point ends, `selectAppropriateLineAtPointEnd()` decides which view to show next:
+**Line type toggle:** The O/D button on the Select Next Line toolbar cycles through four modes: `od` → `o` → `d` → `odOnDeck` → `od`. Each mode manages a separate player selection stored in `pendingNextLine` (`odLine`, `oLine`, `dLine`, `odOnDeckLine`). When a point ends, `selectAppropriateLineAtPointEnd()` (→ `autoSelectActiveTypeForNextPoint()`) decides which view to show next:
 - If the coach was in combined `od` view, it stays in `od` (sticky preference).
 - If in `o` or `d` view, auto-switches to `o` or `d` based on who scored (team scored → defense next, opponent scored → offense next).
-- Split view is always preserved.
-
-**Split mode:** In split view, the `selectLine` panel is hidden (`display: none`) and two stacked panels `selectOLine`/`selectDLine` are shown. The drag system filters out non-rendered panels (`offsetParent === null`) to avoid dragging invisible elements.
+- If in `odOnDeck` view, it stays there (the coach is planning two points ahead; don't interrupt — see *On Deck Line* above).
 
 ### Full PBP integration
 
