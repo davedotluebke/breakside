@@ -264,6 +264,7 @@ Remaining work:
 
 ## Backlog
 
+- [ ] **Rare / administrative events** (long-term). Capture uncommon events that don't fit the main offense/defense/pull flows: offsides on the pull (O or D), cards (yellow / blue / red), and similar officiating/administrative calls. Likely surfaces via the "⋯ more" overflow on the Field/Full tabs (and the existing Game Events modal). Will need new event model support + summarize/serialization, and a decision on whether they affect possession (most don't). Noted while building the Field tab; out of scope for that effort.
 - [x] **Feature**: When Active Coach ends game, all coaches/viewers navigate to game summary. *(Wake recovery + foreground 3-second refresh both detect `gameEndTimestamp` and navigate away.)*
 - [x] O/D line view persistence between points (combined O/D stays; separate O/D auto-switches based on who scored; split preserved).
 - [x] **Feature**: Line selection mode toggle (Manual / Wholesale / Auto)
