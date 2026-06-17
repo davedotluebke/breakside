@@ -562,10 +562,13 @@
             S.pullRunning = false;
             if (pullTimer) { clearInterval(pullTimer); pullTimer = null; }
         }
-        // We pull from our defending goal line (canonical Defend end = l 0..25,
-        // goal line at l = EZ). Brick goes to the brick mark nearest that line.
+        // We pull from our defending goal line (canonical Defend end, goal line
+        // at l = EZ). On a brick the receiving (opponent) offense takes it to
+        // the brick mark in front of the endzone they're attacking — i.e. the
+        // FAR brick mark, near our attacking end (BRICK[1] = L - EZ - 20), not
+        // the near one by our defending end.
         const from = { l: EZ, w: W / 2 };
-        const to = brick ? { l: BRICK[0], w: W / 2 } : clampLoc(l, w);
+        const to = brick ? { l: BRICK[1], w: W / 2 } : clampLoc(l, w);
 
         const opts = { from, to, hang: (typeof S.pullMs === 'number' && S.pullMs > 0) ? S.pullMs : null, brick: !!brick };
         S.pullMods.forEach(label => {
@@ -790,8 +793,6 @@
         const names = (point && point.players) ? point.players.slice() : [];
         const m = document.createElement('div');
         m.className = 'fp-picker';
-        m.style.left = cx + 'px';
-        m.style.top = cy + 'px';
         const ttl = title || (S.dPlacing === 'interception' ? 'Who intercepted?'
             : S.dPlacing ? `Who got the ${S.dPlacing}?`
             : S.pending === 'drop' ? 'Who dropped it?' : 'Who caught it?');
@@ -803,7 +804,26 @@
         });
         html += `<div class="fp-chip unknown" data-pname="${UNKNOWN_PLAYER}"><span class="fp-umark">?</span><span class="fp-nm">Unknown</span></div>`;
         m.innerHTML = html;
+        // Position after measuring so the popover always stays fully on-screen
+        // (it can hold the whole roster + Unknown, and a tap near the top —
+        // e.g. a goal in the attacking endzone — used to push players off the
+        // top with no way to reach them). Prefer above the tap; flip below if
+        // there isn't room; clamp to the viewport; scroll if still too tall.
+        m.style.left = '0px';
+        m.style.top = '0px';
+        m.style.visibility = 'hidden';
         document.body.appendChild(m);
+        const margin = 8;
+        const pw = m.offsetWidth, ph = m.offsetHeight;
+        let left = cx - pw / 2;
+        left = Math.max(margin, Math.min(left, window.innerWidth - pw - margin));
+        let top = cy - ph - 12;                 // preferred: above the tap point
+        if (top < margin) top = cy + 18;        // not enough room above → below
+        top = Math.max(margin, Math.min(top, window.innerHeight - ph - margin));
+        m.style.left = left + 'px';
+        m.style.top = top + 'px';
+        m.style.visibility = 'visible';
+
         m.querySelectorAll('.fp-chip[data-pname]').forEach(c => {
             c.onclick = ev => { ev.stopPropagation(); const name = c.dataset.pname; m.remove(); cb(playerByName(name)); };
         });

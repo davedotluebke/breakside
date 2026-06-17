@@ -279,12 +279,13 @@
     border: 6px solid transparent; border-top-color: var(--fp-blue);
 }
 
-/* Field-side popover picker ("Who got the block?"). */
+/* Field-side popover picker ("Who got the block?"). Positioned in JS (top-left
+   corner) with viewport clamping; scrolls if the roster is taller than fits. */
 .fp-picker {
     position: fixed; z-index: 999; background: #fff; border: 1px solid #bbb;
     border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
     padding: 7px; display: flex; flex-wrap: wrap; gap: 5px; max-width: 250px;
-    transform: translate(-50%, -112%);
+    max-height: 70vh; overflow-y: auto;
 }
 .fp-picker .fp-picker-ttl { flex: 1 1 100%; font-size: 11px; color: #888; text-align: center; margin-bottom: 2px; }
 .fp-picker .fp-chip { padding: 7px 12px; font-size: 14px; }
