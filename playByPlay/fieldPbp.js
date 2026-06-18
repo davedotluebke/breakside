@@ -412,6 +412,10 @@
         if (S.pending === 'drop') return 'Tap the drop spot, then pick who dropped it';
         if (S.pending === 'score') return '<b>Score</b> — pick the receiver, then the spot';
         const holder = effectiveHolder(state);
+        if (holder && S.manualHolder && !S.pickupLoc) {
+            // Holder chosen but not yet placed — prompt for the pickup spot.
+            return `<b>${holder.name === UNKNOWN_PLAYER ? 'Unknown' : holder.name}</b> has the disc — tap where they picked it up`;
+        }
         return holder ? `<b>${holder.name}</b> has the disc`
             : 'Who picked it up? Tap the player (or drag them to the spot)';
     }
@@ -465,12 +469,16 @@
         const fieldBox = `<div class="fp-fieldwrap"><div class="fp-field" id="fpField">${fieldHTML(state)}</div></div>`;
 
         // Action-row left slot: Start Point (between points, not pulling),
-        // a PULL pill while pulling, else the mode pill.
+        // a PULL pill while pulling, else the mode pill. The Start Point label
+        // names the upcoming point's side (Offense/Defense), matching the Line
+        // tab's button.
         let leftSlot;
         if (S.pulling) {
             leftSlot = `<span class="fp-modepill pull">PULL</span>`;
         } else if (!inPoint) {
-            leftSlot = `<button class="fp-start-point-btn" id="fpStartPointBtn">Start Point</button>`;
+            const nextPos = (typeof determineStartingPosition === 'function') ? determineStartingPosition() : 'offense';
+            const spLabel = `Start Point (${nextPos === 'defense' ? 'Defense' : 'Offense'})`;
+            leftSlot = `<button class="fp-start-point-btn" id="fpStartPointBtn">${spLabel}</button>`;
         } else {
             leftSlot = `<span class="fp-modepill ${mode}">${modeLabel(mode)}</span>`;
         }
@@ -649,6 +657,15 @@
         if (state.mode !== 'offense') return;
         if (S.pending === 'throwaway') { placeThrowaway(loc); return; }
         if (S.armed) { placeOffense(S.armed, loc); return; }
+        // Pickup placement: a holder was chosen (tapped a chip) at the start of
+        // the possession but hasn't been placed yet. This field tap marks WHERE
+        // they picked it up — it anchors the first throw, it is NOT a throw, so
+        // don't open the receiver popover.
+        if (S.manualHolder && !S.pickupLoc && !S.pending) {
+            S.pickupLoc = clampLoc(loc.l, loc.w);
+            render();
+            return;
+        }
         if (!effectiveHolder(state) && !S.pending) {
             // No holder yet — field-first tap picks who picked it up *and*
             // where, anchoring the next throw at that spot.
