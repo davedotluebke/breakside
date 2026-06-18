@@ -219,8 +219,14 @@
 .fp-marker.turn { background: var(--fp-red); }
 .fp-marker.block { background: #047857; }
 .fp-marker.pull { background: rgba(80, 80, 80, .85); }
-/* Recent markers are draggable for fine-tuning (older ones stay frozen). */
+/* Rendered markers are draggable for fine-tuning (incl. the fading previous
+   possession, so a prior location can still be adjusted during the fade). */
 .fp-marker[data-mkidx] { pointer-events: auto; cursor: grab; touch-action: none; }
+
+/* Possession-change fade: previous-possession markers/arrows run this once
+   (animation-fill-mode forwards holds them at 0 until they're dropped). It is
+   a single bounded animation, not a continuous loop — negligible battery. */
+@keyframes fpFadeOut { from { opacity: 1; } to { opacity: 0; } }
 
 /* Events bar buttons (pull hangtime + brick; offense/defense buttons later). */
 .fp-ebtn {

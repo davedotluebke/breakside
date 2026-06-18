@@ -89,6 +89,23 @@
     };
     let pullTimer = null;
 
+    // Possession-change fade: the previous possession's markers fade out over
+    // FADE_MS then drop. Implemented as a one-shot CSS animation (resumed via
+    // negative animation-delay so re-renders don't restart it) plus a single
+    // delayed re-render to drop them — no continuous animation loop.
+    const FADE_MS = 5000;
+    let segCurStart = null;   // global event index where the current segment begins
+    let segFadeStart = 0;     // performance.now() when the previous segment began fading
+    let fadeTimer = null;     // one-shot cleanup re-render at fade end
+
+    function nowMs() {
+        return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    }
+    function scheduleFadeCleanup(remainingMs) {
+        if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; }
+        if (remainingMs > 0) fadeTimer = setTimeout(render, remainingMs + 60);
+    }
+
     const PMODS = [
         { label: 'Roller', prop: 'roller' },
         { label: 'OI', prop: 'oi' },
@@ -149,6 +166,54 @@
     }
     function pointHasPull(point) {
         return pointEvents(point).some(e => e.type === 'Pull');
+    }
+
+    // Which side of the disc an event represents: O for our offense (Throw /
+    // Turnover), D for our defense (Pull / Defense). Violation/Other are
+    // transparent — they attach to the surrounding run.
+    function eventSide(e) {
+        if (!e) return null;
+        if (e.type === 'Throw' || e.type === 'Turnover') return 'O';
+        if (e.type === 'Pull' || e.type === 'Defense') return 'D';
+        return null;
+    }
+
+    /**
+     * Split the flat event list into possession segments for fade rendering.
+     * Returns {curStart, prevStart} as global indices: events >= curStart are
+     * the current possession (solid), [prevStart, curStart) are the previous
+     * possession (fading), and < prevStart are older (dropped).
+     *
+     * The current segment is the trailing run of same-side events — UNLESS the
+     * last event flipped possession (its side differs from the reconstructed
+     * mode, e.g. a "they turnover" Defense while we're now on offense with no
+     * O event yet). In that case the current segment is empty and the trailing
+     * run becomes the (fading) previous one, so the pull/D markers fade as soon
+     * as possession flips rather than lingering until the first O throw.
+     */
+    function computeSegments(flat, mode) {
+        let k = flat.length - 1;
+        while (k >= 0 && eventSide(flat[k]) === null) k--;
+        if (k < 0) return { curStart: flat.length, prevStart: -1 };
+
+        const trailingSide = eventSide(flat[k]);
+        const runStart = idx => {
+            let s = idx;
+            while (s - 1 >= 0) {
+                const side = eventSide(flat[s - 1]);
+                if (side === eventSide(flat[idx]) || side === null) s--; else break;
+            }
+            return s;
+        };
+        const cs = runStart(k);
+        const reconSide = mode === 'offense' ? 'O' : 'D';
+
+        if (trailingSide === reconSide) {
+            const prevStart = (cs - 1 >= 0) ? runStart(cs - 1) : -1;
+            return { curStart: cs, prevStart };
+        }
+        // Possession just flipped; current segment is empty.
+        return { curStart: flat.length, prevStart: cs };
     }
     function lastLocatedEvent(point) {
         const evs = pointEvents(point);
@@ -221,37 +286,58 @@
             h += `<div class="fp-brick" style="left:${p.x}%;top:${p.y}%">&times;</div>`;
         });
 
-        // Located events: arrows + markers (older fade), then the disc.
-        const evs = pointEvents(state.point);
+        // Located events, possession-aware (see computeSegments / the fade
+        // module vars). Current segment solid; previous segment fades over
+        // FADE_MS then drops; older segments gone.
+        const flat = pointEvents(state.point);
+        const seg = computeSegments(flat, state.mode);
+        if (seg.curStart !== segCurStart) { segCurStart = seg.curStart; segFadeStart = nowMs(); }
+        const fadeElapsed = nowMs() - segFadeStart;
+        const prevVisible = seg.prevStart >= 0 && fadeElapsed < FADE_MS;
+        const depthOf = gi => (gi >= seg.curStart) ? 0 : (seg.prevStart >= 0 && gi >= seg.prevStart) ? 1 : 2;
+        // Negative animation-delay resumes the one-shot fade at the right point
+        // across re-renders (no continuous loop).
+        const fadeAnim = `;animation:fpFadeOut ${FADE_MS}ms linear ${(-fadeElapsed) | 0}ms forwards`;
+        const shown = gi => { const d = depthOf(gi); return d === 0 || (d === 1 && prevVisible); };
+
         let svg = `<svg class="fp-arrows" viewBox="0 0 100 100" preserveAspectRatio="none"><defs>`
             + `<marker id="fpah" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">`
             + `<path d="M0,0 L5,2.5 L0,5 z" fill="#fff"/></marker></defs>`;
-        evs.forEach((e, i) => {
-            if (!e.from || !e.to) return;
-            const rec = evs.length - 1 - i, op = rec < VISIBLE ? (1 - rec * 0.2) : 0.1;
+        flat.forEach((e, gi) => {
+            if (!shown(gi) || !e.from || !e.to) return;
             const a = pct(e.from.l, e.from.w), b = pct(e.to.l, e.to.w);
             const dash = e.type === 'Pull' ? 'stroke-dasharray="3 2"' : '';
-            svg += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${arrowColor(e)}" stroke-width="0.8" marker-end="url(#fpah)" ${dash} vector-effect="non-scaling-stroke" opacity="${op.toFixed(2)}"/>`;
+            const style = depthOf(gi) === 1 ? ` style="${fadeAnim.slice(1)}"` : '';
+            svg += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${arrowColor(e)}" stroke-width="0.8" marker-end="url(#fpah)" ${dash} vector-effect="non-scaling-stroke"${style}/>`;
         });
         svg += `</svg>`;
         h += svg;
 
-        evs.forEach((e, i) => {
-            if (!e.to) return;
-            const rec = evs.length - 1 - i, op = rec < VISIBLE ? (1 - rec * 0.2) : 0.1;
+        flat.forEach((e, gi) => {
+            if (!shown(gi) || !e.to) return;
             const p = pct(e.to.l, e.to.w);
-            const m = markerStyle(e, i);
-            // The most recent VISIBLE markers stay draggable for fine-tuning
-            // (drag re-anchors the adjacent throw); older ones fade + freeze.
-            const dragAttr = rec < VISIBLE ? ` data-mkidx="${i}"` : '';
-            h += `<div class="fp-marker ${m.cls}"${dragAttr} style="left:${p.x}%;top:${p.y}%;opacity:${op.toFixed(2)}">${m.glyph}</div>`;
+            const m = markerStyle(e, gi);
+            // All shown markers (current + fading-previous) are draggable so a
+            // previous location can be adjusted during the fade window.
+            const fade = depthOf(gi) === 1 ? fadeAnim : '';
+            h += `<div class="fp-marker ${m.cls}" data-mkidx="${gi}" style="left:${p.x}%;top:${p.y}%${fade}">${m.glyph}</div>`;
         });
 
-        const le = lastLocatedEvent(state.point);
-        if (le) {
-            const d = pct(le.to.l, le.to.w);
+        // Disc at the current holder's location: explicit pickup spot, else the
+        // last located event in the CURRENT segment (never a faded prior one).
+        let discPos = S.pickupLoc || null;
+        if (!discPos) {
+            for (let gi = flat.length - 1; gi >= seg.curStart; gi--) {
+                if (flat[gi] && flat[gi].to) { discPos = flat[gi].to; break; }
+            }
+        }
+        if (discPos) {
+            const d = pct(discPos.l, discPos.w);
             h += `<div class="fp-disc" style="left:${d.x}%;top:${d.y}%"></div>`;
         }
+
+        // One delayed re-render to drop the previous segment when its fade ends.
+        scheduleFadeCleanup(prevVisible ? (FADE_MS - fadeElapsed) : 0);
 
         return h;
     }
