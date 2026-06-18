@@ -91,6 +91,13 @@
     background: #eef0f2;
 }
 
+/* Between points: the field + rail show the last point's state but are greyed
+   and non-interactive — no events until Start Point (which lives in the action
+   row, outside .fp-play, so it stays live). JS also guards the pointer layer. */
+.fp-play.fp-between-points .fp-prow,
+.fp-play.fp-between-points .fp-events { opacity: 0.45; pointer-events: none; }
+.fp-play.fp-between-points .fp-mic { pointer-events: none; opacity: 0.5; }
+
 /* Portrait: left name rail; landscape: players across the top. */
 .field-pbp-content[data-o="portrait"] .fp-sidebar {
     flex: 0 0 152px;
