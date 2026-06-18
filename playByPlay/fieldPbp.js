@@ -493,7 +493,7 @@
                 <span class="fp-actionrow-spacer"></span>
                 <button class="fp-undo" id="fpUndoBtn" title="Undo last event"><i class="fas fa-undo"></i><span>Undo</span></button>
             </div>
-            <div class="fp-play">
+            <div class="fp-play${inPoint ? '' : ' fp-between-points'}">
                 <div class="fp-prow">
                     <div class="fp-sidebar">
                         <div class="fp-rail">${playerRailHTML(state, inPoint)}</div>
@@ -962,6 +962,11 @@
     }
 
     function onPointerDown(e) {
+        // Between points the field is read-only — no events may be entered
+        // until Start Point. (The pull flow runs after the point has started,
+        // so isPointInProgress() is already true there.)
+        const inPoint = (typeof isPointInProgress === 'function') && isPointInProgress();
+        if (!inPoint && !S.pulling) return;
         const chip = e.target.closest('.fp-chip[data-pname]');
         if (chip) { startDrag({ kind: 'chip', name: chip.dataset.pname }, e); return; }
         const mk = e.target.closest('.fp-marker[data-mkidx]');
