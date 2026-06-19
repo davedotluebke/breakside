@@ -541,6 +541,12 @@
         const content = document.getElementById('panel-playByPlayField-content');
         if (!content) return;
 
+        // Preserve the sidebar's scroll across the innerHTML rebuild — otherwise
+        // every render (incl. the hangtime tick) snaps it back to the top,
+        // hiding the modifier column at the bottom and fighting the user.
+        const prevSidebar = content.querySelector('.fp-sidebar');
+        const savedScroll = prevSidebar ? prevSidebar.scrollTop : null;
+
         refreshGeometry();   // pick up the current endzone-depth setting
         const state = reconstructState();
         const inPoint = (typeof isPointInProgress === 'function') && isPointInProgress();
@@ -595,6 +601,20 @@
         `;
 
         wireDynamic();
+
+        // Restore sidebar scroll. On first entry to the pull flow, jump to the
+        // bottom once so the pull modifiers are immediately reachable even when
+        // the rail overflows (the coach can scroll back up to pick a different
+        // puller); thereafter, honor wherever the user left it.
+        const newSidebar = content.querySelector('.fp-sidebar');
+        if (newSidebar) {
+            if (S.pullScrollToBottom) {
+                newSidebar.scrollTop = newSidebar.scrollHeight;
+                S.pullScrollToBottom = false;
+            } else if (savedScroll != null) {
+                newSidebar.scrollTop = savedScroll;
+            }
+        }
     }
 
     // -----------------------------------------------------------------
@@ -615,6 +635,7 @@
         S.pullRunning = false;
         S.pullMs = null;
         S.pullMods = [];
+        S.pullScrollToBottom = true;   // reveal the pull modifiers on entry
         if (pullTimer) { clearInterval(pullTimer); pullTimer = null; }
         render();
     }
