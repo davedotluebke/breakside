@@ -1772,11 +1772,25 @@ td.player-mmp,
 #scoreAttributionDialog .score-column-header {
     font-size: 1.05rem;
     margin-bottom: 0.3rem;
+    line-height: 1.15;
 }
-/* Column labels: full form by default, collapse to one word under vertical
-   pressure (short viewports) so they stay on a single line. */
-#scoreAttributionDialog .score-column-header .hdr-compact {
-    display: none;
+/* Two-line column labels: the role word on line 1, a parenthetical clarifier
+   on line 2. Three responsive states:
+     - default (roomy):        Assist / (Threw Score)
+     - horizontal pressure:    Assist / (thrower)      [narrower paren]
+     - vertical pressure:      Assist                  [paren dropped]
+   See the media queries below for the width/height collapses. */
+#scoreAttributionDialog .score-column-header .hdr-main {
+    display: block;
+}
+#scoreAttributionDialog .score-column-header .hdr-paren {
+    display: block;
+    font-size: 0.78em;
+    font-weight: 400;
+    color: #666;
+}
+#scoreAttributionDialog .score-column-header .hdr-paren-narrow {
+    display: none;   /* default shows the full paren */
 }
 /* Callahan + "Not a score" share the first row; Score gets its own full-width
    row so it's prominent and hard to misclick. Zero the global button margin
@@ -1790,12 +1804,24 @@ td.player-mmp,
     flex: 1 0 100%;
 }
 
-@media (max-height: 760px) {
-    #scoreAttributionDialog .score-column-header .hdr-full {
+/* Horizontal pressure: swap the full paren for a shorter one. Breakpoint sits
+   just below the iPhone 15 Pro (393) / Pro Max (430) target so those keep the
+   full "(Threw Score)"; narrower phones get "(thrower)". Still two lines. */
+@media (max-width: 390px) {
+    #scoreAttributionDialog .score-column-header .hdr-paren-full {
         display: none;
     }
-    #scoreAttributionDialog .score-column-header .hdr-compact {
-        display: inline;
+    #scoreAttributionDialog .score-column-header .hdr-paren-narrow {
+        display: block;
+    }
+}
+
+/* Vertical pressure: drop the parenthetical entirely → single word, one line.
+   Placed AFTER the width query so when both pressures apply, the paren is
+   hidden regardless of which variant the width query selected. */
+@media (max-height: 760px) {
+    #scoreAttributionDialog .score-column-header .hdr-paren {
+        display: none;
     }
 }
 
@@ -1827,48 +1853,54 @@ td.player-mmp,
     line-height: 1.15;
 }
 
-/* Throw flags checkboxes. Each sizes to its content so all five modifiers fit
-   on a single row when there's room; flex-wrap spills to a second row only
-   when they genuinely can't. */
+/* Throw modifiers are tight toggle pills (not checkboxes) — no checkbox box to
+   eat horizontal space, so all five fit on one row with room to spare; the
+   selected state is the app's standard blue (button.selected). flex-wrap
+   spills to a second row only if they genuinely can't fit. */
 .throw-flags-container {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 0.4rem 0.7rem;
+    gap: 0.4rem 0.5rem;
     margin: 1rem 0;
     padding: 0.5rem;
     border-top: 1px solid #eee;
     border-bottom: 1px solid #eee;
 }
 
-.throw-flag-checkbox {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.throw-flag-btn {
+    margin: 0;                 /* override global button { margin: 10px } */
     flex: 0 0 auto;
-    cursor: pointer;
-    font-size: 0.9rem;
+    padding: 0.3rem 0.7rem;
+    border: 1px solid #c4c4c4;
+    border-radius: 999px;
+    background: #f1f1f1;
+    color: #444;
+    font-size: 0.85rem;
+    line-height: 1.1;
     white-space: nowrap;
-}
-
-.throw-flag-checkbox input[type="checkbox"] {
-    margin-right: 0.4rem;
     cursor: pointer;
+    transition: background-color .15s, border-color .15s, color .15s;
 }
 
-/* Responsive: tighten type/gaps so the five flags keep to one row as long as
-   possible on phone widths. */
+/* button.selected (global) already supplies the blue fill + white text; just
+   match the border so the pill reads as a solid chip when active. */
+.throw-flag-btn.selected {
+    border-color: #007bff;
+    font-weight: 600;
+}
+
+/* Responsive: tighten on phone widths so the five pills keep to one row down
+   to the iPhone 15 Pro's 393px width. */
 @media (max-width: 480px) {
     .throw-flags-container {
-        gap: 0.3rem 0.3rem;
+        gap: 0.3rem 0.25rem;
+        padding: 0.5rem 0.25rem;
     }
 
-    .throw-flag-checkbox {
-        font-size: 0.75rem;
-    }
-
-    .throw-flag-checkbox input[type="checkbox"] {
-        margin-right: 0.2rem;
+    .throw-flag-btn {
+        font-size: 0.8rem;
+        padding: 0.28rem 0.4rem;
     }
 }
 

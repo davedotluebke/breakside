@@ -537,39 +537,32 @@
             </div>
             <div class="score-attribution-container">
                 <div class="score-column">
-                    <div class="score-column-header"><span class="hdr-full">Assist (Threw)</span><span class="hdr-compact">Assist</span></div>
+                    <div class="score-column-header">
+                        <span class="hdr-main">Assist</span>
+                        <span class="hdr-paren hdr-paren-full">(Threw Score)</span>
+                        <span class="hdr-paren hdr-paren-narrow">(thrower)</span>
+                    </div>
                     <div id="throwerButtons" class="player-buttons">
                         <!-- Player buttons will be dynamically added here -->
                     </div>
                 </div>
                 <div class="score-column">
-                    <div class="score-column-header"><span class="hdr-full">Goal (Caught)</span><span class="hdr-compact">Goal</span></div>
+                    <div class="score-column-header">
+                        <span class="hdr-main">Goal</span>
+                        <span class="hdr-paren hdr-paren-full">(Caught Score)</span>
+                        <span class="hdr-paren hdr-paren-narrow">(receiver)</span>
+                    </div>
                     <div id="receiverButtons" class="player-buttons">
                         <!-- Player buttons will be dynamically added here -->
                     </div>
                 </div>
             </div>
             <div class="throw-flags-container">
-                <label class="throw-flag-checkbox">
-                    <input type="checkbox" id="huckFlag" value="huck">
-                    <span>Huck</span>
-                </label>
-                <label class="throw-flag-checkbox">
-                    <input type="checkbox" id="breakFlag" value="breakmark">
-                    <span>Break</span>
-                </label>
-                <label class="throw-flag-checkbox">
-                    <input type="checkbox" id="skyFlag" value="sky">
-                    <span>Sky</span>
-                </label>
-                <label class="throw-flag-checkbox">
-                    <input type="checkbox" id="layoutFlag" value="layout">
-                    <span>Layout</span>
-                </label>
-                <label class="throw-flag-checkbox">
-                    <input type="checkbox" id="hammerFlag" value="hammer">
-                    <span>Hammer</span>
-                </label>
+                <button type="button" class="throw-flag-btn" id="huckFlag" aria-pressed="false">Huck</button>
+                <button type="button" class="throw-flag-btn" id="breakFlag" aria-pressed="false">Break</button>
+                <button type="button" class="throw-flag-btn" id="skyFlag" aria-pressed="false">Sky</button>
+                <button type="button" class="throw-flag-btn" id="layoutFlag" aria-pressed="false">Layout</button>
+                <button type="button" class="throw-flag-btn" id="hammerFlag" aria-pressed="false">Hammer</button>
             </div>
             <hr class="callahan-separator">
             <div class="score-attribution-actions">
