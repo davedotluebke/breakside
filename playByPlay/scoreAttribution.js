@@ -24,6 +24,22 @@ let pendingTo = null;
 // that case. Cleared on every showScoreAttributionDialog() call.
 let suppressAutoFire = false;
 
+// The throw-modifier flags (Huck/Break/Sky/Layout/Hammer) are toggle buttons,
+// not checkboxes — tighter and tidier. Selected state lives in the .selected
+// class + aria-pressed rather than an input's .checked. These helpers keep the
+// rest of the file agnostic to that.
+const FLAG_IDS = ['huckFlag', 'breakFlag', 'skyFlag', 'layoutFlag', 'hammerFlag'];
+function setFlag(id, on) {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.classList.toggle('selected', !!on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+}
+function getFlag(id) {
+    const btn = document.getElementById(id);
+    return !!(btn && btn.classList.contains('selected'));
+}
+
 /**
  * Initialize score attribution dialog event handlers
  * Should be called after DOM is ready
@@ -33,6 +49,12 @@ function initializeScoreAttributionDialog() {
     const scoreConfirmBtn = document.getElementById('scoreConfirmBtn');
     const continuePossessionBtn = document.getElementById('continuePossessionBtn');
     const scoreAttributionDialogClose = document.querySelector('#scoreAttributionDialog .close');
+
+    // Modifier toggle buttons: click flips selected state.
+    FLAG_IDS.forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.addEventListener('click', () => setFlag(id, !getFlag(id)));
+    });
 
     // Explicit "Score" commit button. Same code path as the auto-fire
     // branch in handleScoreAttribution. Enabled only when both thrower
@@ -139,12 +161,12 @@ function showScoreAttributionDialog(opts) {
     pendingFrom = opts.from || null;
     pendingTo = opts.to || null;
 
-    // Reset checkbox flags
-    document.getElementById('huckFlag').checked = false;
-    document.getElementById('breakFlag').checked = !!opts.breakArmed;
-    document.getElementById('skyFlag').checked = false;
-    document.getElementById('layoutFlag').checked = false;
-    document.getElementById('hammerFlag').checked = false;
+    // Reset modifier toggles
+    setFlag('huckFlag', false);
+    setFlag('breakFlag', !!opts.breakArmed);
+    setFlag('skyFlag', false);
+    setFlag('layoutFlag', false);
+    setFlag('hammerFlag', false);
 
     // Clear existing buttons
     throwerButtons.innerHTML = '';
@@ -263,11 +285,11 @@ function commitScoreAttribution() {
         thrower: selectedThrower,
         receiver: selectedReceiver,
         score: true,
-        huck: document.getElementById('huckFlag').checked,
-        breakmark: document.getElementById('breakFlag').checked,
-        sky: document.getElementById('skyFlag').checked,
-        layout: document.getElementById('layoutFlag').checked,
-        hammer: document.getElementById('hammerFlag').checked,
+        huck: getFlag('huckFlag'),
+        breakmark: getFlag('breakFlag'),
+        sky: getFlag('skyFlag'),
+        layout: getFlag('layoutFlag'),
+        hammer: getFlag('hammerFlag'),
         from: pendingFrom,
         to: pendingTo
     });
@@ -317,11 +339,11 @@ function continuePossessionAttribution() {
 
     const opts = {
         score: false,
-        huck: document.getElementById('huckFlag').checked,
-        breakmark: document.getElementById('breakFlag').checked,
-        sky: document.getElementById('skyFlag').checked,
-        layout: document.getElementById('layoutFlag').checked,
-        hammer: document.getElementById('hammerFlag').checked,
+        huck: getFlag('huckFlag'),
+        breakmark: getFlag('breakFlag'),
+        sky: getFlag('skyFlag'),
+        layout: getFlag('layoutFlag'),
+        hammer: getFlag('hammerFlag'),
         from: pendingFrom,
         to: pendingTo
     };
