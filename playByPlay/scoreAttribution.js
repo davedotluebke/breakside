@@ -30,7 +30,6 @@ let suppressAutoFire = false;
  */
 function initializeScoreAttributionDialog() {
     const callahanBtn = document.getElementById('callahanBtn');
-    const skipAttributionBtn = document.getElementById('skipAttributionBtn');
     const scoreConfirmBtn = document.getElementById('scoreConfirmBtn');
     const continuePossessionBtn = document.getElementById('continuePossessionBtn');
     const scoreAttributionDialogClose = document.querySelector('#scoreAttributionDialog .close');
@@ -88,27 +87,9 @@ function initializeScoreAttributionDialog() {
         });
     }
 
-    if (skipAttributionBtn) {
-        skipAttributionBtn.addEventListener('click', function() {
-            const dialog = document.getElementById('scoreAttributionDialog');
-            // Create scoring throw with Unknown Player (so undo can find it)
-            const scoreEvent = new Throw({
-                thrower: UNKNOWN_PLAYER_OBJ,
-                receiver: UNKNOWN_PLAYER_OBJ,
-                score: true
-            });
-            const point = getLatestPoint();
-            point.addPossession(new Possession(true));
-            getActivePossession(point).addEvent(scoreEvent);
-            UNKNOWN_PLAYER_OBJ.completedPasses++;
-            UNKNOWN_PLAYER_OBJ.assists++;
-            UNKNOWN_PLAYER_OBJ.goals++;
-
-            updateScore(Role.TEAM);
-            dialog.style.display = 'none';
-            moveToNextPoint();
-        });
-    }
+    // (No "Skip" button — to score with unattributed players, pick the
+    // Unknown Player in both columns, which produces the same unknown→unknown
+    // scoring throw.)
 
     // Close dialog when clicking the X
     if (scoreAttributionDialogClose) {

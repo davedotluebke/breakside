@@ -1756,9 +1756,47 @@ td.player-mmp,
     margin: 0.5rem 0;
 }
 #scoreAttributionDialog .score-attribution-actions {
-    flex-wrap: wrap;      /* four buttons wrap instead of overflowing */
+    flex-wrap: wrap;
     gap: 0.5rem;
     margin-top: 0.5rem;
+}
+/* Compact players so the worst case (7-a-side -> 8 buttons incl. Unknown)
+   fits without scrolling; the flex:1 scroll area is only a last resort for
+   short viewports. */
+#scoreAttributionDialog .player-button {
+    min-height: 2rem;
+    padding: 0.4rem 0.3rem;
+    margin: 0.15rem 0;
+    font-size: 0.85rem;
+}
+#scoreAttributionDialog .score-column-header {
+    font-size: 1.05rem;
+    margin-bottom: 0.3rem;
+}
+/* Column labels: full form by default, collapse to one word under vertical
+   pressure (short viewports) so they stay on a single line. */
+#scoreAttributionDialog .score-column-header .hdr-compact {
+    display: none;
+}
+/* Callahan + "Not a score" share the first row; Score gets its own full-width
+   row so it's prominent and hard to misclick. Zero the global button margin
+   (button { margin: 10px }) inside the row so the flex `gap` is the only
+   spacing — otherwise the stray margins push the two buttons onto separate
+   rows. */
+#scoreAttributionDialog .score-attribution-actions button {
+    margin: 0;
+}
+#scoreAttributionDialog #scoreConfirmBtn {
+    flex: 1 0 100%;
+}
+
+@media (max-height: 760px) {
+    #scoreAttributionDialog .score-column-header .hdr-full {
+        display: none;
+    }
+    #scoreAttributionDialog .score-column-header .hdr-compact {
+        display: inline;
+    }
 }
 
 .score-attribution-actions {
@@ -1783,20 +1821,20 @@ td.player-mmp,
 
 /* "Not a score — continue possession": neutral two-line downgrade button.
    Narrower font/line-height so the two text lines sit tidily next to the
-   single-line Callahan/Skip/Score buttons. */
+   single-line Callahan button it shares a row with. */
 #continuePossessionBtn {
     font-size: 0.85rem;
     line-height: 1.15;
 }
 
-/* Throw flags checkboxes. Capped at three per row (flex-basis ~1/3) so the
-   five modifiers always lay out as exactly two lines (3 + 2) at any dialog
-   width, never spilling to a third row. */
+/* Throw flags checkboxes. Each sizes to its content so all five modifiers fit
+   on a single row when there's room; flex-wrap spills to a second row only
+   when they genuinely can't. */
 .throw-flags-container {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 0.5rem 0.8rem;
+    gap: 0.4rem 0.7rem;
     margin: 1rem 0;
     padding: 0.5rem;
     border-top: 1px solid #eee;
@@ -1807,7 +1845,7 @@ td.player-mmp,
     display: flex;
     align-items: center;
     justify-content: center;
-    flex: 1 1 calc(33.333% - 0.8rem);
+    flex: 0 0 auto;
     cursor: pointer;
     font-size: 0.9rem;
     white-space: nowrap;
@@ -1818,14 +1856,19 @@ td.player-mmp,
     cursor: pointer;
 }
 
-/* Responsive: tighten type on smaller screens (still 3-per-row → 2 lines). */
+/* Responsive: tighten type/gaps so the five flags keep to one row as long as
+   possible on phone widths. */
 @media (max-width: 480px) {
     .throw-flags-container {
-        gap: 0.4rem 0.6rem;
+        gap: 0.3rem 0.3rem;
     }
 
     .throw-flag-checkbox {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
+    }
+
+    .throw-flag-checkbox input[type="checkbox"] {
+        margin-right: 0.2rem;
     }
 }
 
