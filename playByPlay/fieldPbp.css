@@ -243,7 +243,8 @@
 
 /* Modifier-column buttons (pull tags now; throw/D modifiers in Phase 7). */
 .fp-modbtn {
-    flex: 0 0 auto; border: 1px solid #cfcfcf; border-radius: 6px; background: #f7f7f7;
+    flex: 0 0 auto; margin: 0;   /* override global button { margin: 10px } */
+    border: 1px solid #cfcfcf; border-radius: 6px; background: #f7f7f7;
     padding: 7px 8px; font-size: 13px; font-weight: 600; color: #333;
     cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent;
 }
