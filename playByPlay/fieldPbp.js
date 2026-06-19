@@ -115,6 +115,25 @@
         { label: 'Layout', prop: 'layout' },
         { label: 'Sky', prop: 'sky' }
     ];
+    // Interactive chips that tag the *last recorded* event, keyed by event type.
+    // Each toggles a boolean *_flag directly on the event (then amend + persist).
+    const LASTMODS = {
+        Throw: [
+            { label: 'Break', flag: 'break_flag' },
+            { label: 'Huck', flag: 'huck_flag' },
+            { label: 'Reset', flag: 'dump_flag' },
+            { label: 'Hammer', flag: 'hammer_flag' },
+            { label: 'Sky', flag: 'sky_flag' },
+            { label: 'Layout', flag: 'layout_flag' }
+        ],
+        Defense: [
+            { label: 'Layout', flag: 'layout_flag' },
+            { label: 'Sky', flag: 'sky_flag' }
+        ],
+        Turnover: [
+            { label: 'Huck', flag: 'huck_flag' }
+        ]
+    };
     // D actions shown in the player slot until one is chosen.
     const DTYPES = [
         { type: 'block', label: 'Block' },
@@ -456,8 +475,11 @@
             return `<div class="fp-modcol-label">Last D was a:</div><div class="fp-modcol-sub">${cap(S.dPlacing)}</div>`
                 + DMODS.map(m => `<button class="fp-modbtn ${S.dMods.includes(m.label) ? 'on' : ''}" data-dmod="${m.label}">${m.label}</button>`).join('');
         }
-        // Modifier chips for the last completed play land in Phase 7; for now
-        // the column names the last play so the coach can see what's tagged.
+        // Tag the last recorded event: name it, then offer interactive chips
+        // (Break/Huck/Reset/… for a throw, Layout/Sky for a D) that toggle the
+        // event's flags directly. The header adapts to the event type. Because
+        // findLastEditableEvent returns the last Throw/Turnover/Defense, a D
+        // stays taggable on the O screen until the first completed pass.
         let label = 'Last throw was a:';
         let sub = '<i>no play yet</i>';
         const le = (window.pbpPossession && state.point)
@@ -475,7 +497,11 @@
                 sub = `${nm(le.thrower)} to ${nm(le.receiver)}${le.score_flag ? ' — goal!' : ''}`;
             }
         }
-        return `<div class="fp-modcol-label">${label}</div><div class="fp-modcol-sub">${sub}</div>`;
+        const chips = (le ? (LASTMODS[le.type] || []) : []).map(m =>
+            `<button class="fp-modbtn ${le[m.flag] ? 'on' : ''}" data-lastmod="${m.flag}">${m.label}</button>`
+        ).join('');
+        const chipsBlock = chips ? `<div class="fp-modchips">${chips}</div>` : '';
+        return `<div class="fp-modcol-label">${label}</div><div class="fp-modcol-sub">${sub}</div>${chipsBlock}`;
     }
 
     function statusText(state, inPoint) {
@@ -905,6 +931,28 @@
         if (k >= 0) S.dMods.splice(k, 1); else S.dMods.push(label);
         render();
     }
+
+    /**
+     * Toggle a modifier flag on the last recorded event (the modifier column's
+     * interactive chips). Mutates the flag in place, then persists + publishes
+     * an amend so every PBP tab repaints — the same amend path the marker drag
+     * uses.
+     */
+    function toggleLastMod(flag) {
+        if (!requireActiveCoach()) return;
+        const state = reconstructState();
+        const le = (window.pbpPossession && state.point)
+            ? window.pbpPossession.findLastEditableEvent(state.point) : null;
+        if (!le) return;
+        le[flag] = !le[flag];
+        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+        if (window.narrationEventBus) {
+            window.narrationEventBus.publish('eventAmended', {
+                event: le, previousEvent: null, source: 'manual', provisionalId: null
+            });
+        }
+        render();
+    }
     function placeD(l, w) {
         if (!requireActiveCoach()) return;
         if (!S.armed || !S.dPlacing) return;
@@ -1202,6 +1250,11 @@
         });
         root.querySelectorAll('.fp-modbtn[data-dmod]').forEach(b => {
             b.onclick = () => toggleDMod(b.dataset.dmod);
+        });
+
+        // Last-play tag chips: toggle a flag on the most recent event.
+        root.querySelectorAll('.fp-modbtn[data-lastmod]').forEach(b => {
+            b.onclick = () => toggleLastMod(b.dataset.lastmod);
         });
 
         // (Field taps are handled by the pointer layer above — no onclick.)

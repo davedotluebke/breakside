@@ -125,6 +125,10 @@
 .fp-modcol { display: flex; flex-direction: column; gap: 5px; }
 .fp-modcol-label { font-size: 12.5px; font-weight: 700; color: #333; }
 .fp-modcol-sub { font: 600 11.5px 'JetBrains Mono', monospace; color: #555; }
+/* Last-play tag chips wrap two-per-row so a 6-modifier throw doesn't make the
+   sidebar tall. (Pull / D-placing mods stay stacked — only 2–3 of them.) */
+.fp-modchips { display: flex; flex-wrap: wrap; gap: 5px; }
+.fp-modchips .fp-modbtn { flex: 1 1 calc(50% - 3px); min-width: 0; padding: 7px 4px; }
 
 /* Player chips. */
 .fp-chip {
