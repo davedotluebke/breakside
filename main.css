@@ -1719,8 +1719,10 @@ td.player-mmp,
 
 .score-attribution-actions {
     display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
     justify-content: center;
-    gap: 1rem;
+    gap: 0.6rem;
     margin-top: 0.5rem;
     margin-bottom: 0.5rem;
 }
@@ -1735,12 +1737,22 @@ td.player-mmp,
     min-width: 80px;
 }
 
-/* Throw flags checkboxes */
+/* "Not a score — continue possession": neutral two-line downgrade button.
+   Narrower font/line-height so the two text lines sit tidily next to the
+   single-line Callahan/Skip/Score buttons. */
+#continuePossessionBtn {
+    font-size: 0.85rem;
+    line-height: 1.15;
+}
+
+/* Throw flags checkboxes. Capped at three per row (flex-basis ~1/3) so the
+   five modifiers always lay out as exactly two lines (3 + 2) at any dialog
+   width, never spilling to a third row. */
 .throw-flags-container {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 0.8rem;
+    gap: 0.5rem 0.8rem;
     margin: 1rem 0;
     padding: 0.5rem;
     border-top: 1px solid #eee;
@@ -1750,6 +1762,8 @@ td.player-mmp,
 .throw-flag-checkbox {
     display: flex;
     align-items: center;
+    justify-content: center;
+    flex: 1 1 calc(33.333% - 0.8rem);
     cursor: pointer;
     font-size: 0.9rem;
     white-space: nowrap;
@@ -1760,21 +1774,14 @@ td.player-mmp,
     cursor: pointer;
 }
 
-/* Responsive break after sky on smaller screens */
+/* Responsive: tighten type on smaller screens (still 3-per-row → 2 lines). */
 @media (max-width: 480px) {
     .throw-flags-container {
-        gap: 0.6rem;
+        gap: 0.4rem 0.6rem;
     }
-    
+
     .throw-flag-checkbox {
         font-size: 0.8rem;
-    }
-    
-    /* Break to two rows after sky */
-    .throw-flag-checkbox:nth-child(n+4) {
-        flex-basis: 100%;
-        justify-content: center;
-        margin-top: 0.2rem;
     }
 }
 

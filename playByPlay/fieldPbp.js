@@ -805,10 +805,12 @@
         const isScore = S.pending === 'score' || inAttackEZ(to);
         clearEntryState();
         if (isScore) {
-            // Don't commit yet — open the attribution dialog. It commits the
-            // throw on Confirm (as a goal) or downgrades to a plain completion
-            // on "wasn't a score". The placement (thrower/receiver/from/to) is
-            // carried into the dialog.
+            // Don't commit yet — open the shared Score Attribution dialog (the
+            // same one Simple/Full PBP use), pre-selecting thrower/receiver and
+            // carrying the tap locations through opts.from/opts.to so the
+            // spatial marker survives. The dialog's Score button commits a goal,
+            // "continue possession" downgrades to a plain completion, and its
+            // modifier flags (huck/break/sky/layout/hammer) apply either way.
             openScoreDialog(thrower, receiver, from, to);
             render();
             return;
@@ -818,57 +820,28 @@
     }
 
     /**
-     * Score-attribution dialog (mockup's "Goal!" flow). Goal (receiver) and
-     * assist (thrower, by default) are pre-filled and editable via the player
-     * popover. Confirm records the goal (Throw{score}); "✕ wasn't a score"
-     * records the same throw as a plain completion so the disc/holder is
-     * preserved and play continues. Both paths go through the shared
-     * createThrow so stats + scoring stay consistent with the other tabs.
+     * Open the shared Score Attribution dialog with the Field-tab tap
+     * locations pre-loaded. Stops the point timer first (matching Full PBP /
+     * Simple mode) so the displayed duration doesn't tick while the coach
+     * fiddles with modifier flags. Falls back to a direct scoring throw if the
+     * shared dialog isn't loaded.
      */
     function openScoreDialog(thrower, receiver, from, to) {
-        document.querySelectorAll('.fp-scoredlg-overlay').forEach(n => n.remove());
-        let goal = receiver;     // who caught it (the goal scorer)
-        let assist = thrower;    // who threw it / gets the assist (editable)
-
-        const ov = document.createElement('div');
-        ov.className = 'fp-scoredlg-overlay';
-        document.body.appendChild(ov);
-
-        const nm = p => p ? (p.name === UNKNOWN_PLAYER ? 'Unknown' : p.name) : '(none)';
-
-        function draw() {
-            ov.innerHTML = `
-                <div class="fp-scoredlg">
-                    <button class="fp-sd-x" title="Wasn't a score">✕</button>
-                    <div class="fp-sd-title">🥏&nbsp; Goal!</div>
-                    <div class="fp-sd-row"><span class="fp-sd-lbl">Goal</span><button class="fp-sd-chip" data-role="goal">${nm(goal)}</button></div>
-                    <div class="fp-sd-row"><span class="fp-sd-lbl">Assist</span><button class="fp-sd-chip" data-role="assist">${nm(assist)}</button></div>
-                    <button class="fp-sd-confirm">Confirm goal</button>
-                </div>`;
-            ov.querySelector('.fp-sd-x').onclick = () => {
-                ov.remove();
-                // Downgrade: keep the throw as a plain completion (the coach can
-                // then Undo it, or drag the catch out of the endzone).
-                window.pbpPossession.createThrow(thrower, goal, { score: false, from, to });
-                render();
-            };
-            ov.querySelector('.fp-sd-confirm').onclick = () => {
-                ov.remove();
-                window.pbpPossession.createThrow(thrower, goal, { score: true, from, to, assist });
-                render();
-            };
-            ov.querySelectorAll('.fp-sd-chip').forEach(c => {
-                c.onclick = () => {
-                    const role = c.dataset.role;
-                    const r = c.getBoundingClientRect();
-                    popPicker(r.left + r.width / 2, r.top, p => {
-                        if (role === 'goal') goal = p; else assist = p;
-                        draw();
-                    }, role === 'goal' ? 'Goal scorer' : 'Assist');
-                };
-            });
+        const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
+        if (point && point.startTimestamp) {
+            point.totalPointTime = (point.totalPointTime || 0)
+                + (Date.now() - new Date(point.startTimestamp).getTime());
+            point.startTimestamp = null;
         }
-        draw();
+
+        if (typeof ensureDialogVisible === 'function') ensureDialogVisible('scoreAttributionDialog');
+
+        if (typeof showScoreAttributionDialog === 'function') {
+            showScoreAttributionDialog({ thrower, receiver, from, to });
+        } else {
+            console.warn('[fieldPbp] showScoreAttributionDialog unavailable; falling back to direct createThrow');
+            window.pbpPossession.createThrow(thrower, receiver, { score: true, from, to });
+        }
     }
 
     function placeThrowaway(loc) {

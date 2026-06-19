@@ -8,6 +8,14 @@
 let selectedThrower = null;
 let selectedReceiver = null;
 
+// Field-tab location pass-through. The Field PBP screen records where the
+// disc was thrown from / caught (canonical {l,w} coords). When the dialog is
+// opened from there, these carry the tap locations into the committed Throw
+// so the spatial marker survives. null for Simple/Full (which have no field
+// geometry). Set every showScoreAttributionDialog() call.
+let pendingFrom = null;
+let pendingTo = null;
+
 // When true, having both thrower and receiver selected does NOT auto-
 // create the score event. Set to true when the dialog is opened with
 // pre-selections from Full PBP (or anywhere else that has thrower/
@@ -24,6 +32,7 @@ function initializeScoreAttributionDialog() {
     const callahanBtn = document.getElementById('callahanBtn');
     const skipAttributionBtn = document.getElementById('skipAttributionBtn');
     const scoreConfirmBtn = document.getElementById('scoreConfirmBtn');
+    const continuePossessionBtn = document.getElementById('continuePossessionBtn');
     const scoreAttributionDialogClose = document.querySelector('#scoreAttributionDialog .close');
 
     // Explicit "Score" commit button. Same code path as the auto-fire
@@ -33,6 +42,13 @@ function initializeScoreAttributionDialog() {
         scoreConfirmBtn.addEventListener('click', () => {
             if (!selectedThrower || !selectedReceiver) return;
             commitScoreAttribution();
+        });
+    }
+
+    if (continuePossessionBtn) {
+        continuePossessionBtn.addEventListener('click', () => {
+            if (!selectedThrower || !selectedReceiver) return;
+            continuePossessionAttribution();
         });
     }
 
@@ -108,6 +124,8 @@ function initializeScoreAttributionDialog() {
  * @param {Player|null} [opts.thrower]    Pre-select this player as thrower.
  * @param {Player|null} [opts.receiver]   Pre-select this player as receiver.
  * @param {boolean}    [opts.breakArmed] Pre-check the Break modifier.
+ * @param {object|null} [opts.from]       Field-tab throw-from location {l,w}.
+ * @param {object|null} [opts.to]         Field-tab catch location {l,w}.
  *
  * When either thrower or receiver is pre-selected, the auto-fire behavior
  * (which normally commits when both selections are made via clicks) is
@@ -127,6 +145,8 @@ function showScoreAttributionDialog(opts) {
     selectedThrower = null;
     selectedReceiver = null;
     suppressAutoFire = !!(opts.thrower || opts.receiver);
+    pendingFrom = opts.from || null;
+    pendingTo = opts.to || null;
 
     // Reset checkbox flags
     document.getElementById('huckFlag').checked = false;
@@ -228,11 +248,15 @@ function updateCallahanButtonState() {
 }
 
 function updateScoreButtonState() {
-    const scoreBtn = document.getElementById('scoreConfirmBtn');
-    if (!scoreBtn) return;
     const ready = !!(selectedThrower && selectedReceiver);
-    scoreBtn.disabled = !ready;
-    scoreBtn.classList.toggle('inactive', !ready);
+    // The Score commit and the "continue possession" downgrade both require
+    // a full thrower→receiver pair.
+    ['scoreConfirmBtn', 'continuePossessionBtn'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.disabled = !ready;
+        btn.classList.toggle('inactive', !ready);
+    });
 }
 
 /**
@@ -253,7 +277,9 @@ function commitScoreAttribution() {
         breakmark: document.getElementById('breakFlag').checked,
         sky: document.getElementById('skyFlag').checked,
         layout: document.getElementById('layoutFlag').checked,
-        hammer: document.getElementById('hammerFlag').checked
+        hammer: document.getElementById('hammerFlag').checked,
+        from: pendingFrom,
+        to: pendingTo
     });
 
     // Attach to the current offensive possession if one exists, otherwise
@@ -284,6 +310,58 @@ function commitScoreAttribution() {
     updateScore(Role.TEAM);
     if (dialog) dialog.style.display = 'none';
     moveToNextPoint();
+}
+
+/**
+ * "Actually not a score — continue possession." Records the same thrower→
+ * receiver pass as a plain completion (score:false) with the field location,
+ * keeps the disc live (receiver becomes the new holder), and does NOT advance
+ * the point. For when the coach opened the score dialog but the catch turned
+ * out not to be in the endzone. Routes through pbpPossession.createThrow so
+ * the event is logged, published on the bus (every PBP tab repaints), and
+ * persisted — same as any other in-point throw.
+ */
+function continuePossessionAttribution() {
+    if (!selectedThrower || !selectedReceiver) return;
+    const dialog = document.getElementById('scoreAttributionDialog');
+
+    const opts = {
+        score: false,
+        huck: document.getElementById('huckFlag').checked,
+        breakmark: document.getElementById('breakFlag').checked,
+        sky: document.getElementById('skyFlag').checked,
+        layout: document.getElementById('layoutFlag').checked,
+        hammer: document.getElementById('hammerFlag').checked,
+        from: pendingFrom,
+        to: pendingTo
+    };
+
+    if (window.pbpPossession && typeof window.pbpPossession.createThrow === 'function') {
+        window.pbpPossession.createThrow(selectedThrower, selectedReceiver, opts);
+    } else {
+        // Fallback: build the completion directly and publish so subscribed
+        // tabs still repaint. Mirrors the createThrow stat bookkeeping minus
+        // the score branch.
+        const evt = new Throw({
+            thrower: selectedThrower,
+            receiver: selectedReceiver,
+            score: false,
+            huck: opts.huck, breakmark: opts.breakmark, sky: opts.sky,
+            layout: opts.layout, hammer: opts.hammer,
+            from: opts.from, to: opts.to
+        });
+        const possession = (typeof ensurePossessionExists === 'function')
+            ? ensurePossessionExists(true)
+            : (() => { const p = new Possession(true); getLatestPoint().addPossession(p); return p; })();
+        possession.addEvent(evt);
+        if (typeof selectedThrower.completedPasses !== 'number') selectedThrower.completedPasses = 0;
+        selectedThrower.completedPasses += 1;
+        if (typeof logEvent === 'function') logEvent(evt.summarize());
+        if (window.narrationEventBus) window.narrationEventBus.publish('eventAdded', { event: evt });
+        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    }
+
+    if (dialog) dialog.style.display = 'none';
 }
 
 function handleScoreAttribution(playerName, isThrower, buttonElement) {
