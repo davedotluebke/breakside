@@ -634,7 +634,10 @@
         // puller); thereafter, honor wherever the user left it.
         const newSidebar = content.querySelector('.fp-sidebar');
         if (newSidebar) {
-            if (S.pullScrollToBottom) {
+            if (S.pullScrollToTop) {
+                newSidebar.scrollTop = 0;
+                S.pullScrollToTop = false;
+            } else if (S.pullScrollToBottom) {
                 newSidebar.scrollTop = newSidebar.scrollHeight;
                 S.pullScrollToBottom = false;
             } else if (savedScroll != null) {
@@ -661,7 +664,9 @@
         S.pullRunning = false;
         S.pullMs = null;
         S.pullMods = [];
-        S.pullScrollToBottom = true;   // reveal the pull modifiers on entry
+        S.pullScrollToTop = true;   // start at the top so "Pick Puller" + all
+                                    // players are visible; we drop to the
+                                    // modifiers once a puller is tapped.
         if (pullTimer) { clearInterval(pullTimer); pullTimer = null; }
         render();
     }
@@ -747,7 +752,11 @@
         if (!requireActiveCoach()) return;
         const p = playerByName(name);
         if (S.pulling) {
-            S.puller = (S.puller && S.puller.name === name) ? null : p;
+            const selecting = !(S.puller && S.puller.name === name);
+            S.puller = selecting ? p : null;
+            // On selecting a puller, drop to the bottom so the pull modifiers
+            // and hang/Brick are in reach; deselecting leaves scroll as-is.
+            if (selecting) S.pullScrollToBottom = true;
             render();
             return;
         }
@@ -1096,7 +1105,15 @@
         const inPoint = (typeof isPointInProgress === 'function') && isPointInProgress();
         if (!inPoint && !S.pulling) return;
         const chip = e.target.closest('.fp-chip[data-pname]');
-        if (chip) { startDrag({ kind: 'chip', name: chip.dataset.pname }, e); return; }
+        if (chip) {
+            // During the pull flow chips aren't draggable (the puller is placed
+            // by tapping the field, not by dragging a pegman). Bail out of the
+            // pointer layer so the rail scrolls natively; the tap itself is
+            // handled by the chip's click handler wired in wireDynamic.
+            if (S.pulling) return;
+            startDrag({ kind: 'chip', name: chip.dataset.pname }, e);
+            return;
+        }
         const mk = e.target.closest('.fp-marker[data-mkidx]');
         if (mk) { startDrag({ kind: 'marker', idx: +mk.dataset.mkidx }, e); return; }
         if (e.target.closest('#fpField')) { startDrag({ kind: 'field' }, e); return; }
@@ -1256,6 +1273,14 @@
         root.querySelectorAll('.fp-modbtn[data-lastmod]').forEach(b => {
             b.onclick = () => toggleLastMod(b.dataset.lastmod);
         });
+
+        // During pull, chips are tap-only (drag is disabled so the rail can
+        // scroll). A plain click picks the puller.
+        if (S.pulling) {
+            root.querySelectorAll('.fp-rail .fp-chip[data-pname]').forEach(c => {
+                c.onclick = () => handleChipTap(c.dataset.pname);
+            });
+        }
 
         // (Field taps are handled by the pointer layer above — no onclick.)
     }

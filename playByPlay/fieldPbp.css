@@ -47,10 +47,13 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 7px 12px;
+    padding: 4px 12px;
     background: #fff;
     border-bottom: 1px solid #eee;
 }
+/* Override global button { margin: 10px } — the stray vertical margin was
+   padding this row out and stealing room the modifier column needs below. */
+.fp-actionrow button { margin: 0; }
 .fp-actionrow-spacer { flex: 1 1 auto; }
 .fp-modepill {
     display: inline-block;
@@ -140,6 +143,8 @@
     touch-action: none;
     -webkit-tap-highlight-color: transparent;
 }
+/* In pull mode chips aren't draggable, so let the rail scroll vertically. */
+.field-pbp-content[data-mode="pull"] .fp-chip { touch-action: pan-y; }
 .fp-chip .fp-num { font: 700 11px 'JetBrains Mono', monospace; color: #888; }
 .fp-chip .fp-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .fp-chip.holder { background: var(--fp-holdbg); border-color: var(--fp-hold); box-shadow: 0 0 0 2px rgba(224, 166, 75, .3); }
