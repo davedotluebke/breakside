@@ -47,8 +47,18 @@ function initializeScoreAttributionDialog() {
 
     if (continuePossessionBtn) {
         continuePossessionBtn.addEventListener('click', () => {
-            if (!selectedThrower || !selectedReceiver) return;
-            continuePossessionAttribution();
+            // Two roles for one button. When a full thrower→receiver pair is
+            // present (Field / Full PBP), record the pass as a plain completion
+            // and keep the disc live. With no such pair (Simple mode, where
+            // selecting both auto-fires the score before this is reachable),
+            // it's just a "never mind, not a score" — close the dialog, same as
+            // the X. No event recorded either way unless a completion is.
+            if (selectedThrower && selectedReceiver) {
+                continuePossessionAttribution();
+            } else {
+                const dialog = document.getElementById('scoreAttributionDialog');
+                if (dialog) dialog.style.display = 'none';
+            }
         });
     }
 
@@ -248,15 +258,14 @@ function updateCallahanButtonState() {
 }
 
 function updateScoreButtonState() {
+    // Only the Score commit needs a full thrower→receiver pair. The
+    // "continue possession" button stays enabled in every state: with a pair
+    // it records a completion, without one it just dismisses the dialog.
+    const scoreBtn = document.getElementById('scoreConfirmBtn');
+    if (!scoreBtn) return;
     const ready = !!(selectedThrower && selectedReceiver);
-    // The Score commit and the "continue possession" downgrade both require
-    // a full thrower→receiver pair.
-    ['scoreConfirmBtn', 'continuePossessionBtn'].forEach(id => {
-        const btn = document.getElementById(id);
-        if (!btn) return;
-        btn.disabled = !ready;
-        btn.classList.toggle('inactive', !ready);
-    });
+    scoreBtn.disabled = !ready;
+    scoreBtn.classList.toggle('inactive', !ready);
 }
 
 /**
