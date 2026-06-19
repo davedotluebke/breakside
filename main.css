@@ -1717,6 +1717,50 @@ td.player-mmp,
     border: 1px solid #ccc;
 }
 
+/* Score Attribution dialog: keep the whole thing on one screen so the Score
+   button never falls below the fold. Scoped to #scoreAttributionDialog so the
+   shared .modal-content / .prominent-dialog-header rules are untouched for
+   other dialogs. The modal is a height-capped flex column: the player lists
+   are the only scroll region, while the modifier flags + action buttons stay
+   pinned at the bottom. The big "Score Attribution" title is dropped — the
+   Score button plus the fact that you got here by entering a score make it
+   redundant — leaving just enough header for the close X. */
+#scoreAttributionDialog .modal-content {
+    margin: 2vh auto;
+    max-height: 96vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#scoreAttributionDialog .prominent-dialog-header {
+    margin-bottom: 0.25rem;
+    padding-bottom: 0;
+    border-bottom: none;
+    min-height: 1.5rem;   /* room for the absolutely-positioned close X */
+    flex: 0 0 auto;
+}
+#scoreAttributionDialog .prominent-dialog-header h2 {
+    display: none;
+}
+#scoreAttributionDialog .score-attribution-container {
+    flex: 1 1 auto;
+    min-height: 0;        /* allow the flex child to shrink below content */
+    overflow-y: auto;
+}
+#scoreAttributionDialog .throw-flags-container,
+#scoreAttributionDialog .callahan-separator,
+#scoreAttributionDialog .score-attribution-actions {
+    flex: 0 0 auto;       /* pinned — never compressed by the scroll area */
+}
+#scoreAttributionDialog .throw-flags-container {
+    margin: 0.5rem 0;
+}
+#scoreAttributionDialog .score-attribution-actions {
+    flex-wrap: wrap;      /* four buttons wrap instead of overflowing */
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
 .score-attribution-actions {
     display: flex;
     flex-wrap: wrap;
