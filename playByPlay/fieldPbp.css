@@ -177,7 +177,9 @@
 .fp-brick { position: absolute; color: rgba(255, 255, 255, .5); font-size: 12px; font-weight: 700; transform: translate(-50%, -50%); pointer-events: none; }
 .fp-ezlabel { position: absolute; color: rgba(255, 255, 255, .5); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; transform: translate(-50%, -50%); }
 .fp-sidelbl { position: absolute; color: rgba(255, 255, 255, .34); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; font-weight: 600; transform: translate(-50%, -50%); }
-.fp-flbl { pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+/* Padding enlarges the long-press hit area; translate(-50%,-50%) still centers
+   on the label's anchor point so the visual position is unchanged. */
+.fp-flbl { pointer-events: auto; cursor: pointer; padding: 6px; -webkit-tap-highlight-color: transparent; }
 
 /* Status + events strips. */
 .fp-statusbar {

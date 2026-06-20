@@ -66,6 +66,13 @@ function createHeaderContent() {
                 <button class="menu-item" id="menuToggleRoleButtons">
                     <i class="fas fa-user-tag"></i> Show Role Buttons
                 </button>
+                <div class="menu-divider" id="menuFieldFlipDivider" style="display: none;"></div>
+                <button class="menu-item" id="menuSwapHomeAway" style="display: none;">
+                    <i class="fas fa-exchange-alt"></i> Swap Home / Away
+                </button>
+                <button class="menu-item" id="menuSwapAttackDefend" style="display: none;">
+                    <i class="fas fa-exchange-alt"></i> Swap Attack / Defend
+                </button>
                 <div class="menu-divider"></div>
                 <button class="menu-item" id="menuSettings">
                     <i class="fas fa-cog"></i> App Settings
@@ -1216,6 +1223,22 @@ function wireGameScreenEvents() {
         });
     }
 
+    // Field tab orientation flips
+    const swapHomeAwayBtn = document.getElementById('menuSwapHomeAway');
+    if (swapHomeAwayBtn) {
+        swapHomeAwayBtn.addEventListener('click', () => {
+            closeGameMenu();
+            if (window.fieldPbp && typeof window.fieldPbp.swapHomeAway === 'function') window.fieldPbp.swapHomeAway();
+        });
+    }
+    const swapAttackDefendBtn = document.getElementById('menuSwapAttackDefend');
+    if (swapAttackDefendBtn) {
+        swapAttackDefendBtn.addEventListener('click', () => {
+            closeGameMenu();
+            if (window.fieldPbp && typeof window.fieldPbp.swapAttackDefend === 'function') window.fieldPbp.swapAttackDefend();
+        });
+    }
+
     // Close menu when clicking outside
     document.addEventListener('click', (e) => {
         const dropdown = document.getElementById('gameMenuDropdown');
@@ -1365,6 +1388,14 @@ function handleGameMenuClick(e) {
         } else {
             console.warn('🔌 Rejoin Game button not found in DOM — HTML may be stale');
         }
+
+        // Field orientation flips only make sense on the Field tab — show them
+        // there, hide elsewhere.
+        const onFieldTab = (typeof window.getActiveTab === 'function') && window.getActiveTab() === 'field';
+        ['menuFieldFlipDivider', 'menuSwapHomeAway', 'menuSwapAttackDefend'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = onFieldTab ? '' : 'none';
+        });
 
         // Update role buttons toggle label
         const toggleRoleBtn = document.getElementById('menuToggleRoleButtons');

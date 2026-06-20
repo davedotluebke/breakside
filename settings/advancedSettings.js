@@ -56,7 +56,9 @@
         // --- Sync ---
         'sync.refreshIntervalSec': 10,                   // cloud auto-refresh cadence (applies after reload)
         // --- Field ---
-        'field.endzoneYards': 20                         // endzone depth drawn on the Field tab (20 = USAU, 25 = some leagues)
+        'field.endzoneYards': 20,                         // endzone depth drawn on the Field tab (20 = USAU, 25 = some leagues)
+        'field.flipHA': false,                            // swap which sideline is Home (Field tab display)
+        'field.flipAD': false                             // base attack direction (auto-alternates each point on top of this)
     };
 
     // Back-compat: console globals we advertised before this UI existed.

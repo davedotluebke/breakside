@@ -59,6 +59,41 @@
     }
 
     // -----------------------------------------------------------------
+    // Display flips (orientation): which sideline is Home (flipHA) and which
+    // way we attack (flipAD). Both are render-time only — canonical {l,w}
+    // never change. flipHA is a stable per-device setting; flipAD is a base
+    // that auto-alternates each point (teams switch ends every point), derived
+    // via point parity in effFlipAD() so no per-point bookkeeping is needed.
+    // -----------------------------------------------------------------
+    function loadFlips() {
+        if (window.advancedSettings && typeof window.advancedSettings.get === 'function') {
+            S.flipHA = !!window.advancedSettings.get('field.flipHA');
+            S.flipAD = !!window.advancedSettings.get('field.flipAD');
+        }
+    }
+    function persistFlips() {
+        if (window.advancedSettings && typeof window.advancedSettings.set === 'function') {
+            window.advancedSettings.set('field.flipHA', S.flipHA);
+            window.advancedSettings.set('field.flipAD', S.flipAD);
+        }
+    }
+    function currentPointIndex() {
+        const g = (typeof currentGame === 'function') ? currentGame() : null;
+        return (g && g.points && g.points.length) ? g.points.length - 1 : 0;
+    }
+    // Effective attack flip = base XOR point parity, so the attack direction
+    // auto-alternates each point on top of the coach's chosen base.
+    function effFlipAD() {
+        return S.flipAD !== (currentPointIndex() % 2 === 1);
+    }
+    function toggleFlip(which) {
+        if (which === 'ad') S.flipAD = !S.flipAD;
+        else S.flipHA = !S.flipHA;
+        persistFlips();
+        render();
+    }
+
+    // -----------------------------------------------------------------
     // View + interaction state. Mode/holder are derived from the event
     // stream (shared core), never stored here.
     // -----------------------------------------------------------------
@@ -147,7 +182,8 @@
     // Coordinate mapping (mirrors the mockup's pct()/toField()).
     // -----------------------------------------------------------------
     function pct(l, w) {
-        const dl = S.flipAD ? (L - l) : l;
+        const ad = effFlipAD();
+        const dl = ad ? (L - l) : l;
         const dw = S.flipHA ? (W - w) : w;
         return S.o === 'portrait'
             ? { x: ((W - dw) / W) * 100, y: ((L - dl) / L) * 100 }
@@ -157,7 +193,7 @@
         let dl, dw;
         if (S.o === 'portrait') { dw = W - fx * W; dl = L - fy * L; }
         else { dl = fx * L; dw = fy * W; }
-        return { l: S.flipAD ? (L - dl) : dl, w: S.flipHA ? (W - dw) : dw };
+        return { l: effFlipAD() ? (L - dl) : dl, w: S.flipHA ? (W - dw) : dw };
     }
     function inAttackEZ(p) { return p.l >= L - EZ; }
     function clampLoc(l, w) {
@@ -1084,8 +1120,38 @@
     // on window, so per-render DOM rebuilds don't break an active drag.
     // -----------------------------------------------------------------
     const DRAG_THRESHOLD_PX = 6;
+    const LONGPRESS_MS = 500;
     let drag = null;     // {kind:'chip'|'marker'|'field', ...}
     let pegEl = null;    // floating pegman element while dragging a chip
+    let labelPressTimer = null;
+
+    /**
+     * Long-press detector for a field label. Fires toggleFlip after LONGPRESS_MS
+     * of a stationary hold; cancels on movement beyond the drag threshold or on
+     * release. A short tap does nothing (so labels don't place events).
+     */
+    function startLabelPress(flip, e) {
+        const sx = e.clientX, sy = e.clientY;
+        let done = false;
+        const cleanup = () => {
+            if (labelPressTimer) { clearTimeout(labelPressTimer); labelPressTimer = null; }
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointercancel', onUp);
+        };
+        const onMove = ev => {
+            if (!done && Math.hypot(ev.clientX - sx, ev.clientY - sy) > DRAG_THRESHOLD_PX) { done = true; cleanup(); }
+        };
+        const onUp = () => { if (!done) { done = true; cleanup(); } };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onUp);
+        labelPressTimer = setTimeout(() => {
+            if (done) return;
+            done = true; cleanup();
+            toggleFlip(flip === 'ad' ? 'ad' : 'ha');
+        }, LONGPRESS_MS);
+    }
 
     function fieldEl() { return document.querySelector('#panel-playByPlayField-content #fpField'); }
 
@@ -1099,6 +1165,12 @@
     }
 
     function onPointerDown(e) {
+        // Long-press a field label to flip orientation (Home/Away → flipHA,
+        // Attack/Defend → flipAD). Allowed any time, even between points, since
+        // it's a view setting — so this is checked before the read-only guard.
+        const flbl = e.target.closest('.fp-flbl');
+        if (flbl) { startLabelPress(flbl.dataset.flip, e); return; }
+
         // Between points the field is read-only — no events may be entered
         // until Start Point. (The pull flow runs after the point has started,
         // so isPointInProgress() is already true there.)
@@ -1291,6 +1363,7 @@
     // Init
     // -----------------------------------------------------------------
     function init() {
+        loadFlips();
         render();
         if (window.narrationEventBus) {
             window.narrationEventBus.subscribe('eventAdded', render);
@@ -1314,6 +1387,9 @@
         render,
         wireEvents,
         beginPull,
+        // orientation flips (hamburger menu hooks)
+        swapHomeAway: () => toggleFlip('ha'),
+        swapAttackDefend: () => toggleFlip('ad'),
         // devtools helpers
         _state: S,
         _pct: pct,
