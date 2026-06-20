@@ -184,10 +184,14 @@
 .field-pbp-content[data-o="landscape"] .fp-attack-arrow { width: 50%; }
 .field-pbp-content[data-o="landscape"] .fp-attack-arrow svg { width: 100%; height: auto; }
 .fp-aa-shape { fill: rgba(210, 245, 205, 0.16); }
-.fp-aa-text {
-    fill: rgba(255, 255, 255, 0.45);
-    font: 800 30px system-ui, sans-serif;
-    letter-spacing: 2px; text-transform: uppercase;
+/* "Attacking" label: centered on the field, rotated to align with the arrow
+   and read from the Home side. Background-style, non-interactive. */
+.fp-attack-label {
+    position: absolute; left: 50%; top: 50%;
+    pointer-events: none; user-select: none; z-index: 1; white-space: nowrap;
+    color: rgba(255, 255, 255, 0.5);
+    font: 800 26px system-ui, sans-serif;
+    letter-spacing: 3px; text-transform: uppercase;
 }
 
 .fp-ezfill { position: absolute; background: var(--fp-ez); }
