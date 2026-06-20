@@ -73,6 +73,9 @@ function createHeaderContent() {
                 <button class="menu-item" id="menuSwapAttackDefend" style="display: none;">
                     <i class="fas fa-exchange-alt"></i> Swap Attack / Defend
                 </button>
+                <button class="menu-item" id="menuSwitchSides" style="display: none;">
+                    <i class="fas fa-retweet"></i> Switch Sides (halftime)
+                </button>
                 <div class="menu-divider"></div>
                 <button class="menu-item" id="menuSettings">
                     <i class="fas fa-cog"></i> App Settings
@@ -1238,6 +1241,13 @@ function wireGameScreenEvents() {
             if (window.fieldPbp && typeof window.fieldPbp.swapAttackDefend === 'function') window.fieldPbp.swapAttackDefend();
         });
     }
+    const switchSidesBtn2 = document.getElementById('menuSwitchSides');
+    if (switchSidesBtn2) {
+        switchSidesBtn2.addEventListener('click', () => {
+            closeGameMenu();
+            applySwitchSides();
+        });
+    }
 
     // Close menu when clicking outside
     document.addEventListener('click', (e) => {
@@ -1392,7 +1402,7 @@ function handleGameMenuClick(e) {
         // Field orientation flips only make sense on the Field tab — show them
         // there, hide elsewhere.
         const onFieldTab = (typeof window.getActiveTab === 'function') && window.getActiveTab() === 'field';
-        ['menuFieldFlipDivider', 'menuSwapHomeAway', 'menuSwapAttackDefend'].forEach(id => {
+        ['menuFieldFlipDivider', 'menuSwapHomeAway', 'menuSwapAttackDefend', 'menuSwitchSides'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = onFieldTab ? '' : 'none';
         });
@@ -2574,17 +2584,67 @@ function handleGameEventHalfTime() {
 }
 
 /**
- * Handle Switch Sides game event
+ * Apply a halftime "Switch Sides": teams swap ends, so the side that pulled
+ * from one endzone now receives from the other.
+ *
+ * Two effects, kept separate:
+ *  1. O/D logic — record an Other{switchsides} event on the last completed
+ *     point. determineStartingPosition() already inverts the next point's
+ *     starting position when it sees this flag, so who starts on O vs D for the
+ *     halftime restart flips (or not, depending on the score so far). Before
+ *     any point exists, just flip the game's initial startingPosition instead.
+ *  2. Field display — flip the attack direction so the drawn field matches the
+ *     physical end swap for the rest of the game (the per-point auto-flip then
+ *     continues on top of the new base).
+ *
+ * Halftime happens between points; guarded to not fire mid-point.
+ */
+function applySwitchSides() {
+    const inPoint = (typeof isPointInProgress === 'function') && isPointInProgress();
+    if (inPoint) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('Switch sides between points (at halftime)', 'warning');
+        }
+        return;
+    }
+
+    const game = (typeof currentGame === 'function') ? currentGame() : null;
+    if (!game) return;
+
+    if (game.points && game.points.length) {
+        const lastPoint = game.points[game.points.length - 1];
+        lastPoint.possessions = lastPoint.possessions || [];
+        let poss = lastPoint.possessions[lastPoint.possessions.length - 1];
+        if (!poss) { poss = new Possession(true); lastPoint.possessions.push(poss); }
+        poss.events.push(new Other({ switchsides: true }));
+    } else {
+        // No points yet — switching before the first pull just flips the
+        // chosen starting position.
+        game.startingPosition = (game.startingPosition === 'offense') ? 'defense' : 'offense';
+    }
+
+    if (typeof logEvent === 'function') logEvent('O and D switch sides');
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    if (typeof updateGameLogEvents === 'function') updateGameLogEvents();
+
+    // Flip the Field-tab display ends to match (persists + re-renders).
+    if (window.fieldPbp && typeof window.fieldPbp.swapAttackDefend === 'function') {
+        window.fieldPbp.swapAttackDefend();
+    }
+    // Nudge any subscribed views (Start Point label now reflects new O/D).
+    if (window.narrationEventBus && typeof window.narrationEventBus.publish === 'function') {
+        window.narrationEventBus.publish('pointChanged', {});
+    }
+    if (typeof showControllerToast === 'function') showControllerToast('Switched sides', 'info');
+}
+window.applySwitchSides = applySwitchSides;
+
+/**
+ * Handle Switch Sides game event (from the Game Events modal).
  */
 function handleGameEventSwitchSides() {
-    if (typeof showControllerToast === 'function') {
-        showControllerToast('Switching sides', 'info');
-    }
-    
-    // Log the event
-    console.log('Game Event: Switch Sides');
-    
     hideGameEventsModal();
+    applySwitchSides();
 }
 
 /**
