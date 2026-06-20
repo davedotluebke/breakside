@@ -163,10 +163,32 @@
     border: 2px solid #fff; border-radius: 3px;
     touch-action: none;
     flex: 0 0 auto;
+    /* No text selection on the touch surface — long-pressing a label to flip
+       must not start a selection / iOS callout. */
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
 /* Keep the 120:40 proportion; size to the constraining dimension. */
 .field-pbp-content[data-o="portrait"] .fp-field { height: 100%; aspect-ratio: 40 / 120; max-width: 100%; }
 .field-pbp-content[data-o="landscape"] .fp-field { width: 100%; aspect-ratio: 120 / 40; max-height: 100%; }
+
+/* Attack-direction arrow: large, subtle, looks like part of the field, never
+   interactive. Sized to ~50% of the field's long dimension; the wrapper is
+   shrink-to-fit and centered. */
+.fp-attack-arrow {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    pointer-events: none; user-select: none; z-index: 1;
+}
+.fp-attack-arrow svg { display: block; overflow: visible; }
+.field-pbp-content[data-o="portrait"] .fp-attack-arrow { height: 50%; }
+.field-pbp-content[data-o="portrait"] .fp-attack-arrow svg { height: 100%; width: auto; }
+.field-pbp-content[data-o="landscape"] .fp-attack-arrow { width: 50%; }
+.field-pbp-content[data-o="landscape"] .fp-attack-arrow svg { width: 100%; height: auto; }
+.fp-aa-shape { fill: rgba(210, 245, 205, 0.16); }
+.fp-aa-text {
+    fill: rgba(255, 255, 255, 0.45);
+    font: 800 30px system-ui, sans-serif;
+    letter-spacing: 2px; text-transform: uppercase;
+}
 
 .fp-ezfill { position: absolute; background: var(--fp-ez); }
 .fp-line { position: absolute; background: var(--fp-line); }

@@ -309,6 +309,30 @@
     // -----------------------------------------------------------------
     // Field rendering: static geometry + located-event arrows/markers/disc.
     // -----------------------------------------------------------------
+    /**
+     * Large background arrow labeled "Attacking" pointing at the attack
+     * endzone. Direction follows orientation + effFlipAD: portrait up/down,
+     * landscape left/right. Sized to ~50% of the field's long dimension via
+     * CSS. The arrow shape flips direction; the text stays upright.
+     */
+    function attackArrowHTML() {
+        const ad = effFlipAD();
+        const port = S.o === 'portrait';
+        const dir = port ? (ad ? 'down' : 'up') : (ad ? 'left' : 'right');
+        const SHAPES = {
+            up:    { vb: '0 0 200 320', pts: '100,12 184,120 132,120 132,306 68,306 68,120 16,120', tx: 100, ty: 215 },
+            down:  { vb: '0 0 200 320', pts: '100,308 184,200 132,200 132,14 68,14 68,200 16,200', tx: 100, ty: 105 },
+            right: { vb: '0 0 320 200', pts: '308,100 200,16 200,68 14,68 14,132 200,132 200,184', tx: 105, ty: 100 },
+            left:  { vb: '0 0 320 200', pts: '12,100 120,16 120,68 306,68 306,132 120,132 120,184', tx: 215, ty: 100 }
+        };
+        const s = SHAPES[dir];
+        return `<div class="fp-attack-arrow fp-aa-${port ? 'v' : 'h'}">`
+            + `<svg viewBox="${s.vb}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">`
+            + `<polygon class="fp-aa-shape" points="${s.pts}"/>`
+            + `<text class="fp-aa-text" x="${s.tx}" y="${s.ty}" text-anchor="middle" dominant-baseline="central">Attacking</text>`
+            + `</svg></div>`;
+    }
+
     function fieldHTML(state) {
         let h = '';
         const port = S.o === 'portrait';
@@ -326,6 +350,11 @@
             RZ.forEach(l => h += `<div class="fp-gline rz v" style="top:3%;bottom:3%;left:${(l / L) * 100}%;width:2px"></div>`);
             LANES.forEach(w => h += `<div class="fp-gline" style="left:${(EZ / L) * 100}%;right:${(EZ / L) * 100}%;top:${(w / W) * 100}%;height:2px"></div>`);
         }
+
+        // Big "Attacking" arrow pointing at the attack endzone — a background
+        // cue so the direction of play is obvious at a glance. Behind the
+        // labels/markers (added first), non-interactive.
+        h += attackArrowHTML();
 
         const lab = (txt, l, w, flip, cls) => {
             const p = pct(l, w);
