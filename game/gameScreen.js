@@ -3659,6 +3659,11 @@ function selectAppropriateLineAtPointEnd() {
 /**
  * Update the Select Line panel table with current roster and selections
  */
+// Remembers the Select Line table's horizontal scroll position across the
+// periodic rebuilds so a manual leftward scroll isn't clobbered by the
+// snap-to-right in makePanelColumnsSticky(). null = treat as "follow latest".
+let _selectLineScrollState = null;
+
 function updateSelectLineTable() {
     const table = document.getElementById('panelActivePlayersTable');
     if (!table) return;
@@ -3666,7 +3671,22 @@ function updateSelectLineTable() {
     const tableBody = table.querySelector('tbody');
     const tableHead = table.querySelector('thead');
     if (!tableBody || !tableHead) return;
-    
+
+    // Capture the horizontal scroll position before we blow away the table.
+    // Clearing innerHTML resets scrollLeft to 0, and makePanelColumnsSticky()
+    // re-snaps to the right edge to surface the latest points. That's the right
+    // behavior on first render and while the user is "following" the newest
+    // point, but it must NOT yank the view back if the user has scrolled left to
+    // review earlier points (the 3s cloud-refresh rebuild would otherwise pop
+    // them back to the right every cycle).
+    const scrollContainer = document.getElementById('panelTableContainer');
+    if (scrollContainer) {
+        const maxScroll = scrollContainer.scrollWidth - scrollContainer.clientWidth;
+        // Within 4px of the right edge (or nothing to scroll) counts as "following".
+        const atRightEdge = maxScroll <= 4 || (maxScroll - scrollContainer.scrollLeft) <= 4;
+        _selectLineScrollState = { scrollLeft: scrollContainer.scrollLeft, atRightEdge };
+    }
+
     // Clear existing content
     tableBody.innerHTML = '';
     tableHead.innerHTML = '';
@@ -4197,10 +4217,17 @@ function makePanelColumnsSticky() {
         cell.style.touchAction = 'pan-y';
     });
 
-    // Scroll to right (show most recent points)
+    // Restore the user's horizontal scroll position. Snap to the right edge
+    // (most recent points) only on first render or when the user was already
+    // following the latest; otherwise preserve where they scrolled to so the
+    // periodic rebuild doesn't pop them back to the right (see _selectLineScrollState).
     const tableContainer = document.getElementById('panelTableContainer');
     if (tableContainer) {
-        tableContainer.scrollLeft = tableContainer.scrollWidth;
+        if (_selectLineScrollState && !_selectLineScrollState.atRightEdge) {
+            tableContainer.scrollLeft = _selectLineScrollState.scrollLeft;
+        } else {
+            tableContainer.scrollLeft = tableContainer.scrollWidth;
+        }
         enableAxisLockedScroll(tableContainer);
     }
 }
