@@ -86,6 +86,16 @@
     function effFlipAD() {
         return S.flipAD !== (currentPointIndex() % 2 === 1);
     }
+
+    // Rotation (deg) that makes on-field text readable from the Home side: the
+    // text's "down" points toward the Home sideline. Portrait Home is a left/
+    // right edge (±90°); landscape Home is the bottom/top edge (0/180°). Used
+    // for the Home/Away labels and the big "Attacking" label, so they double
+    // as a Home/Away cue.
+    function homeSideRotation() {
+        if (S.o === 'portrait') return S.flipHA ? -90 : 90;
+        return S.flipHA ? 180 : 0;
+    }
     function toggleFlip(which) {
         if (which === 'ad') S.flipAD = !S.flipAD;
         else S.flipHA = !S.flipHA;
@@ -320,17 +330,20 @@
         const port = S.o === 'portrait';
         const dir = port ? (ad ? 'down' : 'up') : (ad ? 'left' : 'right');
         const SHAPES = {
-            up:    { vb: '0 0 200 320', pts: '100,12 184,120 132,120 132,306 68,306 68,120 16,120', tx: 100, ty: 215 },
-            down:  { vb: '0 0 200 320', pts: '100,308 184,200 132,200 132,14 68,14 68,200 16,200', tx: 100, ty: 105 },
-            right: { vb: '0 0 320 200', pts: '308,100 200,16 200,68 14,68 14,132 200,132 200,184', tx: 105, ty: 100 },
-            left:  { vb: '0 0 320 200', pts: '12,100 120,16 120,68 306,68 306,132 120,132 120,184', tx: 215, ty: 100 }
+            up:    { vb: '0 0 200 320', pts: '100,12 184,120 132,120 132,306 68,306 68,120 16,120' },
+            down:  { vb: '0 0 200 320', pts: '100,308 184,200 132,200 132,14 68,14 68,200 16,200' },
+            right: { vb: '0 0 320 200', pts: '308,100 200,16 200,68 14,68 14,132 200,132 200,184' },
+            left:  { vb: '0 0 320 200', pts: '12,100 120,16 120,68 306,68 306,132 120,132 120,184' }
         };
         const s = SHAPES[dir];
+        // Text is a separate, CSS-rotated element (not SVG <text>) so it can
+        // align with the arrow AND read from the Home side independently of the
+        // arrow's pointing direction.
         return `<div class="fp-attack-arrow fp-aa-${port ? 'v' : 'h'}">`
             + `<svg viewBox="${s.vb}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">`
             + `<polygon class="fp-aa-shape" points="${s.pts}"/>`
-            + `<text class="fp-aa-text" x="${s.tx}" y="${s.ty}" text-anchor="middle" dominant-baseline="central">Attacking</text>`
-            + `</svg></div>`;
+            + `</svg></div>`
+            + `<div class="fp-attack-label" style="transform:translate(-50%,-50%) rotate(${homeSideRotation()}deg)">Attacking</div>`;
     }
 
     function fieldHTML(state) {
@@ -358,8 +371,12 @@
 
         const lab = (txt, l, w, flip, cls) => {
             const p = pct(l, w);
-            const vert = (port && flip === 'ha') ? ';writing-mode:vertical-rl' : '';
-            return `<div class="${cls} fp-flbl" data-flip="${flip}" style="left:${p.x}%;top:${p.y}%${vert}">${txt}</div>`;
+            // Home/Away labels rotate to read from the Home side (down toward
+            // Home). Attack/Defend stay horizontal.
+            const tf = (flip === 'ha')
+                ? `;transform:translate(-50%,-50%) rotate(${homeSideRotation()}deg)`
+                : '';
+            return `<div class="${cls} fp-flbl" data-flip="${flip}" style="left:${p.x}%;top:${p.y}%${tf}">${txt}</div>`;
         };
         h += lab('Attack', L - EZ / 2, W / 2, 'ad', 'fp-ezlabel');
         h += lab('Defend', EZ / 2, W / 2, 'ad', 'fp-ezlabel');
