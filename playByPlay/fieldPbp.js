@@ -691,6 +691,7 @@
             <div class="fp-actionrow">
                 ${leftSlot}
                 <span class="fp-actionrow-spacer"></span>
+                <span class="fp-status-inline">${statusText(state, inPoint)}</span>
                 <button class="fp-undo" id="fpUndoBtn" title="Undo last event"><i class="fas fa-undo"></i><span>Undo</span></button>
             </div>
             <div class="fp-play${inPoint ? '' : ' fp-between-points'}">
