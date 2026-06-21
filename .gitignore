@@ -38,3 +38,6 @@ tests/node_modules/
 tests/test-results/
 tests/playwright-report/
 tests/test-data-dir/
+
+# Per-session local backend data copies (scripts/dev-backend.sh)
+.dev-data/

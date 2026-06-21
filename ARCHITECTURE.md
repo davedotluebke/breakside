@@ -321,6 +321,37 @@ The service worker implements a network-first strategy with cache fallback:
 
 ## Backend Architecture
 
+### Local development backends (isolated per session)
+
+When several Claude Code sessions / worktrees advance different server-side work
+at once, each should run its **own** backend against its **own** copy of the
+data store — never sharing state, and never pointing a localhost frontend at the
+production API (which risks polluting real games and writing experimental schema
+into prod). `scripts/dev-backend.sh` provides this:
+
+```bash
+./scripts/dev-backend.sh                     # auto-picks a free port from 8000;
+                                             # copies the main worktree's data/ into
+                                             # .dev-data/be-<port>/ and serves it
+./scripts/dev-backend.sh --port 8001 --label on-deck   # explicit port + named data dir
+./scripts/dev-backend.sh --fresh             # empty data store
+./scripts/dev-backend.sh --from <dir>        # seed from a snapshot (e.g. a prod export)
+./scripts/dev-backend.sh --reset             # wipe & re-seed this label's data
+```
+
+Each instance runs with `ULTISTATS_AUTH_REQUIRED=false` (no Supabase secrets
+needed; membership checks are skipped — see [dependencies.py](ultistats_server/auth/dependencies.py)),
+so a locally-served frontend reads/writes the copied data with no CORS or auth
+setup. Pair a frontend by opening it once with `?api=http://localhost:<port>`
+(saved to that origin's localStorage; `?api=reset` clears it). Because
+localStorage is keyed per origin **including port**, frontend port 3001↔backend
+8001 and 3002↔8002 stay independent. `--reload` watches the worktree's own
+`ultistats_server/`, so each session tests its own server changes. The
+`.dev-data/` copies are gitignored and disposable.
+
+This is the durable replacement for adding `localhost` to the prod API's
+`ULTISTATS_ALLOWED_ORIGINS` — keep prod CORS locked to the real origins.
+
 ### Server Stack
 
 | Component | Details |
