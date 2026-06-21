@@ -263,7 +263,8 @@ function updateGameSummaryRosterDisplay() {
     const game = currentGame();
     let playersToDisplay = currentTeam.teamRoster;
     
-    if (game && game.rosterSnapshot && game.rosterSnapshot.players) {
+    if (game && game.rosterSnapshot && game.rosterSnapshot.players
+            && game.rosterSnapshot.players.length > 0) {
         // Use snapshot players but merge with current roster for full Player objects
         // This preserves historical data (names/numbers at game time)
         playersToDisplay = game.rosterSnapshot.players.map(snapshotPlayer => {

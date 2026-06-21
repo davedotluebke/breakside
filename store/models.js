@@ -226,6 +226,16 @@ function createRosterSnapshot(team, event) {
         }));
     }
 
+    // Don't persist an empty snapshot. If the roster wasn't populated yet
+    // (e.g. game started before the team's players loaded, or before any were
+    // added), capturing {players: []} would freeze a misleading "nobody was on
+    // the roster" record and blank every snapshot-driven view. Returning null
+    // instead lets those views fall back to the live roster / who actually
+    // played. See teams/gameSummary.js and teams/rosterManagement.js.
+    if (!players || players.length === 0) {
+        return null;
+    }
+
     return {
         players: players,
         capturedAt: new Date().toISOString()
