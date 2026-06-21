@@ -26,6 +26,13 @@ cd ultistats_server && pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
+For **parallel sessions** that each need their own isolated server + data copy
+(concurrent server-side work without collisions; schema experiments never touch
+prod), use `./scripts/dev-backend.sh` — auto-picks a free port from 8000, copies
+the main worktree's `data/` into a gitignored per-instance `.dev-data/<label>/`,
+runs with auth disabled. Pair a frontend via `?api=http://localhost:<port>`. See
+ARCHITECTURE.md § Local development backends.
+
 ### Local dev server
 ```bash
 ./scripts/dev-server.sh        # serves frontend on http://localhost:3000
