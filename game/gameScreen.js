@@ -2600,9 +2600,18 @@ function handlePanelStatsToggle() {
     // first synchronous render below runs with cachedEventStats still null
     // (cells fall back to live game values) and is corrected when the load
     // resolves. Leaving event mode clears the cache.
+    //
+    // Aggregate over the OTHER event games and exclude the current game: the
+    // renderers add the live per-player game time/points on top, and the
+    // current game's completed points are also synced to the cloud during play
+    // — so including it here would double-count them. Excluding it makes every
+    // point count exactly once (other games from the cloud, this game live),
+    // independent of when the coach toggled into event mode.
     if (panelStatsMode === 'event' && currentEvent && typeof getEventPlayerStats === 'function') {
         cachedEventStats = null;
-        getEventPlayerStats(currentEvent)
+        const otherGameIds = (currentEvent.gameIds || []).filter(id => id !== game.id);
+        const otherGamesEvent = { ...currentEvent, gameIds: otherGameIds };
+        getEventPlayerStats(otherGamesEvent)
             .then(stats => { cachedEventStats = stats || {}; updateSelectLineTable(); })
             .catch(() => { cachedEventStats = {}; });
     } else {
