@@ -1290,13 +1290,14 @@ async function showConnectionInfo() {
  * Show confirmation dialog and force app update
  */
 function confirmAppUpdate() {
-    if (confirm('Update the app now? The page will reload.')) {
-        if (typeof forceAppUpdate === 'function') {
-            forceAppUpdate();
-        } else {
-            // Fallback: just reload with cache clear
-            window.location.reload(true);
-        }
+    // No confirmation prompt: the "Update Now" button already takes several
+    // steps to reach, and the worst case if hit by accident is just re-joining
+    // the game from the Teams screen.
+    if (typeof forceAppUpdate === 'function') {
+        forceAppUpdate();
+    } else {
+        // Fallback: just reload with cache clear
+        window.location.reload(true);
     }
 }
 
