@@ -1,0 +1,54 @@
+/*
+ * New-user hints — lightweight, dismissable nudges shown as info toasts.
+ *
+ * Each hint has a stable id and fires at most once per calendar day for that
+ * id. The "Hide all hints" advanced setting (hints.hideAll) suppresses every
+ * hint outright. Add new hints by calling window.hints.maybeShow('<id>', '<msg>')
+ * from wherever the teachable moment occurs — no per-hint plumbing needed.
+ *
+ * Depends (at call time, not load time) on showControllerToast (controllerState.js)
+ * and window.advancedSettings (advancedSettings.js).
+ */
+(function() {
+    const STAMP_PREFIX = 'breakside_hint_';
+
+    function todayStr() {
+        // Local calendar day — YYYY-MM-DD.
+        const d = new Date();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${d.getFullYear()}-${mm}-${dd}`;
+    }
+
+    function hintsHidden() {
+        return !!(window.advancedSettings &&
+                  typeof window.advancedSettings.get === 'function' &&
+                  window.advancedSettings.get('hints.hideAll'));
+    }
+
+    /**
+     * Show `message` as an info toast at most once per calendar day for `id`,
+     * unless hints are globally hidden. Returns true if a toast was shown.
+     *
+     * @param {string} id       Stable hint identifier (used for the daily stamp).
+     * @param {string} message  Toast text.
+     * @param {object} [opts]    { type='info', duration=5000 }
+     */
+    function maybeShow(id, message, opts) {
+        opts = opts || {};
+        if (hintsHidden()) return false;
+
+        const key = STAMP_PREFIX + id;
+        let last = null;
+        try { last = localStorage.getItem(key); } catch (_) { /* ignore */ }
+        if (last === todayStr()) return false;
+
+        if (typeof showControllerToast !== 'function') return false;
+        showControllerToast(message, opts.type || 'info', opts.duration || 5000);
+
+        try { localStorage.setItem(key, todayStr()); } catch (_) { /* ignore */ }
+        return true;
+    }
+
+    window.hints = { maybeShow };
+})();

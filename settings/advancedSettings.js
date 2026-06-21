@@ -58,7 +58,9 @@
         // --- Field ---
         'field.endzoneYards': 20,                         // endzone depth drawn on the Field tab (20 = USAU, 25 = some leagues)
         'field.flipHA': false,                            // swap which sideline is Home (Field tab display)
-        'field.flipAD': false                             // base attack direction (auto-alternates each point on top of this)
+        'field.flipAD': false,                            // base attack direction (auto-alternates each point on top of this)
+        // --- Hints ---
+        'hints.hideAll': false                            // suppress all new-user hint toasts (see ui/hints.js)
     };
 
     // Back-compat: console globals we advertised before this UI existed.
@@ -265,6 +267,16 @@
                         ['20', '20 yards (USAU)'],
                         ['25', '25 yards']
                     ]
+                }
+            ]
+        },
+        {
+            group: 'Hints',
+            fields: [
+                {
+                    key: 'hints.hideAll', label: 'Hide all hints',
+                    help: 'Suppress the occasional pop-up tips for new users (e.g. “rotate your phone for a full-screen Field view”).',
+                    type: 'toggle'
                 }
             ]
         }
