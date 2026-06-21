@@ -176,6 +176,36 @@ def cmd_events(args):
 # group
 # ---------------------------------------------------------------------------
 
+def _default_roster_ids(team: dict, game_ids: list) -> list:
+    """Player ids to seed a new event's roster.
+
+    The app's in-game player picker (getActiveRoster) returns *empty* when an
+    event's roster.playerIds is empty — which blanks the Lines table for any
+    game in the event. The event-roster screen, by contrast, defaults an empty
+    roster to "all team players". We mirror that default here so a tool-created
+    event behaves like one created in the app.
+
+    Prefer the team's playerIds; if the team has none (legacy team carrying
+    only an embedded roster), fall back to everyone who appears in the linked
+    games' roster snapshots.
+    """
+    ids = list(team.get("playerIds") or [])
+    if ids:
+        return ids
+    seen, order = set(), []
+    for gid in game_ids:
+        try:
+            cur = game_storage.get_game_current(gid)
+        except FileNotFoundError:
+            continue
+        for p in (cur.get("rosterSnapshot") or {}).get("players", []):
+            pid = p.get("id")
+            if pid and pid not in seen:
+                seen.add(pid)
+                order.append(pid)
+    return order
+
+
 def _resolve_target_event(team_id: str, event_name: str, event_id: str):
     """Return (event_dict_or_None, will_create_bool).
 
@@ -242,8 +272,10 @@ def cmd_group(args):
 
     # Print the plan.
     print(f"Team:  {team.get('name')}  ({team_id})")
+    roster_ids = _default_roster_ids(team, args.games) if will_create else None
     if will_create:
-        print(f"Event: '{args.event}'  (WILL BE CREATED)")
+        print(f"Event: '{args.event}'  (WILL BE CREATED, "
+              f"roster seeded with {len(roster_ids)} player(s))")
     else:
         print(f"Event: '{event.get('name')}'  ({event['id']})  (existing)")
     if args.phase:
@@ -267,6 +299,9 @@ def cmd_group(args):
             "teamId": team_id,
             "status": "open",
             "phases": [args.phase] if args.phase else [],
+            # Seed the roster so the in-game Lines table isn't blanked for
+            # games in this event (see _default_roster_ids).
+            "roster": {"playerIds": roster_ids, "pickupPlayers": []},
         }
         target_event_id = event_storage.save_event(new_event)
         print(f"\nCreated event: {target_event_id}")
