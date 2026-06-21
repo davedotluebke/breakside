@@ -1634,8 +1634,9 @@ body.game-screen-active header {
 }
 
 /* One-shot line action buttons: Wholesale (clear) and Auto (fill). Icon +
-   label by default; the label collapses to icon-only on narrow viewports
-   (see the media query below) so the toolbar never overflows. */
+   label always on by default (including phones). When the toolbar runs out of
+   width, adjustLineToolbarCollapse() drops the labels one at a time — see the
+   .toolbar-collapse-* rules below. */
 .select-line-action-btn {
     display: inline-flex;
     align-items: center;
@@ -1682,15 +1683,32 @@ body.game-screen-active header {
     gap: 6px;
 }
 
-/* Collapse action buttons to icon-only when horizontal space is tight,
-   rather than letting the toolbar overflow. */
-@media (max-width: 480px) {
-    .select-line-action-label {
-        display: none;
-    }
-    .select-line-action-btn {
-        padding: 3px 6px;
-    }
+/* Leftmost Wholesale button: trim its left padding so the blank-checkbox icon
+   lines up over the player-checkbox column in the table below. Kept small in
+   every state (incl. collapsed) so the icon stays aligned. */
+.select-line-toolbar .select-line-action-btn--wholesale {
+    padding-left: 1px;
+}
+
+/* Progressive collapse. The toolbar never wraps/overflows: when it's too
+   narrow, adjustLineToolbarCollapse() adds toolbar-collapse-1 (drop the
+   Wholesale label — its checkbox icon is self-explanatory) and, if still
+   tight, toolbar-collapse-2 (also drop the Auto label). */
+.select-line-toolbar.toolbar-collapse-1 .select-line-action-btn--wholesale .select-line-action-label,
+.select-line-toolbar.toolbar-collapse-2 .select-line-action-btn--wholesale .select-line-action-label,
+.select-line-toolbar.toolbar-collapse-2 .select-line-action-btn--auto .select-line-action-label {
+    display: none;
+}
+
+/* Tidy up right padding for icon-only buttons (Wholesale keeps its aligned
+   left padding). */
+.select-line-toolbar.toolbar-collapse-1 .select-line-action-btn--auto,
+.select-line-toolbar.toolbar-collapse-2 .select-line-action-btn--auto {
+    padding-left: 6px;
+    padding-right: 6px;
+}
+.select-line-toolbar.toolbar-collapse-2 .select-line-action-btn--wholesale {
+    padding-right: 6px;
 }
 
 .select-line-stats-toggle {
