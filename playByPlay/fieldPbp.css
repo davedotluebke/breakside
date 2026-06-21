@@ -85,11 +85,6 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 }
 .fp-modepill.offense { background: var(--fp-blue); }
 .fp-modepill.defense { background: var(--fp-red); }
-.fp-iconbtn {
-    width: 34px; height: 34px;
-    border: 1px solid #ccc; border-radius: 7px;
-    background: #fff; color: #555; cursor: pointer; font-size: 14px;
-}
 .fp-undo {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 7px 13px;

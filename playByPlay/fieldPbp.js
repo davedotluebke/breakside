@@ -690,7 +690,6 @@
         content.innerHTML = `
             <div class="fp-actionrow">
                 ${leftSlot}
-                <button class="fp-iconbtn" id="fpExpandBtn" title="${S.o === 'portrait' ? 'Wide field' : 'Tall field'}"><i class="fas fa-${S.o === 'portrait' ? 'expand' : 'compress'}"></i></button>
                 <span class="fp-actionrow-spacer"></span>
                 <button class="fp-undo" id="fpUndoBtn" title="Undo last event"><i class="fas fa-undo"></i><span>Undo</span></button>
             </div>
@@ -1404,15 +1403,28 @@
         document.body.classList.toggle('fp-landscape-takeover', S.o === 'landscape');
     }
 
-    /** Expand-button toggle: portrait ⇄ landscape (CSS overlay, no real FS). */
-    function toggleOrientation() {
-        S.o = (S.o === 'portrait') ? 'landscape' : 'portrait';
-        render();
+    // Orientation is driven entirely by physical device rotation — there's no
+    // manual portrait/landscape button. The Fullscreen and Screen Orientation
+    // Lock APIs can't force rotation on iOS Safari / standalone PWA (lock()
+    // is unsupported, and even on Android it requires fullscreen, which iOS
+    // also lacks). So instead we hint the user, once, that rotating the phone
+    // gives the wide field view.
+    const ROTATE_HINT_KEY = 'fieldRotateHintShown';
+
+    /** Show a one-time "rotate for full-screen" hint when entering Field in portrait. */
+    function maybeShowRotateHint() {
+        if (S.o === 'landscape') return;                  // already wide — nothing to suggest
+        if (window.matchMedia('(orientation: landscape)').matches) return;
+        let shown = false;
+        try { shown = localStorage.getItem(ROTATE_HINT_KEY) === '1'; } catch (_) { /* ignore */ }
+        if (shown) return;
+        if (typeof showControllerToast !== 'function') return;
+        showControllerToast('Rotate your phone for a full-screen field view', 'info', 5000);
+        try { localStorage.setItem(ROTATE_HINT_KEY, '1'); } catch (_) { /* ignore */ }
     }
 
     /**
-     * Physical device rotation: force the layout to match. The user can still
-     * override via the expand button afterward, but the spec calls for
+     * Physical device rotation: force the layout to match. The spec calls for
      * rotation to drive orientation.
      */
     function onOrientationMQChange(e) {
@@ -1434,9 +1446,6 @@
     function wireDynamic() {
         const root = document.getElementById('panel-playByPlayField-content');
         if (!root) return;
-
-        const expandBtn = root.querySelector('#fpExpandBtn');
-        if (expandBtn) expandBtn.onclick = toggleOrientation;
 
         const undoBtn = root.querySelector('#fpUndoBtn');
         if (undoBtn) undoBtn.onclick = handleUndo;
@@ -1540,6 +1549,8 @@
         render,
         wireEvents,
         beginPull,
+        // Called by panelSystem when the Field tab becomes active.
+        onTabShown: maybeShowRotateHint,
         // orientation flips (hamburger menu hooks)
         swapHomeAway: () => toggleFlip('ha'),
         swapAttackDefend: () => toggleFlip('ad'),
