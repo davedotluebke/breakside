@@ -685,6 +685,7 @@
 
         content.dataset.o = S.o;
         content.dataset.mode = S.pulling ? 'pull' : mode;
+        applyTakeoverClass();
 
         content.innerHTML = `
             <div class="fp-actionrow">
@@ -1386,62 +1387,27 @@
     }
 
     // -----------------------------------------------------------------
-    // Orientation + fullscreen
+    // Orientation + landscape takeover
     // -----------------------------------------------------------------
+    //
+    // The browser/PWA Fullscreen API is unusable here: iOS Safari only honors
+    // requestFullscreen() on <video>, and in standalone-PWA mode it's a no-op
+    // on every element — and iOS PWA is a primary runtime (see ARCHITECTURE.md
+    // § Target Platform). So instead of true fullscreen, landscape mode is a
+    // CSS overlay: the panel is pinned `position: fixed; inset: 0` over the
+    // app chrome (orange/purple header + tabbar), respecting safe-area insets.
+    // Toggling is pure state — apply a `fp-landscape-takeover` class on <body>
+    // and let CSS do the rest. Works identically across all phone browsers.
 
-    /** True iff the field panel (or any element) is currently fullscreen. */
-    function isFullscreen() {
-        return !!(document.fullscreenElement || document.webkitFullscreenElement);
+    /** Reflect S.o onto <body> so the overlay CSS can pin the panel. */
+    function applyTakeoverClass() {
+        document.body.classList.toggle('fp-landscape-takeover', S.o === 'landscape');
     }
 
-    /** Request fullscreen on the field panel — vendor-prefixed for Safari/iOS. */
-    function enterFullscreen() {
-        const panel = document.getElementById('panel-playByPlayField');
-        if (!panel) return;
-        const req = panel.requestFullscreen || panel.webkitRequestFullscreen;
-        if (!req) return;  // unsupported (e.g. iOS Safari mobile) — degrade silently
-        try { req.call(panel); } catch (_) { /* user-gesture / security errors */ }
-    }
-
-    /** Exit fullscreen if currently in it — vendor-prefixed for Safari/iOS. */
-    function exitFullscreen() {
-        if (!isFullscreen()) return;
-        const exit = document.exitFullscreen || document.webkitExitFullscreen;
-        if (!exit) return;
-        try { exit.call(document); } catch (_) { /* ignore */ }
-    }
-
-    /**
-     * Expand-button toggle: portrait ⇄ landscape. Going to landscape requests
-     * fullscreen on the field panel so the surrounding header/tabbar disappear
-     * (per FIELD_MODE.md §UI: "landscape = full-screen takeover, minimal
-     * header"). Going to portrait exits fullscreen. The fullscreenchange
-     * listener (set up in init) handles Esc-to-exit, keeping S.o in sync.
-     */
+    /** Expand-button toggle: portrait ⇄ landscape (CSS overlay, no real FS). */
     function toggleOrientation() {
-        if (S.o === 'portrait') {
-            S.o = 'landscape';
-            enterFullscreen();
-            render();
-        } else {
-            S.o = 'portrait';
-            exitFullscreen();
-            render();
-        }
-    }
-
-    /**
-     * Sync S.o to physical fullscreen state when the user exits via Esc or
-     * the browser's exit gesture (we keep .panel-title-bar hidden in
-     * fullscreen, so entering goes through toggleOrientation, but exit can
-     * come from outside).
-     */
-    function onFullscreenChange() {
-        const wantLandscape = isFullscreen();
-        if (wantLandscape !== (S.o === 'landscape')) {
-            S.o = wantLandscape ? 'landscape' : 'portrait';
-            render();
-        }
+        S.o = (S.o === 'portrait') ? 'landscape' : 'portrait';
+        render();
     }
 
     /**
@@ -1458,7 +1424,6 @@
             render();
         } else if (!isLandscape && S.o === 'landscape') {
             S.o = 'portrait';
-            exitFullscreen();
             render();
         }
     }
@@ -1551,10 +1516,6 @@
             resizePending = setTimeout(() => { resizePending = 0; fitPlayers(); }, 0);
         }
         window.addEventListener('resize', scheduleFit);
-
-        // Sync S.o when fullscreen is exited via Esc / browser gesture.
-        document.addEventListener('fullscreenchange', onFullscreenChange);
-        document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 
         // Physical device rotation forces the matching orientation.
         const orientMQ = window.matchMedia('(orientation: landscape)');
