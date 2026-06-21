@@ -1825,12 +1825,19 @@ td.player-mmp,
     }
 }
 
+/* The Unknown button carries three labels (full / "Unknown" / "?"); show only
+   the full one by default. fitScoreButtons() swaps them in the wide layout via
+   the .sa-* container classes. (Base rule — applies in every orientation.) */
+#scoreAttributionDialog .player-button .upl-mid,
+#scoreAttributionDialog .player-button .upl-min { display: none; }
+
 /* Wide / landscape layout. In landscape (the Field-tab takeover, but any
-   landscape opening qualifies) the dialog goes wide and reflows: the two
-   player COLUMNS become horizontal ROWS (header label on the left, player
-   buttons flowing across), and the action buttons collapse onto a single
-   row. Callahan is hidden when inapplicable (offense possession) to reclaim
-   that room — see scoreAttribution.js (.callahan-inapplicable). */
+   landscape opening qualifies) the dialog goes wide and reflows: each player
+   COLUMN becomes a horizontal ROW with its "Assist:" / "Goal:" title ABOVE it,
+   and the action buttons collapse onto a single row. The player rows never
+   wrap — fitScoreButtons() collapses the Unknown label and tightens buttons,
+   then the row scrolls horizontally as a last resort. Callahan is hidden when
+   inapplicable (offense possession) to reclaim room. */
 @media (orientation: landscape) {
     #scoreAttributionDialog .modal-content {
         width: 94vw;
@@ -1838,36 +1845,51 @@ td.player-mmp,
         margin: 2vh auto;
         max-height: 96vh;
     }
-    /* Stack the two role groups as rows instead of side-by-side columns. */
+    /* Stack the two role groups vertically; each group is title-above-row. */
     #scoreAttributionDialog .score-attribution-container {
         flex-direction: column;
-        gap: 0.4rem;
-    }
-    /* Each role group: header label at left, buttons flowing across at right. */
-    #scoreAttributionDialog .score-column {
-        flex-direction: row;
-        align-items: center;
-        width: 100%;
         gap: 0.5rem;
     }
+    #scoreAttributionDialog .score-column {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+        gap: 0.2rem;
+    }
+    /* Title above its row, left-aligned, with a trailing colon ("Assist:"). */
     #scoreAttributionDialog .score-column-header {
-        flex: 0 0 4.5rem;
         text-align: left;
         margin: 0;
         font-size: 0.95rem;
     }
+    #scoreAttributionDialog .score-column-header .hdr-main::after {
+        content: ":";
+    }
+    /* Single non-wrapping row; scrolls horizontally only after fit stages. */
     #scoreAttributionDialog .player-buttons {
         flex-direction: row;
-        flex-wrap: wrap;
-        flex: 1 1 auto;
+        flex-wrap: nowrap;
         gap: 0.3rem;
-        min-width: 0;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
+    /* Buttons grow to fill a roomy row, but never shrink below content (so the
+       row overflows — and fitScoreButtons measures that — rather than truncating). */
     #scoreAttributionDialog .player-button {
-        flex: 1 1 auto;
+        flex: 1 0 auto;
         width: auto;
-        min-width: 4.5rem;
         margin: 0;
+        white-space: nowrap;
+    }
+    /* Collapse stages (cumulative; later rules win for the Unknown label). */
+    #scoreAttributionDialog .sa-shrink-unknown .player-button .upl-full { display: none; }
+    #scoreAttributionDialog .sa-shrink-unknown .player-button .upl-mid  { display: inline; }
+    #scoreAttributionDialog .sa-min-unknown .player-button .upl-full,
+    #scoreAttributionDialog .sa-min-unknown .player-button .upl-mid  { display: none; }
+    #scoreAttributionDialog .sa-min-unknown .player-button .upl-min  { display: inline; }
+    #scoreAttributionDialog .sa-tight .player-button {
+        padding: 0.3rem 0.45rem;
+        font-size: 0.8rem;
     }
     /* Tighten the modifier strip + drop the separator to save vertical room. */
     #scoreAttributionDialog .throw-flags-container {
