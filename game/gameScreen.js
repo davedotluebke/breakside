@@ -1184,7 +1184,13 @@ function wireGameScreenEvents() {
     if (settingsBtn) {
         settingsBtn.addEventListener('click', () => {
             closeGameMenu();
-            showGameSettingsDialog();
+            // Open the real per-device settings (Audio Narration, Sync, Field,
+            // Hints). Same dialog the app-level hamburger's "Advanced Settings"
+            // opens — the in-game menu previously showed a stale panel-drag
+            // toggle instead.
+            if (window.advancedSettings && typeof window.advancedSettings.showAdvancedSettings === 'function') {
+                window.advancedSettings.showAdvancedSettings();
+            }
         });
     }
 
@@ -1604,57 +1610,6 @@ function handleMenuAbout() {
 /**
  * Show the in-game settings dialog
  */
-function showGameSettingsDialog() {
-    // Remove existing dialog if any
-    const existing = document.getElementById('gameSettingsDialog');
-    if (existing) existing.remove();
-
-    const physicalDrag = typeof getFullyPhysicalPanelDragging === 'function'
-        ? getFullyPhysicalPanelDragging()
-        : false;
-
-    const dialog = document.createElement('div');
-    dialog.id = 'gameSettingsDialog';
-    dialog.className = 'game-settings-overlay';
-    dialog.innerHTML = `
-        <div class="game-settings-modal">
-            <div class="game-settings-header">
-                <h3>Settings</h3>
-                <button class="game-settings-close" id="settingsCloseBtn">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="game-settings-body">
-                <label class="game-settings-toggle">
-                    <span class="settings-label">Physical panel dragging</span>
-                    <span class="settings-description">Pushed panels stay where pushed, even when you reverse the drag</span>
-                    <input type="checkbox" id="settingPhysicalDrag" ${physicalDrag ? 'checked' : ''}>
-                    <span class="settings-switch"></span>
-                </label>
-            </div>
-        </div>
-    `;
-
-    document.body.appendChild(dialog);
-
-    // Close button
-    document.getElementById('settingsCloseBtn').addEventListener('click', () => {
-        dialog.remove();
-    });
-
-    // Click overlay to close
-    dialog.addEventListener('click', (e) => {
-        if (e.target === dialog) dialog.remove();
-    });
-
-    // Toggle handler
-    document.getElementById('settingPhysicalDrag').addEventListener('change', (e) => {
-        if (typeof setFullyPhysicalPanelDragging === 'function') {
-            setFullyPhysicalPanelDragging(e.target.checked);
-        }
-    });
-}
-
 /**
  * Handle timer toggle click (tapping on timer value)
  */
