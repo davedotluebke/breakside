@@ -2,6 +2,25 @@
 
 This document describes the technical architecture of the Breakside ultimate frisbee statistics tracker.
 
+## Target Platform
+
+**Phone-first.** Layout, gesture surfaces, and UI density are designed for a
+phone in the coach's hand on the sideline. Tablet may be optimized for later.
+Desktop is not an important target — desktop-specific affordances (hover
+states, keyboard shortcuts beyond basics, multi-column layouts) are
+nice-to-have at best, and should not constrain phone UX decisions.
+
+Practical implications:
+
+- iOS PWA is a primary runtime. Capabilities that don't work there (e.g.
+  Fullscreen API on non-`<video>` elements) need CSS-based workarounds, not
+  feature detection that silently degrades.
+- "Looks fine on desktop" is not a sign-off; test on phone-sized viewports
+  (iPhone 15 Pro 393×852 / 15 Pro Max 430×932) before declaring a UI change
+  done.
+- Touch ergonomics (tap targets ≥ ~36px, drag affordances, no hover-only UI)
+  take precedence over visual density.
+
 ## System Overview
 
 Breakside uses a hybrid architecture with a Progressive Web App (PWA) frontend hosted on CloudFront/S3 and a FastAPI backend on EC2.
