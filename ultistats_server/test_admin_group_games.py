@@ -28,10 +28,10 @@ def run(data_dir: Path, *cli_args):
     )
 
 
-def make_team(data_dir: Path, team_id: str, name: str):
+def make_team(data_dir: Path, team_id: str, name: str, player_ids=None):
     (data_dir / "teams").mkdir(parents=True, exist_ok=True)
     (data_dir / "teams" / f"{team_id}.json").write_text(json.dumps({
-        "id": team_id, "name": name, "playerIds": [],
+        "id": team_id, "name": name, "playerIds": player_ids or [],
     }))
 
 
@@ -64,8 +64,9 @@ def only_event(data_dir: Path):
 def data(tmp_path):
     d = tmp_path / "data"
     d.mkdir()
-    make_team(d, "Flickers-abcd", "Flickers")
-    make_team(d, "Offline-Test-9999", "Offline Test")
+    make_team(d, "Flickers-abcd", "Flickers",
+              player_ids=["Alice-1111", "Bob-2222"])
+    make_team(d, "Offline-Test-9999", "Offline Test")  # no team playerIds
     make_game(d, "g1", "Flickers-abcd", "Sharks", "2026-06-19T18:00:00.000Z")
     make_game(d, "g2", "Flickers-abcd", "Bears", "2026-06-19T20:00:00.000Z")
     make_game(d, "other", "Offline-Test-9999", "Nobody", "2026-06-19T12:00:00.000Z")
@@ -104,12 +105,24 @@ def test_group_creates_event_and_links(data):
     assert ev["teamId"] == "Flickers-abcd"
     assert set(ev["gameIds"]) == {"g1", "g2"}
     assert ev["phases"] == ["Pool Play"]
+    # Roster seeded from team.playerIds so the in-game Lines table renders.
+    assert ev["roster"]["playerIds"] == ["Alice-1111", "Bob-2222"]
     assert read_game_event(data, "g1") == ev["id"]
     assert read_game_event(data, "g2") == ev["id"]
 
     # Index reflects the team's games.
     idx = json.loads((data / "index.json").read_text())
     assert set(idx["teamGames"]["Flickers-abcd"]) == {"g1", "g2"}
+
+
+def test_roster_falls_back_to_game_snapshot(data):
+    # Offline Test has no team.playerIds; roster should come from the linked
+    # game's rosterSnapshot players (Alice-1111, Bob-2222).
+    r = run(data, "group", "--team", "Offline Test", "--event", "OT Combo",
+            "--games", "other", "--yes")
+    assert r.returncode == 0, r.stderr
+    ev = only_event(data)
+    assert set(ev["roster"]["playerIds"]) == {"Alice-1111", "Bob-2222"}
 
 
 def test_group_is_idempotent(data):
