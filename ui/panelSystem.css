@@ -1633,20 +1633,64 @@ body.game-screen-active header {
     flex: 1; /* pushes everything right, reserves left space */
 }
 
-.select-line-mode-toggle {
+/* One-shot line action buttons: Wholesale (clear) and Auto (fill). Icon +
+   label by default; the label collapses to icon-only on narrow viewports
+   (see the media query below) so the toolbar never overflows. */
+.select-line-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
     font-size: 0.8rem;
-    color: #007bff;
+    font-weight: 500;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    color: #495057;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
     cursor: pointer;
-    user-select: none;
+    margin: 0;
+    white-space: nowrap;
+    transition: all 0.15s;
 }
 
-.select-line-mode-toggle:hover {
-    text-decoration: underline;
+.select-line-action-btn:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
 }
 
-.panel-selectLine.readonly .select-line-mode-toggle {
+.select-line-action-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    display: block;
+}
+
+/* AI-sparkle accent for the Auto action so it reads as the "smart" fill */
+#panelAutoBtn .select-line-action-icon,
+#subAutoBtn .select-line-action-icon {
+    color: #7c3aed;
+}
+
+.panel-selectLine.readonly .select-line-action-btn {
     pointer-events: none;
     opacity: 0.5;
+}
+
+/* Substitute modal action button group */
+.sub-players-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Collapse action buttons to icon-only when horizontal space is tight,
+   rather than letting the toolbar overflow. */
+@media (max-width: 480px) {
+    .select-line-action-label {
+        display: none;
+    }
+    .select-line-action-btn {
+        padding: 3px 6px;
+    }
 }
 
 .select-line-stats-toggle {
