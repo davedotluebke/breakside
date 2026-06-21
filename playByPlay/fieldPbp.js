@@ -1420,10 +1420,14 @@
         }
     }
 
-    /** True when the Field panel is the visible tab (not hidden by the tab system). */
+    /** True when the Field panel is the visible tab (not hidden by the tab system).
+        Note: can't use offsetParent — it's null for the position:fixed landscape
+        takeover panel even when fully visible. Use the hidden class + a non-zero box. */
     function fieldPanelVisible() {
         const panel = document.getElementById('panel-playByPlayField');
-        return !!(panel && !panel.classList.contains('hidden') && panel.offsetParent !== null);
+        if (!panel || panel.classList.contains('hidden')) return false;
+        const r = panel.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
     }
 
     /** Hint that field labels are long-pressable to flip sides, on first rotate to landscape. */
