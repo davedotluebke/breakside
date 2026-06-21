@@ -24,11 +24,11 @@ let gameScreenInitialized = false;
 // Two one-shot action buttons augment that — Wholesale (clear all) and Auto
 // (fill empty slots up to the field count). There is no persistent "mode".
 
-// Blank-checkbox icon for Wholesale (clear the line) and an AI-sparkle icon
-// for Auto (fill the line). Inline SVG so they inherit currentColor and need
-// no extra asset load. See .select-line-action-btn in panelSystem.css.
+// Blank-checkbox icon for Wholesale (clear the line) and a lightning-bolt icon
+// for Auto (one-tap fill). Inline SVG so they inherit currentColor and need no
+// extra asset load. See .select-line-action-btn in panelSystem.css.
 const WHOLESALE_ICON_SVG = '<svg class="select-line-action-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
-const AUTO_ICON_SVG = '<svg class="select-line-action-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 1.5 7.7 6.3 12.5 7.5 7.7 8.7 6.5 13.5 5.3 8.7 0.5 7.5 5.3 6.3 Z" fill="currentColor"/><path d="M12.2 9.3 12.75 11.25 14.7 11.8 12.75 12.35 12.2 14.3 11.65 12.35 9.7 11.8 11.65 11.25 Z" fill="currentColor"/></svg>';
+const AUTO_ICON_SVG = '<svg class="select-line-action-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.2 1.5 L4 9 H7 L6.4 14.5 L12 6.8 H8.7 Z" fill="currentColor"/></svg>';
 
 // =============================================================================
 // Header Panel Content

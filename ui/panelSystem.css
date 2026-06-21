@@ -1665,7 +1665,7 @@ body.game-screen-active header {
     display: block;
 }
 
-/* AI-sparkle accent for the Auto action so it reads as the "smart" fill */
+/* Accent the Auto bolt so it stands out from the neutral Wholesale icon */
 #panelAutoBtn .select-line-action-icon,
 #subAutoBtn .select-line-action-icon {
     color: #7c3aed;
