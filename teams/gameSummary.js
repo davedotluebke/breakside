@@ -83,12 +83,25 @@ function renderGameSummaryStatsTable(game) {
         ? getGamePlayerStats(game) : {};
     const hasStats = Object.keys(playerStats).length > 0;
 
-    // Determine players to display: rosterSnapshot for historical accuracy
+    // Determine players to display: rosterSnapshot for historical accuracy.
+    // Some games saved an *empty* rosterSnapshot.players (the snapshot object
+    // exists but captured nobody); guard on length so we don't render a blank
+    // table when getGamePlayerStats actually has data. When the snapshot is
+    // empty, show the live team roster (so bench players still appear as
+    // zeros) unioned with anyone who actually has stats — so whoever played
+    // is always listed even if currentTeam isn't this game's team.
     let players = [];
-    if (game.rosterSnapshot && game.rosterSnapshot.players) {
+    if (game.rosterSnapshot && game.rosterSnapshot.players
+            && game.rosterSnapshot.players.length > 0) {
         players = game.rosterSnapshot.players;
-    } else if (typeof currentTeam !== 'undefined' && currentTeam) {
-        players = currentTeam.teamRoster || [];
+    } else {
+        const base = (typeof currentTeam !== 'undefined' && currentTeam
+            && currentTeam.teamRoster) ? currentTeam.teamRoster : [];
+        const haveNames = new Set(base.map(p => p.name));
+        const fromStats = Object.keys(playerStats)
+            .filter(name => !haveNames.has(name))
+            .map(name => ({ name }));
+        players = [...base, ...fromStats];
     }
 
     // Header row
