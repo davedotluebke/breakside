@@ -43,12 +43,13 @@
         <div class="hero-content">
             <div class="hero-text">
                 <h1 class="hero-title">
-                    Track Every Play.<br>
-                    <span class="hero-highlight">Win Every Game.</span>
+                    Track every play.<br>
+                    <span class="hero-highlight">As deep as you want.</span>
                 </h1>
                 <p class="hero-subtitle">
-                    Real-time play-by-play statistics for ultimate frisbee. 
-                    Track goals, assists, turnovers, and playing time—all from your phone.
+                    Real-time ultimate frisbee stats for youth, college, and club.
+                    Keep it simple with score buttons, or record every throw, catch, drop,
+                    and D—then balance lines and playing time from the same screen.
                 </p>
                 <div class="hero-actions">
                     <button id="getStartedBtn" class="btn btn-primary btn-large">Get Started Free</button>
@@ -60,10 +61,13 @@
                 </p>
             </div>
             <div class="hero-visual">
-                <div class="phone-mockup">
-                    <div class="phone-screen">
-                        <img src="game-screenshot.png" alt="Breakside app showing a game in progress with score, player stats, and play-by-play controls" class="mockup-screenshot">
+                <div class="hero-carousel" id="heroCarousel" aria-roledescription="carousel" aria-label="Breakside feature tour">
+                    <div class="carousel-stage" id="carouselStage"><!-- slides injected by hero-carousel.js --></div>
+                    <div class="carousel-caption">
+                        <h3 class="carousel-title"></h3>
+                        <p class="carousel-tag"></p>
                     </div>
+                    <div class="carousel-pills" id="carouselPills" role="tablist" aria-label="Choose a feature"></div>
                 </div>
             </div>
         </div>
@@ -75,34 +79,54 @@
             <h2 class="section-title">Everything You Need on the Sideline</h2>
             <div class="features-grid">
                 <div class="feature-card">
+                    <div class="feature-icon">🥏</div>
+                    <h3>Field Mode</h3>
+                    <p>Tap a drawn field to place every throw, catch, drop, and D exactly where it happened. Rotate to landscape for a full-screen field.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Pick Your Detail</h3>
+                    <p>Simple score buttons, full every-completion play-by-play, or spatial field entry—switch modes mid-game without losing a beat.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎙️</div>
+                    <h3>AI Speech Narration <span class="card-badge">Beta</span></h3>
+                    <p>Describe plays out loud and Breakside turns your words into structured events. Opt-in per session.</p>
+                </div>
+                <div class="feature-card">
                     <div class="feature-icon">📊</div>
                     <h3>Real-Time Stats</h3>
-                    <p>Track goals, assists, turnovers, Ds, and playing time as the game unfolds.</p>
+                    <p>Goals, assists, completion %, breaks, holds, Ds, and exact playing time—per game or across the whole season.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon">👥</div>
-                    <h3>Team Management</h3>
-                    <p>Manage multiple teams, rosters, and saved lines for quick substitutions.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">📱</div>
-                    <h3>Works Offline</h3>
-                    <p>Full functionality without internet. Syncs automatically when connected.</p>
+                    <div class="feature-icon">🔀</div>
+                    <h3>Smart Line Management</h3>
+                    <p>Set the next line—and the one after—with O/D lines and On Deck. Live playing-time and gender-ratio cues help you balance points.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">🔄</div>
                     <h3>Multi-Coach Sync</h3>
-                    <p>Multiple coaches can collaborate—one tracks plays, another manages lines.</p>
+                    <p>Coaches collaborate in real time—one tracks plays, another sets lines—with role handoffs and a Lineup Ready ping.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🏆</div>
+                    <h3>Tournaments & Events</h3>
+                    <p>Group games into an event with a shared roster, tag them by phase (Day 1, Pool, Bracket…), and view aggregate stats.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">📺</div>
                     <h3>Live Viewer</h3>
-                    <p>Share a link so parents and fans can follow the game in real-time.</p>
+                    <p>Share a link so parents and fans can follow the score and play-by-play in real time.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h3>Offline-First PWA</h3>
+                    <p>Full functionality on the sideline with no signal. Installs like a native app and syncs automatically when connected.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">📈</div>
-                    <h3>Season Analytics</h3>
-                    <p>Track player performance and team stats across the entire season.</p>
+                    <h3>Export Your Data</h3>
+                    <p>Multi-sheet Excel (.xlsx) workbooks and JSON export for stats, event rosters, and team rosters—your data is yours.</p>
                 </div>
             </div>
         </div>
@@ -133,6 +157,16 @@
                         <li>Tap the <strong>three-dot menu</strong> (⋮)</li>
                         <li>Tap <strong>"Add to Home screen"</strong></li>
                         <li>Tap <strong>"Install"</strong> to add</li>
+                    </ol>
+                </div>
+                <div class="install-card">
+                    <div class="install-icon">💻</div>
+                    <h3>Desktop</h3>
+                    <ol class="install-steps">
+                        <li>Open <strong>Chrome or Edge</strong> and go to <strong>breakside.pro</strong></li>
+                        <li>Click the <strong>install icon</strong> in the address bar</li>
+                        <li>Click <strong>"Install"</strong> when prompted</li>
+                        <li>On Safari, use <strong>File → Add to Dock</strong></li>
                     </ol>
                 </div>
             </div>
@@ -245,11 +279,12 @@
                 <a href="https://github.com/davedotluebke/ultistats" target="_blank">GitHub</a>
                 <a href="https://github.com/davedotluebke/ultistats/issues/new?labels=beta_feedback" target="_blank">Feedback</a>
             </div>
-            <p class="footer-copy">&copy; 2024 Breakside. Open source under MIT License.</p>
+            <p class="footer-copy">&copy; 2024–2026 Breakside. Open source under MIT License.</p>
         </div>
     </footer>
 
     <script src="landing.js"></script>
+    <script src="hero-carousel.js"></script>
 </body>
 </html>
 
