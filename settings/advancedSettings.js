@@ -275,7 +275,7 @@
             fields: [
                 {
                     key: 'hints.hideAll', label: 'Hide all hints',
-                    help: 'Suppress the occasional pop-up tips for new users (e.g. “rotate your phone for a full-screen Field view”).',
+                    help: 'Suppress the occasional pop-up tips for new users (e.g. “rotate your phone for a full-screen Field view”). Toggle this setting on and off to reset all hints so they show again.',
                     type: 'toggle'
                 }
             ]
@@ -399,6 +399,13 @@
                     set(key, el.checked);
                 } else {
                     set(key, el.value);
+                }
+                // Flipping "Hide all hints" (either direction) clears the
+                // per-hint "shown today" stamps, so toggling it off and on
+                // again resets all hints — a way for users to bring them back
+                // and for us to re-test new ones. See ui/hints.js.
+                if (key === 'hints.hideAll' && window.hints && typeof window.hints.resetAll === 'function') {
+                    window.hints.resetAll();
                 }
                 // A toggle flip may unhide a gated row (e.g. flipping the
                 // vocabulary hint on reveals the prompt textarea).
