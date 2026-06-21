@@ -301,10 +301,12 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 /* Events bar buttons (pull hangtime + brick; offense/defense buttons later). */
 .fp-ebtn {
     /* basis = content so labels show in full; grow to share the row. nowrap
-       keeps them on one line; they size to their text and fit the row. */
+       keeps them on one line; they size to their text and fit the row.
+       Reduced vertical padding lets the font grow to 14px without the button
+       getting any taller (~35px) — keeping the field surface roomy. */
     flex: 1 1 auto; min-width: 0;
     border: 1px solid #c8c8c8; border-radius: 6px; background: #f7f7f7;
-    padding: 10px 7px; font-size: 12.5px; font-weight: 600; color: #333;
+    padding: 8px 7px; font-size: 14px; line-height: 1.2; font-weight: 600; color: #333;
     cursor: pointer; text-align: center; white-space: nowrap;
     -webkit-tap-highlight-color: transparent;
 }
@@ -321,10 +323,13 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 .fp-modbtn.on { background: var(--fp-blue); border-color: var(--fp-blue); color: #fff; }
 
 /* Defense: D-action buttons fill the player slot until one is chosen.
-   Plain/neutral styling — same look as the other buttons, no color coding. */
+   Plain/neutral styling — same look as the other buttons, no color coding.
+   Sized to match the player chips (~35px) that replace them once a defender
+   takes possession, and the bottom event buttons — so the row never towers
+   over the field. */
 .fp-dtypebtn {
     display: flex; align-items: center; justify-content: center; gap: 7px;
-    border-radius: 8px; padding: 13px 10px; font-size: 15px; font-weight: 700;
+    border-radius: 8px; padding: 8px 10px; font-size: 14px; font-weight: 700;
     cursor: pointer; border: 1px solid #cfcfcf; background: #f7f7f7; color: #333;
     -webkit-tap-highlight-color: transparent;
 }
