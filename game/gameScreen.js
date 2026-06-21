@@ -1866,9 +1866,11 @@ function handlePbpWeScore() {
     // Ensure the dialog is visible by moving it to body if needed
     ensureDialogVisible('scoreAttributionDialog');
     
-    // Use the existing score attribution dialog from scoreAttribution.js
+    // Use the existing score attribution dialog from scoreAttribution.js.
+    // Simple mode doesn't track O/D possession, so Callahan is a valid option
+    // here (unlike the offense-only Field / Full PBP score flows).
     if (typeof showScoreAttributionDialog === 'function') {
-        showScoreAttributionDialog();
+        showScoreAttributionDialog({ callahanApplicable: true });
     } else {
         console.warn('showScoreAttributionDialog not available');
     }
