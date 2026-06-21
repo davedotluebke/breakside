@@ -393,6 +393,10 @@ function createSelectLineContent() {
             <span class="select-line-gender-badge" id="panelGenderBadge" style="display: none;"></span>
             <button class="select-line-od-toggle" id="panelODToggle" title="Toggle O/D line mode">O/D</button>
         </div>
+        <!-- AC-only awareness label: rendered by updateLineCoachViewingLabel
+             when the LC is viewing/editing a different line type than the AC.
+             Hidden in solo / dual-role / matching-view cases. -->
+        <div class="select-line-lc-viewing" id="selectLineLcViewing" style="display: none;"></div>
         <div class="select-line-starting-ratio" id="panelStartingRatioSelection" style="display: none;">
             <label>Starting Ratio: </label>
             <input type="radio" id="panelStartingRatioFMP" name="panelStartingRatio" value="FMP">
@@ -448,588 +452,28 @@ function createSelectLinePanel() {
     return panel;
 }
 
-// =============================================================================
-// O/D Split Panels - Two stacked panels for O and D lines simultaneously
-// =============================================================================
-
 /**
- * Create the content for an O or D split panel
- * @param {'o'|'d'} lineType - Which line type this panel is for
- * @returns {HTMLElement}
+ * If the current user is the Line Coach, mirror their just-set activeType
+ * into the synced `lineCoachViewing` field (with timestamp) so the Active
+ * Coach's panel can render a "Line Coach: viewing the X line" sub-header.
+ *
+ * Gated on `isLineCoach()` so the AC's own local view never leaks into the
+ * synced field. No-op when the current user doesn't hold the LC role.
+ *
+ * Call this from every site that writes `pendingNextLine.activeType` as a
+ * direct result of a user view-toggle (currently just `handleODToggle`).
+ * Auto-sync writes from `autoSelectActiveTypeForNextPoint` are intentionally
+ * NOT instrumented — that function fires on both AC and LC devices and
+ * isn't an explicit LC viewing action.
  */
-function createSplitLineContent(lineType) {
-    const suffix = lineType === 'o' ? 'O' : 'D';
-    const content = document.createElement('div');
-    content.className = 'select-line-content';
-
-    content.innerHTML = `
-        <div class="select-line-toolbar">
-            <span class="select-line-toolbar-spacer"></span>
-            <span class="select-line-mode-toggle" id="split${suffix}SelectionModeToggle">Manual</span>
-            <button class="select-line-od-toggle" id="split${suffix}ODToggle" title="Switch back to combined O/D view">O|D</button>
-        </div>
-        <div class="select-line-table-container" id="panelTableContainer${suffix}">
-            <table class="panel-player-table" id="panelActivePlayersTable${suffix}">
-                <thead>
-                    <tr>
-                        <th></th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                </tbody>
-            </table>
-        </div>
-        <div class="select-line-readonly-overlay" id="panelReadonlyOverlay${suffix}" style="display: none;">
-            <span class="readonly-badge">View Only</span>
-        </div>
-    `;
-
-    return content;
-}
-
-/**
- * Create an O or D split panel
- * @param {'o'|'d'} lineType
- * @returns {HTMLElement}
- */
-function createSplitPanel(lineType) {
-    const panelId = lineType === 'o' ? 'selectOLine' : 'selectDLine';
-    const title = lineType === 'o' ? 'Next O Line' : 'Next D Line';
-
-    const panel = document.createElement('div');
-    panel.id = `panel-${panelId}`;
-    panel.className = `game-panel panel-${panelId}`;
-
-    const titleBar = createPanelTitleBar({
-        panelId: panelId,
-        title: title,
-        showDragHandle: true
-    });
-    panel.appendChild(titleBar);
-
-    const contentArea = document.createElement('div');
-    contentArea.className = 'panel-content';
-    contentArea.id = `panel-${panelId}-content`;
-    contentArea.appendChild(createSplitLineContent(lineType));
-    panel.appendChild(contentArea);
-
-    return panel;
-}
-
-/**
- * Check if we're currently in split mode
- * @returns {boolean}
- */
-function isSplitMode() {
-    const game = typeof currentGame === 'function' ? currentGame() : null;
-    return game?.pendingNextLine?.activeType === 'split';
-}
-
-/**
- * Enter split mode: hide the single selectLine panel, show O and D panels
- */
-function enterSplitMode() {
+function noteLineCoachViewing() {
+    if (typeof isLineCoach !== 'function' || !isLineCoach()) return;
     const game = typeof currentGame === 'function' ? currentGame() : null;
     if (!game || !game.pendingNextLine) return;
-
-    // Save current selections before switching
-    savePanelSelectionsToPendingNextLine(false);
-
-    // Measure selectLine height BEFORE hiding (hidden elements return 0)
-    const selectLinePanel = document.getElementById('panel-selectLine');
-    let selectLineHeight = 0;
-    if (selectLinePanel) {
-        selectLineHeight = selectLinePanel.getBoundingClientRect().height;
-        if (selectLineHeight === 0) selectLineHeight = 150; // fallback if already hidden
-        selectLinePanel.style.display = 'none';
-    }
-
-    // Get the panel stack
-    const stack = document.querySelector('.panel-stack');
-    if (!stack) return;
-
-    // Find the follow panel to insert before
-    const followPanel = document.getElementById('panel-follow');
-
-    // Create and insert O and D panels if they don't exist
-    let oPanel = document.getElementById('panel-selectOLine');
-    let dPanel = document.getElementById('panel-selectDLine');
-
-    if (!oPanel) {
-        oPanel = createSplitPanel('o');
-        stack.insertBefore(oPanel, followPanel);
-    } else {
-        oPanel.style.display = '';
-    }
-
-    if (!dPanel) {
-        dPanel = createSplitPanel('d');
-        stack.insertBefore(dPanel, followPanel);
-    } else {
-        dPanel.style.display = '';
-    }
-
-    // Wire up event handlers for the new panels
-    wireSplitPanelEvents();
-
-    // Set active type to split
-    game.pendingNextLine.activeType = 'split';
-
-    // Populate both tables
-    updateSplitPanelTable('o');
-    updateSplitPanelTable('d');
-
-    // Update panel states to show split panels, hide combined
-    if (typeof setPanelVisible === 'function') {
-        setPanelVisible('selectLine', false);
-        setPanelVisible('selectOLine', true);
-        setPanelVisible('selectDLine', true);
-    }
-
-    // Set reasonable initial heights for split panels using pre-measured height
-    if (typeof setPanelState === 'function') {
-        const splitHeight = Math.max(MIN_PANEL_HEIGHT + 20, Math.floor(selectLineHeight / 2));
-        setPanelState('selectOLine', { height: splitHeight });
-        setPanelState('selectDLine', { height: splitHeight });
-        // Ensure Follow absorbs remaining space
-        setPanelState('follow', { height: null });
-    }
-
-    // Add O|D toggle button to O Line title bar
-    const oTitleBar = oPanel.querySelector('.panel-title-bar');
-    if (oTitleBar) {
-        const actions = oTitleBar.querySelector('.panel-actions');
-        if (actions && !actions.querySelector('.od-split-toggle')) {
-            const toggleBtn = document.createElement('button');
-            toggleBtn.className = 'panel-action-btn od-split-toggle';
-            toggleBtn.textContent = 'O|D';
-            toggleBtn.title = 'Exit split mode';
-            toggleBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                handleODToggle();
-            });
-            actions.appendChild(toggleBtn);
-        }
-    }
-
-    // Save state
-    if (typeof saveAllTeamsData === 'function') {
-        saveAllTeamsData();
-    }
+    game.pendingNextLine.lineCoachViewing = game.pendingNextLine.activeType || 'od';
+    game.pendingNextLine.lineCoachViewingAt = new Date().toISOString();
 }
 
-/**
- * Exit split mode: hide O and D panels, show the single selectLine panel
- */
-function exitSplitMode() {
-    const game = typeof currentGame === 'function' ? currentGame() : null;
-    if (!game || !game.pendingNextLine) return;
-
-    // Save selections from both split panels
-    saveSplitPanelSelections();
-
-    // Remove O|D toggle button from split panel title bar
-    const splitToggle = document.querySelector('.od-split-toggle');
-    if (splitToggle) splitToggle.remove();
-
-    // Hide split panels
-    const oPanel = document.getElementById('panel-selectOLine');
-    const dPanel = document.getElementById('panel-selectDLine');
-    if (oPanel) oPanel.style.display = 'none';
-    if (dPanel) dPanel.style.display = 'none';
-
-    // Update panel states
-    if (typeof setPanelVisible === 'function') {
-        setPanelVisible('selectLine', true);
-        setPanelVisible('selectOLine', false);
-        setPanelVisible('selectDLine', false);
-    }
-
-    // Show the combined panel again and set a reasonable height
-    const selectLinePanel = document.getElementById('panel-selectLine');
-    if (selectLinePanel) {
-        selectLinePanel.style.display = '';
-        // Combine the split panel heights for a reasonable selectLine height
-        const oState = typeof getPanelState === 'function' ? getPanelState('selectOLine') : null;
-        const dState = typeof getPanelState === 'function' ? getPanelState('selectDLine') : null;
-        const combinedHeight = (oState?.height || 150) + (dState?.height || 150);
-        const container = document.getElementById('gameScreenContainer');
-        const maxHeight = container ? Math.floor(container.clientHeight * 0.45) : 300;
-        if (typeof setPanelState === 'function') {
-            setPanelState('selectLine', { height: Math.min(combinedHeight, maxHeight) });
-            setPanelState('follow', { height: null });
-        }
-    }
-
-    // Set active type back to od
-    game.pendingNextLine.activeType = 'od';
-
-    // Refresh the single panel
-    updateSelectLineTable();
-    updateODToggleButton();
-    updateSelectLineSubtitle();
-
-    // Re-apply tab state so single-tab views (e.g. Line tab) hide the
-    // panels they should be hiding. Without this, `setPanelVisible` calls
-    // above show the combined panel but the just-hidden split panels
-    // can leave the layout in a half-broken state on the Line tab —
-    // visible fix: switching tabs and back restored it. Calling
-    // applyTabState directly is the same restoration path.
-    if (typeof window.applyTabState === 'function') {
-        window.applyTabState();
-    }
-
-    // Save state
-    if (typeof saveAllTeamsData === 'function') {
-        saveAllTeamsData();
-    }
-}
-
-/**
- * Wire up event handlers for split panels
- */
-function wireSplitPanelEvents() {
-    // Checkbox change handlers (delegated)
-    const tableContainerO = document.getElementById('panelTableContainerO');
-    if (tableContainerO) {
-        tableContainerO.removeEventListener('change', handleSplitCheckboxChangeO);
-        tableContainerO.addEventListener('change', handleSplitCheckboxChangeO);
-    }
-    const tableContainerD = document.getElementById('panelTableContainerD');
-    if (tableContainerD) {
-        tableContainerD.removeEventListener('change', handleSplitCheckboxChangeD);
-        tableContainerD.addEventListener('change', handleSplitCheckboxChangeD);
-    }
-
-    // Line selection mode toggles for split panels
-    const splitOToggle = document.getElementById('splitOSelectionModeToggle');
-    if (splitOToggle && !splitOToggle._modeWired) {
-        splitOToggle.addEventListener('click', () => cycleSelectionMode('splitO'));
-        splitOToggle._modeWired = true;
-    }
-    const splitDToggle = document.getElementById('splitDSelectionModeToggle');
-    if (splitDToggle && !splitDToggle._modeWired) {
-        splitDToggle.addEventListener('click', () => cycleSelectionMode('splitD'));
-        splitDToggle._modeWired = true;
-    }
-
-    // O|D escape buttons in each split panel — let the user exit split
-    // view without having to cycle through od → o → d → split → od. The
-    // main-panel OD toggle is in the hidden panel, so without these the
-    // user is stuck in split mode. Both buttons just call exitSplitMode
-    // which restores the combined view.
-    ['O', 'D'].forEach(suffix => {
-        const odToggle = document.getElementById(`split${suffix}ODToggle`);
-        if (odToggle && !odToggle._wired) {
-            odToggle.addEventListener('click', () => {
-                if (!canEditSelectLinePanel()) {
-                    if (typeof showControllerToast === 'function') {
-                        showControllerToast('You need a coach role to change line type', 'warning');
-                    }
-                    return;
-                }
-                exitSplitMode();
-                if (typeof showControllerToast === 'function') {
-                    showControllerToast('Switched to combined O/D line', 'info');
-                }
-            });
-            odToggle._wired = true;
-        }
-    });
-}
-
-/**
- * Set checkboxes in the main panelActivePlayersTable to match given players
- * @param {string[]} playerNames
- */
-function setMainPanelCheckboxes(playerNames) {
-    const checkboxes = document.querySelectorAll('#panelActivePlayersTable input[type="checkbox"]');
-    checkboxes.forEach(cb => {
-        cb.checked = playerNames.includes(cb.dataset.playerName);
-    });
-}
-
-/**
- * Get selected players from a specific table
- * @param {string} tableId
- * @returns {string[]}
- */
-function getSelectedPlayersFromTable(tableId) {
-    const checkboxes = document.querySelectorAll(`#${tableId} input[type="checkbox"]`);
-    const selected = [];
-    checkboxes.forEach(cb => {
-        if (cb.checked && cb.dataset.playerName) {
-            selected.push(cb.dataset.playerName);
-        }
-    });
-    return selected;
-}
-
-function handleSplitCheckboxChangeO(e) { handleSplitCheckboxChange(e, 'o'); }
-function handleSplitCheckboxChangeD(e) { handleSplitCheckboxChange(e, 'd'); }
-
-/**
- * Handle checkbox change in a split panel
- * @param {Event} e
- * @param {'o'|'d'} lineType
- */
-function handleSplitCheckboxChange(e, lineType) {
-    if (!e.target || !e.target.matches('input[type="checkbox"]')) return;
-
-    if (!canEditSelectLinePanel()) {
-        e.target.checked = !e.target.checked;
-        if (typeof showControllerToast === 'function') {
-            showControllerToast('Only the Line Coach can edit during a point', 'warning');
-        }
-        return;
-    }
-
-    // Return to manual mode if user manually changes a checkbox while in wholesale/auto
-    const splitContext = lineType === 'o' ? 'splitO' : 'splitD';
-    if (!programmaticCheckboxChange && lineSelectionModes[splitContext] !== 'manual') {
-        returnToManualMode(splitContext);
-    }
-
-    // Save from the specific panel
-    const suffix = lineType === 'o' ? 'O' : 'D';
-    const tableId = `panelActivePlayersTable${suffix}`;
-    const selectedPlayers = getSelectedPlayersFromTable(tableId);
-
-    const game = typeof currentGame === 'function' ? currentGame() : null;
-    if (game && game.pendingNextLine) {
-        game.pendingNextLine[lineType + 'Line'] = selectedPlayers;
-        game.pendingNextLine[lineType + 'LineModifiedAt'] = new Date().toISOString();
-        localLineEditTimestamps[lineType + 'Line'] = Date.now();
-    }
-
-    if (typeof saveAllTeamsData === 'function') {
-        saveAllTeamsData();
-    }
-
-    updateSplitPanelSubtitle(lineType);
-    updatePlayByPlayPanelState();
-}
-
-/**
- * Save selections from both split panels to pendingNextLine
- */
-function saveSplitPanelSelections() {
-    const game = typeof currentGame === 'function' ? currentGame() : null;
-    if (!game || !game.pendingNextLine) return;
-
-    const oPlayers = getSelectedPlayersFromTable('panelActivePlayersTableO');
-    const dPlayers = getSelectedPlayersFromTable('panelActivePlayersTableD');
-
-    if (oPlayers.length > 0 || document.getElementById('panelActivePlayersTableO')) {
-        game.pendingNextLine.oLine = oPlayers;
-        game.pendingNextLine.oLineModifiedAt = new Date().toISOString();
-        localLineEditTimestamps['oLine'] = Date.now();
-    }
-
-    if (dPlayers.length > 0 || document.getElementById('panelActivePlayersTableD')) {
-        game.pendingNextLine.dLine = dPlayers;
-        game.pendingNextLine.dLineModifiedAt = new Date().toISOString();
-        localLineEditTimestamps['dLine'] = Date.now();
-    }
-
-    if (typeof saveAllTeamsData === 'function') {
-        saveAllTeamsData();
-    }
-}
-
-/**
- * Update a split panel's player table
- * @param {'o'|'d'} lineType
- */
-function updateSplitPanelTable(lineType) {
-    const suffix = lineType === 'o' ? 'O' : 'D';
-    const table = document.getElementById(`panelActivePlayersTable${suffix}`);
-    if (!table) return;
-
-    const tableBody = table.querySelector('tbody');
-    const tableHead = table.querySelector('thead');
-    if (!tableBody || !tableHead) return;
-
-    tableBody.innerHTML = '';
-    tableHead.innerHTML = '';
-
-    const game = typeof currentGame === 'function' ? currentGame() : null;
-    if (!game || !currentTeam || !currentTeam.teamRoster) return;
-
-    const pendingLine = game.pendingNextLine || {};
-    const selectedPlayers = pendingLine[lineType + 'Line'] || [];
-
-    // Score header rows (same as main table)
-    const runningScores = typeof getRunningScores === 'function'
-        ? getRunningScores()
-        : { team: [0], opponent: [0] };
-
-    // Check if last point is in progress (no winner yet)
-    const pointInProgress = game.points.length > 0 && !game.points[game.points.length - 1].winner;
-
-    const teamScoreRow = document.createElement('tr');
-    const opponentScoreRow = document.createElement('tr');
-
-    const addScoreCells = (row, teamName, scores) => {
-        const nameCell = document.createElement('th');
-        nameCell.textContent = teamName;
-        nameCell.setAttribute('colspan', '3');
-        nameCell.classList.add('active-header-teams');
-        row.appendChild(nameCell);
-
-        scores.forEach((score, index) => {
-            const scoreCell = document.createElement('th');
-            if (pointInProgress && index === scores.length - 1) {
-                scoreCell.textContent = '-';
-            } else {
-                scoreCell.textContent = score;
-            }
-            if (game.alternateGenderRatio === 'Alternating' && game.startingGenderRatio) {
-                const genderRatio = typeof getGenderRatioForPoint === 'function'
-                    ? getGenderRatioForPoint(game, index)
-                    : null;
-                if (genderRatio === 'FMP') scoreCell.classList.add('score-cell-fmp');
-                else if (genderRatio === 'MMP') scoreCell.classList.add('score-cell-mmp');
-            }
-            row.appendChild(scoreCell);
-        });
-    };
-
-    addScoreCells(teamScoreRow, game.team, runningScores.team);
-    addScoreCells(opponentScoreRow, game.opponent, runningScores.opponent);
-    tableHead.appendChild(teamScoreRow);
-    tableHead.appendChild(opponentScoreRow);
-
-    // Get last point players for sorting
-    const lastPointPlayers = game.points.length > 0
-        ? game.points[game.points.length - 1].players
-        : [];
-
-    // Sort roster
-    const sortedRoster = [...currentTeam.teamRoster].sort((a, b) => {
-        const aLastPoint = lastPointPlayers.includes(a.name);
-        const bLastPoint = lastPointPlayers.includes(b.name);
-        const aPlayedAny = game.points.some(p =>
-            p.players.includes(a.name) ||
-            (p.substitutedOutPlayers && p.substitutedOutPlayers.includes(a.name))
-        );
-        const bPlayedAny = game.points.some(p =>
-            p.players.includes(b.name) ||
-            (p.substitutedOutPlayers && p.substitutedOutPlayers.includes(b.name))
-        );
-
-        if (aLastPoint && !bLastPoint) return -1;
-        if (!aLastPoint && bLastPoint) return 1;
-        if (aPlayedAny && !bPlayedAny) return -1;
-        if (!aPlayedAny && bPlayedAny) return 1;
-        return a.name.localeCompare(b.name);
-    });
-
-    // Create player rows with time + point participation columns
-    sortedRoster.forEach(player => {
-        const row = document.createElement('tr');
-
-        const checkboxCell = document.createElement('td');
-        checkboxCell.classList.add('active-checkbox-column');
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.classList.add('active-checkbox');
-        checkbox.checked = selectedPlayers.includes(player.name);
-        checkbox.dataset.playerName = player.name;
-        checkboxCell.appendChild(checkbox);
-        row.appendChild(checkboxCell);
-
-        const nameCell = document.createElement('td');
-        nameCell.classList.add('active-name-column');
-        nameCell.textContent = typeof formatPlayerName === 'function'
-            ? formatPlayerName(player)
-            : player.name;
-
-        if (player.gender === Gender.FMP) nameCell.classList.add('player-fmp');
-        else if (player.gender === Gender.MMP) nameCell.classList.add('player-mmp');
-
-        nameCell.style.cursor = 'pointer';
-        nameCell.addEventListener('click', () => checkbox.click());
-        row.appendChild(nameCell);
-
-        // Time column (game stats only, no total toggle)
-        const timeCell = document.createElement('td');
-        timeCell.classList.add('active-time-column');
-        const gameTime = typeof getPlayerGameTime === 'function'
-            ? getPlayerGameTime(player.name)
-            : 0;
-        timeCell.textContent = typeof formatPlayTime === 'function'
-            ? formatPlayTime(gameTime)
-            : '0:00';
-        row.appendChild(timeCell);
-
-        // Point participation columns
-        let runningPointTotal = 0;
-        game.points.forEach(point => {
-            const pointCell = document.createElement('td');
-            pointCell.classList.add('active-points-columns');
-            const playedFullPoint = point.players.includes(player.name);
-            const subbedOutMidPoint = point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name);
-            const playedPoint = playedFullPoint || subbedOutMidPoint;
-            if (playedPoint) {
-                runningPointTotal++;
-                pointCell.textContent = `${runningPointTotal}`;
-                if (subbedOutMidPoint && !playedFullPoint) {
-                    pointCell.classList.add('point-cell-subbed-out');
-                }
-            } else {
-                pointCell.textContent = '-';
-            }
-            row.appendChild(pointCell);
-        });
-
-        tableBody.appendChild(row);
-    });
-
-    // Apply sticky columns for this split table
-    requestAnimationFrame(() => {
-        makeSplitPanelColumnsSticky(suffix);
-    });
-
-    updateSplitPanelSubtitle(lineType);
-}
-
-/**
- * Update both split panels
- */
-function updateSplitPanels() {
-    if (!isSplitMode()) return;
-    updateSplitPanelTable('o');
-    updateSplitPanelTable('d');
-}
-
-/**
- * Update subtitle for a split panel
- * @param {'o'|'d'} lineType
- */
-function updateSplitPanelSubtitle(lineType) {
-    if (typeof setPanelSubtitle !== 'function') return;
-
-    const panelId = lineType === 'o' ? 'selectOLine' : 'selectDLine';
-
-    const game = typeof currentGame === 'function' ? currentGame() : null;
-    if (!game) {
-        setPanelSubtitle(panelId, '');
-        return;
-    }
-
-    const pendingLine = game.pendingNextLine || {};
-    const selectedNames = pendingLine[lineType + 'Line'] || [];
-
-    if (selectedNames.length === 0) {
-        setPanelSubtitle(panelId, '(no players selected)');
-        return;
-    }
-
-    const firstNames = selectedNames.map(name => name.split(' ')[0]);
-    setPanelSubtitle(panelId, firstNames.join(', '));
-}
 
 // Game Events panel removed - will be a modal popup from Play-by-Play panel
 // See TODO.md for implementation plan
@@ -2279,31 +1723,62 @@ function transitionToBetweenPoints() {
         // O and D lines: overwrite only if they have NEVER been modified this game (separate O/D pools).
         const lastPoint = game.points.length > 0 ? game.points[game.points.length - 1] : null;
         if (lastPoint && lastPoint.players && lastPoint.players.length > 0 && game.pendingNextLine) {
-            const pointStartTime = lastPoint.startTimestamp
-                ? new Date(lastPoint.startTimestamp).getTime()
-                : 0;
+            // Reliable "this point started" reference for the OD-line "modified
+            // during this point?" check. We can't use lastPoint.startTimestamp
+            // because the score handlers (Simple-mode and Full-mode score taps,
+            // and opponent-score) null it to stop the timer, and updateScore
+            // then re-sets it to `new Date()` — making it equal to score-time
+            // rather than actual point-start. That breaks the original check:
+            // any odLine edit made during the point ends up older than the
+            // (artificial) "point start" and the line gets clobbered.
+            //
+            // Use the *previous* point's endTimestamp instead — it's never
+            // mutated, and "after the previous point ended" naturally covers
+            // both the between-points window AND the current live point, which
+            // is what "modified for this upcoming next-point" should mean.
+            // For the first point, fall back to gameStartTimestamp.
+            const previousPoint = game.points.length > 1
+                ? game.points[game.points.length - 2]
+                : null;
+            const pointStartTime = previousPoint && previousPoint.endTimestamp
+                ? new Date(previousPoint.endTimestamp).getTime()
+                : (game.gameStartTimestamp
+                    ? new Date(game.gameStartTimestamp).getTime()
+                    : 0);
             const endingLine = [...lastPoint.players];
-            // O/D line: reset to ending 7 unless user explicitly changed mode (wholesale/auto)
-            // or modified during this point.
-            // Note: startTimestamp may be set at score-time (not point-start), so also
-            // check selection mode as a reliable signal of intentional changes.
+            // O/D line: reset to ending 7 unless user explicitly changed mode
+            // (wholesale/auto) or modified at any time during this point's
+            // window. ALSO reset if the line is currently empty — a
+            // *ModifiedAt timestamp doesn't mean the line is useful; an LC
+            // who cleared all checkboxes (or any path that left it empty)
+            // shouldn't poison every subsequent point with an unstartable
+            // empty lineup.
+            const odLineCur = game.pendingNextLine.odLine || [];
             const odModTime = game.pendingNextLine.odLineModifiedAt
                 ? new Date(game.pendingNextLine.odLineModifiedAt).getTime()
                 : 0;
-            if (odModTime <= pointStartTime && lineSelectionModes.main === 'manual') {
+            if ((odModTime <= pointStartTime || odLineCur.length === 0)
+                && lineSelectionModes.main === 'manual') {
                 game.pendingNextLine.odLine = endingLine;
             }
-            // O and D lines: reset only if never modified this game (compare to game start)
+            // O and D lines: reset if never modified this game OR currently
+            // empty (same empty-line reasoning as above). Without the
+            // empty-fallback, an emptied O/D line stays empty across points
+            // and — combined with fix8's same-side-only invariant — leaves
+            // the AC's Start Point button greyed forever after the line is
+            // ever cleared.
             const gameStartTime = game.gameStartTimestamp
                 ? new Date(game.gameStartTimestamp).getTime()
                 : 0;
             ['o', 'd'].forEach(type => {
-                const modKey = type + 'LineModifiedAt';
+                const lineKey = type + 'Line';
+                const modKey = lineKey + 'ModifiedAt';
+                const lineCur = game.pendingNextLine[lineKey] || [];
                 const modTime = game.pendingNextLine[modKey]
                     ? new Date(game.pendingNextLine[modKey]).getTime()
                     : 0;
-                if (modTime <= gameStartTime) {
-                    game.pendingNextLine[type + 'Line'] = endingLine;
+                if (modTime <= gameStartTime || lineCur.length === 0) {
+                    game.pendingNextLine[lineKey] = endingLine;
                 }
             });
         }
@@ -2330,11 +1805,6 @@ function transitionToBetweenPoints() {
     
     // Update Select Next Line panel with latest data
     updateSelectLinePanel();
-    
-    // Update split panels if in split mode
-    if (isSplitMode()) {
-        updateSplitPanels();
-    }
 
     // Reset all line selection modes to manual on new point
     resetAllSelectionModes();
@@ -2756,100 +2226,26 @@ function updateLineTabStartPointBtn() {
 }
 
 /**
- * Update the Line tab's "Lineup Ready" button.
+ * "Lineup Ready" — multi-coach coordination signal, fire-and-forget.
  *
- * Multi-coach coordination signal. The Line Coach taps to ping the Active
- * Coach that the next lineup is set — useful when the two coaches aren't
- * standing next to each other. The button is intentionally narrow in
- * scope:
- *   - Only visible when the user is a *pure* Line Coach (i.e. someone
- *     else holds Active Coach). A solo coach sees nothing because the
- *     signal has no recipient. An Active-Coach-only user is the recipient,
- *     not the sender.
- *   - Only between points. During a point the lineup is committed; there's
- *     nothing to "be ready" with.
- *   - After tap, locks into a green "✓ Sent" state until the next point
- *     starts (which clears `lineupReadyAt` in startNextPoint).
+ * The Line Coach taps to ping the Active Coach that the next lineup is
+ * set. The AC's 3-second polling refresh sees `lineupReadyAt` advance and
+ * shows a toast ("X says lineup ready") — that's the whole thing. No
+ * persistent "sent" badge, no per-mode disambiguation, no Intent Rule
+ * branch. The LC's actual view (`lineCoachViewing`) drives auto-select at
+ * point-end via Priority 1 in `getEffectiveLineForNextPoint`.
  *
- * The actual ping is just a timestamp + coach name written to
- * `pendingNextLine.lineupReadyAt` / `lineupReadyBy`. The Active Coach's
- * existing 3-second pendingLine refresh poll picks it up and surfaces a
- * toast — see handleLineupReadyAckOnRefresh.
- */
-/**
- * Compute the current Lineup Ready button state.
- *
- * The Lineup Ready surface is shared between roles but plays different
- * parts on each side:
- *   - Line Coach: it's a *button* — tap to send a ping signaling "I'm
- *     done picking this line."
- *   - Active Coach: it's a *status indicator* — read-only badge that
- *     shows whether the Line Coach has signaled ready. Useful as one of
- *     two coloured cues (alongside Start Point's count/ratio feedback)
- *     when deciding whether to start the point.
- *
- * Both roles share the same compute → render path; differences are
- * encoded in the returned `state` string. Lineup Ready is *never* a
- * commit gate — it never blocks Start Point, and the lineup itself
- * syncs continuously regardless of whether the ping has been sent.
- *
- * Returned `state` values:
- *   - 'active'     → blue button, label "Lineup Ready", tap sends (Line Coach idle)
- *   - 'sent'       → green button/badge, label "✓ Lineup Ready" (someone pinged this window)
- *   - 'pending'    → desaturated-blue badge, label "Lineup Pending" — Active Coach
- *                    sees this when the Line Coach hasn't pinged yet.
- *   - 'disabled'   → desaturated-blue button, label "Lineup Ready"; tap surfaces
- *                    the toast in `disabledReason` (Line Coach can't currently send)
+ * Visibility: only the pure Line Coach sees the button. Solo coaches,
+ * pure Active Coach, spectators, and viewers see nothing.
  */
 function computeLineupReadyState() {
     const ctrlState = (typeof getControllerState === 'function') ? getControllerState() : {};
-    const game = (typeof currentGame === 'function') ? currentGame() : null;
-    const pending = game && game.pendingNextLine;
-    const sentAtRaw = pending && pending.lineupReadyAt;
-    const pointInProgress = (typeof isPointInProgress === 'function') && isPointInProgress();
 
-    // Staleness gate: a `lineupReadyAt` from before the most recent
-    // point's start is leftover from a prior between-points window. The
-    // stored field outlives any one window (it's persisted with the
-    // game), so without this comparison the button would read "✓ Sent"
-    // forever after the first ping ever sent.
-    const points = (game && game.points) || [];
-    const latestPoint = points[points.length - 1];
-    const latestPointStart = (latestPoint && latestPoint.startTimestamp)
-        ? new Date(latestPoint.startTimestamp).getTime() : 0;
-    const sentForCurrentWindow = sentAtRaw && sentAtRaw > latestPointStart;
-
-    // Sent state wins regardless of who's looking — it's a shared status.
-    if (sentForCurrentWindow) {
-        return { state: 'sent', label: '✓ Lineup Ready' };
-    }
-
-    // Active Coach branch: read-only indicator.
-    if (ctrlState.isActiveCoach && !ctrlState.isLineCoach) {
-        // No ping yet from the Line Coach.
-        return { state: 'pending', label: 'Lineup Pending' };
-    }
-
-    // Solo coach (both roles): button has no recipient.
-    if (ctrlState.isActiveCoach && ctrlState.isLineCoach) {
-        return {
-            state: 'disabled', label: 'Lineup Ready',
-            disabledReason: 'You hold both roles — no other coach to ping'
-        };
-    }
-
-    // Spectator coach (no roles, multi-coach session) and Line-Coach branches:
-    if (pointInProgress) {
-        return {
-            state: 'disabled', label: 'Lineup Ready',
-            disabledReason: 'Lineup Ready can only be sent between points'
-        };
-    }
-    if (!ctrlState.isLineCoach) {
-        return {
-            state: 'disabled', label: 'Lineup Ready',
-            disabledReason: 'Only the Line Coach can send a Lineup Ready ping'
-        };
+    // Visible only to a pure Line Coach. (A user who holds BOTH roles
+    // has no one else to ping, and the AC / spectators / viewers don't
+    // send pings.)
+    if (!ctrlState.isLineCoach || ctrlState.isActiveCoach) {
+        return { state: 'hidden' };
     }
     if (!ctrlState.activeCoach) {
         return {
@@ -2865,7 +2261,9 @@ function updateLineTabLineupReadyBtn() {
     if (!btn) return;
 
     const onLineTab = (typeof getActiveTab === 'function') && getActiveTab() === 'line';
-    if (!onLineTab) {
+    const { state, label } = computeLineupReadyState();
+
+    if (!onLineTab || state === 'hidden') {
         btn.style.display = 'none';
         return;
     }
@@ -2873,20 +2271,10 @@ function updateLineTabLineupReadyBtn() {
     btn.style.display = 'flex';
     btn.classList.remove('sent', 'inactive');
     btn.disabled = false;
-
-    const { state, label } = computeLineupReadyState();
     btn.textContent = label;
 
-    if (state === 'sent') {
-        btn.classList.add('sent');
-        btn.disabled = true;  // Already sent — no further action.
-    } else if (state === 'pending') {
-        // Active Coach view, awaiting Line Coach ping. Read-only badge —
-        // hard-disabled so it doesn't invite a tap (no toast, nothing to do).
-        btn.classList.add('inactive');
-        btn.disabled = true;
-    } else if (state === 'disabled') {
-        // Visually disabled but kept clickable so a tap can surface the
+    if (state === 'disabled') {
+        // Visually disabled but kept clickable so a tap surfaces the
         // reason via toast (handleLineupReadyTap re-checks state).
         btn.classList.add('inactive');
     }
@@ -2894,29 +2282,25 @@ function updateLineTabLineupReadyBtn() {
 }
 
 /**
- * "Lineup Ready" tap handler. When state is 'active', writes the ping
- * fields onto pendingNextLine and persists. When state is 'disabled',
- * surfaces a toast explaining why nothing happened. When state is 'sent'
- * the button itself is hard-disabled, so this handler doesn't run.
+ * "Lineup Ready" tap handler. Fire-and-forget: write a timestamp + name,
+ * show a toast. The AC's polling picks up the new timestamp and shows
+ * its own toast on the receiving side.
  */
 function handleLineupReadyTap() {
     const { state, disabledReason } = computeLineupReadyState();
-
-    if (state === 'disabled') {
-        if (typeof showControllerToast === 'function' && disabledReason) {
+    if (state !== 'active') {
+        if (state === 'disabled' && typeof showControllerToast === 'function' && disabledReason) {
             showControllerToast(disabledReason, 'info', 2500);
         }
         return;
     }
-    if (state !== 'active') return;
 
+    const ctrlState = (typeof getControllerState === 'function') ? getControllerState() : {};
     const game = (typeof currentGame === 'function') ? currentGame() : null;
     if (!game) return;
     if (!game.pendingNextLine) game.pendingNextLine = {};
 
-    const ctrlState = (typeof getControllerState === 'function') ? getControllerState() : {};
     const myName = (ctrlState.lineCoach && ctrlState.lineCoach.displayName) || 'Line Coach';
-
     game.pendingNextLine.lineupReadyAt = Date.now();
     game.pendingNextLine.lineupReadyBy = myName;
 
@@ -2924,8 +2308,6 @@ function handleLineupReadyTap() {
     if (typeof showControllerToast === 'function') {
         showControllerToast('Lineup ready ping sent', 'success', 1800);
     }
-
-    updateLineTabLineupReadyBtn();
 }
 
 // =============================================================================
@@ -3162,6 +2544,11 @@ function setupPlayByPlayResizeObserver() {
 // Track stats display mode for panel (Game vs Total vs Event)
 let panelShowingTotalStats = false;
 let panelStatsMode = 'game'; // 'game', 'event', or 'total'
+// Event-aggregated stats for the panel's 'event' mode. getEventPlayerStats()
+// is async (it loads every event game from the cloud), so it's fetched once
+// when 'event' mode is entered and cached here; the synchronous table
+// renderers read this cache rather than calling the async function inline.
+let cachedPanelEventStats = null;
 
 // Track conflict detection state
 let lastConflictToastPointIndex = -1;  // Prevent multiple toasts per point
@@ -3260,6 +2647,29 @@ function handlePanelStatsToggle() {
     if (toggle) {
         const labels = { game: '(Game)', event: '(Event)', total: '(Total)' };
         toggle.textContent = labels[panelStatsMode] || '(Game)';
+    }
+
+    // Entering event mode: load the event-aggregated stats once (async cloud
+    // load), cache them, then re-render so the table shows real numbers. The
+    // first synchronous render below runs with cachedPanelEventStats still null
+    // (cells fall back to live game values) and is corrected when the load
+    // resolves. Leaving event mode clears the cache.
+    //
+    // Aggregate over the OTHER event games and exclude the current game: the
+    // renderers add the live per-player game time/points on top, and the
+    // current game's completed points are also synced to the cloud during play
+    // — so including it here would double-count them. Excluding it makes every
+    // point count exactly once (other games from the cloud, this game live),
+    // independent of when the coach toggled into event mode.
+    if (panelStatsMode === 'event' && currentEvent && typeof getEventPlayerStats === 'function') {
+        cachedPanelEventStats = null;
+        const otherGameIds = (currentEvent.gameIds || []).filter(id => id !== game.id);
+        const otherGamesEvent = { ...currentEvent, gameIds: otherGameIds };
+        getEventPlayerStats(otherGamesEvent)
+            .then(stats => { cachedPanelEventStats = stats || {}; updateSelectLineTable(); })
+            .catch(() => { cachedPanelEventStats = {}; });
+    } else {
+        cachedPanelEventStats = null;
     }
     updateSelectLineTable();
 }
@@ -3456,10 +2866,6 @@ function cycleSelectionMode(context) {
     if (context === 'main') {
         if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
         updateSelectLineSubtitle();
-    } else if (context === 'splitO' || context === 'splitD') {
-        const lineType = context === 'splitO' ? 'o' : 'd';
-        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
-        updateSplitPanelSubtitle(lineType);
     } else if (context === 'sub') {
         // Update the count display directly — flag prevents mode-return
         programmaticCheckboxChange = true;
@@ -3509,19 +2915,22 @@ function resetAllSelectionModes() {
 
 /**
  * Handle O/D toggle button click
- * Cycles between 'od' → 'o' → 'd' → 'split' → 'od'
+ * Cycles between 'od' → 'o' → 'd' → 'od'.
  */
 function handleODToggle() {
     const game = typeof currentGame === 'function' ? currentGame() : null;
     if (!game || !game.pendingNextLine) return;
 
-    // Check if user can edit
-    if (!canEditSelectLinePanel()) {
-        if (typeof showControllerToast === 'function') {
-            showControllerToast('You need a coach role to change line type', 'warning');
-        }
-        return;
-    }
+    // No editability check: per TODO design, the O|D toggle stays
+    // interactive even when the panel is greyed (read-only). Viewing
+    // different line types is independent of editing — the AC who
+    // doesn't hold LC needs to follow along visually.
+    //
+    // activeType writes are local-only (filtered out of cloud sync per
+    // store/storage.js), so a non-coach toggle has no cross-device
+    // side-effects. The LC-viewing instrumentation in
+    // noteLineCoachViewing is gated on isLineCoach() and only fires
+    // for an actual LC, never for a viewer or greyed-out AC.
 
     // Reset main mode on OD toggle
     lineSelectionModes.main = 'manual';
@@ -3529,42 +2938,23 @@ function handleODToggle() {
     updateModeToggleLabel('main');
 
     // Save current selections before switching (don't update timestamp - just viewing)
-    if (!isSplitMode()) {
-        savePanelSelectionsToPendingNextLine(false);
-    }
+    savePanelSelectionsToPendingNextLine(false);
 
-    // Cycle to next type: od → o → d → split → od
+    // Cycle to next type: od → o → d → odOnDeck → od
+    // 'odOnDeck' is the On Deck line (point-after-next); concatenating with
+    // 'Line' resolves to the odOnDeckLine bucket, same as the other types.
     const currentType = game.pendingNextLine.activeType || 'od';
     let nextType;
     switch (currentType) {
-        case 'od': nextType = 'o'; break;
-        case 'o': nextType = 'd'; break;
-        case 'd': nextType = 'split'; break;
-        case 'split': nextType = 'od'; break;
-        default: nextType = 'od';
+        case 'od':       nextType = 'o'; break;
+        case 'o':        nextType = 'd'; break;
+        case 'd':        nextType = 'odOnDeck'; break;
+        case 'odOnDeck': nextType = 'od'; break;
+        default:         nextType = 'od';
     }
 
-    // Handle split mode transitions
-    if (nextType === 'split') {
-        enterSplitMode();
-        updateODToggleButton();
-        if (typeof showControllerToast === 'function') {
-            showControllerToast('Split view: O and D lines side by side', 'info');
-        }
-        return;
-    }
-
-    if (currentType === 'split') {
-        exitSplitMode();
-        // exitSplitMode sets activeType to 'od' and updates UI
-        if (typeof showControllerToast === 'function') {
-            showControllerToast('Switched to O/D line', 'info');
-        }
-        return;
-    }
-
-    // Normal (non-split) transition
     game.pendingNextLine.activeType = nextType;
+    noteLineCoachViewing();
 
     // Save game state
     if (typeof saveAllTeamsData === 'function') {
@@ -3584,7 +2974,7 @@ function handleODToggle() {
     updatePlayByPlayPanelState();
 
     // Show feedback
-    const typeLabels = { od: 'O/D', o: 'Offense', d: 'Defense' };
+    const typeLabels = { od: 'O/D', o: 'Offense', d: 'Defense', odOnDeck: 'On Deck' };
     if (typeof showControllerToast === 'function') {
         showControllerToast(`Switched to ${typeLabels[nextType]} line`, 'info');
     }
@@ -3601,17 +2991,18 @@ function updateODToggleButton() {
     const activeType = game?.pendingNextLine?.activeType || 'od';
     
     // Update button text
-    const typeLabels = { od: 'O/D', o: 'O', d: 'D', split: 'O|D' };
+    const typeLabels = { od: 'O/D', o: 'O', d: 'D', odOnDeck: 'On Deck', split: 'O|D' };
     btn.textContent = typeLabels[activeType] || 'O/D';
 
     // Update title/tooltip
     const typeDescriptions = {
         od: 'Combined line (tap to switch to Offense)',
         o: 'Offense line (tap to switch to Defense)',
-        d: 'Defense line (tap to split O and D)',
+        d: 'Defense line (tap to plan the On Deck line)',
+        odOnDeck: 'On Deck line — the point after Next (tap to switch back to O/D)',
         split: 'Split view (tap to merge back to O/D)'
     };
-    btn.title = typeDescriptions[activeType] || 'Toggle O/D/O-D line';
+    btn.title = typeDescriptions[activeType] || 'Toggle O/D/On-Deck line';
 }
 
 /**
@@ -3954,33 +3345,48 @@ function handlePanelStartingRatioChange(e) {
 }
 
 /**
- * Check if user can edit the Select Line panel
- * During point: Only Line Coach
- * Between points: Line Coach OR Active Coach
+ * Check if the current user can edit the Select Line panel checkboxes.
+ *
+ * Multi-coach rule (TODO.md § "Multi-Coach Line Selection: Intent Rule &
+ * LC-Viewing Label"): editable iff the current user holds the Line Coach
+ * role. The TODO's implementation pointer ("isActiveCoach && isLineCoach")
+ * was an internal inconsistency with the rest of the design — which
+ * explicitly describes the LC editing lines and the AC observing via the
+ * "Line Coach: viewing/editing the X line" label. The right invariant is
+ * "editing is tied to the LC role" so every configuration falls out
+ * cleanly:
+ *
+ *   - Two users, AC ≠ LC → LC user edits; AC user observes (greyed).
+ *   - Dual-role (same user holds both) → editable (holds LC).
+ *   - LC role vacant while AC is claimed → AC sees the panel greyed
+ *     until they explicitly claim LC (single tap). Keeps editing always
+ *     tied to LC and handles "LC went AFK": AC claims LC, edits,
+ *     optionally releases.
+ *
+ * Solo coaching (no multi-coach detection): unchanged, no role
+ * enforcement. Matches the panelSystem latch that hides the role-claim
+ * buttons until two coaches are seen at least once in the session.
+ *
+ * Note: the O|D toggle (`handleODToggle`) is intentionally NOT gated on
+ * this — viewing different line types is independent of editability,
+ * so a greyed-out AC can still browse O / D / OD views to follow
+ * along with what the LC is preparing.
+ *
  * @returns {boolean}
  */
 function canEditSelectLinePanel() {
     const state = typeof getControllerState === 'function' ? getControllerState() : {};
-    const duringPoint = typeof isPointInProgress === 'function' ? isPointInProgress() : false;
     const multiCoach = typeof window.isMultiCoachDetected === 'function'
         ? window.isMultiCoachDetected()
         : false;
 
     // Solo coaching (or pre-multi-coach detection): no role enforcement.
-    // Matches the panelSystem latch that hides the role-claim buttons
-    // until two coaches are seen at least once in the session.
     if (!multiCoach) {
         return true;
     }
 
-    if (duringPoint) {
-        // During point: Line Coach prepares the next line — only they edit.
-        return state.isLineCoach;
-    } else {
-        // Between points: Active Coach finalizes the lineup before Start
-        // Point. Line Coach also retains edit access for handoff continuity.
-        return state.isLineCoach || state.isActiveCoach;
-    }
+    // Multi-coach: editable iff the current user holds the Line Coach role.
+    return state.isLineCoach;
 }
 
 /**
@@ -3988,12 +3394,6 @@ function canEditSelectLinePanel() {
  * @returns {string[]} Array of player names
  */
 function getSelectedPlayersFromPanel() {
-    if (isSplitMode()) {
-        const startOn = typeof determineStartingPosition === 'function'
-            ? determineStartingPosition() : 'offense';
-        const suffix = startOn === 'defense' ? 'D' : 'O';
-        return getSelectedPlayersFromTable(`panelActivePlayersTable${suffix}`);
-    }
     const checkboxes = document.querySelectorAll('#panelActivePlayersTable input[type="checkbox"]');
     const selectedPlayers = [];
 
@@ -4031,7 +3431,7 @@ function savePanelSelectionsToPendingNextLine(updateTimestamp = true) {
         // Track our local edit time for conflict detection
         localLineEditTimestamps[activeType + 'Line'] = Date.now();
     }
-    
+
     // Save (triggers sync)
     if (typeof saveAllTeamsData === 'function') {
         saveAllTeamsData();
@@ -4125,18 +3525,6 @@ function updateSelectLinePanelState() {
 
     // Update subtitle (shown when minimized)
     updateSelectLineSubtitle();
-
-    // Also update split panels if in split mode
-    if (isSplitMode()) {
-        ['O', 'D'].forEach(suffix => {
-            const splitPanel = document.getElementById(`panel-select${suffix}Line`);
-            const splitOverlay = document.getElementById(`panelReadonlyOverlay${suffix}`);
-            if (splitOverlay) splitOverlay.style.display = canEdit ? 'none' : 'flex';
-            if (splitPanel) splitPanel.classList.toggle('readonly', !canEdit);
-            const splitCheckboxes = document.querySelectorAll(`#panelActivePlayersTable${suffix} input[type="checkbox"]`);
-            splitCheckboxes.forEach(cb => { cb.disabled = !canEdit; });
-        });
-    }
 }
 
 /**
@@ -4199,21 +3587,35 @@ function updatePanelGenderRatioDisplay() {
 /**
  * Determine which line will be used for the next point.
  *
- * Rule (intentionally simple, per design discussion):
- *   - For an upcoming offense point, compare oLine vs odLine modification
- *     timestamps. Whichever was edited more recently and is non-empty
- *     wins. Defense point uses dLine vs odLine the same way.
- *   - The separate O/D line, once created, *persists* across multiple
- *     points until the OD line is edited more recently. We don't apply
- *     a per-window freshness gate — the Line Coach saying "here's our O
- *     line" should hold until they say otherwise.
- *   - If both are empty / unset, return an empty line tagged 'od'.
+ * CRITICAL INVARIANT: the returned `source` is always side-consistent
+ * with `determineStartingPosition()` — either `typeKey` (the determined
+ * side) or `'od'` (the combined line). It is NEVER the opposite side.
+ * The side is fixed by who scored; this function only chooses WHICH line
+ * to use on that side. (Downstream, applyStartPointButtonState reads
+ * source 'o'→offense / 'd'→defense, so a side-flipped source would
+ * mislabel the button and field the wrong unit.)
  *
- * Returns `{ source, line }` where `source` is `'o' | 'd' | 'od'` and
- * `line` is the array of player names. Used by:
- *   - `startNextPoint` to decide which player set actually starts the point
- *   - `applyStartPointButtonState` to label the button ("— O line", etc.)
- *   - `autoSelectActiveTypeForNextPoint` to keep the visible view in sync
+ * Priority order:
+ *
+ *   1. LC view preference. If `lineCoachViewing` is set and its
+ *      timestamp is newer than every relevant *ModifiedAt, honor the
+ *      LC's current view — but only as combined-OD vs side-specific:
+ *      'od' → odLine; anything else → the determined side's line. The
+ *      LC's view never flips the side.
+ *
+ *   2. Per-axis most-recent edit. For an upcoming O point compare oLine
+ *      vs odLine timestamps; for a D point, dLine vs odLine. Newer
+ *      non-empty side wins.
+ *
+ *   3. Same-side fallback. If the winner was empty, fall through to the
+ *      other same-side option (this-side typed ↔ odLine) — never the
+ *      opposite side.
+ *
+ *   4. lastPoint safety net. If all same-side options are still empty
+ *      (cross-device sync lag, edge case), surface the just-played
+ *      lineup so the AC's Start Point button stays actionable.
+ *
+ * Returns `{ source, line }` where `source` is `'o' | 'd' | 'od'`.
  */
 function getEffectiveLineForNextPoint(game) {
     if (!game || !game.pendingNextLine) return { source: 'od', line: [] };
@@ -4221,26 +3623,77 @@ function getEffectiveLineForNextPoint(game) {
     const isOffense = (typeof determineStartingPosition === 'function')
         ? determineStartingPosition() === 'offense'
         : true;
-    const typeKey = isOffense ? 'o' : 'd';
+    const typeKey  = isOffense ? 'o' : 'd';
 
     const p = game.pendingNextLine;
-    const typedLine = p[typeKey + 'Line']    || [];
-    const typedMod  = p[typeKey + 'LineModifiedAt'];
-    const odLine    = p.odLine               || [];
-    const odMod     = p.odLineModifiedAt;
-    const typedTime = typedMod ? new Date(typedMod).getTime() : 0;
-    const odTime    = odMod    ? new Date(odMod).getTime()    : 0;
+    const typedLine = p[typeKey  + 'Line'] || [];
+    const odLine    = p.odLine             || [];
+    const typedTime = p[typeKey + 'LineModifiedAt']
+        ? new Date(p[typeKey + 'LineModifiedAt']).getTime() : 0;
+    const odTime    = p.odLineModifiedAt
+        ? new Date(p.odLineModifiedAt).getTime() : 0;
 
-    if (typedTime > odTime && typedLine.length > 0) {
+    // ── Priority 1: LC view preference ────────────────────────────────
+    // The LC's current view (synced via lineCoachViewing) is a soft
+    // tiebreaker. If it's newer than every relevant *ModifiedAt, treat
+    // it as "this is what they're planning around" — 'od' means combined
+    // OD line, anything else means use the determined side's line. The
+    // side itself is fixed by who scored; the view never flips it.
+    // 'odOnDeck' is NOT a Next-line view — it's the point-after-next. Treat it
+    // as "no Next-line view preference" here, else Priority 1 would resolve an
+    // On Deck view into a Next bucket (it falls through to typeKey).
+    const lcView   = (p.lineCoachViewing === 'odOnDeck') ? null : p.lineCoachViewing;
+    const lcViewAt = p.lineCoachViewingAt
+        ? new Date(p.lineCoachViewingAt).getTime() : 0;
+    if (lcView && lcViewAt > typedTime && lcViewAt > odTime) {
+        const viewSource = (lcView === 'od') ? 'od' : typeKey;
+        const viewLine = p[viewSource + 'Line'] || [];
+        if (viewLine.length > 0) {
+            return { source: viewSource, line: viewLine };
+        }
+        // View points at an empty line — fall through.
+    }
+
+    // ── Priority 2: per-axis most-recent edit ─────────────────────────
+    // For an upcoming O point compare oLine vs odLine timestamps; for D
+    // compare dLine vs odLine. Newer non-empty side wins. Per-axis (not
+    // global) so that prepping a D line for the next defense point
+    // doesn't surface an empty O line if the team scores instead.
+    const typedNewer = typedTime > odTime;
+    if (typedNewer && typedLine.length > 0) {
+        return { source: typeKey, line: typedLine };
+    }
+    if (!typedNewer && odLine.length > 0) {
+        return { source: 'od', line: odLine };
+    }
+
+    // ── Priority 3: empty-axis fallback ───────────────────────────────
+    // The most-recent-edit winner was empty. Surface the OTHER same-side
+    // option (this-side typed ↔ odLine) rather than a blank lineup — but
+    // NEVER the opposite side's line. Falling back to the opposite side
+    // would flip O↔D, contradicting who scored (this was the bug behind
+    // "Start Point (O-line)" showing up right after we scored).
+    if (typedLine.length > 0) {
         return { source: typeKey, line: typedLine };
     }
     if (odLine.length > 0) {
         return { source: 'od', line: odLine };
     }
-    if (typedLine.length > 0) {
-        return { source: typeKey, line: typedLine };  // OD empty fallback
+
+    // ── Priority 4: last-point safety net ─────────────────────────────
+    // Both same-side options are empty. transitionToBetweenPoints normally
+    // pre-fills these from the just-played lineup, but defend against
+    // cross-device sync lag (the AC may see this function run before the
+    // LC's edits or the reset has reached this client). Surfacing the
+    // most recent lineup keeps the Start Point button actionable — better
+    // than a permanently greyed button stuck with no players. Tagged as
+    // the determined side so the label matches reality.
+    const lastPoint = game.points && game.points[game.points.length - 1];
+    const lastPlayers = (lastPoint && lastPoint.players) || [];
+    if (lastPlayers.length > 0) {
+        return { source: typeKey, line: [...lastPlayers] };
     }
-    return { source: 'od', line: [] };
+    return { source: typeKey, line: [] };
 }
 
 /**
@@ -4255,7 +3708,11 @@ function getEffectiveLineForNextPoint(game) {
 function autoSelectActiveTypeForNextPoint() {
     const game = typeof currentGame === 'function' ? currentGame() : null;
     if (!game || !game.pendingNextLine) return;
-    if (isSplitMode()) return;
+
+    // Don't yank a coach off the On Deck view when a point ends. If they're
+    // planning the point-after-next, Next is presumably already set — leave
+    // them where they are rather than auto-switching to the resolved Next side.
+    if (game.pendingNextLine.activeType === 'odOnDeck') return;
 
     const { source } = getEffectiveLineForNextPoint(game);
     if (game.pendingNextLine.activeType !== source) {
@@ -4284,6 +3741,11 @@ function selectAppropriateLineAtPointEnd() {
 /**
  * Update the Select Line panel table with current roster and selections
  */
+// Remembers the Select Line table's horizontal scroll position across the
+// periodic rebuilds so a manual leftward scroll isn't clobbered by the
+// snap-to-right in makePanelColumnsSticky(). null = treat as "follow latest".
+let _selectLineScrollState = null;
+
 function updateSelectLineTable() {
     const table = document.getElementById('panelActivePlayersTable');
     if (!table) return;
@@ -4291,7 +3753,22 @@ function updateSelectLineTable() {
     const tableBody = table.querySelector('tbody');
     const tableHead = table.querySelector('thead');
     if (!tableBody || !tableHead) return;
-    
+
+    // Capture the horizontal scroll position before we blow away the table.
+    // Clearing innerHTML resets scrollLeft to 0, and makePanelColumnsSticky()
+    // re-snaps to the right edge to surface the latest points. That's the right
+    // behavior on first render and while the user is "following" the newest
+    // point, but it must NOT yank the view back if the user has scrolled left to
+    // review earlier points (the 3s cloud-refresh rebuild would otherwise pop
+    // them back to the right every cycle).
+    const scrollContainer = document.getElementById('panelTableContainer');
+    if (scrollContainer) {
+        const maxScroll = scrollContainer.scrollWidth - scrollContainer.clientWidth;
+        // Within 4px of the right edge (or nothing to scroll) counts as "following".
+        const atRightEdge = maxScroll <= 4 || (maxScroll - scrollContainer.scrollLeft) <= 4;
+        _selectLineScrollState = { scrollLeft: scrollContainer.scrollLeft, atRightEdge };
+    }
+
     // Clear existing content
     tableBody.innerHTML = '';
     tableHead.innerHTML = '';
@@ -4307,6 +3784,23 @@ function updateSelectLineTable() {
     const pendingLine = game.pendingNextLine || {};
     const activeType = pendingLine.activeType || 'od';
     const selectedPlayers = pendingLine[activeType + 'Line'] || [];
+
+    // On Deck view adds a read-only "tentative next" projection column so the
+    // LC planning the point-after-next can see who's already slated for the
+    // *immediate* next point (and balance rest). Pure-derived, recomputed each
+    // render. Source of the tentative-next set depends on phase: while a point
+    // is in progress the O/D side is genuinely unknown, so use the combined
+    // odLine; between points the side is resolved, so use the effective Next.
+    const isOnDeckView = activeType === 'odOnDeck';
+    let tentativeNextSet = [];
+    if (isOnDeckView) {
+        const inProgress = typeof isPointInProgress === 'function' && isPointInProgress();
+        tentativeNextSet = inProgress
+            ? (pendingLine.odLine || [])
+            : (typeof getEffectiveLineForNextPoint === 'function'
+                ? (getEffectiveLineForNextPoint(game).line || [])
+                : []);
+    }
 
     // Create header rows (score display)
     const runningScores = typeof getRunningScores === 'function'
@@ -4351,7 +3845,33 @@ function updateSelectLineTable() {
     
     addScoreCells(teamScoreRow, game.team, runningScores.team);
     addScoreCells(opponentScoreRow, game.opponent, runningScores.opponent);
-    
+
+    // On Deck: trailing header for the tentative-next projection column.
+    // rowspan 2 so only the team row carries it; the opponent row keeps its
+    // column count without an extra cell.
+    if (isOnDeckView) {
+        const projHeader = document.createElement('th');
+        // Line break stacks "On / Deck" vertically (CSS white-space: pre-line)
+        // to keep the column narrow.
+        projHeader.textContent = 'On\nDeck';
+        projHeader.setAttribute('rowspan', '2');
+        projHeader.title = 'On Deck point — projected points played by each player going in';
+        projHeader.classList.add('active-ondeck-projection');
+        // Color the header by the On Deck point's gender ratio, matching the
+        // score-cell coloring used on the other headers. The ratio is
+        // deterministic (fixed A-B-B-A alternation, independent of who wins),
+        // so the point two ahead is known: its 0-based index is points.length+1
+        // (the next point is points.length per getExpectedGenderRatio).
+        if (game.alternateGenderRatio === 'Alternating' && game.startingGenderRatio) {
+            const onDeckRatio = typeof getGenderRatioForPoint === 'function'
+                ? getGenderRatioForPoint(game, game.points.length + 1)
+                : null;
+            if (onDeckRatio === 'FMP') projHeader.classList.add('score-cell-fmp');
+            else if (onDeckRatio === 'MMP') projHeader.classList.add('score-cell-mmp');
+        }
+        teamScoreRow.appendChild(projHeader);
+    }
+
     tableHead.appendChild(teamScoreRow);
     tableHead.appendChild(opponentScoreRow);
     
@@ -4418,9 +3938,8 @@ function updateSelectLineTable() {
         const gameTime = typeof getPlayerGameTime === 'function'
             ? getPlayerGameTime(player.name)
             : 0;
-        if (panelStatsMode === 'event' && typeof getEventPlayerStats === 'function' && game.eventId) {
-            const eventStats = getEventPlayerStats(game.eventId);
-            const ps = eventStats[player.name] || {};
+        if (panelStatsMode === 'event' && game.eventId) {
+            const ps = (cachedPanelEventStats && cachedPanelEventStats[player.name]) || {};
             const eventTime = (ps.timePlayed || 0) + gameTime;
             timeCell.textContent = typeof formatPlayTime === 'function'
                 ? formatPlayTime(eventTime)
@@ -4439,9 +3958,8 @@ function updateSelectLineTable() {
 
         // Point participation columns
         let runningPointTotal = 0;
-        if (panelStatsMode === 'event' && typeof getEventPlayerStats === 'function' && game.eventId) {
-            const eventStats = getEventPlayerStats(game.eventId);
-            runningPointTotal = (eventStats[player.name]?.pointsPlayed || 0);
+        if (panelStatsMode === 'event' && game.eventId) {
+            runningPointTotal = (cachedPanelEventStats && cachedPanelEventStats[player.name]?.pointsPlayed) || 0;
         } else if (panelShowingTotalStats) {
             runningPointTotal = player.pointsPlayedPreviousGames || 0;
         }
@@ -4464,7 +3982,24 @@ function updateSelectLineTable() {
             }
             row.appendChild(pointCell);
         });
-        
+
+        // On Deck: tentative-next projection — points played so far, +1 if this
+        // player is slated for the immediate next point. Read-only/greyed; it's
+        // a planning aid, not an editable column.
+        if (isOnDeckView) {
+            const projCell = document.createElement('td');
+            projCell.classList.add('active-ondeck-projection');
+            // Like every other point column: show the (incremented) running
+            // total only for players slated for the immediate next point; a
+            // dash for those sitting it out, matching the table's "-" idiom.
+            if (tentativeNextSet.includes(player.name)) {
+                projCell.textContent = `${runningPointTotal + 1}`;
+            } else {
+                projCell.textContent = '-';
+            }
+            row.appendChild(projCell);
+        }
+
         tableBody.appendChild(row);
     });
     
@@ -4506,11 +4041,11 @@ function updateSelectLineTimeCells() {
             : 0;
 
         // Calculate time based on current display mode
-        if (panelStatsMode === 'event' && typeof getEventPlayerStats === 'function') {
+        if (panelStatsMode === 'event') {
             const game = typeof currentGame === 'function' ? currentGame() : null;
             if (game && game.eventId) {
-                const eventStats = getEventPlayerStats(game.eventId);
-                const eventTime = (eventStats[playerName]?.timePlayed || 0) + gameTime;
+                const ps = (cachedPanelEventStats && cachedPanelEventStats[playerName]) || {};
+                const eventTime = (ps.timePlayed || 0) + gameTime;
                 cell.textContent = typeof formatPlayTime === 'function'
                     ? formatPlayTime(eventTime)
                     : '0:00';
@@ -4529,12 +4064,85 @@ function updateSelectLineTimeCells() {
 }
 
 /**
+ * Render the "Line Coach: viewing/editing the X line" awareness label on
+ * the Active Coach's Select Line panel.
+ *
+ * Reads the synced lineCoachViewing field (written only by the LC via
+ * noteLineCoachViewing) and compares against the AC's local activeType.
+ * Per TODO design, the label is hidden in three cases:
+ *   (a) AC's local view already matches the LC's view (no new info).
+ *   (b) No LC role is currently claimed.
+ *   (c) AC and LC are the same user (solo / dual-role).
+ * Additionally only rendered for the Active Coach — the LC themselves
+ * has no use for it.
+ *
+ * Viewing vs editing distinction: if any line *ModifiedAt is within the
+ * last ~10s, the verb is "editing" (stronger nudge for the AC to look);
+ * otherwise "viewing".
+ */
+function updateLineCoachViewingLabel() {
+    const el = document.getElementById('selectLineLcViewing');
+    if (!el) return;
+
+    const hide = () => {
+        el.style.display = 'none';
+        el.textContent = '';
+    };
+
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !game.pendingNextLine) { hide(); return; }
+
+    const ctrl = (typeof getControllerState === 'function') ? getControllerState() : {};
+
+    // (b) No LC claimed → nothing to label.
+    if (!ctrl.lineCoach) { hide(); return; }
+    // (c) Same user holds both roles → no awareness gap.
+    if (ctrl.activeCoach && ctrl.lineCoach.userId === ctrl.activeCoach.userId) {
+        hide(); return;
+    }
+    // Only render for the Active Coach. The Line Coach already knows their
+    // own view; viewers see the AC's view per existing design.
+    if (!ctrl.isActiveCoach) { hide(); return; }
+
+    const lcView = game.pendingNextLine.lineCoachViewing;
+    if (!lcView) { hide(); return; }
+
+    // (a) AC's local view already matches LC's view → no signal to convey.
+    const localView = game.pendingNextLine.activeType || 'od';
+    if (lcView === localView) { hide(); return; }
+
+    // Pick verb based on recent line-edit activity (any axis).
+    const now = Date.now();
+    const recentEdit = ['oLineModifiedAt', 'dLineModifiedAt', 'odLineModifiedAt'].some((k) => {
+        const t = game.pendingNextLine[k] ? new Date(game.pendingNextLine[k]).getTime() : 0;
+        return t && (now - t) < 10000;
+    });
+    const verb = recentEdit ? 'editing' : 'viewing';
+
+    const viewLabels = {
+        o: 'the O line', d: 'the D line', od: 'the O/D line',
+        odOnDeck: 'the On Deck line', split: 'split (O & D)'
+    };
+    const targetLabel = viewLabels[lcView] || `the ${lcView} line`;
+    const lcName = (ctrl.lineCoach.displayName) || 'Line Coach';
+
+    el.textContent = `${lcName}: ${verb} ${targetLabel}`;
+    el.style.display = '';
+}
+
+/**
  * Update the Select Line panel subtitle (shown in title bar when minimized)
  * Shows the selected player names as a compact, comma-separated list
  */
 function updateSelectLineSubtitle() {
+    // Keep the LC-viewing awareness label in sync on every subtitle refresh —
+    // updateSelectLineSubtitle is already invoked at every panel lifecycle
+    // moment (toggle, point end, cloud refresh, etc.) so piggy-backing here
+    // avoids new wiring.
+    updateLineCoachViewingLabel();
+
     if (typeof setPanelSubtitle !== 'function') return;
-    
+
     const game = typeof currentGame === 'function' ? currentGame() : null;
     if (!game) {
         setPanelSubtitle('selectLine', '');
@@ -4547,8 +4155,8 @@ function updateSelectLineSubtitle() {
     const lineKey = activeType + 'Line';
     const selectedNames = pendingLine[lineKey] || [];
     
-    // Update panel title based on line type: "Next D Line", "Next O Line", or "Next Line"
-    const titleLabels = { o: 'Next O Line', d: 'Next D Line', od: 'Next Line', split: 'Next Line' };
+    // Update panel title based on line type: "Next D Line", "Next O Line", "Next Line", or "On Deck Line"
+    const titleLabels = { o: 'Next O Line', d: 'Next D Line', od: 'Next Line', odOnDeck: 'On Deck Line', split: 'Next Line' };
     const panelTitle = titleLabels[activeType] || 'Next Line';
     if (typeof setPanelTitle === 'function') {
         setPanelTitle('selectLine', panelTitle);
@@ -4689,76 +4297,21 @@ function makePanelColumnsSticky() {
         cell.style.touchAction = 'pan-y';
     });
 
-    // Scroll to right (show most recent points)
+    // Restore the user's horizontal scroll position. Snap to the right edge
+    // (most recent points) only on first render or when the user was already
+    // following the latest; otherwise preserve where they scrolled to so the
+    // periodic rebuild doesn't pop them back to the right (see _selectLineScrollState).
     const tableContainer = document.getElementById('panelTableContainer');
     if (tableContainer) {
-        tableContainer.scrollLeft = tableContainer.scrollWidth;
+        if (_selectLineScrollState && !_selectLineScrollState.atRightEdge) {
+            tableContainer.scrollLeft = _selectLineScrollState.scrollLeft;
+        } else {
+            tableContainer.scrollLeft = tableContainer.scrollWidth;
+        }
         enableAxisLockedScroll(tableContainer);
     }
 }
 
-/**
- * Apply sticky columns to a split panel table
- * @param {'O'|'D'} suffix
- */
-function makeSplitPanelColumnsSticky(suffix) {
-    const tableId = `panelActivePlayersTable${suffix}`;
-    const checkboxCells = document.querySelectorAll(`#${tableId} .active-checkbox-column`);
-    const nameCells = document.querySelectorAll(`#${tableId} .active-name-column`);
-    const timeCells = document.querySelectorAll(`#${tableId} .active-time-column`);
-    const headerCells = document.querySelectorAll(`#${tableId} .active-header-teams`);
-
-    if (checkboxCells.length === 0) return;
-
-    const checkboxWidth = checkboxCells[0].getBoundingClientRect().width || 30;
-    const nameWidth = nameCells.length > 0 ? nameCells[0].getBoundingClientRect().width : 0;
-
-    checkboxCells.forEach(cell => {
-        cell.style.position = 'sticky';
-        cell.style.left = '0';
-        cell.style.zIndex = '4';
-        cell.style.backgroundColor = '#fafafa';
-        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
-        cell.style.border = 'none';
-        cell.style.touchAction = 'pan-y';
-    });
-
-    nameCells.forEach(cell => {
-        cell.style.position = 'sticky';
-        cell.style.left = `${checkboxWidth}px`;
-        cell.style.zIndex = '3';
-        cell.style.backgroundColor = '#fafafa';
-        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
-        cell.style.border = 'none';
-        cell.style.touchAction = 'pan-y';
-    });
-
-    timeCells.forEach(cell => {
-        cell.style.position = 'sticky';
-        cell.style.left = `${checkboxWidth + nameWidth}px`;
-        cell.style.zIndex = '3';
-        cell.style.backgroundColor = '#fafafa';
-        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
-        cell.style.border = 'none';
-        cell.style.touchAction = 'pan-y';
-    });
-
-    headerCells.forEach(cell => {
-        cell.style.position = 'sticky';
-        cell.style.left = '0';
-        cell.style.zIndex = '5';
-        cell.style.backgroundColor = '#fafafa';
-        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
-        cell.style.border = 'none';
-        cell.style.touchAction = 'pan-y';
-    });
-
-    const tableContainer = document.getElementById(`panelTableContainer${suffix}`);
-    if (tableContainer) {
-        tableContainer.scrollLeft = tableContainer.scrollWidth;
-        enableAxisLockedScroll(tableContainer);
-    }
-}
 
 /**
  * Full update of the Select Line panel
@@ -5260,14 +4813,15 @@ function enterGameScreen() {
     // Reset stats mode
     panelStatsMode = 'game';
     panelShowingTotalStats = false;
+    cachedPanelEventStats = null;
 
     // Set currentEvent if game is part of an event
     const currentGameObj = typeof currentGame === 'function' ? currentGame() : null;
     if (currentGameObj && currentGameObj.eventId && !currentEvent) {
         // Try to fetch event data (best effort — will be null if not loaded)
         if (typeof listTeamEvents === 'function' && currentGameObj.teamId) {
-            listTeamEvents(game.teamId).then(events => {
-                const ev = events.find(e => e.id === game.eventId);
+            listTeamEvents(currentGameObj.teamId).then(events => {
+                const ev = events.find(e => e.id === currentGameObj.eventId);
                 if (ev) {
                     currentEvent = typeof deserializeTournamentEvent === 'function'
                         ? deserializeTournamentEvent(ev) : ev;
@@ -5373,11 +4927,6 @@ function enterGameScreen() {
         }
     });
 
-    // Restore split mode if it was active
-    if (game && game.pendingNextLine && game.pendingNextLine.activeType === 'split') {
-        enterSplitMode();
-    }
-
     // Set up ResizeObserver for Play-by-Play panel layout
     setupPlayByPlayResizeObserver();
 
@@ -5395,6 +4944,7 @@ function exitGameScreen() {
 
     // Clear event context when leaving game
     currentEvent = null;
+    cachedPanelEventStats = null;
 
     // Reset multi-coach detection for next game
     if (typeof resetMultiCoachDetected === 'function') {
@@ -5446,72 +4996,85 @@ function startGameStateRefresh() {
         const isActiveCoach = state.isActiveCoach;
         
         if (isActiveCoach) {
-            // Active Coach: Only refresh pending line (between points)
-            // They are the authoritative source for game data
-            if (typeof isPointInProgress === 'function' && !isPointInProgress()) {
-                if (typeof refreshPendingLineFromCloud === 'function') {
-                    // Snapshot lineupReadyAt before refresh so we can
-                    // detect a *new* "Lineup Ready" ping from the Line
-                    // Coach. The merge happens in-place inside the
-                    // refresh function; comparing pre/post tells us
-                    // whether to surface a toast.
-                    const gameForSnapshot = (typeof currentGame === 'function') ? currentGame() : null;
-                    const prevLineupReadyAt = (gameForSnapshot
-                        && gameForSnapshot.pendingNextLine
-                        && gameForSnapshot.pendingNextLine.lineupReadyAt) || 0;
+            // Active Coach: refresh the pending line continuously, including
+            // during a live point. Originally gated on !isPointInProgress()
+            // to protect mid-point edits from being clobbered by Line Coach
+            // syncs — that risk was eliminated by the server-side per-field
+            // merge + non-authoritative writer guard (commit 9fadda1), so
+            // the gate can now go. With it gone, the AC sees the LC's view
+            // switches and line edits live, which is what the LC-viewing
+            // sub-header (rendered below) needs to stay accurate.
+            if (typeof refreshPendingLineFromCloud === 'function') {
+                // Snapshot lineupReadyAt before refresh so we can
+                // detect a *new* "Lineup Ready" ping from the Line
+                // Coach. The merge happens in-place inside the
+                // refresh function; comparing pre/post tells us
+                // whether to surface a toast.
+                const gameForSnapshot = (typeof currentGame === 'function') ? currentGame() : null;
+                const prevLineupReadyAt = (gameForSnapshot
+                    && gameForSnapshot.pendingNextLine
+                    && gameForSnapshot.pendingNextLine.lineupReadyAt) || 0;
 
-                    const result = await refreshPendingLineFromCloud(gameId);
-                    if (result && typeof result === 'object' && result.gameJustEnded) {
-                        // Game ended by another session/device
-                        console.log('🏁 Game ended by another session — leaving game screen');
-                        if (typeof showControllerToast === 'function') {
-                            showControllerToast('Game has ended', 'info', 4000);
-                        }
-                        stopControllerPolling();
-                        exitGameScreen();
-                        if (typeof showSelectTeamScreen === 'function') {
-                            showSelectTeamScreen();
-                        }
-                        return;
+                const result = await refreshPendingLineFromCloud(gameId);
+                if (result && typeof result === 'object' && result.gameJustEnded) {
+                    // Game ended by another session/device
+                    console.log('🏁 Game ended by another session — leaving game screen');
+                    if (typeof showControllerToast === 'function') {
+                        showControllerToast('Game has ended', 'info', 4000);
                     }
-                    if (result) {
-                        // Re-evaluate which line will be used for the
-                        // next point now that we have fresh data — the
-                        // Line Coach may have switched between OD / O /
-                        // D since our last poll. autoSelect updates
-                        // activeType so updateSelectLinePanel below
-                        // renders the line that will actually start.
-                        if (typeof autoSelectActiveTypeForNextPoint === 'function') {
-                            autoSelectActiveTypeForNextPoint();
-                        }
-                        updateSelectLinePanel();
+                    stopControllerPolling();
+                    exitGameScreen();
+                    if (typeof showSelectTeamScreen === 'function') {
+                        showSelectTeamScreen();
+                    }
+                    return;
+                }
+                if (result) {
+                    // Re-evaluate which line will be used for the
+                    // next point now that we have fresh data — but
+                    // ONLY between points. autoSelect overrides
+                    // activeType to whatever the Intent Rule picks,
+                    // which is the right behavior at point-end (snap
+                    // the AC's view to the line that will actually
+                    // start) but the wrong behavior mid-point: a
+                    // manual O|D toggle by the AC or LC gets reverted
+                    // on the next 3s poll. The refresh-gate removal
+                    // (this commit's parent) is for keeping line
+                    // *data* and the LC-viewing label fresh during a
+                    // point — not for forcing view auto-selection.
+                    const pointInProgress = typeof isPointInProgress === 'function'
+                        && isPointInProgress();
+                    if (!pointInProgress
+                        && typeof autoSelectActiveTypeForNextPoint === 'function') {
+                        autoSelectActiveTypeForNextPoint();
+                    }
+                    updateSelectLinePanel();
 
-                        // Refresh PBP-side button state too. updateSelect-
-                        // LinePanel only touches the Line tab's table —
-                        // the Start Point buttons on Simple, Full, AND
-                        // Line tabs all read from updatePlayByPlayPanel-
-                        // State. Without this, the Active Coach who's
-                        // sitting on Full or Simple sees stale button
-                        // colors (and the Line tab's own button doesn't
-                        // refresh either, since its state is hung off
-                        // updatePlayByPlayPanelState via
-                        // updateLineTabStartPointBtn).
-                        if (typeof updatePlayByPlayPanelState === 'function') {
-                            updatePlayByPlayPanelState();
-                        }
+                    // Refresh PBP-side button state too. updateSelect-
+                    // LinePanel only touches the Line tab's table —
+                    // the Start Point buttons on Simple, Full, AND
+                    // Line tabs all read from updatePlayByPlayPanel-
+                    // State. Without this, the Active Coach who's
+                    // sitting on Full or Simple sees stale button
+                    // colors (and the Line tab's own button doesn't
+                    // refresh either, since its state is hung off
+                    // updatePlayByPlayPanelState via
+                    // updateLineTabStartPointBtn).
+                    if (typeof updatePlayByPlayPanelState === 'function') {
+                        updatePlayByPlayPanelState();
+                    }
 
-                        // Surface a Lineup Ready ping if this refresh
-                        // brought one. Skip if the timestamp is stale
-                        // (>60s old) — could be a leftover from a
-                        // previous between-points window that we just
-                        // happened to refresh into now.
-                        const newReadyAt = (result && result.lineupReadyAt) || 0;
-                        if (newReadyAt > prevLineupReadyAt
-                            && (Date.now() - newReadyAt) < 60000) {
-                            const who = (result.lineupReadyBy || 'Line Coach');
-                            if (typeof showControllerToast === 'function') {
-                                showControllerToast(`${who} says lineup ready`, 'success', 4000);
-                            }
+                    // Surface a Lineup Ready ping if this refresh
+                    // brought one. Skip if the timestamp is stale
+                    // (>60s old) — could be a leftover from a
+                    // previous between-points window that we just
+                    // happened to refresh into now.
+                    const newReadyAt = (result && result.lineupReadyAt) || 0;
+                    if (newReadyAt > prevLineupReadyAt
+                        && (Date.now() - newReadyAt) < 60000) {
+                        const who = (result.lineupReadyBy || 'Line Coach');
+                        if (typeof showControllerToast === 'function') {
+                            showControllerToast(`${who} says lineup ready`, 'success', 4000);
                         }
                     }
                 }
@@ -5586,11 +5149,6 @@ function updateGameScreenAfterRefresh() {
     // Update Select Line panel (player stats, etc.)
     updateSelectLinePanel();
     updateSelectLineTable();
-
-    // Update split panels if in split mode
-    if (isSplitMode()) {
-        updateSplitPanels();
-    }
 
     // Update Play-by-Play panel state
     updatePlayByPlayPanelState();
@@ -5685,12 +5243,6 @@ window.updateSelectLineSubtitle = updateSelectLineSubtitle;
 window.canEditSelectLinePanel = canEditSelectLinePanel;
 window.getSelectedPlayersFromPanel = getSelectedPlayersFromPanel;
 window.savePanelSelectionsToPendingNextLine = savePanelSelectionsToPendingNextLine;
-
-// O/D Split panels
-window.isSplitMode = isSplitMode;
-window.enterSplitMode = enterSplitMode;
-window.exitSplitMode = exitSplitMode;
-window.updateSplitPanels = updateSplitPanels;
 
 // Tab control
 window.wireTabControlEvents = wireTabControlEvents;

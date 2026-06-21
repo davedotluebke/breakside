@@ -31,15 +31,15 @@ const FOLLOW_MIN_HEIGHT = 80;
 // playByPlayFull is the Full-mode PBP panel — only visible when the "Full"
 // tab is active. Hidden by default everywhere else (including the All view,
 // which keeps Simple-mode PBP only — see docs/full-pbp-requirements.md).
-const PANEL_ORDER = ['header', 'roleButtons', 'playByPlay', 'playByPlayFull', 'playByPlayField', 'selectLine', 'selectOLine', 'selectDLine', 'follow'];
+const PANEL_ORDER = ['header', 'roleButtons', 'playByPlay', 'playByPlayFull', 'playByPlayField', 'selectLine', 'follow'];
 
 // Panels that can be resized via drag (these have draggable title bars)
 // Dragging a title bar resizes that panel and the one above it
-const DRAGGABLE_PANELS = ['selectLine', 'selectOLine', 'selectDLine', 'follow'];
+const DRAGGABLE_PANELS = ['selectLine', 'follow'];
 
 // Panels that CAN be resized (excludes fixed-height header and roleButtons)
 // Note: playByPlayFull is full-tab-only and never resized via drag.
-const RESIZABLE_PANELS = ['playByPlay', 'selectLine', 'selectOLine', 'selectDLine', 'follow'];
+const RESIZABLE_PANELS = ['playByPlay', 'selectLine', 'follow'];
 
 // Default panel states
 // height: null = natural/flexible height (Follow uses flex-fill)
@@ -52,8 +52,6 @@ const DEFAULT_PANEL_STATES = {
     playByPlayFull: { hidden: true, height: null },
     playByPlayField: { hidden: true, height: null },
     selectLine: { hidden: false, height: null },
-    selectOLine: { hidden: true, height: null },
-    selectDLine: { hidden: true, height: null },
     follow: { hidden: false, height: null }
 };
 
@@ -209,10 +207,7 @@ function updateExpandingPanel() {
     const followAtMin = followState.height !== null && followState.height <= getDragMinHeight('follow');
 
     // All potentially expanding panels (bottom-up order, excluding Follow)
-    // Include split panels when visible
     const expandOrder = [];
-    if (!getPanelState('selectDLine').hidden) expandOrder.push('selectDLine');
-    if (!getPanelState('selectOLine').hidden) expandOrder.push('selectOLine');
     if (!getPanelState('selectLine').hidden) expandOrder.push('selectLine');
     expandOrder.push('playByPlay');
 
@@ -961,8 +956,6 @@ function updatePanelsForRole() {
         }
         setPanelVisible('playByPlay', false);
         setPanelVisible('selectLine', false);
-        setPanelVisible('selectOLine', false);
-        setPanelVisible('selectDLine', false);
         if (isPanelMinimized('follow')) {
             maximizePanel('follow', false);
         }
@@ -972,10 +965,7 @@ function updatePanelsForRole() {
     // Ensure coach panels are visible (viewer mode may have hidden them
     // in a previous session, and the hidden state persists in localStorage)
     setPanelVisible('playByPlay', true);
-    const inSplitMode = typeof window.isSplitMode === 'function' && window.isSplitMode();
-    if (!inSplitMode) {
-        setPanelVisible('selectLine', true);
-    }
+    setPanelVisible('selectLine', true);
 
     // Hide role buttons when solo coaching.
     // Server tracks how many coaches are actively polling this game.
@@ -1195,8 +1185,7 @@ function applyTabState() {
     // playByPlayFull is a content panel like the others, but only ever
     // visible in the Full tab — never in All. Listed here so the tab
     // switcher can hide/show it consistently with the rest.
-    const contentPanels = ['playByPlay', 'playByPlayFull', 'playByPlayField', 'selectLine', 'selectOLine', 'selectDLine', 'follow'];
-    const inSplitMode = typeof window.isSplitMode === 'function' && window.isSplitMode();
+    const contentPanels = ['playByPlay', 'playByPlayFull', 'playByPlayField', 'selectLine', 'follow'];
 
     if (activeTab === 'all') {
         // Restore normal panel mode
@@ -1206,16 +1195,7 @@ function applyTabState() {
         });
         // Re-apply saved panel states (restores heights, visibility)
         applyAllPanelStates();
-        // Respect split mode
-        if (inSplitMode) {
-            setPanelVisible('selectLine', false);
-            setPanelVisible('selectOLine', true);
-            setPanelVisible('selectDLine', true);
-        } else {
-            setPanelVisible('selectLine', true);
-            setPanelVisible('selectOLine', false);
-            setPanelVisible('selectDLine', false);
-        }
+        setPanelVisible('selectLine', true);
         setPanelVisible('playByPlay', true);
         // All view keeps Simple-mode PBP only — Full + Field panels stay hidden.
         setPanelVisible('playByPlayFull', false);
@@ -1224,11 +1204,6 @@ function applyTabState() {
     } else {
         // Single-tab mode: determine which panels to show
         let showPanels = [...(TAB_PANELS[activeTab] || [])];
-
-        // Line tab: respect split mode
-        if (activeTab === 'line' && inSplitMode) {
-            showPanels = ['selectOLine', 'selectDLine'];
-        }
 
         contentPanels.forEach(id => {
             const panel = getPanelElement(id);

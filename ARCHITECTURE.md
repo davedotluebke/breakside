@@ -2,6 +2,25 @@
 
 This document describes the technical architecture of the Breakside ultimate frisbee statistics tracker.
 
+## Target Platform
+
+**Phone-first.** Layout, gesture surfaces, and UI density are designed for a
+phone in the coach's hand on the sideline. Tablet may be optimized for later.
+Desktop is not an important target — desktop-specific affordances (hover
+states, keyboard shortcuts beyond basics, multi-column layouts) are
+nice-to-have at best, and should not constrain phone UX decisions.
+
+Practical implications:
+
+- iOS PWA is a primary runtime. Capabilities that don't work there (e.g.
+  Fullscreen API on non-`<video>` elements) need CSS-based workarounds, not
+  feature detection that silently degrades.
+- "Looks fine on desktop" is not a sign-off; test on phone-sized viewports
+  (iPhone 15 Pro 393×852 / 15 Pro Max 430×932) before declaring a UI change
+  done.
+- Touch ergonomics (tap targets ≥ ~36px, drag affordances, no hover-only UI)
+  take precedence over visual density.
+
 ## System Overview
 
 Breakside uses a hybrid architecture with a Progressive Web App (PWA) frontend hosted on CloudFront/S3 and a FastAPI backend on EC2.
@@ -177,6 +196,22 @@ The interesting consequence: a separate O line, once created, persists across po
 
 Feedback colors (count / gender-ratio warnings) on the Start Point button are computed against the *effective* line, not the visible checkboxes — so even if a coach is browsing a different line at tap time, the feedback hue reflects what would actually start.
 
+### On Deck Line (planning two points ahead)
+
+The Line Coach can prepare the line for the point *after* the next one while the current point is still in progress. This is a single, **side-agnostic** lineup (not a full O/D/OD mirror): `game.pendingNextLine.odOnDeckLine`, paired with `odOnDeckLineModifiedAt`. The motivation: once the next line is set, the Line Coach was otherwise idle and would start points early just to advance the panel.
+
+**Toggle / storage.** The O/D toggle gains a fourth state, so the cycle is `od → o → d → odOnDeck → od`. The `activeType` value `'odOnDeck'` is chosen so the existing `activeType + 'Line'` string-concatenation pattern (used throughout `savePanelSelectionsToPendingNextLine`, `updateSelectLineTable`, `updateSelectLineSubtitle`) resolves to the `odOnDeckLine` bucket with no special-casing.
+
+**Promotion.** In `startNextPoint()` (`game/pointManagement.js`), *after* the effective line for the point being started has been read, a non-empty `odOnDeckLine` is promoted into the next-line bucket: `odLine = [...odOnDeckLine]; odLineModifiedAt = now`, then `odOnDeckLine` is cleared. Promotion is side-agnostic — it always seeds `odLine`, dodging the O/D side-consistency logic entirely; `getEffectiveLineForNextPoint` then resolves the side normally at the following point. Stamping `odLineModifiedAt = now` (a time *during* the just-started point) is load-bearing: it keeps the promoted line from being overwritten by the ending-7 reseed in `transitionToBetweenPoints`, whose reference time is the *previous* point's end. Empty On Deck = no-op; the cleared view re-renders to its empty default for fresh planning.
+
+**Projection column.** In the On Deck view only, `updateSelectLineTable` appends one read-only column: each player's points-played-so-far, `+1` if they're in the *tentative next* set (a dash otherwise, matching the table's points-not-played idiom). The tentative-next set is phase-dependent — `isPointInProgress() ? odLine : getEffectiveLineForNextPoint(game).line` — because the O/D side is genuinely unknown until the in-progress point ends. The column is pure-derived (recomputed each render, no stored projection state). Its header is colored by the on-deck point's gender ratio via `getGenderRatioForPoint(game, game.points.length + 1)` — deterministic because the alternation schedule doesn't depend on who wins.
+
+**Two guards** keep the new view from leaking into the next-line logic:
+- `getEffectiveLineForNextPoint` treats a `lineCoachViewing` value of `'odOnDeck'` as "no Next-line view preference" (Priority 1 is skipped) — an On Deck view must never resolve into a Next bucket.
+- `autoSelectActiveTypeForNextPoint` returns early when `activeType === 'odOnDeck'`, so a coach planning On Deck isn't yanked back to the Next view when a point ends.
+
+**Sync.** `odOnDeckLine` merges per-axis by `odOnDeckLineModifiedAt`, exactly like the O/D/OD lines: added to `_LINE_KEYS` in `merge_pending_next_line` (`ultistats_server/storage/game_storage.py`), to both client read-merge sites in `store/sync.js`, and to `serializeGame`/`deserializeGame` in `store/storage.js`. (`activeType` itself stays local-only, as before.)
+
 ### Lineup Ready Signal
 
 Multi-coach coordination ping. The Line Coach taps a button on the Line tab to signal the Active Coach that the next line is set. Implementation:
@@ -206,7 +241,7 @@ The in-game UI is organized into five tabs, switched via a segmented control in 
 
 - **Simple** — The legacy Key Play–driven Play-by-Play panel only, full-screen. Streamlined buttons (We Score / They Score / Key Play / Undo / Sub / Events / More) plus the Key Play modal for granular event entry.
 - **Full** — The new every-event-entry panel (`playByPlay/fullPbp.js`), full-screen. Player rows + per-row contextual action buttons (drop / score / throwaway / break / block / interception / …), a horizontal modifier-flag chip strip below, a bottom-row "They turnover / Events / They score" action set in D-mode, and a flex-sized mini event log at the bottom. See **docs/full-pbp-requirements.md** for the full design and **Full PBP integration** below for the runtime architecture.
-- **Line** — Select Next Line panel only, full-screen (in split mode, the O and D panels stack).
+- **Line** — Select Next Line panel only, full-screen (the O/D toggle switches the single panel between combined, O, D, and On Deck views).
 - **Log** — Game Log (Follow) panel only, full-screen.
 - **All** — The full vertical panel stack with drag-to-resize (see next section). Default tab. Uses Simple PBP — the Full PBP layout is excluded from All-view because its custom-shaped panel doesn't compose well with the drag-to-resize stack.
 
@@ -250,12 +285,10 @@ moveTitleBar(i, delta):
 - **Spring-back (default):** Each frame resets heights to their start-of-drag values and applies the absolute delta from the drag start position. When the finger reverses, all panels spring back to their original sizes.
 - **Physical:** Each frame applies an incremental delta from the previous frame's position. Pushed panels stay where they are because nothing asks them to move back — the recursion only pushes, never pulls.
 
-**Line type toggle:** The O/D button on the Select Next Line toolbar cycles through four modes: `od` → `o` → `d` → `split` → `od`. Each mode manages a separate player selection stored in `pendingNextLine` (`odLine`, `oLine`, `dLine`). When a point ends, `selectAppropriateLineAtPointEnd()` decides which view to show next:
+**Line type toggle:** The O/D button on the Select Next Line toolbar cycles through four modes: `od` → `o` → `d` → `odOnDeck` → `od`. Each mode manages a separate player selection stored in `pendingNextLine` (`odLine`, `oLine`, `dLine`, `odOnDeckLine`). When a point ends, `selectAppropriateLineAtPointEnd()` (→ `autoSelectActiveTypeForNextPoint()`) decides which view to show next:
 - If the coach was in combined `od` view, it stays in `od` (sticky preference).
 - If in `o` or `d` view, auto-switches to `o` or `d` based on who scored (team scored → defense next, opponent scored → offense next).
-- Split view is always preserved.
-
-**Split mode:** In split view, the `selectLine` panel is hidden (`display: none`) and two stacked panels `selectOLine`/`selectDLine` are shown. The drag system filters out non-rendered panels (`offsetParent === null`) to avoid dragging invisible elements.
+- If in `odOnDeck` view, it stays there (the coach is planning two points ahead; don't interrupt — see *On Deck Line* above).
 
 ### Full PBP integration
 
@@ -298,6 +331,48 @@ The service worker implements a network-first strategy with cache fallback:
 | **Process Manager** | systemd |
 | **Data Storage** | JSON files on filesystem |
 | **SSL** | Let's Encrypt (certbot) |
+
+### TLS Certificate Renewal (and the PATH gotcha)
+
+nginx terminates TLS using Let's Encrypt certs under `/etc/letsencrypt/live/`. Two
+lineages exist: `api.breakside.pro` (covers `api.breakside.pro` + `api.breakside.us`,
+both served from EC2) and `api.breakside.us` (the apex/redirect block). **`www.breakside.pro`
+must NOT be on any EC2 cert** — it's served by CloudFront, so its http-01 challenge
+404s on EC2 and fails the whole renewal.
+
+Renewal runs from `/etc/cron.d/certbot` (`certbot renew --quiet`, twice daily) using the
+**nginx authenticator plugin**.
+
+**Historical root cause (June 2026 outage):** the `api.breakside.pro` cert silently failed
+to auto-renew for ~3 months and eventually expired, taking the API down. The cron job *was*
+running certbot twice daily the whole time, but every run failed with `The nginx plugin is
+not working`. The real reason buried in `/var/log/letsencrypt/letsencrypt.log` was
+`Could not find a usable 'nginx' binary ... your PATH`: **cron's default PATH
+(`/usr/bin:/bin`) does not include `/usr/sbin`, where the `nginx` binary lives.** The nginx
+plugin shells out to `nginx`, couldn't find it, and aborted — but only under cron. Run by
+hand (login PATH includes `/usr/sbin`) it always worked, which masked the bug. Fix: a
+`PATH=...:/usr/sbin:...` line at the top of `/etc/cron.d/certbot`. Verify with
+`sudo env -i PATH=/usr/bin:/bin certbot renew --dry-run` (reproduces the failure) vs
+adding `/usr/sbin` (succeeds).
+
+**Expiry tripwire:** Let's Encrypt stopped emailing expiry warnings in 2025, so the silent
+failure went unnoticed until the API died. `/usr/local/bin/cert-expiry-check.sh` (daily via
+`/etc/cron.d/cert-expiry-check`) checks days-to-expiry on every `live/*/fullchain.pem` and,
+under 20 days, logs to syslog (`logger -t cert-expiry`) **and** emails dave@luebke.us — an
+alarm independent of whatever certbot does, so it catches any future cause.
+
+### Outbound Mail (Postfix → Gmail relay)
+
+The box sends mail (cert alarm; also the old text-adventure game's git-sync/db-backup
+notices) via local **Postfix**. EC2 blocks outbound port 25 to the internet, so Postfix
+cannot deliver directly — it **must** relay through an authenticated SMTP service. It's
+configured to relay through Gmail (`relayhost = [smtp.gmail.com]:587`, SASL creds in
+`/etc/postfix/sasl_passwd`, perms 600). The auth account is a `luebke.us` Google account
+using an **app password** (not the login password; requires 2FA). If mail stops delivering,
+check `sudo postqueue -p` and `/var/log/maillog` — `relay=none ... Network is unreachable`
+on port 25 means the relay config was lost; `535 Username and Password not accepted` means
+the app password is stale. The harmless `connect to smtp.gmail.com[<ipv6>]:587: Network is
+unreachable` log lines are just the box falling back from IPv6 to IPv4.
 
 ### Server File Structure
 

@@ -100,14 +100,25 @@
 }
 .full-pbp-start-point-btn:hover  { background: #15803d; }
 .full-pbp-start-point-btn:active { background: #166534; }
-.full-pbp-start-point-btn.inactive,
-.full-pbp-start-point-btn.feedback-count-warning {
+/* Feedback colors — match the Select Line / PBP panel palette
+   (panelSystem.css ~1285) so the same lineup state reads the same way
+   wherever the Start Point button appears. count-warning was previously
+   collapsed with `.inactive` (both grey) which made a real wrong-count
+   warning look like a disabled button to the AC. */
+.full-pbp-start-point-btn.feedback-count-warning  { background: #dc3545; color: #fff; }
+.full-pbp-start-point-btn.feedback-gender-warning { background: #f59e0b; color: #fff; }
+.full-pbp-start-point-btn.feedback-ok             { background: #16a34a; color: #fff; }
+.full-pbp-start-point-btn.inactive {
     background: #d6d6d6;
     color: #888;
     cursor: not-allowed;
 }
-.full-pbp-start-point-btn.feedback-gender-warning { background: #f59e0b; color: #fff; }
-.full-pbp-start-point-btn.feedback-ok             { background: #16a34a; color: #fff; }
+/* Inactive + feedback combos: dimmed but the warning hue still shows
+   through, so a non-Active-Coach can read the lineup state without
+   acting on it (pure grey would erase the warning info). */
+.full-pbp-start-point-btn.inactive.feedback-ok             { background: #6fae7d; color: #fff; opacity: 0.85; }
+.full-pbp-start-point-btn.inactive.feedback-count-warning  { background: #b97a82; color: #fff; opacity: 0.85; }
+.full-pbp-start-point-btn.inactive.feedback-gender-warning { background: #d29a55; color: #fff; opacity: 0.85; }
 
 .full-pbp-no-point-msg {
     flex: 1 1 auto;
@@ -429,9 +440,17 @@
 /* Mini event log — flexes to absorb whatever vertical slack is left
  * after the header / rows-area / modifier-row / bottom-actions are
  * laid out. min-height keeps it usable even on very tall row counts;
- * on roomy viewports the log just gets bigger. */
+ * on roomy viewports the log just gets bigger.
+ *
+ * flex-basis MUST be 0 (not auto): with `auto` the basis is the log's
+ * own content height, so as events accumulate during a point the log's
+ * basis grows and the flex-shrink pass steals space from the shrinkable
+ * rows-area above (flex: 0 1 auto) — progressively squeezing the player
+ * action buttons until they need scrolling. Basis 0 sizes the log purely
+ * from leftover free space; its internal overflow-y:auto handles scroll,
+ * so log length no longer affects the rows-area. */
 .full-pbp-log-reserve {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 110px;
     border-top: 1px solid #ddd;
     background: #fafafa;

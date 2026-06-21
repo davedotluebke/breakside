@@ -773,9 +773,9 @@ class TestPendingLineMerge:
 
     def _pnl(self, **fields):
         """Build a pendingNextLine dict with the standard empty defaults."""
-        base = {"oLine": [], "dLine": [], "odLine": [],
+        base = {"oLine": [], "dLine": [], "odLine": [], "odOnDeckLine": [],
                 "oLineModifiedAt": None, "dLineModifiedAt": None,
-                "odLineModifiedAt": None}
+                "odLineModifiedAt": None, "odOnDeckLineModifiedAt": None}
         base.update(fields)
         return base
 
@@ -799,6 +799,47 @@ class TestPendingLineMerge:
         pnl = get_game_current(gid)["pendingNextLine"]
         assert pnl["oLine"] == ["A", "B", "C", "D", "E", "F", "X"]
         assert pnl["oLineModifiedAt"] == "2026-05-24T18:01:00.000Z"
+
+    def test_on_deck_line_not_clobbered_by_stale_sync(self, isolate_test_data):
+        """The On Deck line (odOnDeckLine) merges per-axis like the others: a
+        stale full-sync must not clobber a newer On Deck edit on the server.
+        """
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "merge-ondeck-001"
+        # Line Coach has prepared the point-after-next On Deck line.
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    odOnDeckLine=["A", "B", "C", "D", "E", "F", "X"],
+                                    odOnDeckLineModifiedAt="2026-05-24T18:01:00.000Z")})
+        # Active Coach syncs with their stale (empty) On Deck copy.
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl()})
+
+        pnl = get_game_current(gid)["pendingNextLine"]
+        assert pnl["odOnDeckLine"] == ["A", "B", "C", "D", "E", "F", "X"]
+        assert pnl["odOnDeckLineModifiedAt"] == "2026-05-24T18:01:00.000Z"
+
+    def test_on_deck_line_merges_independently_of_other_axes(self, isolate_test_data):
+        """An On Deck edit and a separate odLine edit don't overwrite each
+        other — each axis carries its own timestamp.
+        """
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "merge-ondeck-002"
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    odLine=["O1"],
+                                    odLineModifiedAt="2026-05-24T18:00:00.000Z")})
+        # Newer On Deck edit; odLine edit is older and must be preserved.
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    odOnDeckLine=["N1"],
+                                    odOnDeckLineModifiedAt="2026-05-24T18:05:00.000Z")})
+
+        pnl = get_game_current(gid)["pendingNextLine"]
+        assert pnl["odOnDeckLine"] == ["N1"]
+        assert pnl["odLine"] == ["O1"]
 
     def test_per_field_merge_takes_newer_line_edit(self, isolate_test_data):
         """The mirror case: an incoming line edit newer than the server's must
@@ -887,6 +928,79 @@ class TestPendingLineMerge:
         cur = get_game_current(gid)
         assert cur["scores"] == {"team": 5, "opponent": 3}
         assert len(cur["points"]) == 8
+
+    # ---------------------------------------------------------------------
+    # LC-viewing signal (lineCoachViewing / lineCoachViewingAt). Drives
+    # Priority 1 of the Intent Rule and the AC's "Line Coach: viewing the
+    # X line" sub-label.
+    # ---------------------------------------------------------------------
+
+    def test_line_coach_viewing_merges_independently(self, isolate_test_data):
+        """lineCoachViewing has its own timestamp and merges independently
+        of the line-edit and Lineup Ready timestamps.
+        """
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "merge-viewing-001"
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    lineCoachViewing="o",
+                                    lineCoachViewingAt="2026-05-24T18:00:00.000Z")})
+        # LC switches view; newer lineCoachViewingAt wins.
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    lineCoachViewing="d",
+                                    lineCoachViewingAt="2026-05-24T18:05:00.000Z")})
+
+        pnl = get_game_current(gid)["pendingNextLine"]
+        assert pnl["lineCoachViewing"] == "d"
+        assert pnl["lineCoachViewingAt"] == "2026-05-24T18:05:00.000Z"
+
+    def test_stale_line_coach_viewing_does_not_clobber(self, isolate_test_data):
+        """A stale lineCoachViewing write (e.g. an out-of-order sync from a
+        device with a slow connection) must NOT roll back a newer view value.
+        """
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "merge-viewing-002"
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    lineCoachViewing="od",
+                                    lineCoachViewingAt="2026-05-24T18:05:00.000Z")})
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    lineCoachViewing="d",
+                                    lineCoachViewingAt="2026-05-24T18:00:00.000Z")})
+
+        pnl = get_game_current(gid)["pendingNextLine"]
+        assert pnl["lineCoachViewing"] == "od"
+        assert pnl["lineCoachViewingAt"] == "2026-05-24T18:05:00.000Z"
+
+    def test_viewing_and_ready_merge_independently(self, isolate_test_data):
+        """lineCoachViewingAt and lineupReadyAt have separate timestamps;
+        advancing one must not affect the other.
+        """
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "merge-viewing-003"
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    lineupReadyAt=1716576060000,
+                                    lineupReadyBy="Coach A",
+                                    lineCoachViewing="d",
+                                    lineCoachViewingAt="2026-05-24T18:00:00.000Z")})
+        # LC switches view to "o" but does NOT re-press Ready.
+        save_game_version(gid, {"team": "T", "opponent": "O",
+                                "pendingNextLine": self._pnl(
+                                    lineCoachViewing="o",
+                                    lineCoachViewingAt="2026-05-24T18:05:00.000Z")})
+
+        pnl = get_game_current(gid)["pendingNextLine"]
+        # Viewing advanced.
+        assert pnl["lineCoachViewing"] == "o"
+        # Ready ping unchanged.
+        assert pnl["lineupReadyAt"] == 1716576060000
+        assert pnl["lineupReadyBy"] == "Coach A"
 
 
 if __name__ == "__main__":

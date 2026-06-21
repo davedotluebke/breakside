@@ -48,6 +48,14 @@
      * the previous receiver), the user should Undo and re-tap.
      */
     let manualHolder = null;
+    // Tracks the Point object reference last seen by reconstructState so we
+    // can detect crossing a point boundary and clear stale manualHolder.
+    // Without this, a user-tapped holder from the previous point survives
+    // into a new point (especially when the point ends via a path that
+    // doesn't pass through createThrow / createTurnover / createDefense —
+    // e.g. Simple-mode "They Score" or narration) and prevents tapping
+    // someone else to indicate the pull catcher on the new O point.
+    let _lastSeenPointRef = null;
 
     /**
      * Whether the next Throw will have its break_flag set. Toggled by the
@@ -76,6 +84,18 @@
      * Returns { mode, holder } where holder is a Player or null.
      */
     function reconstructState() {
+        const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
+
+        // Point-boundary detection: when getLatestPoint() returns a different
+        // Point instance than last time, we've crossed a boundary — drop any
+        // stale manualHolder from the previous point. Done before delegating so
+        // it also covers point-end paths that bypass our event handlers
+        // (Simple-mode "They Score", narration). (main fix 1e995c5)
+        if (point !== _lastSeenPointRef) {
+            manualHolder = null;
+            _lastSeenPointRef = point;
+        }
+
         // Delegate to the shared possession core (playByPlay/pbpPossession.js)
         // so the Full and Field tabs always agree on (mode, holder).
         if (window.pbpPossession && typeof window.pbpPossession.reconstructState === 'function') {
@@ -83,7 +103,6 @@
         }
         // Fallback if the shared module isn't loaded: mode from the point's
         // starting position, no holder.
-        const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
         const mode = (point && point.startingPosition === 'defense') ? 'defense' : 'offense';
         return { mode, holder: null, point };
     }
