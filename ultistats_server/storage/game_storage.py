@@ -29,7 +29,9 @@ except ImportError:
 # the same instant can't interleave and lose each other's edits.
 _SAVE_LOCK = threading.Lock()
 
-_LINE_KEYS = ("oLine", "dLine", "odLine")
+# odOnDeckLine is the side-agnostic "On Deck" line (point-after-next); it
+# merges with the same per-axis last-writer-wins rule as the O/D/OD lines.
+_LINE_KEYS = ("oLine", "dLine", "odLine", "odOnDeckLine")
 
 
 def _ts(value) -> float:
@@ -70,9 +72,19 @@ def merge_pending_next_line(existing: Optional[dict], incoming: Optional[dict]) 
             merged[mod_key] = incoming.get(mod_key)
 
     # "Lineup Ready" signal: Line Coach writes, Active Coach reads.
+    # Fire-and-forget ping — AC's polling shows a toast when lineupReadyAt
+    # advances; no persistent latch beyond that.
     if _ts(incoming.get("lineupReadyAt")) > _ts(existing.get("lineupReadyAt")):
         merged["lineupReadyAt"] = incoming.get("lineupReadyAt")
         merged["lineupReadyBy"] = incoming.get("lineupReadyBy")
+
+    # LC-viewing signal: only the Line Coach writes lineCoachViewing /
+    # lineCoachViewingAt (client gates on isLineCoach). The Active Coach
+    # reads it to render the "Line Coach: viewing the X line" sub-header.
+    # Independent last-writer-wins on lineCoachViewingAt.
+    if _ts(incoming.get("lineCoachViewingAt")) > _ts(existing.get("lineCoachViewingAt")):
+        merged["lineCoachViewing"] = incoming.get("lineCoachViewing")
+        merged["lineCoachViewingAt"] = incoming.get("lineCoachViewingAt")
 
     # activeType is local UI state; honor the most recent writer's value if set.
     if "activeType" in incoming:

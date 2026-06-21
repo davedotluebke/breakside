@@ -15,6 +15,18 @@ Sections, in roughly priority order:
 
 ## Active
 
+### ⚠️ Temp ops cleanup — remove localhost from prod CORS
+
+Added `http://localhost:3002` (and possibly `:3001`/`:3000`) to `ULTISTATS_ALLOWED_ORIGINS`
+in `/etc/breakside/env` on EC2 so the localhost-only Claude preview could hit the prod API
+while building the **Field tab** (`field-position` branch). Low risk (auth is a Bearer JWT in
+`localStorage`, not reachable cross-origin), but remove it once Field-tab dev wraps up:
+
+- [ ] `ssh ec2-user@3.212.138.180`; edit `/etc/breakside/env`, drop the `http://localhost:*`
+      origin(s) from `ULTISTATS_ALLOWED_ORIGINS`; `sudo systemctl restart breakside`
+- [ ] Also revert the `field-tab-phase0` staging deploy when done (redeploy whatever should
+      live on staging), and remove the `field-app` entry from `.claude/launch.json`
+
 ### AI Narration
 
 MVP shipped. Coach speaks naturally; the system extracts structured game events. See **AI Narration** in [ARCHITECTURE.md](ARCHITECTURE.md) for the full design. Active work going forward is the post-MVP improvements list below.
@@ -55,11 +67,43 @@ The multi-user push is mostly done. A few items linger:
 
 ---
 
-## Multi-Coach Line Selection: Intent Rule & LC-Viewing Label
+## Multi-Coach Line Selection: Intent Rule & LC-Viewing Label — ✅ SHIPPED
 
-> **Status:** designed, not implemented. Server-side sync fix landed in `9fadda1` (multi-coach sync: merge `pendingNextLine` per-field + non-authoritative writer guard). This section is the client-side follow-up and is the agreed-upon design after a May 2026 review.
+> **Status: implemented and merged to main (May 2026).** Server-side
+> sync fix landed earlier in `9fadda1`; the client-side intent rule,
+> LC-viewing label, dual-role greying, and live mid-point refresh landed
+> via the `intent-rule-lc-label` branch, then were simplified by
+> `simplify-line-selection` (split view removed; Lineup Ready reduced to
+> a fire-and-forget ping). Both merged together.
 >
-> **Note for sibling sessions** (e.g. an "on-deck"/"next next line" feature): if you're adding new fields to `pendingNextLine`, follow the conventions called out under [Data model additions](#data-model-additions) below — pair each new value-field with its own `*ModifiedAt` so the server's `merge_pending_next_line` picks it up automatically, and apply the same greying / role-based editability rules to any new line-selection surface.
+> **What's live now** (so a future on-deck/"next next line" session has the
+> current shape, not the original design):
+> - `getEffectiveLineForNextPoint` picks the next line with the **side
+>   fixed by who-scored** (never flipped). Priority: (1) LC's current
+>   view (`lineCoachViewing`) if newer than every `*ModifiedAt` — `'od'`
+>   → odLine, else the determined side's line; (2) per-axis most-recent
+>   edit; (3) same-side fallback; (4) last-point safety net.
+> - **LC-viewing label** on the AC's panel ("Line Coach: viewing the X
+>   line") via synced `lineCoachViewing` / `lineCoachViewingAt`.
+> - **Greying:** line panel editable iff the current user holds the Line
+>   Coach role (solo coaching unrestricted). O|D toggle stays interactive
+>   even when greyed.
+> - **Lineup Ready** is a fire-and-forget ping (toast on both ends); no
+>   persistent badge, no latch, no `lineupReadyMode`. Visible only to a
+>   pure LC.
+> - The `!isPointInProgress()` refresh gate is gone — the AC sees LC
+>   edits + the viewing label live during a point.
+> - **Split view removed.** `activeType` is `'o' | 'd' | 'od'` only.
+>
+> **Conventions for new `pendingNextLine` fields** (e.g. on-deck): pair
+> each value field with its own `*ModifiedAt`/`*At` timestamp and extend
+> `merge_pending_next_line` in `ultistats_server/storage/game_storage.py`
+> (+ the read-merge in `store/sync.js` and serialize/deserialize in
+> `store/storage.js`) to resolve it last-writer-wins. Apply the same
+> role-based greying to any new line-selection surface.
+
+<details>
+<summary>Original design notes (superseded — kept for history)</summary>
 
 ### Context
 
@@ -131,6 +175,8 @@ lineupReadyMode:      'o' | 'd' | 'od' | null             // alongside existing 
 - **Tap-to-switch on the label** (one-tap mirror of the LC's view). Easy to add later if coaches ask; start informational only.
 - **Spectator / viewer behavior** stays unchanged — they continue to see the AC's view.
 - **The "AC view follows LC view" design** discussed earlier (with manual-override breaking the follow until point-end + a "resume sync" affordance) is **rejected** in favor of the simpler label-based approach.
+
+</details>
 
 ---
 
@@ -218,6 +264,8 @@ Remaining work:
 
 ## Backlog
 
+- [ ] **Low-power / reduced-motion mode** (long-term). A toggle (and/or honoring the OS `prefers-reduced-motion`) that disables non-essential animations to save battery during long sideline sessions. One-shot transitions (e.g. the Field tab's 5s possession-change fade) are cheap, but *continuous/looping* animations and per-frame JS (`requestAnimationFrame`/`setInterval`) keep the GPU/CPU from idling and do drain battery — so the rule of thumb is: avoid always-running animations, and let this mode strip any that exist. Audit current usage (e.g. pull hangtime `setInterval`, any CSS loops) when implementing. Noted while building the Field tab.
+- [ ] **Rare / administrative events** (long-term). Capture uncommon events that don't fit the main offense/defense/pull flows: offsides on the pull (O or D), cards (yellow / blue / red), and similar officiating/administrative calls. Likely surfaces via the "⋯ more" overflow on the Field/Full tabs (and the existing Game Events modal). Will need new event model support + summarize/serialization, and a decision on whether they affect possession (most don't). Noted while building the Field tab; out of scope for that effort.
 - [x] **Feature**: When Active Coach ends game, all coaches/viewers navigate to game summary. *(Wake recovery + foreground 3-second refresh both detect `gameEndTimestamp` and navigate away.)*
 - [x] O/D line view persistence between points (combined O/D stays; separate O/D auto-switches based on who scored; split preserved).
 - [x] **Feature**: Line selection mode toggle (Manual / Wholesale / Auto)
@@ -320,6 +368,7 @@ Bigger asks, deferred until current themes settle.
 - [ ] Rate limiting and abuse prevention
 - [ ] "Publish" games to make them searchable/discoverable
 - [ ] Git-based backup and version history
+- [ ] **e2e tests: stop hardcoding ports 3099/8100.** `tests/playwright.config.ts` pins the frontend/backend ports, and with Playwright's `reuseExistingServer` two worktrees (or parallel sessions) running the suite at once will reuse each other's leftover dev servers — so tests silently hit another branch's code (this masked, then unmasked, the `cachedEventStats` fix during investigation). Derive the ports per worktree (e.g. hash the repo path, or read an env var the dev-server script also honors) so concurrent runs are isolated. Same shared-port issue applies to `scripts/dev-server.sh`.
 
 ### Battery
 

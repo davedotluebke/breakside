@@ -94,16 +94,35 @@ function startNextPoint() {
         console.log('📋 Got players from panel table (fallback):', activePlayersForThisPoint);
     }
 
+    // Promote the On Deck line into Next (side-agnostic). Done AFTER reading
+    // the effective line above so THIS point still fields the current Next —
+    // promotion seeds the line for the point *after* this one. Stamping odLine
+    // with `now` (during this point) keeps it from being overwritten by the
+    // ending-7 reseed in transitionToBetweenPoints (whose reference time is the
+    // previous point's end), so the promoted line survives to become Next.
+    // Empty On Deck = no-op. Clearing it lets the On Deck view re-render to its
+    // empty default for fresh planning.
+    if (game && game.pendingNextLine
+        && Array.isArray(game.pendingNextLine.odOnDeckLine)
+        && game.pendingNextLine.odOnDeckLine.length > 0) {
+        const nowIso = new Date().toISOString();
+        game.pendingNextLine.odLine = [...game.pendingNextLine.odOnDeckLine];
+        game.pendingNextLine.odLineModifiedAt = nowIso;
+        game.pendingNextLine.odOnDeckLine = [];
+        game.pendingNextLine.odOnDeckLineModifiedAt = nowIso;
+        console.log('📋 Promoted On Deck line into Next (odLine):', game.pendingNextLine.odLine);
+    }
+
     // Clear the stored next line selections since we're now using them
     console.log('About to clear next line selections in startNextPoint after using them');
     clearNextLineSelections();
 
-    // Reset the Lineup Ready ping for this point's slot so the Line Coach
-    // can send a fresh one for the next between-points window.
-    if (game && game.pendingNextLine) {
-        game.pendingNextLine.lineupReadyAt = null;
-        game.pendingNextLine.lineupReadyBy = null;
-    }
+    // No need to clear lineupReadyAt/By on point start — the toast-only
+    // ping fires on `serverReadyAt > prevReadyAt && now-newReadyAt < 60s`
+    // in the AC's polling, so a ping from the previous between-points
+    // window naturally falls out of the 60-second relevance window
+    // without an explicit clear (which wouldn't propagate cross-device
+    // anyway, since null < value in the merge).
 
     // determine starting position: check point winners and switchside events
     const startPointOn = determineStartingPosition();
