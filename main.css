@@ -3788,7 +3788,9 @@ section > .panel-title-bar {
     top: 10px;
     left: 50%;
     transform: translateX(-50%);
-    z-index: 2000;
+    /* Above the Field landscape takeover panel (z-index 9999) so hints/toasts
+       are visible in full-screen Field mode, not hidden behind it. */
+    z-index: 10000;
     display: flex;
     flex-direction: column;
     gap: 8px;
