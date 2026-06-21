@@ -27,16 +27,25 @@
     min-height: 0;
 }
 
-/* Fullscreen takeover — the expand button (⛶) requests fullscreen on the
-   panel so the surrounding app header + tabbar drop away. Hide the panel's
-   own title bar for the "minimal header" specified in FIELD_MODE.md §UI. */
-.panel-playByPlayField:fullscreen,
-.panel-playByPlayField:-webkit-full-screen {
-    width: 100vw; height: 100vh;
+/* Landscape takeover — CSS overlay, NOT the Fullscreen API (which iOS Safari
+   honors only on <video>, and no-ops in standalone PWA mode; iOS PWA is a
+   primary runtime — see ARCHITECTURE.md § Target Platform). When the Field
+   render sets <body class="fp-landscape-takeover">, the panel is pinned over
+   the app chrome (header + tabbar), covering rather than hiding them — so
+   switching tabs (which display:none's this panel) reveals the chrome again
+   with no cleanup needed. Safe-area insets keep it clear of the notch / home
+   indicator. The panel's own title bar is hidden for the minimal header
+   specified in FIELD_MODE.md §UI. */
+body.fp-landscape-takeover .panel-playByPlayField {
+    position: fixed;
+    top: env(safe-area-inset-top, 0px);
+    right: env(safe-area-inset-right, 0px);
+    bottom: env(safe-area-inset-bottom, 0px);
+    left: env(safe-area-inset-left, 0px);
+    z-index: 9999;
     background: #eef0f2;
 }
-.panel-playByPlayField:fullscreen .panel-title-bar,
-.panel-playByPlayField:-webkit-full-screen .panel-title-bar { display: none; }
+body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: none; }
 .panel-playByPlayField .panel-content.field-pbp-content {
     flex: 1 1 auto;
     display: flex;
