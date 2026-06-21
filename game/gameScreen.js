@@ -2490,6 +2490,11 @@ function setupPlayByPlayResizeObserver() {
 // Track stats display mode for panel (Game vs Total vs Event)
 let panelShowingTotalStats = false;
 let panelStatsMode = 'game'; // 'game', 'event', or 'total'
+// Event-aggregated stats for the panel's 'event' mode. getEventPlayerStats()
+// is async (it loads every event game from the cloud), so it's fetched once
+// when 'event' mode is entered and cached here; the synchronous table
+// renderers read this cache rather than calling the async function inline.
+let cachedEventStats = null;
 
 // Track conflict detection state
 let lastConflictToastPointIndex = -1;  // Prevent multiple toasts per point
@@ -2588,6 +2593,20 @@ function handlePanelStatsToggle() {
     if (toggle) {
         const labels = { game: '(Game)', event: '(Event)', total: '(Total)' };
         toggle.textContent = labels[panelStatsMode] || '(Game)';
+    }
+
+    // Entering event mode: load the event-aggregated stats once (async cloud
+    // load), cache them, then re-render so the table shows real numbers. The
+    // first synchronous render below runs with cachedEventStats still null
+    // (cells fall back to live game values) and is corrected when the load
+    // resolves. Leaving event mode clears the cache.
+    if (panelStatsMode === 'event' && currentEvent && typeof getEventPlayerStats === 'function') {
+        cachedEventStats = null;
+        getEventPlayerStats(currentEvent)
+            .then(stats => { cachedEventStats = stats || {}; updateSelectLineTable(); })
+            .catch(() => { cachedEventStats = {}; });
+    } else {
+        cachedEventStats = null;
     }
     updateSelectLineTable();
 }
@@ -3856,9 +3875,8 @@ function updateSelectLineTable() {
         const gameTime = typeof getPlayerGameTime === 'function'
             ? getPlayerGameTime(player.name)
             : 0;
-        if (panelStatsMode === 'event' && typeof getEventPlayerStats === 'function' && game.eventId) {
-            const eventStats = getEventPlayerStats(game.eventId);
-            const ps = eventStats[player.name] || {};
+        if (panelStatsMode === 'event' && game.eventId) {
+            const ps = (cachedEventStats && cachedEventStats[player.name]) || {};
             const eventTime = (ps.timePlayed || 0) + gameTime;
             timeCell.textContent = typeof formatPlayTime === 'function'
                 ? formatPlayTime(eventTime)
@@ -3877,9 +3895,8 @@ function updateSelectLineTable() {
 
         // Point participation columns
         let runningPointTotal = 0;
-        if (panelStatsMode === 'event' && typeof getEventPlayerStats === 'function' && game.eventId) {
-            const eventStats = getEventPlayerStats(game.eventId);
-            runningPointTotal = (eventStats[player.name]?.pointsPlayed || 0);
+        if (panelStatsMode === 'event' && game.eventId) {
+            runningPointTotal = (cachedEventStats && cachedEventStats[player.name]?.pointsPlayed) || 0;
         } else if (panelShowingTotalStats) {
             runningPointTotal = player.pointsPlayedPreviousGames || 0;
         }
@@ -3961,11 +3978,11 @@ function updateSelectLineTimeCells() {
             : 0;
 
         // Calculate time based on current display mode
-        if (panelStatsMode === 'event' && typeof getEventPlayerStats === 'function') {
+        if (panelStatsMode === 'event') {
             const game = typeof currentGame === 'function' ? currentGame() : null;
             if (game && game.eventId) {
-                const eventStats = getEventPlayerStats(game.eventId);
-                const eventTime = (eventStats[playerName]?.timePlayed || 0) + gameTime;
+                const ps = (cachedEventStats && cachedEventStats[playerName]) || {};
+                const eventTime = (ps.timePlayed || 0) + gameTime;
                 cell.textContent = typeof formatPlayTime === 'function'
                     ? formatPlayTime(eventTime)
                     : '0:00';
@@ -4733,14 +4750,15 @@ function enterGameScreen() {
     // Reset stats mode
     panelStatsMode = 'game';
     panelShowingTotalStats = false;
+    cachedEventStats = null;
 
     // Set currentEvent if game is part of an event
     const currentGameObj = typeof currentGame === 'function' ? currentGame() : null;
     if (currentGameObj && currentGameObj.eventId && !currentEvent) {
         // Try to fetch event data (best effort — will be null if not loaded)
         if (typeof listTeamEvents === 'function' && currentGameObj.teamId) {
-            listTeamEvents(game.teamId).then(events => {
-                const ev = events.find(e => e.id === game.eventId);
+            listTeamEvents(currentGameObj.teamId).then(events => {
+                const ev = events.find(e => e.id === currentGameObj.eventId);
                 if (ev) {
                     currentEvent = typeof deserializeTournamentEvent === 'function'
                         ? deserializeTournamentEvent(ev) : ev;
@@ -4863,6 +4881,7 @@ function exitGameScreen() {
 
     // Clear event context when leaving game
     currentEvent = null;
+    cachedEventStats = null;
 
     // Reset multi-coach detection for next game
     if (typeof resetMultiCoachDetected === 'function') {
