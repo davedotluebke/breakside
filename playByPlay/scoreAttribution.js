@@ -127,6 +127,14 @@ function initializeScoreAttributionDialog() {
             dialog.style.display = 'none';
         }
     });
+
+    // Re-fit the player rows when the viewport changes while the dialog is
+    // open (window resize, device rotation). Coalesced to the next task.
+    let fitPending = 0;
+    window.addEventListener('resize', () => {
+        if (fitPending) return;
+        fitPending = setTimeout(() => { fitPending = 0; fitScoreButtons(); }, 0);
+    });
 }
 
 /**
@@ -196,11 +204,11 @@ function showScoreAttributionDialog(opts) {
         const throwerName = opts.thrower.name;
         selectedThrower = opts.thrower;
         document.querySelectorAll('#throwerButtons .player-button').forEach(btn => {
-            if (btn.textContent === throwerName) btn.classList.add('selected');
+            if (btn.dataset.playerName === throwerName) btn.classList.add('selected');
         });
         if (throwerName !== UNKNOWN_PLAYER) {
             document.querySelectorAll('#receiverButtons .player-button').forEach(btn => {
-                if (btn.textContent === throwerName) {
+                if (btn.dataset.playerName === throwerName) {
                     btn.disabled = true;
                     btn.classList.add('inactive');
                 }
@@ -211,11 +219,11 @@ function showScoreAttributionDialog(opts) {
         const receiverName = opts.receiver.name;
         selectedReceiver = opts.receiver;
         document.querySelectorAll('#receiverButtons .player-button').forEach(btn => {
-            if (btn.textContent === receiverName) btn.classList.add('selected');
+            if (btn.dataset.playerName === receiverName) btn.classList.add('selected');
         });
         if (receiverName !== UNKNOWN_PLAYER) {
             document.querySelectorAll('#throwerButtons .player-button').forEach(btn => {
-                if (btn.textContent === receiverName) {
+                if (btn.dataset.playerName === receiverName) {
                     btn.disabled = true;
                     btn.classList.add('inactive');
                 }
@@ -237,14 +245,61 @@ function showScoreAttributionDialog(opts) {
 
     // Show dialog
     dialog.style.display = 'block';
+
+    // Fit the player rows for the current orientation (no-op in portrait).
+    fitScoreButtons();
+}
+
+/**
+ * Wide/landscape fit for the two player rows: never wrap onto a second line —
+ * progressively collapse, then horizontally scroll as a last resort. Mirrors
+ * fitPlayers() in fieldPbp.js. The collapse stages (cumulative classes on the
+ * .score-attribution-container) are:
+ *   1. sa-shrink-unknown — Unknown button "Unknown Player" → "Unknown"
+ *   2. sa-min-unknown    — Unknown button → "?"
+ *   3. sa-tight          — reduce every button's padding/font
+ * After all stages, the rows (flex-nowrap + overflow-x:auto) scroll. Both
+ * rows share the same level so they stay visually aligned. No-op in portrait.
+ */
+function fitScoreButtons() {
+    const dialog = document.getElementById('scoreAttributionDialog');
+    if (!dialog || dialog.style.display === 'none') return;
+    const container = dialog.querySelector('.score-attribution-container');
+    if (!container) return;
+
+    const STAGES = ['sa-shrink-unknown', 'sa-min-unknown', 'sa-tight'];
+    container.classList.remove(...STAGES);
+
+    // Only the wide (landscape) layout uses single-row scrolling player lists.
+    if (!window.matchMedia('(orientation: landscape)').matches) return;
+
+    const rows = Array.from(container.querySelectorAll('.player-buttons'));
+    if (!rows.length) return;
+    const fits = () => rows.every(r => r.scrollWidth <= r.clientWidth + 1);
+
+    for (let i = 0; i < STAGES.length; i++) {
+        if (fits()) return;
+        container.classList.add(STAGES[i]);
+    }
+    // Still overflowing after all stages → the rows scroll horizontally.
 }
 
 function createPlayerButton(playerName) {
     const button = document.createElement('button');
-    button.textContent = playerName;
     button.classList.add('player-button');
+    // Store the canonical name for matching — the visible label may differ
+    // (the Unknown button collapses responsively in the wide layout).
+    button.dataset.playerName = playerName;
     if (playerName === UNKNOWN_PLAYER) {
         button.classList.add('unknown-player');
+        // Three collapse levels for the wide/landscape fit (fitScoreButtons):
+        // full → "Unknown" → "?". CSS shows exactly one; default is full.
+        button.innerHTML =
+            '<span class="upl-full">' + UNKNOWN_PLAYER + '</span>' +
+            '<span class="upl-mid">Unknown</span>' +
+            '<span class="upl-min">?</span>';
+    } else {
+        button.textContent = playerName;
     }
     button.addEventListener('click', function() {
         handleScoreAttribution(playerName, this.parentElement.id === 'throwerButtons', this);
@@ -393,7 +448,7 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
         if (isThrower) {
             selectedThrower = null;
             document.querySelectorAll('#receiverButtons .player-button').forEach(btn => {
-                if (btn.textContent === playerName) {
+                if (btn.dataset.playerName === playerName) {
                     btn.disabled = false;
                     btn.classList.remove('inactive');
                 }
@@ -401,7 +456,7 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
         } else {
             selectedReceiver = null;
             document.querySelectorAll('#throwerButtons .player-button').forEach(btn => {
-                if (btn.textContent === playerName) {
+                if (btn.dataset.playerName === playerName) {
                     btn.disabled = false;
                     btn.classList.remove('inactive');
                 }
@@ -416,7 +471,7 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
         if (selectedThrower) {
             const previousThrowerName = selectedThrower.name;
             document.querySelectorAll('#receiverButtons .player-button').forEach(btn => {
-                if (btn.textContent === previousThrowerName) {
+                if (btn.dataset.playerName === previousThrowerName) {
                     btn.disabled = false;
                     btn.classList.remove('inactive');
                 }
@@ -429,7 +484,7 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
         buttonElement.classList.add('selected');
         if (playerName !== UNKNOWN_PLAYER) {
             document.querySelectorAll('#receiverButtons .player-button').forEach(btn => {
-                if (btn.textContent === playerName) {
+                if (btn.dataset.playerName === playerName) {
                     btn.disabled = true;
                     btn.classList.add('inactive');
                 }
@@ -439,7 +494,7 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
         if (selectedReceiver) {
             const previousReceiverName = selectedReceiver.name;
             document.querySelectorAll('#throwerButtons .player-button').forEach(btn => {
-                if (btn.textContent === previousReceiverName) {
+                if (btn.dataset.playerName === previousReceiverName) {
                     btn.disabled = false;
                     btn.classList.remove('inactive');
                 }
@@ -452,7 +507,7 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
         buttonElement.classList.add('selected');
         if (playerName !== UNKNOWN_PLAYER) {
             document.querySelectorAll('#throwerButtons .player-button').forEach(btn => {
-                if (btn.textContent === playerName) {
+                if (btn.dataset.playerName === playerName) {
                     btn.disabled = true;
                     btn.classList.add('inactive');
                 }
