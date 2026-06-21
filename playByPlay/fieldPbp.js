@@ -1420,6 +1420,20 @@
         }
     }
 
+    /** True when the Field panel is the visible tab (not hidden by the tab system). */
+    function fieldPanelVisible() {
+        const panel = document.getElementById('panel-playByPlayField');
+        return !!(panel && !panel.classList.contains('hidden') && panel.offsetParent !== null);
+    }
+
+    /** Hint that field labels are long-pressable to flip sides, on first rotate to landscape. */
+    function maybeShowFlipHint() {
+        if (!fieldPanelVisible()) return;                 // only when the Field tab is showing
+        if (window.hints && typeof window.hints.maybeShow === 'function') {
+            window.hints.maybeShow('field-flip', 'Tip: long-press a field label (Home/Away/Attack/Defend) to flip sides');
+        }
+    }
+
     /**
      * Physical device rotation: force the layout to match. The spec calls for
      * rotation to drive orientation.
@@ -1431,6 +1445,7 @@
         if (isLandscape && S.o !== 'landscape') {
             S.o = 'landscape';
             render();
+            maybeShowFlipHint();   // first rotate to landscape: teach the label-flip gesture
         } else if (!isLandscape && S.o === 'landscape') {
             S.o = 'portrait';
             render();
