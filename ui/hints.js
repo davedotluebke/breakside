@@ -50,5 +50,20 @@
         return true;
     }
 
-    window.hints = { maybeShow };
+    /**
+     * Forget every hint's "already shown today" stamp, so each hint can fire
+     * again. Used by the "Hide all hints" toggle to let users (and us, when
+     * testing new hints) bring the hints back.
+     */
+    function resetAll() {
+        let keys = [];
+        try { keys = Object.keys(localStorage); } catch (_) { return; }
+        keys.forEach(k => {
+            if (k.indexOf(STAMP_PREFIX) === 0) {
+                try { localStorage.removeItem(k); } catch (_) { /* ignore */ }
+            }
+        });
+    }
+
+    window.hints = { maybeShow, resetAll };
 })();
