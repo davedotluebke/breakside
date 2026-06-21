@@ -2494,7 +2494,7 @@ let panelStatsMode = 'game'; // 'game', 'event', or 'total'
 // is async (it loads every event game from the cloud), so it's fetched once
 // when 'event' mode is entered and cached here; the synchronous table
 // renderers read this cache rather than calling the async function inline.
-let cachedEventStats = null;
+let cachedPanelEventStats = null;
 
 // Track conflict detection state
 let lastConflictToastPointIndex = -1;  // Prevent multiple toasts per point
@@ -2597,7 +2597,7 @@ function handlePanelStatsToggle() {
 
     // Entering event mode: load the event-aggregated stats once (async cloud
     // load), cache them, then re-render so the table shows real numbers. The
-    // first synchronous render below runs with cachedEventStats still null
+    // first synchronous render below runs with cachedPanelEventStats still null
     // (cells fall back to live game values) and is corrected when the load
     // resolves. Leaving event mode clears the cache.
     //
@@ -2608,14 +2608,14 @@ function handlePanelStatsToggle() {
     // point count exactly once (other games from the cloud, this game live),
     // independent of when the coach toggled into event mode.
     if (panelStatsMode === 'event' && currentEvent && typeof getEventPlayerStats === 'function') {
-        cachedEventStats = null;
+        cachedPanelEventStats = null;
         const otherGameIds = (currentEvent.gameIds || []).filter(id => id !== game.id);
         const otherGamesEvent = { ...currentEvent, gameIds: otherGameIds };
         getEventPlayerStats(otherGamesEvent)
-            .then(stats => { cachedEventStats = stats || {}; updateSelectLineTable(); })
-            .catch(() => { cachedEventStats = {}; });
+            .then(stats => { cachedPanelEventStats = stats || {}; updateSelectLineTable(); })
+            .catch(() => { cachedPanelEventStats = {}; });
     } else {
-        cachedEventStats = null;
+        cachedPanelEventStats = null;
     }
     updateSelectLineTable();
 }
@@ -3885,7 +3885,7 @@ function updateSelectLineTable() {
             ? getPlayerGameTime(player.name)
             : 0;
         if (panelStatsMode === 'event' && game.eventId) {
-            const ps = (cachedEventStats && cachedEventStats[player.name]) || {};
+            const ps = (cachedPanelEventStats && cachedPanelEventStats[player.name]) || {};
             const eventTime = (ps.timePlayed || 0) + gameTime;
             timeCell.textContent = typeof formatPlayTime === 'function'
                 ? formatPlayTime(eventTime)
@@ -3905,7 +3905,7 @@ function updateSelectLineTable() {
         // Point participation columns
         let runningPointTotal = 0;
         if (panelStatsMode === 'event' && game.eventId) {
-            runningPointTotal = (cachedEventStats && cachedEventStats[player.name]?.pointsPlayed) || 0;
+            runningPointTotal = (cachedPanelEventStats && cachedPanelEventStats[player.name]?.pointsPlayed) || 0;
         } else if (panelShowingTotalStats) {
             runningPointTotal = player.pointsPlayedPreviousGames || 0;
         }
@@ -3990,7 +3990,7 @@ function updateSelectLineTimeCells() {
         if (panelStatsMode === 'event') {
             const game = typeof currentGame === 'function' ? currentGame() : null;
             if (game && game.eventId) {
-                const ps = (cachedEventStats && cachedEventStats[playerName]) || {};
+                const ps = (cachedPanelEventStats && cachedPanelEventStats[playerName]) || {};
                 const eventTime = (ps.timePlayed || 0) + gameTime;
                 cell.textContent = typeof formatPlayTime === 'function'
                     ? formatPlayTime(eventTime)
@@ -4759,7 +4759,7 @@ function enterGameScreen() {
     // Reset stats mode
     panelStatsMode = 'game';
     panelShowingTotalStats = false;
-    cachedEventStats = null;
+    cachedPanelEventStats = null;
 
     // Set currentEvent if game is part of an event
     const currentGameObj = typeof currentGame === 'function' ? currentGame() : null;
@@ -4890,7 +4890,7 @@ function exitGameScreen() {
 
     // Clear event context when leaving game
     currentEvent = null;
-    cachedEventStats = null;
+    cachedPanelEventStats = null;
 
     // Reset multi-coach detection for next game
     if (typeof resetMultiCoachDetected === 'function') {
