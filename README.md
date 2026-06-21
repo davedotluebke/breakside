@@ -47,6 +47,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 ### Game Tracking Modes
 - **Simple Mode** - Streamlined We Score / They Score / Key Play buttons; the Key Play modal captures granular event detail when you want it
 - **Full Play-by-Play** - Dedicated tab for every-event entry: player rows with contextual action buttons (drop, score, throwaway, break, block, interception), a horizontal modifier-chip strip ("Last pass was a: break / huck / reset / hammer / sky catch / layout catch"), an O/D pill that flips state with one tap (and inserts an inferred turnover/Defense if you tap to indicate an unobserved possession change), and a flex-sized mini log at the bottom
+- **Field Mode (Spatial Play-by-Play)** - Record plays *on a field diagram*: tap a player then tap the field to place each throw, catch, turnover, or D exactly where it happened (or tap an empty spot for a player picker, or drag a player onto the field). Includes the in-field pull flow (time the hang, tap the landing, or call a brick), Offense/Defense modes with contextual actions, and tap-to-toggle last-play modifier chips. **Phone-first:** rotate to landscape for a full-screen field takeover — the app chrome drops away to maximize the playing surface; long-press the Home / Away / Attack / Defend labels (or use the menu) to flip sides, and the attacking direction auto-flips each point. Shares its possession core with Full Play-by-Play, so the two tabs always agree on who has the disc.
 - **AI Speech Narration** - Tap a mic button and describe plays out loud ("Alice throws to Bob, deep huck to Carla for the score") — speech is transcribed live and converted to structured events on stop. Powered by OpenAI Realtime + Claude Sonnet. Optional, opt-in per session.
 
 ### Real-Time Statistics
@@ -75,7 +76,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 - **Game History** - View and manage past games for each team
 
 ### User Interface
-- **Tabbed In-Game View** - Switch between Simple PBP, Full PBP, Line, Log, and the combined panel layout (All) via a segmented control in the header
+- **Tabbed In-Game View** - Switch between Simple PBP, Full PBP, Field, Line, Log, and the combined panel layout (All) via a segmented control in the header
 - **Resizable Panel Layout** - In the All tab, drag-to-resize panels let you balance Play-by-Play, Next Line, and Game Log to your preference
 - **Responsive Design** - Optimized for both mobile and desktop use
 - **Touch-Optimized** - Large buttons and gestures designed for sideline use
