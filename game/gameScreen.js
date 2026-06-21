@@ -390,17 +390,17 @@ function createSelectLineContent() {
             </button>
         </div>
         <div class="select-line-toolbar">
-            <span class="select-line-toolbar-spacer"></span>
-            <button class="select-line-lines-btn" id="panelLinesBtn">Lines...</button>
-            <button class="select-line-action-btn" id="panelWholesaleBtn" title="Clear all selected players">
+            <button class="select-line-action-btn select-line-action-btn--wholesale" id="panelWholesaleBtn" title="Clear all selected players">
                 ${WHOLESALE_ICON_SVG}<span class="select-line-action-label">Wholesale</span>
             </button>
-            <button class="select-line-action-btn" id="panelAutoBtn" title="Auto-fill empty slots to complete the line">
+            <button class="select-line-action-btn select-line-action-btn--auto" id="panelAutoBtn" title="Auto-fill empty slots to complete the line">
                 ${AUTO_ICON_SVG}<span class="select-line-action-label">Auto</span>
             </button>
             <span class="select-line-stats-toggle" id="panelStatsToggle">(Game)</span>
+            <button class="select-line-lines-btn" id="panelLinesBtn">Lines...</button>
             <span class="select-line-gender-badge" id="panelGenderBadge" style="display: none;"></span>
             <button class="select-line-od-toggle" id="panelODToggle" title="Toggle O/D line mode">O/D</button>
+            <span class="select-line-toolbar-spacer"></span>
         </div>
         <!-- AC-only awareness label: rendered by updateLineCoachViewingLabel
              when the LC is viewing/editing a different line type than the AC.
@@ -2577,6 +2577,10 @@ function wireSelectLineEvents() {
         autoBtn.addEventListener('click', () => autoFillLineSelection('main'));
     }
 
+    // Keep the toolbar from overflowing as width changes (orientation, split
+    // views, gender badge appearing): drop action labels one at a time.
+    setupLineToolbarResponsive();
+
     // Stats toggle (Game/Total)
     const statsToggle = document.getElementById('panelStatsToggle');
     if (statsToggle) {
@@ -2881,6 +2885,44 @@ function autoFillLineSelection(context) {
     }
 
     applyLineSelection(context, computeAutoLine(current));
+}
+
+// Observer that keeps the line toolbar fitting its width.
+let _lineToolbarResizeObserver = null;
+
+/**
+ * Attach a ResizeObserver to the line toolbar so its action labels collapse
+ * as the toolbar narrows. Safe to call repeatedly — it re-binds to the
+ * current toolbar element and runs an initial pass.
+ */
+function setupLineToolbarResponsive() {
+    const toolbar = document.querySelector('.panel-selectLine .select-line-toolbar');
+    if (!toolbar) return;
+    if (window.ResizeObserver) {
+        if (_lineToolbarResizeObserver) _lineToolbarResizeObserver.disconnect();
+        _lineToolbarResizeObserver = new ResizeObserver(() => adjustLineToolbarCollapse(toolbar));
+        _lineToolbarResizeObserver.observe(toolbar);
+    }
+    adjustLineToolbarCollapse(toolbar);
+}
+
+/**
+ * Drop line-toolbar action labels one at a time until the toolbar fits, so it
+ * never overflows. Wholesale's label goes first (its blank-checkbox icon is
+ * self-explanatory), then Auto's. Labels stay on by default at all widths.
+ * @param {HTMLElement} [toolbar]
+ */
+function adjustLineToolbarCollapse(toolbar) {
+    toolbar = toolbar || document.querySelector('.panel-selectLine .select-line-toolbar');
+    if (!toolbar) return;
+    // Start fully expanded, then collapse stepwise. Reading scrollWidth between
+    // class changes forces the reflow we need to re-measure.
+    toolbar.classList.remove('toolbar-collapse-1', 'toolbar-collapse-2');
+    if (toolbar.clientWidth === 0) return; // not visible yet
+    if (toolbar.scrollWidth <= toolbar.clientWidth) return;
+    toolbar.classList.add('toolbar-collapse-1');
+    if (toolbar.scrollWidth <= toolbar.clientWidth) return;
+    toolbar.classList.add('toolbar-collapse-2');
 }
 
 /**
@@ -3498,6 +3540,7 @@ function updatePanelGenderRatioDisplay() {
     if (!game || !game.alternateGenderRatio || game.alternateGenderRatio === 'No') {
         if (badge) badge.style.display = 'none';
         if (ratioSelection) ratioSelection.style.display = 'none';
+        adjustLineToolbarCollapse();
         return;
     }
 
@@ -3510,6 +3553,7 @@ function updatePanelGenderRatioDisplay() {
             badge.onclick = null;
         }
         if (ratioSelection) ratioSelection.style.display = 'none';
+        adjustLineToolbarCollapse();
         return;
     }
 
@@ -3536,6 +3580,7 @@ function updatePanelGenderRatioDisplay() {
         if (mmpRadio) mmpRadio.checked = false;
         if (ratioSelection) ratioSelection.style.display = 'block';
     }
+    adjustLineToolbarCollapse();
 }
 
 /**
