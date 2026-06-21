@@ -119,6 +119,11 @@
     display: flex; flex-direction: row; flex: 1 1 auto; gap: 6px; min-width: 0;
 }
 .field-pbp-content[data-o="landscape"] .fp-rail .fp-chip { flex: 1 1 0; min-width: 0; justify-content: center; }
+/* Landscape never scrolls — fitPlayers() in fieldPbp.js progressively shrinks:
+   .fp-rail-tight drops jersey numbers; .fp-rail-xtight collapses Unknown's
+   label to just "?". Both stages are applied via JS measurement. */
+.field-pbp-content[data-o="landscape"] .fp-rail.fp-rail-tight .fp-chip .fp-num { display: none; }
+.field-pbp-content[data-o="landscape"] .fp-rail.fp-rail-xtight .fp-chip.unknown .fp-nm { display: none; }
 .field-pbp-content[data-o="landscape"] .fp-modsep { display: none; }
 .field-pbp-content[data-o="landscape"] .fp-modcol { display: none; }
 

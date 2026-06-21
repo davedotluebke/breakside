@@ -726,6 +726,53 @@
                 newSidebar.scrollTop = savedScroll;
             }
         }
+
+        // Landscape: the rail never scrolls. After layout, measure natural
+        // chip widths vs available width and progressively shrink — first by
+        // dropping jersey numbers, then by collapsing the Unknown chip's
+        // label to just "?". Run synchronously (after the innerHTML rebuild
+        // layout is already committed); rAF would defer past the next paint,
+        // which can flash full-size chips.
+        if (S.o === 'landscape') fitPlayers();
+    }
+
+    /**
+     * Landscape-only: make every player chip fit on one row without horizontal
+     * scrolling. Two shrink stages, applied via classes on `.fp-rail`:
+     *   1. `.fp-rail-tight`  — hide jersey numbers (.fp-num)
+     *   2. `.fp-rail-xtight` — collapse the Unknown chip's label to "?"
+     * Stages are additive: tight may be enough; if not, xtight piles on.
+     * Measurement temporarily sets each chip to `flex: 0 0 auto` to read its
+     * natural width — synchronous within the rAF, so no paint flash.
+     */
+    function fitPlayers() {
+        const content = document.getElementById('panel-playByPlayField-content');
+        if (!content || content.dataset.o !== 'landscape') return;
+        const rail = content.querySelector('.fp-rail');
+        if (!rail) return;
+        const chips = Array.from(rail.querySelectorAll('.fp-chip'));
+        if (!chips.length) return;
+
+        rail.classList.remove('fp-rail-tight', 'fp-rail-xtight');
+
+        const railWidth = rail.clientWidth;
+        if (railWidth <= 0) return;
+
+        function measureNatural() {
+            chips.forEach(c => { c.style.flex = '0 0 auto'; });
+            // Force a reflow so offsetWidth reflects the override.
+            const w = chips.reduce((s, c) => s + c.offsetWidth, 0);
+            chips.forEach(c => { c.style.flex = ''; });
+            const gap = 6 * Math.max(0, chips.length - 1);
+            return w + gap;
+        }
+
+        if (measureNatural() <= railWidth) return;
+
+        rail.classList.add('fp-rail-tight');
+        if (measureNatural() <= railWidth) return;
+
+        rail.classList.add('fp-rail-xtight');
     }
 
     // -----------------------------------------------------------------
@@ -1417,6 +1464,16 @@
             window.narrationEventBus.subscribe('eventRetracted', render);
             window.narrationEventBus.subscribe('pointChanged', render);
         }
+        // Landscape rail must re-fit on width changes (window resize, panel
+        // showing/hiding, fullscreen enter/exit). Coalesce bursts of resize
+        // events into a single fit on the next task.
+        let resizePending = 0;
+        function scheduleFit() {
+            if (resizePending) return;
+            resizePending = setTimeout(() => { resizePending = 0; fitPlayers(); }, 0);
+        }
+        window.addEventListener('resize', scheduleFit);
+        window.addEventListener('orientationchange', scheduleFit);
     }
 
     if (document.readyState === 'loading') {
