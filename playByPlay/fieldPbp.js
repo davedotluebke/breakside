@@ -1408,20 +1408,16 @@
     // manual portrait/landscape button. The Fullscreen and Screen Orientation
     // Lock APIs can't force rotation on iOS Safari / standalone PWA (lock()
     // is unsupported, and even on Android it requires fullscreen, which iOS
-    // also lacks). So instead we hint the user, once, that rotating the phone
-    // gives the wide field view.
-    const ROTATE_HINT_KEY = 'fieldRotateHintShown';
+    // also lacks). So instead we hint the user that rotating the phone gives
+    // the wide field view (once/day, suppressible — see ui/hints.js).
 
-    /** Show a one-time "rotate for full-screen" hint when entering Field in portrait. */
+    /** Hint that rotating gives a full-screen view, when entering Field in portrait. */
     function maybeShowRotateHint() {
         if (S.o === 'landscape') return;                  // already wide — nothing to suggest
         if (window.matchMedia('(orientation: landscape)').matches) return;
-        let shown = false;
-        try { shown = localStorage.getItem(ROTATE_HINT_KEY) === '1'; } catch (_) { /* ignore */ }
-        if (shown) return;
-        if (typeof showControllerToast !== 'function') return;
-        showControllerToast('Rotate your phone for a full-screen field view', 'info', 5000);
-        try { localStorage.setItem(ROTATE_HINT_KEY, '1'); } catch (_) { /* ignore */ }
+        if (window.hints && typeof window.hints.maybeShow === 'function') {
+            window.hints.maybeShow('field-rotate', 'Rotate your phone for a full-screen view in Field mode');
+        }
     }
 
     /**
