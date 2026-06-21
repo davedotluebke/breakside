@@ -1255,6 +1255,7 @@ function applyTabState() {
         if (activeTab === 'field' && window.fieldPbp) {
             if (typeof window.fieldPbp.wireEvents === 'function') window.fieldPbp.wireEvents();
             if (typeof window.fieldPbp.render === 'function') window.fieldPbp.render();
+            if (typeof window.fieldPbp.onTabShown === 'function') window.fieldPbp.onTabShown();
         }
 
         // Log tab: auto-scroll the game log to the bottom so the most
