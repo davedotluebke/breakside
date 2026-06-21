@@ -78,7 +78,7 @@ function createHeaderContent() {
                 </button>
                 <div class="menu-divider"></div>
                 <button class="menu-item" id="menuSettings">
-                    <i class="fas fa-cog"></i> App Settings
+                    <i class="fas fa-cog"></i> Advanced Settings
                 </button>
                 <button class="menu-item" id="menuAbout">
                     <i class="fas fa-info-circle"></i> About / Version
