@@ -26,6 +26,17 @@
     flex-direction: column;
     min-height: 0;
 }
+
+/* Fullscreen takeover — the expand button (⛶) requests fullscreen on the
+   panel so the surrounding app header + tabbar drop away. Hide the panel's
+   own title bar for the "minimal header" specified in FIELD_MODE.md §UI. */
+.panel-playByPlayField:fullscreen,
+.panel-playByPlayField:-webkit-full-screen {
+    width: 100vw; height: 100vh;
+    background: #eef0f2;
+}
+.panel-playByPlayField:fullscreen .panel-title-bar,
+.panel-playByPlayField:-webkit-full-screen .panel-title-bar { display: none; }
 .panel-playByPlayField .panel-content.field-pbp-content {
     flex: 1 1 auto;
     display: flex;
