@@ -1633,20 +1633,87 @@ body.game-screen-active header {
     flex: 1; /* pushes everything right, reserves left space */
 }
 
-.select-line-mode-toggle {
+/* Line action button (Auto in the toolbar; Wholesale + Auto in the sub modal).
+   Icon + label by default; the Auto label collapses to its icon if the toolbar
+   runs out of width (see .toolbar-collapse-1 below). */
+.select-line-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
     font-size: 0.8rem;
-    color: #007bff;
+    font-weight: 500;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    color: #495057;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
     cursor: pointer;
-    user-select: none;
+    margin: 0;
+    white-space: nowrap;
+    transition: all 0.15s;
 }
 
-.select-line-mode-toggle:hover {
-    text-decoration: underline;
+.select-line-action-btn:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
 }
 
-.panel-selectLine.readonly .select-line-mode-toggle {
+.select-line-action-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    display: block;
+}
+
+/* Accent the Auto bolt so it stands out from the neutral Wholesale icon */
+#panelAutoBtn .select-line-action-icon,
+#subAutoBtn .select-line-action-icon {
+    color: #7c3aed;
+}
+
+.panel-selectLine.readonly .select-line-action-btn {
     pointer-events: none;
     opacity: 0.5;
+}
+
+/* Substitute modal action button group */
+.sub-players-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Combined/Separate planning-mode pill (text only — "Combined"/"Separate"). */
+.select-line-mode-btn {
+    padding: 2px 10px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    color: #495057;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 0;
+    white-space: nowrap;
+    transition: all 0.15s;
+}
+
+.select-line-mode-btn:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+}
+
+.panel-selectLine.readonly .select-line-mode-btn {
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+/* Collapse: the toolbar is roomy now (Wholesale + stats toggle moved into the
+   table header). If it still overflows, drop the Auto label to its icon. */
+.select-line-toolbar.toolbar-collapse-1 .select-line-action-btn--auto .select-line-action-label {
+    display: none;
+}
+.select-line-toolbar.toolbar-collapse-1 .select-line-action-btn--auto {
+    padding-left: 6px;
+    padding-right: 6px;
 }
 
 .select-line-stats-toggle {
@@ -1684,6 +1751,7 @@ body.game-screen-active header {
 .select-line-od-toggle.active-d {
     background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
 }
+
 
 .select-line-lines-btn {
     padding: 2px 8px;
@@ -1778,6 +1846,51 @@ body.game-screen-active header {
     background: #f8f9fa;
     font-weight: 600;
     font-size: 0.75rem;
+}
+
+/* Controls header row: a light-grey band under the score rows that holds the
+   Wholesale icon, the "Player" label, and the Game/Event toggle. The
+   !important beats the inline #fafafa that makePanelColumnsSticky() writes onto
+   the sticky checkbox/name/time cells, so the whole band reads as one colour. */
+.panel-player-table .select-line-controls-row th {
+    background: #e4e7ea !important;
+    font-weight: 600;
+    font-size: 0.75rem;
+    /* Normal UI font: these are labels, not the monospace/italic time readouts
+       whose .active-time-column styling the toggle cell would otherwise inherit. */
+    font-family: inherit !important;
+    font-style: normal !important;
+    /* Double-thick rule to firmly separate the header band from the players.
+       !important beats the inline `border:none` makePanelColumnsSticky() writes
+       onto the sticky checkbox/name/time cells. */
+    border-bottom: 3px solid #868e96 !important;
+}
+
+.panel-player-table .select-line-controls-row th .select-line-stats-toggle {
+    font-family: inherit;
+    font-style: normal;
+}
+
+/* Whole stats cell is the tap target (the small link text alone is hard to hit
+   on a phone). */
+.panel-player-table .select-line-th-stats {
+    cursor: pointer;
+}
+
+.panel-player-table .select-line-th-wholesale {
+    cursor: pointer;
+    color: #495057;
+}
+
+.panel-player-table .select-line-th-wholesale .select-line-action-icon {
+    width: 16px;
+    height: 16px;
+    margin: 0 auto;
+}
+
+.panel-selectLine.readonly .select-line-th-wholesale {
+    opacity: 0.5;
+    cursor: default;
 }
 
 .panel-player-table .active-checkbox-column {
