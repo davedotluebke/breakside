@@ -221,7 +221,7 @@ Today the mic only narrates plays *during* a point. Two adjacent flows would ext
   - Open question: one mic-tap or two? Single tap that handles "line + pull" feels natural orally but mixes two state transitions; safer to gate the pull narration behind the line being confirmed first.
 
 - [ ] **Speech-driven line selection (oral roll-call)**
-  - On the Line tab between points: tap mic, read names ("Alice, Bob, Carol, Dan, Eve, Frank, Grace"), stop. App ticks the matching checkboxes. Works in Manual / Wholesale / Auto modes — Wholesale becomes especially fast (clear all → speak the seven).
+  - On the Line tab between points: tap mic, read names ("Alice, Bob, Carol, Dan, Eve, Frank, Grace"), stop. App ticks the matching checkboxes. Pairs well with **Wholesale** (clear all → speak the seven).
   - Player-name resolution already exists in `narrationEngine.js` (`resolvePlayerName`) including nickname/jersey-number matching; extract it into a shared helper.
   - Touch points: `narration/narrationEngine.js` (new "name list" intent that maps transcript → player IDs without going through the slow-pass event extractor), `game/playerSelection.js` (programmatic checkbox toggle), gateway in `panelTableContainer{,O,D}` UI.
   - Edge cases: ambiguous names ("Cyrus" vs "Sirius"), name + jersey number disambiguation ("Alice number seven"), partial lines ("just sub Frank for Dan"), interaction with multi-coach Line Coach role enforcement.
@@ -268,7 +268,7 @@ Remaining work:
 - [ ] **Rare / administrative events** (long-term). Capture uncommon events that don't fit the main offense/defense/pull flows: offsides on the pull (O or D), cards (yellow / blue / red), and similar officiating/administrative calls. Likely surfaces via the "⋯ more" overflow on the Field/Full tabs (and the existing Game Events modal). Will need new event model support + summarize/serialization, and a decision on whether they affect possession (most don't). Noted while building the Field tab; out of scope for that effort.
 - [x] **Feature**: When Active Coach ends game, all coaches/viewers navigate to game summary. *(Wake recovery + foreground 3-second refresh both detect `gameEndTimestamp` and navigate away.)*
 - [x] O/D line view persistence between points (combined O/D stays; separate O/D auto-switches based on who scored; split preserved).
-- [x] **Feature**: Line selection mode toggle (Manual / Wholesale / Auto)
+- [x] **Feature**: Line selection mode toggle (Manual / Wholesale / Auto) *(later superseded — the cycling mode toggle was replaced by one-shot Wholesale/Auto buttons on `line-selection-rework`; see "Wholesale/Auto icon UI redesign" under Future Enhancements → Line Selection.)*
   - Tappable text element in each player-selection table header that cycles through three states:
     - **Manual** (default): Whatever the user has checked. This is the normal behavior today.
     - **Wholesale**: All players unchecked (clean slate for building a line from scratch).
@@ -414,11 +414,11 @@ Higher-leverage interventions, in roughly priority order:
   - Auto-lineup uses these to build balanced lines
 - [ ] AI/stats-driven lineup suggestions
   - Use game stats and/or AI to pick players that play well together
-- [ ] Wholesale/Auto icon UI redesign
-  - Replace cycling text toggle with two separate icons in the toolbar, far left
-  - Empty checkbox icon for Wholesale (clear all)
-  - AI sparkle icon for Auto (suggest lineup)
-  - Double-tapping either icon without making manual changes restores the snapshot (the players that were checked before wholesale cleared or auto filled)
+- [x] Wholesale/Auto icon UI redesign — shipped on `line-selection-rework`
+  - Replaced the cycling Manual/Wholesale/Auto text toggle with two one-shot actions: **Wholesale** (clear) and **Auto** (fill empty slots). No persistent "mode" — selection is always manual.
+  - Empty-checkbox icon for Wholesale, now living in a **table controls header row** (over the checkbox column); a lightning-bolt icon for **Auto** in the toolbar. The Game/Event time toggle also moved into that header row.
+  - Snapshot/double-tap-restore was dropped along with modes (no longer meaningful — Auto augments the current selection rather than replacing it, and Wholesale is a deliberate one-shot clear).
+  - Also added the **Combined / Separate** planning-mode control (per-game, synced): Combined = Next + On Deck; Separate = distinct O/D lines. See README and ARCHITECTURE § *Combined vs Separate line planning*.
 - [ ] "Suggest lineups every point" toggle in pre-game/roster screen (auto mode as default each point)
 
 ### UI/UX

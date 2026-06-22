@@ -152,35 +152,33 @@ A handful of non-obvious cascade and box-model details have bitten layout work i
 
 When CLAUDE finds a *new* gotcha worth remembering across sessions, add it here rather than to CLAUDE.md.
 
-### Line Selection Mode Toggle
+### Line Selection: Wholesale & Auto
 
-Player-selection tables (main panel, O/D split panels, injury sub dialog) support a three-state mode toggle:
+Player selection is **always manual** — the coach checks/unchecks players directly. Two one-shot action buttons augment it (there is no persistent "mode" — an earlier Manual/Wholesale/Auto cycling toggle was removed):
 
-```
-Manual ──tap──▶ Wholesale ──tap──▶ Auto ──tap──▶ Manual
-                (all unchecked)    (suggested)    (restored snapshot)
-```
+- **Wholesale** — clears the active line (blank-checkbox icon).
+- **Auto** — fills the *empty* slots up to the field count, **keeping** whoever is already checked, choosing players with the fewest points played in the current game and respecting the gender ratio. If the line is already full it no-ops with a warning toast.
 
-**States:**
-- **Manual** (default): User's own checkbox selections. Standard behavior.
-- **Wholesale**: All checkboxes cleared — a fresh start for building a line.
-- **Auto**: App suggests a lineup by selecting players with the fewest points played in the current game, respecting the game's gender ratio settings. Falls back to ignoring ratio if available players can't satisfy it.
+`computeAutoLine(alreadySelected)` does the augment-fill; `clearLineSelection(context)`, `autoFillLineSelection(context)`, and the shared `applyLineSelection(context, players)` implement the actions (all in `game/gameScreen.js`). Two contexts: `'main'` (the Line tab) and `'sub'` (the injury-substitution dialog).
 
-**Snapshot behavior:**
-- When leaving Manual (first tap), the current checked set is saved as `manualLineSnapshot`.
-- When returning to Manual (third tap), the snapshot is restored.
-- Any direct checkbox change while in Wholesale or Auto immediately transitions back to Manual and updates the snapshot to the new state.
+**Where the controls live.** To keep the toolbar uncluttered, **Wholesale** and the **Game/Event** time-stats toggle live in a dedicated **controls header row** inside the player table — built in `updateSelectLineTable`, light-grey banded with a thick bottom border, between the score rows and the player rows. The Wholesale icon sits over the checkbox column (the whole `th.select-line-th-wholesale` cell is tappable), a "Player" label over the names, and the Game/Event toggle over the time column (whole `th.select-line-th-stats` cell tappable). The **Auto** button stays in the toolbar.
 
-**State management:**
-- Each table context (main, O split, D split, injury sub) maintains its own `lineSelectionMode` and `manualLineSnapshot`.
-- Mode resets to Manual at the start of each new point.
-- The toggle is rendered as a tappable text label ("Manual" / "Wholesale" / "Auto") in the table header.
+- The table is rebuilt on every refresh, so these header clicks are **delegated** on `#panelTableContainer` (matching `.select-line-th-wholesale` / `.select-line-th-stats`), not bound to the cells directly.
+- Gotcha: the per-second `updateSelectLineTimeCells()` updater is scoped to `tbody .active-time-column` — the header toggle cell also carries `.active-time-column`, and an unscoped query would overwrite it and shift every player's time down a row.
 
-**Auto algorithm (v1):**
-1. Determine expected player count and gender ratio from game settings.
-2. Sort roster by points played ascending (fewest first).
-3. Fill the line respecting ratio: pick from the under-represented gender first, then alternate.
-4. If ratio can't be met with available players, fill remaining slots regardless of gender.
+**Auto algorithm:**
+1. Determine expected player count and gender ratio from game settings; subtract what's already checked.
+2. Sort the remaining roster by points played ascending (fewest first).
+3. Fill the gender deficit first (target counts minus already-selected per gender), then top up any remaining slots from whoever's left.
+
+### Combined vs Separate line planning
+
+`game.pendingNextLine.useSeparateLines` (synced, last-writer-wins on `useSeparateLinesAt`) controls how the coach plans lines and what the line-type toggle button flips between:
+
+- **Combined** (default) — one **Next** line (`odLine`) plus an **On Deck** line (`odOnDeckLine`); the toggle flips `od ↔ odOnDeck`.
+- **Separate** — distinct **O** and **D** lines; the toggle flips `o ↔ d` (green/red cue). On Deck is Combined-only.
+
+The flag only changes which buckets the UI exposes — `getEffectiveLineForNextPoint` still blends `oLine`/`dLine`/`odLine` by timestamp at point start, so the fielded-line logic below is unchanged. `autoSelectActiveTypeForNextPoint` is clamped so Combined mode never lands on a side-specific bucket the UI can't show.
 
 ### Effective Line for the Next Point
 
@@ -200,7 +198,7 @@ Feedback colors (count / gender-ratio warnings) on the Start Point button are co
 
 The Line Coach can prepare the line for the point *after* the next one while the current point is still in progress. This is a single, **side-agnostic** lineup (not a full O/D/OD mirror): `game.pendingNextLine.odOnDeckLine`, paired with `odOnDeckLineModifiedAt`. The motivation: once the next line is set, the Line Coach was otherwise idle and would start points early just to advance the panel.
 
-**Toggle / storage.** The O/D toggle gains a fourth state, so the cycle is `od → o → d → odOnDeck → od`. The `activeType` value `'odOnDeck'` is chosen so the existing `activeType + 'Line'` string-concatenation pattern (used throughout `savePanelSelectionsToPendingNextLine`, `updateSelectLineTable`, `updateSelectLineSubtitle`) resolves to the `odOnDeckLine` bucket with no special-casing.
+**Toggle / storage.** On Deck is the second view in **Combined** mode — the line-type toggle flips `od ↔ odOnDeck` (see *Combined vs Separate line planning* above). The `activeType` value `'odOnDeck'` is chosen so the existing `activeType + 'Line'` string-concatenation pattern (used throughout `savePanelSelectionsToPendingNextLine`, `updateSelectLineTable`, `updateSelectLineSubtitle`) resolves to the `odOnDeckLine` bucket with no special-casing.
 
 **Promotion.** In `startNextPoint()` (`game/pointManagement.js`), *after* the effective line for the point being started has been read, a non-empty `odOnDeckLine` is promoted into the next-line bucket: `odLine = [...odOnDeckLine]; odLineModifiedAt = now`, then `odOnDeckLine` is cleared. Promotion is side-agnostic — it always seeds `odLine`, dodging the O/D side-consistency logic entirely; `getEffectiveLineForNextPoint` then resolves the side normally at the following point. Stamping `odLineModifiedAt = now` (a time *during* the just-started point) is load-bearing: it keeps the promoted line from being overwritten by the ending-7 reseed in `transitionToBetweenPoints`, whose reference time is the *previous* point's end. Empty On Deck = no-op; the cleared view re-renders to its empty default for fresh planning.
 
