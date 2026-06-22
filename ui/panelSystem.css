@@ -1747,6 +1747,26 @@ body.game-screen-active header {
     background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
 }
 
+/* Combined/Separate planning-mode selector — compact, matches the toolbar
+   toggles. Kept small so the toolbar stays on one row. */
+.select-line-mode-select {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #495057;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 2px 4px;
+    margin: 0;
+    max-width: 110px;
+    cursor: pointer;
+}
+
+.panel-selectLine.readonly .select-line-mode-select {
+    pointer-events: none;
+    opacity: 0.5;
+}
+
 .select-line-lines-btn {
     padding: 2px 8px;
     font-size: 0.8rem;
