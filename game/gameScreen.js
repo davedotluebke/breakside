@@ -20,11 +20,15 @@
 
 let gameScreenInitialized = false;
 
-// Line selection mode toggle state (ephemeral, not persisted)
-// Each context has its own mode and manual-snapshot
-let lineSelectionModes = { main: 'manual', splitO: 'manual', splitD: 'manual', sub: 'manual' };
-let lineSelectionSnapshots = { main: null, splitO: null, splitD: null, sub: null };
-let programmaticCheckboxChange = false; // flag to suppress mode-return during programmatic changes
+// Line selection is always manual: the coach checks/unchecks players directly.
+// Two one-shot action buttons augment that — Wholesale (clear all) and Auto
+// (fill empty slots up to the field count). There is no persistent "mode".
+
+// Blank-checkbox icon for Wholesale (clear the line) and a lightning-bolt icon
+// for Auto (one-tap fill). Inline SVG so they inherit currentColor and need no
+// extra asset load. See .select-line-action-btn in panelSystem.css.
+const WHOLESALE_ICON_SVG = '<svg class="select-line-action-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
+const AUTO_ICON_SVG = '<svg class="select-line-action-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.2 1.5 L4 9 H7 L6.4 14.5 L12 6.8 H8.7 Z" fill="currentColor"/></svg>';
 
 // =============================================================================
 // Header Panel Content
@@ -386,12 +390,14 @@ function createSelectLineContent() {
             </button>
         </div>
         <div class="select-line-toolbar">
-            <span class="select-line-toolbar-spacer"></span>
+            <button class="select-line-action-btn select-line-action-btn--auto" id="panelAutoBtn" title="Auto-fill empty slots to complete the line">
+                ${AUTO_ICON_SVG}<span class="select-line-action-label">Auto</span>
+            </button>
             <button class="select-line-lines-btn" id="panelLinesBtn">Lines...</button>
-            <span class="select-line-mode-toggle" id="lineSelectionModeToggle">Manual</span>
-            <span class="select-line-stats-toggle" id="panelStatsToggle">(Game)</span>
+            <button class="select-line-mode-btn" id="panelLineModeBtn" title="Combined: one Next line + On Deck. Separate: distinct O and D lines.">Combined</button>
+            <button class="select-line-od-toggle" id="panelODToggle" title="Toggle line type">O/D</button>
             <span class="select-line-gender-badge" id="panelGenderBadge" style="display: none;"></span>
-            <button class="select-line-od-toggle" id="panelODToggle" title="Toggle O/D line mode">O/D</button>
+            <span class="select-line-toolbar-spacer"></span>
         </div>
         <!-- AC-only awareness label: rendered by updateLineCoachViewingLabel
              when the LC is viewing/editing a different line type than the AC.
@@ -1404,7 +1410,14 @@ function createSubPlayersModal() {
             </div>
             <div class="sub-players-info">
                 <span id="subPlayersCount">7 selected</span>
-                <span class="select-line-mode-toggle" id="subSelectionModeToggle">Manual</span>
+                <span class="sub-players-actions">
+                    <button class="select-line-action-btn" id="subWholesaleBtn" title="Clear all selected players">
+                        ${WHOLESALE_ICON_SVG}<span class="select-line-action-label">Wholesale</span>
+                    </button>
+                    <button class="select-line-action-btn" id="subAutoBtn" title="Auto-fill empty slots to complete the line">
+                        ${AUTO_ICON_SVG}<span class="select-line-action-label">Auto</span>
+                    </button>
+                </span>
             </div>
             <div class="sub-players-table-container" id="subPlayersTableContainer">
                 <table class="panel-player-table" id="subPlayersTable">
@@ -1426,7 +1439,8 @@ function createSubPlayersModal() {
     document.getElementById('subPlayersModalClose').addEventListener('click', hideSubPlayersModal);
     document.getElementById('subPlayersCancelBtn').addEventListener('click', hideSubPlayersModal);
     document.getElementById('subPlayersConfirmBtn').addEventListener('click', confirmSubstitution);
-    document.getElementById('subSelectionModeToggle')?.addEventListener('click', () => cycleSelectionMode('sub'));
+    document.getElementById('subWholesaleBtn')?.addEventListener('click', () => clearLineSelection('sub'));
+    document.getElementById('subAutoBtn')?.addEventListener('click', () => autoFillLineSelection('sub'));
     
     // Close modal when clicking outside
     modal.addEventListener('click', (e) => {
@@ -1443,10 +1457,6 @@ function createSubPlayersModal() {
  */
 function showSubPlayersModal() {
     const modal = createSubPlayersModal();
-    // Reset sub mode to manual each time
-    lineSelectionModes.sub = 'manual';
-    lineSelectionSnapshots.sub = null;
-    updateModeToggleLabel('sub');
     populateSubPlayersTable();
     modal.style.display = 'block';
 }
@@ -1524,11 +1534,6 @@ function populateSubPlayersTable() {
  * Update the selected player count display
  */
 function updateSubPlayersCount() {
-    // Return to manual mode if user manually changes a checkbox while in wholesale/auto
-    if (!programmaticCheckboxChange && lineSelectionModes.sub !== 'manual') {
-        returnToManualMode('sub');
-    }
-
     const countEl = document.getElementById('subPlayersCount');
     if (!countEl) return;
 
@@ -1757,8 +1762,7 @@ function transitionToBetweenPoints() {
             const odModTime = game.pendingNextLine.odLineModifiedAt
                 ? new Date(game.pendingNextLine.odLineModifiedAt).getTime()
                 : 0;
-            if ((odModTime <= pointStartTime || odLineCur.length === 0)
-                && lineSelectionModes.main === 'manual') {
+            if (odModTime <= pointStartTime || odLineCur.length === 0) {
                 game.pendingNextLine.odLine = endingLine;
             }
             // O and D lines: reset if never modified this game OR currently
@@ -1805,9 +1809,6 @@ function transitionToBetweenPoints() {
     
     // Update Select Next Line panel with latest data
     updateSelectLinePanel();
-
-    // Reset all line selection modes to manual on new point
-    resetAllSelectionModes();
 
     // Update Play-by-Play panel state (buttons now disabled since point ended)
     updatePlayByPlayPanelState();
@@ -2563,19 +2564,29 @@ let localLineEditTimestamps = {
  * Wire up Select Next Line panel event handlers
  */
 function wireSelectLineEvents() {
-    // Line selection mode toggle (Manual/Wholesale/Auto)
-    const modeToggle = document.getElementById('lineSelectionModeToggle');
-    if (modeToggle) {
-        modeToggle.addEventListener('click', () => cycleSelectionMode('main'));
+    // Auto action button (Wholesale + the Game/Event toggle now live in the
+    // table's controls header row — see buildSelectLineControlsRow + the
+    // delegated click handler wired on the table container below).
+    const autoBtn = document.getElementById('panelAutoBtn');
+    if (autoBtn) {
+        autoBtn.addEventListener('click', () => autoFillLineSelection('main'));
     }
 
-    // Stats toggle (Game/Total)
-    const statsToggle = document.getElementById('panelStatsToggle');
-    if (statsToggle) {
-        statsToggle.addEventListener('click', handlePanelStatsToggle);
+    // Keep the toolbar from overflowing as width changes (orientation, split
+    // views, gender badge appearing): drop the Auto label if needed.
+    setupLineToolbarResponsive();
+
+    // (Wholesale icon + Game/Event stats toggle now live in the table's controls
+    // header row — clicks handled via delegation on the table container below.)
+
+    // Combined/Separate planning-mode toggle pill
+    const lineModeBtn = document.getElementById('panelLineModeBtn');
+    if (lineModeBtn) {
+        lineModeBtn.addEventListener('click', handleLineModeChange);
     }
-    
-    // O/D toggle button - cycles between O/D, O, and D lines
+
+    // Line-type toggle button. In Combined mode it flips Next ↔ On Deck; in
+    // Separate mode it flips O line ↔ D line.
     const odToggle = document.getElementById('panelODToggle');
     if (odToggle) {
         odToggle.addEventListener('click', handleODToggle);
@@ -2608,6 +2619,12 @@ function wireSelectLineEvents() {
     const tableContainer = document.getElementById('panelTableContainer');
     if (tableContainer) {
         tableContainer.addEventListener('change', handlePanelCheckboxChange);
+        // Delegated clicks for the controls header row (Wholesale icon and the
+        // Game/Event stats toggle), which are rebuilt with the table each refresh.
+        tableContainer.addEventListener('click', (e) => {
+            if (e.target.closest('.select-line-th-stats')) { handlePanelStatsToggle(); return; }
+            if (e.target.closest('.select-line-th-wholesale')) { clearLineSelection('main'); return; }
+        });
     }
     
     // Starting gender ratio radio buttons
@@ -2645,8 +2662,8 @@ function handlePanelStatsToggle() {
 
     const toggle = document.getElementById('panelStatsToggle');
     if (toggle) {
-        const labels = { game: '(Game)', event: '(Event)', total: '(Total)' };
-        toggle.textContent = labels[panelStatsMode] || '(Game)';
+        const labels = { game: 'Game', event: 'Event', total: 'Total' };
+        toggle.textContent = labels[panelStatsMode] || 'Game';
     }
 
     // Entering event mode: load the event-aggregated stats once (async cloud
@@ -2675,51 +2692,39 @@ function handlePanelStatsToggle() {
 }
 
 // =============================================================================
-// Line Selection Mode Toggle (Manual / Wholesale / Auto)
+// Line Selection Actions (Wholesale = clear, Auto = fill empty slots)
 // =============================================================================
 
 /**
  * Map context → table element ID
- * @param {string} context - 'main', 'splitO', 'splitD', or 'sub'
+ * @param {string} context - 'main' or 'sub'
  * @returns {string}
  */
 function getContextTableId(context) {
     switch (context) {
         case 'main': return 'panelActivePlayersTable';
-        case 'splitO': return 'panelActivePlayersTableO';
-        case 'splitD': return 'panelActivePlayersTableD';
         case 'sub': return 'subPlayersTable';
         default: return 'panelActivePlayersTable';
     }
 }
 
 /**
- * Map context → toggle label element ID
- * @param {string} context
- * @returns {string}
+ * Compute a complete line by filling the empty slots around an existing
+ * selection. Already-selected players are kept; only the remaining slots (up
+ * to the field count) are filled, choosing players with the fewest points
+ * played and respecting the gender ratio if one is active.
+ * @param {string[]} alreadySelected - player names the coach has already picked
+ * @returns {string[]} The full line (alreadySelected + auto-filled additions)
  */
-function getContextToggleId(context) {
-    switch (context) {
-        case 'main': return 'lineSelectionModeToggle';
-        case 'splitO': return 'splitOSelectionModeToggle';
-        case 'splitD': return 'splitDSelectionModeToggle';
-        case 'sub': return 'subSelectionModeToggle';
-        default: return 'lineSelectionModeToggle';
-    }
-}
-
-/**
- * Compute an auto-suggested line for a context.
- * Picks players with fewest points played, respecting gender ratio if active.
- * @param {string} context
- * @returns {string[]} Array of player names
- */
-function computeAutoLine(context) {
+function computeAutoLine(alreadySelected = []) {
     const game = typeof currentGame === 'function' ? currentGame() : null;
-    if (!game || !currentTeam || !currentTeam.teamRoster) return [];
+    if (!game || !currentTeam || !currentTeam.teamRoster) return alreadySelected.slice();
 
     const expectedCount = parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
     const roster = currentTeam.teamRoster;
+    const selectedSet = new Set(alreadySelected);
+    const result = alreadySelected.slice();
+    if (result.length >= expectedCount) return result;
 
     // Count points played per player in current game
     const pointsPlayed = {};
@@ -2731,6 +2736,18 @@ function computeAutoLine(context) {
             if (played) pointsPlayed[p.name]++;
         });
     });
+
+    const byFewestPoints = (a, b) => (pointsPlayed[a.name] || 0) - (pointsPlayed[b.name] || 0);
+    // Append up to `n` unselected candidates (already filtered + sorted) to result.
+    const addFrom = (candidates, n) => {
+        for (let i = 0; i < candidates.length && n > 0; i++) {
+            if (!selectedSet.has(candidates[i].name)) {
+                result.push(candidates[i].name);
+                selectedSet.add(candidates[i].name);
+                n--;
+            }
+        }
+    };
 
     // Check if gender ratio is active
     const hasRatio = game.alternateGenderRatio && game.alternateGenderRatio !== 'No';
@@ -2749,35 +2766,29 @@ function computeAutoLine(context) {
 
         if (expectedRatio) {
             const counts = getExpectedGenderCounts(expectedCount, expectedRatio);
-            const fmpPlayers = roster.filter(p => p.gender === Gender.FMP)
-                .sort((a, b) => (pointsPlayed[a.name] || 0) - (pointsPlayed[b.name] || 0));
-            const mmpPlayers = roster.filter(p => p.gender === Gender.MMP)
-                .sort((a, b) => (pointsPlayed[a.name] || 0) - (pointsPlayed[b.name] || 0));
+            // How many of each gender are already on the line — fill only the deficit.
+            let haveFmp = 0, haveMmp = 0;
+            roster.forEach(p => {
+                if (!selectedSet.has(p.name)) return;
+                if (p.gender === Gender.FMP) haveFmp++;
+                else if (p.gender === Gender.MMP) haveMmp++;
+            });
+            const fmpPlayers = roster.filter(p => p.gender === Gender.FMP).sort(byFewestPoints);
+            const mmpPlayers = roster.filter(p => p.gender === Gender.MMP).sort(byFewestPoints);
+            addFrom(fmpPlayers, Math.max(0, counts.fmp - haveFmp));
+            addFrom(mmpPlayers, Math.max(0, counts.mmp - haveMmp));
 
-            const selected = [];
-            // Fill FMP slots
-            const fmpNeeded = Math.min(counts.fmp, fmpPlayers.length);
-            for (let i = 0; i < fmpNeeded; i++) selected.push(fmpPlayers[i].name);
-            // Fill MMP slots
-            const mmpNeeded = Math.min(counts.mmp, mmpPlayers.length);
-            for (let i = 0; i < mmpNeeded; i++) selected.push(mmpPlayers[i].name);
-
-            // Fallback: if not enough of one gender, fill remaining from other
-            if (selected.length < expectedCount) {
-                const remaining = roster
-                    .filter(p => !selected.includes(p.name))
-                    .sort((a, b) => (pointsPlayed[a.name] || 0) - (pointsPlayed[b.name] || 0));
-                for (let i = 0; i < remaining.length && selected.length < expectedCount; i++) {
-                    selected.push(remaining[i].name);
-                }
+            // Fallback: short a gender (or over on one) — top up from whoever's left.
+            if (result.length < expectedCount) {
+                addFrom([...roster].sort(byFewestPoints), expectedCount - result.length);
             }
-            return selected;
+            return result;
         }
     }
 
-    // No ratio: pick top N by fewest points played
-    const sorted = [...roster].sort((a, b) => (pointsPlayed[a.name] || 0) - (pointsPlayed[b.name] || 0));
-    return sorted.slice(0, expectedCount).map(p => p.name);
+    // No ratio: fill remaining slots by fewest points played
+    addFrom([...roster].sort(byFewestPoints), expectedCount - result.length);
+    return result;
 }
 
 /**
@@ -2808,39 +2819,15 @@ function getCheckedPlayersFromTable(tableId) {
 }
 
 /**
- * Cycle the line selection mode for a context: Manual → Wholesale → Auto → Manual
- * @param {string} context - 'main', 'splitO', 'splitD', or 'sub'
+ * Apply a target set of players to a context's table + state. Shared by the
+ * Wholesale (clear) and Auto (fill) actions. Writes pendingNextLine BEFORE
+ * touching checkboxes so a concurrent sync won't overwrite with stale data.
+ * @param {string} context - 'main' or 'sub'
+ * @param {string[]} targetPlayers
  */
-function cycleSelectionMode(context) {
-    if (context !== 'sub' && !canEditSelectLinePanel()) {
-        if (typeof showControllerToast === 'function') {
-            showControllerToast('You need a coach role to change line mode', 'warning');
-        }
-        return;
-    }
-
+function applyLineSelection(context, targetPlayers) {
     const tableId = getContextTableId(context);
-    const currentMode = lineSelectionModes[context];
-    let targetPlayers;
 
-    if (currentMode === 'manual') {
-        // Snapshot current, switch to wholesale (uncheck all)
-        lineSelectionSnapshots[context] = getCheckedPlayersFromTable(tableId);
-        lineSelectionModes[context] = 'wholesale';
-        targetPlayers = [];
-    } else if (currentMode === 'wholesale') {
-        // Switch to auto
-        lineSelectionModes[context] = 'auto';
-        targetPlayers = computeAutoLine(context);
-    } else {
-        // Auto → Manual: restore snapshot
-        lineSelectionModes[context] = 'manual';
-        targetPlayers = lineSelectionSnapshots[context] || getCheckedPlayersFromTable(tableId);
-        lineSelectionSnapshots[context] = null;
-    }
-
-    // Write target selection to pendingNextLine BEFORE touching checkboxes
-    // so sync won't overwrite with stale data
     if (context === 'main') {
         const game = typeof currentGame === 'function' ? currentGame() : null;
         if (game && game.pendingNextLine) {
@@ -2849,68 +2836,97 @@ function cycleSelectionMode(context) {
             game.pendingNextLine[activeType + 'LineModifiedAt'] = new Date().toISOString();
             localLineEditTimestamps[activeType + 'Line'] = Date.now();
         }
-    } else if (context === 'splitO' || context === 'splitD') {
-        const lineType = context === 'splitO' ? 'o' : 'd';
-        const game = typeof currentGame === 'function' ? currentGame() : null;
-        if (game && game.pendingNextLine) {
-            game.pendingNextLine[lineType + 'Line'] = targetPlayers;
-            game.pendingNextLine[lineType + 'LineModifiedAt'] = new Date().toISOString();
-            localLineEditTimestamps[lineType + 'Line'] = Date.now();
-        }
     }
 
-    // Now update checkboxes to match (no change events fired)
+    // Update checkboxes to match (no change events fired)
     setTableCheckboxes(tableId, targetPlayers);
 
-    // Save and update UI
     if (context === 'main') {
         if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
         updateSelectLineSubtitle();
     } else if (context === 'sub') {
-        // Update the count display directly — flag prevents mode-return
-        programmaticCheckboxChange = true;
         updateSubPlayersCount();
-        programmaticCheckboxChange = false;
     }
 
-    updateModeToggleLabel(context);
     updatePlayByPlayPanelState();
     updatePanelGenderRatioDisplay();
 }
 
 /**
- * Return to manual mode when user manually changes a checkbox while in wholesale/auto
- * @param {string} context
+ * Wholesale action: clear all selected players for a context (one-shot).
+ * @param {string} context - 'main' or 'sub'
  */
-function returnToManualMode(context) {
-    lineSelectionModes[context] = 'manual';
-    const tableId = getContextTableId(context);
-    lineSelectionSnapshots[context] = getCheckedPlayersFromTable(tableId);
-    updateModeToggleLabel(context);
+function clearLineSelection(context) {
+    if (context !== 'sub' && !canEditSelectLinePanel()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('You need a coach role to change the line', 'warning');
+        }
+        return;
+    }
+    applyLineSelection(context, []);
 }
 
 /**
- * Update the toggle label text for a context
- * @param {string} context
+ * Auto action: fill the empty slots up to the field count, keeping whoever is
+ * already selected (one-shot). If the line is already full, nothing can be
+ * filled — fire a warning toast instead.
+ * @param {string} context - 'main' or 'sub'
  */
-function updateModeToggleLabel(context) {
-    const el = document.getElementById(getContextToggleId(context));
-    if (!el) return;
-    const labels = { manual: 'Manual', wholesale: 'Wholesale', auto: 'Auto' };
-    el.textContent = labels[lineSelectionModes[context]] || 'Manual';
+function autoFillLineSelection(context) {
+    if (context !== 'sub' && !canEditSelectLinePanel()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('You need a coach role to change the line', 'warning');
+        }
+        return;
+    }
+
+    const current = getCheckedPlayersFromTable(getContextTableId(context));
+    const expectedCount = parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
+    if (current.length >= expectedCount) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast(`Line already full (${current.length}/${expectedCount}) — no slots to fill`, 'warning');
+        }
+        return;
+    }
+
+    applyLineSelection(context, computeAutoLine(current));
+}
+
+// Observer that keeps the line toolbar fitting its width.
+let _lineToolbarResizeObserver = null;
+
+/**
+ * Attach a ResizeObserver to the line toolbar so its action labels collapse
+ * as the toolbar narrows. Safe to call repeatedly — it re-binds to the
+ * current toolbar element and runs an initial pass.
+ */
+function setupLineToolbarResponsive() {
+    const toolbar = document.querySelector('.panel-selectLine .select-line-toolbar');
+    if (!toolbar) return;
+    if (window.ResizeObserver) {
+        if (_lineToolbarResizeObserver) _lineToolbarResizeObserver.disconnect();
+        _lineToolbarResizeObserver = new ResizeObserver(() => adjustLineToolbarCollapse(toolbar));
+        _lineToolbarResizeObserver.observe(toolbar);
+    }
+    adjustLineToolbarCollapse(toolbar);
 }
 
 /**
- * Reset all selection modes to manual with null snapshots.
- * Called on new point transition.
+ * Drop line-toolbar action labels one at a time until the toolbar fits, so it
+ * never overflows. Wholesale's label goes first (its blank-checkbox icon is
+ * self-explanatory), then Auto's. Labels stay on by default at all widths.
+ * @param {HTMLElement} [toolbar]
  */
-function resetAllSelectionModes() {
-    ['main', 'splitO', 'splitD', 'sub'].forEach(ctx => {
-        lineSelectionModes[ctx] = 'manual';
-        lineSelectionSnapshots[ctx] = null;
-    });
-    // Update labels if elements exist
-    ['main', 'splitO', 'splitD', 'sub'].forEach(ctx => updateModeToggleLabel(ctx));
+function adjustLineToolbarCollapse(toolbar) {
+    toolbar = toolbar || document.querySelector('.panel-selectLine .select-line-toolbar');
+    if (!toolbar) return;
+    // The toolbar is roomy now that Wholesale and the stats toggle moved into
+    // the table header. If it still can't fit, drop the Auto label to its icon.
+    // Reading scrollWidth between class changes forces the reflow to re-measure.
+    toolbar.classList.remove('toolbar-collapse-1');
+    if (toolbar.clientWidth === 0) return; // not visible yet
+    if (toolbar.scrollWidth <= toolbar.clientWidth) return;
+    toolbar.classList.add('toolbar-collapse-1');
 }
 
 /**
@@ -2932,26 +2948,16 @@ function handleODToggle() {
     // noteLineCoachViewing is gated on isLineCoach() and only fires
     // for an actual LC, never for a viewer or greyed-out AC.
 
-    // Reset main mode on OD toggle
-    lineSelectionModes.main = 'manual';
-    lineSelectionSnapshots.main = null;
-    updateModeToggleLabel('main');
-
     // Save current selections before switching (don't update timestamp - just viewing)
     savePanelSelectionsToPendingNextLine(false);
 
-    // Cycle to next type: od → o → d → odOnDeck → od
-    // 'odOnDeck' is the On Deck line (point-after-next); concatenating with
-    // 'Line' resolves to the odOnDeckLine bucket, same as the other types.
-    const currentType = game.pendingNextLine.activeType || 'od';
-    let nextType;
-    switch (currentType) {
-        case 'od':       nextType = 'o'; break;
-        case 'o':        nextType = 'd'; break;
-        case 'd':        nextType = 'odOnDeck'; break;
-        case 'odOnDeck': nextType = 'od'; break;
-        default:         nextType = 'od';
-    }
+    // Flip to the other type within the active planning mode:
+    //   Combined → Next (odLine) ↔ On Deck (odOnDeckLine)
+    //   Separate → O line ↔ D line
+    const pair = lineTypeTogglePair(game);
+    const currentType = game.pendingNextLine.activeType || pair[0];
+    const idx = pair.indexOf(currentType);
+    const nextType = pair[(idx + 1) % pair.length];
 
     game.pendingNextLine.activeType = nextType;
     noteLineCoachViewing();
@@ -2974,35 +2980,104 @@ function handleODToggle() {
     updatePlayByPlayPanelState();
 
     // Show feedback
-    const typeLabels = { od: 'O/D', o: 'Offense', d: 'Defense', odOnDeck: 'On Deck' };
+    const typeLabels = { od: 'Next', o: 'Offense', d: 'Defense', odOnDeck: 'On Deck' };
     if (typeof showControllerToast === 'function') {
         showControllerToast(`Switched to ${typeLabels[nextType]} line`, 'info');
     }
 }
 
 /**
- * Update the O/D toggle button text to show current mode
+ * The two line-type buckets the toggle flips between, given the current
+ * planning mode. Combined → Next (odLine) and On Deck; Separate → O and D.
+ * @param {object} game
+ * @returns {string[]} two activeType values
+ */
+function lineTypeTogglePair(game) {
+    const sep = !!(game && game.pendingNextLine && game.pendingNextLine.useSeparateLines);
+    return sep ? ['o', 'd'] : ['od', 'odOnDeck'];
+}
+
+/**
+ * Handle the Combined/Separate planning-mode selector. Persists + syncs the
+ * flag and snaps activeType to a valid bucket for the chosen mode.
+ */
+function handleLineModeChange() {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !game.pendingNextLine) return;
+    if (!canEditSelectLinePanel()) {
+        // Revert the select to the real state and warn.
+        updateODToggleButton();
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('Only the Line Coach can change this during a point', 'warning');
+        }
+        return;
+    }
+
+    const separate = !game.pendingNextLine.useSeparateLines; // flip current mode
+    game.pendingNextLine.useSeparateLines = separate;
+    game.pendingNextLine.useSeparateLinesAt = new Date().toISOString();
+
+    // Snap the view to a bucket valid for the new mode. Separate → default to
+    // the side that's actually coming up; Combined → the Next line.
+    if (separate) {
+        const offense = (typeof determineStartingPosition === 'function')
+            ? determineStartingPosition() === 'offense' : true;
+        game.pendingNextLine.activeType = offense ? 'o' : 'd';
+    } else {
+        game.pendingNextLine.activeType = 'od';
+    }
+    noteLineCoachViewing();
+
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    updateSelectLineTable();
+    updateODToggleButton();
+    updateSelectLineSubtitle();
+    updatePlayByPlayPanelState();
+}
+
+/**
+ * Sync the line-type toggle button and the Combined/Separate selector to the
+ * current planning mode + active view.
  */
 function updateODToggleButton() {
     const btn = document.getElementById('panelODToggle');
-    if (!btn) return;
-    
     const game = typeof currentGame === 'function' ? currentGame() : null;
-    const activeType = game?.pendingNextLine?.activeType || 'od';
-    
-    // Update button text
-    const typeLabels = { od: 'O/D', o: 'O', d: 'D', odOnDeck: 'On Deck', split: 'O|D' };
-    btn.textContent = typeLabels[activeType] || 'O/D';
+    const separate = !!(game?.pendingNextLine?.useSeparateLines);
+    let activeType = game?.pendingNextLine?.activeType || 'od';
 
-    // Update title/tooltip
+    // Guard: if the stored view doesn't belong to the current mode (e.g. after
+    // a mode flip arriving via sync), fall back to the mode's primary bucket.
+    const pair = separate ? ['o', 'd'] : ['od', 'odOnDeck'];
+    if (!pair.includes(activeType)) activeType = pair[0];
+
+    // Keep the Combined/Separate pill in sync (it also reflects a synced flip).
+    const modeBtn = document.getElementById('panelLineModeBtn');
+    if (modeBtn) {
+        modeBtn.textContent = separate ? 'Separate' : 'Combined';
+        modeBtn.title = separate
+            ? 'Separate O and D lines (tap for one combined Next line + On Deck)'
+            : 'Combined: one Next line + On Deck (tap for separate O and D lines)';
+    }
+
+    if (!btn) { adjustLineToolbarCollapse(); return; }
+
+    const typeLabels = { od: 'Next', odOnDeck: 'On Deck', o: 'O', d: 'D' };
+    btn.textContent = typeLabels[activeType] || 'Next';
+
     const typeDescriptions = {
-        od: 'Combined line (tap to switch to Offense)',
+        od: 'Next line (tap to plan the On Deck line)',
+        odOnDeck: 'On Deck line — the point after Next (tap to switch back to Next)',
         o: 'Offense line (tap to switch to Defense)',
-        d: 'Defense line (tap to plan the On Deck line)',
-        odOnDeck: 'On Deck line — the point after Next (tap to switch back to O/D)',
-        split: 'Split view (tap to merge back to O/D)'
+        d: 'Defense line (tap to switch to Offense)'
     };
-    btn.title = typeDescriptions[activeType] || 'Toggle O/D/On-Deck line';
+    btn.title = typeDescriptions[activeType] || 'Toggle line type';
+
+    // Color cue only in Separate mode: green O / red D. Combined stays neutral.
+    btn.classList.toggle('active-o', activeType === 'o');
+    btn.classList.toggle('active-d', activeType === 'd');
+
+    // Label/text widths may have changed — re-evaluate the responsive collapse.
+    adjustLineToolbarCollapse();
 }
 
 /**
@@ -3309,11 +3384,6 @@ function handlePanelCheckboxChange(e) {
         return;
     }
 
-    // Return to manual mode if user manually changes a checkbox while in wholesale/auto
-    if (!programmaticCheckboxChange && lineSelectionModes.main !== 'manual') {
-        returnToManualMode('main');
-    }
-
     // Check for conflicts with other coach before saving
     checkForLineEditConflict();
 
@@ -3538,6 +3608,7 @@ function updatePanelGenderRatioDisplay() {
     if (!game || !game.alternateGenderRatio || game.alternateGenderRatio === 'No') {
         if (badge) badge.style.display = 'none';
         if (ratioSelection) ratioSelection.style.display = 'none';
+        adjustLineToolbarCollapse();
         return;
     }
 
@@ -3550,6 +3621,7 @@ function updatePanelGenderRatioDisplay() {
             badge.onclick = null;
         }
         if (ratioSelection) ratioSelection.style.display = 'none';
+        adjustLineToolbarCollapse();
         return;
     }
 
@@ -3576,6 +3648,7 @@ function updatePanelGenderRatioDisplay() {
         if (mmpRadio) mmpRadio.checked = false;
         if (ratioSelection) ratioSelection.style.display = 'block';
     }
+    adjustLineToolbarCollapse();
 }
 
 /**
@@ -3713,6 +3786,17 @@ function autoSelectActiveTypeForNextPoint() {
     // planning the point-after-next, Next is presumably already set — leave
     // them where they are rather than auto-switching to the resolved Next side.
     if (game.pendingNextLine.activeType === 'odOnDeck') return;
+
+    // In Combined mode there's only the Next (od) view — never auto-switch to a
+    // side-specific o/d bucket the UI can't show. Selection itself still blends
+    // o/d/od via getEffectiveLineForNextPoint at point start.
+    if (!game.pendingNextLine.useSeparateLines) {
+        if (game.pendingNextLine.activeType !== 'od') {
+            game.pendingNextLine.activeType = 'od';
+            if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+        }
+        return;
+    }
 
     const { source } = getEffectiveLineForNextPoint(game);
     if (game.pendingNextLine.activeType !== source) {
@@ -3874,7 +3958,43 @@ function updateSelectLineTable() {
 
     tableHead.appendChild(teamScoreRow);
     tableHead.appendChild(opponentScoreRow);
-    
+
+    // Controls header row: sits under the score rows, above the players. Holds
+    // the Wholesale (clear) icon over the checkbox column, a "Player" label, and
+    // the Game/Event stats toggle over the time column. The remaining
+    // point-columns are blank. Clicks are handled via delegation on the table
+    // container (wireSelectLineEvents). Light-grey banded via CSS.
+    const controlsRow = document.createElement('tr');
+    controlsRow.className = 'select-line-controls-row';
+
+    const wholesaleTh = document.createElement('th');
+    wholesaleTh.className = 'active-checkbox-column select-line-th-wholesale';
+    wholesaleTh.title = 'Clear all selected players';
+    wholesaleTh.innerHTML = WHOLESALE_ICON_SVG;
+    controlsRow.appendChild(wholesaleTh);
+
+    const playerTh = document.createElement('th');
+    playerTh.className = 'active-name-column';
+    playerTh.textContent = 'Player';
+    controlsRow.appendChild(playerTh);
+
+    const statsTh = document.createElement('th');
+    statsTh.className = 'active-time-column select-line-th-stats';
+    statsTh.title = 'Toggle the time column between this game and the whole event';
+    const statsLabels = { game: 'Game', event: 'Event', total: 'Total' };
+    statsTh.innerHTML = '<span class="select-line-stats-toggle" id="panelStatsToggle">'
+        + (statsLabels[panelStatsMode] || 'Game') + '</span>';
+    controlsRow.appendChild(statsTh);
+
+    // Blank cells matching the per-point score columns, plus the On Deck
+    // projection column (its score-row header is rowspan=2, so this third row
+    // needs its own cell).
+    const numPointCols = runningScores.team.length;
+    for (let i = 0; i < numPointCols; i++) controlsRow.appendChild(document.createElement('th'));
+    if (isOnDeckView) controlsRow.appendChild(document.createElement('th'));
+
+    tableHead.appendChild(controlsRow);
+
     // Get last point players for sorting
     const lastPointPlayers = game.points.length > 0
         ? game.points[game.points.length - 1].players
@@ -4018,11 +4138,14 @@ function updateSelectLineTimeCells() {
     const table = document.getElementById('panelActivePlayersTable');
     if (!table) return;
     
-    const timeCells = table.querySelectorAll('.active-time-column');
+    // Body cells only — the controls header row also has an .active-time-column
+    // cell (the Game/Event toggle); including it here would overwrite the toggle
+    // and shift every player's time down by one row.
+    const timeCells = table.querySelectorAll('tbody .active-time-column');
     if (timeCells.length === 0) return;
-    
+
     // Get all checkboxes to map cells to players
-    const checkboxes = table.querySelectorAll('.active-checkbox');
+    const checkboxes = table.querySelectorAll('tbody .active-checkbox');
     
     timeCells.forEach((cell, index) => {
         const checkbox = checkboxes[index];

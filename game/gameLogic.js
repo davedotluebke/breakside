@@ -50,7 +50,9 @@ function startNewGame(startingPosition, seconds) {
         dLine: [],
         odLineModifiedAt: null,
         oLineModifiedAt: null,
-        dLineModifiedAt: null
+        dLineModifiedAt: null,
+        useSeparateLines: false,
+        useSeparateLinesAt: null
     };
     
     // Save and Sync Immediately
