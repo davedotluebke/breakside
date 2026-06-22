@@ -2622,7 +2622,7 @@ function wireSelectLineEvents() {
         // Delegated clicks for the controls header row (Wholesale icon and the
         // Game/Event stats toggle), which are rebuilt with the table each refresh.
         tableContainer.addEventListener('click', (e) => {
-            if (e.target.closest('#panelStatsToggle')) { handlePanelStatsToggle(); return; }
+            if (e.target.closest('.select-line-th-stats')) { handlePanelStatsToggle(); return; }
             if (e.target.closest('.select-line-th-wholesale')) { clearLineSelection('main'); return; }
         });
     }
@@ -3979,7 +3979,8 @@ function updateSelectLineTable() {
     controlsRow.appendChild(playerTh);
 
     const statsTh = document.createElement('th');
-    statsTh.className = 'active-time-column';
+    statsTh.className = 'active-time-column select-line-th-stats';
+    statsTh.title = 'Toggle the time column between this game and the whole event';
     const statsLabels = { game: 'Game', event: 'Event', total: 'Total' };
     statsTh.innerHTML = '<span class="select-line-stats-toggle" id="panelStatsToggle">'
         + (statsLabels[panelStatsMode] || 'Game') + '</span>';
