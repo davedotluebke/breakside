@@ -1,11 +1,9 @@
 # Hero carousel media
 
-These are **stylized placeholder SVGs** for the landing-page hero carousel. Replace
-each with a real screenshot (PNG/JPG) or a short looping clip (MP4/WebM) of the
-feature in use.
-
-The carousel is data-driven. To swap a placeholder for a real asset, edit the
-`HERO_SLIDES` array in [`../hero-carousel.js`](../hero-carousel.js):
+Real-app screenshots for the landing-page hero carousel, captured from a live
+game (Breakside vs. Rival City) in the running app. To swap any of these for an
+updated screenshot or a short looping clip (MP4/WebM), edit the `HERO_SLIDES`
+array in [`../hero-carousel.js`](../hero-carousel.js):
 
 - Drop the new file in this folder (keep the name, or update `media.src`).
 - For video, set `media.type: 'video'` and point `media.src` at the `.mp4`/`.webm`.
@@ -13,12 +11,17 @@ The carousel is data-driven. To swap a placeholder for a real asset, edit the
 - `orientation` (`portrait` | `landscape`) controls which device frame is used —
   match it to the asset's aspect ratio.
 
-| Slide id          | Placeholder            | Capture (real asset)                                   |
-|-------------------|------------------------|--------------------------------------------------------|
-| `simple`          | simple.svg             | Simple tab — We Score / They Score / Key Play          |
-| `simple-score`    | simple-score.svg       | Simple tab with the Score Attribution dialog open      |
-| `full`            | full-offense.svg       | Full tab in Offense mode (player rows + modifier chips)|
-| `field`           | field-portrait.svg     | Field tab, portrait                                    |
-| `field-landscape` | field-landscape.svg    | Field tab, landscape full-screen takeover              |
-| `line`            | line.svg               | Line tab (roster, points-played, On Deck)              |
-| `all`             | ../game-screenshot.png | All tab — combined panel layout (existing real shot)   |
+| Slide id          | File                  | Screen                                                   |
+|-------------------|-----------------------|----------------------------------------------------------|
+| `simple`          | simple.png            | Simple tab — We Score / They Score / Key Play            |
+| `simple-score`    | simple-score.png      | Score Attribution dialog (Assist / Goal + modifiers)     |
+| `full`            | full.png              | Full tab, Offense mode (player rows + Drop/Score)        |
+| `field`           | field.png             | Field tab, portrait — a throw placed on the field        |
+| `field-landscape` | field-landscape.png   | Field tab, landscape full-screen takeover                |
+| `line`            | line.png              | Line tab (roster, score progression, points-played)      |
+| `all`             | all.png               | All tab — combined PBP + Next Line + Game Log            |
+
+Note: these were captured mid-session, so the live point-timer in the header
+corner shows a large elapsed value on a few shots — re-capture from a fresh point
+if you want it tidy. The standalone `../game-screenshot.png` is the old hero image,
+no longer referenced.
