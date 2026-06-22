@@ -168,15 +168,26 @@ body {
     margin: 0 auto;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--space-3xl);
+    grid-template-areas:
+        "title  visual"
+        "copy   visual";
+    column-gap: var(--space-3xl);
+    row-gap: var(--space-lg);
     align-items: center;
 }
 
+.hero-title { grid-area: title; }
+.hero-copy  { grid-area: copy; }
+.hero-visual { grid-area: visual; }
+
 .hero-title {
-    font-size: clamp(2.5rem, 5vw, 4rem);
+    /* Sized so each line ("Every point. Every player." / "Or even every
+       throw.") stays on a single line. This value targets the desktop
+       two-column width; the <900px single-column override is in the
+       responsive section below. */
+    font-size: clamp(1.5rem, 2.9vw, 2.4rem);
     font-weight: 700;
-    line-height: 1.1;
-    margin-bottom: var(--space-lg);
+    line-height: 1.15;
 }
 
 .hero-highlight {
@@ -216,37 +227,136 @@ body {
     letter-spacing: 0.05em;
 }
 
-/* Phone Mockup */
+/* Hero Carousel */
 .hero-visual {
     display: flex;
     justify-content: center;
 }
 
-.phone-mockup {
-    width: 300px;
-    height: 460px;
+.hero-carousel {
+    width: 100%;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Fixed-size stage so portrait/landscape slides never shift the layout. */
+.carousel-stage {
+    position: relative;
+    width: 100%;
+    height: 480px;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: pan-y;
+    cursor: grab;
+}
+
+.carousel-slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(0.97);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    pointer-events: none;
+}
+
+.carousel-slide.active {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+}
+
+/* Device frame — adapts to slide orientation. */
+.device-frame {
     background: linear-gradient(145deg, var(--gray-700), var(--gray-800));
-    border-radius: 40px;
-    padding: 12px;
     box-shadow:
         0 25px 50px -12px rgba(0, 0, 0, 0.5),
         inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-.phone-screen {
+.device-frame.portrait {
+    width: 268px;
+    height: 472px;
+    border-radius: 36px;
+    padding: 11px;
+}
+
+.device-frame.landscape {
+    width: 360px;
+    height: 200px;
+    border-radius: 26px;
+    padding: 10px;
+}
+
+.device-screen {
     width: 100%;
     height: 100%;
-    background: var(--gray-100);
-    border-radius: 32px;
+    background: var(--gray-900);
     overflow: hidden;
 }
 
-.mockup-screenshot {
+.device-frame.portrait .device-screen { border-radius: 26px; }
+.device-frame.landscape .device-screen { border-radius: 18px; }
+
+.device-media {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    object-position: left top;
+    object-position: top center;
     display: block;
+}
+
+/* Caption */
+.carousel-caption {
+    text-align: center;
+    margin-top: var(--space-lg);
+    min-height: 3.5rem;
+}
+
+.carousel-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: white;
+    line-height: 1.2;
+}
+
+.carousel-tag {
+    color: var(--brand-orange-light);
+    font-size: 1rem;
+    margin-top: 0.15rem;
+}
+
+/* Pills */
+.carousel-pills {
+    display: flex;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.carousel-pill {
+    width: 28px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    border: none;
+    padding: 0;
+    background: var(--gray-600);
+    cursor: pointer;
+    transition: background 0.2s, width 0.2s;
+}
+
+.carousel-pill:hover {
+    background: var(--gray-500);
+}
+
+.carousel-pill.active {
+    background: var(--brand-orange);
+    width: 38px;
 }
 
 /* =============================================================================
@@ -398,6 +508,20 @@ body {
     font-size: 1.25rem;
     margin-bottom: var(--space-sm);
     color: white;
+}
+
+.card-badge {
+    display: inline-block;
+    vertical-align: middle;
+    background: var(--accent-purple);
+    color: white;
+    padding: 0.1rem 0.45rem;
+    border-radius: var(--radius-full);
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-left: 0.4rem;
 }
 
 .feature-card p {
@@ -765,31 +889,32 @@ body {
    ============================================================================= */
 
 @media (max-width: 900px) {
+    /* Single column, stacked: title → carousel → subcopy. */
     .hero-content {
         grid-template-columns: 1fr;
+        grid-template-areas:
+            "title"
+            "visual"
+            "copy";
         text-align: center;
     }
-    
+
+    /* Full-width column needs a steeper scale to keep each line unwrapped. */
+    .hero-title {
+        font-size: clamp(1.35rem, 5.7vw, 2.1rem);
+    }
+
     .hero-subtitle {
         margin-left: auto;
         margin-right: auto;
     }
-    
+
     .hero-actions {
         justify-content: center;
     }
-    
+
     .hero-note {
         justify-content: center;
-    }
-    
-    .hero-visual {
-        order: -1;
-    }
-    
-    .phone-mockup {
-        width: 240px;
-        height: 480px;
     }
 }
 
@@ -815,11 +940,23 @@ body {
         width: 100%;
     }
     
-    .phone-mockup {
-        width: 200px;
-        height: 400px;
+    .carousel-stage {
+        height: 412px;
     }
-    
+
+    .device-frame.portrait {
+        width: 224px;
+        height: 394px;
+        border-radius: 30px;
+        padding: 9px;
+    }
+
+    .device-frame.landscape {
+        width: 280px;
+        height: 156px;
+        border-radius: 22px;
+    }
+
     .install-grid {
         grid-template-columns: 1fr;
     }
