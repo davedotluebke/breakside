@@ -111,8 +111,14 @@ export async function startPoint(page: Page) {
 /** Click "We Score" and skip attribution. Score increments by 1. */
 export async function weScoreSkip(page: Page) {
   await page.click('#pbpWeScoreBtn');
-  await expect(page.locator('#scoreAttributionDialog')).toBeVisible({ timeout: 5_000 });
-  await page.click('#skipAttributionBtn');
+  const dialog = page.locator('#scoreAttributionDialog');
+  await expect(dialog).toBeVisible({ timeout: 5_000 });
+  // The Skip button was removed (commit 7c8dda0). Attributing to the Unknown
+  // thrower + Unknown receiver is the new "skip" path: it scores with no named
+  // players. Selecting both auto-commits the goal and closes the dialog.
+  await page.locator('#throwerButtons .player-button.unknown-player').click();
+  await page.locator('#receiverButtons .player-button.unknown-player').click();
+  await expect(dialog).not.toBeVisible({ timeout: 5_000 });
 }
 
 /**
