@@ -168,15 +168,26 @@ body {
     margin: 0 auto;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--space-3xl);
+    grid-template-areas:
+        "title  visual"
+        "copy   visual";
+    column-gap: var(--space-3xl);
+    row-gap: var(--space-lg);
     align-items: center;
 }
 
+.hero-title { grid-area: title; }
+.hero-copy  { grid-area: copy; }
+.hero-visual { grid-area: visual; }
+
 .hero-title {
-    font-size: clamp(2.5rem, 5vw, 4rem);
+    /* Sized so each line ("Every point. Every player." / "Or even every
+       throw.") stays on a single line. This value targets the desktop
+       two-column width; the <900px single-column override is in the
+       responsive section below. */
+    font-size: clamp(1.5rem, 2.9vw, 2.4rem);
     font-weight: 700;
-    line-height: 1.1;
-    margin-bottom: var(--space-lg);
+    line-height: 1.15;
 }
 
 .hero-highlight {
@@ -878,26 +889,32 @@ body {
    ============================================================================= */
 
 @media (max-width: 900px) {
+    /* Single column, stacked: title → carousel → subcopy. */
     .hero-content {
         grid-template-columns: 1fr;
+        grid-template-areas:
+            "title"
+            "visual"
+            "copy";
         text-align: center;
     }
-    
+
+    /* Full-width column needs a steeper scale to keep each line unwrapped. */
+    .hero-title {
+        font-size: clamp(1.35rem, 5.7vw, 2.1rem);
+    }
+
     .hero-subtitle {
         margin-left: auto;
         margin-right: auto;
     }
-    
+
     .hero-actions {
         justify-content: center;
     }
-    
+
     .hero-note {
         justify-content: center;
-    }
-    
-    .hero-visual {
-        order: -1;
     }
 }
 
