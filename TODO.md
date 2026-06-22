@@ -345,6 +345,12 @@ Bigger asks, deferred until current themes settle.
 - [x] Google OAuth login
 - [ ] Apple OAuth login
 - [ ] Custom SMTP for Supabase emails (branded sender)
+- [ ] **Brand the OAuth consent screen (before going wide).** Google sign-in
+      currently shows the raw Supabase project domain
+      (`mfuziqztsfqaqnnxjcrr.supabase.co`), surfaced as a "Will appear as…" note
+      on the landing-page auth modal (`landing/index.html` `.google-note`). Needs a
+      custom auth domain (e.g. `auth.breakside.pro`), which requires the paid
+      Supabase tier. Once configured, drop the apologetic `.google-note` line.
 
 ### Team Management
 - [ ] QR code generation for invites
