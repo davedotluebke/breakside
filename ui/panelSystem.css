@@ -1856,7 +1856,19 @@ body.game-screen-active header {
     background: #e4e7ea !important;
     font-weight: 600;
     font-size: 0.75rem;
-    border-bottom: 1px solid #ced4da;
+    /* Normal UI font: these are labels, not the monospace/italic time readouts
+       whose .active-time-column styling the toggle cell would otherwise inherit. */
+    font-family: inherit !important;
+    font-style: normal !important;
+    /* Double-thick rule to firmly separate the header band from the players.
+       !important beats the inline `border:none` makePanelColumnsSticky() writes
+       onto the sticky checkbox/name/time cells. */
+    border-bottom: 3px solid #868e96 !important;
+}
+
+.panel-player-table .select-line-controls-row th .select-line-stats-toggle {
+    font-family: inherit;
+    font-style: normal;
 }
 
 .panel-player-table .select-line-th-wholesale {

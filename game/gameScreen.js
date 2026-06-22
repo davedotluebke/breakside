@@ -2662,8 +2662,8 @@ function handlePanelStatsToggle() {
 
     const toggle = document.getElementById('panelStatsToggle');
     if (toggle) {
-        const labels = { game: '(Game)', event: '(Event)', total: '(Total)' };
-        toggle.textContent = labels[panelStatsMode] || '(Game)';
+        const labels = { game: 'Game', event: 'Event', total: 'Total' };
+        toggle.textContent = labels[panelStatsMode] || 'Game';
     }
 
     // Entering event mode: load the event-aggregated stats once (async cloud
@@ -3980,9 +3980,9 @@ function updateSelectLineTable() {
 
     const statsTh = document.createElement('th');
     statsTh.className = 'active-time-column';
-    const statsLabels = { game: '(Game)', event: '(Event)', total: '(Total)' };
+    const statsLabels = { game: 'Game', event: 'Event', total: 'Total' };
     statsTh.innerHTML = '<span class="select-line-stats-toggle" id="panelStatsToggle">'
-        + (statsLabels[panelStatsMode] || '(Game)') + '</span>';
+        + (statsLabels[panelStatsMode] || 'Game') + '</span>';
     controlsRow.appendChild(statsTh);
 
     // Blank cells matching the per-point score columns, plus the On Deck
@@ -4137,11 +4137,14 @@ function updateSelectLineTimeCells() {
     const table = document.getElementById('panelActivePlayersTable');
     if (!table) return;
     
-    const timeCells = table.querySelectorAll('.active-time-column');
+    // Body cells only — the controls header row also has an .active-time-column
+    // cell (the Game/Event toggle); including it here would overwrite the toggle
+    // and shift every player's time down by one row.
+    const timeCells = table.querySelectorAll('tbody .active-time-column');
     if (timeCells.length === 0) return;
-    
+
     // Get all checkboxes to map cells to players
-    const checkboxes = table.querySelectorAll('.active-checkbox');
+    const checkboxes = table.querySelectorAll('tbody .active-checkbox');
     
     timeCells.forEach((cell, index) => {
         const checkbox = checkboxes[index];
