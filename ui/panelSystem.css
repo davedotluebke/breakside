@@ -1633,10 +1633,9 @@ body.game-screen-active header {
     flex: 1; /* pushes everything right, reserves left space */
 }
 
-/* One-shot line action buttons: Wholesale (clear) and Auto (fill). Icon +
-   label always on by default (including phones). When the toolbar runs out of
-   width, adjustLineToolbarCollapse() drops the labels one at a time — see the
-   .toolbar-collapse-* rules below. */
+/* Line action button (Auto in the toolbar; Wholesale + Auto in the sub modal).
+   Icon + label by default; the Auto label collapses to its icon if the toolbar
+   runs out of width (see .toolbar-collapse-1 below). */
 .select-line-action-btn {
     display: inline-flex;
     align-items: center;
@@ -1683,37 +1682,37 @@ body.game-screen-active header {
     gap: 6px;
 }
 
-/* Leftmost Wholesale button: trim its left padding so the blank-checkbox icon
-   lines up over the player-checkbox column in the table below. Kept small in
-   every state (incl. collapsed) so the icon stays aligned. */
-.select-line-toolbar .select-line-action-btn--wholesale {
-    padding-left: 1px;
+/* Combined/Separate planning-mode pill (text only — "Combined"/"Separate"). */
+.select-line-mode-btn {
+    padding: 2px 10px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    color: #495057;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 0;
+    white-space: nowrap;
+    transition: all 0.15s;
 }
 
-/* Progressive collapse. The toolbar never wraps/overflows: adjustLineToolbar-
-   Collapse() drops labels one tier at a time — Combined/Separate first
-   (tier 1), then Wholesale (tier 2), then Auto (tier 3). The action icons are
-   the most self-explanatory, so their labels survive longest. */
-.select-line-toolbar.toolbar-collapse-1 .select-line-mode-label,
-.select-line-toolbar.toolbar-collapse-2 .select-line-mode-label,
-.select-line-toolbar.toolbar-collapse-3 .select-line-mode-label,
-.select-line-toolbar.toolbar-collapse-2 .select-line-action-btn--wholesale .select-line-action-label,
-.select-line-toolbar.toolbar-collapse-3 .select-line-action-btn--wholesale .select-line-action-label,
-.select-line-toolbar.toolbar-collapse-3 .select-line-action-btn--auto .select-line-action-label {
+.select-line-mode-btn:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+}
+
+.panel-selectLine.readonly .select-line-mode-btn {
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+/* Collapse: the toolbar is roomy now (Wholesale + stats toggle moved into the
+   table header). If it still overflows, drop the Auto label to its icon. */
+.select-line-toolbar.toolbar-collapse-1 .select-line-action-btn--auto .select-line-action-label {
     display: none;
 }
-
-/* Tidy up right padding for icon-only buttons (Wholesale keeps its aligned
-   left padding). */
-.select-line-toolbar.toolbar-collapse-1 .select-line-action-btn--mode,
-.select-line-toolbar.toolbar-collapse-2 .select-line-action-btn--mode,
-.select-line-toolbar.toolbar-collapse-3 .select-line-action-btn--mode,
-.select-line-toolbar.toolbar-collapse-3 .select-line-action-btn--auto {
+.select-line-toolbar.toolbar-collapse-1 .select-line-action-btn--auto {
     padding-left: 6px;
-    padding-right: 6px;
-}
-.select-line-toolbar.toolbar-collapse-2 .select-line-action-btn--wholesale,
-.select-line-toolbar.toolbar-collapse-3 .select-line-action-btn--wholesale {
     padding-right: 6px;
 }
 
@@ -1847,6 +1846,33 @@ body.game-screen-active header {
     background: #f8f9fa;
     font-weight: 600;
     font-size: 0.75rem;
+}
+
+/* Controls header row: a light-grey band under the score rows that holds the
+   Wholesale icon, the "Player" label, and the Game/Event toggle. The
+   !important beats the inline #fafafa that makePanelColumnsSticky() writes onto
+   the sticky checkbox/name/time cells, so the whole band reads as one colour. */
+.panel-player-table .select-line-controls-row th {
+    background: #e4e7ea !important;
+    font-weight: 600;
+    font-size: 0.75rem;
+    border-bottom: 1px solid #ced4da;
+}
+
+.panel-player-table .select-line-th-wholesale {
+    cursor: pointer;
+    color: #495057;
+}
+
+.panel-player-table .select-line-th-wholesale .select-line-action-icon {
+    width: 16px;
+    height: 16px;
+    margin: 0 auto;
+}
+
+.panel-selectLine.readonly .select-line-th-wholesale {
+    opacity: 0.5;
+    cursor: default;
 }
 
 .panel-player-table .active-checkbox-column {

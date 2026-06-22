@@ -29,10 +29,6 @@ let gameScreenInitialized = false;
 // extra asset load. See .select-line-action-btn in panelSystem.css.
 const WHOLESALE_ICON_SVG = '<svg class="select-line-action-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
 const AUTO_ICON_SVG = '<svg class="select-line-action-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.2 1.5 L4 9 H7 L6.4 14.5 L12 6.8 H8.7 Z" fill="currentColor"/></svg>';
-// Planning-mode pill icons: one bar = Combined (a single line), two bars =
-// Separate (distinct O and D lines).
-const MODE_COMBINED_ICON_SVG = '<svg class="select-line-action-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="6.3" width="12" height="3.4" rx="1.7" fill="currentColor"/></svg>';
-const MODE_SEPARATE_ICON_SVG = '<svg class="select-line-action-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3.3" width="12" height="3.1" rx="1.5" fill="currentColor"/><rect x="2" y="9.6" width="12" height="3.1" rx="1.5" fill="currentColor"/></svg>';
 
 // =============================================================================
 // Header Panel Content
@@ -394,19 +390,13 @@ function createSelectLineContent() {
             </button>
         </div>
         <div class="select-line-toolbar">
-            <button class="select-line-action-btn select-line-action-btn--wholesale" id="panelWholesaleBtn" title="Clear all selected players">
-                ${WHOLESALE_ICON_SVG}<span class="select-line-action-label">Wholesale</span>
-            </button>
             <button class="select-line-action-btn select-line-action-btn--auto" id="panelAutoBtn" title="Auto-fill empty slots to complete the line">
                 ${AUTO_ICON_SVG}<span class="select-line-action-label">Auto</span>
             </button>
-            <span class="select-line-stats-toggle" id="panelStatsToggle">(Game)</span>
             <button class="select-line-lines-btn" id="panelLinesBtn">Lines...</button>
-            <span class="select-line-gender-badge" id="panelGenderBadge" style="display: none;"></span>
-            <button class="select-line-action-btn select-line-action-btn--mode" id="panelLineModeBtn" title="Combined: one Next line + On Deck. Separate: distinct O and D lines.">
-                ${MODE_COMBINED_ICON_SVG}<span class="select-line-mode-label">Combined</span>
-            </button>
+            <button class="select-line-mode-btn" id="panelLineModeBtn" title="Combined: one Next line + On Deck. Separate: distinct O and D lines.">Combined</button>
             <button class="select-line-od-toggle" id="panelODToggle" title="Toggle line type">O/D</button>
+            <span class="select-line-gender-badge" id="panelGenderBadge" style="display: none;"></span>
             <span class="select-line-toolbar-spacer"></span>
         </div>
         <!-- AC-only awareness label: rendered by updateLineCoachViewingLabel
@@ -2574,26 +2564,21 @@ let localLineEditTimestamps = {
  * Wire up Select Next Line panel event handlers
  */
 function wireSelectLineEvents() {
-    // One-shot line action buttons: Wholesale (clear) and Auto (fill empty slots)
-    const wholesaleBtn = document.getElementById('panelWholesaleBtn');
-    if (wholesaleBtn) {
-        wholesaleBtn.addEventListener('click', () => clearLineSelection('main'));
-    }
+    // Auto action button (Wholesale + the Game/Event toggle now live in the
+    // table's controls header row — see buildSelectLineControlsRow + the
+    // delegated click handler wired on the table container below).
     const autoBtn = document.getElementById('panelAutoBtn');
     if (autoBtn) {
         autoBtn.addEventListener('click', () => autoFillLineSelection('main'));
     }
 
     // Keep the toolbar from overflowing as width changes (orientation, split
-    // views, gender badge appearing): drop action labels one at a time.
+    // views, gender badge appearing): drop the Auto label if needed.
     setupLineToolbarResponsive();
 
-    // Stats toggle (Game/Total)
-    const statsToggle = document.getElementById('panelStatsToggle');
-    if (statsToggle) {
-        statsToggle.addEventListener('click', handlePanelStatsToggle);
-    }
-    
+    // (Wholesale icon + Game/Event stats toggle now live in the table's controls
+    // header row — clicks handled via delegation on the table container below.)
+
     // Combined/Separate planning-mode toggle pill
     const lineModeBtn = document.getElementById('panelLineModeBtn');
     if (lineModeBtn) {
@@ -2634,6 +2619,12 @@ function wireSelectLineEvents() {
     const tableContainer = document.getElementById('panelTableContainer');
     if (tableContainer) {
         tableContainer.addEventListener('change', handlePanelCheckboxChange);
+        // Delegated clicks for the controls header row (Wholesale icon and the
+        // Game/Event stats toggle), which are rebuilt with the table each refresh.
+        tableContainer.addEventListener('click', (e) => {
+            if (e.target.closest('#panelStatsToggle')) { handlePanelStatsToggle(); return; }
+            if (e.target.closest('.select-line-th-wholesale')) { clearLineSelection('main'); return; }
+        });
     }
     
     // Starting gender ratio radio buttons
@@ -2929,18 +2920,13 @@ function setupLineToolbarResponsive() {
 function adjustLineToolbarCollapse(toolbar) {
     toolbar = toolbar || document.querySelector('.panel-selectLine .select-line-toolbar');
     if (!toolbar) return;
-    // Start fully expanded, then drop labels one tier at a time until it fits.
-    // Order: Combined/Separate label first, then Wholesale, then Auto (the
-    // action icons are most self-explanatory, so their labels survive longest).
+    // The toolbar is roomy now that Wholesale and the stats toggle moved into
+    // the table header. If it still can't fit, drop the Auto label to its icon.
     // Reading scrollWidth between class changes forces the reflow to re-measure.
-    toolbar.classList.remove('toolbar-collapse-1', 'toolbar-collapse-2', 'toolbar-collapse-3');
+    toolbar.classList.remove('toolbar-collapse-1');
     if (toolbar.clientWidth === 0) return; // not visible yet
     if (toolbar.scrollWidth <= toolbar.clientWidth) return;
     toolbar.classList.add('toolbar-collapse-1');
-    if (toolbar.scrollWidth <= toolbar.clientWidth) return;
-    toolbar.classList.add('toolbar-collapse-2');
-    if (toolbar.scrollWidth <= toolbar.clientWidth) return;
-    toolbar.classList.add('toolbar-collapse-3');
 }
 
 /**
@@ -3067,8 +3053,7 @@ function updateODToggleButton() {
     // Keep the Combined/Separate pill in sync (it also reflects a synced flip).
     const modeBtn = document.getElementById('panelLineModeBtn');
     if (modeBtn) {
-        modeBtn.innerHTML = (separate ? MODE_SEPARATE_ICON_SVG : MODE_COMBINED_ICON_SVG)
-            + '<span class="select-line-mode-label">' + (separate ? 'Separate' : 'Combined') + '</span>';
+        modeBtn.textContent = separate ? 'Separate' : 'Combined';
         modeBtn.title = separate
             ? 'Separate O and D lines (tap for one combined Next line + On Deck)'
             : 'Combined: one Next line + On Deck (tap for separate O and D lines)';
@@ -3973,7 +3958,42 @@ function updateSelectLineTable() {
 
     tableHead.appendChild(teamScoreRow);
     tableHead.appendChild(opponentScoreRow);
-    
+
+    // Controls header row: sits under the score rows, above the players. Holds
+    // the Wholesale (clear) icon over the checkbox column, a "Player" label, and
+    // the Game/Event stats toggle over the time column. The remaining
+    // point-columns are blank. Clicks are handled via delegation on the table
+    // container (wireSelectLineEvents). Light-grey banded via CSS.
+    const controlsRow = document.createElement('tr');
+    controlsRow.className = 'select-line-controls-row';
+
+    const wholesaleTh = document.createElement('th');
+    wholesaleTh.className = 'active-checkbox-column select-line-th-wholesale';
+    wholesaleTh.title = 'Clear all selected players';
+    wholesaleTh.innerHTML = WHOLESALE_ICON_SVG;
+    controlsRow.appendChild(wholesaleTh);
+
+    const playerTh = document.createElement('th');
+    playerTh.className = 'active-name-column';
+    playerTh.textContent = 'Player';
+    controlsRow.appendChild(playerTh);
+
+    const statsTh = document.createElement('th');
+    statsTh.className = 'active-time-column';
+    const statsLabels = { game: '(Game)', event: '(Event)', total: '(Total)' };
+    statsTh.innerHTML = '<span class="select-line-stats-toggle" id="panelStatsToggle">'
+        + (statsLabels[panelStatsMode] || '(Game)') + '</span>';
+    controlsRow.appendChild(statsTh);
+
+    // Blank cells matching the per-point score columns, plus the On Deck
+    // projection column (its score-row header is rowspan=2, so this third row
+    // needs its own cell).
+    const numPointCols = runningScores.team.length;
+    for (let i = 0; i < numPointCols; i++) controlsRow.appendChild(document.createElement('th'));
+    if (isOnDeckView) controlsRow.appendChild(document.createElement('th'));
+
+    tableHead.appendChild(controlsRow);
+
     // Get last point players for sorting
     const lastPointPlayers = game.points.length > 0
         ? game.points[game.points.length - 1].players
