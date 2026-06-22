@@ -29,6 +29,10 @@ let gameScreenInitialized = false;
 // extra asset load. See .select-line-action-btn in panelSystem.css.
 const WHOLESALE_ICON_SVG = '<svg class="select-line-action-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
 const AUTO_ICON_SVG = '<svg class="select-line-action-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.2 1.5 L4 9 H7 L6.4 14.5 L12 6.8 H8.7 Z" fill="currentColor"/></svg>';
+// Planning-mode pill icons: one bar = Combined (a single line), two bars =
+// Separate (distinct O and D lines).
+const MODE_COMBINED_ICON_SVG = '<svg class="select-line-action-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="6.3" width="12" height="3.4" rx="1.7" fill="currentColor"/></svg>';
+const MODE_SEPARATE_ICON_SVG = '<svg class="select-line-action-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3.3" width="12" height="3.1" rx="1.5" fill="currentColor"/><rect x="2" y="9.6" width="12" height="3.1" rx="1.5" fill="currentColor"/></svg>';
 
 // =============================================================================
 // Header Panel Content
@@ -399,10 +403,9 @@ function createSelectLineContent() {
             <span class="select-line-stats-toggle" id="panelStatsToggle">(Game)</span>
             <button class="select-line-lines-btn" id="panelLinesBtn">Lines...</button>
             <span class="select-line-gender-badge" id="panelGenderBadge" style="display: none;"></span>
-            <select class="select-line-mode-select" id="panelLineModeSelect" title="Combined: one Next line + On Deck. Separate: distinct O and D lines.">
-                <option value="combined">Combined</option>
-                <option value="separate">Separate</option>
-            </select>
+            <button class="select-line-action-btn select-line-action-btn--mode" id="panelLineModeBtn" title="Combined: one Next line + On Deck. Separate: distinct O and D lines.">
+                ${MODE_COMBINED_ICON_SVG}<span class="select-line-mode-label">Combined</span>
+            </button>
             <button class="select-line-od-toggle" id="panelODToggle" title="Toggle line type">O/D</button>
             <span class="select-line-toolbar-spacer"></span>
         </div>
@@ -2591,10 +2594,10 @@ function wireSelectLineEvents() {
         statsToggle.addEventListener('click', handlePanelStatsToggle);
     }
     
-    // Combined/Separate planning-mode selector
-    const lineModeSelect = document.getElementById('panelLineModeSelect');
-    if (lineModeSelect) {
-        lineModeSelect.addEventListener('change', handleLineModeChange);
+    // Combined/Separate planning-mode toggle pill
+    const lineModeBtn = document.getElementById('panelLineModeBtn');
+    if (lineModeBtn) {
+        lineModeBtn.addEventListener('click', handleLineModeChange);
     }
 
     // Line-type toggle button. In Combined mode it flips Next ↔ On Deck; in
@@ -2926,14 +2929,18 @@ function setupLineToolbarResponsive() {
 function adjustLineToolbarCollapse(toolbar) {
     toolbar = toolbar || document.querySelector('.panel-selectLine .select-line-toolbar');
     if (!toolbar) return;
-    // Start fully expanded, then collapse stepwise. Reading scrollWidth between
-    // class changes forces the reflow we need to re-measure.
-    toolbar.classList.remove('toolbar-collapse-1', 'toolbar-collapse-2');
+    // Start fully expanded, then drop labels one tier at a time until it fits.
+    // Order: Combined/Separate label first, then Wholesale, then Auto (the
+    // action icons are most self-explanatory, so their labels survive longest).
+    // Reading scrollWidth between class changes forces the reflow to re-measure.
+    toolbar.classList.remove('toolbar-collapse-1', 'toolbar-collapse-2', 'toolbar-collapse-3');
     if (toolbar.clientWidth === 0) return; // not visible yet
     if (toolbar.scrollWidth <= toolbar.clientWidth) return;
     toolbar.classList.add('toolbar-collapse-1');
     if (toolbar.scrollWidth <= toolbar.clientWidth) return;
     toolbar.classList.add('toolbar-collapse-2');
+    if (toolbar.scrollWidth <= toolbar.clientWidth) return;
+    toolbar.classList.add('toolbar-collapse-3');
 }
 
 /**
@@ -3020,8 +3027,7 @@ function handleLineModeChange() {
         return;
     }
 
-    const sel = document.getElementById('panelLineModeSelect');
-    const separate = sel && sel.value === 'separate';
+    const separate = !game.pendingNextLine.useSeparateLines; // flip current mode
     game.pendingNextLine.useSeparateLines = separate;
     game.pendingNextLine.useSeparateLinesAt = new Date().toISOString();
 
@@ -3058,11 +3064,17 @@ function updateODToggleButton() {
     const pair = separate ? ['o', 'd'] : ['od', 'odOnDeck'];
     if (!pair.includes(activeType)) activeType = pair[0];
 
-    // Keep the mode selector in sync (it also reflects a synced flip).
-    const sel = document.getElementById('panelLineModeSelect');
-    if (sel) sel.value = separate ? 'separate' : 'combined';
+    // Keep the Combined/Separate pill in sync (it also reflects a synced flip).
+    const modeBtn = document.getElementById('panelLineModeBtn');
+    if (modeBtn) {
+        modeBtn.innerHTML = (separate ? MODE_SEPARATE_ICON_SVG : MODE_COMBINED_ICON_SVG)
+            + '<span class="select-line-mode-label">' + (separate ? 'Separate' : 'Combined') + '</span>';
+        modeBtn.title = separate
+            ? 'Separate O and D lines (tap for one combined Next line + On Deck)'
+            : 'Combined: one Next line + On Deck (tap for separate O and D lines)';
+    }
 
-    if (!btn) return;
+    if (!btn) { adjustLineToolbarCollapse(); return; }
 
     const typeLabels = { od: 'Next', odOnDeck: 'On Deck', o: 'O', d: 'D' };
     btn.textContent = typeLabels[activeType] || 'Next';
@@ -3078,6 +3090,9 @@ function updateODToggleButton() {
     // Color cue only in Separate mode: green O / red D. Combined stays neutral.
     btn.classList.toggle('active-o', activeType === 'o');
     btn.classList.toggle('active-d', activeType === 'd');
+
+    // Label/text widths may have changed — re-evaluate the responsive collapse.
+    adjustLineToolbarCollapse();
 }
 
 /**
