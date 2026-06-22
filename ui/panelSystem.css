@@ -1690,24 +1690,30 @@ body.game-screen-active header {
     padding-left: 1px;
 }
 
-/* Progressive collapse. The toolbar never wraps/overflows: when it's too
-   narrow, adjustLineToolbarCollapse() adds toolbar-collapse-1 (drop the
-   Wholesale label — its checkbox icon is self-explanatory) and, if still
-   tight, toolbar-collapse-2 (also drop the Auto label). */
-.select-line-toolbar.toolbar-collapse-1 .select-line-action-btn--wholesale .select-line-action-label,
+/* Progressive collapse. The toolbar never wraps/overflows: adjustLineToolbar-
+   Collapse() drops labels one tier at a time — Combined/Separate first
+   (tier 1), then Wholesale (tier 2), then Auto (tier 3). The action icons are
+   the most self-explanatory, so their labels survive longest. */
+.select-line-toolbar.toolbar-collapse-1 .select-line-mode-label,
+.select-line-toolbar.toolbar-collapse-2 .select-line-mode-label,
+.select-line-toolbar.toolbar-collapse-3 .select-line-mode-label,
 .select-line-toolbar.toolbar-collapse-2 .select-line-action-btn--wholesale .select-line-action-label,
-.select-line-toolbar.toolbar-collapse-2 .select-line-action-btn--auto .select-line-action-label {
+.select-line-toolbar.toolbar-collapse-3 .select-line-action-btn--wholesale .select-line-action-label,
+.select-line-toolbar.toolbar-collapse-3 .select-line-action-btn--auto .select-line-action-label {
     display: none;
 }
 
 /* Tidy up right padding for icon-only buttons (Wholesale keeps its aligned
    left padding). */
-.select-line-toolbar.toolbar-collapse-1 .select-line-action-btn--auto,
-.select-line-toolbar.toolbar-collapse-2 .select-line-action-btn--auto {
+.select-line-toolbar.toolbar-collapse-1 .select-line-action-btn--mode,
+.select-line-toolbar.toolbar-collapse-2 .select-line-action-btn--mode,
+.select-line-toolbar.toolbar-collapse-3 .select-line-action-btn--mode,
+.select-line-toolbar.toolbar-collapse-3 .select-line-action-btn--auto {
     padding-left: 6px;
     padding-right: 6px;
 }
-.select-line-toolbar.toolbar-collapse-2 .select-line-action-btn--wholesale {
+.select-line-toolbar.toolbar-collapse-2 .select-line-action-btn--wholesale,
+.select-line-toolbar.toolbar-collapse-3 .select-line-action-btn--wholesale {
     padding-right: 6px;
 }
 
@@ -1747,25 +1753,6 @@ body.game-screen-active header {
     background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
 }
 
-/* Combined/Separate planning-mode selector — compact, matches the toolbar
-   toggles. Kept small so the toolbar stays on one row. */
-.select-line-mode-select {
-    font-size: 0.8rem;
-    font-weight: 500;
-    color: #495057;
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 2px 4px;
-    margin: 0;
-    max-width: 110px;
-    cursor: pointer;
-}
-
-.panel-selectLine.readonly .select-line-mode-select {
-    pointer-events: none;
-    opacity: 0.5;
-}
 
 .select-line-lines-btn {
     padding: 2px 8px;
