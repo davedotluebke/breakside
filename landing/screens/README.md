@@ -21,7 +21,6 @@ array in [`../hero-carousel.js`](../hero-carousel.js):
 | `line`            | line.png              | Line tab (roster, score progression, points-played)      |
 | `all`             | all.png               | All tab — combined PBP + Next Line + Game Log            |
 
-Note: these were captured mid-session, so the live point-timer in the header
-corner shows a large elapsed value on a few shots — re-capture from a fresh point
-if you want it tidy. The standalone `../game-screenshot.png` is the old hero image,
-no longer referenced.
+All shots are from one consistent game (Breakside 6 – Rival City 6) with a tidy
+point-timer. The standalone `../game-screenshot.png` is the old hero image, no
+longer referenced.
