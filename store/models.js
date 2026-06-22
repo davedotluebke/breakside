@@ -162,6 +162,14 @@ function Game(teamName, opponentName, startOn, teamId = null) {
         // full o/d/od mirror. Empty = "not set" = promotion no-op.
         odOnDeckLine: [],           // Player names for the point-after-next
         odOnDeckLineModifiedAt: null, // ISO timestamp of last modification
+
+        // Combined vs Separate line planning (synced, per-game). false =
+        // Combined: one Next line (odLine) plus an On Deck line. true =
+        // Separate: distinct O and D lines, no On Deck. Drives which buckets
+        // the line-type toggle exposes; the *ModifiedAt timestamp is for
+        // last-writer-wins merge across coaches.
+        useSeparateLines: false,
+        useSeparateLinesAt: null,
         activeType: 'od',           // Locally-viewed line type: 'o' | 'd' | 'od' | 'odOnDeck' (NOT synced)
 
         // Lineup Ready signal: LC presses "Lineup Ready" to tell the AC

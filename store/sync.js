@@ -1144,6 +1144,17 @@ async function refreshPendingLineFromCloud(gameId) {
             localPending.lineCoachViewingAt = serverPending.lineCoachViewingAt;
         }
 
+        // Merge Combined/Separate planning mode (either coach may flip it).
+        // Last-writer-wins on its own timestamp, like the signals above.
+        const serverModeAt = serverPending.useSeparateLinesAt
+            ? new Date(serverPending.useSeparateLinesAt).getTime() : 0;
+        const localModeAt = localPending.useSeparateLinesAt
+            ? new Date(localPending.useSeparateLinesAt).getTime() : 0;
+        if (serverModeAt > localModeAt) {
+            localPending.useSeparateLines = !!serverPending.useSeparateLines;
+            localPending.useSeparateLinesAt = serverPending.useSeparateLinesAt;
+        }
+
         // Note: activeType is intentionally NOT synced - it's local UI state
         // Each user independently chooses which line type to view/edit
 

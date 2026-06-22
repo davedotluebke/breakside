@@ -399,7 +399,11 @@ function createSelectLineContent() {
             <span class="select-line-stats-toggle" id="panelStatsToggle">(Game)</span>
             <button class="select-line-lines-btn" id="panelLinesBtn">Lines...</button>
             <span class="select-line-gender-badge" id="panelGenderBadge" style="display: none;"></span>
-            <button class="select-line-od-toggle" id="panelODToggle" title="Toggle O/D line mode">O/D</button>
+            <select class="select-line-mode-select" id="panelLineModeSelect" title="Combined: one Next line + On Deck. Separate: distinct O and D lines.">
+                <option value="combined">Combined</option>
+                <option value="separate">Separate</option>
+            </select>
+            <button class="select-line-od-toggle" id="panelODToggle" title="Toggle line type">O/D</button>
             <span class="select-line-toolbar-spacer"></span>
         </div>
         <!-- AC-only awareness label: rendered by updateLineCoachViewingLabel
@@ -2587,7 +2591,14 @@ function wireSelectLineEvents() {
         statsToggle.addEventListener('click', handlePanelStatsToggle);
     }
     
-    // O/D toggle button - cycles between O/D, O, and D lines
+    // Combined/Separate planning-mode selector
+    const lineModeSelect = document.getElementById('panelLineModeSelect');
+    if (lineModeSelect) {
+        lineModeSelect.addEventListener('change', handleLineModeChange);
+    }
+
+    // Line-type toggle button. In Combined mode it flips Next ↔ On Deck; in
+    // Separate mode it flips O line ↔ D line.
     const odToggle = document.getElementById('panelODToggle');
     if (odToggle) {
         odToggle.addEventListener('click', handleODToggle);
@@ -2947,18 +2958,13 @@ function handleODToggle() {
     // Save current selections before switching (don't update timestamp - just viewing)
     savePanelSelectionsToPendingNextLine(false);
 
-    // Cycle to next type: od → o → d → odOnDeck → od
-    // 'odOnDeck' is the On Deck line (point-after-next); concatenating with
-    // 'Line' resolves to the odOnDeckLine bucket, same as the other types.
-    const currentType = game.pendingNextLine.activeType || 'od';
-    let nextType;
-    switch (currentType) {
-        case 'od':       nextType = 'o'; break;
-        case 'o':        nextType = 'd'; break;
-        case 'd':        nextType = 'odOnDeck'; break;
-        case 'odOnDeck': nextType = 'od'; break;
-        default:         nextType = 'od';
-    }
+    // Flip to the other type within the active planning mode:
+    //   Combined → Next (odLine) ↔ On Deck (odOnDeckLine)
+    //   Separate → O line ↔ D line
+    const pair = lineTypeTogglePair(game);
+    const currentType = game.pendingNextLine.activeType || pair[0];
+    const idx = pair.indexOf(currentType);
+    const nextType = pair[(idx + 1) % pair.length];
 
     game.pendingNextLine.activeType = nextType;
     noteLineCoachViewing();
@@ -2981,35 +2987,97 @@ function handleODToggle() {
     updatePlayByPlayPanelState();
 
     // Show feedback
-    const typeLabels = { od: 'O/D', o: 'Offense', d: 'Defense', odOnDeck: 'On Deck' };
+    const typeLabels = { od: 'Next', o: 'Offense', d: 'Defense', odOnDeck: 'On Deck' };
     if (typeof showControllerToast === 'function') {
         showControllerToast(`Switched to ${typeLabels[nextType]} line`, 'info');
     }
 }
 
 /**
- * Update the O/D toggle button text to show current mode
+ * The two line-type buckets the toggle flips between, given the current
+ * planning mode. Combined → Next (odLine) and On Deck; Separate → O and D.
+ * @param {object} game
+ * @returns {string[]} two activeType values
+ */
+function lineTypeTogglePair(game) {
+    const sep = !!(game && game.pendingNextLine && game.pendingNextLine.useSeparateLines);
+    return sep ? ['o', 'd'] : ['od', 'odOnDeck'];
+}
+
+/**
+ * Handle the Combined/Separate planning-mode selector. Persists + syncs the
+ * flag and snaps activeType to a valid bucket for the chosen mode.
+ */
+function handleLineModeChange() {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !game.pendingNextLine) return;
+    if (!canEditSelectLinePanel()) {
+        // Revert the select to the real state and warn.
+        updateODToggleButton();
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('Only the Line Coach can change this during a point', 'warning');
+        }
+        return;
+    }
+
+    const sel = document.getElementById('panelLineModeSelect');
+    const separate = sel && sel.value === 'separate';
+    game.pendingNextLine.useSeparateLines = separate;
+    game.pendingNextLine.useSeparateLinesAt = new Date().toISOString();
+
+    // Snap the view to a bucket valid for the new mode. Separate → default to
+    // the side that's actually coming up; Combined → the Next line.
+    if (separate) {
+        const offense = (typeof determineStartingPosition === 'function')
+            ? determineStartingPosition() === 'offense' : true;
+        game.pendingNextLine.activeType = offense ? 'o' : 'd';
+    } else {
+        game.pendingNextLine.activeType = 'od';
+    }
+    noteLineCoachViewing();
+
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    updateSelectLineTable();
+    updateODToggleButton();
+    updateSelectLineSubtitle();
+    updatePlayByPlayPanelState();
+}
+
+/**
+ * Sync the line-type toggle button and the Combined/Separate selector to the
+ * current planning mode + active view.
  */
 function updateODToggleButton() {
     const btn = document.getElementById('panelODToggle');
-    if (!btn) return;
-    
     const game = typeof currentGame === 'function' ? currentGame() : null;
-    const activeType = game?.pendingNextLine?.activeType || 'od';
-    
-    // Update button text
-    const typeLabels = { od: 'O/D', o: 'O', d: 'D', odOnDeck: 'On Deck', split: 'O|D' };
-    btn.textContent = typeLabels[activeType] || 'O/D';
+    const separate = !!(game?.pendingNextLine?.useSeparateLines);
+    let activeType = game?.pendingNextLine?.activeType || 'od';
 
-    // Update title/tooltip
+    // Guard: if the stored view doesn't belong to the current mode (e.g. after
+    // a mode flip arriving via sync), fall back to the mode's primary bucket.
+    const pair = separate ? ['o', 'd'] : ['od', 'odOnDeck'];
+    if (!pair.includes(activeType)) activeType = pair[0];
+
+    // Keep the mode selector in sync (it also reflects a synced flip).
+    const sel = document.getElementById('panelLineModeSelect');
+    if (sel) sel.value = separate ? 'separate' : 'combined';
+
+    if (!btn) return;
+
+    const typeLabels = { od: 'Next', odOnDeck: 'On Deck', o: 'O', d: 'D' };
+    btn.textContent = typeLabels[activeType] || 'Next';
+
     const typeDescriptions = {
-        od: 'Combined line (tap to switch to Offense)',
+        od: 'Next line (tap to plan the On Deck line)',
+        odOnDeck: 'On Deck line — the point after Next (tap to switch back to Next)',
         o: 'Offense line (tap to switch to Defense)',
-        d: 'Defense line (tap to plan the On Deck line)',
-        odOnDeck: 'On Deck line — the point after Next (tap to switch back to O/D)',
-        split: 'Split view (tap to merge back to O/D)'
+        d: 'Defense line (tap to switch to Offense)'
     };
-    btn.title = typeDescriptions[activeType] || 'Toggle O/D/On-Deck line';
+    btn.title = typeDescriptions[activeType] || 'Toggle line type';
+
+    // Color cue only in Separate mode: green O / red D. Combined stays neutral.
+    btn.classList.toggle('active-o', activeType === 'o');
+    btn.classList.toggle('active-d', activeType === 'd');
 }
 
 /**
@@ -3718,6 +3786,17 @@ function autoSelectActiveTypeForNextPoint() {
     // planning the point-after-next, Next is presumably already set — leave
     // them where they are rather than auto-switching to the resolved Next side.
     if (game.pendingNextLine.activeType === 'odOnDeck') return;
+
+    // In Combined mode there's only the Next (od) view — never auto-switch to a
+    // side-specific o/d bucket the UI can't show. Selection itself still blends
+    // o/d/od via getEffectiveLineForNextPoint at point start.
+    if (!game.pendingNextLine.useSeparateLines) {
+        if (game.pendingNextLine.activeType !== 'od') {
+            game.pendingNextLine.activeType = 'od';
+            if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+        }
+        return;
+    }
 
     const { source } = getEffectiveLineForNextPoint(game);
     if (game.pendingNextLine.activeType !== source) {
