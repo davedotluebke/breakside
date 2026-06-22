@@ -1871,6 +1871,12 @@ body.game-screen-active header {
     font-style: normal;
 }
 
+/* Whole stats cell is the tap target (the small link text alone is hard to hit
+   on a phone). */
+.panel-player-table .select-line-th-stats {
+    cursor: pointer;
+}
+
 .panel-player-table .select-line-th-wholesale {
     cursor: pointer;
     color: #495057;
