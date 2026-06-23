@@ -394,7 +394,7 @@ function createSelectLineContent() {
                 ${AUTO_ICON_SVG}<span class="select-line-action-label">Auto</span>
             </button>
             <button class="select-line-lines-btn" id="panelLinesBtn">Lines...</button>
-            <button class="select-line-mode-btn" id="panelLineModeBtn" title="Combined: one Next line + On Deck. Separate: distinct O and D lines.">Combined</button>
+            <button class="select-line-mode-btn" id="panelLineModeBtn" title="Choose line-planning mode">Mode: O/D</button>
             <button class="select-line-od-toggle" id="panelODToggle" title="Toggle line type">O/D</button>
             <span class="select-line-gender-badge" id="panelGenderBadge" style="display: none;"></span>
             <span class="select-line-toolbar-spacer"></span>
@@ -2582,7 +2582,7 @@ function wireSelectLineEvents() {
     // Combined/Separate planning-mode toggle pill
     const lineModeBtn = document.getElementById('panelLineModeBtn');
     if (lineModeBtn) {
-        lineModeBtn.addEventListener('click', handleLineModeChange);
+        lineModeBtn.addEventListener('click', toggleLineModeMenu);
     }
 
     // Line-type toggle button. In Combined mode it flips Next ↔ On Deck; in
@@ -2960,6 +2960,10 @@ function handleODToggle() {
     const nextType = pair[(idx + 1) % pair.length];
 
     game.pendingNextLine.activeType = nextType;
+    // Honor this view for the rest of the planning window — the 3s cloud poll
+    // calls autoSelectActiveTypeForNextPoint and would otherwise snap it back to
+    // the who-scored default (e.g. you score → default D, but you're setting O).
+    lineViewManuallyChosen = true;
     noteLineCoachViewing();
 
     // Save game state
@@ -3001,20 +3005,24 @@ function lineTypeTogglePair(game) {
  * Handle the Combined/Separate planning-mode selector. Persists + syncs the
  * flag and snaps activeType to a valid bucket for the chosen mode.
  */
-function handleLineModeChange() {
+/**
+ * Set the line-planning mode. Combined (false) = one Next line + On Deck;
+ * Separate (true) = distinct O and D lines.
+ * @param {boolean} separate
+ */
+function setLineMode(separate) {
     const game = typeof currentGame === 'function' ? currentGame() : null;
     if (!game || !game.pendingNextLine) return;
     if (!canEditSelectLinePanel()) {
-        // Revert the select to the real state and warn.
         updateODToggleButton();
         if (typeof showControllerToast === 'function') {
             showControllerToast('Only the Line Coach can change this during a point', 'warning');
         }
         return;
     }
+    if (!!game.pendingNextLine.useSeparateLines === !!separate) return; // no change
 
-    const separate = !game.pendingNextLine.useSeparateLines; // flip current mode
-    game.pendingNextLine.useSeparateLines = separate;
+    game.pendingNextLine.useSeparateLines = !!separate;
     game.pendingNextLine.useSeparateLinesAt = new Date().toISOString();
 
     // Snap the view to a bucket valid for the new mode. Separate → default to
@@ -3026,6 +3034,7 @@ function handleLineModeChange() {
     } else {
         game.pendingNextLine.activeType = 'od';
     }
+    lineViewManuallyChosen = false; // mode change resets to the sensible default
     noteLineCoachViewing();
 
     if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
@@ -3033,6 +3042,71 @@ function handleLineModeChange() {
     updateODToggleButton();
     updateSelectLineSubtitle();
     updatePlayByPlayPanelState();
+}
+
+// ── Combined/Separate ("Mode:") popup menu ────────────────────────────────
+function onLineModeOutsideClick(e) {
+    const menu = document.getElementById('lineModeMenu');
+    const btn = document.getElementById('panelLineModeBtn');
+    if (menu && !menu.contains(e.target) && e.target !== btn) closeLineModeMenu();
+}
+function onLineModeKey(e) { if (e.key === 'Escape') closeLineModeMenu(); }
+
+function closeLineModeMenu() {
+    const menu = document.getElementById('lineModeMenu');
+    if (menu) menu.remove();
+    document.removeEventListener('click', onLineModeOutsideClick, true);
+    document.removeEventListener('keydown', onLineModeKey);
+}
+
+/**
+ * Open (or close) the "Mode:" popup. Two choices — O/D (combined) and O&D
+ * (separate) — each with a one-line explanation.
+ */
+function toggleLineModeMenu() {
+    if (document.getElementById('lineModeMenu')) { closeLineModeMenu(); return; }
+    const btn = document.getElementById('panelLineModeBtn');
+    if (!btn) return;
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    const separate = !!(game && game.pendingNextLine && game.pendingNextLine.useSeparateLines);
+
+    const menu = document.createElement('div');
+    menu.className = 'line-mode-menu';
+    menu.id = 'lineModeMenu';
+    [
+        { sep: false, title: 'O/D', desc: 'One combined roster' },
+        { sep: true,  title: 'O&D', desc: 'Separate O & D lines' }
+    ].forEach(o => {
+        const opt = document.createElement('button');
+        opt.className = 'line-mode-option' + (o.sep === separate ? ' selected' : '');
+        const t = document.createElement('span');
+        t.className = 'line-mode-option-title';
+        t.textContent = o.title;
+        const d = document.createElement('span');
+        d.className = 'line-mode-option-desc';
+        d.textContent = o.desc;
+        opt.appendChild(t);
+        opt.appendChild(d);
+        opt.addEventListener('click', () => { setLineMode(o.sep); closeLineModeMenu(); });
+        menu.appendChild(opt);
+    });
+    document.body.appendChild(menu);
+
+    // Anchor below the button, kept within the viewport.
+    const r = btn.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.top = `${r.bottom + 4}px`;
+    let left = r.left;
+    if (left + menu.offsetWidth > window.innerWidth - 8) {
+        left = Math.max(8, window.innerWidth - menu.offsetWidth - 8);
+    }
+    menu.style.left = `${left}px`;
+
+    // Defer listener attachment so the opening click doesn't immediately close it.
+    setTimeout(() => {
+        document.addEventListener('click', onLineModeOutsideClick, true);
+        document.addEventListener('keydown', onLineModeKey);
+    }, 0);
 }
 
 /**
@@ -3053,10 +3127,10 @@ function updateODToggleButton() {
     // Keep the Combined/Separate pill in sync (it also reflects a synced flip).
     const modeBtn = document.getElementById('panelLineModeBtn');
     if (modeBtn) {
-        modeBtn.textContent = separate ? 'Separate' : 'Combined';
+        modeBtn.textContent = separate ? 'Mode: O&D' : 'Mode: O/D';
         modeBtn.title = separate
-            ? 'Separate O and D lines (tap for one combined Next line + On Deck)'
-            : 'Combined: one Next line + On Deck (tap for separate O and D lines)';
+            ? 'Separate O & D lines (tap to change line-planning mode)'
+            : 'One combined roster (tap to change line-planning mode)';
     }
 
     if (!btn) { adjustLineToolbarCollapse(); return; }
@@ -3778,6 +3852,11 @@ function getEffectiveLineForNextPoint(game) {
  * after cloud refresh (so the Active Coach's view follows the Line
  * Coach's edits without a manual toggle).
  */
+// Set true when the coach manually picks a line view (O/D toggle) during a
+// planning window, so the 3s cloud-refresh poll doesn't snap it back to the
+// who-scored default. Cleared at point end (selectAppropriateLineAtPointEnd).
+let lineViewManuallyChosen = false;
+
 function autoSelectActiveTypeForNextPoint() {
     const game = typeof currentGame === 'function' ? currentGame() : null;
     if (!game || !game.pendingNextLine) return;
@@ -3786,6 +3865,9 @@ function autoSelectActiveTypeForNextPoint() {
     // planning the point-after-next, Next is presumably already set — leave
     // them where they are rather than auto-switching to the resolved Next side.
     if (game.pendingNextLine.activeType === 'odOnDeck') return;
+
+    // Respect a manual O/D pick made during this planning window (see flag note).
+    if (lineViewManuallyChosen) return;
 
     // In Combined mode there's only the Next (od) view — never auto-switch to a
     // side-specific o/d bucket the UI can't show. Selection itself still blends
@@ -3811,6 +3893,9 @@ function autoSelectActiveTypeForNextPoint() {
 }
 
 function selectAppropriateLineAtPointEnd() {
+    // New planning window → drop any manual O/D view pick so the who-scored
+    // default applies; the coach can re-toggle and it'll stick (see flag note).
+    lineViewManuallyChosen = false;
     // Delegate to the shared helper. The historical version of this
     // function had a 3-priority rule (stay on OD, then OD-modified-during-
     // point, then who-scored) — but that meant a separately-prepared O or
