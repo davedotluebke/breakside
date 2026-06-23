@@ -2709,35 +2709,105 @@ function getContextTableId(context) {
 }
 
 /**
+ * Build per-player auto-line stats for the CURRENT game. Pure given (game,
+ * roster) plus getPlayerGameTime — no DOM, no mutation — so it's easy to reason
+ * about and exercise from the console.
+ *
+ * Each entry carries everything the Auto comparator needs:
+ *   - pointsPlayed: points this player appeared in (incl. mid-point subs)
+ *   - timePlayed:   ms on the field this game (getPlayerGameTime)
+ *   - inLastPoint:  was on the most recent point's line
+ *   - outStreak:    consecutive most-recent points sat out (never-played = all)
+ *   - quintile:     0..4 bucket by timePlayed across the roster (0 = least time);
+ *                   equal-time players share a bucket so ties aren't split
+ * @param {object} game
+ * @param {Array} roster
+ * @returns {Object<string, {pointsPlayed:number,timePlayed:number,inLastPoint:boolean,outStreak:number,quintile:number}>}
+ */
+function buildAutoLineStats(game, roster) {
+    const points = (game && game.points) || [];
+    const lastPoint = points.length ? points[points.length - 1] : null;
+    const lastPointPlayers = lastPoint ? lastPoint.players : [];
+
+    const playedIn = (point, name) =>
+        point.players.includes(name) ||
+        (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(name));
+
+    const stats = {};
+    roster.forEach(p => {
+        let pointsPlayed = 0;
+        points.forEach(pt => { if (playedIn(pt, p.name)) pointsPlayed++; });
+        // Consecutive points sat out, walking back from the most recent point.
+        let outStreak = 0;
+        for (let i = points.length - 1; i >= 0; i--) {
+            if (playedIn(points[i], p.name)) break;
+            outStreak++;
+        }
+        stats[p.name] = {
+            pointsPlayed,
+            timePlayed: typeof getPlayerGameTime === 'function' ? getPlayerGameTime(p.name) : 0,
+            inLastPoint: lastPointPlayers.includes(p.name),
+            outStreak,
+            quintile: 0,
+        };
+    });
+
+    // Quintiles by game time ascending. Equal-count buckets via floor(i*5/n),
+    // but players with identical time inherit the earlier bucket so a tie at a
+    // boundary never lands two equal-time players in different equivalence
+    // classes (the whole point of "about the same time").
+    const byTime = [...roster].sort((a, b) => stats[a.name].timePlayed - stats[b.name].timePlayed);
+    const n = byTime.length;
+    let prevTime = null, prevQ = 0;
+    byTime.forEach((p, i) => {
+        let q = n > 0 ? Math.floor((i * 5) / n) : 0;
+        if (prevTime !== null && stats[p.name].timePlayed === prevTime) q = prevQ;
+        stats[p.name].quintile = q;
+        prevTime = stats[p.name].timePlayed;
+        prevQ = q;
+    });
+
+    return stats;
+}
+
+/**
  * Compute a complete line by filling the empty slots around an existing
- * selection. Already-selected players are kept; only the remaining slots (up
- * to the field count) are filled, choosing players with the fewest points
- * played and respecting the gender ratio if one is active.
+ * selection. Already-selected players are kept; only the remaining slots (up to
+ * the field count) are filled. Candidates are chosen in this strict order of
+ * priority (decreasing):
+ *   1. Gender ratio — satisfy the active ratio's per-gender targets first
+ *   2. Rest — players NOT on the last point come before those who just played
+ *   3. Less time played — by time quintile (least-played quintile first)
+ *   4. (tiebreak within a quintile) fewer points played
+ *   5. (tiebreak) longest current bench streak (out the most points in a row)
  * @param {string[]} alreadySelected - player names the coach has already picked
  * @returns {string[]} The full line (alreadySelected + auto-filled additions)
  */
 function computeAutoLine(alreadySelected = []) {
     const game = typeof currentGame === 'function' ? currentGame() : null;
-    if (!game || !currentTeam || !currentTeam.teamRoster) return alreadySelected.slice();
+    const roster = typeof getActiveRoster === 'function'
+        ? getActiveRoster()
+        : (currentTeam && currentTeam.teamRoster) || [];
+    if (!game || !roster || !roster.length) return alreadySelected.slice();
 
     const expectedCount = parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
-    const roster = currentTeam.teamRoster;
     const selectedSet = new Set(alreadySelected);
     const result = alreadySelected.slice();
     if (result.length >= expectedCount) return result;
 
-    // Count points played per player in current game
-    const pointsPlayed = {};
-    roster.forEach(p => { pointsPlayed[p.name] = 0; });
-    game.points.forEach(point => {
-        roster.forEach(p => {
-            const played = point.players.includes(p.name) ||
-                (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(p.name));
-            if (played) pointsPlayed[p.name]++;
-        });
-    });
+    const stats = buildAutoLineStats(game, roster);
 
-    const byFewestPoints = (a, b) => (pointsPlayed[a.name] || 0) - (pointsPlayed[b.name] || 0);
+    // Strict lexicographic priority: rest > time quintile > fewer points >
+    // longer bench streak > name (stable final tiebreak).
+    const cmp = (a, b) => {
+        const sa = stats[a.name], sb = stats[b.name];
+        if (sa.inLastPoint !== sb.inLastPoint) return sa.inLastPoint ? 1 : -1;
+        if (sa.quintile !== sb.quintile) return sa.quintile - sb.quintile;
+        if (sa.pointsPlayed !== sb.pointsPlayed) return sa.pointsPlayed - sb.pointsPlayed;
+        if (sa.outStreak !== sb.outStreak) return sb.outStreak - sa.outStreak;
+        return a.name.localeCompare(b.name);
+    };
+
     // Append up to `n` unselected candidates (already filtered + sorted) to result.
     const addFrom = (candidates, n) => {
         for (let i = 0; i < candidates.length && n > 0; i++) {
@@ -2752,13 +2822,13 @@ function computeAutoLine(alreadySelected = []) {
     // Check if gender ratio is active
     const hasRatio = game.alternateGenderRatio && game.alternateGenderRatio !== 'No';
 
-    if (hasRatio && typeof getExpectedGenderRatio === 'function' && typeof getExpectedGenderCounts === 'function') {
+    if (hasRatio && typeof getExpectedGenderCounts === 'function') {
         let expectedRatio;
-        if (game.alternateGenderRatio === 'Alternating') {
+        if (game.alternateGenderRatio === 'Alternating' && typeof getExpectedGenderRatio === 'function') {
             expectedRatio = getExpectedGenderRatio(game);
         } else {
             // Fixed ratio like "4:3" — determine which gender is majority
-            const parts = game.alternateGenderRatio.split(':');
+            const parts = String(game.alternateGenderRatio).split(':');
             if (parts.length === 2) {
                 expectedRatio = parseInt(parts[0]) >= parseInt(parts[1]) ? 'FMP' : 'MMP';
             }
@@ -2773,22 +2843,27 @@ function computeAutoLine(alreadySelected = []) {
                 if (p.gender === Gender.FMP) haveFmp++;
                 else if (p.gender === Gender.MMP) haveMmp++;
             });
-            const fmpPlayers = roster.filter(p => p.gender === Gender.FMP).sort(byFewestPoints);
-            const mmpPlayers = roster.filter(p => p.gender === Gender.MMP).sort(byFewestPoints);
+            const fmpPlayers = roster.filter(p => p.gender === Gender.FMP).sort(cmp);
+            const mmpPlayers = roster.filter(p => p.gender === Gender.MMP).sort(cmp);
             addFrom(fmpPlayers, Math.max(0, counts.fmp - haveFmp));
             addFrom(mmpPlayers, Math.max(0, counts.mmp - haveMmp));
 
             // Fallback: short a gender (or over on one) — top up from whoever's left.
             if (result.length < expectedCount) {
-                addFrom([...roster].sort(byFewestPoints), expectedCount - result.length);
+                addFrom([...roster].sort(cmp), expectedCount - result.length);
             }
             return result;
         }
     }
 
-    // No ratio: fill remaining slots by fewest points played
-    addFrom([...roster].sort(byFewestPoints), expectedCount - result.length);
+    // No ratio: fill remaining slots by the priority comparator
+    addFrom([...roster].sort(cmp), expectedCount - result.length);
     return result;
+}
+
+if (typeof window !== 'undefined') {
+    window.computeAutoLine = computeAutoLine;
+    window.buildAutoLineStats = buildAutoLineStats;
 }
 
 /**
