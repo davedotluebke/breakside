@@ -350,6 +350,25 @@ localStorage is keyed per origin **including port**, frontend port 3001↔backen
 This is the durable replacement for adding `localhost` to the prod API's
 `ULTISTATS_ALLOWED_ORIGINS` — keep prod CORS locked to the real origins.
 
+#### `uvicorn` / `pytest` not found on PATH (python.org macOS builds)
+
+If a bare `uvicorn main:app …` or `pytest` reports "command not found" even
+though they're installed, the package console-scripts are in the python.org
+framework's own `bin/` — which the installer does **not** add to PATH. It only
+symlinks the interpreter (`/usr/local/bin/python3.12 → …/Versions/3.12/bin/python3.12`);
+the `uvicorn`/`pytest`/`fastapi`/`pip` wrappers next to it stay unreachable.
+
+Two ways through it:
+
+```bash
+# One-off: run the module via the interpreter (no PATH change needed)
+/usr/local/bin/python3.12 -m uvicorn main:app --reload --port 8000
+
+# Permanent: put the framework bin on PATH (add to ~/.zshrc), so the bare
+# `uvicorn` / `pytest` commands in this doc and CLAUDE.md just work:
+export PATH="/Library/Frameworks/Python.framework/Versions/3.12/bin:$PATH"
+```
+
 ### Server Stack
 
 | Component | Details |
