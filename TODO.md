@@ -411,15 +411,17 @@ Higher-leverage interventions, in roughly priority order:
   - Add a lightweight battery-impact log: timestamp + `navigator.getBattery()` snapshots at session start, point boundaries, and game end. Even rough deltas across 2–3 games would tell us which intervention matters before we build it.
 
 ### Line Selection
-- [ ] Smarter auto-lineup tiebreaking
-  - Break ties (same points played) by preferring players who have sat out for more consecutive points
-  - Then break remaining ties by preferring players with more total points played (reward workhorses)
-- [ ] Player position and line preference in roster
-  - Add position field to player records: handler, cutter, hybrid
-  - Add O-line / D-line preference per player
-  - Auto-lineup uses these to build balanced lines
-- [ ] AI/stats-driven lineup suggestions
-  - Use game stats and/or AI to pick players that play well together
+- [x] Auto fill algorithm (priority-ordered) — shipped on `auto-line`
+  - `computeAutoLine` / `buildAutoLineStats` in [game/gameScreen.js](game/gameScreen.js). Auto only *fills empty slots* up to the field count (7 for 7v7, 5 for 5v5, …); already-checked players are kept, and a full line fills nothing. Wholesale clears so Auto can repopulate from scratch.
+  - Strict decreasing priority: (1) satisfy the active gender ratio's per-gender targets; (2) prefer players **not on the last point**; (3) prefer **less time played**, bucketed into **quintiles** (equal-time players share a bucket) so "about the same time" is one equivalence class; within a quintile tiebreak by (4) **fewer points played**, then (5) **longest current bench streak** (out the most points in a row).
+  - All metrics are **current-game** scope. Time = `getPlayerGameTime`; roster = `getActiveRoster()` (event-aware, includes pickups).
+- [ ] Handlers / cutters with per-line minimums
+  - Add a position field to player records (handler / cutter / hybrid) and let the coach set a **minimum number of each** per line; Auto treats those minimums as constraints alongside the gender ratio (gender first, then position minimums), filling the rest by the priority order above.
+  - Also: O-line / D-line preference per player to bias Auto by point type.
+- [ ] AI/stats-driven "moneyball" auto-subbing
+  - Use accumulated game/event stats (and/or an AI model) to pick players who **play well together** and suggest matchup-aware lines, beyond simple fatigue/rotation balancing.
+- [ ] Reward-workhorses tiebreak (optional)
+  - A deeper tiebreak that, all else equal, can prefer players with more total points played — deferred; current final tiebreak is name for determinism.
 - [x] Wholesale/Auto icon UI redesign — shipped on `line-selection-rework`
   - Replaced the cycling Manual/Wholesale/Auto text toggle with two one-shot actions: **Wholesale** (clear) and **Auto** (fill empty slots). No persistent "mode" — selection is always manual.
   - Empty-checkbox icon for Wholesale, now living in a **table controls header row** (over the checkbox column); a lightning-bolt icon for **Auto** in the toolbar. The Game/Event time toggle also moved into that header row.
