@@ -174,23 +174,31 @@ async def _mint_transcription_session_token(api_key: str, req: TokenRequest) -> 
 
 async def _mint_legacy_session_token(api_key: str, req: TokenRequest) -> Dict[str, Any]:
     """
-    Legacy path: mint a token for a conversational gpt-realtime session.
-    Used when mode="conversation" or when NARRATION_USE_LEGACY_SESSIONS=1.
+    Mint a token for a conversational gpt-realtime session (tools + function
+    calling). Used when mode="conversation" or when
+    NARRATION_USE_LEGACY_SESSIONS=1.
+
+    Uses the GA `client_secrets` endpoint with `session.type=realtime`. The old
+    beta path (`POST /v1/realtime/sessions` + `OpenAI-Beta: realtime=v1`, flat
+    `modalities`) was disabled by OpenAI; GA renames `modalities` ->
+    `output_modalities` and nests everything under `session`.
     """
     payload: Dict[str, Any] = {
-        "model": req.model,
-        # We only need transcription + function calling back, not audio out.
-        "modalities": ["text"],
+        "session": {
+            "type": "realtime",
+            "model": req.model,
+            # We only need transcription + function calling back, not audio out.
+            "output_modalities": ["text"],
+        }
     }
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         try:
             resp = await client.post(
-                "https://api.openai.com/v1/realtime/sessions",
+                "https://api.openai.com/v1/realtime/client_secrets",
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
-                    "OpenAI-Beta": "realtime=v1",
                 },
                 json=payload,
             )
@@ -203,12 +211,16 @@ async def _mint_legacy_session_token(api_key: str, req: TokenRequest) -> Dict[st
         raise HTTPException(status_code=resp.status_code, detail=f"OpenAI: {resp.text}")
 
     data = resp.json()
-    # OpenAI returns { client_secret: { value, expires_at }, ... }
-    secret = data.get("client_secret") or {}
-    token = secret.get("value")
-    expires_at = secret.get("expires_at")
+    # GA shape: { "value": "ek_...", "expires_at": ..., "session": {...} }.
+    # Tolerate the older { "client_secret": { value, expires_at } } shape too.
+    token = data.get("value")
+    expires_at = data.get("expires_at")
     if not token:
-        logger.error("OpenAI token response missing client_secret.value: %s", data)
+        secret = data.get("client_secret") or {}
+        token = secret.get("value")
+        expires_at = secret.get("expires_at") or expires_at
+    if not token:
+        logger.error("OpenAI token response missing token value: %s", data)
         raise HTTPException(status_code=502, detail="OpenAI returned no token")
 
     return {

@@ -205,29 +205,37 @@
                 }
             });
         } else {
-            // Conversation mode: legacy flat shape with gpt-realtime + tools.
+            // Conversation mode: GA gpt-realtime path with tools. GA renamed
+            // `modalities` -> `output_modalities`, requires session.type, and
+            // nests audio config under audio.input.* (same migration as the
+            // transcription branch above and the backend token mint).
             send({
                 type: 'session.update',
                 session: {
-                    modalities: ['text'],
+                    type: 'realtime',
+                    output_modalities: ['text'],
                     instructions,
                     tools,
                     tool_choice: 'auto',
-                    input_audio_format: 'pcm16',
-                    input_audio_transcription: {
-                        // gpt-4o-mini-transcribe is paired with gpt-realtime;
-                        // whisper-1 does not reliably emit transcription events
-                        // on this path in our testing.
-                        model: transcriptionModel
-                    },
-                    turn_detection: {
-                        type: 'server_vad',
-                        // Sane defaults for the conversational fast pass.
-                        // We're not chasing maximal splits — just clean
-                        // utterance boundaries and reliable VAD on stop.
-                        threshold: 0.5,
-                        prefix_padding_ms: 300,
-                        silence_duration_ms: 500
+                    audio: {
+                        input: {
+                            format: { type: 'audio/pcm', rate: TARGET_SAMPLE_RATE },
+                            transcription: {
+                                // gpt-4o-mini-transcribe is paired with
+                                // gpt-realtime; whisper-1 does not reliably emit
+                                // transcription events on this path in testing.
+                                model: transcriptionModel
+                            },
+                            turn_detection: {
+                                type: 'server_vad',
+                                // Sane defaults for the conversational fast pass.
+                                // We're not chasing maximal splits — just clean
+                                // utterance boundaries and reliable VAD on stop.
+                                threshold: 0.5,
+                                prefix_padding_ms: 300,
+                                silence_duration_ms: 500
+                            }
+                        }
                     }
                 }
             });
@@ -461,10 +469,15 @@
                 const errMsg = msg.error?.message || 'Realtime API error';
                 // "buffer too small" is benign: it means server VAD already
                 // committed the audio before our manual commit in stop()
-                // reached the server. Skip silently — nothing went wrong.
+                // reached the server. Likewise "active response" is benign in
+                // conversation mode: server VAD already auto-created the
+                // response before our explicit response.create in stop().
+                // Skip both silently — nothing went wrong.
                 if (errMsg.includes('buffer too small') ||
-                    errMsg.includes('buffer_empty')) {
-                    console.log('[rt] (ignored) server already committed buffer:', errMsg);
+                    errMsg.includes('buffer_empty') ||
+                    errMsg.includes('active response') ||
+                    msg.error?.code === 'conversation_already_has_active_response') {
+                    console.log('[rt] (ignored) server already handled commit/response:', errMsg);
                     break;
                 }
                 onErrorCb(new Error(errMsg));
