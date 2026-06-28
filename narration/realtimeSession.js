@@ -188,7 +188,10 @@
             if (transcriptionPrompt) transcription.prompt = transcriptionPrompt;
 
             const inputCfg = {
-                format: 'audio/pcm',
+                // GA requires an object here; a bare 'audio/pcm' string is
+                // rejected with invalid_type and the transcription session
+                // never produces any transcript (silent narration failure).
+                format: { type: 'audio/pcm', rate: TARGET_SAMPLE_RATE },
                 transcription,
                 turn_detection: { type: 'semantic_vad', eagerness }
             };
