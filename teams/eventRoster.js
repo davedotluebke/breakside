@@ -171,7 +171,7 @@ async function renderEventRosterTable() {
     headerRow.appendChild(thName);
 
     if (hasStats) {
-        ['Pts', 'Time', 'Goals', 'Assists', 'HA', 'Huck HA', 'Comp%', 'Huck%', 'Ds', 'TOs', '+/-', '..per pt'].forEach(text => {
+        ['Pts', 'Time', 'Goals', 'Assists', 'HA', 'Huck HA', 'Throws', 'Comp%', 'Huck%', 'Ds', 'TOs', '+/-', '..per pt'].forEach(text => {
             const th = document.createElement('th');
             th.textContent = text;
             th.classList.add('roster-header');
@@ -239,6 +239,7 @@ async function renderEventRosterTable() {
             totals.assists,
             totals.hockeyAssists,
             totals.huckHockeyAssists,
+            totals.totalThrows,
             teamCompPct !== '-' ? `${teamCompPct}%` : teamCompPct,
             teamHuckPct !== '-' ? `${teamHuckPct}%` : teamHuckPct,
             totals.dPlays,
@@ -271,12 +272,13 @@ async function renderEventRosterTable() {
                 { key: 'assists', type: 'number', colIndex: 5 },
                 { key: 'hockeyAssists', type: 'number', colIndex: 6 },
                 { key: 'huckHockeyAssists', type: 'number', colIndex: 7 },
-                { key: 'compPct', type: 'percentage', colIndex: 8 },
-                { key: 'huckPct', type: 'percentage', colIndex: 9 },
-                { key: 'ds', type: 'number', colIndex: 10 },
-                { key: 'tos', type: 'number', colIndex: 11 },
-                { key: 'plusMinus', type: 'number', colIndex: 12 },
-                { key: 'pmPerPt', type: 'number', colIndex: 13 }
+                { key: 'throws', type: 'number', colIndex: 8 },
+                { key: 'compPct', type: 'percentage', colIndex: 9 },
+                { key: 'huckPct', type: 'percentage', colIndex: 10 },
+                { key: 'ds', type: 'number', colIndex: 11 },
+                { key: 'tos', type: 'number', colIndex: 12 },
+                { key: 'plusMinus', type: 'number', colIndex: 13 },
+                { key: 'pmPerPt', type: 'number', colIndex: 14 }
             );
         }
         eventRosterSortController = createTableSortController({
@@ -386,6 +388,7 @@ function createEventRosterPlayerRow(player, eventPlayerStats, hasStats, totals, 
             assists,
             hockeyAssists,
             huckHockeyAssists,
+            totalThrows,
             compPct !== '-' ? `${compPct}%` : compPct,
             huckPct !== '-' ? `${huckPct}%` : huckPct,
             dPlays,

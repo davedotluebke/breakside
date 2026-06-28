@@ -19,6 +19,8 @@ const STATS_COLUMN_HELP = {
                   desc: 'Threw the pass that led to the assist (the pass before the goal).' },
     'Huck HA':  { name: 'Huck Hockey Assists',
                   desc: 'Hockey assists where the throw was a huck. Counted in the HA total as well.' },
+    'Throws':   { name: 'Throws',
+                  desc: 'Total throws attempted (completions + throwaways/drops).' },
     'Comp%':    { name: 'Completion Percentage',
                   desc: 'Completed throws ÷ total throws (completions + turnovers).' },
     'Huck%':    { name: 'Huck Completion Percentage',

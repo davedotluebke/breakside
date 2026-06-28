@@ -106,7 +106,7 @@ function renderGameSummaryStatsTable(game) {
 
     // Header row
     const headerRow = document.createElement('tr');
-    const headers = ['Name', 'Pts', 'Time', 'Goals', 'Assists', 'HA', 'Huck HA', 'Comp%', 'Huck%', 'Ds', 'TOs', '+/-', '..per pt'];
+    const headers = ['Name', 'Pts', 'Time', 'Goals', 'Assists', 'HA', 'Huck HA', 'Throws', 'Comp%', 'Huck%', 'Ds', 'TOs', '+/-', '..per pt'];
     headers.forEach(text => {
         const th = document.createElement('th');
         th.textContent = text;
@@ -154,6 +154,7 @@ function renderGameSummaryStatsTable(game) {
             totals.assists,
             totals.hockeyAssists,
             totals.huckHockeyAssists,
+            totals.totalThrows,
             teamCompPct !== '-' ? `${teamCompPct}%` : teamCompPct,
             teamHuckPct !== '-' ? `${teamHuckPct}%` : teamHuckPct,
             totals.dPlays,
@@ -182,12 +183,13 @@ function renderGameSummaryStatsTable(game) {
             { key: 'assists', type: 'number', colIndex: 4 },
             { key: 'hockeyAssists', type: 'number', colIndex: 5 },
             { key: 'huckHockeyAssists', type: 'number', colIndex: 6 },
-            { key: 'compPct', type: 'percentage', colIndex: 7 },
-            { key: 'huckPct', type: 'percentage', colIndex: 8 },
-            { key: 'ds', type: 'number', colIndex: 9 },
-            { key: 'tos', type: 'number', colIndex: 10 },
-            { key: 'plusMinus', type: 'number', colIndex: 11 },
-            { key: 'pmPerPt', type: 'number', colIndex: 12 }
+            { key: 'throws', type: 'number', colIndex: 7 },
+            { key: 'compPct', type: 'percentage', colIndex: 8 },
+            { key: 'huckPct', type: 'percentage', colIndex: 9 },
+            { key: 'ds', type: 'number', colIndex: 10 },
+            { key: 'tos', type: 'number', colIndex: 11 },
+            { key: 'plusMinus', type: 'number', colIndex: 12 },
+            { key: 'pmPerPt', type: 'number', colIndex: 13 }
         ];
         gameSummarySortController = createTableSortController({
             getHeaderRow: () => tbody.querySelector('tr:first-child'),
@@ -257,6 +259,7 @@ function createGameSummaryPlayerRow(player, ps, totals) {
         assists,
         hockeyAssists,
         huckHockeyAssists,
+        totalThrows,
         compPct !== '-' ? `${compPct}%` : compPct,
         huckPct !== '-' ? `${huckPct}%` : huckPct,
         dPlays,
