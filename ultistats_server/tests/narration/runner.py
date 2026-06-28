@@ -179,19 +179,24 @@ def _read_pcm16_chunks(audio_path: Path, chunk_ms: int = 100, sample_rate: int =
 # OpenAI Realtime transcription session (server-to-server)
 # =============================================================================
 
-REALTIME_URL_TEMPLATE = "wss://api.openai.com/v1/realtime?model={model}"
+# GA Realtime transcription endpoint. The model is NOT in the URL for
+# transcription sessions — it's set via session.update (transcription.model).
+# The old `?model=` + `OpenAI-Beta: realtime=v1` beta shape was disabled by
+# OpenAI (close code 4000 beta_api_shape_disabled); this mirrors the GA shape
+# that production uses in narration/realtimeSession.js.
+REALTIME_TRANSCRIPTION_URL = "wss://api.openai.com/v1/realtime?intent=transcription"
 
 
 async def stream_audio_for_transcription(
     audio_path: Path,
     sample_rate: int = 24000,
-    model: str = "gpt-realtime",
+    transcription_model: str = "gpt-4o-mini-transcribe",
     timeout_s: float = 60.0,
 ) -> str:
     """
     Stream a PCM16 audio file to the Realtime API and return the accumulated
-    transcript. Uses transcription-only session config (no tools, no model
-    output) — matches the production fast-pass mode.
+    transcript. Uses a GA transcription-only session (no tools, no model
+    output) — matches the production fast-pass mode in realtimeSession.js.
     """
     if websockets is None:
         raise RuntimeError(
@@ -202,44 +207,47 @@ async def stream_audio_for_transcription(
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY env var not set")
 
-    url = REALTIME_URL_TEMPLATE.format(model=model)
-    headers = [
-        ("Authorization", f"Bearer {api_key}"),
-        ("OpenAI-Beta", "realtime=v1"),
-    ]
+    # Server-to-server auth: a standard API key in the Authorization header.
+    # The GA endpoint no longer wants (and now rejects) the OpenAI-Beta header.
+    # The browser uses an ephemeral token via subprotocol because it can't set
+    # headers; server-side we just send the key directly.
+    headers = [("Authorization", f"Bearer {api_key}")]
 
     transcript_parts: List[str] = []
-    response_done = asyncio.Event()
-    # Transcription is a separate event stream from the model response. For
-    # short audio it sometimes lands AFTER response.done, so we track its
-    # completion independently and wait for whichever happens later.
+    # Transcription-only GA sessions never emit response.done — the
+    # input_audio_transcription.completed that follows our manual
+    # input_audio_buffer.commit IS the end-of-turn signal.
     transcription_completed = asyncio.Event()
+    session_error: Dict[str, Any] = {}
 
     # websockets API note: the legacy `websockets.connect` (v10.x and the
     # legacy compat shim in v12+) uses `extra_headers=`; the new modern
     # asyncio API in v12+ would use `additional_headers=`. We use the
     # legacy name because it's accepted by both major versions.
-    async with websockets.connect(url, extra_headers=headers, max_size=2**24) as ws:  # type: ignore[attr-defined]
-        # Configure session: text-only, transcription enabled, no tools.
+    async with websockets.connect(
+        REALTIME_TRANSCRIPTION_URL, extra_headers=headers, max_size=2**24
+    ) as ws:  # type: ignore[attr-defined]
+        # Configure the GA transcription session: nested under audio.input.*
+        # with session.type=transcription. No tools, no instructions, no
+        # response model — pure ASR. Mirrors realtimeSession.js.
         await ws.send(
             json.dumps(
                 {
                     "type": "session.update",
                     "session": {
-                        "modalities": ["text"],
-                        "instructions": (
-                            "You are passively listening. Do not respond. "
-                            "Just transcribe."
-                        ),
-                        "input_audio_format": "pcm16",
-                        "input_audio_transcription": {
-                            "model": "gpt-4o-mini-transcribe"
-                        },
-                        "turn_detection": {
-                            "type": "server_vad",
-                            "threshold": 0.5,
-                            "prefix_padding_ms": 300,
-                            "silence_duration_ms": 500,
+                        "type": "transcription",
+                        "audio": {
+                            "input": {
+                                # GA wants an object here, not a bare string.
+                                "format": {"type": "audio/pcm", "rate": sample_rate},
+                                "transcription": {"model": transcription_model},
+                                "turn_detection": {
+                                    "type": "server_vad",
+                                    "threshold": 0.5,
+                                    "prefix_padding_ms": 300,
+                                    "silence_duration_ms": 500,
+                                },
+                            }
                         },
                     },
                 }
@@ -260,9 +268,8 @@ async def stream_audio_for_transcription(
                     if text and not "".join(transcript_parts).strip():
                         transcript_parts.append(text)
                     transcription_completed.set()
-                elif t == "response.done":
-                    response_done.set()
                 elif t == "error":
+                    session_error["error"] = msg.get("error")
                     raise RuntimeError(f"Realtime error: {msg.get('error')}")
 
         async def writer():
@@ -277,31 +284,28 @@ async def stream_audio_for_transcription(
                 # A bit faster than real-time so tests aren't unnecessarily slow.
                 await asyncio.sleep(dur * 0.5)
 
-            # Force end-of-turn so transcription completes promptly.
-            await ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
-            await ws.send(json.dumps({"type": "response.create"}))
+            # Append ~800ms of trailing silence so server_vad sees the gap and
+            # closes the turn (speech_stopped -> auto-commit -> transcription).
+            # A manual input_audio_buffer.commit is wrong here: VAD has usually
+            # already drained the buffer, so commit errors on an empty buffer.
+            silence_chunk = base64.b64encode(
+                b"\x00\x00" * int(sample_rate * 0.1)
+            ).decode("ascii")
+            for _ in range(8):
+                await ws.send(
+                    json.dumps({"type": "input_audio_buffer.append", "audio": silence_chunk})
+                )
+                await asyncio.sleep(0.05)
 
         reader_task = asyncio.create_task(reader())
         writer_task = asyncio.create_task(writer())
 
         try:
             await asyncio.wait_for(writer_task, timeout=timeout_s)
-            # After audio is fully sent and committed, wait for BOTH:
-            # - response.done (model's reply finishes; for transcription-only
-            #   sessions this is usually a tiny acknowledgment)
-            # - input_audio_transcription.completed (the actual ASR result —
-            #   what we care about)
-            # These come on independent pipelines and can arrive in either
-            # order, especially for short audio. Waiting only for response.done
-            # (the original bug) caused empty transcripts on ~2s scenarios.
+            # After audio is committed, wait for the ASR result. The completed
+            # event can lag the audio for short clips, so give it a window.
             try:
-                await asyncio.wait_for(
-                    asyncio.gather(
-                        response_done.wait(),
-                        transcription_completed.wait(),
-                    ),
-                    timeout=10.0,
-                )
+                await asyncio.wait_for(transcription_completed.wait(), timeout=15.0)
             except asyncio.TimeoutError:
                 pass  # take whatever transcript we have
         finally:
