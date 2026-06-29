@@ -330,8 +330,8 @@ async function populateCloudTeamsAndGames() {
                 topRight.style.gap = '4px';
 
                 const settingsBtn = document.createElement('button');
-                settingsBtn.innerHTML = '<i class="fas fa-cog"></i>';
-                settingsBtn.classList.add('icon-button');
+                settingsBtn.innerHTML = '<i class="fas fa-cog"></i><span class="icon-button-label">Team settings</span>';
+                settingsBtn.classList.add('icon-button', 'team-settings-btn');
                 settingsBtn.title = 'Team Settings';
                 settingsBtn.onclick = (e) => {
                     e.stopPropagation();
@@ -1125,9 +1125,6 @@ function buildSyncStatusHTML() {
         </div>
         ${pendingBadge}
         <div class="sync-status-actions">
-            <button id="refreshAllBtn" class="sync-btn" ${!isOnline ? 'disabled' : ''} onclick="doFullRefresh()">
-                <i id="refreshIcon" class="fas fa-sync"></i> Refresh
-            </button>
             ${signOutButton}
         </div>
     `;
