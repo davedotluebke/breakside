@@ -459,6 +459,50 @@ ul {
     background-color: white;  /* opaque so sticky cells don't bleed-through */
 }
 
+/* Roster stats scope toggle (All-time / Event / Game) */
+.roster-scope-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 6px 20px 10px;
+    flex-wrap: wrap;
+}
+.roster-scope-label {
+    font-size: 0.85em;
+    color: #555;
+}
+.roster-scope-btn {
+    margin: 0;  /* override global button margin */
+    padding: 4px 12px;
+    border: 1px solid #bbb;
+    border-radius: 14px;
+    background: #f0f0f0;
+    color: #333;
+    font-size: 0.85em;
+    cursor: pointer;
+}
+.roster-scope-btn.active {
+    background: #2d6cdf;
+    border-color: #2d6cdf;
+    color: #fff;
+    font-weight: bold;
+}
+
+/* Sortable roster headers */
+.roster-sortable {
+    cursor: pointer;
+    user-select: none;
+}
+.roster-sortable:hover {
+    background-color: #ececec;
+}
+.roster-sorted {
+    background-color: #e3ecfb;
+}
+.roster-gender-column {
+    text-align: center;
+}
+
 /* Sticky header row on stats tables */
 #eventRosterTable tr:first-child th,
 #gameSummaryTable tr:first-child th {
