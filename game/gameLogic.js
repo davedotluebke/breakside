@@ -337,7 +337,9 @@ function undoEvent() {
         if (undoPastStartTimestamp && (now - undoPastStartTimestamp) < 4000) {
             // Second press — offer restart
             undoPastStartTimestamp = null;
-            if (confirm('This will delete the current game and return to the new game screen. Are you sure?')) {
+            // Skip the confirm for test games (throwaway dev data).
+            const skipDeleteConfirm = typeof isTestGame === 'function' && isTestGame(currentGame());
+            if (skipDeleteConfirm || confirm('This will delete the current game and return to the new game screen. Are you sure?')) {
                 const gameId = currentGame().id;
                 currentTeam.games.pop();
                 // Delete from cloud
