@@ -237,7 +237,10 @@
         <!-- Start Game subscreen (default) -->
         <div id="startGameSubscreen">
             <div class="panel-title-bar not-draggable">
-                <span class="panel-title">Start Game</span>
+                <button class="title-bar-back-btn" id="backFromStartGameBtn">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <span class="panel-title" id="startGameHeader">Start Game</span>
             </div>
             <div class="subscreen-content">
                 <button id="showRosterBtn" class="roster-nav-btn" title="Edit Roster">
@@ -265,6 +268,7 @@
                         Start Game on: <button id="startGameOnOBtn">Offense</button>
                         <button id="startGameOnDBtn">Defense</button>
                     </div>
+                    <button id="applyGameSettingsBtn" style="display: none;">Apply &amp; Continue Game</button>
                 </div>
             </div>
         </div>

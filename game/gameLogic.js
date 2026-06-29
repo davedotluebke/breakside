@@ -87,6 +87,86 @@ document.getElementById('startGameOnDBtn').addEventListener('click', function() 
     startNewGame('defense', seconds);
 });
 
+/**
+ * Configure the Start/Continue Game screen for either new-game or mid-game mode.
+ * In mid-game mode the inputs are prefilled from the live game, the "Start Game
+ * on Offense/Defense" buttons are replaced by an "Apply & Continue" button, and
+ * the title reads "Game Settings".
+ * @param {boolean} midGame
+ */
+function configureStartGameMode(midGame) {
+    const titleEl = document.getElementById('startGameHeader');
+    const startButtons = document.querySelector('#startGameSubscreen .start-game-buttons');
+    const applyBtn = document.getElementById('applyGameSettingsBtn');
+    const continueBtn = document.getElementById('continueGameBtn');
+    const game = (typeof currentGame === 'function') ? currentGame() : null;
+
+    if (midGame && game) {
+        if (titleEl) titleEl.textContent = 'Game Settings';
+
+        // Prefill controls from the live game / timer state
+        const opp = document.getElementById('opponentNameInput');
+        if (opp) opp.value = game.opponent || '';
+
+        const ratioSel = document.getElementById('enforceGenderRatioSelect');
+        if (ratioSel) {
+            if (typeof populateGenderRatioDropdown === 'function') populateGenderRatioDropdown();
+            if (game.alternateGenderRatio) ratioSel.value = game.alternateGenderRatio;
+        }
+
+        const pulls = document.getElementById('alternateGenderPullsCheckbox');
+        if (pulls) pulls.checked = !!game.alternateGenderPulls;
+
+        const timer = document.getElementById('pointTimerInput');
+        if (timer && typeof countdownSeconds !== 'undefined' && countdownSeconds != null) {
+            timer.value = countdownSeconds;
+        }
+
+        if (startButtons) startButtons.style.display = 'none';
+        if (applyBtn) applyBtn.style.display = '';
+        if (continueBtn) continueBtn.classList.remove('inactive');
+    } else {
+        if (titleEl) titleEl.textContent = 'Start Game';
+        if (startButtons) startButtons.style.display = '';
+        if (applyBtn) applyBtn.style.display = 'none';
+    }
+}
+
+/**
+ * Apply edited settings from the Game Settings screen to the current game so
+ * they take effect on the next point. Players-on-field is read live from the
+ * DOM during play, so it needs no copy here.
+ */
+function applyGameSettingsToCurrentGame() {
+    const game = (typeof currentGame === 'function') ? currentGame() : null;
+    if (!game) return;
+
+    const opp = document.getElementById('opponentNameInput');
+    if (opp && opp.value.trim()) game.opponent = opp.value.trim();
+
+    const ratioSel = document.getElementById('enforceGenderRatioSelect');
+    if (ratioSel) game.alternateGenderRatio = ratioSel.value;
+
+    const pulls = document.getElementById('alternateGenderPullsCheckbox');
+    if (pulls) game.alternateGenderPulls = pulls.checked;
+
+    const timer = document.getElementById('pointTimerInput');
+    if (timer) {
+        const secs = parseInt(timer.value, 10);
+        if (!isNaN(secs)) countdownSeconds = secs;
+    }
+
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    if (typeof syncGameToCloud === 'function' && game.id) syncGameToCloud(game);
+}
+
+document.getElementById('applyGameSettingsBtn')?.addEventListener('click', function() {
+    applyGameSettingsToCurrentGame();
+    if (typeof returnToGameFromRoster === 'function') {
+        returnToGameFromRoster();
+    }
+});
+
 function updateScore(winner) {
     if (winner !== Role.TEAM && winner !== Role.OPPONENT) {
         throw new Error("inactive role");
