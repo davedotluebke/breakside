@@ -507,9 +507,34 @@ function validateJerseyNumber(input) {
             if (typeof syncTeamToCloud === 'function' && currentTeam.id) {
                 syncTeamToCloud(currentTeam);
             }
-            
+
+            // If a game in progress belongs to a tournament event, the line
+            // selector reads from the event roster (getActiveRoster filters
+            // team players down to currentEvent.roster.playerIds). A freshly
+            // added team player isn't in that list, so they'd stay
+            // unselectable for the next line even after a refresh — add them.
+            if (typeof currentEvent !== 'undefined' && currentEvent && currentEvent.roster) {
+                if (!Array.isArray(currentEvent.roster.playerIds)) {
+                    currentEvent.roster.playerIds = [];
+                }
+                if (!currentEvent.roster.playerIds.includes(newPlayer.id)) {
+                    currentEvent.roster.playerIds.push(newPlayer.id);
+                    if (typeof syncEventToCloud === 'function') {
+                        syncEventToCloud(currentEvent);
+                    }
+                }
+            }
+
             updateTeamRosterDisplay();
-            
+
+            // If a game is live, refresh the line-selection panel so the new
+            // player can be put on the very next line without leaving and
+            // re-entering the game.
+            if (typeof currentGame === 'function' && currentGame() &&
+                typeof updateSelectLinePanel === 'function') {
+                updateSelectLinePanel();
+            }
+
             // Save locally
             if (typeof saveAllTeamsData === 'function') {
                 saveAllTeamsData();
