@@ -55,38 +55,20 @@ function showSelectTeamScreen(firsttime = false) {
 
     teamsContainer.appendChild(header);
 
-    // Join Team section — invite code input at top of teams screen
+    // Compact actions row: join an existing team, or create a new one.
+    // The invite-code entry lives in the Join-a-Team modal (with QR scanning to come).
     const joinSection = document.createElement('div');
-    joinSection.className = 'teams-join-section';
+    joinSection.className = 'teams-actions';
     joinSection.innerHTML = `
-        <div class="teams-join-form">
-            <input type="text" id="teamsJoinCodeInput" placeholder="Invite code" maxlength="5" class="join-code-input">
-            <button id="teamsJoinBtn" class="join-btn">Join Team</button>
-        </div>
+        <button class="teams-action-btn" onclick="openJoinTeamModal()">
+            <i class="fas fa-sign-in-alt"></i> Join a team
+        </button>
+        <button class="teams-action-btn" onclick="openCreateTeamModal()">
+            <i class="fas fa-plus"></i> Create new team
+        </button>
     `;
     teamsContainer.appendChild(joinSection);
 
-    // Wire up join team from teams screen
-    setTimeout(() => {
-        const joinInput = document.getElementById('teamsJoinCodeInput');
-        const joinBtn = document.getElementById('teamsJoinBtn');
-        if (joinInput) {
-            joinInput.addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase(); });
-            joinInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && typeof handleJoinCodeFromTeamsScreen === 'function') {
-                    handleJoinCodeFromTeamsScreen();
-                }
-            });
-        }
-        if (joinBtn) {
-            joinBtn.addEventListener('click', () => {
-                if (typeof handleJoinCodeFromTeamsScreen === 'function') {
-                    handleJoinCodeFromTeamsScreen();
-                }
-            });
-        }
-    }, 0);
-    
     const teamsList = document.createElement('div');
     teamsList.id = 'cloudTeamsList';
     teamsList.textContent = 'Loading...';
@@ -504,9 +486,19 @@ async function populateCloudTeamsAndGames() {
             container.appendChild(teamSection);
         });
 
+        // Preserve scroll position across the rebuild. The teams screen
+        // auto-refreshes every ~10s; without this, emptying then refilling the
+        // list collapses page height and the browser resets scroll, yanking the
+        // user back up while they're reading older teams near the bottom.
+        const scroller = document.scrollingElement || document.documentElement;
+        const prevScrollTop = scroller.scrollTop;
+
         listElement.innerHTML = '';
         listElement.appendChild(container);
         _expandStateInitialized = true;
+
+        // Restore after the new content is in place (clamped to the new max).
+        scroller.scrollTop = prevScrollTop;
         
     } catch (error) {
         console.error('Error populating cloud teams:', error);
@@ -867,24 +859,36 @@ function initializeTeamSelection() {
         });
     }
 
-    const createNewTeamBtn = document.getElementById('createNewTeamBtn');
-    if (createNewTeamBtn) {
-        createNewTeamBtn.addEventListener('click', () => {
-            const modal = document.getElementById('createTeamModal');
-            if (modal) {
-                modal.style.display = 'block';
-            }
+    // Create-team modal close button (scoped to that modal).
+    const createTeamModal = document.getElementById('createTeamModal');
+    const createTeamClose = createTeamModal?.querySelector('.close');
+    if (createTeamClose) {
+        createTeamClose.addEventListener('click', () => {
+            createTeamModal.style.display = 'none';
         });
     }
 
-    const closeButton = document.querySelector('.close');
-    if (closeButton) {
-        closeButton.addEventListener('click', () => {
-            const modal = document.getElementById('createTeamModal');
-            if (modal) {
-                modal.style.display = 'none';
+    // Join-a-Team (invite code) modal wiring.
+    const joinInput = document.getElementById('teamsJoinCodeInput');
+    const joinBtn = document.getElementById('teamsJoinBtn');
+    const joinModalClose = document.getElementById('closeJoinTeamCodeModal');
+    if (joinInput) {
+        joinInput.addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase(); });
+        joinInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && typeof handleJoinCodeFromTeamsScreen === 'function') {
+                handleJoinCodeFromTeamsScreen();
             }
         });
+    }
+    if (joinBtn) {
+        joinBtn.addEventListener('click', () => {
+            if (typeof handleJoinCodeFromTeamsScreen === 'function') {
+                handleJoinCodeFromTeamsScreen();
+            }
+        });
+    }
+    if (joinModalClose) {
+        joinModalClose.addEventListener('click', closeJoinTeamModal);
     }
 
     const saveNewTeamBtn = document.getElementById('saveNewTeamBtn');
@@ -1006,16 +1010,6 @@ function initializeTeamSelection() {
             modal.style.display = 'none';
         }
     });
-
-    const backToRosterBtn = document.getElementById('backToRosterScreenBtn');
-    if (backToRosterBtn) {
-        backToRosterBtn.addEventListener('click', () => {
-            if (typeof updateTeamRosterDisplay === 'function') {
-                updateTeamRosterDisplay();
-            }
-            showScreen('teamRosterScreen');
-        });
-    }
 
     const restoreGamesBtn = document.getElementById('restoreGamesBtn');
     if (restoreGamesBtn) {
@@ -1442,6 +1436,7 @@ async function handleJoinCodeFromTeamsScreen() {
 
         const result = await redeemResponse.json();
         input.value = '';
+        closeJoinTeamModal();
         alert(`Joined ${result.team?.name || 'the team'} as ${result.membership?.role || 'member'}!`);
 
         if (typeof syncUserTeams === 'function') {
@@ -1455,12 +1450,42 @@ async function handleJoinCodeFromTeamsScreen() {
     }
 }
 
+/**
+ * Open/close the Join-a-Team (invite code) modal, and open the Create-Team modal.
+ * Invoked from the compact actions row on the teams screen.
+ */
+function openJoinTeamModal() {
+    const modal = document.getElementById('joinTeamCodeModal');
+    if (!modal) return;
+    const input = document.getElementById('teamsJoinCodeInput');
+    if (input) input.value = '';
+    modal.style.display = 'block';
+    if (input) input.focus();
+}
+
+function closeJoinTeamModal() {
+    const modal = document.getElementById('joinTeamCodeModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function openCreateTeamModal() {
+    const modal = document.getElementById('createTeamModal');
+    if (!modal) return;
+    const input = document.getElementById('newTeamNameInput');
+    if (input) input.value = '';
+    modal.style.display = 'block';
+    if (input) input.focus();
+}
+
 // Make functions available globally for onclick handlers
 window.handleSignOut = handleSignOut;
 window.doFullRefresh = doFullRefresh;
 window.showConnectionInfo = showConnectionInfo;
 window.confirmAppUpdate = confirmAppUpdate;
 window.handleJoinCodeFromTeamsScreen = handleJoinCodeFromTeamsScreen;
+window.openJoinTeamModal = openJoinTeamModal;
+window.closeJoinTeamModal = closeJoinTeamModal;
+window.openCreateTeamModal = openCreateTeamModal;
 
 // =============================================================================
 // Active-Game Polling (auto-join prompt)
@@ -1722,9 +1747,12 @@ function renderEventContainer(event, games, team, role) {
         container.classList.add('event-closed');
     }
 
-    // Event header
+    // Event header — two rows: [name + W-L] on top, [roster | settings] below.
     const header = document.createElement('div');
     header.className = 'event-header';
+
+    const headerTop = document.createElement('div');
+    headerTop.className = 'event-header-top';
 
     const nameSpan = document.createElement('span');
     nameSpan.className = 'event-name';
@@ -1732,15 +1760,20 @@ function renderEventContainer(event, games, team, role) {
     if (event.status === 'closed') {
         nameSpan.textContent += ' (closed)';
     }
-    header.appendChild(nameSpan);
+    headerTop.appendChild(nameSpan);
+    header.appendChild(headerTop);
 
     if (role === 'coach') {
-        const headerBtns = document.createElement('span');
+        const headerBtns = document.createElement('div');
         headerBtns.className = 'event-header-btns';
 
+        // Roster label collapses "Event roster" → "Roster" → icon-only;
+        // the settings label drops out first. See @container rules in main.css.
         const rosterBtn = document.createElement('button');
-        rosterBtn.innerHTML = '<i class="fas fa-users"></i>';
-        rosterBtn.classList.add('icon-button');
+        rosterBtn.innerHTML = '<i class="fas fa-users"></i>' +
+            '<span class="ev-btn-label ev-roster-full">Event roster</span>' +
+            '<span class="ev-btn-label ev-roster-short">Roster</span>';
+        rosterBtn.classList.add('icon-button', 'event-header-btn');
         rosterBtn.title = 'Event Roster';
         rosterBtn.onclick = (e) => {
             e.stopPropagation();
@@ -1749,8 +1782,9 @@ function renderEventContainer(event, games, team, role) {
         headerBtns.appendChild(rosterBtn);
 
         const settingsBtn = document.createElement('button');
-        settingsBtn.innerHTML = '<i class="fas fa-cog"></i>';
-        settingsBtn.classList.add('icon-button');
+        settingsBtn.innerHTML = '<i class="fas fa-cog"></i>' +
+            '<span class="ev-btn-label ev-settings-label">Event settings</span>';
+        settingsBtn.classList.add('icon-button', 'event-header-btn');
         settingsBtn.title = 'Event Settings';
         settingsBtn.onclick = (e) => {
             e.stopPropagation();
@@ -1829,10 +1863,10 @@ function renderEventContainer(event, games, team, role) {
     const wins = games.filter(g => (g.scores?.team || 0) > (g.scores?.opponent || 0)).length;
     const losses = games.filter(g => (g.scores?.opponent || 0) > (g.scores?.team || 0)).length;
     if (games.length > 0) {
-        const record = document.createElement('div');
+        const record = document.createElement('span');
         record.className = 'event-record';
         record.textContent = `${wins}W-${losses}L`;
-        header.insertBefore(record, header.querySelector('.event-header-btns'));
+        header.querySelector('.event-header-top').appendChild(record);
     }
 
     return container;
