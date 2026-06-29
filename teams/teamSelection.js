@@ -44,12 +44,13 @@ function showSelectTeamScreen(firsttime = false) {
     // Build header
     const header = document.createElement('div');
     header.style.display = 'flex';
+    header.style.justifyContent = 'center';
     header.style.alignItems = 'center';
     header.style.gap = '10px';
     header.style.marginBottom = '10px';
 
     const title = document.createElement('h3');
-    title.textContent = 'Teams & Games';
+    title.textContent = 'Teams, Events, and Games';
     title.style.margin = '0';
     header.appendChild(title);
 
@@ -60,10 +61,10 @@ function showSelectTeamScreen(firsttime = false) {
     const joinSection = document.createElement('div');
     joinSection.className = 'teams-actions';
     joinSection.innerHTML = `
-        <button class="teams-action-btn" onclick="openJoinTeamModal()">
+        <button class="teams-action-btn teams-action-join" onclick="openJoinTeamModal()">
             <i class="fas fa-sign-in-alt"></i> Join a team
         </button>
-        <button class="teams-action-btn" onclick="openCreateTeamModal()">
+        <button class="teams-action-btn teams-action-create" onclick="openCreateTeamModal()">
             <i class="fas fa-plus"></i> Create new team
         </button>
     `;
