@@ -24,7 +24,7 @@ export async function goToApp(page: Page) {
 
 /** Create a new team and wait for navigation to the roster screen. */
 export async function createTeam(page: Page, name: string) {
-  await page.click('#createNewTeamBtn');
+  await page.click('.teams-action-create');
   await expect(page.locator('#createTeamModal')).toBeVisible();
   await page.fill('#newTeamNameInput', name);
   await page.click('#saveNewTeamBtn');
