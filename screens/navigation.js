@@ -91,6 +91,11 @@ function manageControllerPolling(screenId) {
 function showStartGameSubscreen() {
     document.getElementById('startGameSubscreen').style.display = '';
     document.getElementById('editRosterSubscreen').style.display = 'none';
+    // Default to new-game mode; showStartGameScreen('gameScreen') re-applies
+    // mid-game mode afterward when appropriate.
+    if (typeof configureStartGameMode === 'function') {
+        configureStartGameMode(false);
+    }
 }
 
 function showEditRosterSubscreen() {
@@ -99,14 +104,76 @@ function showEditRosterSubscreen() {
     if (typeof updateTeamRosterDisplay === 'function') updateTeamRosterDisplay();
 }
 
+// =============================================================================
+// Roster / Start-Game flow navigation
+//
+// The two subscreens of teamRosterScreen behave as independent destinations —
+// "Start/Continue Game" and "Edit Roster" — each reachable from the team list
+// and from within a live game. Each remembers where its Back button returns to.
+// =============================================================================
+let _rosterFlowReturn = 'selectTeamScreen';
+
+function setRosterFlowReturn(target) {
+    _rosterFlowReturn = target || 'selectTeamScreen';
+}
+
+// Re-enter the live game from a roster/start-game screen (mirrors the
+// Continue Game button behavior).
+function returnToGameFromRoster() {
+    if (typeof enterGameScreen === 'function' && currentTeam &&
+        currentTeam.games && currentTeam.games.length > 0) {
+        enterGameScreen();
+        if (typeof isPointInProgress === 'function' && isPointInProgress() === false &&
+            typeof transitionToBetweenPoints === 'function') {
+            transitionToBetweenPoints();
+        }
+    }
+}
+
+// Back from either roster-flow subscreen — returns to the live game when we
+// came from one, otherwise to the team list.
+function rosterFlowBack() {
+    if (_rosterFlowReturn === 'gameScreen') {
+        returnToGameFromRoster();
+    } else if (typeof showSelectTeamScreen === 'function') {
+        showSelectTeamScreen();
+    } else {
+        showScreen('selectTeamScreen');
+    }
+}
+
+// Open the Edit Roster screen as a standalone destination.
+function showEditRosterScreen(returnTarget) {
+    setRosterFlowReturn(returnTarget);
+    showScreen('teamRosterScreen');
+    showEditRosterSubscreen();
+}
+
+// Open the Start/Continue Game screen. When returnTarget is 'gameScreen' the
+// screen runs in mid-game "Game Settings" mode (edit settings for the next
+// point) instead of new-game mode.
+function showStartGameScreen(returnTarget) {
+    setRosterFlowReturn(returnTarget);
+    showScreen('teamRosterScreen');
+    showStartGameSubscreen();
+    if (typeof configureStartGameMode === 'function') {
+        configureStartGameMode(returnTarget === 'gameScreen');
+    }
+}
+
 // Wire subscreen buttons once DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     const showRosterBtn = document.getElementById('showRosterBtn');
     if (showRosterBtn) {
+        // Cross-link from Start Game → Edit Roster, preserving the return target.
         showRosterBtn.addEventListener('click', showEditRosterSubscreen);
     }
-    const backToStartBtn = document.getElementById('backToStartGameBtn');
-    if (backToStartBtn) {
-        backToStartBtn.addEventListener('click', showStartGameSubscreen);
+    const backFromRosterBtn = document.getElementById('backToStartGameBtn');
+    if (backFromRosterBtn) {
+        backFromRosterBtn.addEventListener('click', rosterFlowBack);
+    }
+    const backFromStartGameBtn = document.getElementById('backFromStartGameBtn');
+    if (backFromStartGameBtn) {
+        backFromStartGameBtn.addEventListener('click', rosterFlowBack);
     }
 });

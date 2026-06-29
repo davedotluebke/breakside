@@ -468,8 +468,12 @@ function initializeAppMenu() {
 
     document.getElementById('menuAppRoster')?.addEventListener('click', () => {
         closeAppMenu();
-        showScreen('teamRosterScreen');
-        if (typeof showEditRosterSubscreen === 'function') showEditRosterSubscreen();
+        if (typeof showEditRosterScreen === 'function') {
+            showEditRosterScreen('selectTeamScreen');
+        } else {
+            showScreen('teamRosterScreen');
+            if (typeof showEditRosterSubscreen === 'function') showEditRosterSubscreen();
+        }
     });
 
     document.getElementById('menuAppTeamSettings')?.addEventListener('click', () => {
