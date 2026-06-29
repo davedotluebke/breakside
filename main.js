@@ -282,6 +282,10 @@ function hideAuthScreenAndShowApp() {
  * Different messaging for desktop vs mobile
  */
 function showPwaInstallPrompt() {
+    // Dev test mode (?testMode=true): never nag about installing to home screen.
+    if (new URLSearchParams(window.location.search).get('testMode') === 'true') {
+        return;
+    }
     // Don't show if already dismissed or if running as installed PWA
     if (localStorage.getItem('breakside_pwa_prompt_dismissed')) {
         return;

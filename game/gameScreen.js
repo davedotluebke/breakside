@@ -963,8 +963,11 @@ function handleRejoinGame() {
  */
 function handleLeaveGame() {
     closeGameMenu();
-    
-    if (confirm('Leave this game? You can rejoin later.')) {
+
+    // Test games are leave/rejoined constantly during dev — skip the confirm.
+    const skipConfirm = typeof isTestGame === 'function'
+        && typeof currentGame === 'function' && isTestGame(currentGame());
+    if (skipConfirm || confirm('Leave this game? You can rejoin later.')) {
         // Release any held roles
         if (typeof releaseControllerRole === 'function') {
             const gameId = typeof getPollingGameId === 'function' ? getPollingGameId() : null;
@@ -1012,7 +1015,10 @@ function handleEndGame() {
         endGameConfirm();
     } else {
         // Fallback: implement end game logic directly
-        if (!confirm('Are you sure you want to end the game?')) {
+        // Skip the confirm for test games (throwaway dev data).
+        const skipEndConfirm = typeof isTestGame === 'function'
+            && typeof currentGame === 'function' && isTestGame(currentGame());
+        if (!skipEndConfirm && !confirm('Are you sure you want to end the game?')) {
             return;
         }
         
@@ -2086,7 +2092,10 @@ function handleGameEventEndGame() {
         endGameConfirm();
     } else {
         // Fallback: implement end game logic directly
-        if (!confirm('Are you sure you want to end the game?')) {
+        // Skip the confirm for test games (throwaway dev data).
+        const skipEndConfirm = typeof isTestGame === 'function'
+            && typeof currentGame === 'function' && isTestGame(currentGame());
+        if (!skipEndConfirm && !confirm('Are you sure you want to end the game?')) {
             return;
         }
         
