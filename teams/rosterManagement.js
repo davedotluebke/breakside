@@ -18,7 +18,14 @@ let rosterStatsScope = (function () {
 })();
 let rosterSortKey = 'name';
 let rosterSortDir = 1; // 1 = ascending, -1 = descending
-let _rosterEventStatsCache = { key: null, byName: {} };
+// Cache for the async scopes (event/all); keyed by scope+id so switching scope
+// or team invalidates it. Held across scope toggles/sorts within a screen view,
+// and cleared on screen (re)entry so newly-played points are picked up.
+let _rosterStatsCache = { key: null, byName: {} };
+function invalidateRosterStatsCache() {
+    _rosterStatsCache = { key: null, byName: {} };
+}
+window.invalidateRosterStatsCache = invalidateRosterStatsCache;
 
 // Column descriptors (everything after the checkbox). `num` columns default to
 // descending on first click; text columns to ascending.
@@ -50,28 +57,6 @@ function effectiveRosterScope() {
     if (rosterStatsScope === 'event' && !hasEvent) return hasGame ? 'game' : 'all';
     if (rosterStatsScope === 'game' && !hasGame) return hasEvent ? 'event' : 'all';
     return rosterStatsScope;
-}
-
-// Lifetime stats from the per-player legacy fields (the only reliable all-time
-// source). Detailed columns (Comp%, Ds, TOs) aren't tracked lifetime, so they
-// render as em-dashes.
-function getLegacyAllTimeStats() {
-    const stats = {};
-    const roster = currentTeam ? currentTeam.teamRoster : [];
-    roster.forEach(p => {
-        stats[p.name] = {
-            pointsPlayed: p.totalPointsPlayed || 0,
-            timePlayed: p.totalTimePlayed || 0,
-            goals: p.goals || 0,
-            assists: p.assists || 0,
-            completions: null,
-            totalThrows: null,
-            dPlays: null,
-            turnovers: null,
-            plusMinus: (p.pointsWon || 0) - (p.pointsLost || 0)
-        };
-    });
-    return stats;
 }
 
 function updateTeamRosterDisplay() {
@@ -135,30 +120,37 @@ function updateTeamRosterDisplay() {
     const scope = effectiveRosterScope();
     updateRosterScopeToggleUI(scope);
 
-    if (scope === 'event') {
-        // Async: aggregate across event games (loaded from cloud). Render from
-        // cache when fresh; otherwise show a loading state then fill in.
-        const key = 'event:' + (currentEvent && currentEvent.id ? currentEvent.id : '');
-        if (_rosterEventStatsCache.key === key) {
-            renderRosterTable(scope, _rosterEventStatsCache.byName, false);
-        } else {
-            renderRosterTable(scope, {}, true);
-            if (typeof getEventPlayerStats === 'function') {
-                getEventPlayerStats(currentEvent).then(byName => {
-                    _rosterEventStatsCache = { key, byName };
-                    if (effectiveRosterScope() === 'event') {
-                        renderRosterTable('event', byName, false);
-                    }
-                });
-            }
-        }
-    } else if (scope === 'game') {
+    if (scope === 'game') {
+        // Sync: the current game is in memory.
         const byName = (typeof getGamePlayerStats === 'function' && currentGame())
             ? getGamePlayerStats(currentGame()) : {};
         renderRosterTable(scope, byName, false);
-    } else {
-        renderRosterTable('all', getLegacyAllTimeStats(), false);
+        return;
     }
+
+    // Async scopes: 'event' (aggregate the event's games) and 'all' (aggregate
+    // every game the team has played) — both derive stats from game events and
+    // load games from cloud, so render from cache when fresh, otherwise show a
+    // loading state then fill in.
+    const key = (scope === 'event')
+        ? 'event:' + (currentEvent && currentEvent.id ? currentEvent.id : '')
+        : 'all:' + (currentTeam && currentTeam.id ? currentTeam.id : '');
+
+    if (_rosterStatsCache.key === key) {
+        renderRosterTable(scope, _rosterStatsCache.byName, false);
+        return;
+    }
+
+    renderRosterTable(scope, {}, true);
+    const statsPromise = (scope === 'event')
+        ? (typeof getEventPlayerStats === 'function' ? getEventPlayerStats(currentEvent) : Promise.resolve({}))
+        : (typeof getTeamPlayerStats === 'function' ? getTeamPlayerStats(currentTeam) : Promise.resolve({}));
+    statsPromise.then(byName => {
+        _rosterStatsCache = { key, byName };
+        if (effectiveRosterScope() === scope) {
+            renderRosterTable(scope, byName, false);
+        }
+    });
 }
 
 /**

@@ -145,6 +145,8 @@ function rosterFlowBack() {
 // Open the Edit Roster screen as a standalone destination.
 function showEditRosterScreen(returnTarget) {
     setRosterFlowReturn(returnTarget);
+    // Recompute scoped stats on entry so newly-played points / added games show.
+    if (typeof invalidateRosterStatsCache === 'function') invalidateRosterStatsCache();
     showScreen('teamRosterScreen');
     showEditRosterSubscreen();
 }

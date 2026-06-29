@@ -260,6 +260,54 @@ function getGamePlayerStats(game) {
 }
 
 /**
+ * Get lifetime (all-time) aggregate player stats for a team, across every game
+ * the team has played. Mirrors getEventPlayerStats but spans the whole team
+ * rather than one event.
+ *
+ * Stats are derived from game events — the legacy per-player counters
+ * (totalPointsPlayed, totalTimePlayed, …) are NOT maintained in the current
+ * model, so we must aggregate the actual games. In-memory games (the live
+ * session, including the current game) are used directly; the rest are loaded
+ * from cloud by id and deduped.
+ *
+ * @param {object} team - Team object (needs id; games[] used when present)
+ * @returns {Promise<Object>} Map of playerName → stats
+ */
+async function getTeamPlayerStats(team) {
+    if (!team) return {};
+    const stats = {};
+    const seen = new Set();
+
+    // 1. In-memory games (current session — full data, incl. the live game).
+    (team.games || []).forEach(g => {
+        if (g && Array.isArray(g.points) && g.points.length > 0) {
+            accumulateGameStats(g, stats);
+            if (g.id) seen.add(g.id);
+        }
+    });
+
+    // 2. Every other game the cloud lists for this team.
+    let summaries = [];
+    if (typeof listServerGames === 'function') {
+        try { summaries = await listServerGames(); } catch (e) { summaries = []; }
+    }
+    const ids = summaries
+        .filter(g => g && g.teamId === team.id && g.game_id && !seen.has(g.game_id))
+        .map(g => g.game_id);
+
+    for (const gid of ids) {
+        if (seen.has(gid)) continue;
+        try {
+            const game = (typeof loadGameFromCloud === 'function') ? await loadGameFromCloud(gid) : null;
+            if (game) { accumulateGameStats(game, stats); seen.add(gid); }
+        } catch (e) {
+            console.debug('Skipping unavailable game', gid);
+        }
+    }
+    return stats;
+}
+
+/**
  * Get aggregate player stats for an event across all its games.
  * @param {object} event - TournamentEvent object (must have gameIds)
  * @param {object} [options] - { phase: string } to restrict to one phase label
@@ -303,6 +351,7 @@ async function getEventRecord(event, options = {}) {
 
 window.getGamePlayerStats = getGamePlayerStats;
 window.getEventPlayerStats = getEventPlayerStats;
+window.getTeamPlayerStats = getTeamPlayerStats;
 window.getEventRecord = getEventRecord;
 window.loadEventGames = loadEventGames;
 window.getGameTeamStats = getGameTeamStats;
