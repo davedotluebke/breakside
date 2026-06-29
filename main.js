@@ -424,12 +424,22 @@ function updateAppMenuState() {
     const settingsBtn = document.getElementById('menuAppTeamSettings');
     const switchBtn = document.getElementById('menuSwitchTeam');
 
-    if (rosterBtn) rosterBtn.disabled = !hasTeam;
-    if (settingsBtn) settingsBtn.disabled = !hasTeam;
+    const onSelectScreen = document.getElementById('selectTeamScreen')?.style.display !== 'none';
+
+    // Roster and Team Settings are team-scoped — they only make sense once
+    // you're inside a particular team. Hide them entirely on the team-selection
+    // screen (each team/event row has its own roster & settings controls there).
+    if (rosterBtn) {
+        rosterBtn.style.display = onSelectScreen ? 'none' : '';
+        rosterBtn.disabled = !hasTeam;
+    }
+    if (settingsBtn) {
+        settingsBtn.style.display = onSelectScreen ? 'none' : '';
+        settingsBtn.disabled = !hasTeam;
+    }
 
     // Hide Switch Team when already on Select Team screen
     if (switchBtn) {
-        const onSelectScreen = document.getElementById('selectTeamScreen')?.style.display !== 'none';
         switchBtn.style.display = onSelectScreen ? 'none' : '';
     }
 }

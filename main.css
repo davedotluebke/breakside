@@ -716,7 +716,7 @@ td.player-mmp,
 .team-section {
     border: 1px solid #ddd;
     border-radius: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 7px;
     overflow: hidden;
     background: #fff;
 }
@@ -729,8 +729,8 @@ td.player-mmp,
 .team-header {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 10px 15px;
+    gap: 2px;
+    padding: 6px 12px;
     background: #f8f9fa;
     cursor: pointer;
     user-select: none;
@@ -928,9 +928,19 @@ td.player-mmp,
 
 .event-header {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    gap: 4px;
     padding: 8px 12px;
     background: #e8e8e8;
+    /* Query container so the roster/settings labels collapse based on the
+       event card's own width rather than the viewport width. */
+    container-type: inline-size;
+    container-name: event-header-row;
+}
+
+.event-header-top {
+    display: flex;
+    align-items: center;
     gap: 8px;
 }
 
@@ -938,17 +948,59 @@ td.player-mmp,
     font-weight: 600;
     font-size: 0.95rem;
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .event-record {
     font-size: 0.85rem;
     color: #555;
     font-weight: 500;
+    flex-shrink: 0;
 }
 
 .event-header-btns {
     display: flex;
-    gap: 4px;
+    gap: 6px;
+}
+
+/* Roster & settings controls on the event header's second row. Dark text for
+   contrast against the grey header band. */
+.event-header-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #222;
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    font-size: 0.85rem;
+}
+
+.event-header-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+/* Responsive label collapse. Widest: "Event roster" + "Event settings".
+   Narrower in stages: settings label drops, then "Event roster" → "Roster",
+   then roster label drops to icon-only. */
+.event-header-btn .ev-roster-short {
+    display: none;
+}
+
+@container event-header-row (max-width: 420px) {
+    .event-header-btn .ev-settings-label { display: none; }
+}
+
+@container event-header-row (max-width: 340px) {
+    .event-header-btn .ev-roster-full { display: none; }
+    .event-header-btn .ev-roster-short { display: inline; }
+}
+
+@container event-header-row (max-width: 250px) {
+    .event-header-btn .ev-roster-short { display: none; }
 }
 
 .event-games-list {
@@ -2837,28 +2889,53 @@ section > .panel-title-bar {
    ============================================================================= */
 
 /* Join Team section on teams screen */
-.teams-join-section {
+/* Compact actions row on the teams screen: Join / Create. */
+.teams-actions {
+    display: flex;
+    gap: 8px;
     margin-bottom: 12px;
 }
 
-.teams-join-form {
-    display: flex;
-    gap: 8px;
+.teams-action-btn {
+    flex: 1;
+    display: inline-flex;
     align-items: center;
-}
-
-.teams-join-form .join-code-input {
-    flex: 0 0 auto;
-    width: 130px;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    text-align: center;
-    font-weight: 600;
-}
-
-.teams-join-form .join-btn {
-    flex: 0 0 auto;
+    justify-content: center;
+    gap: 6px;
+    margin: 0;
+    padding: 8px 10px;
+    background: #f1f3f5;
+    color: #333;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
     white-space: nowrap;
+}
+
+.teams-action-btn:hover {
+    background: #e2e6ea;
+}
+
+/* Invite-code form inside the Join-a-Team modal. */
+.join-modal-help {
+    font-size: 0.9rem;
+    color: #555;
+    margin: 0 0 12px;
+}
+
+#joinTeamCodeModal .join-team-form {
+    margin-bottom: 12px;
+}
+
+#joinTeamCodeModal .join-code-input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#joinTeamCodeModal .join-btn {
+    width: 100%;
 }
 
 /* Viewer roster back button */
