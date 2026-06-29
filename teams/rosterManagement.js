@@ -5,6 +5,60 @@
  * Phase 4 update: Player IDs, cloud sync for player creation/updates
  */
 
+// ---------------------------------------------------------------------------
+// Roster stats scope + sorting state
+//
+// Scope: 'all' (lifetime, from legacy per-player fields), 'event' (aggregate
+// across the current tournament event's games — async cloud load), or 'game'
+// (the current game only). Default 'event', falling back when none applies.
+// ---------------------------------------------------------------------------
+let rosterStatsScope = (function () {
+    try { return localStorage.getItem('rosterStatsScope') || 'event'; }
+    catch (e) { return 'event'; }
+})();
+let rosterSortKey = 'name';
+let rosterSortDir = 1; // 1 = ascending, -1 = descending
+// Cache for the async scopes (event/all); keyed by scope+id so switching scope
+// or team invalidates it. Held across scope toggles/sorts within a screen view,
+// and cleared on screen (re)entry so newly-played points are picked up.
+let _rosterStatsCache = { key: null, byName: {} };
+function invalidateRosterStatsCache() {
+    _rosterStatsCache = { key: null, byName: {} };
+}
+window.invalidateRosterStatsCache = invalidateRosterStatsCache;
+
+// Column descriptors (everything after the checkbox). `num` columns default to
+// descending on first click; text columns to ascending.
+const ROSTER_COLUMNS = [
+    { key: 'name',      label: 'Name',     cls: 'roster-name-header',                 num: false },
+    { key: 'gender',    label: 'F/M',      cls: 'roster-gender-header',               num: false },
+    { key: 'points',    label: 'Pts',      cls: 'roster-points-header',               num: true },
+    { key: 'time',      label: 'Time',     cls: 'roster-time-header',                 num: true },
+    { key: 'goals',     label: 'Goals',    cls: 'roster-goals-header',                num: true },
+    { key: 'assists',   label: 'Assists',  cls: 'roster-assists-header',              num: true },
+    { key: 'comppct',   label: 'Comp%',    cls: 'roster-comppct-header',              num: true },
+    { key: 'dplays',    label: 'Ds',       cls: 'roster-dplays-header',               num: true },
+    { key: 'turnovers', label: 'TOs',      cls: 'roster-turnovers-header',            num: true },
+    { key: 'plusminus', label: '+/-',      cls: 'roster-plusminus-header',            num: true },
+    { key: 'perpoint',  label: '..per pt', cls: 'roster-plusminus-per-point-header',  num: true }
+];
+
+function genderLabel(player) {
+    if (player.gender === Gender.FMP) return 'FMP';
+    if (player.gender === Gender.MMP) return 'MMP';
+    return '—';
+}
+
+// The scope actually rendered, after falling back when the requested scope has
+// no data (no current event / no current game).
+function effectiveRosterScope() {
+    const hasEvent = typeof currentEvent !== 'undefined' && currentEvent;
+    const hasGame = typeof currentGame === 'function' && currentGame();
+    if (rosterStatsScope === 'event' && !hasEvent) return hasGame ? 'game' : 'all';
+    if (rosterStatsScope === 'game' && !hasGame) return hasEvent ? 'event' : 'all';
+    return rosterStatsScope;
+}
+
 function updateTeamRosterDisplay() {
     const teamRosterHeader = document.getElementById('teamRosterHeader');
     if (teamRosterHeader) {
@@ -23,9 +77,13 @@ function updateTeamRosterDisplay() {
         rosterScreen.querySelectorAll('.management-row').forEach(el => {
             el.style.display = viewerMode ? 'none' : '';
         });
+        // Only force-hide the Start Game subscreen for viewers. For non-viewers,
+        // leave its visibility to the navigation layer (showStartGameSubscreen /
+        // showEditRosterSubscreen) — otherwise this re-shows it on top of the
+        // Edit Roster screen, defeating the screen separation.
         const startGameSubscreen = document.getElementById('startGameSubscreen');
-        if (startGameSubscreen) {
-            startGameSubscreen.style.display = viewerMode ? 'none' : '';
+        if (startGameSubscreen && viewerMode) {
+            startGameSubscreen.style.display = 'none';
         }
         // Force roster subscreen visible for viewers
         if (viewerMode) {
@@ -59,6 +117,49 @@ function updateTeamRosterDisplay() {
         initializeGenderRatioDropdown();
     }
 
+    const scope = effectiveRosterScope();
+    updateRosterScopeToggleUI(scope);
+
+    if (scope === 'game') {
+        // Sync: the current game is in memory.
+        const byName = (typeof getGamePlayerStats === 'function' && currentGame())
+            ? getGamePlayerStats(currentGame()) : {};
+        renderRosterTable(scope, byName, false);
+        return;
+    }
+
+    // Async scopes: 'event' (aggregate the event's games) and 'all' (aggregate
+    // every game the team has played) — both derive stats from game events and
+    // load games from cloud, so render from cache when fresh, otherwise show a
+    // loading state then fill in.
+    const key = (scope === 'event')
+        ? 'event:' + (currentEvent && currentEvent.id ? currentEvent.id : '')
+        : 'all:' + (currentTeam && currentTeam.id ? currentTeam.id : '');
+
+    if (_rosterStatsCache.key === key) {
+        renderRosterTable(scope, _rosterStatsCache.byName, false);
+        return;
+    }
+
+    renderRosterTable(scope, {}, true);
+    const statsPromise = (scope === 'event')
+        ? (typeof getEventPlayerStats === 'function' ? getEventPlayerStats(currentEvent) : Promise.resolve({}))
+        : (typeof getTeamPlayerStats === 'function' ? getTeamPlayerStats(currentTeam) : Promise.resolve({}));
+    statsPromise.then(byName => {
+        _rosterStatsCache = { key, byName };
+        if (effectiveRosterScope() === scope) {
+            renderRosterTable(scope, byName, false);
+        }
+    });
+}
+
+/**
+ * Render the roster table body for a given scope and stats map.
+ * @param {string} scope - 'all' | 'event' | 'game'
+ * @param {Object} statsByName - playerName → stats (accumulateGameStats shape)
+ * @param {boolean} loading - true while async event stats are still loading
+ */
+function renderRosterTable(scope, statsByName, loading) {
     const rosterElement = document.getElementById('rosterList');
     if (!rosterElement) {
         console.warn('Roster list element not found.');
@@ -66,22 +167,73 @@ function updateTeamRosterDisplay() {
     }
     rosterElement.innerHTML = '';
 
-    const eventStats = currentGame() ? calculatePlayerStatsFromEvents(currentGame()) : {};
+    const roster = currentTeam ? currentTeam.teamRoster.slice() : [];
 
-    const headerRow = document.createElement('tr');
-    const headerClasses = ['roster-checkbox-header', 'roster-name-header', 'roster-points-header', 'roster-time-header', 'roster-goals-header', 'roster-assists-header', 'roster-comppct-header', 'roster-dplays-header', 'roster-turnovers-header', 'roster-plusminus-header', 'roster-plusminus-per-point-header'];
-    ['', 'Name', 'Pts', 'Time', 'Goals', 'Assists', 'Comp%', 'Ds', 'TOs', '+/-', '..per pt'].forEach((headerText, index) => {
-        const headerCell = document.createElement('th');
-        headerCell.textContent = headerText;
-        headerCell.classList.add('roster-header');
-        if (headerClasses[index]) {
-            headerCell.classList.add(headerClasses[index]);
+    // Per-player value accessor used for both sorting and display.
+    const valueFor = (player, key) => {
+        const s = statsByName[player.name] || {};
+        switch (key) {
+            case 'name': return formatPlayerName(player).toLowerCase();
+            case 'gender': return genderLabel(player);
+            case 'points': return s.pointsPlayed || 0;
+            case 'time': return s.timePlayed || 0;
+            case 'goals': return s.goals || 0;
+            case 'assists': return s.assists || 0;
+            case 'comppct':
+                if (s.totalThrows == null) return -1; // detail not tracked (all-time)
+                return s.totalThrows > 0 ? (s.completions / s.totalThrows) : -1;
+            case 'dplays': return s.dPlays == null ? -1 : s.dPlays;
+            case 'turnovers': return s.turnovers == null ? -1 : s.turnovers;
+            case 'plusminus': return s.plusMinus || 0;
+            case 'perpoint': return (s.pointsPlayed > 0) ? (s.plusMinus || 0) / s.pointsPlayed : 0;
+            default: return 0;
         }
-        headerRow.appendChild(headerCell);
+    };
+
+    // Sort a copy of the roster by the active column/direction.
+    roster.sort((a, b) => {
+        const va = valueFor(a, rosterSortKey);
+        const vb = valueFor(b, rosterSortKey);
+        let cmp;
+        if (typeof va === 'string' || typeof vb === 'string') {
+            cmp = String(va).localeCompare(String(vb));
+        } else {
+            cmp = va - vb;
+        }
+        if (cmp === 0) {
+            // Stable tiebreak by name so order is deterministic
+            cmp = formatPlayerName(a).toLowerCase().localeCompare(formatPlayerName(b).toLowerCase());
+            return cmp; // tiebreak always ascending
+        }
+        return cmp * rosterSortDir;
+    });
+
+    // --- Header row (sortable) ---
+    const headerRow = document.createElement('tr');
+    const checkboxHeader = document.createElement('th');
+    checkboxHeader.classList.add('roster-header', 'roster-checkbox-header');
+    headerRow.appendChild(checkboxHeader);
+
+    ROSTER_COLUMNS.forEach(col => {
+        const th = document.createElement('th');
+        th.classList.add('roster-header', col.cls, 'roster-sortable');
+        let label = col.label;
+        if (rosterSortKey === col.key) {
+            label += rosterSortDir === 1 ? ' ▲' : ' ▼';
+            th.classList.add('roster-sorted');
+        }
+        th.textContent = label;
+        th.addEventListener('click', () => handleRosterHeaderSort(col));
+        headerRow.appendChild(th);
     });
     rosterElement.appendChild(headerRow);
 
-    currentTeam.teamRoster.forEach(player => {
+    // --- Player rows ---
+    const dash = '—';
+    const fmtPlusMinus = (v) => v > 0 ? `+${v}` : `${v}`;
+
+    roster.forEach(player => {
+        const s = statsByName[player.name] || {};
         const playerRow = document.createElement('tr');
 
         const checkboxCell = document.createElement('td');
@@ -95,157 +247,166 @@ function updateTeamRosterDisplay() {
         const nameCell = document.createElement('td');
         nameCell.classList.add('roster-name-column', 'roster-sticky-name');
         nameCell.textContent = formatPlayerName(player);
-        
-        // Add gender-based color coding
         if (player.gender === Gender.FMP) {
             nameCell.classList.add('player-fmp');
         } else if (player.gender === Gender.MMP) {
             nameCell.classList.add('player-mmp');
         }
-        
-        // Make name cell clickable to edit player
-        nameCell.addEventListener('click', () => {
-            showEditPlayerDialog(player);
-        });
-        
+        nameCell.addEventListener('click', () => showEditPlayerDialog(player));
         playerRow.appendChild(nameCell);
 
-        const totalPointsCell = document.createElement('td');
-        totalPointsCell.classList.add('roster-points-column');
-        totalPointsCell.textContent = player.totalPointsPlayed;
-        playerRow.appendChild(totalPointsCell);
+        const genderCell = document.createElement('td');
+        genderCell.classList.add('roster-gender-column');
+        genderCell.textContent = genderLabel(player);
+        if (player.gender === Gender.FMP) genderCell.classList.add('player-fmp');
+        else if (player.gender === Gender.MMP) genderCell.classList.add('player-mmp');
+        playerRow.appendChild(genderCell);
 
-        const totalTimeCell = document.createElement('td');
-        totalTimeCell.classList.add('roster-time-column');
-        totalTimeCell.textContent = formatPlayTime(player.totalTimePlayed);
-        playerRow.appendChild(totalTimeCell);
+        const pointsCell = document.createElement('td');
+        pointsCell.classList.add('roster-points-column');
+        pointsCell.textContent = s.pointsPlayed || 0;
+        playerRow.appendChild(pointsCell);
+
+        const timeCell = document.createElement('td');
+        timeCell.classList.add('roster-time-column');
+        timeCell.textContent = formatPlayTime(s.timePlayed || 0);
+        playerRow.appendChild(timeCell);
 
         const goalsCell = document.createElement('td');
         goalsCell.classList.add('roster-goals-column');
-        goalsCell.textContent = player.goals || 0;
+        goalsCell.textContent = s.goals || 0;
         playerRow.appendChild(goalsCell);
 
         const assistsCell = document.createElement('td');
         assistsCell.classList.add('roster-assists-column');
-        assistsCell.textContent = player.assists || 0;
+        assistsCell.textContent = s.assists || 0;
         playerRow.appendChild(assistsCell);
-
-        const playerStats = eventStats[player.name] || {};
 
         const compPctCell = document.createElement('td');
         compPctCell.classList.add('roster-comppct-column');
-        const compPct = playerStats.totalThrows > 0
-            ? ((playerStats.completions / playerStats.totalThrows) * 100).toFixed(0)
-            : '-';
-        compPctCell.textContent = compPct !== '-' ? `${compPct}%` : compPct;
+        if (s.totalThrows == null) {
+            compPctCell.textContent = dash;
+        } else if (s.totalThrows > 0) {
+            compPctCell.textContent = `${((s.completions / s.totalThrows) * 100).toFixed(0)}%`;
+        } else {
+            compPctCell.textContent = '-';
+        }
         playerRow.appendChild(compPctCell);
 
         const dPlaysCell = document.createElement('td');
         dPlaysCell.classList.add('roster-dplays-column');
-        dPlaysCell.textContent = playerStats.dPlays || 0;
+        dPlaysCell.textContent = s.dPlays == null ? dash : (s.dPlays || 0);
         playerRow.appendChild(dPlaysCell);
 
         const turnoversCell = document.createElement('td');
         turnoversCell.classList.add('roster-turnovers-column');
-        turnoversCell.textContent = playerStats.turnovers || 0;
+        turnoversCell.textContent = s.turnovers == null ? dash : (s.turnovers || 0);
         playerRow.appendChild(turnoversCell);
 
+        const plusMinus = s.plusMinus || 0;
         const plusMinusCell = document.createElement('td');
         plusMinusCell.classList.add('roster-plusminus-column');
-        const plusMinus = (player.pointsWon || 0) - (player.pointsLost || 0);
-        plusMinusCell.textContent = plusMinus > 0 ? `+${plusMinus}` : plusMinus;
+        plusMinusCell.textContent = fmtPlusMinus(plusMinus);
         playerRow.appendChild(plusMinusCell);
 
-        const plusMinusPerPointCell = document.createElement('td');
-        plusMinusPerPointCell.classList.add('roster-plusminus-per-point-column');
-        const plusMinusPerPoint = player.totalPointsPlayed > 0
-            ? (plusMinus / player.totalPointsPlayed).toFixed(2)
-            : '0.0';
-        plusMinusPerPointCell.textContent = plusMinusPerPoint > 0 ? `+${plusMinusPerPoint}` : plusMinusPerPoint;
-        playerRow.appendChild(plusMinusPerPointCell);
+        const perPointCell = document.createElement('td');
+        perPointCell.classList.add('roster-plusminus-per-point-column');
+        const perPoint = (s.pointsPlayed > 0) ? (plusMinus / s.pointsPlayed) : 0;
+        const perPointStr = perPoint > 0 ? `+${perPoint.toFixed(2)}` : perPoint.toFixed(2);
+        perPointCell.textContent = perPointStr;
+        playerRow.appendChild(perPointCell);
 
         rosterElement.appendChild(playerRow);
     });
 
-    // Make sticky columns work after all rows are added
-    // Use requestAnimationFrame to ensure DOM is fully rendered before calculating widths
-    requestAnimationFrame(() => {
-        makeRosterColumnsSticky();
+    requestAnimationFrame(() => makeRosterColumnsSticky());
+
+    // --- Team aggregate row ---
+    let totGoals = 0, totAssists = 0, totTime = 0;
+    let totCompletions = 0, totThrows = 0, totDPlays = 0, totTurnovers = 0;
+    let detailAvailable = false;
+    roster.forEach(player => {
+        const s = statsByName[player.name] || {};
+        totGoals += s.goals || 0;
+        totAssists += s.assists || 0;
+        totTime += s.timePlayed || 0;
+        if (s.totalThrows != null) {
+            detailAvailable = true;
+            totCompletions += s.completions || 0;
+            totThrows += s.totalThrows || 0;
+            totDPlays += s.dPlays || 0;
+            totTurnovers += s.turnovers || 0;
+        }
     });
 
     const teamRow = document.createElement('tr');
     teamRow.classList.add('team-aggregate-row');
-
-    let totalGoals = 0;
-    let totalAssists = 0;
-    let totalCompletions = 0;
-    let totalThrows = 0;
-    let totalHuckCompletions = 0;
-    let totalHucks = 0;
-    let totalDPlays = 0;
-    let totalTurnovers = 0;
-    let totalTimePlayed = 0;
-
-    currentTeam.teamRoster.forEach(player => {
-        totalGoals += player.goals || 0;
-        totalAssists += player.assists || 0;
-        totalTimePlayed += player.totalTimePlayed || 0;
-
-        const playerStats = eventStats[player.name] || {};
-        totalCompletions += playerStats.completions || 0;
-        totalThrows += playerStats.totalThrows || 0;
-        totalHuckCompletions += playerStats.huckCompletions || 0;
-        totalHucks += playerStats.totalHucks || 0;
-        totalDPlays += playerStats.dPlays || 0;
-        totalTurnovers += playerStats.turnovers || 0;
-    });
-
-    const appendTeamCell = (value, className, isSticky = false) => {
+    const appendTeamCell = (value, className, sticky) => {
         const cell = document.createElement('td');
         cell.classList.add(className, 'team-total-cell');
-        if (isSticky) {
-            if (className === 'active-checkbox-column') {
-                cell.classList.add('roster-sticky-checkbox');
-            } else if (className === 'roster-name-column') {
-                cell.classList.add('roster-sticky-name');
-            }
-        }
+        if (sticky === 'checkbox') cell.classList.add('roster-sticky-checkbox');
+        else if (sticky === 'name') cell.classList.add('roster-sticky-name');
         cell.textContent = value;
         teamRow.appendChild(cell);
     };
 
-    // First cell is empty (checkbox column) - make it sticky
-    appendTeamCell('', 'active-checkbox-column', true);
-    // Second cell is "Team" (name column) - make it sticky
-    appendTeamCell('Team', 'roster-name-column', true);
-    appendTeamCell(currentGame() ? currentGame().points.length : 0, 'roster-points-column');
-    appendTeamCell(formatPlayTime(totalTimePlayed), 'roster-time-column');
-    appendTeamCell(totalGoals, 'roster-goals-column');
-    appendTeamCell(totalAssists, 'roster-assists-column');
-
-    const teamCompPct = totalThrows > 0 ? ((totalCompletions / totalThrows) * 100).toFixed(0) : '-';
-    appendTeamCell(teamCompPct !== '-' ? `${teamCompPct}%` : teamCompPct, 'roster-comppct-column');
-
-    const teamHuckPct = totalHucks > 0 ? ((totalHuckCompletions / totalHucks) * 100).toFixed(0) : '-';
-    appendTeamCell(teamHuckPct !== '-' ? `${teamHuckPct}%` : teamHuckPct, 'roster-huckpct-column');
-
-    appendTeamCell(totalDPlays, 'roster-dplays-column');
-    appendTeamCell(totalTurnovers, 'roster-turnovers-column');
-
-    const teamScore = currentGame() ? currentGame().scores[Role.TEAM] : 0;
-    const opponentScore = currentGame() ? currentGame().scores[Role.OPPONENT] : 0;
-    const teamPlusMinus = teamScore - opponentScore;
-    appendTeamCell(teamPlusMinus > 0 ? `+${teamPlusMinus}` : teamPlusMinus, 'roster-plusminus-column');
-
-    const totalPoints = currentGame() ? currentGame().points.length : 0;
-    const teamPlusMinusPerPoint = totalPoints > 0 ? (teamPlusMinus / totalPoints).toFixed(2) : '0.0';
-    appendTeamCell(teamPlusMinusPerPoint > 0 ? `+${teamPlusMinusPerPoint}` : teamPlusMinusPerPoint, 'roster-plusminus-per-point-column');
-
+    const game = (typeof currentGame === 'function') ? currentGame() : null;
+    appendTeamCell('', 'active-checkbox-column', 'checkbox');
+    appendTeamCell('Team', 'roster-name-column', 'name');
+    appendTeamCell('', 'roster-gender-column');
+    // Team points: meaningful only for the current game scope.
+    appendTeamCell(scope === 'game' && game ? game.points.length : dash, 'roster-points-column');
+    appendTeamCell(formatPlayTime(totTime), 'roster-time-column');
+    appendTeamCell(totGoals, 'roster-goals-column');
+    appendTeamCell(totAssists, 'roster-assists-column');
+    appendTeamCell(detailAvailable && totThrows > 0 ? `${((totCompletions / totThrows) * 100).toFixed(0)}%` : dash, 'roster-comppct-column');
+    appendTeamCell(detailAvailable ? totDPlays : dash, 'roster-dplays-column');
+    appendTeamCell(detailAvailable ? totTurnovers : dash, 'roster-turnovers-column');
+    if (scope === 'game' && game) {
+        const teamPM = (game.scores[Role.TEAM] || 0) - (game.scores[Role.OPPONENT] || 0);
+        appendTeamCell(fmtPlusMinus(teamPM), 'roster-plusminus-column');
+        const tp = game.points.length;
+        const pmpp = tp > 0 ? teamPM / tp : 0;
+        appendTeamCell(pmpp > 0 ? `+${pmpp.toFixed(2)}` : pmpp.toFixed(2), 'roster-plusminus-per-point-column');
+    } else {
+        appendTeamCell(dash, 'roster-plusminus-column');
+        appendTeamCell(dash, 'roster-plusminus-per-point-column');
+    }
     rosterElement.appendChild(teamRow);
-    
-    // Re-run sticky columns function to include team row
-    requestAnimationFrame(() => {
-        makeRosterColumnsSticky();
+
+    requestAnimationFrame(() => makeRosterColumnsSticky());
+}
+
+// Click handler for a sortable column header.
+function handleRosterHeaderSort(col) {
+    if (rosterSortKey === col.key) {
+        rosterSortDir = -rosterSortDir;
+    } else {
+        rosterSortKey = col.key;
+        rosterSortDir = col.num ? -1 : 1; // numbers high-first, text A→Z
+    }
+    updateTeamRosterDisplay();
+}
+
+// Switch the stats scope and re-render.
+function setRosterStatsScope(scope) {
+    rosterStatsScope = scope;
+    try { localStorage.setItem('rosterStatsScope', scope); } catch (e) { /* ignore */ }
+    updateTeamRosterDisplay();
+}
+
+// Reflect the active scope on the toggle buttons; disable scopes with no data.
+function updateRosterScopeToggleUI(effectiveScope) {
+    const toggle = document.getElementById('rosterScopeToggle');
+    if (!toggle) return;
+    const hasEvent = typeof currentEvent !== 'undefined' && currentEvent;
+    const hasGame = typeof currentGame === 'function' && currentGame();
+    toggle.querySelectorAll('.roster-scope-btn').forEach(btn => {
+        const scope = btn.getAttribute('data-scope');
+        const disabled = (scope === 'event' && !hasEvent) || (scope === 'game' && !hasGame);
+        btn.disabled = disabled;
+        btn.style.display = disabled ? 'none' : '';
+        btn.classList.toggle('active', scope === effectiveScope);
     });
 }
 
@@ -507,9 +668,34 @@ function validateJerseyNumber(input) {
             if (typeof syncTeamToCloud === 'function' && currentTeam.id) {
                 syncTeamToCloud(currentTeam);
             }
-            
+
+            // If a game in progress belongs to a tournament event, the line
+            // selector reads from the event roster (getActiveRoster filters
+            // team players down to currentEvent.roster.playerIds). A freshly
+            // added team player isn't in that list, so they'd stay
+            // unselectable for the next line even after a refresh — add them.
+            if (typeof currentEvent !== 'undefined' && currentEvent && currentEvent.roster) {
+                if (!Array.isArray(currentEvent.roster.playerIds)) {
+                    currentEvent.roster.playerIds = [];
+                }
+                if (!currentEvent.roster.playerIds.includes(newPlayer.id)) {
+                    currentEvent.roster.playerIds.push(newPlayer.id);
+                    if (typeof syncEventToCloud === 'function') {
+                        syncEventToCloud(currentEvent);
+                    }
+                }
+            }
+
             updateTeamRosterDisplay();
-            
+
+            // If a game is live, refresh the line-selection panel so the new
+            // player can be put on the very next line without leaving and
+            // re-entering the game.
+            if (typeof currentGame === 'function' && currentGame() &&
+                typeof updateSelectLinePanel === 'function') {
+                updateSelectLinePanel();
+            }
+
             // Save locally
             if (typeof saveAllTeamsData === 'function') {
                 saveAllTeamsData();
@@ -581,6 +767,17 @@ function validateJerseyNumber(input) {
     const exportTeamBtn = document.getElementById('exportTeamRosterBtn');
     if (exportTeamBtn) {
         exportTeamBtn.addEventListener('click', exportTeamRosterXLSX);
+    }
+
+    // Stats scope toggle (All-time / Event / Game)
+    const scopeToggle = document.getElementById('rosterScopeToggle');
+    if (scopeToggle) {
+        scopeToggle.querySelectorAll('.roster-scope-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const scope = btn.getAttribute('data-scope');
+                if (scope) setRosterStatsScope(scope);
+            });
+        });
     }
 
     // Line management functions

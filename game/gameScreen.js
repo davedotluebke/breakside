@@ -62,7 +62,10 @@ function createHeaderContent() {
                 </button>
                 <div class="menu-divider"></div>
                 <button class="menu-item" id="menuRoster">
-                    <i class="fas fa-users"></i> Roster
+                    <i class="fas fa-users"></i> Edit Roster
+                </button>
+                <button class="menu-item" id="menuGameSettings">
+                    <i class="fas fa-sliders-h"></i> Game Settings
                 </button>
                 <button class="menu-item" id="menuTeamSettings">
                     <i class="fas fa-shield-alt"></i> Team Settings
@@ -649,11 +652,26 @@ function wireGameScreenEvents() {
         rosterBtn.addEventListener('click', () => {
             closeGameMenu();
             if (typeof hideGameScreen === 'function') hideGameScreen();
-            showScreen('teamRosterScreen');
-            if (typeof showEditRosterSubscreen === 'function') showEditRosterSubscreen();
+            if (typeof showEditRosterScreen === 'function') {
+                showEditRosterScreen('gameScreen');
+            } else {
+                showScreen('teamRosterScreen');
+                if (typeof showEditRosterSubscreen === 'function') showEditRosterSubscreen();
+            }
             // Ensure "Continue Game" button is active so user can return
             const continueBtn = document.getElementById('continueGameBtn');
             if (continueBtn) continueBtn.classList.remove('inactive');
+        });
+    }
+
+    const gameSettingsBtn = document.getElementById('menuGameSettings');
+    if (gameSettingsBtn) {
+        gameSettingsBtn.addEventListener('click', () => {
+            closeGameMenu();
+            if (typeof hideGameScreen === 'function') hideGameScreen();
+            if (typeof showStartGameScreen === 'function') {
+                showStartGameScreen('gameScreen');
+            }
         });
     }
 
