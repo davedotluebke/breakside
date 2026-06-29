@@ -1117,6 +1117,37 @@ location.reload();
 To create or rotate the account: sign up at `test@luebke.us`, confirm
 the verification email, and update `test-credentials.local`.
 
+### Interactive "user logs in, then Claude proceeds" testing
+
+Some verification needs a *specific* logged-in account (the user's own
+teams/games), not the generic test account — e.g. "create a game for team X
+and exercise the new flow." Supabase login (especially Google OAuth) can't be
+driven headlessly, so use this handoff:
+
+1. **Claude** starts the preview server for the worktree and points it at the
+   real backend so the user's teams load:
+   ```js
+   localStorage.setItem('ultistats_api_url', 'https://api.breakside.pro');
+   location.href = '/index.html';   // redirects to /landing/ for login
+   ```
+2. **Claude** tells the user the preview is ready and asks them to sign in in
+   the preview browser window, then say "proceed" (or similar).
+3. **User** logs in interactively and gives the go-ahead. *Claude must wait —
+   do not poll or auto-continue; the user controls when login is done.*
+4. **Claude** resumes: confirm the authenticated state
+   (`window.breakside.auth.isAuthenticated()` is `true` and the Select Team
+   screen is showing), then drive the app with `preview_*` tools (select the
+   named team, start a game, etc.).
+
+Notes:
+- The preview browser is the same window the user sees in the IDE, so a login
+  they perform there is visible to Claude's subsequent `preview_eval`/snapshot
+  calls — the session persists.
+- Don't reload or renavigate after the user logs in unless necessary; a reload
+  re-runs the auth check (it won't log them out, but avoid surprising them).
+- This is for *interactive* verification only. Never ask the user for their
+  password or try to type their credentials — they sign in themselves.
+
 ### EC2 / API
 
 ```bash
