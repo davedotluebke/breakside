@@ -373,7 +373,7 @@ async function populateCloudTeamsAndGames() {
                 if (typeof window.setCurrentTeamRole === 'function') {
                     window.setCurrentTeamRole(role);
                 }
-                selectCloudTeam(team);
+                selectCloudTeam(team, { landOn: 'roster' });
             };
             bottomRow.appendChild(rosterBtn);
             
@@ -455,7 +455,7 @@ async function populateCloudTeamsAndGames() {
                 newGameBtn.innerHTML = '<i class="fas fa-plus"></i> New Game';
                 newGameBtn.onclick = (e) => {
                     e.stopPropagation();
-                    selectCloudTeam(team);
+                    selectCloudTeam(team, { landOn: 'startGame' });
                 };
                 btnRow.appendChild(newGameBtn);
 
@@ -545,8 +545,11 @@ async function deleteCloudGameWithConfirm(gameId, team = null) {
  * Select a cloud team and navigate to roster screen
  * Ensures the team is loaded into local state for the app to work with
  */
-async function selectCloudTeam(cloudTeam) {
+async function selectCloudTeam(cloudTeam, options = {}) {
     console.log('📥 Selecting cloud team:', cloudTeam.name);
+    // landOn: 'roster' opens the Edit Roster screen directly; anything else
+    // (default) opens the Start/Continue Game screen.
+    const landOn = options.landOn || 'startGame';
     
     try {
         // Check if we already have this team in local state
@@ -599,8 +602,14 @@ async function selectCloudTeam(cloudTeam) {
         if (typeof updateTeamRosterDisplay === 'function') {
             updateTeamRosterDisplay();
         }
-        showScreen('teamRosterScreen');
-        
+        if (landOn === 'roster' && typeof showEditRosterScreen === 'function') {
+            showEditRosterScreen('selectTeamScreen');
+        } else if (typeof showStartGameScreen === 'function') {
+            showStartGameScreen('selectTeamScreen');
+        } else {
+            showScreen('teamRosterScreen');
+        }
+
     } catch (error) {
         console.error('Error selecting cloud team:', error);
         alert('Failed to load team: ' + error.message);
