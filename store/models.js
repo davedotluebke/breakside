@@ -582,9 +582,44 @@ function TournamentEvent(name = "New Event", teamId = null, id = null) {
     this.updatedAt = new Date().toISOString();
 }
 
+/**
+ * Dev-testing helpers.
+ *
+ * A team/game is treated as a "test" entity when its name contains "test"
+ * (case-insensitive). These are the single source of truth for suppressing
+ * dev-only friction on throwaway test data — the idle-game wake prompt and the
+ * leave/end/delete confirmations. Every such suppression is gated on these
+ * helpers so the behavior change can never touch a real team's data.
+ */
+function isTestName(name) {
+    // Word-boundary match so "Test"/"Offline Test"/"my-test-team" qualify but
+    // incidental substrings like "Greatest" or "Contestants" do not.
+    return typeof name === 'string' && /\btest\b/i.test(name);
+}
+
+function isTestTeam(team) {
+    return !!team && isTestName(team.name);
+}
+
+function isTestGame(game) {
+    if (!game) return false;
+    // `game.team` holds the team-name string (kept for display). Fall back to a
+    // teamId lookup against the global `teams` array when the name isn't on the
+    // game object itself.
+    if (isTestName(game.team)) return true;
+    if (game.teamId && typeof teams !== 'undefined' && Array.isArray(teams)) {
+        const team = teams.find(t => t && t.id === game.teamId);
+        if (team && isTestName(team.name)) return true;
+    }
+    return false;
+}
+
 // ID generation functions - needed by sync.js for offline entity creation
 window.generateShortId = generateShortId;
 window.generatePlayerId = generatePlayerId;
 window.generateTeamId = generateTeamId;
 window.generateEventId = generateEventId;
+window.isTestName = isTestName;
+window.isTestTeam = isTestTeam;
+window.isTestGame = isTestGame;
 

@@ -520,7 +520,13 @@ document.addEventListener('visibilitychange', async () => {
         const gameStart = game.gameStartTimestamp
             ? new Date(game.gameStartTimestamp).getTime()
             : null;
-        if (gameStart) {
+        // Test games are long-lived dev fixtures reopened across many coding
+        // sessions — skip the stale-game wake nag entirely for them.
+        const isTestFixture = typeof isTestGame === 'function' && isTestGame(game);
+        if (isTestFixture) {
+            console.log('🎮 Test game — skipping stale-game wake check');
+        }
+        if (gameStart && !isTestFixture) {
             const hoursElapsed = (Date.now() - gameStart) / (1000 * 60 * 60);
             if (hoursElapsed > STALE_GAME_HOURS) {
                 // Check if there's been any recent activity (last point within the threshold)

@@ -519,8 +519,10 @@ async function populateCloudGames() {
     return populateCloudTeamsAndGames();
 }
 
-async function deleteCloudGame(gameId) {
-    if (!confirm('Are you sure you want to delete this game from the cloud? This cannot be undone.')) return;
+async function deleteCloudGame(gameId, team = null) {
+    // Skip the confirm for test teams (throwaway dev data).
+    const skipConfirm = typeof isTestTeam === 'function' && isTestTeam(team);
+    if (!skipConfirm && !confirm('Are you sure you want to delete this game from the cloud? This cannot be undone.')) return;
     
     try {
         await deleteGameFromCloud(gameId);
@@ -533,8 +535,10 @@ async function deleteCloudGame(gameId) {
 /**
  * Delete a cloud game with confirmation (used by new UI)
  */
-async function deleteCloudGameWithConfirm(gameId) {
-    if (!confirm('Are you sure you want to delete this game? This cannot be undone.')) return;
+async function deleteCloudGameWithConfirm(gameId, team = null) {
+    // Skip the confirm for test teams (throwaway dev data).
+    const skipConfirm = typeof isTestTeam === 'function' && isTestTeam(team);
+    if (!skipConfirm && !confirm('Are you sure you want to delete this game? This cannot be undone.')) return;
     
     try {
         await deleteGameFromCloud(gameId);
@@ -1693,7 +1697,7 @@ function renderGameItem(game, team, role, parentEvent) {
         deleteBtn.title = 'Delete Game';
         deleteBtn.onclick = (e) => {
             e.stopPropagation();
-            deleteCloudGameWithConfirm(game.game_id);
+            deleteCloudGameWithConfirm(game.game_id, team);
         };
         line2.appendChild(deleteBtn);
     }
