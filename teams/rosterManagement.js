@@ -92,9 +92,13 @@ function updateTeamRosterDisplay() {
         rosterScreen.querySelectorAll('.management-row').forEach(el => {
             el.style.display = viewerMode ? 'none' : '';
         });
+        // Only force-hide the Start Game subscreen for viewers. For non-viewers,
+        // leave its visibility to the navigation layer (showStartGameSubscreen /
+        // showEditRosterSubscreen) — otherwise this re-shows it on top of the
+        // Edit Roster screen, defeating the screen separation.
         const startGameSubscreen = document.getElementById('startGameSubscreen');
-        if (startGameSubscreen) {
-            startGameSubscreen.style.display = viewerMode ? 'none' : '';
+        if (startGameSubscreen && viewerMode) {
+            startGameSubscreen.style.display = 'none';
         }
         // Force roster subscreen visible for viewers
         if (viewerMode) {
