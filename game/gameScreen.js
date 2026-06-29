@@ -817,12 +817,21 @@ function wireTabControlEvents() {
         }
     });
 
-    // Reposition slider on resize
-    window.addEventListener('resize', () => {
-        if (typeof updateSegmentedSlider === 'function') {
-            updateSegmentedSlider();
-        }
-    });
+    // Reposition slider on resize / orientation change. Defer to the next
+    // frame so the measurement runs after the browser has reflowed to the
+    // new viewport — measuring synchronously here reads stale (pre-reflow)
+    // button geometry, which left the slider mis-sized when rotating back
+    // to portrait. orientationchange is included because some mobile
+    // browsers fire it without a paired resize.
+    const repositionSlider = () => {
+        requestAnimationFrame(() => {
+            if (typeof updateSegmentedSlider === 'function') {
+                updateSegmentedSlider();
+            }
+        });
+    };
+    window.addEventListener('resize', repositionSlider);
+    window.addEventListener('orientationchange', repositionSlider);
 }
 
 /**
