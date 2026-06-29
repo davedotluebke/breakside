@@ -755,6 +755,10 @@ td.player-mmp,
     align-items: center;
     gap: 8px;
     min-width: 0;
+    /* Query container so the "Team settings" label hides based on the
+       header row's own width rather than the viewport width. */
+    container-type: inline-size;
+    container-name: team-header-row;
 }
 
 .team-header-top-left {
@@ -859,6 +863,26 @@ td.player-mmp,
 
 .team-header .icon-button:hover {
     background: rgba(0, 0, 0, 0.08);
+}
+
+/* Team settings button: gear icon with a responsive text label. */
+.team-settings-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.team-settings-btn .icon-button-label {
+    font-size: 0.9em;
+}
+
+/* Drop the text label when the header row is too narrow to fit it
+   alongside the team name; the gear icon stays. */
+@container team-header-row (max-width: 380px) {
+    .team-settings-btn .icon-button-label {
+        display: none;
+    }
 }
 
 .team-games-container {
