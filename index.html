@@ -176,7 +176,7 @@
                 </button>
                 <div class="header-menu-dropdown" id="appMenuDropdown">
                     <button class="menu-item" id="menuSwitchTeam">
-                        <i class="fas fa-exchange-alt"></i> Switch Team
+                        <i class="fas fa-exchange-alt"></i> Teams, Events, and Games...
                     </button>
                     <button class="menu-item" id="menuAppRoster">
                         <i class="fas fa-users"></i> Roster
@@ -205,8 +205,7 @@
         </div>
     </header>
 
-    <!-- Select Your Team Screen -->
-        <!-- Add this modal inside the body tag -->
+    <!-- Teams, Events & Games Screen -->
     <div id="createTeamModal" class="modal" style="display: none;">
         <div class="modal-content">
             <div class="dialog-header prominent-dialog-header">
@@ -218,9 +217,6 @@
         </div>
     </div>
     <section id="selectTeamScreen" style="display: none;">
-        <div class="panel-title-bar not-draggable">
-            <span class="panel-title">Select Your Team</span>
-        </div>
         <div id="teamListWarning" class="warning-box" style="display: none;">
             No saved teams found. Create a new team or use the sample team.
         </div>
@@ -228,9 +224,23 @@
             <!-- Dynamically populated list of teams -->
         </ul>
         <input type="file" id="fileInput" accept=".json" style="display: none;">
-        <button id="createNewTeamBtn">Create New Team</button>
-        <button id="backToRosterScreenBtn">Back</button>
     </section>
+
+    <!-- Join a Team (invite code) Modal -->
+    <div id="joinTeamCodeModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Join a Team</h2>
+                <span class="close" id="closeJoinTeamCodeModal">&times;</span>
+            </div>
+            <p class="join-modal-help">Enter the 5-character invite code your coach shared with you.</p>
+            <div class="join-team-form">
+                <input type="text" id="teamsJoinCodeInput" placeholder="Invite code" maxlength="5" class="join-code-input">
+            </div>
+            <button id="teamsJoinBtn" class="join-btn primary-btn">Join Team</button>
+            <!-- QR code scanning will be added here -->
+        </div>
+    </div>
 
     <!-- Team Roster Screen -->
     <section id="teamRosterScreen">
