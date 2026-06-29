@@ -13,8 +13,8 @@ test('app loads and shows team selection screen', async ({ page }) => {
   await expect(teamScreen).toBeVisible({ timeout: 10_000 });
 
   // Key UI elements should be present
-  await expect(page.locator('#createNewTeamBtn')).toBeVisible();
-  await expect(page.getByText('Select Your Team')).toBeVisible();
+  await expect(page.locator('.teams-action-create')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Teams, Events, and Games' })).toBeVisible();
 });
 
 test('backend health endpoint is reachable', async ({ request }) => {
