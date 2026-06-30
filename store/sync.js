@@ -892,10 +892,10 @@ function prepareGameForSync(game) {
             endTimestamp: point.endTimestamp ? point.endTimestamp.toISOString() : null,
             totalPointTime: point.totalPointTime,
             lastPauseTime: point.lastPauseTime ? point.lastPauseTime.toISOString() : null,
-            modes: point.modes || [],  // PBP modes ('simple'/'full'/'field') active during this point
+            modes: point.getModes(),  // PBP modes recorded during this point (union of possessions)
             possessions: point.possessions.map(possession => ({
                 offensive: possession.offensive,
-                modes: possession.modes || [],  // PBP modes active during this possession
+                modes: possession.modes || [],  // PBP modes events were recorded under in this possession
                 events: possession.events.map(event => serializeEvent(event))
             }))
         }))
@@ -1053,7 +1053,6 @@ async function loadGameFromCloud(gameId) {
                 point.winner = pointData.winner;
                 point.totalPointTime = pointData.totalPointTime || 0;
                 point.lastPauseTime = pointData.lastPauseTime ? new Date(pointData.lastPauseTime) : null;
-                point.modes = pointData.modes || [];  // PBP modes active during this point (empty for legacy data)
 
                 if (pointData.possessions) {
                     point.possessions = pointData.possessions.map(possessionData => {
@@ -1065,6 +1064,7 @@ async function loadGameFromCloud(gameId) {
                         return possession;
                     });
                 }
+                point.modes = point.getModes();  // derive from restored possessions (empty for legacy data)
                 return point;
             });
         }
@@ -1227,7 +1227,6 @@ async function refreshGameStateFromCloud(gameId) {
                 point.winner = pointData.winner;
                 point.totalPointTime = pointData.totalPointTime || 0;
                 point.lastPauseTime = pointData.lastPauseTime ? new Date(pointData.lastPauseTime) : null;
-                point.modes = pointData.modes || [];  // PBP modes active during this point (empty for legacy data)
 
                 if (pointData.possessions && Array.isArray(pointData.possessions)) {
                     point.possessions = pointData.possessions.map(possessionData => {
@@ -1252,10 +1251,11 @@ async function refreshGameStateFromCloud(gameId) {
                         return possession;
                     });
                 }
+                point.modes = point.getModes();  // derive from restored possessions (empty for legacy data)
                 return point;
             });
         }
-        
+
         // Update other game metadata
         if (gameData.gameEndTimestamp) {
             game.gameEndTimestamp = new Date(gameData.gameEndTimestamp);
