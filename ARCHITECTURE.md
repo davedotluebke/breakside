@@ -302,6 +302,39 @@ Key runtime properties:
 
 Full design + decision history: **docs/full-pbp-requirements.md**.
 
+### Field PBP spatial coordinate frame
+
+The "Field" tab (`playByPlay/fieldPbp.js`) is a spatial event-entry surface: the
+coach taps a drawn field to record *where* each throw / catch / turnover / block
+/ pull happened. It writes the same `Throw` / `Turnover` / `Defense` / `Pull`
+events as the other tabs (through `pbpPossession`), but each event also stores a
+`from` / `to` location.
+
+Stored locations use a **normalized, size-independent field frame** — an `{x, y}`
+pair on each event's `from` / `to`:
+
+- **`x` = progress toward the attacking endzone.** `x = 0` at the **defending**
+  endzone (goal) line, `x = 1` at the **attacking** endzone (goal) line. `x < 0`
+  is inside the defending endzone; `x > 1` is inside the attacking endzone.
+- **`y` = across the field.** `y = 0` at the **home** sideline, `y = 1` at the
+  **away** sideline.
+
+Why normalized rather than yards: the frame is deliberately decoupled from the
+endzone-depth setting and from yards/meters, so it works unchanged for short
+fields (4v4/5v5/middle-school) and **a change to the endzone-depth setting only
+re-scales the on-screen endzone margins — it never moves a stored point relative
+to the playing field.** (This supersedes an earlier "canonical yards keyed off
+endzone depth" frame, which re-scaled past games when the depth setting changed.)
+
+At render time the normalized `{x, y}` is scaled to the on-screen field — whose
+length *includes* the depth-dependent endzones — by the yard-based `pct()` /
+`toField()` helpers; `toNorm()` / `fromNorm()` in `fieldPbp.js` are the only
+bridge between the two frames. The two display flips (`flipAD` = attack
+direction, which auto-alternates per point; `flipHA` = which sideline is home)
+are **render-time only** — stored `{x, y}` never change, so re-opening a game or
+flipping orientation never moves a recorded event. The canonical convention lives
+in the `fieldPbp.js` file header; keep the two in sync.
+
 ### Feature Worktrees
 
 For parallel development, feature branches use git worktrees in `.worktrees/<feature-name>`. See CLAUDE.md for the workflow.

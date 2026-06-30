@@ -9,10 +9,11 @@ let selectedThrower = null;
 let selectedReceiver = null;
 
 // Field-tab location pass-through. The Field PBP screen records where the
-// disc was thrown from / caught (canonical {l,w} coords). When the dialog is
-// opened from there, these carry the tap locations into the committed Throw
-// so the spatial marker survives. null for Simple/Full (which have no field
-// geometry). Set every showScoreAttributionDialog() call.
+// disc was thrown from / caught (normalized {x,y} field coords — see
+// fieldPbp.js). When the dialog is opened from there, these carry the tap
+// locations into the committed Throw so the spatial marker survives. null for
+// Simple/Full (which have no field geometry). Set every
+// showScoreAttributionDialog() call.
 let pendingFrom = null;
 let pendingTo = null;
 
@@ -164,8 +165,8 @@ function initializeScoreAttributionDialog() {
  * @param {Player|null} [opts.thrower]    Pre-select this player as thrower.
  * @param {Player|null} [opts.receiver]   Pre-select this player as receiver.
  * @param {boolean}    [opts.breakArmed] Pre-check the Break modifier.
- * @param {object|null} [opts.from]       Field-tab throw-from location {l,w}.
- * @param {object|null} [opts.to]         Field-tab catch location {l,w}.
+ * @param {object|null} [opts.from]       Field-tab throw-from location {x,y}.
+ * @param {object|null} [opts.to]         Field-tab catch location {x,y}.
  *
  * When either thrower or receiver is pre-selected, the auto-fire behavior
  * (which normally commits when both selections are made via clicks) is
