@@ -2605,7 +2605,10 @@ header {
     color: #333;
     border-bottom: 3px solid #EB8232; /* brand orange accent (replaces full-orange fill) */
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    margin-bottom: 0;
+    /* Break out of the body's 5px padding so the white header reaches the
+       top/side edges, and fill the iOS safe area (notch/dynamic island) white */
+    margin: -5px -5px 0;
+    padding-top: env(safe-area-inset-top, 0);
     position: relative;
 }
 
@@ -2613,7 +2616,7 @@ header .header-content-row {
     display: grid;
     grid-template-columns: 1fr auto 1fr; /* menu | centered logo | pill */
     align-items: center;
-    padding: 5px 12px 10px; /* 5 top, 10 bottom */
+    padding: 5px 12px 4px; /* 5 top, 4 bottom (compact) */
     gap: 10px;
 }
 
@@ -2625,12 +2628,12 @@ header .header-staging-pill {
     justify-self: end;
 }
 
-.header-logo-container {
+header .header-logo-container {
     position: relative;
     flex-shrink: 0;
 }
 
-.header-logo-container img {
+header .header-logo-container img {
     height: 55px;
     width: auto;
     display: block;
@@ -4200,15 +4203,8 @@ section > .panel-title-bar {
    Staging environment overrides
    ============================================ */
 
-/* Staging header matches production; the purple STAGING pill is the differentiator. */
-
-body.staging .version-overlay {
-    background: #7B68AE;
-}
-
-body.staging .panel-header {
-    background: #7B68AE;
-}
+/* Staging header (both the main header and the in-game panel-header) matches
+   production; the purple STAGING pill is the only differentiator now. */
 
 /* -----------------------------------------------------------------
  * Advanced Settings modal
