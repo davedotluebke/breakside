@@ -402,17 +402,70 @@ async def health():
 # Image Proxy endpoint
 # =============================================================================
 
+def _assert_public_http_url(url: str) -> None:
+    """Reject a URL whose host resolves to a non-public IP (SSRF guard).
+
+    Resolves the hostname and raises HTTP 400 if ANY resolved address is
+    private, loopback, link-local (incl. the cloud metadata 169.254.169.254),
+    reserved, multicast or unspecified. This blocks server-side fetches of
+    internal services and instance-metadata endpoints.
+
+    Note: a fully robust guard would also pin the socket to the validated IP to
+    defeat DNS-rebinding (TOCTOU between this check and httpx's own resolution);
+    combined with redirects disabled, this check closes the practical vectors.
+    """
+    import socket
+    import ipaddress
+    from urllib.parse import urlparse
+
+    host = urlparse(url).hostname
+    if not host:
+        raise HTTPException(status_code=400, detail="Invalid URL: missing host")
+
+    # If the host is a literal IP, validate it directly; otherwise resolve.
+    candidates = set()
+    try:
+        ipaddress.ip_address(host)
+        candidates.add(host)
+    except ValueError:
+        try:
+            for info in socket.getaddrinfo(host, None):
+                candidates.add(info[4][0])
+        except socket.gaierror:
+            raise HTTPException(status_code=400, detail="Could not resolve image host")
+
+    if not candidates:
+        raise HTTPException(status_code=400, detail="Could not resolve image host")
+
+    for addr in candidates:
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid resolved address")
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            raise HTTPException(
+                status_code=400,
+                detail="URL host is not allowed (resolves to a non-public address)"
+            )
+
+
 @app.post("/api/proxy-image")
-async def proxy_image(body: dict = Body(...)):
+async def proxy_image(body: dict = Body(...), user: dict = Depends(get_current_user)):
     """
     Proxy and resize an image from a URL.
-    
+
     This endpoint fetches an image from a URL (bypassing CORS),
     resizes it to max 128x128, and returns it as a base64 data URL.
-    
+
+    Requires authentication. To prevent SSRF, the target host is resolved and
+    rejected if it maps to a private/loopback/link-local address (e.g. the EC2
+    metadata endpoint 169.254.169.254 or internal services), and redirects are
+    disabled so a public URL can't bounce to an internal one.
+
     Request body:
         url: str - The image URL to fetch
-    
+
     Returns:
         dataUrl: str - The resized image as a data URL (PNG format)
         originalUrl: str - The original URL that was fetched
@@ -420,28 +473,32 @@ async def proxy_image(body: dict = Body(...)):
     import httpx
     import base64
     from io import BytesIO
-    
+
     url = body.get("url")
     if not url:
         raise HTTPException(status_code=400, detail="Missing 'url' in request body")
-    
+
     # Validate URL format
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Invalid URL format")
-    
+
+    # SSRF guard: reject hosts that resolve to non-public addresses.
+    _assert_public_http_url(url)
+
     MAX_SIZE = 256
     MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB max download
-    
+
     try:
-        # Fetch the image
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        # Fetch the image. Redirects are disabled so a public URL can't 302 to
+        # an internal address that bypassed the pre-flight DNS check.
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
             response = await client.get(url, headers={
                 "User-Agent": "Breakside/1.0 (Team Icon Fetcher)"
             })
-            
+
             if response.status_code != 200:
                 raise HTTPException(
-                    status_code=400, 
+                    status_code=400,
                     detail=f"Failed to fetch image: HTTP {response.status_code}"
                 )
             
@@ -503,6 +560,10 @@ async def proxy_image(body: dict = Body(...)):
         
         return {"dataUrl": data_url, "originalUrl": url}
         
+    except HTTPException:
+        # Don't let the generic handler below mask our own 400s (bad
+        # status / not-an-image / too-large) as 500s.
+        raise
     except httpx.TimeoutException:
         raise HTTPException(status_code=408, detail="Timeout fetching image")
     except httpx.RequestError as e:
