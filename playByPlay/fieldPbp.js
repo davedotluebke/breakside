@@ -1312,7 +1312,9 @@
                 pegEl.className = 'fp-pegman';
                 pegEl.innerHTML =
                     '<div class="fp-peg-name"></div>' +
-                    '<div class="fp-peg-figure">🧍</div>' +
+                    '<div class="fp-peg-figure">' +
+                        '<img src="images/player.reach.png" alt="" draggable="false">' +
+                    '</div>' +
                     '<div class="fp-peg-shadow"></div>' +
                     '<div class="fp-peg-x">✕</div>';
                 pegEl.querySelector('.fp-peg-name').textContent =

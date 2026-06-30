@@ -377,13 +377,16 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 }
 /* Player figure standing just above the drop point. */
 .fp-peg-figure {
-    position: absolute; left: 0; bottom: 5px; transform: translateX(-50%);
-    font-size: 30px; line-height: 1;
+    position: absolute; left: 0; bottom: 4px; transform: translateX(-50%);
+    line-height: 0;
     filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .45));
+}
+.fp-peg-figure img {
+    display: block; height: 54px; width: auto; pointer-events: none;
 }
 /* Name pill floating above the figure. */
 .fp-peg-name {
-    position: absolute; left: 0; bottom: 40px; transform: translateX(-50%);
+    position: absolute; left: 0; bottom: 62px; transform: translateX(-50%);
     background: var(--fp-blue); color: #fff; border-radius: 999px;
     padding: 3px 10px; font-size: 12px; font-weight: 600; white-space: nowrap;
     box-shadow: 0 3px 10px rgba(0, 0, 0, .35);
