@@ -1148,6 +1148,43 @@ Notes:
 - This is for *interactive* verification only. Never ask the user for their
   password or try to type their credentials — they sign in themselves.
 
+### Driving the preview against a local backend (no prod CORS change)
+
+The preview server is served from `http://localhost:<port>`, but the **prod
+API's CORS allowlist only contains the real origins** (`www`/`staging.breakside.pro`)
+— a localhost preview origin is blocked, so its data calls (list teams, load
+games, sync) silently fail and **no teams appear** even though Supabase login
+succeeded. Do **not** "fix" this by adding the localhost origin to prod
+`ULTISTATS_ALLOWED_ORIGINS` (that's the temp hack TODO.md tracks for removal).
+Instead, point the preview at an **isolated local backend**, which runs
+auth-disabled and returns `Access-Control-Allow-Origin: *`:
+
+1. **Start an isolated backend** for the worktree (see § Local development
+   backends). `--fresh` starts empty; omit it to seed from the main worktree's
+   `data/`:
+   ```bash
+   ./scripts/dev-backend.sh --port 8007 --label <feature> --fresh
+   ```
+2. **Point the preview frontend at it** — load the app once with the `?api=`
+   override (saved to that origin's localStorage; `?api=reset` clears it):
+   ```js
+   location.href = '/index.html?api=http://localhost:8007';
+   ```
+   Supabase login still works (auth is independent of the data API), so an
+   already-signed-in preview session stays signed in; only data calls re-route.
+3. **Create test data and drive the flow.** Because the isolated backend has
+   its own data store, the user's *real* cloud teams won't be listed (its
+   membership store doesn't link the logged-in user) — so create a throwaway
+   team + game in the UI and exercise the feature against that. This is the
+   right tool when **Claude needs to drive the app end-to-end itself**
+   (create team → start game → …), as opposed to the interactive handoff above
+   where the user explores their own real data on **staging** (a real,
+   CORS-allowed origin).
+
+Cleanup when done: stop the preview server(s) and `kill` the `dev-backend.sh`
+uvicorn process (or just close the terminal running it); the `.dev-data/<label>/`
+copy is gitignored and disposable.
+
 ### EC2 / API
 
 ```bash
