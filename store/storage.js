@@ -158,10 +158,10 @@ function serializeGame(game) {
             totalPointTime: point.totalPointTime,
             lastPauseTime: point.lastPauseTime ? (typeof point.lastPauseTime === 'string' ? point.lastPauseTime : point.lastPauseTime.toISOString()) : null,
             substitutedOutPlayers: point.substitutedOutPlayers || [],  // Players subbed out mid-point
-            modes: point.modes || [],  // PBP modes ('simple'/'full'/'field') active during this point
+            modes: point.getModes(),  // PBP modes recorded during this point (union of possessions)
             possessions: point.possessions.map(possession => ({
                 offensive: possession.offensive,
-                modes: possession.modes || [],  // PBP modes active during this possession
+                modes: possession.modes || [],  // PBP modes events were recorded under in this possession
                 events: possession.events.map(event => serializeEvent(event))
             }))
         }))
@@ -457,13 +457,13 @@ function deserializeGame(gameData) {
         point.totalPointTime = pointData.totalPointTime || 0;
         point.lastPauseTime = pointData.lastPauseTime ? new Date(pointData.lastPauseTime) : null;
         point.substitutedOutPlayers = pointData.substitutedOutPlayers || [];  // Players subbed out mid-point
-        point.modes = pointData.modes || [];  // PBP modes active during this point (empty for legacy data)
         point.possessions = pointData.possessions.map(possessionData => {
             const possession = new Possession(possessionData.offensive);
             possession.modes = possessionData.modes || [];  // empty for legacy data
             possession.events = possessionData.events.map(eventData => deserializeEvent(eventData));
             return possession;
         });
+        point.modes = point.getModes();  // derive from restored possessions (empty for legacy data)
         return point;
     });
     

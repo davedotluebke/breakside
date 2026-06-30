@@ -1170,9 +1170,6 @@ function switchTab(tabName) {
     if (tabName === 'simple' || tabName === 'full' || tabName === 'field' || tabName === 'all') {
         lastPbpTab = tabName;
         try { localStorage.setItem(LAST_PBP_TAB_KEY, tabName); } catch (e) { /* ignore */ }
-        // Record the newly-active recording mode on the in-progress point so a
-        // mid-point switch (e.g. Simple -> Field) is captured for analytics.
-        stampCurrentModeOnActivePlay();
     }
 
     applyTabState();
@@ -1311,22 +1308,6 @@ function getCurrentMode() {
     if (tab === 'full') return 'full';
     if (tab === 'field') return 'field';
     return 'simple'; // 'simple', 'all', or any unexpected value
-}
-
-/**
- * Stamp the current recording mode onto the in-progress point and its active
- * possession, so a mid-point mode switch is captured (not just the mode at
- * creation). No-op when there's no game, no point, or the latest point has
- * already ended.
- */
-function stampCurrentModeOnActivePlay() {
-    if (typeof getLatestPoint !== 'function') return;
-    const point = getLatestPoint();
-    if (!point || point.winner) return; // no in-progress point to stamp
-    const mode = getCurrentMode();
-    if (typeof point.addMode === 'function') point.addMode(mode);
-    const possession = (typeof getActivePossession === 'function') ? getActivePossession(point) : null;
-    if (possession && typeof possession.addMode === 'function') possession.addMode(mode);
 }
 
 /**

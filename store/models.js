@@ -515,9 +515,8 @@ class Pull extends Event {
 
 // Which play-by-play surface ('simple' | 'full' | 'field') is active right now,
 // per the UI. Returns null when the panel system hasn't loaded yet (e.g. during
-// deserialization), in which case callers leave `modes` empty / overwrite it
-// from stored data. Lives here so Point/Possession can self-stamp the recording
-// mode at creation without each call site having to thread it in.
+// deserialization), in which case nothing is stamped. Lives here so addEvent can
+// self-stamp the recording mode without each call site having to thread it in.
 function captureCurrentMode() {
     return (typeof window !== 'undefined' && typeof window.getCurrentMode === 'function')
         ? window.getCurrentMode()
@@ -529,19 +528,26 @@ class Possession {
     constructor(offensive) {
         this.offensive = offensive; // true for offensive, false for defensive
         this.events = [];
-        // Distinct PBP modes ('simple' | 'full' | 'field') that were active at
-        // any time during this possession, in first-seen order. Drives later
+        // Distinct PBP modes ('simple' | 'full' | 'field') under which events
+        // were actually *recorded* into this possession, in first-seen order.
+        // Stamped on event entry (see addEvent / addMode) — NOT on creation or
+        // tab switches — so merely browsing tabs or starting in the wrong tab
+        // leaves no trace; only meaningful recording taps count. Drives later
         // analytics: e.g. 'field' alone => location data for every throw;
         // 'simple' present => individual throws likely weren't all recorded.
         this.modes = [];
-        this.addMode(captureCurrentMode());
     }
 
     addEvent(event) {
         this.events.push(event);
+        // Stamp the surface this event was recorded under. addEvent is the
+        // chokepoint for all PBP events (throws, turnovers, scores, defense);
+        // the pull, which is unshifted in directly, stamps itself separately.
+        this.addMode(captureCurrentMode());
     }
 
-    // Record that `mode` was active during this possession (deduped).
+    // Record that `mode` was active (an event was recorded) during this
+    // possession (deduped, ignores null/empty).
     addMode(mode) {
         if (mode && !this.modes.includes(mode)) {
             this.modes.push(mode);
@@ -561,21 +567,27 @@ class Point {
         this.totalPointTime = 0;  // Accumulated time tracking
         this.lastPauseTime = null;  // Track when the point was last paused
         this.substitutedOutPlayers = [];  // Players who were subbed out mid-point (for injury/fatigue)
-        // Distinct PBP modes ('simple' | 'full' | 'field') active at any time
-        // during this point (union across its possessions). See Possession.modes.
+        // Distinct PBP modes recorded during this point — derived from its
+        // possessions (see getModes). Kept as a field for convenient in-memory
+        // reads; serialization writes the freshly-derived value.
         this.modes = [];
-        this.addMode(captureCurrentMode());
     }
 
     addPossession(possession) {
         this.possessions.push(possession);
     }
 
-    // Record that `mode` was active during this point (deduped).
-    addMode(mode) {
-        if (mode && !this.modes.includes(mode)) {
-            this.modes.push(mode);
+    // Union of the modes recorded across this point's possessions, in
+    // first-seen order. This is the authoritative value; a point "used" a mode
+    // iff some possession in it recorded an event under that mode.
+    getModes() {
+        const seen = [];
+        for (const possession of this.possessions) {
+            for (const mode of (possession.modes || [])) {
+                if (!seen.includes(mode)) { seen.push(mode); }
+            }
         }
+        return seen;
     }
 }
 
