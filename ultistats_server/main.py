@@ -11,7 +11,7 @@ from datetime import datetime
 
 # Import config - handle both relative and absolute imports
 try:
-    from config import HOST, PORT, DEBUG, ALLOWED_ORIGINS, AUTH_REQUIRED
+    from config import HOST, PORT, DEBUG, ALLOWED_ORIGINS, AUTH_REQUIRED, auth_required
     from storage import (
         # Game storage
         save_game_version,
@@ -108,7 +108,7 @@ try:
     )
 except ImportError:
     # Try absolute import (when running as package)
-    from ultistats_server.config import HOST, PORT, DEBUG, ALLOWED_ORIGINS, AUTH_REQUIRED
+    from ultistats_server.config import HOST, PORT, DEBUG, ALLOWED_ORIGINS, AUTH_REQUIRED, auth_required
     from ultistats_server.storage import (
         # Game storage
         save_game_version,
@@ -694,7 +694,7 @@ async def create_event(
         raise HTTPException(status_code=400, detail="teamId is required")
 
     # Verify coach access to team
-    if AUTH_REQUIRED:
+    if auth_required():
         role = get_user_team_role(user['id'], team_id)
         if role != 'coach':
             raise HTTPException(status_code=403, detail="Coach access required")
@@ -727,7 +727,7 @@ async def update_event_endpoint(
     existing = get_event(event_id)
     team_id = existing.get('teamId')
 
-    if AUTH_REQUIRED and team_id:
+    if auth_required() and team_id:
         role = get_user_team_role(user['id'], team_id)
         if role != 'coach':
             raise HTTPException(status_code=403, detail="Coach access required")
@@ -750,7 +750,7 @@ async def delete_event_endpoint(
     existing = get_event(event_id)
     team_id = existing.get('teamId')
 
-    if AUTH_REQUIRED and team_id:
+    if auth_required() and team_id:
         role = get_user_team_role(user['id'], team_id)
         if role != 'coach':
             raise HTTPException(status_code=403, detail="Coach access required")
