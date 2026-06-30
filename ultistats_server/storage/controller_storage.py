@@ -63,7 +63,22 @@ HANDOFF_EXPIRY_SECONDS = int(os.getenv("BREAKSIDE_HANDOFF_EXPIRY", "10"))
 # =============================================================================
 # In-Memory State
 # =============================================================================
-
+#
+# SINGLE-WORKER REQUIREMENT
+# -------------------------
+# All controller state below (role holders, pending handoffs, connected
+# coaches) lives in module globals guarded by a threading.Lock. This is only
+# correct within ONE process. If the server is ever run with multiple uvicorn
+# workers, each worker gets its own copy of these dicts, so two coaches hitting
+# different workers would see divergent "Active Coach" state and the
+# `authoritative` ownership check in sync_game could roll back play data.
+#
+# Production runs single-worker by construction: main.py calls
+# `uvicorn.run(app, ...)` with the app *object* (uvicorn can't spawn workers
+# from an instance) and the EC2 `breakside` systemd unit has no `--workers`
+# flag. DO NOT add `--workers N` (or `gunicorn -w N`) without first moving this
+# state into a shared store (e.g. Redis); otherwise multi-coach control silently
+# breaks. See CODE_REVIEW_REPORT.md (decision 4).
 _controller_states: Dict[str, ControllerState] = {}
 _lock = threading.Lock()
 
