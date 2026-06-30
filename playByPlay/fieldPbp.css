@@ -355,17 +355,38 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 .fp-ebtn.score { color: #047857; border-color: #86d3b3; background: #e7f7f0; }
 .fp-ebtn.on { background: var(--fp-blue); border-color: var(--fp-blue); color: #fff; }
 
-/* Pegman ghost while dragging a player chip onto the field. */
+/* Pegman ghost while dragging a player chip onto the field. Google-Maps
+   Street-View style: the container is a zero-size anchor pinned at the exact
+   drop point (where the "X" sits, lifted above the finger in JS). The shadow +
+   X mark that point; the figure and name pill float above it. */
 .fp-pegman {
     position: fixed; z-index: 999; pointer-events: none;
-    transform: translate(-50%, -100%);
-    background: var(--fp-blue); color: #fff; border-radius: 999px;
-    padding: 4px 11px 4px 7px; font-size: 13px; font-weight: 600;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, .35); white-space: nowrap;
+    width: 0; height: 0;
 }
-.fp-pegman::after {
-    content: ""; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%);
-    border: 6px solid transparent; border-top-color: var(--fp-blue);
+/* Soft ground shadow, centred on the drop point. */
+.fp-peg-shadow {
+    position: absolute; left: 0; top: 0; transform: translate(-50%, -50%);
+    width: 30px; height: 12px; border-radius: 50%;
+    background: radial-gradient(ellipse at center, rgba(0, 0, 0, .4), rgba(0, 0, 0, 0) 70%);
+}
+/* Precise drop-point marker, drawn on top of the shadow. */
+.fp-peg-x {
+    position: absolute; left: 0; top: 0; transform: translate(-50%, -50%);
+    font-size: 16px; font-weight: 900; line-height: 1; color: var(--fp-blue);
+    text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;
+}
+/* Player figure standing just above the drop point. */
+.fp-peg-figure {
+    position: absolute; left: 0; bottom: 5px; transform: translateX(-50%);
+    font-size: 30px; line-height: 1;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .45));
+}
+/* Name pill floating above the figure. */
+.fp-peg-name {
+    position: absolute; left: 0; bottom: 40px; transform: translateX(-50%);
+    background: var(--fp-blue); color: #fff; border-radius: 999px;
+    padding: 3px 10px; font-size: 12px; font-weight: 600; white-space: nowrap;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, .35);
 }
 
 /* Field-side popover picker ("Who got the block?"). Positioned in JS (top-left

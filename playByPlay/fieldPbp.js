@@ -1214,6 +1214,11 @@
     // on window, so per-render DOM rebuilds don't break an active drag.
     // -----------------------------------------------------------------
     const DRAG_THRESHOLD_PX = 6;
+    // While dragging a player chip, the pegman's target ("X") floats this many
+    // screen px above the finger so the fingertip never occludes the precise
+    // drop spot (Google-Maps-Street-View style). The disc is recorded at the
+    // lifted X, not under the finger — see onPointerMove / onPointerUp.
+    const DRAG_LIFT_PX = 56;
     const LONGPRESS_MS = 500;
     let drag = null;     // {kind:'chip'|'marker'|'field', ...}
     let pegEl = null;    // floating pegman element while dragging a chip
@@ -1299,13 +1304,23 @@
         }
         if (drag.kind === 'chip') {
             if (!pegEl) {
+                // Street-View-style pegman: a name pill + figure standing on a
+                // ground shadow, with an "X" marking the exact drop point. The
+                // container is anchored at the drop point (the X); children sit
+                // above it. Positioned in onPointerMove at (finger - lift).
                 pegEl = document.createElement('div');
                 pegEl.className = 'fp-pegman';
-                pegEl.textContent = '🧍 ' + (drag.name === UNKNOWN_PLAYER ? 'Unknown' : drag.name);
+                pegEl.innerHTML =
+                    '<div class="fp-peg-name"></div>' +
+                    '<div class="fp-peg-figure">🧍</div>' +
+                    '<div class="fp-peg-shadow"></div>' +
+                    '<div class="fp-peg-x">✕</div>';
+                pegEl.querySelector('.fp-peg-name').textContent =
+                    drag.name === UNKNOWN_PLAYER ? 'Unknown' : drag.name;
                 document.body.appendChild(pegEl);
             }
             pegEl.style.left = e.clientX + 'px';
-            pegEl.style.top = (e.clientY - 6) + 'px';
+            pegEl.style.top = (e.clientY - DRAG_LIFT_PX) + 'px';
         } else if (drag.kind === 'marker') {
             const loc = pointInField(e.clientX, e.clientY);
             if (loc) moveMarker(drag.idx, clampLoc(loc.l, loc.w));
@@ -1321,7 +1336,9 @@
 
         if (d.kind === 'chip') {
             if (!d.moved) { handleChipTap(d.name); return; }
-            const loc = pointInField(e.clientX, e.clientY);
+            // Record at the lifted X (the pegman's drop point), not under the
+            // finger — keeps the recorded spot where the coach actually aimed.
+            const loc = pointInField(e.clientX, e.clientY - DRAG_LIFT_PX);
             if (!loc) { render(); return; }
             // Chip dropped on the field — one-gesture pick + place.
             handleChipDrop(d.name, loc);
