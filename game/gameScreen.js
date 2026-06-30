@@ -5518,23 +5518,6 @@ window.updateControllerUI = function(state, previousState) {
 };
 
 // =============================================================================
-// Integration with moveToNextPoint
-// =============================================================================
-
-// Hook into moveToNextPoint to handle panel UI transitions
-// This is called after a score event to prepare for the next point.
-// Note: originalMoveToNextPoint already calls enterGameScreen() and
-// transitionToBetweenPoints(), so this wrapper just delegates — no
-// duplicate transitionToBetweenPoints() call.
-const originalMoveToNextPoint = window.moveToNextPoint;
-window.moveToNextPoint = function() {
-    // Call original if it exists
-    if (typeof originalMoveToNextPoint === 'function') {
-        originalMoveToNextPoint();
-    }
-};
-
-// =============================================================================
 // Exports
 // =============================================================================
 
