@@ -473,47 +473,30 @@ function handleDefensePlayerSelection(playerName, buttonElement) {
 function createKeyPlayDefenseEvent(player) {
     // Get selected defense sub-buttons to determine flags
     const defenseSubButtons = keyPlaySelectedSubButtons.filter(id => id.startsWith('defense-'));
-    
-    // Create defense event with appropriate flags
-    const defenseEvent = new Defense({
-        defender: player,
+
+    // Route through the shared possession core so Key Play writes defenses
+    // identically to Full/Field PBP: the event is logged, persisted, and
+    // published on the narration bus (so the Full/Field tabs repaint), and a
+    // Callahan awards the defender a goal, updates the score, and advances the
+    // point — all handled inside createDefense.
+    const defenseEvent = window.pbpPossession.createDefense(player, {
         interception: defenseSubButtons.includes('defense-interception'),
         layout: defenseSubButtons.includes('defense-layout'),
         sky: defenseSubButtons.includes('defense-sky'),
         Callahan: defenseSubButtons.includes('defense-Callahan'),
         stall: defenseSubButtons.includes('defense-stall'),
-        unforcedError: defenseSubButtons.includes('defense-unforced error')
+        unforcedError: defenseSubButtons.includes('defense-unforced error'),
+        source: 'keyplay'
     });
-    
-    // Ensure we have a defensive possession to add the event to
-    const currentPossession = ensurePossessionExists(false);
-    
-    // Add event to possession
-    currentPossession.addEvent(defenseEvent);
-    logEvent(defenseEvent.summarize());
-    
-    // Handle Callahan special case
-    if (defenseSubButtons.includes('defense-Callahan')) {
-        // Callahan scores a point and ends the current point
-        // Award goal to the defender who caught the Callahan
-        if (player) {
-            player.goals++;
-        } else {
-            console.log("Warning: no defender selected for Callahan");
-        }
-        updateScore(Role.TEAM);
-        moveToNextPoint();
+
+    if (!defenseEvent) {
+        console.log('Warning: defense event not created (no defender selected)');
     }
-    
+
     // Close dialog
     document.getElementById('keyPlayDialog').style.display = 'none';
-    
-    console.log('Defense event created:', defenseEvent.summarize());
-    
-    // Sync to cloud for live updates (Callahan already syncs via moveToNextPoint)
-    if (!defenseSubButtons.includes('defense-Callahan')) {
-        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
-    }
+
+    if (defenseEvent) console.log('Defense event created:', defenseEvent.summarize());
 }
 
 function handleKeyPlayPlayerSelection(playerName, buttonElement) {
@@ -633,45 +616,34 @@ function createKeyPlayThrowEvent() {
     
     // Get selected throw sub-buttons to determine flags
     const throwSubButtons = keyPlaySelectedSubButtons.filter(id => id.startsWith('throw-'));
-    
-    // Create throw event with appropriate flags (basic throw if no sub-buttons selected)
-    const throwEvent = new Throw({
-        thrower: keyPlaySelectedThrower,
-        receiver: keyPlaySelectedReceiver,
-        huck: throwSubButtons.includes('throw-huck'),
-        breakmark: throwSubButtons.includes('throw-break'),
-        dump: throwSubButtons.includes('throw-dump'),
-        hammer: throwSubButtons.includes('throw-hammer'),
-        sky: throwSubButtons.includes('throw-sky'),
-        layout: throwSubButtons.includes('throw-layout'),
-        score: throwSubButtons.includes('throw-score')
-    });
-    
-    // Ensure we have an offensive possession to add the event to
-    const currentPossession = ensurePossessionExists(true);
-    
-    // Add event to possession
-    currentPossession.addEvent(throwEvent);
-    logEvent(throwEvent.summarize());
-    
-    // Update player stats
-    keyPlaySelectedThrower.assists++;
-    if (throwEvent.score_flag) {
-        keyPlaySelectedReceiver.goals++;
-        // Update score and move to next point for score events
-        updateScore(Role.TEAM);
-        moveToNextPoint();
-    }
-    
+
+    // Route through the shared possession core (playByPlay/pbpPossession.js) so
+    // Key Play writes throws identically to Full/Field PBP:
+    //   - completedPasses is incremented on every throw (was never bumped here);
+    //   - an assist is credited ONLY on a scoring throw (this path used to add
+    //     an assist on every completion — see code review);
+    //   - the event is logged, persisted, AND published on the narration bus so
+    //     the Full/Field tabs (which only repaint on bus events) stay in sync;
+    //   - a score updates the score and advances the point.
+    const throwEvent = window.pbpPossession.createThrow(
+        keyPlaySelectedThrower,
+        keyPlaySelectedReceiver,
+        {
+            huck: throwSubButtons.includes('throw-huck'),
+            breakmark: throwSubButtons.includes('throw-break'),
+            dump: throwSubButtons.includes('throw-dump'),
+            hammer: throwSubButtons.includes('throw-hammer'),
+            sky: throwSubButtons.includes('throw-sky'),
+            layout: throwSubButtons.includes('throw-layout'),
+            score: throwSubButtons.includes('throw-score'),
+            source: 'keyplay'
+        }
+    );
+
     // Close dialog
     document.getElementById('keyPlayDialog').style.display = 'none';
-    
-    console.log('Throw event created:', throwEvent.summarize());
-    
-    // Sync to cloud for live updates (scores already sync via moveToNextPoint)
-    if (!throwEvent.score_flag) {
-        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
-    }
+
+    if (throwEvent) console.log('Throw event created:', throwEvent.summarize());
 }
 
 function handleKeyPlayHeaderToggle() {
@@ -767,29 +739,22 @@ function createKeyPlayTurnoverEvent(player) {
         receiver = getPlayerFromName("Unknown Player");
     }
     
-    // Create turnover event with appropriate flags
-    const turnoverEvent = new Turnover({
-        thrower: thrower,
-        receiver: receiver,
+    // Route through the shared possession core so Key Play writes turnovers
+    // identically to Full/Field PBP (logged, persisted, and published on the
+    // narration bus so the Full/Field tabs repaint).
+    const turnoverEvent = window.pbpPossession.createTurnover(thrower, receiver, {
         throwaway: turnoverSubButtons.includes('turnover-throwaway'),
         huck: turnoverSubButtons.includes('turnover-huck'),
-        receiverError: turnoverSubButtons.includes('turnover-drop'),
+        drop: turnoverSubButtons.includes('turnover-drop'),
         goodDefense: turnoverSubButtons.includes('turnover-good D'),
-        stall: turnoverSubButtons.includes('turnover-stall')
+        stall: turnoverSubButtons.includes('turnover-stall'),
+        source: 'keyplay'
     });
-    
-    // Ensure we have an offensive possession to add the event to
-    const currentPossession = ensurePossessionExists(true);
-    
-    // Add event to possession
-    currentPossession.addEvent(turnoverEvent);
-    logEvent(turnoverEvent.summarize());
-    
+
     // Close dialog
     document.getElementById('keyPlayDialog').style.display = 'none';
-    
-    console.log('Turnover event created:', turnoverEvent.summarize());
-    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+
+    if (turnoverEvent) console.log('Turnover event created:', turnoverEvent.summarize());
 }
 
 function updateKeyPlayPlayerHeader(subButtonType, panelType) {
