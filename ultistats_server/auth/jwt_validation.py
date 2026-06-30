@@ -19,9 +19,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 # Import config - handle both relative and absolute imports
 try:
-    from config import SUPABASE_JWT_SECRET, AUTH_REQUIRED
+    from config import SUPABASE_JWT_SECRET, auth_required
 except ImportError:
-    from ultistats_server.config import SUPABASE_JWT_SECRET, AUTH_REQUIRED
+    from ultistats_server.config import SUPABASE_JWT_SECRET, auth_required
 
 
 # HTTP Bearer token extractor
@@ -115,8 +115,12 @@ async def get_current_user(
     FastAPI dependency that extracts and validates the current user from JWT.
 
     Use this for endpoints that REQUIRE authentication.
-    When AUTH_REQUIRED is false, accepts an X-Test-User-Id header to
-    identify distinct test users (needed for multi-coach tests).
+
+    The ``X-Test-User-Id`` impersonation header is honored ONLY when auth is
+    disabled (``auth_required()`` is False — i.e. local dev/agent servers that
+    explicitly set ``ULTISTATS_AUTH_REQUIRED=false``). Whenever auth is
+    required (the production default) the header is ignored and a valid JWT is
+    mandatory, so a caller can never become an arbitrary user by sending it.
 
     Returns:
         Dict with user info: {"id": str, "email": str, "role": str, ...}
@@ -124,10 +128,9 @@ async def get_current_user(
     Raises:
         HTTPException 401: If no token provided or token is invalid
     """
-    import os
-    auth_required = os.getenv("ULTISTATS_AUTH_REQUIRED", "true").lower() == "true"
-    if not auth_required:
-        # In test mode, use X-Test-User-Id header or fall back to a default
+    if not auth_required():
+        # Auth disabled (local dev only): use X-Test-User-Id header or a
+        # default so multi-coach tests can impersonate distinct users.
         test_user_id = request.headers.get("x-test-user-id", "test-user")
         return {
             "id": test_user_id,

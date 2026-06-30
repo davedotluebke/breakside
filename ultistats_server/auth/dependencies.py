@@ -18,6 +18,12 @@ from fastapi import Depends, HTTPException, status, Request
 
 from .jwt_validation import get_current_user, get_optional_user
 
+# Single source of truth for whether auth is enforced (defaults true).
+try:
+    from config import auth_required
+except ImportError:
+    from ultistats_server.config import auth_required
+
 # Import storage - handle both relative and absolute imports
 try:
     from storage.user_storage import get_user, user_exists
@@ -172,9 +178,7 @@ async def require_game_team_coach(
         HTTPException 400: If game has no teamId
         HTTPException 403: If user is not a coach for the team
     """
-    import os
-    auth_required = os.getenv("ULTISTATS_AUTH_REQUIRED", "true").lower() == "true"
-    if not auth_required:
+    if not auth_required():
         return user
 
     game_id = request.path_params.get("game_id")
@@ -233,9 +237,7 @@ async def require_game_team_access(
         HTTPException 400: If game has no teamId
         HTTPException 403: If user doesn't have team access
     """
-    import os
-    auth_required = os.getenv("ULTISTATS_AUTH_REQUIRED", "true").lower() == "true"
-    if not auth_required:
+    if not auth_required():
         return user
 
     game_id = request.path_params.get("game_id")
