@@ -2,6 +2,7 @@
 Game storage using JSON files with versioning support.
 """
 import json
+import os
 import subprocess
 import threading
 from pathlib import Path
@@ -23,6 +24,14 @@ except ImportError:
         # Fallback: add parent to path
         sys.path.insert(0, str(Path(__file__).parent.parent))
         from config import GAMES_DIR, ENABLE_GIT_VERSIONING
+
+from .file_utils import atomic_write_json
+
+# Cap retained version backups per game to bound disk growth. The most recent
+# MAX_VERSIONS are always kept; older ones are thinned to one-per-day so some
+# history survives without unbounded accumulation (a live game synced every
+# few seconds for hours otherwise produces thousands of full-state copies).
+MAX_VERSIONS = int(os.getenv("BREAKSIDE_MAX_VERSIONS", "200"))
 
 
 # Serializes the read-merge-write of current.json so two coaches syncing at
@@ -183,19 +192,70 @@ def save_game_version(game_id: str, game_data: dict,
                                    game_id, final_data)
 
 
+def _prune_versions(versions_dir: Path, max_versions: int = MAX_VERSIONS) -> None:
+    """Bound the number of retained version files.
+
+    Keeps the most recent ``max_versions`` files in full; for everything older,
+    keeps only the last version of each calendar day (a daily snapshot) and
+    deletes the rest. Version stems start with ``YYYY-MM-DDT...`` so the date is
+    the first 10 chars and lexical order matches chronological order.
+    """
+    if max_versions <= 0:
+        return
+    try:
+        files = sorted(versions_dir.glob("*.json"), key=lambda p: p.stem)
+    except OSError:
+        return
+    if len(files) <= max_versions:
+        return
+
+    older = files[:-max_versions]  # everything except the most-recent N
+    # Among the older files, keep the last one per day (its date prefix).
+    keep_per_day = {}
+    for f in older:
+        day = f.stem[:10]  # YYYY-MM-DD
+        keep_per_day[day] = f  # later file for the same day overwrites → last wins
+    keep = set(keep_per_day.values())
+
+    for f in older:
+        if f not in keep:
+            try:
+                f.unlink()
+            except OSError:
+                pass
+
+
+def _unique_version_file(versions_dir: Path) -> str:
+    """Build a collision-free version filename stem.
+
+    Includes microseconds (``%f``) so two syncs in the same wall-clock second
+    no longer overwrite each other, and appends an incrementing counter on the
+    astronomically-rare same-microsecond collision. Stem stays within
+    ``[A-Za-z0-9_-]`` so it round-trips through the ID validator.
+    """
+    base = datetime.now().strftime("%Y-%m-%dT%H-%M-%S-%f")
+    candidate = versions_dir / f"{base}.json"
+    counter = 1
+    while candidate.exists():
+        candidate = versions_dir / f"{base}_{counter:03d}.json"
+        counter += 1
+    return candidate.stem
+
+
 def _write_game_version(game_dir: Path, versions_dir: Path, current_file: Path,
                         game_id: str, game_data: dict) -> str:
     """Persist game_data as a new timestamped version + current.json."""
-    # Create timestamped version
-    timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    # Create timestamped, collision-free version
+    timestamp = _unique_version_file(versions_dir)
     version_file = versions_dir / f"{timestamp}.json"
 
-    # Write version file
-    with open(version_file, 'w') as f:
-        json.dump(game_data, f, indent=2)
+    # Write version file and current.json atomically (temp file + os.replace)
+    # so a crash/concurrent read never sees a torn JSON file.
+    atomic_write_json(version_file, game_data)
+    atomic_write_json(current_file, game_data)
 
-    # Update current.json
-    shutil.copy(version_file, current_file)
+    # Prune old version backups to bound disk growth.
+    _prune_versions(versions_dir)
 
     # Optional: Git commit
     if ENABLE_GIT_VERSIONING:
@@ -327,13 +387,16 @@ def update_game_metadata(game_id: str, updates: dict) -> dict:
     if not current_file.exists():
         raise FileNotFoundError(f"Game {game_id} not found")
 
-    with open(current_file, 'r') as f:
-        game_data = json.load(f)
+    # Serialize against save_game_version's read-merge-write of current.json
+    # and write atomically so a concurrent sync can't be clobbered or read a
+    # torn file.
+    with _SAVE_LOCK:
+        with open(current_file, 'r') as f:
+            game_data = json.load(f)
 
-    game_data.update(updates)
+        game_data.update(updates)
 
-    with open(current_file, 'w') as f:
-        json.dump(game_data, f, indent=2)
+        atomic_write_json(current_file, game_data)
 
     _update_index_for_game(game_id, game_data)
     return game_data

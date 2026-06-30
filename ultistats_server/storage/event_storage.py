@@ -20,6 +20,8 @@ except ImportError:
         sys.path.insert(0, str(Path(__file__).parent.parent))
         from config import EVENTS_DIR
 
+from .file_utils import atomic_write_json, entity_lock
+
 
 def generate_event_id(name: str) -> str:
     """
@@ -83,9 +85,7 @@ def save_event(event_data: dict, event_id: Optional[str] = None) -> str:
     if 'roster' not in event_data:
         event_data['roster'] = {'playerIds': [], 'pickupPlayers': []}
 
-    event_file = EVENTS_DIR / f"{event_id}.json"
-    with open(event_file, 'w') as f:
-        json.dump(event_data, f, indent=2)
+    atomic_write_json(EVENTS_DIR / f"{event_id}.json", event_data)
 
     return event_id
 
@@ -119,13 +119,14 @@ def list_events() -> List[dict]:
 
 def update_event(event_id: str, event_data: dict) -> str:
     """Update an existing event."""
-    if not event_exists(event_id):
-        raise FileNotFoundError(f"Event {event_id} not found")
+    with entity_lock(f"event:{event_id}"):
+        if not event_exists(event_id):
+            raise FileNotFoundError(f"Event {event_id} not found")
 
-    existing = get_event(event_id)
-    event_data['createdAt'] = existing.get('createdAt', datetime.now().isoformat())
+        existing = get_event(event_id)
+        event_data['createdAt'] = existing.get('createdAt', datetime.now().isoformat())
 
-    return save_event(event_data, event_id)
+        return save_event(event_data, event_id)
 
 
 def delete_event(event_id: str) -> bool:
@@ -151,7 +152,10 @@ def list_team_events(team_id: str) -> List[dict]:
 
 def add_game_to_event(event_id: str, game_id: str) -> None:
     """Add a game ID to an event's gameIds list (idempotent)."""
-    event = get_event(event_id)
-    if game_id not in event.get('gameIds', []):
-        event.setdefault('gameIds', []).append(game_id)
-        save_event(event, event_id)
+    # Serialize so two games syncing into the same event concurrently can't
+    # each read the old gameIds and drop one another's addition.
+    with entity_lock(f"event:{event_id}"):
+        event = get_event(event_id)
+        if game_id not in event.get('gameIds', []):
+            event.setdefault('gameIds', []).append(game_id)
+            save_event(event, event_id)

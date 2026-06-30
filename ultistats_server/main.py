@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException, Body, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.concurrency import run_in_threadpool
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Literal
 from datetime import datetime
@@ -870,9 +871,13 @@ async def sync_game(
     except Exception:
         authoritative = True
 
-    # Save with versioning
-    version_file = save_game_version(game_id, game_data,
-                                     authoritative_game_data=authoritative)
+    # Save with versioning. Run off the event loop: the storage write does
+    # fsync'd file I/O (and optional blocking git subprocess calls) that would
+    # otherwise stall the whole single-worker server during every sync.
+    version_file = await run_in_threadpool(
+        save_game_version, game_id, game_data,
+        authoritative_game_data=authoritative,
+    )
     version_timestamp = Path(version_file).stem
 
     return {
@@ -1051,7 +1056,7 @@ async def restore_version(game_id: str, timestamp: str, user: dict = Depends(req
 
     try:
         game_data = get_game_version(game_id, timestamp)
-        save_game_version(game_id, game_data)
+        await run_in_threadpool(save_game_version, game_id, game_data)
         return {"status": "restored", "game_id": game_id, "timestamp": timestamp}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Version {timestamp} not found")
