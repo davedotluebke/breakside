@@ -563,7 +563,7 @@ function loadTeams(silent = false) {
  * Initialize teams from local storage or create a sample team
  */
 function initializeTeams() {
-    loadTeams({ silent: true })
+    loadTeams(true)
     if (teams.length === 0) {
         const sampleNames = ["Cyrus L","Leif","Cesc","Cyrus J","Abby","Avery","James","Simeon","Soren","Walden"];
         sampleTeam = new Team("Sample Team", sampleNames);  // A sample team with 10 players
