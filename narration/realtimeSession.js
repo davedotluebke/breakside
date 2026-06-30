@@ -148,18 +148,35 @@
             ]
         );
 
-        await new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('WebSocket connection timeout')), 10000);
-            ws.addEventListener('open', () => {
-                clearTimeout(timeout);
-                resolve();
-            }, { once: true });
-            ws.addEventListener('error', (err) => {
-                clearTimeout(timeout);
-                reject(new Error('WebSocket connection error'));
-            }, { once: true });
-        });
+        try {
+            await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => reject(new Error('WebSocket connection timeout')), 10000);
+                ws.addEventListener('open', () => {
+                    clearTimeout(timeout);
+                    resolve();
+                }, { once: true });
+                ws.addEventListener('error', (err) => {
+                    clearTimeout(timeout);
+                    reject(new Error('WebSocket connection error'));
+                }, { once: true });
+            });
+        } catch (err) {
+            // On timeout/error the socket is half-open with listeners attached
+            // and would otherwise leak (and a later start could open the mic
+            // against a dead socket). Close and null it before bubbling.
+            try { if (ws) ws.close(); } catch (_) {}
+            ws = null;
+            throw err;
+        }
         logPhase('websocket open');
+
+        // Guard against a socket that errored/closed in the same tick the open
+        // resolved — never proceed to open the mic against a dead socket.
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            try { if (ws) ws.close(); } catch (_) {}
+            ws = null;
+            throw new Error('WebSocket closed before session setup');
+        }
 
         ws.addEventListener('message', handleServerMessage);
         ws.addEventListener('close', handleSocketClose);
@@ -492,10 +509,17 @@
 
     function handleSocketClose(ev) {
         if (sessionActive) {
-            // Unexpected close
-            onErrorCb(new Error(`Realtime WebSocket closed: ${ev.code} ${ev.reason}`));
+            // Unexpected close. Tear down audio and reconcile state so the UI
+            // doesn't latch in "recording"/"finalizing":
             sessionActive = false;
             stopAudioCapture();
+            // Resolve any stop() that's waiting on an end-of-turn signal — the
+            // socket is gone, so it would otherwise hang the full timeout.
+            if (pendingResponseDone) {
+                try { pendingResponseDone(); } catch (_) {}
+            }
+            // Notify the engine so it can reset its phase out of "recording".
+            onErrorCb(new Error(`Realtime WebSocket closed: ${ev.code} ${ev.reason}`));
         }
     }
 
