@@ -82,17 +82,21 @@ async function claimActiveCoach(gameId) {
         
         if (response.ok) {
             if (data.status === 'claimed') {
+                myOutstandingHandoff = null;
                 showControllerToast('You are now Active Coach', 'success');
-                updateLocalControllerState({ 
-                    state: data.state, 
+                updateLocalControllerState({
+                    state: data.state,
                     hasPendingHandoffForMe: false
                 });
             } else if (data.status === 'handoff_requested') {
+                // Record this request durably so its resolution toast fires
+                // exactly once regardless of poll timing.
+                myOutstandingHandoff = { key: getHandoffKey(data.state?.pendingHandoff), role: 'activeCoach' };
                 // Toast stays visible for full handoff timeout, track for auto-dismiss
                 const timeoutMs = (data.handoff?.expiresInSeconds ?? handoffTimeoutSeconds) * 1000;
                 handoffRequestSentToast = showControllerToast('Handoff request sent...', 'info', timeoutMs);
-                updateLocalControllerState({ 
-                    state: data.state 
+                updateLocalControllerState({
+                    state: data.state
                 });
             }
             return { success: true, ...data };
@@ -121,17 +125,21 @@ async function claimLineCoach(gameId) {
         
         if (response.ok) {
             if (data.status === 'claimed') {
+                myOutstandingHandoff = null;
                 showControllerToast('You are now Line Coach', 'success');
-                updateLocalControllerState({ 
-                    state: data.state, 
-                    hasPendingHandoffForMe: false 
+                updateLocalControllerState({
+                    state: data.state,
+                    hasPendingHandoffForMe: false
                 });
             } else if (data.status === 'handoff_requested') {
+                // Record this request durably so its resolution toast fires
+                // exactly once regardless of poll timing.
+                myOutstandingHandoff = { key: getHandoffKey(data.state?.pendingHandoff), role: 'lineCoach' };
                 // Toast stays visible for full handoff timeout, track for auto-dismiss
                 const timeoutMs = (data.handoff?.expiresInSeconds ?? handoffTimeoutSeconds) * 1000;
                 handoffRequestSentToast = showControllerToast('Handoff request sent...', 'info', timeoutMs);
-                updateLocalControllerState({ 
-                    state: data.state 
+                updateLocalControllerState({
+                    state: data.state
                 });
             }
             return { success: true, ...data };
@@ -284,28 +292,36 @@ function updateLocalControllerState(data) {
         lastUpdate: new Date()
     };
     
-    // Check if my handoff request was resolved (I was the requester)
-    // Note: myUserId already declared above
-    const wasMyRequest = previousState.pendingHandoff?.requesterId === myUserId;
-    const handoffGone = !controllerState.pendingHandoff;
-    const requestedRole = previousState.pendingHandoff?.role;
-    
-    if (wasMyRequest && handoffGone && requestedRole) {
-        // My handoff request was resolved - dismiss the "request sent" toast first
-        if (handoffRequestSentToast && handoffRequestSentToast.parentElement) {
-            dismissToast(handoffRequestSentToast);
-        }
-        handoffRequestSentToast = null;
-        
-        // Check if I got the role I requested
-        const iGotTheRole = (requestedRole === 'activeCoach' && controllerState.isActiveCoach) ||
-                           (requestedRole === 'lineCoach' && controllerState.isLineCoach);
-        const roleName = requestedRole === 'activeCoach' ? 'Play-by-Play' : 'Next Line';
-        
-        if (iGotTheRole) {
-            showControllerToast(`You are now ${roleName}`, 'success');
-        } else {
-            showControllerToast(`Handoff request for ${roleName} was denied`, 'error');
+    // Check if a handoff request *I* made was resolved. Keyed off the durable
+    // myOutstandingHandoff record rather than diffing previousState, so the
+    // resolution is detected on whichever update first observes the request is
+    // gone (and only once), even when a fetch and a ping both land between
+    // polls. The request is resolved when the server no longer shows my exact
+    // pending request (granted, denied, or expired → different/no pendingHandoff).
+    if (myOutstandingHandoff) {
+        const currentHandoffKey = getHandoffKey(controllerState.pendingHandoff);
+        const stillPending = currentHandoffKey === myOutstandingHandoff.key;
+
+        if (!stillPending) {
+            const requestedRole = myOutstandingHandoff.role;
+            myOutstandingHandoff = null;
+
+            // Dismiss the "request sent" toast first
+            if (handoffRequestSentToast && handoffRequestSentToast.parentElement) {
+                dismissToast(handoffRequestSentToast);
+            }
+            handoffRequestSentToast = null;
+
+            // Check if I got the role I requested
+            const iGotTheRole = (requestedRole === 'activeCoach' && controllerState.isActiveCoach) ||
+                               (requestedRole === 'lineCoach' && controllerState.isLineCoach);
+            const roleName = requestedRole === 'activeCoach' ? 'Play-by-Play' : 'Next Line';
+
+            if (iGotTheRole) {
+                showControllerToast(`You are now ${roleName}`, 'success');
+            } else {
+                showControllerToast(`Handoff request for ${roleName} was denied`, 'error');
+            }
         }
     }
     
@@ -398,6 +414,9 @@ function stopControllerPolling() {
         controllerPollIntervalId = null;
     }
     currentGameIdForPolling = null;
+    // Drop any outstanding handoff request so its resolution toast can't leak
+    // into a later game session.
+    myOutstandingHandoff = null;
     console.log('🎮 Controller polling stopped');
 }
 
@@ -734,6 +753,24 @@ let handoffRequestSentToast = null; // Track "handoff request sent" toast for au
 
 // Handoff timeout - fetched from server, fallback to 10s
 let handoffTimeoutSeconds = 10;
+
+// Durable record of a handoff request *this* client made, used to fire the
+// "you got it / was denied" toast exactly once. We key off a stable per-request
+// id rather than frame-to-frame diffing previousState, because polling replaces
+// controllerState wholesale and a fetch+ping can both land between snapshots —
+// dropping the transition. Set when a claim returns 'handoff_requested',
+// cleared when the request resolves (granted, denied, or expired).
+// Shape: { key: string, role: 'activeCoach'|'lineCoach' } or null.
+let myOutstandingHandoff = null;
+
+/**
+ * Stable id for a pending handoff. Matches the format used for the incoming
+ * handoff toast (currentHandoffId) so the two never disagree.
+ */
+function getHandoffKey(handoff) {
+    if (!handoff) return null;
+    return `${handoff.requesterId}-${handoff.role}-${handoff.requestedAt}`;
+}
 
 /**
  * Show a toast notification for controller events
