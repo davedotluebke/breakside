@@ -2,24 +2,23 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Breakside - Ultimate Frisbee Tracker</title>
-    
+
     <!-- PWA Meta Tags -->
     <meta name="description" content="A PWA for tracking Ultimate Frisbee games and team statistics.">
-    <meta name="theme-color" content="#E19049">
+    <!-- White theme to match the clean white header; status bar uses dark glyphs for legibility on white -->
+    <meta name="theme-color" content="#ffffff">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <script>window._isStaging = location.hostname === 'staging.breakside.pro';</script>
     <meta name="apple-mobile-web-app-title" id="appTitle" content="Breakside">
-    <meta name="msapplication-TileColor" content="#E19049">
+    <meta name="msapplication-TileColor" content="#ffffff">
     <meta name="msapplication-config" content="browserconfig.xml">
     <script>
         if(window._isStaging) {
             document.getElementById('appTitle').content = 'Breakside STG';
-            document.querySelector('meta[name="theme-color"]').content = '#9B32EB';
-            document.querySelector('meta[name="msapplication-TileColor"]').content = '#9B32EB';
         }
     </script>
 
