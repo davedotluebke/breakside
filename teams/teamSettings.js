@@ -246,14 +246,14 @@ function renderMemberItem(member) {
             <div class="member-info">
                 <span class="member-icon">${roleIcon}</span>
                 <div class="member-details">
-                    <span class="member-name">${escapeHtml(displayName)}${isSelf ? ' (you)' : ''}</span>
-                    <span class="member-email">${escapeHtml(member.email || '')}</span>
+                    <span class="member-name">${escapeHtmlAttr(displayName)}${isSelf ? ' (you)' : ''}</span>
+                    <span class="member-email">${escapeHtmlAttr(member.email || '')}</span>
                 </div>
-                <span class="member-role ${roleClass}">${escapeHtml(member.role || '')}</span>
+                <span class="member-role ${roleClass}">${escapeHtmlAttr(member.role || '')}</span>
             </div>
             <button class="remove-member-btn icon-button"
-                    data-user-id="${escapeHtml(member.userId || '')}"
-                    data-name="${escapeHtml(displayName)}"
+                    data-user-id="${escapeHtmlAttr(member.userId || '')}"
+                    data-name="${escapeHtmlAttr(displayName)}"
                     title="Remove member">
                 <i class="fas fa-times"></i>
             </button>
@@ -373,18 +373,18 @@ function renderInviteItem(invite) {
             <div class="invite-info">
                 <span class="invite-role-icon">${roleIcon}</span>
                 <div class="invite-details">
-                    <span class="invite-code">${escapeHtml(invite.code || '')}</span>
-                    <span class="invite-meta">${escapeHtml(invite.role || '')} • expires ${escapeHtml(expiresDate)}</span>
+                    <span class="invite-code">${escapeHtmlAttr(invite.code || '')}</span>
+                    <span class="invite-meta">${escapeHtmlAttr(invite.role || '')} • expires ${escapeHtmlAttr(expiresDate)}</span>
                 </div>
             </div>
             <div class="invite-actions">
                 <button class="copy-invite-code-btn icon-button"
-                        data-code="${escapeHtml(invite.code || '')}"
+                        data-code="${escapeHtmlAttr(invite.code || '')}"
                         title="Copy code">
                     <i class="fas fa-copy"></i>
                 </button>
                 <button class="revoke-invite-btn icon-button"
-                        data-invite-id="${escapeHtml(invite.id || '')}"
+                        data-invite-id="${escapeHtmlAttr(invite.id || '')}"
                         title="Revoke invite">
                     <i class="fas fa-times"></i>
                 </button>
@@ -1017,7 +1017,7 @@ function initializeTeamIdentityHandlers() {
 // Utility Functions
 // =============================================================================
 
-function escapeHtml(str) {
+function escapeHtmlAttr(str) {
     if (str === null || str === undefined || str === '') return '';
     // textContent→innerHTML escapes &, <, > but NOT quotes, so values
     // interpolated into double-quoted attributes (data-code, data-user-id…)
