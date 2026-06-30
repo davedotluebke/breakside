@@ -597,22 +597,40 @@ document.addEventListener('visibilitychange', async () => {
         // Don't return — let polling continue and restart game state refresh below
     }
 
-    // Check if roles were lost during sleep and silently re-claim
+    // Check if roles were lost during sleep and silently re-claim — but ONLY
+    // if the role is now VACANT on the server. If another coach legitimately
+    // took it while we slept, leave it with them (Active Coach is
+    // authoritative): re-claiming would either yank control back outright (if
+    // the server let it expire) or fire an unwanted handoff request. The post-
+    // ping controllerState reflects fresh server state, so a null holder means
+    // the role is free to retake.
     if (result) {
         const lostActiveCoach = hadActiveCoach && !controllerState.isActiveCoach;
         const lostLineCoach = hadLineCoach && !controllerState.isLineCoach;
+        const activeCoachVacant = !controllerState.activeCoach;
+        const lineCoachVacant = !controllerState.lineCoach;
 
-        if (lostActiveCoach || lostLineCoach) {
-            console.log(`🎮 Roles lost during sleep — re-claiming (active: ${lostActiveCoach}, line: ${lostLineCoach})`);
+        if (lostActiveCoach && !activeCoachVacant) {
+            console.log('🎮 Active Coach taken by another coach during sleep — not re-claiming');
+        }
+        if (lostLineCoach && !lineCoachVacant) {
+            console.log('🎮 Line Coach taken by another coach during sleep — not re-claiming');
+        }
 
-            if (lostActiveCoach) {
+        const reclaimActive = lostActiveCoach && activeCoachVacant;
+        const reclaimLine = lostLineCoach && lineCoachVacant;
+
+        if (reclaimActive || reclaimLine) {
+            console.log(`🎮 Roles lost during sleep and now vacant — re-claiming (active: ${reclaimActive}, line: ${reclaimLine})`);
+
+            if (reclaimActive) {
                 const claimResult = await claimActiveCoach(gameId);
                 if (claimResult?.success) {
                     console.log('🎮 Re-claimed Active Coach after wake');
                 }
             }
 
-            if (lostLineCoach) {
+            if (reclaimLine) {
                 const claimResult = await claimLineCoach(gameId);
                 if (claimResult?.success) {
                     console.log('🎮 Re-claimed Line Coach after wake');
