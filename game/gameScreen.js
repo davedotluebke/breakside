@@ -995,12 +995,20 @@ function handleLeaveGame() {
     const skipConfirm = typeof isTestGame === 'function'
         && typeof currentGame === 'function' && isTestGame(currentGame());
     if (skipConfirm || confirm('Leave this game? You can rejoin later.')) {
-        // Release any held roles
+        // Release any held roles. releaseControllerRole requires the specific
+        // role ('activeCoach'/'lineCoach') — calling it with none sends
+        // {role: undefined} and releases nothing, leaving a stale holder until
+        // ping-timeout. Release each role this user actually holds.
         if (typeof releaseControllerRole === 'function') {
             const gameId = typeof getPollingGameId === 'function' ? getPollingGameId() : null;
             if (gameId) {
-                releaseControllerRole(gameId).catch(err => {
-                    console.log('Could not release role:', err);
+                const heldRoles = [];
+                if (typeof isActiveCoach === 'function' && isActiveCoach()) heldRoles.push('activeCoach');
+                if (typeof isLineCoach === 'function' && isLineCoach()) heldRoles.push('lineCoach');
+                heldRoles.forEach(role => {
+                    releaseControllerRole(gameId, role).catch(err => {
+                        console.log(`Could not release ${role} role:`, err);
+                    });
                 });
             }
         }
