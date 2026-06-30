@@ -30,6 +30,9 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 let inviteCode = null;
 let inviteInfo = null;
 let currentUser = null;
+// Guards against duplicate/concurrent redemptions — both the SIGNED_IN handler
+// and the in-page form/button paths can fire redeemInvite() around the same time.
+let redeemInProgress = false;
 
 // =============================================================================
 // DOM Elements
@@ -153,20 +156,17 @@ function getInviteCodeFromURL() {
 async function fetchInviteInfo(code) {
     try {
         const response = await fetch(`${API_BASE}/api/invites/${code}/info`);
-        
-        if (response.status === 404) {
-            throw new Error('Invite not found');
-        }
-        
-        if (response.status === 410) {
-            const data = await response.json();
-            throw new Error(data.detail || 'This invite is no longer valid');
-        }
-        
+
         if (!response.ok) {
-            throw new Error('Failed to load invite');
+            // Tag the error with the HTTP status so callers classify on status,
+            // not brittle message-text matching.
+            let detail = null;
+            try { detail = (await response.json()).detail; } catch (_) { /* no body */ }
+            const err = new Error(detail || `Failed to load invite (${response.status})`);
+            err.status = response.status;
+            throw err;
         }
-        
+
         return await response.json();
     } catch (error) {
         console.error('Fetch invite error:', error);
@@ -247,43 +247,50 @@ async function redeemInvite() {
         showAuthMessage('Please sign in first');
         return;
     }
-    
+    if (redeemInProgress) return;  // already redeeming (or redeemed)
+    redeemInProgress = true;
+
     joinTeamBtn.disabled = true;
     joinTeamBtn.textContent = 'Joining...';
-    
+
     try {
         const headers = await getAuthHeaders();
         const response = await fetch(`${API_BASE}/api/invites/${inviteCode}/redeem`, {
             method: 'POST',
             headers
         });
-        
+
         if (response.status === 409) {
-            // Already a member
+            // Already a member — terminal success; clear the pending code.
+            localStorage.removeItem('pendingInviteCode');
             showAuthMessage("You're already on this team!", 'success');
             setTimeout(() => {
                 window.location.href = '/app/';
             }, 1500);
             return;
         }
-        
+
         if (!response.ok) {
-            const data = await response.json();
+            const data = await response.json().catch(() => ({}));
             throw new Error(data.detail || 'Failed to join team');
         }
-        
+
         const result = await response.json();
-        
+
+        // Redemption succeeded — now it's safe to drop the pending invite code.
+        localStorage.removeItem('pendingInviteCode');
+
         // Show success state
         successTeamName.textContent = result.team?.name || inviteInfo?.teamName || 'the team';
         successRole.textContent = result.membership?.role || inviteInfo?.role || 'member';
         showState(successState);
-        
+
     } catch (error) {
         console.error('Redeem error:', error);
         showAuthMessage(error.message || 'Failed to join team');
         joinTeamBtn.disabled = false;
         joinTeamBtn.textContent = 'Join Team';
+        redeemInProgress = false;  // allow a retry
     }
 }
 
@@ -432,13 +439,16 @@ async function initialize() {
     // Get invite code from URL
     inviteCode = getInviteCodeFromURL();
     
-    // Check for pending invite from Google OAuth redirect
+    // Check for pending invite from Google OAuth redirect. Keep it in storage
+    // until redemption actually succeeds — on an OAuth return the Supabase
+    // session may still be hydrating from the URL hash, so clearing it now
+    // (before getSession resolves a user) would dead-end the join. redeemInvite()
+    // removes it once the team is joined.
     const pendingCode = localStorage.getItem('pendingInviteCode');
     if (pendingCode && !inviteCode) {
         inviteCode = pendingCode;
     }
-    localStorage.removeItem('pendingInviteCode');
-    
+
     if (!inviteCode) {
         showError('No Invite Code', 'Please use the invite link shared with you.');
         return;
@@ -449,32 +459,43 @@ async function initialize() {
         inviteInfo = await fetchInviteInfo(inviteCode);
         displayInvitePreview(inviteInfo);
         
-        // Check if user is already logged in
+        // Check if user is already logged in (session already hydrated by now).
         const { data: { session } } = await supabaseClient.auth.getSession();
         if (session?.user) {
             updateUIForUser(session.user);
-            
-            // If we just came from OAuth redirect, auto-redeem
+
+            // If we just came from an OAuth redirect, auto-redeem now that the
+            // session resolved. The SIGNED_IN handler below also covers the case
+            // where the hash hadn't finished hydrating yet; redeemInProgress
+            // de-dupes the two paths.
             if (pendingCode) {
-                setTimeout(() => redeemInvite(), 500);
+                redeemInvite();
             }
         }
-        
-        // Listen for auth changes
+
+        // Listen for auth changes. On a genuine sign-in (incl. OAuth return,
+        // which fires SIGNED_IN once the session hydrates from the hash),
+        // auto-redeem the invite so Google joins don't dead-end on a manual tap.
         supabaseClient.auth.onAuthStateChange((event, session) => {
             console.log('Auth state changed:', event);
             if (session?.user) {
                 updateUIForUser(session.user);
+                if (event === 'SIGNED_IN' && inviteCode) {
+                    redeemInvite();
+                }
             }
         });
-        
+
     } catch (error) {
         console.error('Initialize error:', error);
-        
-        if (error.message.includes('not found')) {
+
+        // Classify on HTTP status, not message text.
+        if (error.status === 404) {
             showError('Invite Not Found', 'This invite code doesn\'t exist. Please check the link and try again.');
-        } else if (error.message.includes('expired') || error.message.includes('no longer valid')) {
-            showError('Invite Expired', error.message);
+        } else if (error.status === 410) {
+            showError('Invite Expired', error.message || 'This invite is no longer valid.');
+        } else if (error.status === 409) {
+            showError('Already a Member', 'You\'re already on this team. Open the app to get started.');
         } else {
             showError('Error Loading Invite', 'Something went wrong. Please try again later.');
         }

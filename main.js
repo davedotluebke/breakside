@@ -66,36 +66,73 @@ if ('serviceWorker' in navigator && swDisabledForDev) {
     console.log('Service Worker: disabled on localhost (dev)');
 }
 
+/**
+ * Whether it's unsafe to auto-reload the page right now — i.e. a game is on
+ * screen or narration is recording/connecting, where a reload would drop
+ * unsaved in-memory state and the live narration socket. Used to gate the
+ * service-worker update reload below.
+ */
+function isReloadUnsafe() {
+    try {
+        if (window.narrationEngine && typeof window.narrationEngine.getPhase === 'function'
+            && window.narrationEngine.getPhase() !== 'idle') {
+            return true;
+        }
+        if (typeof isGameScreenVisible === 'function' && isGameScreenVisible()) {
+            return true;
+        }
+    } catch (_) {
+        // Be conservative but never throw from inside a SW lifecycle callback.
+    }
+    return false;
+}
+
 if ('serviceWorker' in navigator && !swDisabledForDev) {
+    // Whether this page is already controlled by a SW at load time. A
+    // controllerchange while we started uncontrolled is the first-visit
+    // activation (clients.claim() on initial install), NOT an update — reloading
+    // for that would be a spurious refresh, so we ignore that case below.
+    const hadControllerAtLoad = !!navigator.serviceWorker.controller;
+    let reloadingForUpdate = false;
+
+    // A new service worker has taken control (an update activated). controllerchange
+    // is the correct signal for "new version is now live" — more reliable than the
+    // installing worker's statechange. Reload so the page runs the new assets, but
+    // never mid-game/mid-recording where the reload would lose data.
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloadingForUpdate) return;
+        if (!hadControllerAtLoad) return;  // first-visit claim, not an update
+        if (isReloadUnsafe()) {
+            console.log('Service Worker: update ready, deferring reload (game/recording active)');
+            window.__breaksideUpdatePending = true;
+            return;
+        }
+        reloadingForUpdate = true;
+        console.log('Service Worker: new version activated, reloading');
+        window.location.reload();
+    });
+
     window.addEventListener('load', () => {
         navigator.serviceWorker
             .register('./service-worker.js')
             .then(reg => {
                 console.log('Service Worker: Registered');
-                
+
                 // Store registration globally for manual update checks
                 window.swRegistration = reg;
-                
+
                 // Check for updates immediately
                 reg.update().catch(err => console.log('SW update check failed:', err));
-                
+
                 // Check for updates periodically (every 5 minutes while app is open)
                 setInterval(() => {
                     reg.update().catch(err => console.log('SW update check failed:', err));
                 }, 5 * 60 * 1000);
-                
-                // Listen for new service worker installing
+
+                // Log when a new worker is found; the actual reload is handled by
+                // the controllerchange listener above (gated on isReloadUnsafe()).
                 reg.addEventListener('updatefound', () => {
-                    const newWorker = reg.installing;
                     console.log('Service Worker: Update found, installing...');
-                    
-                    newWorker.addEventListener('statechange', () => {
-                        if (newWorker.state === 'activated') {
-                            console.log('Service Worker: New version activated, reloading...');
-                            // Reload to get the new version
-                            window.location.reload();
-                        }
-                    });
                 });
             })
             .catch(err => console.log(`Service Worker Error: ${err}`));
@@ -155,8 +192,10 @@ async function forceAppUpdate() {
         const cacheNames = await caches.keys();
         await Promise.all(cacheNames.map(name => caches.delete(name)));
         
-        // Reload the page to get the new version
-        window.location.reload(true);
+        // Reload the page to get the new version. (The legacy reload(true)
+        // forced-reload argument is a no-op in modern browsers; the cache clear
+        // above is what actually refreshes assets.)
+        window.location.reload();
     } catch (error) {
         console.error('Error forcing update:', error);
         alert('Update failed: ' + error.message);
@@ -171,12 +210,19 @@ window.forceAppUpdate = forceAppUpdate;
 /********************************** Auth Initialization ***********************/
 /******************************************************************************/
 
+// Test mode (?testMode=true) exists only for local dev / agent debug servers.
+// It must be a NO-OP against production and staging, where it would otherwise
+// be an auth bypass. Allow it only on localhost / 127.0.0.1.
+function isTestModeAllowed() {
+    return ['localhost', '127.0.0.1'].includes(location.hostname);
+}
+
 // Initialize authentication
 async function initializeApp() {
     // Test mode: skip Supabase auth and inject a fake session.
-    // Activated via ?testMode=true URL parameter.
+    // Activated via ?testMode=true URL parameter (localhost only).
     // Optional ?testUserId=<id> sets the user identity (for multi-coach tests).
-    if (new URLSearchParams(window.location.search).get('testMode') === 'true') {
+    if (isTestModeAllowed() && new URLSearchParams(window.location.search).get('testMode') === 'true') {
         const params = new URLSearchParams(window.location.search);
         const testUserId = params.get('testUserId') || 'test-user';
         console.log('[Test] Test mode: injecting fake auth session for', testUserId);
@@ -282,8 +328,8 @@ function hideAuthScreenAndShowApp() {
  * Different messaging for desktop vs mobile
  */
 function showPwaInstallPrompt() {
-    // Dev test mode (?testMode=true): never nag about installing to home screen.
-    if (new URLSearchParams(window.location.search).get('testMode') === 'true') {
+    // Dev test mode (?testMode=true, localhost only): never nag about installing.
+    if (isTestModeAllowed() && new URLSearchParams(window.location.search).get('testMode') === 'true') {
         return;
     }
     // Don't show if already dismissed or if running as installed PWA
@@ -369,9 +415,51 @@ window.addEventListener('beforeinstallprompt', (e) => {
     window.deferredInstallPrompt = e;
 });
 
-// Initialize the app when DOM is ready
-// Note: We delay this slightly to ensure all modules are loaded
-setTimeout(initializeApp, 100);
+// Initialize the app once the DOM is ready and the auth module has loaded.
+//
+// Classic <script> tags execute in source order before DOMContentLoaded, so by
+// then window.breakside.auth is normally defined. A fixed 100ms timer used to
+// race this: on a slow/cold load the auth module might not be ready yet and a
+// logged-in user was silently dropped into offline mode. Instead we wait for an
+// explicit readiness signal — the auth symbol — polling briefly as a fallback.
+function startAppInitialization() {
+    const authReady = () => !!(window.breakside && window.breakside.auth
+        && typeof window.breakside.auth.initializeAuth === 'function');
+
+    if (authReady()) {
+        initializeApp();
+        return;
+    }
+
+    const POLL_MS = 50;
+    const MAX_WAIT_MS = 10000;
+    let waited = 0;
+    const timer = setInterval(() => {
+        waited += POLL_MS;
+        if (authReady() || waited >= MAX_WAIT_MS) {
+            clearInterval(timer);
+            // Run init even on timeout — initializeApp() handles a missing auth
+            // module by falling back to offline mode.
+            initializeApp();
+        }
+    }, POLL_MS);
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startAppInitialization);
+} else {
+    startAppInitialization();
+}
+
+// Re-render the team-selection screen when the initial team sync completes.
+// auth.js dispatches this instead of relying on a fixed 500ms delay, so the
+// list populates deterministically once server teams have been pulled.
+window.addEventListener('breakside:teams-synced', () => {
+    if (typeof showSelectTeamScreen === 'function' &&
+        document.getElementById('selectTeamScreen')?.style.display !== 'none') {
+        showSelectTeamScreen();
+    }
+});
 
 // =============================================================================
 // App Hamburger Menu
@@ -566,8 +654,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Initial display of countdown timer
-    document.getElementById('countdownTimer').style.display = 'none';
+    // Initial display of countdown timer (null-guard like the rest of this block;
+    // a missing element must not abort the remaining DOMContentLoaded setup).
+    const countdownTimerEl = document.getElementById('countdownTimer');
+    if (countdownTimerEl) countdownTimerEl.style.display = 'none';
     
     // Initialize play-by-play modules
     if (typeof initializeScoreAttributionDialog === 'function') {

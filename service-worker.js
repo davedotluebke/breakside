@@ -31,12 +31,22 @@ self.addEventListener('fetch', e => {
         return;
     }
 
-    // Don't cache API calls
-    if (e.request.url.includes(':8000/') || 
-        e.request.url.includes('api.breakside.pro') ||
-        e.request.url.includes('api.breakside.us')) {
+    let requestUrl;
+    try {
+        requestUrl = new URL(e.request.url);
+    } catch (_) {
+        return;  // non-parseable URL — let the browser handle it untouched
+    }
+
+    // Don't cache API calls. Match by path prefix (covers same-origin /api/* and
+    // any dev backend, e.g. dev-backend.sh's :8001+ ports) plus the known API
+    // hosts — robust where the old substring host/port matching was not.
+    const API_HOSTS = ['api.breakside.pro', 'api.breakside.us'];
+    if (requestUrl.pathname.startsWith('/api/') || API_HOSTS.includes(requestUrl.hostname)) {
         return;
     }
+
+    const isSameOrigin = requestUrl.origin === self.location.origin;
 
     console.log('Service Worker: Fetching', e.request.url);
     e.respondWith(
@@ -44,12 +54,16 @@ self.addEventListener('fetch', e => {
             // Try network first
             fetch(e.request)
                 .then(networkResponse => {
-                    // Clone the response before caching it
-                    const responseClone = networkResponse.clone();
-                    caches.open(cacheName)
-                        .then(cache => {
-                            cache.put(e.request, responseClone);
-                        });
+                    // Only cache successful, same-origin GET responses. Caching
+                    // error responses (404/500) or opaque cross-origin responses
+                    // would let stale/invalid content be served offline as valid.
+                    if (isSameOrigin && networkResponse && networkResponse.ok) {
+                        const responseClone = networkResponse.clone();
+                        caches.open(cacheName)
+                            .then(cache => {
+                                cache.put(e.request, responseClone);
+                            });
+                    }
                     return networkResponse;
                 }),
             // Timeout after 5 seconds
