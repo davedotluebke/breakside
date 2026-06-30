@@ -311,10 +311,10 @@ body.game-screen-active header {
     height: 36px;
     padding: 0;
     margin: 0;
-    background: rgba(255,255,255,0.15);
+    background: rgba(0,0,0,0.06);
     border: none;
     border-radius: 6px;
-    color: #fff;
+    color: #4a4a4a;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -324,7 +324,7 @@ body.game-screen-active header {
 }
 
 .header-menu-btn:hover {
-    background: rgba(255,255,255,0.25);
+    background: rgba(0,0,0,0.12);
 }
 
 /* Menu dropdown container */

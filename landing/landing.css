@@ -79,9 +79,10 @@ body {
     left: 0;
     right: 0;
     z-index: 100;
-    background: rgba(17, 24, 39, 0.9);
+    background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
 }
 
 .nav-content {
@@ -102,14 +103,8 @@ body {
 }
 
 .nav-logo-img {
-    height: 36px;
+    height: 40px;
     width: auto;
-}
-
-.nav-logo-text {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--brand-orange);
 }
 
 .nav-links {
@@ -119,7 +114,7 @@ body {
 }
 
 .nav-link {
-    color: var(--gray-300);
+    color: var(--gray-700);
     text-decoration: none;
     font-weight: 500;
     font-size: 0.9rem;
