@@ -41,6 +41,22 @@ function getFlag(id) {
 }
 
 /**
+ * Gate event-recording on the global Active-Coach role (or solo / no-roles
+ * fallback handled by canEditPlayByPlay). Surfaces a toast and returns false so
+ * the caller can early-out. Mirrors requireActiveCoach() in fullPbp/fieldPbp —
+ * the score dialog's Score/Callahan commits are real event-recording paths and
+ * must obey the same role gate. Defaults to allowed if the helper isn't loaded.
+ */
+function requireActiveCoach() {
+    const ok = (typeof window.canEditPlayByPlay === 'function')
+        ? window.canEditPlayByPlay() : true;
+    if (!ok && typeof showControllerToast === 'function') {
+        showControllerToast('Only the Active Coach can record events', 'warning', 2200);
+    }
+    return ok;
+}
+
+/**
  * Initialize score attribution dialog event handlers
  * Should be called after DOM is ready
  */
@@ -85,27 +101,30 @@ function initializeScoreAttributionDialog() {
 
     if (callahanBtn) {
         callahanBtn.addEventListener('click', function() {
+            if (!requireActiveCoach()) return;
             const dialog = document.getElementById('scoreAttributionDialog');
-            // Use whichever player is selected (receiver or thrower) as the defender who caught the Callahan
+            // Use whichever player is selected (receiver or thrower) as the
+            // defender who caught the Callahan. Route through the shared
+            // possession core so the event is logged, persisted, AND published
+            // on the narration bus (Full/Field tabs repaint); createDefense
+            // also awards the defender's goal, updates the score, and advances
+            // the point on a Callahan.
             const defender = selectedReceiver || selectedThrower || null;
-            const callahanEvent = new Defense({
-                defender: defender,
-                Callahan: true
+            const callahanEvent = window.pbpPossession.createDefense(defender, {
+                Callahan: true,
+                from: pendingFrom,
+                to: pendingTo
             });
-            const point = getLatestPoint();
-            point.addPossession(new Possession(false));
-            getActivePossession(point).addEvent(callahanEvent);
-
-            // Award goal to the defender who caught the Callahan
-            if (defender) {
-                defender.goals++;
-            } else {
-                console.log("Warning: no defender selected for Callahan");
+            if (!defender) console.log('Warning: no defender selected for Callahan');
+            if (dialog) dialog.style.display = 'none';
+            if (!callahanEvent) {
+                // No defender → createDefense no-ops. Preserve the legacy
+                // behavior of still scoring + advancing on an unattributed
+                // Callahan (the button is normally only enabled with one
+                // player selected, so this is a rare fallback).
+                if (typeof updateScore === 'function') updateScore(Role.TEAM);
+                if (typeof moveToNextPoint === 'function') moveToNextPoint();
             }
-
-            updateScore(Role.TEAM);
-            dialog.style.display = 'none';
-            moveToNextPoint();
         });
     }
 
@@ -342,11 +361,13 @@ function updateScoreButtonState() {
  */
 function commitScoreAttribution() {
     if (!selectedThrower || !selectedReceiver) return;
+    // Recording a goal is gated on the Active-Coach role, same as every other
+    // event-entry surface (Field/Full re-check before committing). Without this
+    // a line coach reaching the dialog could commit a score.
+    if (!requireActiveCoach()) return;
     const dialog = document.getElementById('scoreAttributionDialog');
 
-    const scoreEvent = new Throw({
-        thrower: selectedThrower,
-        receiver: selectedReceiver,
+    const opts = {
         score: true,
         huck: getFlag('huckFlag'),
         breakmark: getFlag('breakFlag'),
@@ -355,12 +376,29 @@ function commitScoreAttribution() {
         hammer: getFlag('hammerFlag'),
         from: pendingFrom,
         to: pendingTo
-    });
+    };
 
-    // Attach to the current offensive possession if one exists, otherwise
-    // create a new offensive possession. Previously this always created a
-    // new possession, which would orphan any in-point events the user
-    // entered via Full PBP / narration earlier.
+    // Route through the shared possession core so the scoring throw is recorded
+    // identically to every other PBP surface: completedPasses + assist (thrower)
+    // + goal (receiver) stats, logged, persisted, AND published on the narration
+    // bus (so Full/Field repaint), plus updateScore + moveToNextPoint on score.
+    // (The old path built a raw Throw and never published to the bus.)
+    if (window.pbpPossession && typeof window.pbpPossession.createThrow === 'function') {
+        window.pbpPossession.createThrow(selectedThrower, selectedReceiver, opts);
+        if (dialog) dialog.style.display = 'none';
+        return;
+    }
+
+    // Fallback if the shared core isn't loaded: build the scoring throw
+    // directly (mirrors createThrow's stat bookkeeping) and advance the point.
+    const scoreEvent = new Throw({
+        thrower: selectedThrower,
+        receiver: selectedReceiver,
+        score: true,
+        huck: opts.huck, breakmark: opts.breakmark, sky: opts.sky,
+        layout: opts.layout, hammer: opts.hammer,
+        from: opts.from, to: opts.to
+    });
     const possession = (typeof ensurePossessionExists === 'function')
         ? ensurePossessionExists(true)
         : (() => {
@@ -370,18 +408,14 @@ function commitScoreAttribution() {
             return p;
         })();
     possession.addEvent(scoreEvent);
-
-    // Stats: scoring throw counts as a completed pass for the thrower,
-    // an assist for them, and a goal for the receiver. (The old version
-    // skipped the completedPass increment — fixed here while we're at it
-    // so Simple-mode + Full-PBP score events update stats identically.)
     if (typeof selectedThrower.completedPasses !== 'number') {
         selectedThrower.completedPasses = 0;
     }
     selectedThrower.completedPasses += 1;
     selectedThrower.assists = (selectedThrower.assists || 0) + 1;
     selectedReceiver.goals = (selectedReceiver.goals || 0) + 1;
-
+    if (typeof logEvent === 'function') logEvent(scoreEvent.summarize());
+    if (window.narrationEventBus) window.narrationEventBus.publish('eventAdded', { event: scoreEvent });
     updateScore(Role.TEAM);
     if (dialog) dialog.style.display = 'none';
     moveToNextPoint();
