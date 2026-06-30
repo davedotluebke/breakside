@@ -106,6 +106,8 @@ try:
         require_game_team_coach,
         require_game_team_access,
         require_player_edit_access,
+        require_player_read_access,
+        assert_player_edit_access,
     )
 except ImportError:
     # Try absolute import (when running as package)
@@ -204,6 +206,8 @@ except ImportError:
         require_game_team_coach,
         require_game_team_access,
         require_player_edit_access,
+        require_player_read_access,
+        assert_player_edit_access,
     )
 
 # Create FastAPI app
@@ -1648,37 +1652,75 @@ async def create_player(
     
     If 'id' is provided in the body, it will be used (for offline-created players).
     Otherwise, an ID will be generated from the name.
-    
-    Requires: Any authenticated user can create players.
+
+    Requires: Coach access. Supplying an existing player's `id` overwrites
+    that player, so the caller must be a Coach of a team that player is on
+    (closing the hole where any authed user could overwrite any player).
     """
     if "name" not in player_data:
         raise HTTPException(status_code=400, detail="Player name is required")
-    
+
     # Check if client provided an ID (offline creation)
     provided_id = player_data.get('id')
-    
+    if provided_id:
+        validate_id(provided_id, "player id")
+
+    # Authorize: overwriting an existing player requires edit access to it;
+    # creating a brand-new player requires being a coach of some team.
+    assert_player_edit_access(
+        user,
+        provided_id if (provided_id and player_exists(provided_id)) else None,
+    )
+
     # If ID was provided and already exists, this is an update/sync
     if provided_id and player_exists(provided_id):
         update_player(provided_id, player_data)
         return {"status": "updated", "player_id": provided_id, "player": get_player(provided_id)}
-    
+
     player_id = save_player(player_data, provided_id)
     return {"status": "created", "player_id": player_id, "player": get_player(player_id)}
 
 
 @app.get("/api/players")
-async def list_players_endpoint():
-    """List all players."""
-    players = list_players()
+async def list_players_endpoint(user: Optional[dict] = Depends(get_optional_user)):
+    """
+    List players visible to the caller.
+
+    Player records are private: returns only players on teams the user has
+    access to. Admins see all; anonymous callers get an empty list.
+    """
+    if not user:
+        return {"players": [], "count": 0}
+
+    if is_admin(user["id"]):
+        players = list_players()
+        return {"players": players, "count": len(players)}
+
+    # Union of rosters across teams the user is a member of (coach or viewer).
+    seen: Dict[str, dict] = {}
+    for team_id in get_user_teams(user["id"]):
+        try:
+            for player in get_team_players(team_id):
+                pid = player.get("id")
+                if pid:
+                    seen[pid] = player
+        except FileNotFoundError:
+            continue
+
+    players = sorted(seen.values(), key=lambda p: p.get("name", "").lower())
     return {"players": players, "count": len(players)}
 
 
 @app.get("/api/players/{player_id}")
-async def get_player_endpoint(player_id: str):
-    """Get a player by ID."""
+async def get_player_endpoint(player_id: str, user: dict = Depends(require_player_read_access)):
+    """
+    Get a player by ID.
+
+    Requires: membership (coach or viewer) of a team the player is on.
+    """
     if not player_exists(player_id):
         raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
-    
+
     return get_player(player_id)
 
 
@@ -1715,18 +1757,26 @@ async def delete_player_endpoint(player_id: str, user: dict = Depends(require_pl
 
 
 @app.get("/api/players/{player_id}/games")
-async def get_player_games_endpoint(player_id: str):
-    """Get all games a player has participated in."""
+async def get_player_games_endpoint(player_id: str, user: dict = Depends(require_player_read_access)):
+    """
+    Get all games a player has participated in.
+
+    Requires: membership (coach or viewer) of a team the player is on.
+    """
     if not player_exists(player_id):
         raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
-    
+
     game_ids = get_player_games(player_id)
     return {"player_id": player_id, "game_ids": game_ids, "count": len(game_ids)}
 
 
 @app.get("/api/players/{player_id}/teams")
-async def get_player_teams_endpoint(player_id: str):
-    """Get all teams a player belongs to."""
+async def get_player_teams_endpoint(player_id: str, user: dict = Depends(require_player_read_access)):
+    """
+    Get all teams a player belongs to.
+
+    Requires: membership (coach or viewer) of a team the player is on.
+    """
     if not player_exists(player_id):
         raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
     
