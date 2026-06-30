@@ -69,10 +69,16 @@ aws s3 cp "$STAGED_VERSION" "s3://$BUCKET/version.json" \
   --content-type "application/json"
 rm -f "$STAGED_VERSION"
 
-# Upload service worker with no-cache headers
-aws s3 cp "$DIR/service-worker.js" "s3://$BUCKET/service-worker.js" \
+# Upload service worker with a per-deploy cache name so it registers as an
+# update (purging old CacheStorage on activate) on every staging deploy — the
+# committed build number doesn't change on staging. Served with no-cache headers.
+STAGED_SW=$(mktemp)
+sed "s/^const cacheName = '\([^']*\)';/const cacheName = '\1-stg-$STAMP';/" \
+  "$DIR/service-worker.js" > "$STAGED_SW"
+aws s3 cp "$STAGED_SW" "s3://$BUCKET/service-worker.js" \
   --cache-control "no-cache, no-store, must-revalidate" \
   --content-type "application/javascript"
+rm -f "$STAGED_SW"
 
 # Sync viewer files
 aws s3 sync "$DIR/ultistats_server/static/viewer/" "s3://$BUCKET/viewer/"
