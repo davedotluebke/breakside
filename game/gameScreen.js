@@ -1986,40 +1986,6 @@ function hideGameEventsModal() {
 }
 
 /**
- * Update Game Events modal button states based on current game state
- */
-function updateGameEventsModalState() {
-    const point = getLatestPoint();
-    const duringPoint = point && point.startTimestamp && !point.endTimestamp;
-    
-    // Timeout: available anytime
-    const timeoutBtn = document.getElementById('geTimeoutBtn');
-    if (timeoutBtn) {
-        timeoutBtn.disabled = false;
-        timeoutBtn.classList.remove('disabled');
-    }
-
-    // Injury Sub: only DURING a point (mid-point sub mechanism)
-    const injurySubBtn = document.getElementById('geInjurySubBtn');
-    if (injurySubBtn) {
-        injurySubBtn.disabled = !duringPoint;
-        injurySubBtn.classList.toggle('disabled', !duringPoint);
-    }
-
-    // Half Time, Switch Sides, End Game: only between points
-    const halfTimeBtn = document.getElementById('geHalfTimeBtn');
-    const switchSidesBtn = document.getElementById('geSwitchSidesBtn');
-    const endGameBtn = document.getElementById('geEndGameBtn');
-
-    [halfTimeBtn, switchSidesBtn, endGameBtn].forEach(btn => {
-        if (btn) {
-            btn.disabled = duringPoint;
-            btn.classList.toggle('disabled', duringPoint);
-        }
-    });
-}
-
-/**
  * Handle Injury Sub from the Game Events modal. Routes through
  * handlePbpSubPlayers so the role check + point-in-progress guard +
  * sub-players modal all work the same as Simple mode's top-level Sub
@@ -2488,29 +2454,39 @@ function applyStartPointButtonState(btn, showPointInProgress = true) {
 }
 
 /**
- * Update Game Events modal button states based on point status
- * - Timeout: enabled anytime (can be called during or between points)
+ * Update Game Events modal button states. Single source of truth — gates on
+ * both the Active Coach role and point status:
+ * - Timeout: enabled anytime (during or between points), Active Coach only
+ * - Injury Sub: enabled only DURING a point (mid-point sub mechanism)
  * - Halftime, Switch Sides, End Game: enabled BETWEEN points only
  */
 function updateGameEventsModalState() {
     const modal = document.getElementById('gameEventsModal');
     if (!modal || modal.style.display === 'none') return;
-    
+
     const hasActiveCoachRole = canEditPlayByPlayPanel();
     const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
-    
+
     // Timeout - enabled anytime (can be called during or between points)
     const timeoutBtn = modal.querySelector('#geTimeoutBtn');
     if (timeoutBtn) {
         timeoutBtn.disabled = !hasActiveCoachRole;
         timeoutBtn.classList.toggle('disabled', !hasActiveCoachRole);
     }
-    
+
+    // Injury Sub - only DURING a point (mid-point sub mechanism)
+    const injurySubBtn = modal.querySelector('#geInjurySubBtn');
+    if (injurySubBtn) {
+        const injuryEnabled = hasActiveCoachRole && pointInProgress;
+        injurySubBtn.disabled = !injuryEnabled;
+        injurySubBtn.classList.toggle('disabled', !injuryEnabled);
+    }
+
     // Halftime, Switch Sides, End Game - enabled BETWEEN points only
     const halfTimeBtn = modal.querySelector('#geHalfTimeBtn');
     const switchSidesBtn = modal.querySelector('#geSwitchSidesBtn');
     const endGameBtn = modal.querySelector('#geEndGameBtn');
-    
+
     const betweenPointsEnabled = hasActiveCoachRole && !pointInProgress;
     [halfTimeBtn, switchSidesBtn, endGameBtn].forEach(btn => {
         if (btn) {
