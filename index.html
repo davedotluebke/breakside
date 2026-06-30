@@ -2,12 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Breakside - Ultimate Frisbee Tracker</title>
 
     <!-- PWA Meta Tags -->
     <meta name="description" content="A PWA for tracking Ultimate Frisbee games and team statistics.">
-    <!-- White theme to match the clean white header; status bar uses dark glyphs for legibility on white -->
+    <!-- White theme to match the clean white header. NOTE: no viewport-fit=cover —
+         the app has several top-anchored fixed elements (countdown timer, toasts)
+         that aren't safe-area aware, so we keep the layout viewport below the notch.
+         status-bar-style "default" gives a white status bar with dark glyphs. -->
     <meta name="theme-color" content="#ffffff">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">

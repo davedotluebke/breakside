@@ -302,12 +302,18 @@ body.game-screen-active header {
     padding: 6px 12px;
 }
 
-/* Staging badge in the in-game header — pinned top-right; may overlap the
-   timer readout (acceptable). Shown only on staging via body.staging rule. */
+/* Staging badge in the in-game header — anchored within the title row at the
+   right, overlapping the timer readout (acceptable). pointer-events:none so taps
+   pass through to the timer. Shown only on staging via the body.staging rule. */
+.panel-header .header-content-row {
+    position: relative;
+}
+
 .header-staging-pill--game {
     position: absolute;
-    top: calc(env(safe-area-inset-top, 0px) + 6px);
-    right: 10px;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
     z-index: 5;
     pointer-events: none;
 }
