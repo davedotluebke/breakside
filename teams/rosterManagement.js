@@ -5,6 +5,20 @@
  * Phase 4 update: Player IDs, cloud sync for player creation/updates
  */
 
+// Whether developer debug affordances (e.g. the raw player-ID display in the
+// edit-player dialog) should be shown. Off by default in production; enable
+// with ?debug=true in the URL or localStorage 'breakside_debug'='true'.
+function isDebugEnabled() {
+    try {
+        if (localStorage.getItem('breakside_debug') === 'true') return true;
+    } catch (e) { /* localStorage unavailable */ }
+    try {
+        return new URLSearchParams(window.location.search).get('debug') === 'true';
+    } catch (e) {
+        return false;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Roster stats scope + sorting state
 //
@@ -1066,28 +1080,39 @@ function showEditPlayerDialog(player, options = {}) {
     if (nameInput) nameInput.value = player.name;
     if (numberInput) numberInput.value = player.number || '';
     
-    // Phase 4: Show player ID for debugging
+    // Player ID display — a debugging affordance, gated off in production.
+    // Enable with ?debug=true in the URL or localStorage 'breakside_debug'='true'.
     let playerIdDisplay = document.getElementById('editPlayerIdDisplay');
-    if (!playerIdDisplay) {
-        // Create the ID display element if it doesn't exist
-        const container = dialog.querySelector('.edit-player-container');
-        if (container) {
-            const idField = document.createElement('div');
-            idField.className = 'edit-player-field edit-player-id-field';
-            idField.innerHTML = `
-                <label>Player ID:</label>
-                <code id="editPlayerIdDisplay" class="player-id-code">${player.id || 'No ID'}</code>
-            `;
-            container.insertBefore(idField, container.firstChild);
-            playerIdDisplay = document.getElementById('editPlayerIdDisplay');
+    if (isDebugEnabled()) {
+        if (!playerIdDisplay) {
+            // Create the ID display element if it doesn't exist. Build the label
+            // statically and set the id via textContent (never interpolate the
+            // user-derived player.id into innerHTML).
+            const container = dialog.querySelector('.edit-player-container');
+            if (container) {
+                const idField = document.createElement('div');
+                idField.className = 'edit-player-field edit-player-id-field';
+                const label = document.createElement('label');
+                label.textContent = 'Player ID:';
+                const code = document.createElement('code');
+                code.id = 'editPlayerIdDisplay';
+                code.className = 'player-id-code';
+                code.textContent = player.id || 'No ID';
+                idField.appendChild(label);
+                idField.appendChild(code);
+                container.insertBefore(idField, container.firstChild);
+                playerIdDisplay = code;
+            }
+        } else {
+            playerIdDisplay.textContent = player.id || 'No ID';
         }
-    } else {
-        playerIdDisplay.textContent = player.id || 'No ID';
     }
 
-    // Hide player ID display for pickup context
+    // Hide player ID display for pickup context (or entirely when not debugging)
     const idField = playerIdDisplay ? playerIdDisplay.closest('.edit-player-id-field') : null;
-    if (idField) idField.style.display = options.context === 'pickup' ? 'none' : '';
+    if (idField) {
+        idField.style.display = (!isDebugEnabled() || options.context === 'pickup') ? 'none' : '';
+    }
 
     // Set gender button states
     if (fmpBtn && mmpBtn) {
