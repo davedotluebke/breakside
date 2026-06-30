@@ -513,15 +513,39 @@ class Pull extends Event {
     }
 }
 
+// Which play-by-play surface ('simple' | 'full' | 'field') is active right now,
+// per the UI. Returns null when the panel system hasn't loaded yet (e.g. during
+// deserialization), in which case callers leave `modes` empty / overwrite it
+// from stored data. Lives here so Point/Possession can self-stamp the recording
+// mode at creation without each call site having to thread it in.
+function captureCurrentMode() {
+    return (typeof window !== 'undefined' && typeof window.getCurrentMode === 'function')
+        ? window.getCurrentMode()
+        : null;
+}
+
 // Possession class
 class Possession {
     constructor(offensive) {
         this.offensive = offensive; // true for offensive, false for defensive
         this.events = [];
+        // Distinct PBP modes ('simple' | 'full' | 'field') that were active at
+        // any time during this possession, in first-seen order. Drives later
+        // analytics: e.g. 'field' alone => location data for every throw;
+        // 'simple' present => individual throws likely weren't all recorded.
+        this.modes = [];
+        this.addMode(captureCurrentMode());
     }
 
     addEvent(event) {
         this.events.push(event);
+    }
+
+    // Record that `mode` was active during this possession (deduped).
+    addMode(mode) {
+        if (mode && !this.modes.includes(mode)) {
+            this.modes.push(mode);
+        }
     }
 }
 
@@ -531,16 +555,27 @@ class Point {
         this.possessions = [];
         this.players = playingPlayers;  // An array of player names who played the point
         this.startingPosition = startOn;  // Either 'offense' or 'defense'
-        this.winner = "";  // Either 'team' or 'opponent'     
+        this.winner = "";  // Either 'team' or 'opponent'
         this.startTimestamp = null;
         this.endTimestamp = null;
         this.totalPointTime = 0;  // Accumulated time tracking
         this.lastPauseTime = null;  // Track when the point was last paused
         this.substitutedOutPlayers = [];  // Players who were subbed out mid-point (for injury/fatigue)
+        // Distinct PBP modes ('simple' | 'full' | 'field') active at any time
+        // during this point (union across its possessions). See Possession.modes.
+        this.modes = [];
+        this.addMode(captureCurrentMode());
     }
 
     addPossession(possession) {
         this.possessions.push(possession);
+    }
+
+    // Record that `mode` was active during this point (deduped).
+    addMode(mode) {
+        if (mode && !this.modes.includes(mode)) {
+            this.modes.push(mode);
+        }
     }
 }
 
