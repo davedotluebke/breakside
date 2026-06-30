@@ -178,9 +178,15 @@ async function populateCloudTeamsAndGames() {
     const listElement = document.getElementById('cloudTeamsList');
     if (!listElement) return;
 
-    // Check if user is authenticated
-    if (!window.breakside?.auth?.isAuthenticated?.()) {
-        listElement.innerHTML = '<p>Please sign in to view your teams.</p>';
+    // Check if user is authenticated. Fetching cloud teams needs a live
+    // session + connectivity, so we still can't proceed here — but tell an
+    // offline / Supabase-down user that rather than wrongly nagging them to
+    // sign in (they may already be signed in, just offline).
+    const auth = window.breakside?.auth;
+    if (!auth?.isAuthenticated?.()) {
+        listElement.innerHTML = (auth?.canActOffline?.() ?? !navigator.onLine)
+            ? '<p>You\'re offline. Your teams will load when you\'re back online.</p>'
+            : '<p>Please sign in to view your teams.</p>';
         return;
     }
 
@@ -666,6 +672,17 @@ async function deleteCloudTeam(team) {
  * Resume a game from the cloud
  * Loads the game data and enters the appropriate screen
  */
+/**
+ * Whether a game record matches the given canonical game id. The local Game
+ * `.id` is canonical and the server mirrors it as `game_id`; call sites pass
+ * the server `game_id`. Normalize so dedupe works whether a record carries
+ * `.id`, `.game_id`, or both — otherwise a divergence pushes the same game
+ * twice into `currentTeam.games`.
+ */
+function gameMatchesId(g, gameId) {
+    return !!g && (g.id === gameId || g.game_id === gameId);
+}
+
 async function resumeCloudGame(cloudTeam, gameId, role) {
     console.log('📥 Resuming cloud game:', gameId, role ? `(${role})` : '');
 
@@ -689,7 +706,7 @@ async function resumeCloudGame(cloudTeam, gameId, role) {
         }
         
         // Check if this game already exists in the local team
-        const existingIndex = currentTeam.games.findIndex(g => g.id === gameId);
+        const existingIndex = currentTeam.games.findIndex(g => gameMatchesId(g, gameId));
         if (existingIndex !== -1) {
             // Remove existing game from its current position
             currentTeam.games.splice(existingIndex, 1);
@@ -749,7 +766,7 @@ async function openCompletedGameSummary(cloudTeam, gameId) {
         }
 
         // Ensure game is in local state
-        const existingIndex = currentTeam.games.findIndex(g => g.id === gameId);
+        const existingIndex = currentTeam.games.findIndex(g => gameMatchesId(g, gameId));
         if (existingIndex !== -1) {
             currentTeam.games.splice(existingIndex, 1);
         }
@@ -916,20 +933,68 @@ function initializeTeamSelection() {
                 return;
             }
             
-            // Check if user is authenticated
-            if (!window.breakside?.auth?.isAuthenticated?.()) {
+            // Offline-first: only hard-block when the user is genuinely signed
+            // out *and* online (i.e. we can reach Supabase and confirmed there's
+            // no session). Offline / Supabase-down falls through to the local
+            // create + queue-for-sync path below.
+            const auth = window.breakside?.auth;
+            const isAuthed = auth?.isAuthenticated?.() === true;
+            const canOffline = auth?.canActOffline?.() ?? !navigator.onLine;
+            if (!isAuthed && !canOffline) {
                 alert('Please sign in to create a team.');
                 return;
             }
-            
+
             // Disable button while creating
             saveNewTeamBtn.disabled = true;
             saveNewTeamBtn.textContent = 'Creating...';
-            
+
+            // Shared offline fallback: create the team locally and queue for sync.
+            const createTeamLocally = () => {
+                console.log('📴 Offline - creating team locally and queueing for sync');
+                const newTeam = new Team(newTeamName);
+                teams.push(newTeam);
+                currentTeam = newTeam;
+
+                if (typeof createTeamOffline === 'function') {
+                    createTeamOffline({
+                        id: newTeam.id,
+                        name: newTeam.name,
+                        playerIds: newTeam.playerIds || [],
+                        lines: newTeam.lines || []
+                    });
+                }
+
+                if (typeof saveAllTeamsData === 'function') {
+                    saveAllTeamsData();
+                }
+                if (typeof updateTeamRosterDisplay === 'function') {
+                    updateTeamRosterDisplay();
+                }
+
+                const modal = document.getElementById('createTeamModal');
+                if (modal) {
+                    modal.style.display = 'none';
+                }
+                if (input) {
+                    input.value = '';
+                }
+
+                showScreen('teamRosterScreen');
+                alert('Team created locally. It will sync to the cloud when you\'re back online.');
+            };
+
             try {
+                // Not authenticated but allowed to act offline (offline or
+                // Supabase unreachable): skip the server round-trip entirely.
+                if (!isAuthed) {
+                    createTeamLocally();
+                    return;
+                }
+
                 // Phase 6b: Create team on cloud first
                 const newTeam = new Team(newTeamName);
-                
+
                 // Create on server
                 const response = await authFetch(`${API_BASE_URL}/api/teams`, {
                     method: 'POST',
@@ -940,27 +1005,27 @@ function initializeTeamSelection() {
                         lines: newTeam.lines || []
                     })
                 });
-                
+
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.detail || `Server error: ${response.status}`);
                 }
-                
+
                 const result = await response.json();
                 console.log('✅ Team created on server:', result);
-                
+
                 // Add to local state
                 teams.push(newTeam);
                 currentTeam = newTeam;
-                
+
                 if (typeof saveAllTeamsData === 'function') {
                     saveAllTeamsData();
                 }
-                
+
                 if (typeof updateTeamRosterDisplay === 'function') {
                     updateTeamRosterDisplay();
                 }
-                
+
                 // Close modal and navigate
                 const modal = document.getElementById('createTeamModal');
                 if (modal) {
@@ -969,45 +1034,15 @@ function initializeTeamSelection() {
                 if (input) {
                     input.value = '';
                 }
-                
+
                 showScreen('teamRosterScreen');
-                
+
             } catch (error) {
                 console.error('Failed to create team:', error);
-                
+
                 // If offline or network error, queue for later sync
                 if (!navigator.onLine || error.message.includes('Failed to fetch')) {
-                    console.log('📴 Offline - creating team locally and queueing for sync');
-                    const newTeam = new Team(newTeamName);
-                    teams.push(newTeam);
-                    currentTeam = newTeam;
-                    
-                    if (typeof createTeamOffline === 'function') {
-                        createTeamOffline({
-                            id: newTeam.id,
-                            name: newTeam.name,
-                            playerIds: newTeam.playerIds || [],
-                            lines: newTeam.lines || []
-                        });
-                    }
-                    
-                    if (typeof saveAllTeamsData === 'function') {
-                        saveAllTeamsData();
-                    }
-                    if (typeof updateTeamRosterDisplay === 'function') {
-                        updateTeamRosterDisplay();
-                    }
-                    
-                    const modal = document.getElementById('createTeamModal');
-                    if (modal) {
-                        modal.style.display = 'none';
-                    }
-                    if (input) {
-                        input.value = '';
-                    }
-                    
-                    showScreen('teamRosterScreen');
-                    alert('Team created locally. It will sync to the cloud when you\'re back online.');
+                    createTeamLocally();
                 } else {
                     alert('Failed to create team: ' + error.message);
                 }
