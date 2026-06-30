@@ -21,8 +21,10 @@ from .jwt_validation import get_current_user, get_optional_user
 # Single source of truth for whether auth is enforced (defaults true).
 try:
     from config import auth_required
+    from validation import validate_id
 except ImportError:
     from ultistats_server.config import auth_required
+    from ultistats_server.validation import validate_id
 
 # Import storage - handle both relative and absolute imports
 try:
@@ -100,11 +102,12 @@ def require_team_coach(team_id_param: str = "team_id") -> Callable:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Missing path parameter: {team_id_param}"
             )
-        
+        validate_id(team_id, "team_id")
+
         # Admins have coach access to all teams
         if is_admin(user["id"]):
                 return user
-        
+
         # Check team membership
         role = get_user_team_role(user["id"], team_id)
         if role != "coach":
@@ -139,11 +142,12 @@ def require_team_access(team_id_param: str = "team_id") -> Callable:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Missing path parameter: {team_id_param}"
             )
-        
+        validate_id(team_id, "team_id")
+
         # Admins have access to all teams
         if is_admin(user["id"]):
                 return user
-        
+
         # Check team membership (any role grants access)
         role = get_user_team_role(user["id"], team_id)
         if role is None:
@@ -178,10 +182,14 @@ async def require_game_team_coach(
         HTTPException 400: If game has no teamId
         HTTPException 403: If user is not a coach for the team
     """
+    # Validate before the auth short-circuit so traversal is rejected even
+    # when auth is disabled for local dev.
+    game_id = request.path_params.get("game_id")
+    if game_id is not None:
+        validate_id(game_id, "game_id")
+
     if not auth_required():
         return user
-
-    game_id = request.path_params.get("game_id")
 
     team_id = None
 
@@ -237,10 +245,12 @@ async def require_game_team_access(
         HTTPException 400: If game has no teamId
         HTTPException 403: If user doesn't have team access
     """
+    game_id = request.path_params.get("game_id")
+    if game_id is not None:
+        validate_id(game_id, "game_id")
+
     if not auth_required():
         return user
-
-    game_id = request.path_params.get("game_id")
 
     if not game_id or not game_exists(game_id):
         raise HTTPException(
@@ -290,13 +300,14 @@ async def require_player_edit_access(
         HTTPException 403: If user is not a coach of any team with this player
     """
     player_id = request.path_params.get("player_id")
-    
+
     if not player_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Missing player_id"
         )
-    
+    validate_id(player_id, "player_id")
+
     # Admin bypass
     if is_admin(user["id"]):
         return user

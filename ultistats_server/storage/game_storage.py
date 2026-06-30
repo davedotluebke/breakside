@@ -29,6 +29,22 @@ except ImportError:
 # the same instant can't interleave and lose each other's edits.
 _SAVE_LOCK = threading.Lock()
 
+
+def _safe_game_dir(game_id: str) -> Path:
+    """Resolve a game's directory and confirm it stays under GAMES_DIR.
+
+    Defense-in-depth against path traversal: the API layer validates IDs
+    against ``^[A-Za-z0-9_-]+$``, but this storage helper independently
+    rejects any ``game_id`` (or ``timestamp``) that would escape GAMES_DIR,
+    so a missed validation upstream still can't read/write outside the games
+    tree. Raises FileNotFoundError on escape (treated as "not found").
+    """
+    base = GAMES_DIR.resolve()
+    candidate = (base / game_id).resolve()
+    if base != candidate and base not in candidate.parents:
+        raise FileNotFoundError(f"Invalid game id: {game_id!r}")
+    return candidate
+
 # odOnDeckLine is the side-agnostic "On Deck" line (point-after-next); it
 # merges with the same per-axis last-writer-wins rule as the O/D/OD lines.
 _LINE_KEYS = ("oLine", "dLine", "odLine", "odOnDeckLine")
@@ -133,7 +149,7 @@ def save_game_version(game_id: str, game_data: dict,
     Returns:
         Path to the version file that was created
     """
-    game_dir = GAMES_DIR / game_id
+    game_dir = _safe_game_dir(game_id)
     game_dir.mkdir(parents=True, exist_ok=True)
     versions_dir = game_dir / "versions"
     versions_dir.mkdir(exist_ok=True)
@@ -240,10 +256,10 @@ def get_game_current(game_id: str) -> dict:
     Raises:
         FileNotFoundError: If game doesn't exist
     """
-    current_file = GAMES_DIR / game_id / "current.json"
+    current_file = _safe_game_dir(game_id) / "current.json"
     if not current_file.exists():
         raise FileNotFoundError(f"Game {game_id} not found")
-    
+
     with open(current_file, 'r') as f:
         return json.load(f)
 
@@ -262,10 +278,14 @@ def get_game_version(game_id: str, timestamp: str) -> dict:
     Raises:
         FileNotFoundError: If version doesn't exist
     """
-    version_file = GAMES_DIR / game_id / "versions" / f"{timestamp}.json"
+    versions_dir = (_safe_game_dir(game_id) / "versions").resolve()
+    version_file = (versions_dir / f"{timestamp}.json").resolve()
+    # Confirm the timestamp didn't escape the versions directory.
+    if versions_dir not in version_file.parents:
+        raise FileNotFoundError(f"Version {timestamp} not found for game {game_id}")
     if not version_file.exists():
         raise FileNotFoundError(f"Version {timestamp} not found for game {game_id}")
-    
+
     with open(version_file, 'r') as f:
         return json.load(f)
 
@@ -303,7 +323,7 @@ def update_game_metadata(game_id: str, updates: dict) -> dict:
     Raises:
         FileNotFoundError: If game doesn't exist
     """
-    current_file = GAMES_DIR / game_id / "current.json"
+    current_file = _safe_game_dir(game_id) / "current.json"
     if not current_file.exists():
         raise FileNotFoundError(f"Game {game_id} not found")
 
@@ -329,7 +349,10 @@ def game_exists(game_id: str) -> bool:
     Returns:
         True if game exists, False otherwise
     """
-    current_file = GAMES_DIR / game_id / "current.json"
+    try:
+        current_file = _safe_game_dir(game_id) / "current.json"
+    except FileNotFoundError:
+        return False
     return current_file.exists()
 
 
@@ -343,10 +366,13 @@ def delete_game(game_id: str) -> bool:
     Returns:
         True if game was deleted, False if it didn't exist
     """
-    game_dir = GAMES_DIR / game_id
+    try:
+        game_dir = _safe_game_dir(game_id)
+    except FileNotFoundError:
+        return False
     if not game_dir.exists():
         return False
-    
+
     shutil.rmtree(game_dir)
     return True
 

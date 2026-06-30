@@ -12,6 +12,7 @@ from datetime import datetime
 # Import config - handle both relative and absolute imports
 try:
     from config import HOST, PORT, DEBUG, ALLOWED_ORIGINS, AUTH_REQUIRED, auth_required
+    from validation import validate_id, safe_static_path
     from storage import (
         # Game storage
         save_game_version,
@@ -109,6 +110,7 @@ try:
 except ImportError:
     # Try absolute import (when running as package)
     from ultistats_server.config import HOST, PORT, DEBUG, ALLOWED_ORIGINS, AUTH_REQUIRED, auth_required
+    from ultistats_server.validation import validate_id, safe_static_path
     from ultistats_server.storage import (
         # Game storage
         save_game_version,
@@ -240,6 +242,43 @@ pwa_static_dirs = ["data", "game", "playByPlay", "screens", "teams", "ui", "util
 # Landing page directory
 landing_dir = pwa_dir / "landing"
 
+# Media types for static file serving (shared by all PWA/landing handlers).
+_STATIC_MEDIA_TYPES = {
+    '.js': 'application/javascript',
+    '.css': 'text/css',
+    '.json': 'application/json',
+    '.html': 'text/html',
+    '.png': 'image/png',
+    '.ico': 'image/x-icon',
+    '.webmanifest': 'application/manifest+json',
+}
+
+
+def _serve_static_file(base_dir: Path, filename: str,
+                       allowed_first_parts: Optional[set] = None) -> FileResponse:
+    """Serve a static file from ``base_dir``, guarding against path traversal.
+
+    If ``allowed_first_parts`` is given, the first path segment must be in that
+    whitelist. In all cases the resolved path is confirmed to stay inside
+    ``base_dir`` (``safe_static_path``) so escapes like ``game/../../secret``
+    that slip past the first-segment whitelist are rejected.
+    """
+    if allowed_first_parts is not None:
+        first_part = filename.split('/')[0] if '/' in filename else filename
+        if first_part not in allowed_first_parts:
+            raise HTTPException(status_code=404, detail="File not found")
+
+    safe_path = safe_static_path(base_dir, filename)
+    if safe_path is None:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    media_type = _STATIC_MEDIA_TYPES.get(safe_path.suffix.lower(), 'application/octet-stream')
+    return FileResponse(safe_path, media_type=media_type)
+
+
+# Whitelisted top-level files/dirs for PWA serving.
+_PWA_ALLOWED_FIRST_PARTS = set(pwa_static_files) | set(pwa_static_dirs)
+
 @app.get("/")
 async def root():
     """Serve the PWA index.html at root (redirects to /ultistats/ for PWA compatibility)"""
@@ -269,28 +308,7 @@ async def app_page():
 @app.get("/app/{filename:path}")
 async def serve_app_file(filename: str):
     """Serve PWA files under /app/ path."""
-    file_path = pwa_dir / filename
-    
-    # Check if it's a known static file or in a known directory
-    first_part = filename.split('/')[0] if '/' in filename else filename
-    
-    if first_part in pwa_static_files or first_part in pwa_static_dirs:
-        if file_path.exists() and file_path.is_file():
-            # Determine media type
-            suffix = file_path.suffix.lower()
-            media_types = {
-                '.js': 'application/javascript',
-                '.css': 'text/css',
-                '.json': 'application/json',
-                '.html': 'text/html',
-                '.png': 'image/png',
-                '.ico': 'image/x-icon',
-                '.webmanifest': 'application/manifest+json',
-            }
-            media_type = media_types.get(suffix, 'application/octet-stream')
-            return FileResponse(file_path, media_type=media_type)
-    
-    raise HTTPException(status_code=404, detail="File not found")
+    return _serve_static_file(pwa_dir, filename, _PWA_ALLOWED_FIRST_PARTS)
 
 
 # =============================================================================
@@ -327,22 +345,7 @@ async def landing_page():
 @app.get("/landing/{filename:path}")
 async def serve_landing_file(filename: str):
     """Serve landing page static files."""
-    file_path = landing_dir / filename
-    
-    if file_path.exists() and file_path.is_file():
-        suffix = file_path.suffix.lower()
-        media_types = {
-            '.js': 'application/javascript',
-            '.css': 'text/css',
-            '.json': 'application/json',
-            '.html': 'text/html',
-            '.png': 'image/png',
-            '.ico': 'image/x-icon',
-        }
-        media_type = media_types.get(suffix, 'application/octet-stream')
-        return FileResponse(file_path, media_type=media_type)
-    
-    raise HTTPException(status_code=404, detail="File not found")
+    return _serve_static_file(landing_dir, filename)
 
 
 # =============================================================================
@@ -373,28 +376,7 @@ async def ultistats_root():
 @app.get("/ultistats/{filename:path}")
 async def serve_ultistats_file(filename: str):
     """Serve PWA files under /ultistats/ path."""
-    file_path = pwa_dir / filename
-    
-    # Check if it's a known static file or in a known directory
-    first_part = filename.split('/')[0] if '/' in filename else filename
-    
-    if first_part in pwa_static_files or first_part in pwa_static_dirs:
-        if file_path.exists() and file_path.is_file():
-            # Determine media type
-            suffix = file_path.suffix.lower()
-            media_types = {
-                '.js': 'application/javascript',
-                '.css': 'text/css',
-                '.json': 'application/json',
-                '.html': 'text/html',
-                '.png': 'image/png',
-                '.ico': 'image/x-icon',
-                '.webmanifest': 'application/manifest+json',
-            }
-            media_type = media_types.get(suffix, 'application/octet-stream')
-            return FileResponse(file_path, media_type=media_type)
-    
-    raise HTTPException(status_code=404, detail="File not found")
+    return _serve_static_file(pwa_dir, filename, _PWA_ALLOWED_FIRST_PARTS)
 
 @app.get("/api")
 async def api_info():
@@ -709,6 +691,7 @@ async def get_event_endpoint(
     user: dict = Depends(get_current_user)
 ):
     """Get an event by ID."""
+    validate_id(event_id, "event_id")
     if not event_exists(event_id):
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
     return get_event(event_id)
@@ -721,6 +704,7 @@ async def update_event_endpoint(
     user: dict = Depends(get_current_user)
 ):
     """Update an event. Requires coach access to the event's team."""
+    validate_id(event_id, "event_id")
     if not event_exists(event_id):
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
 
@@ -744,6 +728,7 @@ async def delete_event_endpoint(
     user: dict = Depends(get_current_user)
 ):
     """Delete an event. Requires coach access to the event's team."""
+    validate_id(event_id, "event_id")
     if not event_exists(event_id):
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
 
@@ -977,9 +962,10 @@ async def get_version(game_id: str, timestamp: str, user: dict = Depends(require
     
     Requires: Coach or Viewer access to the game's team.
     """
+    validate_id(timestamp, "timestamp")
     if not game_exists(game_id):
         raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
-    
+
     try:
         game_data = get_game_version(game_id, timestamp)
         return game_data
@@ -994,9 +980,10 @@ async def restore_version(game_id: str, timestamp: str, user: dict = Depends(req
     
     Requires: Coach access to the game's team.
     """
+    validate_id(timestamp, "timestamp")
     if not game_exists(game_id):
         raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
-    
+
     try:
         game_data = get_game_version(game_id, timestamp)
         save_game_version(game_id, game_data)
@@ -1379,8 +1366,9 @@ async def get_game_by_share(hash: str):
     
     This is a public endpoint - no authentication required.
     """
+    validate_id(hash, "share hash")
     share = get_share_by_hash(hash)
-    
+
     if not share:
         raise HTTPException(status_code=404, detail="Share link not found")
     
@@ -1474,6 +1462,7 @@ async def get_invite_info(code: str):
     Returns team name and role, but not internal details.
     No auth required.
     """
+    validate_id(code, "invite code")
     invite = get_invite_by_code(code.upper())
     
     if not invite:
@@ -1521,6 +1510,7 @@ async def redeem_invite_endpoint(
     
     Creates a team membership for the authenticated user.
     """
+    validate_id(code, "invite code")
     result = redeem_invite(code.upper(), user["id"])
     
     if not result["success"]:
@@ -1999,30 +1989,8 @@ async def get_index_status_endpoint():
 # PWA file serving - MUST be last to avoid catching API routes
 @app.get("/{filename:path}")
 async def serve_pwa_file(filename: str):
-    """Serve PWA files from parent directory."""
-    # Security: only serve known files/directories
-    file_path = pwa_dir / filename
-    
-    # Check if it's a known static file or in a known directory
-    first_part = filename.split('/')[0] if '/' in filename else filename
-    
-    if first_part in pwa_static_files or first_part in pwa_static_dirs:
-        if file_path.exists() and file_path.is_file():
-            # Determine media type
-            suffix = file_path.suffix.lower()
-            media_types = {
-                '.js': 'application/javascript',
-                '.css': 'text/css',
-                '.json': 'application/json',
-                '.html': 'text/html',
-                '.png': 'image/png',
-                '.ico': 'image/x-icon',
-                '.webmanifest': 'application/manifest+json',
-            }
-            media_type = media_types.get(suffix, 'application/octet-stream')
-            return FileResponse(file_path, media_type=media_type)
-    
-    raise HTTPException(status_code=404, detail="File not found")
+    """Serve PWA files from parent directory (only whitelisted files/dirs)."""
+    return _serve_static_file(pwa_dir, filename, _PWA_ALLOWED_FIRST_PARTS)
 
 
 if __name__ == "__main__":
