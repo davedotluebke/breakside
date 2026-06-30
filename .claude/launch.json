@@ -6,6 +6,54 @@
       "runtimeExecutable": "./scripts/dev-server.sh",
       "runtimeArgs": ["3001"],
       "port": 3001
+    },
+    {
+      "name": "field-app",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/Users/luebke/src/ultistats/.claude/nocache-server.py", "3002", "/Users/luebke/src/ultistats/.worktrees/field-position"],
+      "port": 3002
+    },
+    {
+      "name": "on-deck-app",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/Users/luebke/src/ultistats/.claude/nocache-server.py", "3003", "/Users/luebke/src/ultistats/.worktrees/on-deck-line"],
+      "port": 3003
+    },
+    {
+      "name": "landing-refresh-app",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/Users/luebke/src/ultistats/.claude/nocache-server.py", "3004", "/Users/luebke/src/ultistats/.worktrees/landing-refresh"],
+      "port": 3004
+    },
+    {
+      "name": "throws-app",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/Users/luebke/src/ultistats/.claude/nocache-server.py", "3006", "/Users/luebke/src/ultistats/.worktrees/throws-column"],
+      "port": 3006
+    },
+    {
+      "name": "roster-split-app",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/Users/luebke/src/ultistats/.claude/nocache-server.py", "3007", "/Users/luebke/src/ultistats/.worktrees/roster-game-split"],
+      "port": 3007
+    },
+    {
+      "name": "friction-app",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/Users/luebke/src/ultistats/.claude/nocache-server.py", "3009", "/Users/luebke/src/ultistats/.worktrees/test-team-dev-friction"],
+      "port": 3009
+    },
+    {
+      "name": "logo-refresh-app",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/Users/luebke/src/ultistats/.claude/nocache-server.py", "3010", "/Users/luebke/src/ultistats/.worktrees/logo-refresh"],
+      "port": 3010
+    },
+    {
+      "name": "pegman-app",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/Users/luebke/src/ultistats/.claude/nocache-server.py", "3011", "/Users/luebke/src/ultistats/.worktrees/pegman-drag"],
+      "port": 3011
     }
   ]
 }

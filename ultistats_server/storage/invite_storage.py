@@ -49,6 +49,11 @@ except ImportError:
         get_user_team_membership,
     )
 
+from .file_utils import atomic_write_json, entity_lock
+
+# Serializes read-modify-write of the invite index.
+_INDEX_LOCK_KEY = "invite-index"
+
 
 # Human-friendly alphabet (no 0/O/1/I/L)
 INVITE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -91,51 +96,51 @@ def _load_index() -> Dict[str, Any]:
 
 
 def _save_index(index: Dict[str, Any]) -> None:
-    """Save the invite index."""
-    INVITES_DIR.mkdir(parents=True, exist_ok=True)
-    with open(INDEX_FILE, "w") as f:
-        json.dump(index, f, indent=2)
+    """Save the invite index atomically."""
+    atomic_write_json(INDEX_FILE, index)
 
 
 def _update_index_add(invite: Dict[str, Any]) -> None:
-    """Add an invite to the index."""
-    index = _load_index()
-    
+    """Add an invite to the index (serialized read-modify-write)."""
     invite_id = invite["id"]
     code = invite["code"]
     team_id = invite["teamId"]
-    
-    # Add to code index (uppercase for case-insensitive lookup)
-    index["byCode"][code.upper()] = invite_id
-    
-    # Add to team index
-    if team_id not in index["byTeam"]:
-        index["byTeam"][team_id] = []
-    if invite_id not in index["byTeam"][team_id]:
-        index["byTeam"][team_id].append(invite_id)
-    
-    _save_index(index)
+
+    with entity_lock(_INDEX_LOCK_KEY):
+        index = _load_index()
+
+        # Add to code index (uppercase for case-insensitive lookup)
+        index["byCode"][code.upper()] = invite_id
+
+        # Add to team index
+        if team_id not in index["byTeam"]:
+            index["byTeam"][team_id] = []
+        if invite_id not in index["byTeam"][team_id]:
+            index["byTeam"][team_id].append(invite_id)
+
+        _save_index(index)
 
 
 def _update_index_remove(invite: Dict[str, Any]) -> None:
-    """Remove an invite from the index."""
-    index = _load_index()
-    
+    """Remove an invite from the index (serialized read-modify-write)."""
     invite_id = invite["id"]
     code = invite["code"]
     team_id = invite["teamId"]
-    
-    # Remove from code index
-    if code.upper() in index["byCode"]:
-        del index["byCode"][code.upper()]
-    
-    # Remove from team index
-    if team_id in index["byTeam"]:
-        index["byTeam"][team_id] = [i for i in index["byTeam"][team_id] if i != invite_id]
-        if not index["byTeam"][team_id]:
-            del index["byTeam"][team_id]
-    
-    _save_index(index)
+
+    with entity_lock(_INDEX_LOCK_KEY):
+        index = _load_index()
+
+        # Remove from code index
+        if code.upper() in index["byCode"]:
+            del index["byCode"][code.upper()]
+
+        # Remove from team index
+        if team_id in index["byTeam"]:
+            index["byTeam"][team_id] = [i for i in index["byTeam"][team_id] if i != invite_id]
+            if not index["byTeam"][team_id]:
+                del index["byTeam"][team_id]
+
+        _save_index(index)
 
 
 def invite_exists(invite_id: str) -> bool:
@@ -292,14 +297,13 @@ def create_invite(
     
     # Ensure directory exists
     INVITES_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     # Save invite file
-    with open(_invite_file(invite["id"]), "w") as f:
-        json.dump(invite, f, indent=2)
-    
+    atomic_write_json(_invite_file(invite["id"]), invite)
+
     # Update index
     _update_index_add(invite)
-    
+
     return invite
 
 
@@ -343,55 +347,60 @@ def redeem_invite(code: str, user_id: str) -> Dict[str, Any]:
         {"success": False, "error": "...", "reason": "..."} on failure
     """
     invite = get_invite_by_code(code)
-    
+
     if not invite:
         return {"success": False, "error": "Invite not found", "reason": "not_found"}
-    
-    # Check validity
-    reason = get_invite_validity_reason(invite)
-    if reason:
-        error_messages = {
-            "revoked": "This invite has been revoked",
-            "expired": "This invite has expired",
-            "max_uses": "This invite has already been used",
-        }
-        return {
-            "success": False, 
-            "error": error_messages.get(reason, "Invite is no longer valid"),
-            "reason": reason
-        }
-    
-    # Check if user is already a member
-    existing = get_user_team_membership(user_id, invite["teamId"])
-    if existing:
-        return {
-            "success": False,
-            "error": "You're already a member of this team",
-            "reason": "already_member"
-        }
-    
-    # Create membership
-    try:
-        membership = create_membership(
-            team_id=invite["teamId"],
-            user_id=user_id,
-            role=invite["role"],
-            invited_by=invite["createdBy"]
-        )
-    except ValueError as e:
-        return {"success": False, "error": str(e), "reason": "membership_error"}
-    
-    # Update invite usage
-    invite["uses"] = invite.get("uses", 0) + 1
-    invite["usedBy"].append({
-        "userId": user_id,
-        "usedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    })
-    
-    # Save updated invite
-    with open(_invite_file(invite["id"]), "w") as f:
-        json.dump(invite, f, indent=2)
-    
+
+    # Serialize the validity-check + use-increment so two simultaneous redeems
+    # of the same code can't both pass a maxUses check and double-count.
+    with entity_lock(f"invite:{invite['id']}"):
+        # Re-read fresh under the lock in case another redeem just updated it.
+        invite = get_invite(invite["id"]) or invite
+
+        # Check validity
+        reason = get_invite_validity_reason(invite)
+        if reason:
+            error_messages = {
+                "revoked": "This invite has been revoked",
+                "expired": "This invite has expired",
+                "max_uses": "This invite has already been used",
+            }
+            return {
+                "success": False,
+                "error": error_messages.get(reason, "Invite is no longer valid"),
+                "reason": reason
+            }
+
+        # Check if user is already a member
+        existing = get_user_team_membership(user_id, invite["teamId"])
+        if existing:
+            return {
+                "success": False,
+                "error": "You're already a member of this team",
+                "reason": "already_member"
+            }
+
+        # Create membership
+        try:
+            membership = create_membership(
+                team_id=invite["teamId"],
+                user_id=user_id,
+                role=invite["role"],
+                invited_by=invite["createdBy"]
+            )
+        except ValueError as e:
+            return {"success": False, "error": str(e), "reason": "membership_error"}
+
+        # Update invite usage
+        invite["uses"] = invite.get("uses", 0) + 1
+        invite["usedBy"].append({
+            "userId": user_id,
+            "usedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        })
+
+        # Save updated invite atomically
+        atomic_write_json(_invite_file(invite["id"]), invite)
+
     return {"success": True, "membership": membership}
 
 
@@ -417,11 +426,10 @@ def revoke_invite(invite_id: str, revoked_by: str) -> bool:
     # Mark as revoked
     invite["revokedAt"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     invite["revokedBy"] = revoked_by
-    
-    # Save updated invite
-    with open(_invite_file(invite_id), "w") as f:
-        json.dump(invite, f, indent=2)
-    
+
+    # Save updated invite atomically
+    atomic_write_json(_invite_file(invite_id), invite)
+
     return True
 
 
