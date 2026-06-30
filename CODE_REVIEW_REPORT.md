@@ -9,8 +9,9 @@ This report is organized as:
 1. **Executive summary**
 2. **Systemic themes** (the patterns worth fixing structurally, not file-by-file)
 3. **Priority must-fix list** (the highest-value 🔴 findings, ordered)
-4. **Open questions for Dave** (consolidated 🔵 — decide these before executors start)
-5. **Full findings by area** (the detailed per-file reports — hand individual sections to executor agents)
+4. **Resolved decisions** (Dave's answers to the 🔵 questions)
+5. **Full findings by area** (the detailed per-file reports)
+6. **Conflict-aware execution plan** (how to slice the work into tasks + run order — start here for handoff)
 
 ---
 
@@ -556,3 +557,72 @@ Read-only review of app bootstrap, auth, landing/join, and the narration stack. 
 
 ### CSS
 - 🟠 `main.css` is **4412 lines, one file**, with 398 lines carrying hardcoded hex colors and 27 `!important` declarations. No CSS custom properties for the core palette means theme/color changes require shotgun edits. Recommend extracting a `:root` color-token palette and splitting the file by screen. (See ARCHITECTURE.md § CSS Styling Gotchas — already a known pain area.)
+
+---
+
+## 6. Conflict-aware execution plan
+
+The findings in Section 5 are re-sliced here into **tasks designed to minimize merge conflicts** between parallel sessions. The guiding principles:
+
+- **Separate bug fixes from refactors.** Small surgical fixes rarely collide even in the same file; the *structural* changes (splitting god-files, deduping renderers, ES modules) are the conflict generators. Land bug fixes first, refactor against the updated `main`.
+- **One task owns a directory/file.** Two sessions editing the same god-file — especially if one is *splitting* it — is unmergeable. Each file has exactly one owner per phase.
+- **ES modules is solo and last.** It rewrites `import`/`export` across all ~48 files; any concurrent frontend branch becomes a brutal rebase.
+- Use the CLAUDE.md worktree workflow (`git worktree add .worktrees/<task> -b <task>`); rebase later branches onto `main` after earlier ones merge.
+
+### Run order at a glance
+
+```
+Phase A (in flight):   A1 backend-security ████ (RUNNING — let it finish before starting B*)
+Phase B (parallel):    B1 game · B2 platform · B3 pbp · B4 store · B5 teams   ← disjoint dirs, run together
+Phase C (after B4+B5): C1 stats name→ID migration + utility
+Phase D (after each    D1 split gameScreen · D2 teams refactors · D3 backend split/dedup · D4 store helper dedup
+         area's B/C):  (D1–D4 are different dirs → can parallelize among themselves)
+Phase E (solo, last):  E1 ES-module migration   (blocks all other frontend work)
+Anytime (isolated):    E2 deploy-time version bump · X1 S3 exclude fix · X3 worktree/​repo hygiene
+```
+
+### Phase A — security (IN PROGRESS)
+
+- **A1 · Backend security** — _bug/security_ — owns `ultistats_server/**`. **🟢 LAUNCHED.** Fully orthogonal to all frontend work (different language/dir). The detailed prompt and scope are the 8 items in the Backend executor-guidance block. _Note: the `main.py` split and storage-dedup are deliberately **excluded** here (that's D3) so A1 stays a focused security pass._
+
+### Phase B — frontend bug fixes (parallel-safe; start only after A1 finishes per Dave)
+
+These five own **disjoint directories**, so they can run concurrently. Each does **🔴/🟠 bug fixes only — no file splits, no cross-directory edits.** If a fix seems to need another task's file, flag it and coordinate rather than reaching across.
+
+- **B1 · Game correctness** — owns `game/**`. Fixes: rival pause systems (`gameScreen.js:1099-1188`+`pointManagement.js:246-300`), double-defined `updateGameEventsModalState` (`:1974`/`:2478`), `releaseControllerRole` missing role (`:1002`), undo stat-decrement (`gameLogic.js:553-578`), and the two controller-state races (keep it local-UX correct; no Redis/consensus — single-worker is decided). **Do NOT split `gameScreen.js` here** (that's D1, same owner, next phase).
+- **B2 · Bootstrap / auth / narration** — owns `main.js`, `auth/**`, `landing/**`, `narration/**`, `service-worker.js`. Fixes: init `setTimeout(100)` race → drive off `DOMContentLoaded`/readiness, SW auto-reload guard + don't-cache-errors, `getAuthHeaders` token refresh, OAuth invite-join dead-end, mic-hot/socket races, `testMode` client gating.
+- **B3 · Play-by-play** — owns `playByPlay/**` + PBP-only bits of `ui/`. Fixes: **route Key Play (and score-attribution/Callahan) through `window.pbpPossession.*`** (resolves assist-on-completion, missing `completedPasses`, missing bus publish at once), `fieldPbp` loc ref-sharing (`:1365-1371`), **Field normalized-coordinate frame** per decision #11 + **document the convention in ARCHITECTURE.md and in code**. **Must not edit `game/gameScreen.js`** (coordinate with B1 if a panel hook is needed).
+- **B4 · Data layer** — owns `store/sync.js`, `store/storage.js`, `store/models.js`. Fixes: `updatedAt` mutation on offline failure, no retry-cap (`sync.js:204-254`), browser-specific offline detection, `pendingNextLine`/`useSeparateLines` merge divergence, `Violation.summarize` dead flags (`models.js:386-407`), `loadTeams({silent})` boolean (`storage.js:562`). **Game-sync LWW is accepted — do not build server-side point merge.** _B4 owns `models.js`/`storage.js`; C1 will re-touch them, so C1 waits on B4._
+- **B5 · Teams / roster** — owns `teams/**`. Fixes: **offline-first create-team guard** (`teamSelection.js:910-1018`) + a shared `canActOffline()` across the teams auth guards, `resumeCloudGame` id dedup, escape all `innerHTML` interpolations (codes/roles/player-id), **cap the team-icon cache** (size+count, stop swallowing quota error), consolidate onto `authFetch`, remove the shipped debug player-ID display. _C1 will re-touch `rosterManagement.js`/`eventRoster.js`, so C1 waits on B5._
+
+### Phase C — stats migration (after B4 **and** B5 merge)
+
+- **C1 · Stats name → ID migration + utility** — _cross-cutting bug + migration_ — touches `utils/eventStats.js`, `teams/rosterManagement.js`, `teams/eventRoster.js`, and re-touches `store/models.js`/`store/storage.js`. Re-key all stat maps from `player.name` to `player.id` (display by name). **Write a one-shot migration utility** that re-keys existing stored data and **verify it preserves the historical stats for CUDO Spring 26, Flickers, and Mumbo Sauce** (their data lives under `data/`). Sequenced after B4/B5 because it shares `store/` and `teams/` files with them.
+
+### Phase D — refactors (each waits on its area's bug-fix task; D1–D4 are cross-dir, so parallel-safe among themselves)
+
+- **D1 · Split `game/gameScreen.js`** along its banner-comment seams (panels / event handlers / timer / select-line / cloud-refresh). After B1 — **ideally the same session continues B1's branch into the split** so no second session touches the file.
+- **D2 · Teams refactors** — split `teamSelection.js`, extract the shared roster-row renderer (3 copies), move sticky-columns from inline-JS to CSS `position: sticky` classes. After B5 + C1.
+- **D3 · Backend refactors** — split `main.py` into routers, extract `BaseEntityStore`/`id_utils`/`json_index`, collapse the 4× static-serve helper. After A1.
+- **D4 · Store helper dedup** — extract shared `deserializePointsFromServer` / `mergePendingNextLine`, kill dead serialize fallbacks. After B4 + C1.
+
+### Phase E — global structural (solo, last) + isolated anytime-tasks
+
+- **E1 · ES-module migration** — _APPROVED, solo, LAST._ Native ES modules, no bundler, **incremental** (leaf utils → up). Run only after all B/C/D frontend tasks have merged; it blocks concurrent frontend work by design.
+- **E2 · Deploy-time version bumping** — _APPROVED, ISOLATED._ Touches only the GitHub Action, `deploy-staging.sh`, `increment-version.py`, and the version docs. **Parallel-safe at any time, including now** — not blocked by anything.
+- **X1 · S3 prod-exclude fix** — make `main.yml` exclude `.claude/*`/`.vscode/*` like staging. Isolated; can fold into E2.
+- **X3 · Repo hygiene** — prune the 38 stale worktrees; no code. Anytime.
+- **Dead-code / `console.*` sweep** — do this **per-file inside each B/C/D task that already owns the file**, not as a standalone global pass (a global sweep would touch every owner's files at once). Defer any remaining global cleanup until after E1.
+
+### Quick conflict matrix
+
+| | A1 backend | B1 game | B2 platform | B3 pbp | B4 store | B5 teams |
+|---|---|---|---|---|---|---|
+| **A1 backend** | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **B1 game** | ✅ | — | ✅ | ⚠️ gameScreen panel hooks | ✅ | ✅ |
+| **B2 platform** | ✅ | ✅ | — | ✅ | ✅ | ✅ |
+| **B3 pbp** | ✅ | ⚠️ | ✅ | — | ✅ | ✅ |
+| **B4 store** | ✅ | ✅ | ✅ | ✅ | — | ⚠️ C1 bridges them |
+| **B5 teams** | ✅ | ✅ | ✅ | ✅ | ⚠️ | — |
+
+✅ = safe to run in parallel · ⚠️ = coordinate (shared file or a downstream task bridges them)
