@@ -18,15 +18,23 @@ from fastapi import Depends, HTTPException, status, Request
 
 from .jwt_validation import get_current_user, get_optional_user
 
+# Single source of truth for whether auth is enforced (defaults true).
+try:
+    from config import auth_required
+    from validation import validate_id
+except ImportError:
+    from ultistats_server.config import auth_required
+    from ultistats_server.validation import validate_id
+
 # Import storage - handle both relative and absolute imports
 try:
     from storage.user_storage import get_user, user_exists
-    from storage.membership_storage import get_user_team_role, get_user_memberships
+    from storage.membership_storage import get_user_team_role, get_user_memberships, get_user_teams
     from storage.game_storage import game_exists, get_game_current
     from storage.index_storage import get_player_teams
 except ImportError:
     from ultistats_server.storage.user_storage import get_user, user_exists
-    from ultistats_server.storage.membership_storage import get_user_team_role, get_user_memberships
+    from ultistats_server.storage.membership_storage import get_user_team_role, get_user_memberships, get_user_teams
     from ultistats_server.storage.game_storage import game_exists, get_game_current
     from ultistats_server.storage.index_storage import get_player_teams
 
@@ -94,11 +102,12 @@ def require_team_coach(team_id_param: str = "team_id") -> Callable:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Missing path parameter: {team_id_param}"
             )
-        
+        validate_id(team_id, "team_id")
+
         # Admins have coach access to all teams
         if is_admin(user["id"]):
                 return user
-        
+
         # Check team membership
         role = get_user_team_role(user["id"], team_id)
         if role != "coach":
@@ -133,11 +142,12 @@ def require_team_access(team_id_param: str = "team_id") -> Callable:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Missing path parameter: {team_id_param}"
             )
-        
+        validate_id(team_id, "team_id")
+
         # Admins have access to all teams
         if is_admin(user["id"]):
                 return user
-        
+
         # Check team membership (any role grants access)
         role = get_user_team_role(user["id"], team_id)
         if role is None:
@@ -172,12 +182,14 @@ async def require_game_team_coach(
         HTTPException 400: If game has no teamId
         HTTPException 403: If user is not a coach for the team
     """
-    import os
-    auth_required = os.getenv("ULTISTATS_AUTH_REQUIRED", "true").lower() == "true"
-    if not auth_required:
-        return user
-
+    # Validate before the auth short-circuit so traversal is rejected even
+    # when auth is disabled for local dev.
     game_id = request.path_params.get("game_id")
+    if game_id is not None:
+        validate_id(game_id, "game_id")
+
+    if not auth_required():
+        return user
 
     team_id = None
 
@@ -233,12 +245,12 @@ async def require_game_team_access(
         HTTPException 400: If game has no teamId
         HTTPException 403: If user doesn't have team access
     """
-    import os
-    auth_required = os.getenv("ULTISTATS_AUTH_REQUIRED", "true").lower() == "true"
-    if not auth_required:
-        return user
-
     game_id = request.path_params.get("game_id")
+    if game_id is not None:
+        validate_id(game_id, "game_id")
+
+    if not auth_required():
+        return user
 
     if not game_id or not game_exists(game_id):
         raise HTTPException(
@@ -270,58 +282,127 @@ async def require_game_team_access(
     return user
 
 
+def assert_player_edit_access(user: dict, player_id: Optional[str]) -> None:
+    """Raise HTTP 403 unless ``user`` may create/edit/delete ``player_id``.
+
+    Authorization model: the user must be a Coach of a team that has this
+    player on its roster. A player not on any team yet (orphan / brand-new,
+    including ``player_id is None`` for a fresh create) is editable by any
+    Coach. Admins always pass.
+
+    Shared by ``require_player_edit_access`` (PUT/DELETE, player_id from path)
+    and the ``POST /api/players`` create/overwrite handler (id from the body).
+    """
+    if is_admin(user["id"]):
+        return
+
+    user_coach_teams = set(
+        m["teamId"] for m in get_user_memberships(user["id"]) if m["role"] == "coach"
+    )
+
+    player_teams = set(get_player_teams(player_id)) if player_id else set()
+
+    if not player_teams:
+        # Orphaned / brand-new player: any coach may create or edit it.
+        if user_coach_teams:
+            return
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Coach access required to edit players"
+        )
+
+    if not (player_teams & user_coach_teams):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must be a Coach of a team with this player"
+        )
+
+
 async def require_player_edit_access(
     request: Request,
     user: dict = Depends(get_current_user)
 ) -> dict:
     """
     Dependency for player edit/delete endpoints.
-    
+
     Verifies the user is a Coach of at least one team that has this player
     on their roster.
-    
+
     Returns:
         The user dict if authorized
-        
+
     Raises:
-        HTTPException 400: If player_id is missing
+        HTTPException 400: If player_id is missing/invalid
         HTTPException 403: If user is not a coach of any team with this player
     """
     player_id = request.path_params.get("player_id")
-    
+
     if not player_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Missing player_id"
         )
-    
+    validate_id(player_id, "player_id")
+
+    assert_player_edit_access(user, player_id)
+    return user
+
+
+async def require_player_read_access(
+    request: Request,
+    user: dict = Depends(get_current_user)
+) -> dict:
+    """
+    Dependency for player read endpoints.
+
+    Player records are private. A player is visible only to members
+    (coaches OR viewers) of a team the player belongs to — which covers both
+    "coaches of the player's team" and "viewers invited to a game" featuring
+    that player (game viewers hold a viewer membership on the team). Admins
+    see all.
+
+    This is the read-side complement to ``require_player_edit_access`` and
+    closes the gap where any caller could read any player's data.
+
+    Returns:
+        The user dict if authorized
+
+    Raises:
+        HTTPException 400: If player_id is missing/invalid
+        HTTPException 403: If the user shares no team with this player
+    """
+    player_id = request.path_params.get("player_id")
+
+    if not player_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing player_id"
+        )
+    validate_id(player_id, "player_id")
+
     # Admin bypass
     if is_admin(user["id"]):
         return user
-    
-    # Get teams this player belongs to (from index)
+
     player_teams = set(get_player_teams(player_id))
-    
+
     if not player_teams:
-        # Player isn't on any team - allow edit by any coach
-        # (This handles orphaned players or newly created ones)
+        # Orphaned / newly-created player not yet on any roster. Mirror the
+        # edit-access fallback: any coach may read it (so a coach who just
+        # created a player can read it back before the team sync lands).
         user_memberships = get_user_memberships(user["id"])
         if any(m["role"] == "coach" for m in user_memberships):
             return user
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Coach access required to edit players"
+            detail="You don't have access to this player"
         )
-    
-    # Get teams user is a Coach of
-    user_memberships = get_user_memberships(user["id"])
-    user_coach_teams = set(m["teamId"] for m in user_memberships if m["role"] == "coach")
-    
-    # Check for overlap
-    if not player_teams & user_coach_teams:
+
+    user_teams = set(get_user_teams(user["id"]))
+    if not (player_teams & user_teams):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You must be a Coach of a team with this player"
+            detail="You don't have access to this player"
         )
-    
+
     return user

@@ -33,9 +33,14 @@ try:
 except ImportError:
     from ultistats_server.config import SHARES_DIR
 
+from .file_utils import atomic_write_json, entity_lock
+
 
 # Index file for fast lookups
 INDEX_FILE = SHARES_DIR / "_index.json"
+
+# Serializes read-modify-write of the share index.
+_INDEX_LOCK_KEY = "share-index"
 
 
 def _share_file(share_id: str) -> Path:
@@ -66,51 +71,51 @@ def _load_index() -> Dict[str, Any]:
 
 
 def _save_index(index: Dict[str, Any]) -> None:
-    """Save the share index."""
-    SHARES_DIR.mkdir(parents=True, exist_ok=True)
-    with open(INDEX_FILE, "w") as f:
-        json.dump(index, f, indent=2)
+    """Save the share index atomically."""
+    atomic_write_json(INDEX_FILE, index)
 
 
 def _update_index_add(share: Dict[str, Any]) -> None:
-    """Add a share to the index."""
-    index = _load_index()
-    
+    """Add a share to the index (serialized read-modify-write)."""
     share_id = share["id"]
     share_hash = share["hash"]
     game_id = share["gameId"]
-    
-    # Add to hash index
-    index["byHash"][share_hash] = share_id
-    
-    # Add to game index
-    if game_id not in index["byGame"]:
-        index["byGame"][game_id] = []
-    if share_id not in index["byGame"][game_id]:
-        index["byGame"][game_id].append(share_id)
-    
-    _save_index(index)
+
+    with entity_lock(_INDEX_LOCK_KEY):
+        index = _load_index()
+
+        # Add to hash index
+        index["byHash"][share_hash] = share_id
+
+        # Add to game index
+        if game_id not in index["byGame"]:
+            index["byGame"][game_id] = []
+        if share_id not in index["byGame"][game_id]:
+            index["byGame"][game_id].append(share_id)
+
+        _save_index(index)
 
 
 def _update_index_remove(share: Dict[str, Any]) -> None:
-    """Remove a share from the index (used when deleting, not revoking)."""
-    index = _load_index()
-    
+    """Remove a share from the index (serialized read-modify-write)."""
     share_id = share["id"]
     share_hash = share["hash"]
     game_id = share["gameId"]
-    
-    # Remove from hash index
-    if share_hash in index["byHash"]:
-        del index["byHash"][share_hash]
-    
-    # Remove from game index
-    if game_id in index["byGame"]:
-        index["byGame"][game_id] = [s for s in index["byGame"][game_id] if s != share_id]
-        if not index["byGame"][game_id]:
-            del index["byGame"][game_id]
-    
-    _save_index(index)
+
+    with entity_lock(_INDEX_LOCK_KEY):
+        index = _load_index()
+
+        # Remove from hash index
+        if share_hash in index["byHash"]:
+            del index["byHash"][share_hash]
+
+        # Remove from game index
+        if game_id in index["byGame"]:
+            index["byGame"][game_id] = [s for s in index["byGame"][game_id] if s != share_id]
+            if not index["byGame"][game_id]:
+                del index["byGame"][game_id]
+
+        _save_index(index)
 
 
 def share_exists(share_id: str) -> bool:
@@ -166,7 +171,11 @@ def is_share_valid(share: Dict[str, Any]) -> bool:
     if expires_at:
         try:
             expiry = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-            if datetime.now(expiry.tzinfo) > expiry:
+            # Normalize naive timestamps to UTC so the comparison is always
+            # tz-aware (matches invite_storage); avoids a naive-vs-aware error.
+            if expiry.tzinfo is None:
+                expiry = expiry.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > expiry:
                 return False
         except (ValueError, TypeError):
             # If we can't parse the date, treat as expired for safety
@@ -214,14 +223,13 @@ def create_share_link(
     
     # Ensure directory exists
     SHARES_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     # Save share file
-    with open(_share_file(share["id"]), "w") as f:
-        json.dump(share, f, indent=2)
-    
+    atomic_write_json(_share_file(share["id"]), share)
+
     # Update index
     _update_index_add(share)
-    
+
     return share
 
 
@@ -272,11 +280,10 @@ def revoke_share(share_id: str, revoked_by: str) -> bool:
     # Mark as revoked
     share["revokedAt"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     share["revokedBy"] = revoked_by
-    
-    # Save updated share
-    with open(_share_file(share_id), "w") as f:
-        json.dump(share, f, indent=2)
-    
+
+    # Save updated share atomically
+    atomic_write_json(_share_file(share_id), share)
+
     return True
 
 

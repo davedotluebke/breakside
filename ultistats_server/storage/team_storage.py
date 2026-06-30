@@ -24,6 +24,8 @@ except ImportError:
         from config import TEAMS_DIR
         from storage.player_storage import get_player, player_exists
 
+from .file_utils import atomic_write_json, entity_lock
+
 
 def generate_team_id(name: str) -> str:
     """
@@ -97,10 +99,8 @@ def save_team(team_data: dict, team_id: Optional[str] = None) -> str:
     if 'playerIds' not in team_data:
         team_data['playerIds'] = []
     
-    team_file = TEAMS_DIR / f"{team_id}.json"
-    with open(team_file, 'w') as f:
-        json.dump(team_data, f, indent=2)
-    
+    atomic_write_json(TEAMS_DIR / f"{team_id}.json", team_data)
+
     return team_id
 
 
@@ -164,14 +164,17 @@ def update_team(team_id: str, team_data: dict) -> str:
     Raises:
         FileNotFoundError: If team doesn't exist
     """
-    if not team_exists(team_id):
-        raise FileNotFoundError(f"Team {team_id} not found")
-    
-    # Preserve createdAt from existing record
-    existing = get_team(team_id)
-    team_data['createdAt'] = existing.get('createdAt', datetime.now().isoformat())
-    
-    return save_team(team_data, team_id)
+    # Serialize the read (createdAt) + write so concurrent team updates can't
+    # interleave and lose each other.
+    with entity_lock(f"team:{team_id}"):
+        if not team_exists(team_id):
+            raise FileNotFoundError(f"Team {team_id} not found")
+
+        # Preserve createdAt from existing record
+        existing = get_team(team_id)
+        team_data['createdAt'] = existing.get('createdAt', datetime.now().isoformat())
+
+        return save_team(team_data, team_id)
 
 
 def delete_team(team_id: str) -> bool:
