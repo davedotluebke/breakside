@@ -550,34 +550,41 @@ function undoEvent() {
                 // no events in this possession, remove the possession
                 point.possessions.pop();
                 if (point.possessions.length === 0) {
-                    // no possessions left in this point, update player stats then remove the point
-                    point.players.forEach(playerName => {
-                        let player = getPlayerFromName(playerName);
-                        player.totalPointsPlayed--;
-                        player.consecutivePointsPlayed--;
-                        // Decrement time played for this point
-                        if (point.totalPointTime) {
-                            player.totalTimePlayed -= point.totalPointTime;
-                            // Ensure totalTimePlayed doesn't go negative
-                            if (player.totalTimePlayed < 0) {
-                                player.totalTimePlayed = 0;
-                            }
-                        }
-                        // Decrement pointsWon or pointsLost based on winner
-                        if (point.winner === Role.TEAM) {
-                            player.pointsWon--;
-                            if (player.pointsWon < 0) {
-                                player.pointsWon = 0;
-                            }
-                        } else if (point.winner === Role.OPPONENT) {
-                            player.pointsLost--;
-                            if (player.pointsLost < 0) {
-                                player.pointsLost = 0;
-                            }
-                        }
-                    });
-                    // Decrement game score if winner is set
+                    // no possessions left in this point, remove the point.
+                    // Only revert player point stats / game score if this point
+                    // was actually scored — updateScore() only increments those
+                    // on a score, so an unscored point being undone here was
+                    // never counted (decrementing it would corrupt earlier
+                    // points' stats). Mirrors revertPointScore() and the
+                    // parallel branch above that notes "Don't decrement player
+                    // point stats."
                     if (point.winner) {
+                        point.players.forEach(playerName => {
+                            let player = getPlayerFromName(playerName);
+                            player.totalPointsPlayed--;
+                            player.consecutivePointsPlayed--;
+                            // Decrement time played for this point
+                            if (point.totalPointTime) {
+                                player.totalTimePlayed -= point.totalPointTime;
+                                // Ensure totalTimePlayed doesn't go negative
+                                if (player.totalTimePlayed < 0) {
+                                    player.totalTimePlayed = 0;
+                                }
+                            }
+                            // Decrement pointsWon or pointsLost based on winner
+                            if (point.winner === Role.TEAM) {
+                                player.pointsWon--;
+                                if (player.pointsWon < 0) {
+                                    player.pointsWon = 0;
+                                }
+                            } else if (point.winner === Role.OPPONENT) {
+                                player.pointsLost--;
+                                if (player.pointsLost < 0) {
+                                    player.pointsLost = 0;
+                                }
+                            }
+                        });
+                        // Decrement game score
                         currentGame().scores[point.winner]--;
                     }
                     currentGame().points.pop();
