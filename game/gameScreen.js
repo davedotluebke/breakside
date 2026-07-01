@@ -995,12 +995,20 @@ function handleLeaveGame() {
     const skipConfirm = typeof isTestGame === 'function'
         && typeof currentGame === 'function' && isTestGame(currentGame());
     if (skipConfirm || confirm('Leave this game? You can rejoin later.')) {
-        // Release any held roles
+        // Release any held roles. releaseControllerRole requires the specific
+        // role ('activeCoach'/'lineCoach') — calling it with none sends
+        // {role: undefined} and releases nothing, leaving a stale holder until
+        // ping-timeout. Release each role this user actually holds.
         if (typeof releaseControllerRole === 'function') {
             const gameId = typeof getPollingGameId === 'function' ? getPollingGameId() : null;
             if (gameId) {
-                releaseControllerRole(gameId).catch(err => {
-                    console.log('Could not release role:', err);
+                const heldRoles = [];
+                if (typeof isActiveCoach === 'function' && isActiveCoach()) heldRoles.push('activeCoach');
+                if (typeof isLineCoach === 'function' && isLineCoach()) heldRoles.push('lineCoach');
+                heldRoles.forEach(role => {
+                    releaseControllerRole(gameId, role).catch(err => {
+                        console.log(`Could not release ${role} role:`, err);
+                    });
                 });
             }
         }
@@ -1098,7 +1106,16 @@ function handleMenuAbout() {
  */
 let timerMode = 'point'; // 'point' or 'game'
 let pointTimerPaused = false;
-let pointPausedAt = null;  // When the timer was paused
+
+// `point.totalPointTime` is the accumulated *active* play time (ms) for the
+// point, banked from each running segment as it ends; `point.startTimestamp`
+// is the start of the currently-running segment (null while paused). This is
+// the single source of truth shared with updateScore() (gameLogic.js — adds
+// the final running segment into totalPointTime and reads it as play time) and
+// updatePointTimer() (pointManagement.js). Pausing banks the running segment
+// into totalPointTime and nulls startTimestamp; resuming starts a fresh
+// segment. startTimestamp must stay a Date object (storage/sync serialize it
+// via .toISOString()), so always assign `new Date()`, never an ISO string.
 
 function handleTimerToggle() {
     timerMode = timerMode === 'point' ? 'game' : 'point';
@@ -1107,41 +1124,56 @@ function handleTimerToggle() {
 }
 
 /**
+ * Bank the currently-running segment into totalPointTime and stop the clock.
+ * Safe to call when already paused (no running segment) — it's a no-op then.
+ */
+function pausePointTimer(point) {
+    if (point && point.startTimestamp) {
+        point.totalPointTime = (point.totalPointTime || 0) +
+            (Date.now() - new Date(point.startTimestamp).getTime());
+        point.startTimestamp = null;
+    }
+    if (point) point.lastPauseTime = new Date();
+    pointTimerPaused = true;
+}
+
+/**
+ * Resume timing by starting a fresh running segment.
+ */
+function resumePointTimer(point) {
+    if (point) {
+        point.startTimestamp = new Date();
+        point.lastPauseTime = null;
+    }
+    pointTimerPaused = false;
+}
+
+/**
  * Handle timer pause/resume button click
  */
 function handleTimerPauseClick(e) {
     e.stopPropagation(); // Don't trigger timer mode toggle
-    
+
     if (timerMode !== 'point') {
         // Game clock cannot be paused
         return;
     }
-    
+
     const point = getLatestPoint();
-    if (!point || !point.startTimestamp) {
-        // No active point, nothing to pause
+    if (!point || (!point.startTimestamp && !pointTimerPaused)) {
+        // No active point (and not currently paused), nothing to do
         return;
     }
-    
+
     if (pointTimerPaused) {
-        // Resume: add paused duration to totalPointTime
-        if (pointPausedAt && point.lastPauseTime) {
-            const pausedDuration = Date.now() - new Date(point.lastPauseTime).getTime();
-            point.totalPointTime = (point.totalPointTime || 0) + pausedDuration;
-        }
-        point.lastPauseTime = null;
-        pointTimerPaused = false;
-        pointPausedAt = null;
+        resumePointTimer(point);
     } else {
-        // Pause: record pause time
-        point.lastPauseTime = new Date().toISOString();
-        pointTimerPaused = true;
-        pointPausedAt = Date.now();
+        pausePointTimer(point);
     }
-    
+
     updateTimerPauseButton();
     updateTimerDisplay();
-    
+
     // Save the change
     if (typeof saveAllTeamsData === 'function') {
         saveAllTeamsData();
@@ -1175,14 +1207,7 @@ function updateTimerPauseButton() {
  */
 function autoResumePointTimer() {
     if (pointTimerPaused) {
-        const point = getLatestPoint();
-        if (point && point.lastPauseTime) {
-            const pausedDuration = Date.now() - new Date(point.lastPauseTime).getTime();
-            point.totalPointTime = (point.totalPointTime || 0) + pausedDuration;
-            point.lastPauseTime = null;
-        }
-        pointTimerPaused = false;
-        pointPausedAt = null;
+        resumePointTimer(getLatestPoint());
         updateTimerPauseButton();
     }
 }
@@ -1969,40 +1994,6 @@ function hideGameEventsModal() {
 }
 
 /**
- * Update Game Events modal button states based on current game state
- */
-function updateGameEventsModalState() {
-    const point = getLatestPoint();
-    const duringPoint = point && point.startTimestamp && !point.endTimestamp;
-    
-    // Timeout: available anytime
-    const timeoutBtn = document.getElementById('geTimeoutBtn');
-    if (timeoutBtn) {
-        timeoutBtn.disabled = false;
-        timeoutBtn.classList.remove('disabled');
-    }
-
-    // Injury Sub: only DURING a point (mid-point sub mechanism)
-    const injurySubBtn = document.getElementById('geInjurySubBtn');
-    if (injurySubBtn) {
-        injurySubBtn.disabled = !duringPoint;
-        injurySubBtn.classList.toggle('disabled', !duringPoint);
-    }
-
-    // Half Time, Switch Sides, End Game: only between points
-    const halfTimeBtn = document.getElementById('geHalfTimeBtn');
-    const switchSidesBtn = document.getElementById('geSwitchSidesBtn');
-    const endGameBtn = document.getElementById('geEndGameBtn');
-
-    [halfTimeBtn, switchSidesBtn, endGameBtn].forEach(btn => {
-        if (btn) {
-            btn.disabled = duringPoint;
-            btn.classList.toggle('disabled', duringPoint);
-        }
-    });
-}
-
-/**
  * Handle Injury Sub from the Game Events modal. Routes through
  * handlePbpSubPlayers so the role check + point-in-progress guard +
  * sub-players modal all work the same as Simple mode's top-level Sub
@@ -2471,29 +2462,39 @@ function applyStartPointButtonState(btn, showPointInProgress = true) {
 }
 
 /**
- * Update Game Events modal button states based on point status
- * - Timeout: enabled anytime (can be called during or between points)
+ * Update Game Events modal button states. Single source of truth — gates on
+ * both the Active Coach role and point status:
+ * - Timeout: enabled anytime (during or between points), Active Coach only
+ * - Injury Sub: enabled only DURING a point (mid-point sub mechanism)
  * - Halftime, Switch Sides, End Game: enabled BETWEEN points only
  */
 function updateGameEventsModalState() {
     const modal = document.getElementById('gameEventsModal');
     if (!modal || modal.style.display === 'none') return;
-    
+
     const hasActiveCoachRole = canEditPlayByPlayPanel();
     const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
-    
+
     // Timeout - enabled anytime (can be called during or between points)
     const timeoutBtn = modal.querySelector('#geTimeoutBtn');
     if (timeoutBtn) {
         timeoutBtn.disabled = !hasActiveCoachRole;
         timeoutBtn.classList.toggle('disabled', !hasActiveCoachRole);
     }
-    
+
+    // Injury Sub - only DURING a point (mid-point sub mechanism)
+    const injurySubBtn = modal.querySelector('#geInjurySubBtn');
+    if (injurySubBtn) {
+        const injuryEnabled = hasActiveCoachRole && pointInProgress;
+        injurySubBtn.disabled = !injuryEnabled;
+        injurySubBtn.classList.toggle('disabled', !injuryEnabled);
+    }
+
     // Halftime, Switch Sides, End Game - enabled BETWEEN points only
     const halfTimeBtn = modal.querySelector('#geHalfTimeBtn');
     const switchSidesBtn = modal.querySelector('#geSwitchSidesBtn');
     const endGameBtn = modal.querySelector('#geEndGameBtn');
-    
+
     const betweenPointsEnabled = hasActiveCoachRole && !pointInProgress;
     [halfTimeBtn, switchSidesBtn, endGameBtn].forEach(btn => {
         if (btn) {
@@ -4905,22 +4906,29 @@ function updateTimerDisplay() {
         labelEl.textContent = 'point';
         
         const point = getLatestPoint();
-        if (point && point.startTimestamp) {
-            let elapsed;
-            const startTime = new Date(point.startTimestamp).getTime();
-            const previousPausedTime = point.totalPointTime || 0;
-            
-            if (pointTimerPaused && pointPausedAt) {
-                // Show time when paused - subtract accumulated pause time from previous cycles
-                elapsed = Math.floor((pointPausedAt - startTime - previousPausedTime) / 1000);
+        // Elapsed = accumulated active time (totalPointTime) plus the current
+        // running segment. A completed point (endTimestamp set) or a paused
+        // point has its full active time already banked into totalPointTime,
+        // so it shows that frozen value rather than ticking against `now`.
+        let elapsedMs = null;
+        if (point) {
+            if (point.endTimestamp) {
+                elapsedMs = point.totalPointTime || 0;
+            } else if (point.startTimestamp && !pointTimerPaused) {
+                elapsedMs = (point.totalPointTime || 0) +
+                    (Date.now() - new Date(point.startTimestamp).getTime());
+            } else if (pointTimerPaused || point.totalPointTime || point.startTimestamp) {
+                elapsedMs = point.totalPointTime || 0;
+            }
+        }
+
+        if (elapsedMs !== null) {
+            const elapsed = Math.floor(elapsedMs / 1000);
+            if (pointTimerPaused) {
                 valueEl.classList.add('timer-paused');
-            } else {
-                // Active timer - subtract any accumulated pause time
-                const now = Date.now();
-                elapsed = Math.floor((now - startTime - previousPausedTime) / 1000);
             }
             valueEl.textContent = formatTime(elapsed);
-            
+
             // Add warning colors for long points
             if (elapsed > 180) { // 3+ minutes
                 valueEl.classList.add('timer-danger');
@@ -5179,7 +5187,6 @@ function enterGameScreen() {
     
     // Reset timer pause state when entering
     pointTimerPaused = false;
-    pointPausedAt = null;
     
     // Update displays
     let game;
@@ -5507,23 +5514,6 @@ window.updateControllerUI = function(state, previousState) {
         
         // Always keep game state refresh running (for viewers to see updates)
         startGameStateRefresh();
-    }
-};
-
-// =============================================================================
-// Integration with moveToNextPoint
-// =============================================================================
-
-// Hook into moveToNextPoint to handle panel UI transitions
-// This is called after a score event to prepare for the next point.
-// Note: originalMoveToNextPoint already calls enterGameScreen() and
-// transitionToBetweenPoints(), so this wrapper just delegates — no
-// duplicate transitionToBetweenPoints() call.
-const originalMoveToNextPoint = window.moveToNextPoint;
-window.moveToNextPoint = function() {
-    // Call original if it exists
-    if (typeof originalMoveToNextPoint === 'function') {
-        originalMoveToNextPoint();
     }
 };
 
