@@ -292,7 +292,15 @@ def assert_player_edit_access(user: dict, player_id: Optional[str]) -> None:
 
     Shared by ``require_player_edit_access`` (PUT/DELETE, player_id from path)
     and the ``POST /api/players`` create/overwrite handler (id from the body).
+
+    When AUTH_REQUIRED is false (local dev / test backends), the coach-
+    membership check is skipped, matching ``require_game_edit_access`` and
+    ``require_game_team_access`` — otherwise a synthetic dev user with no
+    memberships can never sync offline-created players.
     """
+    if not auth_required():
+        return
+
     if is_admin(user["id"]):
         return
 
