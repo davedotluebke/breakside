@@ -35,9 +35,9 @@ let rosterSortDir = 1; // 1 = ascending, -1 = descending
 // Cache for the async scopes (event/all); keyed by scope+id so switching scope
 // or team invalidates it. Held across scope toggles/sorts within a screen view,
 // and cleared on screen (re)entry so newly-played points are picked up.
-let _rosterStatsCache = { key: null, byName: {} };
+let _rosterStatsCache = { key: null, byId: {} };
 function invalidateRosterStatsCache() {
-    _rosterStatsCache = { key: null, byName: {} };
+    _rosterStatsCache = { key: null, byId: {} };
 }
 window.invalidateRosterStatsCache = invalidateRosterStatsCache;
 
@@ -136,9 +136,9 @@ function updateTeamRosterDisplay() {
 
     if (scope === 'game') {
         // Sync: the current game is in memory.
-        const byName = (typeof getGamePlayerStats === 'function' && currentGame())
+        const byId = (typeof getGamePlayerStats === 'function' && currentGame())
             ? getGamePlayerStats(currentGame()) : {};
-        renderRosterTable(scope, byName, false);
+        renderRosterTable(scope, byId, false);
         return;
     }
 
@@ -151,7 +151,7 @@ function updateTeamRosterDisplay() {
         : 'all:' + (currentTeam && currentTeam.id ? currentTeam.id : '');
 
     if (_rosterStatsCache.key === key) {
-        renderRosterTable(scope, _rosterStatsCache.byName, false);
+        renderRosterTable(scope, _rosterStatsCache.byId, false);
         return;
     }
 
@@ -159,10 +159,10 @@ function updateTeamRosterDisplay() {
     const statsPromise = (scope === 'event')
         ? (typeof getEventPlayerStats === 'function' ? getEventPlayerStats(currentEvent) : Promise.resolve({}))
         : (typeof getTeamPlayerStats === 'function' ? getTeamPlayerStats(currentTeam) : Promise.resolve({}));
-    statsPromise.then(byName => {
-        _rosterStatsCache = { key, byName };
+    statsPromise.then(byId => {
+        _rosterStatsCache = { key, byId };
         if (effectiveRosterScope() === scope) {
-            renderRosterTable(scope, byName, false);
+            renderRosterTable(scope, byId, false);
         }
     });
 }
@@ -170,10 +170,10 @@ function updateTeamRosterDisplay() {
 /**
  * Render the roster table body for a given scope and stats map.
  * @param {string} scope - 'all' | 'event' | 'game'
- * @param {Object} statsByName - playerName → stats (accumulateGameStats shape)
+ * @param {Object} statsById - playerId → stats (accumulateGameStats shape)
  * @param {boolean} loading - true while async event stats are still loading
  */
-function renderRosterTable(scope, statsByName, loading) {
+function renderRosterTable(scope, statsById, loading) {
     const rosterElement = document.getElementById('rosterList');
     if (!rosterElement) {
         console.warn('Roster list element not found.');
@@ -185,7 +185,7 @@ function renderRosterTable(scope, statsByName, loading) {
 
     // Per-player value accessor used for both sorting and display.
     const valueFor = (player, key) => {
-        const s = statsByName[player.name] || {};
+        const s = statsById[player.id] || {};
         switch (key) {
             case 'name': return formatPlayerName(player).toLowerCase();
             case 'gender': return genderLabel(player);
@@ -247,7 +247,7 @@ function renderRosterTable(scope, statsByName, loading) {
     const fmtPlusMinus = (v) => v > 0 ? `+${v}` : `${v}`;
 
     roster.forEach(player => {
-        const s = statsByName[player.name] || {};
+        const s = statsById[player.id] || {};
         const playerRow = document.createElement('tr');
 
         const checkboxCell = document.createElement('td');
@@ -340,7 +340,7 @@ function renderRosterTable(scope, statsByName, loading) {
     let totCompletions = 0, totThrows = 0, totDPlays = 0, totTurnovers = 0;
     let detailAvailable = false;
     roster.forEach(player => {
-        const s = statsByName[player.name] || {};
+        const s = statsById[player.id] || {};
         totGoals += s.goals || 0;
         totAssists += s.assists || 0;
         totTime += s.timePlayed || 0;

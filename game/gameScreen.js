@@ -4256,7 +4256,7 @@ function updateSelectLineTable() {
             ? getPlayerGameTime(player.name)
             : 0;
         if (panelStatsMode === 'event' && game.eventId) {
-            const ps = (cachedPanelEventStats && cachedPanelEventStats[player.name]) || {};
+            const ps = (cachedPanelEventStats && cachedPanelEventStats[player.id]) || {};
             const eventTime = (ps.timePlayed || 0) + gameTime;
             timeCell.textContent = typeof formatPlayTime === 'function'
                 ? formatPlayTime(eventTime)
@@ -4276,7 +4276,7 @@ function updateSelectLineTable() {
         // Point participation columns
         let runningPointTotal = 0;
         if (panelStatsMode === 'event' && game.eventId) {
-            runningPointTotal = (cachedPanelEventStats && cachedPanelEventStats[player.name]?.pointsPlayed) || 0;
+            runningPointTotal = (cachedPanelEventStats && cachedPanelEventStats[player.id]?.pointsPlayed) || 0;
         } else if (panelShowingTotalStats) {
             runningPointTotal = player.pointsPlayedPreviousGames || 0;
         }

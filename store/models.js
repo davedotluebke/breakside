@@ -122,7 +122,6 @@ function Game(teamName, opponentName, startOn, teamId = null) {
     this.points = [];  // An array of Point objects
     this.gameStartTimestamp = new Date();
     this.gameEndTimestamp = null;
-    this.pointsData = [];  // Array of objects, each object will have player names as keys and true/false as values.
     this.lastLineUsed = null; // Track the last line used in this game
     this.alternateGenderRatio = 'No'; // Gender ratio enforcement: 'No', 'Alternating', or ratio string like '4:3'
     this.alternateGenderPulls = false; // Whether to follow Mixed rules for alternating gender pulls
