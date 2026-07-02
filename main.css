@@ -553,18 +553,50 @@ ul {
     padding: 1vw 1vw;
 }
 
-/* Sticky column styles - positioning is handled dynamically in makeColumnsSticky() */
-/* Base styles for sticky columns */
+/* Sticky columns (active players table): position/color/border/z-index are
+   static CSS below; only the checkbox column's width and the name/time
+   columns' `left` offsets are width-synced from JS in makeColumnsSticky()
+   (ui/activePlayersDisplay.js), since those depend on measured column
+   widths that vary with content and can't be known statically. */
 .active-checkbox-column {
     text-align: center;
     padding: 5px !important;  /* Override default td padding */
     box-sizing: border-box;  /* Include padding in width calculation */
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    background-color: #fafafa;
+    box-shadow: inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: none;
+}
+
+.active-name-column {
+    position: sticky;
+    left: 30px; /* overwritten dynamically to the measured checkbox column width */
+    z-index: 3;
+    background-color: #fafafa;
+    box-shadow: inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: none;
 }
 
 /* Header cell for merged sticky columns */
 .active-header-teams {
     background-color: #fafafa;
     box-sizing: border-box;
+    position: sticky;
+    left: 0;
+    z-index: 5;
+    box-shadow: inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: none;
 }
 
 /* Gender-based color coding for player names */
@@ -648,8 +680,16 @@ td.player-mmp,
 }
 
 .active-time-column {
+    position: sticky;
     left: 140px; /* this will be overwritten dynamically to width of left 2 columns */
     font-style: italic;
+    z-index: 3;
+    background-color: #fafafa;
+    box-shadow: inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: none;
 }
 
 /* fix width of point columns */
@@ -667,6 +707,46 @@ td.player-mmp,
     text-align: left;
     /* border: 1px solid grey; */
     border-right: none;
+}
+
+/* Sticky checkbox + name columns (team roster table only — game summary and
+   event roster tables don't have sticky columns). Position/color/border/
+   z-index are static CSS; only the name column's `left` offset is
+   width-synced from JS in makeRosterColumnsSticky() (rosterManagement.js),
+   since it depends on the measured checkbox column width.
+   Scoped with #rosterTable so these beat the "#rosterTable th, td {
+   background-color: white }" rule above on specificity — a bare class
+   selector there would lose to that id+element rule and the sticky cells
+   would render white instead of #fafafa. */
+#rosterTable .roster-sticky-checkbox,
+#rosterTable .roster-checkbox-header {
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    background-color: #fafafa;
+    box-shadow: inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: none;
+}
+#rosterTable .roster-checkbox-header {
+    z-index: 5;
+}
+#rosterTable .roster-sticky-name,
+#rosterTable .roster-name-header {
+    position: sticky;
+    left: 30px; /* overwritten dynamically to the measured checkbox column width */
+    z-index: 3;
+    background-color: #fafafa;
+    box-shadow: inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: none;
+}
+#rosterTable .roster-name-header {
+    z-index: 4;
 }
 
 .roster-points-column,

@@ -283,8 +283,6 @@ function renderRosterTable(scope, statsById, loading) {
         rosterElement.appendChild(playerRow);
     });
 
-    requestAnimationFrame(() => makeRosterColumnsSticky());
-
     // --- Team aggregate row ---
     let totGoals = 0, totAssists = 0, totTime = 0;
     let totCompletions = 0, totThrows = 0, totDPlays = 0, totTurnovers = 0;
@@ -1331,99 +1329,49 @@ function saveEditedPlayer() {
 /**
  * Make the first two columns (checkbox, name) sticky for horizontal scrolling
  */
+// Sticky positioning, colors, borders, and z-index for the checkbox/name
+// columns live in CSS (see .roster-sticky-checkbox / .roster-sticky-name /
+// .roster-checkbox-header / .roster-name-header in main.css). This only
+// width-syncs the checkbox column and offsets the name column's `left` to
+// sit right after it — the one part CSS can't do on its own, since the
+// checkbox column's rendered width isn't a fixed constant across
+// browsers/zoom levels. Called once per render, after all rows are built.
 function makeRosterColumnsSticky() {
     const checkboxCells = document.querySelectorAll('.roster-sticky-checkbox');
     if (checkboxCells.length === 0) {
         return;
     }
-    
+
     // Get checkbox column width - use getBoundingClientRect which includes padding and border
     // Use the first data cell (not header) for accurate measurement
     const firstCheckboxCell = checkboxCells[0];
     const checkboxRect = firstCheckboxCell.getBoundingClientRect();
     let checkboxCellWidth = checkboxRect.width;
-    
+
     // If width is 0 or invalid, try to get computed style width
     if (checkboxCellWidth <= 0) {
         const computedStyle = window.getComputedStyle(firstCheckboxCell);
         checkboxCellWidth = parseFloat(computedStyle.width) || 30; // fallback to 30px
     }
-    
-    // Ensure checkbox column has consistent width and positioning
-    checkboxCells.forEach(cell => {
-        cell.style.position = 'sticky';
-        cell.style.left = '0';
-        cell.style.zIndex = '4';
-        cell.style.backgroundColor = '#fafafa';
-        // Force consistent width
+
+    // Force consistent width across all checkbox cells (data + header)
+    const applyCheckboxWidth = (cell) => {
         cell.style.width = `${checkboxCellWidth}px`;
         cell.style.minWidth = `${checkboxCellWidth}px`;
         cell.style.maxWidth = `${checkboxCellWidth}px`;
         cell.style.boxSizing = 'border-box';
-        // Use box-shadow to create borders that stay with sticky column
-        // Format: x-offset y-offset blur spread color
-        // Right border (2px), left border (1px), bottom border (1px)
-        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
-        // Remove all CSS borders that would scroll
-        cell.style.borderLeft = 'none';
-        cell.style.borderRight = 'none';
-        cell.style.borderTop = 'none';
-        cell.style.borderBottom = 'none';
-    });
-    
-    // Get name column cells
-    const nameCells = document.querySelectorAll('.roster-sticky-name');
-    
-    // Apply sticky positioning to name column (positioned right after checkbox)
-    // Use the exact checkbox width to prevent overlap
-    nameCells.forEach(cell => {
-        cell.style.position = 'sticky';
-        cell.style.left = `${checkboxCellWidth}px`;
-        cell.style.zIndex = '3';
-        cell.style.backgroundColor = '#fafafa';
-        // Use box-shadow to create borders that stay with sticky column
-        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
-        // Remove all borders that would scroll
-        cell.style.borderLeft = 'none';
-        cell.style.borderRight = 'none';
-        cell.style.borderTop = 'none';
-        cell.style.borderBottom = 'none';
-    });
-    
-    // Also make header cells sticky
+    };
+    checkboxCells.forEach(applyCheckboxWidth);
     const headerCheckbox = document.querySelector('.roster-checkbox-header');
-    if (headerCheckbox) {
-        headerCheckbox.style.position = 'sticky';
-        headerCheckbox.style.left = '0';
-        headerCheckbox.style.zIndex = '5';
-        headerCheckbox.style.backgroundColor = '#fafafa';
-        // Ensure header checkbox has same width as data cells
-        headerCheckbox.style.width = `${checkboxCellWidth}px`;
-        headerCheckbox.style.minWidth = `${checkboxCellWidth}px`;
-        headerCheckbox.style.maxWidth = `${checkboxCellWidth}px`;
-        headerCheckbox.style.boxSizing = 'border-box';
-        // Use box-shadow to create borders that stay with sticky column
-        // Right border (2px), left border (1px), bottom border (1px)
-        headerCheckbox.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
-        // Remove all CSS borders that would scroll
-        headerCheckbox.style.borderLeft = 'none';
-        headerCheckbox.style.borderRight = 'none';
-        headerCheckbox.style.borderTop = 'none';
-        headerCheckbox.style.borderBottom = 'none';
-    }
-    
+    if (headerCheckbox) applyCheckboxWidth(headerCheckbox);
+
+    // Offset the name column (data + header) to sit right after the checkbox column
+    document.querySelectorAll('.roster-sticky-name').forEach(cell => {
+        cell.style.left = `${checkboxCellWidth}px`;
+    });
     const headerName = document.querySelector('.roster-name-header');
     if (headerName) {
-        headerName.style.position = 'sticky';
         headerName.style.left = `${checkboxCellWidth}px`;
-        headerName.style.zIndex = '4';
-        headerName.style.backgroundColor = '#fafafa';
-        // Use box-shadow to create borders that stay with sticky column
-        headerName.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
-        headerName.style.borderLeft = 'none';
-        headerName.style.borderRight = 'none';
-        headerName.style.borderTop = 'none';
-        headerName.style.borderBottom = 'none';
     }
 }
 
