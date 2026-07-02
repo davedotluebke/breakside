@@ -1,4 +1,4 @@
-const cacheName = 'build-266';
+const cacheName = 'build-267';
 
 self.addEventListener('install', (e) => {
     console.log('Service Worker: Installed');
