@@ -17,7 +17,10 @@
  *   │   └── navigation.js       # Screen navigation and state management
  *   │
  *   ├── teams/                   # Team management
- *   │   ├── teamSelection.js    # Team selection screen and team CRUD operations
+ *   │   ├── teamList.js         # Team/game/event list rendering, team CRUD, join/create dialogs
+ *   │   ├── eventDialogs.js     # Event creation/settings dialogs, event-game start flow
+ *   │   ├── syncStatusUI.js     # Sync status indicator, full-refresh, pending-sync dialog
+ *   │   ├── activeGamePolling.js # Active-game polling and teams-screen auto-refresh
  *   │   └── rosterManagement.js # Roster display, player management, and line management
  *   │
  *   ├── game/                    # Game core logic
