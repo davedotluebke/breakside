@@ -1983,62 +1983,31 @@ function enableAxisLockedScroll(container) {
 }
 
 /**
- * Make panel table columns sticky (similar to legacy makeColumnsSticky)
+ * Width-sync the Line tab's sticky columns and restore horizontal scroll.
+ * Position, colors, box-shadow borders, z-index, and touch-action are static
+ * CSS (see the #panelActivePlayersTable .active-* rules in ui/panelSystem.css)
+ * — this only sets the name/time columns' `left` offsets, which depend on the
+ * measured checkbox/name column widths that CSS can't derive on its own.
  */
 function makePanelColumnsSticky() {
     const checkboxCells = document.querySelectorAll('#panelActivePlayersTable .active-checkbox-column');
     const nameCells = document.querySelectorAll('#panelActivePlayersTable .active-name-column');
     const timeCells = document.querySelectorAll('#panelActivePlayersTable .active-time-column');
-    const headerCells = document.querySelectorAll('#panelActivePlayersTable .active-header-teams');
-    
+
     if (checkboxCells.length === 0) return;
-    
+
     // Get widths
     const checkboxWidth = checkboxCells[0].getBoundingClientRect().width || 30;
     const nameWidth = nameCells.length > 0 ? nameCells[0].getBoundingClientRect().width : 0;
-    
-    // Apply sticky styles to checkbox column
-    checkboxCells.forEach(cell => {
-        cell.style.position = 'sticky';
-        cell.style.left = '0';
-        cell.style.zIndex = '4';
-        cell.style.backgroundColor = '#fafafa';
-        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
-        cell.style.border = 'none';
-        cell.style.touchAction = 'pan-y';
-    });
 
-    // Apply sticky styles to name column
+    // Offset name column to sit right after the checkbox column
     nameCells.forEach(cell => {
-        cell.style.position = 'sticky';
         cell.style.left = `${checkboxWidth}px`;
-        cell.style.zIndex = '3';
-        cell.style.backgroundColor = '#fafafa';
-        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
-        cell.style.border = 'none';
-        cell.style.touchAction = 'pan-y';
     });
 
-    // Apply sticky styles to time column
+    // Offset time column to sit right after the name column
     timeCells.forEach(cell => {
-        cell.style.position = 'sticky';
         cell.style.left = `${checkboxWidth + nameWidth}px`;
-        cell.style.zIndex = '3';
-        cell.style.backgroundColor = '#fafafa';
-        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
-        cell.style.border = 'none';
-        cell.style.touchAction = 'pan-y';
-    });
-
-    // Apply sticky styles to header cells
-    headerCells.forEach(cell => {
-        cell.style.position = 'sticky';
-        cell.style.left = '0';
-        cell.style.zIndex = '5';
-        cell.style.backgroundColor = '#fafafa';
-        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
-        cell.style.border = 'none';
-        cell.style.touchAction = 'pan-y';
     });
 
     // Restore the user's horizontal scroll position. Snap to the right edge

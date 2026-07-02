@@ -244,96 +244,44 @@ function renderRosterTable(scope, statsById, loading) {
 
     // --- Player rows ---
     const dash = '—';
-    const fmtPlusMinus = (v) => v > 0 ? `+${v}` : `${v}`;
 
     roster.forEach(player => {
         const s = statsById[player.id] || {};
-        const playerRow = document.createElement('tr');
 
-        const checkboxCell = document.createElement('td');
-        checkboxCell.classList.add('active-checkbox-column', 'roster-sticky-checkbox');
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.classList.add('active-checkbox');
-        checkboxCell.appendChild(checkbox);
-        playerRow.appendChild(checkboxCell);
 
-        const nameCell = document.createElement('td');
-        nameCell.classList.add('roster-name-column', 'roster-sticky-name');
-        nameCell.textContent = formatPlayerName(player);
+        const nameClasses = ['roster-name-column', 'roster-sticky-name'];
+        const genderClasses = ['roster-gender-column'];
         if (player.gender === Gender.FMP) {
-            nameCell.classList.add('player-fmp');
+            nameClasses.push('player-fmp');
+            genderClasses.push('player-fmp');
         } else if (player.gender === Gender.MMP) {
-            nameCell.classList.add('player-mmp');
+            nameClasses.push('player-mmp');
+            genderClasses.push('player-mmp');
         }
-        nameCell.addEventListener('click', () => showEditPlayerDialog(player));
-        playerRow.appendChild(nameCell);
-
-        const genderCell = document.createElement('td');
-        genderCell.classList.add('roster-gender-column');
-        genderCell.textContent = genderLabel(player);
-        if (player.gender === Gender.FMP) genderCell.classList.add('player-fmp');
-        else if (player.gender === Gender.MMP) genderCell.classList.add('player-mmp');
-        playerRow.appendChild(genderCell);
-
-        const pointsCell = document.createElement('td');
-        pointsCell.classList.add('roster-points-column');
-        pointsCell.textContent = s.pointsPlayed || 0;
-        playerRow.appendChild(pointsCell);
-
-        const timeCell = document.createElement('td');
-        timeCell.classList.add('roster-time-column');
-        timeCell.textContent = formatPlayTime(s.timePlayed || 0);
-        playerRow.appendChild(timeCell);
-
-        const goalsCell = document.createElement('td');
-        goalsCell.classList.add('roster-goals-column');
-        goalsCell.textContent = s.goals || 0;
-        playerRow.appendChild(goalsCell);
-
-        const assistsCell = document.createElement('td');
-        assistsCell.classList.add('roster-assists-column');
-        assistsCell.textContent = s.assists || 0;
-        playerRow.appendChild(assistsCell);
-
-        const compPctCell = document.createElement('td');
-        compPctCell.classList.add('roster-comppct-column');
-        if (s.totalThrows == null) {
-            compPctCell.textContent = dash;
-        } else if (s.totalThrows > 0) {
-            compPctCell.textContent = `${((s.completions / s.totalThrows) * 100).toFixed(0)}%`;
-        } else {
-            compPctCell.textContent = '-';
-        }
-        playerRow.appendChild(compPctCell);
-
-        const dPlaysCell = document.createElement('td');
-        dPlaysCell.classList.add('roster-dplays-column');
-        dPlaysCell.textContent = s.dPlays == null ? dash : (s.dPlays || 0);
-        playerRow.appendChild(dPlaysCell);
-
-        const turnoversCell = document.createElement('td');
-        turnoversCell.classList.add('roster-turnovers-column');
-        turnoversCell.textContent = s.turnovers == null ? dash : (s.turnovers || 0);
-        playerRow.appendChild(turnoversCell);
 
         const plusMinus = s.plusMinus || 0;
-        const plusMinusCell = document.createElement('td');
-        plusMinusCell.classList.add('roster-plusminus-column');
-        plusMinusCell.textContent = fmtPlusMinus(plusMinus);
-        playerRow.appendChild(plusMinusCell);
-
-        const perPointCell = document.createElement('td');
-        perPointCell.classList.add('roster-plusminus-per-point-column');
         const perPoint = (s.pointsPlayed > 0) ? (plusMinus / s.pointsPlayed) : 0;
-        const perPointStr = perPoint > 0 ? `+${perPoint.toFixed(2)}` : perPoint.toFixed(2);
-        perPointCell.textContent = perPointStr;
-        playerRow.appendChild(perPointCell);
+
+        const playerRow = buildRosterRow([
+            { element: checkbox, className: ['active-checkbox-column', 'roster-sticky-checkbox'] },
+            { value: formatPlayerName(player), className: nameClasses, onClick: () => showEditPlayerDialog(player) },
+            { value: genderLabel(player), className: genderClasses },
+            { value: s.pointsPlayed || 0, className: 'roster-points-column' },
+            { value: formatPlayTime(s.timePlayed || 0), className: 'roster-time-column' },
+            { value: s.goals || 0, className: 'roster-goals-column' },
+            { value: s.assists || 0, className: 'roster-assists-column' },
+            { value: s.totalThrows == null ? dash : formatPercentOrDash(s.completions, s.totalThrows), className: 'roster-comppct-column' },
+            { value: s.dPlays == null ? dash : (s.dPlays || 0), className: 'roster-dplays-column' },
+            { value: s.turnovers == null ? dash : (s.turnovers || 0), className: 'roster-turnovers-column' },
+            { value: formatSigned(plusMinus), className: 'roster-plusminus-column' },
+            { value: formatSignedFixed(perPoint, 2), className: 'roster-plusminus-per-point-column' }
+        ]);
 
         rosterElement.appendChild(playerRow);
     });
-
-    requestAnimationFrame(() => makeRosterColumnsSticky());
 
     // --- Team aggregate row ---
     let totGoals = 0, totAssists = 0, totTime = 0;
@@ -356,12 +304,10 @@ function renderRosterTable(scope, statsById, loading) {
     const teamRow = document.createElement('tr');
     teamRow.classList.add('team-aggregate-row');
     const appendTeamCell = (value, className, sticky) => {
-        const cell = document.createElement('td');
-        cell.classList.add(className, 'team-total-cell');
-        if (sticky === 'checkbox') cell.classList.add('roster-sticky-checkbox');
-        else if (sticky === 'name') cell.classList.add('roster-sticky-name');
-        cell.textContent = value;
-        teamRow.appendChild(cell);
+        const classes = [className, 'team-total-cell'];
+        if (sticky === 'checkbox') classes.push('roster-sticky-checkbox');
+        else if (sticky === 'name') classes.push('roster-sticky-name');
+        appendRosterCell(teamRow, { value, className: classes });
     };
 
     const game = (typeof currentGame === 'function') ? currentGame() : null;
@@ -373,15 +319,15 @@ function renderRosterTable(scope, statsById, loading) {
     appendTeamCell(formatPlayTime(totTime), 'roster-time-column');
     appendTeamCell(totGoals, 'roster-goals-column');
     appendTeamCell(totAssists, 'roster-assists-column');
-    appendTeamCell(detailAvailable && totThrows > 0 ? `${((totCompletions / totThrows) * 100).toFixed(0)}%` : dash, 'roster-comppct-column');
+    appendTeamCell(detailAvailable && totThrows > 0 ? formatPercentOrDash(totCompletions, totThrows) : dash, 'roster-comppct-column');
     appendTeamCell(detailAvailable ? totDPlays : dash, 'roster-dplays-column');
     appendTeamCell(detailAvailable ? totTurnovers : dash, 'roster-turnovers-column');
     if (scope === 'game' && game) {
         const teamPM = (game.scores[Role.TEAM] || 0) - (game.scores[Role.OPPONENT] || 0);
-        appendTeamCell(fmtPlusMinus(teamPM), 'roster-plusminus-column');
+        appendTeamCell(formatSigned(teamPM), 'roster-plusminus-column');
         const tp = game.points.length;
         const pmpp = tp > 0 ? teamPM / tp : 0;
-        appendTeamCell(pmpp > 0 ? `+${pmpp.toFixed(2)}` : pmpp.toFixed(2), 'roster-plusminus-per-point-column');
+        appendTeamCell(formatSignedFixed(pmpp, 2), 'roster-plusminus-per-point-column');
     } else {
         appendTeamCell(dash, 'roster-plusminus-column');
         appendTeamCell(dash, 'roster-plusminus-per-point-column');
@@ -460,82 +406,33 @@ function updateGameSummaryRosterDisplay() {
     rosterElement.appendChild(headerRow);
 
     playersToDisplay.forEach(player => {
-        const playerRow = document.createElement('tr');
-
-        const nameCell = document.createElement('td');
-        nameCell.classList.add('roster-name-column');
-        nameCell.textContent = formatPlayerName(player);
-        
-        // Add gender-based color coding
+        const nameClasses = ['roster-name-column'];
         if (player.gender === Gender.FMP) {
-            nameCell.classList.add('player-fmp');
+            nameClasses.push('player-fmp');
         } else if (player.gender === Gender.MMP) {
-            nameCell.classList.add('player-mmp');
+            nameClasses.push('player-mmp');
         }
-        
-        playerRow.appendChild(nameCell);
-
-        const totalPointsCell = document.createElement('td');
-        totalPointsCell.classList.add('roster-points-column');
-        totalPointsCell.textContent = player.totalPointsPlayed;
-        playerRow.appendChild(totalPointsCell);
-
-        const totalTimeCell = document.createElement('td');
-        totalTimeCell.classList.add('roster-time-column');
-        totalTimeCell.textContent = formatPlayTime(player.totalTimePlayed);
-        playerRow.appendChild(totalTimeCell);
-
-        const goalsCell = document.createElement('td');
-        goalsCell.classList.add('roster-goals-column');
-        goalsCell.textContent = player.goals || 0;
-        playerRow.appendChild(goalsCell);
-
-        const assistsCell = document.createElement('td');
-        assistsCell.classList.add('roster-assists-column');
-        assistsCell.textContent = player.assists || 0;
-        playerRow.appendChild(assistsCell);
 
         const playerStats = eventStats[player.name] || {};
-
-        const compPctCell = document.createElement('td');
-        compPctCell.classList.add('roster-comppct-column');
-        const compPct = playerStats.totalThrows > 0
-            ? ((playerStats.completions / playerStats.totalThrows) * 100).toFixed(0)
-            : '-';
-        compPctCell.textContent = compPct !== '-' ? `${compPct}%` : compPct;
-        playerRow.appendChild(compPctCell);
-
-        const huckPctCell = document.createElement('td');
-        huckPctCell.classList.add('roster-huckpct-column');
-        const huckPct = playerStats.totalHucks > 0
-            ? ((playerStats.huckCompletions / playerStats.totalHucks) * 100).toFixed(0)
-            : '-';
-        huckPctCell.textContent = huckPct !== '-' ? `${huckPct}%` : huckPct;
-        playerRow.appendChild(huckPctCell);
-
-        const dPlaysCell = document.createElement('td');
-        dPlaysCell.classList.add('roster-dplays-column');
-        dPlaysCell.textContent = playerStats.dPlays || 0;
-        playerRow.appendChild(dPlaysCell);
-
-        const turnoversCell = document.createElement('td');
-        turnoversCell.classList.add('roster-turnovers-column');
-        turnoversCell.textContent = playerStats.turnovers || 0;
-        playerRow.appendChild(turnoversCell);
-
-        const plusMinusCell = document.createElement('td');
-        plusMinusCell.classList.add('roster-plusminus-column');
         const plusMinus = (player.pointsWon || 0) - (player.pointsLost || 0);
-        plusMinusCell.textContent = plusMinus > 0 ? `+${plusMinus}` : plusMinus;
-        playerRow.appendChild(plusMinusCell);
-
-        const plusMinusPerPointCell = document.createElement('td');
-        plusMinusPerPointCell.classList.add('roster-plusminus-per-point-column');
+        // Zero-points case renders the literal "0.0" (not "0.00") — preserved as-is.
         const plusMinusPerPoint = player.totalPointsPlayed > 0
-            ? (plusMinus / player.totalPointsPlayed).toFixed(2)
+            ? formatSignedFixed(plusMinus / player.totalPointsPlayed, 2)
             : '0.0';
-        plusMinusPerPointCell.textContent = plusMinusPerPoint > 0 ? `+${plusMinusPerPoint}` : plusMinusPerPoint;
-        playerRow.appendChild(plusMinusPerPointCell);
+
+        const playerRow = buildRosterRow([
+            { value: formatPlayerName(player), className: nameClasses },
+            { value: player.totalPointsPlayed, className: 'roster-points-column' },
+            { value: formatPlayTime(player.totalTimePlayed), className: 'roster-time-column' },
+            { value: player.goals || 0, className: 'roster-goals-column' },
+            { value: player.assists || 0, className: 'roster-assists-column' },
+            { value: formatPercentOrDash(playerStats.completions, playerStats.totalThrows), className: 'roster-comppct-column' },
+            { value: formatPercentOrDash(playerStats.huckCompletions, playerStats.totalHucks), className: 'roster-huckpct-column' },
+            { value: playerStats.dPlays || 0, className: 'roster-dplays-column' },
+            { value: playerStats.turnovers || 0, className: 'roster-turnovers-column' },
+            { value: formatSigned(plusMinus), className: 'roster-plusminus-column' },
+            { value: plusMinusPerPoint, className: 'roster-plusminus-per-point-column' }
+        ]);
 
         rosterElement.appendChild(playerRow);
     });
@@ -1432,99 +1329,49 @@ function saveEditedPlayer() {
 /**
  * Make the first two columns (checkbox, name) sticky for horizontal scrolling
  */
+// Sticky positioning, colors, borders, and z-index for the checkbox/name
+// columns live in CSS (see .roster-sticky-checkbox / .roster-sticky-name /
+// .roster-checkbox-header / .roster-name-header in main.css). This only
+// width-syncs the checkbox column and offsets the name column's `left` to
+// sit right after it — the one part CSS can't do on its own, since the
+// checkbox column's rendered width isn't a fixed constant across
+// browsers/zoom levels. Called once per render, after all rows are built.
 function makeRosterColumnsSticky() {
     const checkboxCells = document.querySelectorAll('.roster-sticky-checkbox');
     if (checkboxCells.length === 0) {
         return;
     }
-    
+
     // Get checkbox column width - use getBoundingClientRect which includes padding and border
     // Use the first data cell (not header) for accurate measurement
     const firstCheckboxCell = checkboxCells[0];
     const checkboxRect = firstCheckboxCell.getBoundingClientRect();
     let checkboxCellWidth = checkboxRect.width;
-    
+
     // If width is 0 or invalid, try to get computed style width
     if (checkboxCellWidth <= 0) {
         const computedStyle = window.getComputedStyle(firstCheckboxCell);
         checkboxCellWidth = parseFloat(computedStyle.width) || 30; // fallback to 30px
     }
-    
-    // Ensure checkbox column has consistent width and positioning
-    checkboxCells.forEach(cell => {
-        cell.style.position = 'sticky';
-        cell.style.left = '0';
-        cell.style.zIndex = '4';
-        cell.style.backgroundColor = '#fafafa';
-        // Force consistent width
+
+    // Force consistent width across all checkbox cells (data + header)
+    const applyCheckboxWidth = (cell) => {
         cell.style.width = `${checkboxCellWidth}px`;
         cell.style.minWidth = `${checkboxCellWidth}px`;
         cell.style.maxWidth = `${checkboxCellWidth}px`;
         cell.style.boxSizing = 'border-box';
-        // Use box-shadow to create borders that stay with sticky column
-        // Format: x-offset y-offset blur spread color
-        // Right border (2px), left border (1px), bottom border (1px)
-        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
-        // Remove all CSS borders that would scroll
-        cell.style.borderLeft = 'none';
-        cell.style.borderRight = 'none';
-        cell.style.borderTop = 'none';
-        cell.style.borderBottom = 'none';
-    });
-    
-    // Get name column cells
-    const nameCells = document.querySelectorAll('.roster-sticky-name');
-    
-    // Apply sticky positioning to name column (positioned right after checkbox)
-    // Use the exact checkbox width to prevent overlap
-    nameCells.forEach(cell => {
-        cell.style.position = 'sticky';
-        cell.style.left = `${checkboxCellWidth}px`;
-        cell.style.zIndex = '3';
-        cell.style.backgroundColor = '#fafafa';
-        // Use box-shadow to create borders that stay with sticky column
-        cell.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
-        // Remove all borders that would scroll
-        cell.style.borderLeft = 'none';
-        cell.style.borderRight = 'none';
-        cell.style.borderTop = 'none';
-        cell.style.borderBottom = 'none';
-    });
-    
-    // Also make header cells sticky
+    };
+    checkboxCells.forEach(applyCheckboxWidth);
     const headerCheckbox = document.querySelector('.roster-checkbox-header');
-    if (headerCheckbox) {
-        headerCheckbox.style.position = 'sticky';
-        headerCheckbox.style.left = '0';
-        headerCheckbox.style.zIndex = '5';
-        headerCheckbox.style.backgroundColor = '#fafafa';
-        // Ensure header checkbox has same width as data cells
-        headerCheckbox.style.width = `${checkboxCellWidth}px`;
-        headerCheckbox.style.minWidth = `${checkboxCellWidth}px`;
-        headerCheckbox.style.maxWidth = `${checkboxCellWidth}px`;
-        headerCheckbox.style.boxSizing = 'border-box';
-        // Use box-shadow to create borders that stay with sticky column
-        // Right border (2px), left border (1px), bottom border (1px)
-        headerCheckbox.style.boxShadow = 'inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey';
-        // Remove all CSS borders that would scroll
-        headerCheckbox.style.borderLeft = 'none';
-        headerCheckbox.style.borderRight = 'none';
-        headerCheckbox.style.borderTop = 'none';
-        headerCheckbox.style.borderBottom = 'none';
-    }
-    
+    if (headerCheckbox) applyCheckboxWidth(headerCheckbox);
+
+    // Offset the name column (data + header) to sit right after the checkbox column
+    document.querySelectorAll('.roster-sticky-name').forEach(cell => {
+        cell.style.left = `${checkboxCellWidth}px`;
+    });
     const headerName = document.querySelector('.roster-name-header');
     if (headerName) {
-        headerName.style.position = 'sticky';
         headerName.style.left = `${checkboxCellWidth}px`;
-        headerName.style.zIndex = '4';
-        headerName.style.backgroundColor = '#fafafa';
-        // Use box-shadow to create borders that stay with sticky column
-        headerName.style.boxShadow = 'inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey';
-        headerName.style.borderLeft = 'none';
-        headerName.style.borderRight = 'none';
-        headerName.style.borderTop = 'none';
-        headerName.style.borderBottom = 'none';
     }
 }
 
