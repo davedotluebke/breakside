@@ -1900,7 +1900,7 @@ body.game-screen-active header {
 
 /* Controls header row: a light-grey band under the score rows that holds the
    Wholesale icon, the "Player" label, and the Game/Event toggle. The
-   !important beats the inline #fafafa that makePanelColumnsSticky() writes onto
+   !important beats the #fafafa the id-scoped sticky-column rules below put on
    the sticky checkbox/name/time cells, so the whole band reads as one colour. */
 .panel-player-table .select-line-controls-row th {
     background: #e4e7ea !important;
@@ -1911,8 +1911,8 @@ body.game-screen-active header {
     font-family: inherit !important;
     font-style: normal !important;
     /* Double-thick rule to firmly separate the header band from the players.
-       !important beats the inline `border:none` makePanelColumnsSticky() writes
-       onto the sticky checkbox/name/time cells. */
+       !important beats the `border: none` the id-scoped sticky-column rules
+       below put on the sticky checkbox/name/time cells. */
     border-bottom: 3px solid #868e96 !important;
 }
 
@@ -1965,6 +1965,54 @@ body.game-screen-active header {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.75rem;
     color: #6c757d;
+}
+
+/* Sticky checkbox/name/time columns + merged score-row header cells on the
+   Line tab table. Position/color/box-shadow/border/z-index live here; only
+   the name/time columns' `left` offsets are width-synced from JS in
+   makePanelColumnsSticky() (game/selectLine.js), since they depend on the
+   measured checkbox/name column widths.
+   Scoped by ID for two reasons: the injury-sub dialog's #subPlayersTable
+   shares these classes but has never had sticky columns, and the id-scoped
+   selectors beat `.panel-player-table th` (background) and the td/th
+   border-bottom rule above on specificity.
+   touch-action: pan-y keeps vertical page panning working when a touch
+   starts on a pinned cell (pairs with enableAxisLockedScroll). */
+#panelActivePlayersTable .active-checkbox-column {
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    background-color: #fafafa;
+    box-shadow: inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
+    border: none;
+    touch-action: pan-y;
+}
+#panelActivePlayersTable .active-name-column {
+    position: sticky;
+    left: 30px; /* overwritten dynamically to the measured checkbox width */
+    z-index: 3;
+    background-color: #fafafa;
+    box-shadow: inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey;
+    border: none;
+    touch-action: pan-y;
+}
+#panelActivePlayersTable .active-time-column {
+    position: sticky;
+    left: 140px; /* overwritten dynamically to checkbox + name width */
+    z-index: 3;
+    background-color: #fafafa;
+    box-shadow: inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey;
+    border: none;
+    touch-action: pan-y;
+}
+#panelActivePlayersTable .active-header-teams {
+    position: sticky;
+    left: 0;
+    z-index: 5;
+    background-color: #fafafa;
+    box-shadow: inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
+    border: none;
+    touch-action: pan-y;
 }
 
 .panel-player-table .active-points-columns {
