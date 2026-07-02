@@ -345,7 +345,7 @@ function createEventRosterPlayerRow(player, eventPlayerStats, hasStats, totals, 
 
     // Stats cells
     if (hasStats) {
-        const ps = eventPlayerStats[player.name] || {};
+        const ps = eventPlayerStats[player.id] || {};
         const pts = ps.pointsPlayed || 0;
         const time = ps.timePlayed || 0;
         const goals = ps.goals || 0;
