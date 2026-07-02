@@ -157,6 +157,35 @@ function isAuthenticated() {
 }
 
 /**
+ * Whether the app can safely act on the user's behalf despite not having a
+ * confirmed authenticated session — i.e. distinguish "genuinely signed out"
+ * from "we can't reach Supabase to know".
+ *
+ * Offline-first surfaces (e.g. create-team) should fall back to a local +
+ * queue-for-sync path when this returns true, and only hard-block on
+ * "please sign in" when it returns false.
+ *
+ * @returns {boolean} true if authenticated OR auth status is indeterminate
+ *                    (device offline / Supabase client unavailable);
+ *                    false only when genuinely signed out while online.
+ */
+function canActOffline() {
+    // A confirmed session always qualifies.
+    if (isAuthenticated()) return true;
+
+    // No session — figure out whether that's authoritative. If the device is
+    // offline, or the Supabase client never came up (JS not loaded, config
+    // missing, or init failed), we can't actually know the auth state, so
+    // treat it as "offline/degraded" rather than "signed out".
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+    if (typeof window.supabase === 'undefined') return true;
+    if (!supabaseClient) return true;
+
+    // Online, Supabase available, and no session → genuinely signed out.
+    return false;
+}
+
+/**
  * Enable test mode: inject a fake authenticated session without Supabase.
  * For automated testing only — never call this in production.
  * @param {string} userId - Test user ID (default: 'test-user')
@@ -466,6 +495,7 @@ async function syncUserToBackend() {
 window.BreaksideAuth = {
     initializeAuth,
     isAuthenticated,
+    canActOffline,
     getCurrentUser,
     getCurrentSession,
     onAuthStateChange,
@@ -487,6 +517,7 @@ window.breakside.auth = {
     // State queries
     isAuthenticated,
     isLoggedIn: isAuthenticated,  // alias for consistency
+    canActOffline,
     getCurrentUser,
     getCurrentSession,
     getSession: getCurrentSession,  // alias
