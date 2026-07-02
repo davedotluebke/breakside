@@ -397,12 +397,12 @@ class Violation extends Event {
     // Override summarize for Violation events  
     summarize() {
         let summary = 'Violation called: ';
-        if (this.offensive_flag)        { summary += 'Offensive foul '; }
+        if (this.ofoul_flag)            { summary += 'Offensive foul '; }
         if (this.strip_flag)            { summary += 'Strip '; }
         if (this.pick_flag)             { summary += 'Pick '; }
         if (this.travel_flag)           { summary += 'Travel '; }
-        if (this.contested_flag)        { summary += 'Contested foul '; }
-        if (this.doubleTeam_flag)       { summary += 'Double team '; }
+        if (this.contest_flag)          { summary += 'Contested foul '; }
+        if (this.dblteam_flag)          { summary += 'Double team '; }
         return summary;
     }
 }

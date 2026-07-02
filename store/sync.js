@@ -198,6 +198,55 @@ function hasPendingSync(type, id) {
     return syncQueue.some(item => item.type === type && item.id === id);
 }
 
+// After this many failed attempts a queue item is assumed to be permanently
+// broken (e.g. a server 4xx from a malformed payload) and is quarantined so it
+// can't loop forever every 5s.
+const MAX_SYNC_RETRIES = 5;
+
+/**
+ * Decide whether a sync failure is a connectivity problem (pause and retry)
+ * versus a hard server error (count against the retry cap).
+ *
+ * fetch() rejects with a TypeError on every kind of network failure, but the
+ * message differs per browser ("Failed to fetch" Chrome, "Load failed" Safari,
+ * "NetworkError when attempting to fetch resource" Firefox), so match on the
+ * error type and the onLine flag rather than one Chrome-specific string.
+ * HTTP 4xx/5xx don't reject fetch — syncQueueItem throws a plain Error for
+ * those — so they correctly fall through as hard errors.
+ */
+function isOfflineError(error) {
+    return !navigator.onLine || error instanceof TypeError;
+}
+
+/**
+ * Remove a permanently-failing item from the live queue, stash it in a bounded
+ * dead-letter list for inspection, and surface it to the user.
+ */
+function quarantineSyncItem(item) {
+    try {
+        const deadLetter = JSON.parse(localStorage.getItem('syncDeadLetter') || '[]');
+        deadLetter.push({ ...item, quarantinedAt: new Date().toISOString() });
+        // Bound the dead-letter list so it can't grow without limit.
+        while (deadLetter.length > 50) deadLetter.shift();
+        localStorage.setItem('syncDeadLetter', JSON.stringify(deadLetter));
+    } catch (e) {
+        console.error('Failed to persist quarantined sync item:', e);
+    }
+
+    console.error(
+        `🚫 Quarantined sync item after ${item.retryCount} failed attempts:`,
+        item.type, item.id, '-', item.lastError
+    );
+
+    if (typeof showControllerToast === 'function') {
+        showControllerToast(
+            `Couldn't sync a ${item.type} change after several tries — it's been set aside. Your other data is unaffected.`,
+            'error',
+            6000
+        );
+    }
+}
+
 /**
  * Process the sync queue in dependency order: players → teams → games
  */
@@ -228,19 +277,30 @@ async function processSyncQueue() {
             
         } catch (error) {
             console.error(`❌ Failed to sync ${item.type} ${item.id}:`, error);
-            
-            // Increment retry count
+
+            // A connectivity failure isn't the item's fault — stop processing
+            // and let the online listener / retry timer pick it back up. Don't
+            // count it against the retry cap.
+            if (isOfflineError(error)) {
+                isOnline = false;
+                break;
+            }
+
+            // Hard error (e.g. server 4xx from a malformed payload). Count the
+            // retry; once it hits the cap, quarantine the item so it can't
+            // block the queue and loop forever.
             const queueItem = syncQueue.find(q => q.type === item.type && q.id === item.id);
             if (queueItem) {
                 queueItem.retryCount = (queueItem.retryCount || 0) + 1;
                 queueItem.lastError = error.message;
+
+                if (queueItem.retryCount >= MAX_SYNC_RETRIES) {
+                    syncQueue = syncQueue.filter(q =>
+                        !(q.type === item.type && q.id === item.id)
+                    );
+                    quarantineSyncItem(queueItem);
+                }
                 saveSyncQueue();
-            }
-            
-            // If it's a network error, stop processing
-            if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
-                isOnline = false;
-                break;
             }
         }
     }
@@ -452,9 +512,13 @@ async function syncPlayerToCloud(player) {
         throw new Error('Player must have an ID');
     }
     
-    // Update timestamp
-    player.updatedAt = new Date().toISOString();
-    
+    // Bump the timestamp only on the serialized copy we queue — NOT on the
+    // caller's live object. If this sync later fails or we're offline, mutating
+    // the source would leave it with a future updatedAt that beats a genuinely
+    // newer server record in syncUserTeams' serverUpdated > localUpdated check,
+    // suppressing a real incoming update.
+    const updatedAt = new Date().toISOString();
+
     // Prepare data for sync
     const playerData = {
         id: player.id,
@@ -463,7 +527,7 @@ async function syncPlayerToCloud(player) {
         gender: player.gender || Gender.UNKNOWN,
         number: player.number || null,
         createdAt: player.createdAt,
-        updatedAt: player.updatedAt
+        updatedAt: updatedAt
     };
     
     // Queue for sync
@@ -592,9 +656,11 @@ async function syncTeamToCloud(team) {
         throw new Error('Team must have an ID');
     }
     
-    // Update timestamp
-    team.updatedAt = new Date().toISOString();
-    
+    // Bump the timestamp only on the serialized copy we queue — NOT on the
+    // caller's live object (see syncPlayerToCloud for why mutating the source
+    // on a failed/offline sync suppresses real incoming server updates).
+    const updatedAt = new Date().toISOString();
+
     // Prepare data for sync (exclude legacy embedded data)
     const teamData = {
         id: team.id,
@@ -602,7 +668,7 @@ async function syncTeamToCloud(team) {
         playerIds: team.playerIds || [],
         lines: team.lines || [],
         createdAt: team.createdAt,
-        updatedAt: team.updatedAt,
+        updatedAt: updatedAt,
         // Phase 6b: Team identity fields (synced when team settings change)
         teamSymbol: team.teamSymbol || null,
         iconUrl: team.iconUrl || null
@@ -1084,6 +1150,21 @@ async function loadGameFromCloud(gameId) {
  * @param {string} gameId - Game ID to refresh
  * @returns {Promise<object|null>} Updated pendingNextLine or null if failed
  */
+/**
+ * Normalize a timestamp to epoch milliseconds for comparison. Accepts epoch-ms
+ * numbers (e.g. lineupReadyAt, documented as epoch ms), ISO-8601 strings, or
+ * Date objects; returns 0 for null/undefined/unparseable values so a missing
+ * timestamp always loses the "newer wins" comparison. Using this everywhere
+ * keeps the pendingNextLine merge from mixing raw `>` (epoch ms) with
+ * `new Date(...).getTime()` (ISO) and silently mis-ordering if a writer drifts.
+ */
+function toMs(v) {
+    if (v == null) return 0;
+    if (typeof v === 'number') return v;
+    const t = new Date(v).getTime();
+    return Number.isNaN(t) ? 0 : t;
+}
+
 async function refreshPendingLineFromCloud(gameId) {
     if (!isOnline || !gameId) {
         return null;
@@ -1115,8 +1196,8 @@ async function refreshPendingLineFromCloud(gameId) {
         // Check each line type and use whichever is newer
         ['oLine', 'dLine', 'odLine', 'odOnDeckLine'].forEach(lineKey => {
             const modKey = lineKey.replace('Line', 'LineModifiedAt');
-            const serverModTime = serverPending[modKey] ? new Date(serverPending[modKey]).getTime() : 0;
-            const localModTime = localPending[modKey] ? new Date(localPending[modKey]).getTime() : 0;
+            const serverModTime = toMs(serverPending[modKey]);
+            const localModTime = toMs(localPending[modKey]);
 
             if (serverModTime > localModTime) {
                 // Server has newer data for this line type
@@ -1129,9 +1210,7 @@ async function refreshPendingLineFromCloud(gameId) {
         // sole writer; Active Coach reads. Last-writer-wins by timestamp,
         // same as the line-type fields. Fire-and-forget — the AC's polling
         // shows a toast on advance; no persistent latch.
-        const serverReadyAt = serverPending.lineupReadyAt || 0;
-        const localReadyAt = localPending.lineupReadyAt || 0;
-        if (serverReadyAt > localReadyAt) {
+        if (toMs(serverPending.lineupReadyAt) > toMs(localPending.lineupReadyAt)) {
             localPending.lineupReadyAt = serverPending.lineupReadyAt;
             localPending.lineupReadyBy = serverPending.lineupReadyBy || null;
         }
@@ -1139,22 +1218,14 @@ async function refreshPendingLineFromCloud(gameId) {
         // Merge LC-viewing signal (only the LC writes this). Independent
         // last-writer-wins on lineCoachViewingAt — AC reads to render the
         // "Line Coach: viewing the X line" sub-header.
-        const serverViewingAt = serverPending.lineCoachViewingAt
-            ? new Date(serverPending.lineCoachViewingAt).getTime() : 0;
-        const localViewingAt = localPending.lineCoachViewingAt
-            ? new Date(localPending.lineCoachViewingAt).getTime() : 0;
-        if (serverViewingAt > localViewingAt) {
+        if (toMs(serverPending.lineCoachViewingAt) > toMs(localPending.lineCoachViewingAt)) {
             localPending.lineCoachViewing = serverPending.lineCoachViewing || null;
             localPending.lineCoachViewingAt = serverPending.lineCoachViewingAt;
         }
 
         // Merge Combined/Separate planning mode (either coach may flip it).
         // Last-writer-wins on its own timestamp, like the signals above.
-        const serverModeAt = serverPending.useSeparateLinesAt
-            ? new Date(serverPending.useSeparateLinesAt).getTime() : 0;
-        const localModeAt = localPending.useSeparateLinesAt
-            ? new Date(localPending.useSeparateLinesAt).getTime() : 0;
-        if (serverModeAt > localModeAt) {
+        if (toMs(serverPending.useSeparateLinesAt) > toMs(localPending.useSeparateLinesAt)) {
             localPending.useSeparateLines = !!serverPending.useSeparateLines;
             localPending.useSeparateLinesAt = serverPending.useSeparateLinesAt;
         }
@@ -1271,8 +1342,8 @@ async function refreshGameStateFromCloud(gameId) {
             
             ['oLine', 'dLine', 'odLine', 'odOnDeckLine'].forEach(lineKey => {
                 const modKey = lineKey.replace('Line', 'LineModifiedAt');
-                const serverModTime = serverPending[modKey] ? new Date(serverPending[modKey]).getTime() : 0;
-                const localModTime = localPending[modKey] ? new Date(localPending[modKey]).getTime() : 0;
+                const serverModTime = toMs(serverPending[modKey]);
+                const localModTime = toMs(localPending[modKey]);
 
                 if (serverModTime > localModTime) {
                     localPending[lineKey] = serverPending[lineKey] || [];
@@ -1282,21 +1353,24 @@ async function refreshGameStateFromCloud(gameId) {
 
             // Lineup Ready multi-coach signal — same merge contract as
             // refreshPendingLineFromCloud.
-            const serverReadyAt = serverPending.lineupReadyAt || 0;
-            const localReadyAt = localPending.lineupReadyAt || 0;
-            if (serverReadyAt > localReadyAt) {
+            if (toMs(serverPending.lineupReadyAt) > toMs(localPending.lineupReadyAt)) {
                 localPending.lineupReadyAt = serverPending.lineupReadyAt;
                 localPending.lineupReadyBy = serverPending.lineupReadyBy || null;
-                }
+            }
 
             // LC-viewing signal — independent timestamp merge.
-            const serverViewingAt = serverPending.lineCoachViewingAt
-                ? new Date(serverPending.lineCoachViewingAt).getTime() : 0;
-            const localViewingAt = localPending.lineCoachViewingAt
-                ? new Date(localPending.lineCoachViewingAt).getTime() : 0;
-            if (serverViewingAt > localViewingAt) {
+            if (toMs(serverPending.lineCoachViewingAt) > toMs(localPending.lineCoachViewingAt)) {
                 localPending.lineCoachViewing = serverPending.lineCoachViewing || null;
                 localPending.lineCoachViewingAt = serverPending.lineCoachViewingAt;
+            }
+
+            // Merge Combined/Separate planning mode — same contract as
+            // refreshPendingLineFromCloud. Without this, a coach who flips
+            // planning mode only propagates it via the line-refresh path, not
+            // this full-state path, leaving the two pollers in disagreement.
+            if (toMs(serverPending.useSeparateLinesAt) > toMs(localPending.useSeparateLinesAt)) {
+                localPending.useSeparateLines = !!serverPending.useSeparateLines;
+                localPending.useSeparateLinesAt = serverPending.useSeparateLinesAt;
             }
 
             game.pendingNextLine = localPending;
