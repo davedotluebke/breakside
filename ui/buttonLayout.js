@@ -41,3 +41,7 @@ if (document.readyState === 'loading') {
     initializeButtonLayout();
 }
 
+// --- ES-module exports; window.* shims are transitional until all consumers import ---
+export { matchButtonWidths };
+window.matchButtonWidths = matchButtonWidths;
+

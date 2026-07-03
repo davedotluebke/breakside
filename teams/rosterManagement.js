@@ -1454,17 +1454,13 @@ function stopRosterPolling() {
 }
 
 // Start polling when roster screen becomes visible
-// Hook into showScreen if available
-const originalShowScreen = window.showScreen;
-if (typeof originalShowScreen === 'function') {
-    window.showScreen = function(screenId) {
-        originalShowScreen(screenId);
-        
-        if (screenId === 'teamRosterScreen') {
-            startRosterPolling();
-        } else {
-            stopRosterPolling();
-        }
-    };
-}
+// React to navigation via the module-era hook (replaces the old
+// window.showScreen wrapper, which broke once navigation.js became a module).
+document.addEventListener('breakside:screen-shown', (e) => {
+    if (e.detail.screenId === 'teamRosterScreen') {
+        startRosterPolling();
+    } else {
+        stopRosterPolling();
+    }
+});
 

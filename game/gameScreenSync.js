@@ -674,7 +674,9 @@ window.enterGameScreen = enterGameScreen;
 window.exitGameScreen = exitGameScreen;
 window.updateGameScreenScore = updateGameScreenScore;
 window.updateGameScreenRoleButtons = updateGameScreenRoleButtons;
-window.isGameScreenVisible = isGameScreenVisible;
+// isGameScreenVisible is owned and shimmed by ui/panelSystem.js (module);
+// re-assigning it here would throw at classic parse time (bare reference to a
+// module-scoped name) and abort this script's tail.
 
 // Game Log panel
 window.updateGameLogPanel = updateGameLogPanel;

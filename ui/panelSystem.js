@@ -8,6 +8,7 @@
  *
  * Panel state is saved to localStorage per-client.
  */
+import { showScreen } from '../screens/navigation.js';
 
 // =============================================================================
 // Panel State Management
@@ -61,6 +62,11 @@ let panelStates = { ...DEFAULT_PANEL_STATES };
 // Track whether another coach has been seen in the current game session.
 // Once true, role buttons stay visible until the game screen is exited.
 let _multiCoachDetected = false;
+
+// Multi-coach detection controls (latch for role button visibility)
+function resetMultiCoachDetected() { _multiCoachDetected = false; }
+function forceMultiCoachDetected() { _multiCoachDetected = true; }
+function isMultiCoachDetected() { return _multiCoachDetected; }
 
 /**
  * Load panel states from localStorage
@@ -305,6 +311,8 @@ function setFullyPhysicalPanelDragging(enabled) {
     fullyPhysicalPanelDragging = enabled;
     localStorage.setItem(PHYSICAL_DRAG_KEY, enabled ? 'true' : 'false');
 }
+
+function getFullyPhysicalPanelDragging() { return fullyPhysicalPanelDragging; }
 
 // Drag state
 let dragState = {
@@ -1354,58 +1362,63 @@ if (document.readyState === 'loading') {
 // Exports
 // =============================================================================
 
-// State management
+// --- ES-module exports; window.* shims are transitional until all consumers import ---
+// Only names consumed by other files are exported/shimmed. Names that were on
+// window purely "for testing/debugging" with zero external references
+// (loadPanelStates, savePanelStates, isPanelMinimized, minimizePanel,
+// maximizePanel, resetPanelHeights, updateExpandingPanel, createPanelStub,
+// createPanel, isPanelDraggable, getDragMinHeight, DRAGGABLE_PANELS,
+// RESIZABLE_PANELS, PBP_MIN_CONTENT_HEIGHT, FOLLOW_MIN_HEIGHT, applyTabState)
+// are module-internal now. The physical-drag getter/setter pair is kept as a
+// console/debug seam (no in-app UI toggles it yet).
+export {
+    // State management
+    getPanelState, setPanelState, MIN_PANEL_HEIGHT,
+    // Panel actions
+    setPanelVisible, setPanelSubtitle, setPanelTitle, resetAllPanelStates,
+    // Panel creation
+    createPanelTitleBar,
+    // Physical-drag setting (console/debug seam)
+    setFullyPhysicalPanelDragging, getFullyPhysicalPanelDragging,
+    // Multi-coach detection controls (latch for role button visibility)
+    resetMultiCoachDetected, forceMultiCoachDetected, isMultiCoachDetected,
+    // Game screen management
+    showGameScreen, hideGameScreen, isGameScreenVisible,
+    // Role and state updates
+    updatePanelsForRole, updatePanelsForGameState,
+    // Tab system
+    switchTab, getActiveTab, getCurrentMode, getLastPbpTab,
+    rememberCurrentPbpTab, updateSegmentedSlider,
+};
+
 window.getPanelState = getPanelState;
 window.setPanelState = setPanelState;
-window.loadPanelStates = loadPanelStates;
-window.savePanelStates = savePanelStates;
-window.isPanelMinimized = isPanelMinimized;
-
-// Panel actions
-window.minimizePanel = minimizePanel;
-window.maximizePanel = maximizePanel;
+// MIN_PANEL_HEIGHT: consumed by game/gameScreenSync.js; as a classic-script
+// const it was visible via the global lexical scope, which module consts are
+// not — the shim keeps that working until gameScreenSync converts.
+window.MIN_PANEL_HEIGHT = MIN_PANEL_HEIGHT;
 window.setPanelVisible = setPanelVisible;
 window.setPanelSubtitle = setPanelSubtitle;
 window.setPanelTitle = setPanelTitle;
-window.resetPanelHeights = resetPanelHeights;
 window.resetAllPanelStates = resetAllPanelStates;
-window.updateExpandingPanel = updateExpandingPanel;
-
-// Panel creation
 window.createPanelTitleBar = createPanelTitleBar;
-window.createPanelStub = createPanelStub;
-window.createPanel = createPanel;
-
-// Drag handling (exposed for testing/debugging)
-window.isPanelDraggable = isPanelDraggable;
-window.getDragMinHeight = getDragMinHeight;
-window.DRAGGABLE_PANELS = DRAGGABLE_PANELS;
 window.setFullyPhysicalPanelDragging = setFullyPhysicalPanelDragging;
-window.getFullyPhysicalPanelDragging = function() { return fullyPhysicalPanelDragging; };
-window.RESIZABLE_PANELS = RESIZABLE_PANELS;
-window.PBP_MIN_CONTENT_HEIGHT = PBP_MIN_CONTENT_HEIGHT;
-window.FOLLOW_MIN_HEIGHT = FOLLOW_MIN_HEIGHT;
-
-// Multi-coach detection controls (latch for role button visibility)
-window.resetMultiCoachDetected = function() { _multiCoachDetected = false; };
-window.forceMultiCoachDetected = function() { _multiCoachDetected = true; };
-window.isMultiCoachDetected = function() { return _multiCoachDetected; };
-
-// Game screen management
+window.getFullyPhysicalPanelDragging = getFullyPhysicalPanelDragging;
+window.resetMultiCoachDetected = resetMultiCoachDetected;
+window.forceMultiCoachDetected = forceMultiCoachDetected;
+window.isMultiCoachDetected = isMultiCoachDetected;
 window.showGameScreen = showGameScreen;
 window.hideGameScreen = hideGameScreen;
+// isGameScreenVisible: game/gameScreenSync.js re-assigns this global to itself
+// at classic-parse time; this module shim overwrites it at module eval with the
+// same (only real) implementation — no behavior change.
 window.isGameScreenVisible = isGameScreenVisible;
-
-// Role and state updates
 window.updatePanelsForRole = updatePanelsForRole;
 window.updatePanelsForGameState = updatePanelsForGameState;
-
-// Tab system
 window.switchTab = switchTab;
 window.getActiveTab = getActiveTab;
 window.getCurrentMode = getCurrentMode;
 window.getLastPbpTab = getLastPbpTab;
 window.rememberCurrentPbpTab = rememberCurrentPbpTab;
-window.applyTabState = applyTabState;
 window.updateSegmentedSlider = updateSegmentedSlider;
 

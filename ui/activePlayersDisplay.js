@@ -2,6 +2,12 @@
  * Active Players Display
  * Handles rendering and management of the active players table on the Before Point Screen
  */
+import { Gender } from '../store/models.js';
+import { currentTeam } from '../store/storage.js';
+import {
+    currentGame, getPlayerFromName, getPlayerGameTime, formatPlayTime,
+    formatPlayerName, getGenderRatioForPoint
+} from '../utils/helpers.js';
 
 let showingTotalStats = false;
 let nextLineSelections = null;
@@ -420,4 +426,9 @@ function togglePlayerStats() {
         checkPlayerCount();
     }
 }
+
+// --- ES-module exports; window.* shims are transitional until all consumers import ---
+export { clearNextLineSelections, getRunningScores };
+window.clearNextLineSelections = clearNextLineSelections;
+window.getRunningScores = getRunningScores;
 

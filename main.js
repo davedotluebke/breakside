@@ -67,6 +67,11 @@ import './utils/eventStats.js';
 import './utils/tableSort.js';
 import './utils/statsHelp.js';
 import './utils/xlsxExport.js';
+import './ui/activePlayersDisplay.js';
+import './ui/eventLogDisplay.js';
+import './ui/buttonLayout.js';
+import './ui/panelSystem.js';
+import './screens/navigation.js';
 
 // Skip the service worker during local development (localhost / 127.0.0.1).
 // Its offline precache otherwise serves stale JS/CSS across edits, so source
