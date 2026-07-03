@@ -23,21 +23,23 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Literal
 
-# Import config
-try:
-    from config import MEMBERSHIPS_DIR
-except ImportError:
-    from ultistats_server.config import MEMBERSHIPS_DIR
+from ._config import config
+from .file_utils import atomic_write_json
+from .json_index import JsonIndex, add_to_bucket, remove_from_bucket
 
-from .file_utils import atomic_write_json, entity_lock
-
+MEMBERSHIPS_DIR = config.MEMBERSHIPS_DIR
 
 # Index file for fast lookups
 INDEX_FILE = MEMBERSHIPS_DIR / "_index.json"
 
-# Serializes read-modify-write of the membership index so two concurrent
-# membership changes can't each overwrite the other (dropping a membership).
-_INDEX_LOCK_KEY = "membership-index"
+# The JsonIndex serializes read-modify-write of the membership index so two
+# concurrent membership changes can't each overwrite the other (dropping a
+# membership). Path is a getter so tests can patch INDEX_FILE.
+_index = JsonIndex(
+    path_getter=lambda: INDEX_FILE,
+    lock_key="membership-index",
+    empty=lambda: {"byUser": {}, "byTeam": {}},
+)
 
 
 def _membership_file(membership_id: str) -> Path:
@@ -50,69 +52,23 @@ def _generate_membership_id() -> str:
     return f"mem_{secrets.token_hex(6)}"
 
 
-def _load_index() -> Dict[str, Any]:
-    """Load the membership index."""
-    if not INDEX_FILE.exists():
-        return {"byUser": {}, "byTeam": {}}
-    
-    try:
-        with open(INDEX_FILE, "r") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return {"byUser": {}, "byTeam": {}}
-
-
-def _save_index(index: Dict[str, Any]) -> None:
-    """Save the membership index atomically."""
-    atomic_write_json(INDEX_FILE, index)
+def _index_entry_add(index: Dict[str, Any], membership: Dict[str, Any]) -> None:
+    """Record one membership in the index (byUser + byTeam)."""
+    add_to_bucket(index, "byUser", membership["userId"], membership["id"])
+    add_to_bucket(index, "byTeam", membership["teamId"], membership["id"])
 
 
 def _update_index_add(membership: Dict[str, Any]) -> None:
     """Add a membership to the index (serialized read-modify-write)."""
-    user_id = membership["userId"]
-    team_id = membership["teamId"]
-    mem_id = membership["id"]
-
-    with entity_lock(_INDEX_LOCK_KEY):
-        index = _load_index()
-
-        # Add to user index
-        if user_id not in index["byUser"]:
-            index["byUser"][user_id] = []
-        if mem_id not in index["byUser"][user_id]:
-            index["byUser"][user_id].append(mem_id)
-
-        # Add to team index
-        if team_id not in index["byTeam"]:
-            index["byTeam"][team_id] = []
-        if mem_id not in index["byTeam"][team_id]:
-            index["byTeam"][team_id].append(mem_id)
-
-        _save_index(index)
+    with _index.update() as index:
+        _index_entry_add(index, membership)
 
 
 def _update_index_remove(membership: Dict[str, Any]) -> None:
     """Remove a membership from the index (serialized read-modify-write)."""
-    user_id = membership["userId"]
-    team_id = membership["teamId"]
-    mem_id = membership["id"]
-
-    with entity_lock(_INDEX_LOCK_KEY):
-        index = _load_index()
-
-        # Remove from user index
-        if user_id in index["byUser"]:
-            index["byUser"][user_id] = [m for m in index["byUser"][user_id] if m != mem_id]
-            if not index["byUser"][user_id]:
-                del index["byUser"][user_id]
-
-        # Remove from team index
-        if team_id in index["byTeam"]:
-            index["byTeam"][team_id] = [m for m in index["byTeam"][team_id] if m != mem_id]
-            if not index["byTeam"][team_id]:
-                del index["byTeam"][team_id]
-
-        _save_index(index)
+    with _index.update() as index:
+        remove_from_bucket(index, "byUser", membership["userId"], membership["id"])
+        remove_from_bucket(index, "byTeam", membership["teamId"], membership["id"])
 
 
 def membership_exists(membership_id: str) -> bool:
@@ -125,7 +81,7 @@ def get_membership(membership_id: str) -> Optional[Dict[str, Any]]:
     mem_file = _membership_file(membership_id)
     if not mem_file.exists():
         return None
-    
+
     with open(mem_file, "r") as f:
         return json.load(f)
 
@@ -138,16 +94,16 @@ def create_membership(
 ) -> Dict[str, Any]:
     """
     Create a new team membership.
-    
+
     Args:
         team_id: The team ID
         user_id: The user ID
         role: Either "coach" or "viewer"
         invited_by: User ID of who sent the invite (null if creator)
-        
+
     Returns:
         The created membership
-        
+
     Raises:
         ValueError: If user already has a membership for this team
     """
@@ -155,7 +111,7 @@ def create_membership(
     existing = get_user_team_membership(user_id, team_id)
     if existing:
         raise ValueError(f"User {user_id} already has membership for team {team_id}")
-    
+
     membership = {
         "id": _generate_membership_id(),
         "teamId": team_id,
@@ -164,7 +120,7 @@ def create_membership(
         "invitedBy": invited_by,
         "joinedAt": datetime.now().isoformat(),
     }
-    
+
     # Ensure directory exists
     MEMBERSHIPS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -181,14 +137,14 @@ def update_membership_role(
 ) -> Optional[Dict[str, Any]]:
     """
     Update a membership's role.
-    
+
     Returns:
         Updated membership, or None if not found
     """
     membership = get_membership(membership_id)
     if not membership:
         return None
-    
+
     membership["role"] = new_role
 
     atomic_write_json(_membership_file(membership_id), membership)
@@ -199,52 +155,52 @@ def update_membership_role(
 def delete_membership(membership_id: str) -> bool:
     """
     Delete a membership.
-    
+
     Returns:
         True if deleted, False if not found
     """
     membership = get_membership(membership_id)
     if not membership:
         return False
-    
+
     _update_index_remove(membership)
     _membership_file(membership_id).unlink()
-    
+
     return True
 
 
 def get_user_memberships(user_id: str) -> List[Dict[str, Any]]:
     """Get all team memberships for a user."""
-    index = _load_index()
+    index = _index.load()
     membership_ids = index.get("byUser", {}).get(user_id, [])
-    
+
     memberships = []
     for mem_id in membership_ids:
         membership = get_membership(mem_id)
         if membership:
             memberships.append(membership)
-    
+
     return memberships
 
 
 def get_team_memberships(team_id: str) -> List[Dict[str, Any]]:
     """Get all memberships for a team."""
-    index = _load_index()
+    index = _index.load()
     membership_ids = index.get("byTeam", {}).get(team_id, [])
-    
+
     memberships = []
     for mem_id in membership_ids:
         membership = get_membership(mem_id)
         if membership:
             memberships.append(membership)
-    
+
     return memberships
 
 
 def get_user_team_membership(user_id: str, team_id: str) -> Optional[Dict[str, Any]]:
     """
     Get a user's membership for a specific team.
-    
+
     Returns:
         Membership dict or None if no membership exists
     """
@@ -258,7 +214,7 @@ def get_user_team_membership(user_id: str, team_id: str) -> Optional[Dict[str, A
 def get_user_team_role(user_id: str, team_id: str) -> Optional[str]:
     """
     Get a user's role for a specific team.
-    
+
     Returns:
         "coach", "viewer", or None if no membership
     """
@@ -287,41 +243,10 @@ def get_team_viewers(team_id: str) -> List[str]:
 def rebuild_membership_index() -> Dict[str, Any]:
     """
     Rebuild the membership index from all membership files.
-    
+
     Useful if the index gets corrupted or out of sync.
-    
+
     Returns:
         The rebuilt index
     """
-    index = {"byUser": {}, "byTeam": {}}
-    
-    if not MEMBERSHIPS_DIR.exists():
-        _save_index(index)
-        return index
-    
-    for mem_file in MEMBERSHIPS_DIR.glob("*.json"):
-        if mem_file.name.startswith("_"):
-            continue  # Skip index file
-        
-        try:
-            with open(mem_file, "r") as f:
-                membership = json.load(f)
-            
-            user_id = membership["userId"]
-            team_id = membership["teamId"]
-            mem_id = membership["id"]
-            
-            if user_id not in index["byUser"]:
-                index["byUser"][user_id] = []
-            index["byUser"][user_id].append(mem_id)
-            
-            if team_id not in index["byTeam"]:
-                index["byTeam"][team_id] = []
-            index["byTeam"][team_id].append(mem_id)
-            
-        except (json.JSONDecodeError, IOError, KeyError):
-            continue
-    
-    _save_index(index)
-    return index
-
+    return _index.rebuild(MEMBERSHIPS_DIR, _index_entry_add)

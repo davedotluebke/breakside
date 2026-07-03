@@ -8,18 +8,13 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Set
 
-# Import config - handle both relative and absolute imports
-try:
-    from config import INDEX_FILE, GAMES_DIR, TEAMS_DIR, PLAYERS_DIR
-except ImportError:
-    try:
-        from ultistats_server.config import INDEX_FILE, GAMES_DIR, TEAMS_DIR, PLAYERS_DIR
-    except ImportError:
-        import sys
-        sys.path.insert(0, str(Path(__file__).parent.parent))
-        from config import INDEX_FILE, GAMES_DIR, TEAMS_DIR, PLAYERS_DIR
-
+from ._config import config
 from .file_utils import atomic_write_json, entity_lock
+
+INDEX_FILE = config.INDEX_FILE
+GAMES_DIR = config.GAMES_DIR
+TEAMS_DIR = config.TEAMS_DIR
+PLAYERS_DIR = config.PLAYERS_DIR
 
 # Serializes read-modify-write of the cross-entity index file.
 _INDEX_LOCK_KEY = "entity-index"

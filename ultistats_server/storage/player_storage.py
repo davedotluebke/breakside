@@ -1,27 +1,25 @@
 """
 Player storage using JSON files.
 Each player is stored as a separate JSON file: data/players/{player_id}.json
+
+CRUD mechanics live in the shared JsonEntityStore; this module binds it to
+PLAYERS_DIR and keeps the long-standing public function API.
 """
-import json
-import re
-import random
-import string
-from pathlib import Path
-from datetime import datetime
-from typing import Dict, List, Optional
+from typing import List, Optional
 
-# Import config - handle both relative and absolute imports
-try:
-    from config import PLAYERS_DIR
-except ImportError:
-    try:
-        from ultistats_server.config import PLAYERS_DIR
-    except ImportError:
-        import sys
-        sys.path.insert(0, str(Path(__file__).parent.parent))
-        from config import PLAYERS_DIR
+from ._config import config
+from .entity_store import JsonEntityStore
+from .id_utils import generate_entity_id
 
-from .file_utils import atomic_write_json, entity_lock
+PLAYERS_DIR = config.PLAYERS_DIR
+
+# dir_getter re-reads the module global so tests can patch PLAYERS_DIR.
+_store = JsonEntityStore(
+    kind="Player",
+    dir_getter=lambda: PLAYERS_DIR,
+    sort_key=lambda p: p.get('name', '').lower(),
+    strip_fields=('_localOnly',),
+)
 
 
 def generate_player_id(name: str) -> str:
@@ -30,174 +28,53 @@ def generate_player_id(name: str) -> str:
     Format: {sanitized-name}-{4-char-hash}
     Example: "Alice-7f3a", "Bob-Smith-2d9e"
     """
-    # Sanitize: keep alphanumeric and spaces, convert spaces to hyphens
-    safe_name = re.sub(r'[^a-zA-Z0-9\s-]', '', name)
-    safe_name = re.sub(r'\s+', '-', safe_name).strip('-')
-    safe_name = safe_name[:20]  # Max 20 chars
-    safe_name = re.sub(r'-+$', '', safe_name)  # Trim trailing hyphens
-    
-    if not safe_name:
-        safe_name = "player"
-    
-    # Generate 4-char alphanumeric hash
-    chars = string.ascii_lowercase + string.digits
-    hash_part = ''.join(random.choice(chars) for _ in range(4))
-    
-    return f"{safe_name}-{hash_part}"
-
-
-def _ensure_unique_id(player_id: str) -> str:
-    """
-    Ensure the player ID is unique. If collision, append extra chars.
-    """
-    original_id = player_id
-    attempt = 0
-    while player_exists(player_id):
-        attempt += 1
-        chars = string.ascii_lowercase + string.digits
-        extra = ''.join(random.choice(chars) for _ in range(2))
-        player_id = f"{original_id}{extra}"
-        if attempt > 10:
-            # Extremely unlikely, but prevent infinite loop
-            player_id = f"{original_id}-{random.randint(1000, 9999)}"
-            break
-    return player_id
+    return generate_entity_id(name, "player")
 
 
 def save_player(player_data: dict, player_id: Optional[str] = None) -> str:
     """
     Save a player. If no ID provided, generates one from the name.
-    
+
     Args:
         player_data: Player data dictionary (must include 'name')
         player_id: Optional existing player ID (for updates)
-        
+
     Returns:
         The player ID
     """
-    PLAYERS_DIR.mkdir(parents=True, exist_ok=True)
-    
-    if not player_id:
-        name = player_data.get('name', 'Unknown')
-        player_id = generate_player_id(name)
-        player_id = _ensure_unique_id(player_id)
-    
-    # Strip client-side-only fields
-    player_data.pop('_localOnly', None)
-    
-    # Add metadata
-    now = datetime.now().isoformat()
-    if 'createdAt' not in player_data:
-        player_data['createdAt'] = now
-    player_data['updatedAt'] = now
-    player_data['id'] = player_id
-    
-    atomic_write_json(PLAYERS_DIR / f"{player_id}.json", player_data)
-
-    return player_id
+    return _store.save(player_data, player_id)
 
 
 def get_player(player_id: str) -> dict:
     """
     Get a player by ID.
-    
-    Args:
-        player_id: The player's unique ID
-        
-    Returns:
-        Player data dictionary
-        
+
     Raises:
         FileNotFoundError: If player doesn't exist
     """
-    player_file = PLAYERS_DIR / f"{player_id}.json"
-    if not player_file.exists():
-        raise FileNotFoundError(f"Player {player_id} not found")
-    
-    with open(player_file, 'r') as f:
-        return json.load(f)
+    return _store.get(player_id)
 
 
 def list_players() -> List[dict]:
-    """
-    List all players with their data.
-    
-    Returns:
-        List of player data dictionaries
-    """
-    players = []
-    if not PLAYERS_DIR.exists():
-        return players
-    
-    for player_file in PLAYERS_DIR.glob("*.json"):
-        try:
-            with open(player_file, 'r') as f:
-                player_data = json.load(f)
-                players.append(player_data)
-        except (json.JSONDecodeError, KeyError):
-            # Skip invalid files
-            continue
-    
-    # Sort by name
-    players.sort(key=lambda p: p.get('name', '').lower())
-    return players
+    """List all players with their data, sorted by name."""
+    return _store.list()
 
 
 def update_player(player_id: str, player_data: dict) -> str:
     """
-    Update an existing player.
-    
-    Args:
-        player_id: The player's unique ID
-        player_data: Updated player data
-        
-    Returns:
-        The player ID
-        
+    Update an existing player (preserves createdAt).
+
     Raises:
         FileNotFoundError: If player doesn't exist
     """
-    # Serialize the read (createdAt) + write so concurrent updates to the same
-    # player can't interleave.
-    with entity_lock(f"player:{player_id}"):
-        if not player_exists(player_id):
-            raise FileNotFoundError(f"Player {player_id} not found")
-
-        # Preserve createdAt from existing record
-        existing = get_player(player_id)
-        player_data['createdAt'] = existing.get('createdAt', datetime.now().isoformat())
-
-        return save_player(player_data, player_id)
+    return _store.update(player_id, player_data)
 
 
 def delete_player(player_id: str) -> bool:
-    """
-    Delete a player.
-    
-    Args:
-        player_id: The player's unique ID
-        
-    Returns:
-        True if deleted, False if didn't exist
-    """
-    player_file = PLAYERS_DIR / f"{player_id}.json"
-    if not player_file.exists():
-        return False
-    
-    player_file.unlink()
-    return True
+    """Delete a player. Returns True if deleted, False if didn't exist."""
+    return _store.delete(player_id)
 
 
 def player_exists(player_id: str) -> bool:
-    """
-    Check if a player exists.
-    
-    Args:
-        player_id: The player's unique ID
-        
-    Returns:
-        True if player exists
-    """
-    player_file = PLAYERS_DIR / f"{player_id}.json"
-    return player_file.exists()
-
+    """Check if a player exists."""
+    return _store.exists(player_id)
