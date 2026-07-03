@@ -655,6 +655,50 @@ body {
 }
 
 /* =============================================================================
+   Quickstart Section
+   ============================================================================= */
+
+.quickstart {
+    padding: var(--space-3xl) var(--space-lg);
+    background: var(--gray-800);
+}
+
+/* Single card matching .feature-card colors (gray-700 on the gray-800 band). */
+.quickstart-card {
+    max-width: 720px;
+    margin: 0 auto;
+    background: var(--gray-700);
+    border: 1px solid var(--gray-600);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl) var(--space-xl) var(--space-lg);
+}
+
+/* Steps reuse .install-steps numbering; longer copy gets more air. */
+.quickstart-steps li {
+    margin-bottom: var(--space-lg);
+}
+
+.quickstart-steps li:last-child {
+    margin-bottom: 0;
+}
+
+.quickstart-steps a {
+    color: var(--brand-orange-light);
+    text-decoration: none;
+}
+
+.quickstart-steps a:hover {
+    text-decoration: underline;
+}
+
+.quickstart-cta {
+    text-align: center;
+    margin-top: var(--space-xl);
+    padding-top: var(--space-lg);
+    border-top: 1px solid var(--gray-600);
+}
+
+/* =============================================================================
    Auth Modal
    ============================================================================= */
 
