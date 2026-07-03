@@ -12,7 +12,7 @@ on:
       - '*.py'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   deploy:
@@ -22,27 +22,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          # Full history: the deploy-time build number is git rev-list --count HEAD
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Increment build version
+      - name: Stamp deploy-time build number
+        # Writes the build number (git rev-list --count HEAD) and a deployStamp
+        # into version.json and the service-worker cacheName in this checkout
+        # only — nothing is committed or pushed back. See VERSIONING.md.
         run: |
-          # Skip if version.json was already modified in this commit
-          # (means the pre-commit hook already bumped it)
-          if git diff HEAD~1 --name-only | grep -q "^version.json$"; then
-            echo "Version already bumped in this commit, skipping"
-          else
-            python3 increment-version.py build
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add version.json service-worker.js
-            git commit -m "Auto-increment build version"
-            git push
-          fi
+          python3 increment-version.py stamp --deploy-stamp "$(date -u +%Y%m%d%H%M%S)"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -51,26 +44,22 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Sync PWA files to S3 (except service worker)
+      - name: Sync PWA files to S3 (except service worker and version.json)
         run: |
-          aws s3 sync . s3://breakside.pro/ \
-            --exclude ".git/*" \
-            --exclude ".github/*" \
-            --exclude "ultistats_server/*" \
-            --exclude "data/*" \
-            --exclude "scripts/*" \
-            --exclude "*.py" \
-            --exclude "__pycache__/*" \
-            --exclude "*.md" \
-            --exclude ".DS_Store" \
-            --exclude "*.wav" \
-            --exclude "*.ogg" \
-            --exclude "*.m4a" \
-            --exclude "*.webm" \
-            --exclude "service-worker.js" \
-            --delete
+          EXCLUDES=()
+          while IFS= read -r pattern; do
+            [[ -z "$pattern" || "$pattern" == \#* ]] && continue
+            EXCLUDES+=(--exclude "$pattern")
+          done < scripts/deploy-excludes.txt
+          aws s3 sync . s3://breakside.pro/ "${EXCLUDES[@]}" --delete
 
-      - name: Sync service worker with no-cache headers
+      - name: Upload stamped version.json with no-cache headers
+        run: |
+          aws s3 cp version.json s3://breakside.pro/version.json \
+            --cache-control "no-cache, no-store, must-revalidate" \
+            --content-type "application/json"
+
+      - name: Upload stamped service worker with no-cache headers
         run: |
           aws s3 cp service-worker.js s3://breakside.pro/service-worker.js \
             --cache-control "no-cache, no-store, must-revalidate" \
