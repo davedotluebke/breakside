@@ -540,3 +540,13 @@ cd /opt/breakside && sudo git pull && sudo systemctl restart breakside
 - Auth settings: Dashboard → Authentication → Settings
 - User management: Dashboard → Authentication → Users
 - **Important:** Set Site URL to `https://www.breakside.pro` for email redirects
+
+### Backend: CORS headers on unhandled 500s (from staging shakedown, 2026-07-03)
+
+- [ ] An unhandled exception in FastAPI returns a bare 500 **without CORS
+      headers** (Starlette's ServerErrorMiddleware sits outside CORSMiddleware),
+      so browsers block the response and fetch rejects with a TypeError
+      ("Load failed" on Safari) — the client can't tell a server bug from a
+      network drop. Add an exception handler / middleware ordering fix so
+      error responses carry CORS headers. This turned the rosterSnapshot-null
+      sync 500 into an "offline-classified" poison pill on staging.
