@@ -30,6 +30,7 @@ import {
 } from './rosterRowHelpers.js';
 import { showScreen } from '../screens/navigation.js';
 import { showSelectTeamScreen } from './teamList.js';
+import { initializeGenderRatioDropdown } from '../game/genderRatioDropdown.js';
 
 // Whether developer debug affordances (e.g. the raw player-ID display in the
 // edit-player dialog) should be shown. Off by default in production; enable

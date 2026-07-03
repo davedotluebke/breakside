@@ -28,6 +28,7 @@ import {
 import { updateTeamRosterDisplay } from './rosterManagement.js';
 import { showTeamSettingsScreen } from './teamSettings.js';
 import { showGameSummaryFromList } from './gameSummary.js';
+import { downloadJSON } from '../game/gameLogic.js';
 
 function showSelectTeamScreen(firsttime = false) {
     console.log('showSelectTeamScreen called (cloud-only mode)');

@@ -9,7 +9,9 @@
  * Depends (at call time, not load time) on showControllerToast (controllerState.js)
  * and window.advancedSettings (advancedSettings.js).
  */
-(function() {
+import { showControllerToast } from '../game/controllerState.js';
+
+const hints = (function() {
     const STAMP_PREFIX = 'breakside_hint_';
 
     function todayStr() {
@@ -65,5 +67,10 @@
         });
     }
 
-    window.hints = { maybeShow, resetAll };
+    return { maybeShow, resetAll };
 })();
+
+// --- ES-module export; window shim is transitional for classic consumers
+// --- (playByPlay/fieldPbp.js) and window-qualified use in advancedSettings.js.
+export { hints };
+window.hints = hints;

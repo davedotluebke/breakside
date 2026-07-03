@@ -11,6 +11,11 @@
  * Only one user can hold each role at a time. Handoffs allow smooth
  * transitions when coaches want to swap responsibilities.
  */
+import { authFetch, API_BASE_URL, refreshGameStateFromCloud } from '../store/sync.js';
+import { isTestGame } from '../store/models.js';
+import { currentGame } from '../utils/helpers.js';
+import { logEvent } from '../ui/eventLogDisplay.js';
+import { showSelectTeamScreen } from '../teams/teamList.js';
 
 // =============================================================================
 // State
@@ -325,10 +330,8 @@ function updateLocalControllerState(data) {
         }
     }
     
-    // Trigger UI update if function exists
-    if (typeof updateControllerUI === 'function') {
-        updateControllerUI(controllerState, previousState);
-    }
+    // Trigger UI update (module-local function — the old typeof guard is moot)
+    updateControllerUI(controllerState, previousState);
     
     // Handle handoff UI based on server state
     if (controllerState.hasPendingHandoffForMe && controllerState.pendingHandoff) {
@@ -398,10 +401,10 @@ function startControllerPolling(gameId) {
     const interval = hasRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
     controllerPollIntervalId = setInterval(() => {
         if (currentGameIdForPolling) {
-            pingController(currentGameIdForPolling);
+            window.pingController(currentGameIdForPolling); // via window: e2e test seam (tests replace window.pingController)
         }
     }, interval);
-    
+
     console.log(`🎮 Controller polling started for game ${gameId} (${interval}ms)`);
 }
 
@@ -434,7 +437,7 @@ function adjustPollingInterval() {
     const interval = hasRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
     controllerPollIntervalId = setInterval(() => {
         if (currentGameIdForPolling) {
-            pingController(currentGameIdForPolling);
+            window.pingController(currentGameIdForPolling); // via window: e2e test seam (tests replace window.pingController)
         }
     }, interval);
 }
@@ -597,7 +600,7 @@ document.addEventListener('visibilitychange', async () => {
     const interval = hasRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
     controllerPollIntervalId = setInterval(() => {
         if (currentGameIdForPolling) {
-            pingController(currentGameIdForPolling);
+            window.pingController(currentGameIdForPolling); // via window: e2e test seam (tests replace window.pingController)
         }
     }, interval);
 
@@ -605,7 +608,7 @@ document.addEventListener('visibilitychange', async () => {
     // The first ping after wake may fail if the network is still restoring.
     let result = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
-        result = await pingController(gameId);
+        result = await window.pingController(gameId); // via window: e2e test seam (tests replace window.pingController)
         if (result) break;
         console.warn(`🎮 Wake ping attempt ${attempt}/3 failed — retrying in 1s...`);
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -939,6 +942,15 @@ function addSwipeToDismiss(toast) {
 }
 
 /**
+ * Notify cross-module listeners that controller UI state was updated.
+ * Hook for cross-module reactions (replaces the old window.updateControllerUI
+ * monkey-patch in gameScreenSync.js, which can't survive ES modules).
+ */
+function notifyControllerUiUpdated(state, previousState) {
+    document.dispatchEvent(new CustomEvent('breakside:controller-ui-updated', { detail: { state, previousState } }));
+}
+
+/**
  * Update controller UI elements (role buttons in header)
  * @param {object} state - Current controller state
  * @param {object} previousState - Previous controller state
@@ -949,8 +961,12 @@ function updateControllerUI(state, previousState) {
     const lineCoachBtn = document.getElementById('lineCoachBtn');
     const activeCoachHolder = document.getElementById('activeCoachHolder');
     const lineCoachHolder = document.getElementById('lineCoachHolder');
-    
+
     if (!roleButtonsContainer || !activeCoachBtn || !lineCoachBtn) {
+        // The legacy header role buttons no longer exist in index.html, so this
+        // early return is the LIVE path — the cross-module hook must still fire
+        // here (the old monkey-patch wrapper ran its body regardless).
+        notifyControllerUiUpdated(state, previousState);
         return;
     }
     
@@ -997,6 +1013,10 @@ function updateControllerUI(state, previousState) {
     if (typeof window.updatePlayByPlayPanelState === 'function') {
         window.updatePlayByPlayPanelState();
     }
+
+    // Hook for cross-module reactions (replaces the old window.updateControllerUI
+    // monkey-patch in gameScreenSync.js, which can't survive ES modules).
+    notifyControllerUiUpdated(state, previousState);
 }
 
 /**
@@ -1359,31 +1379,52 @@ if (document.readyState === 'loading') {
 // Exports
 // =============================================================================
 
-// State access
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration),
+// --- except where marked PERMANENT.
+export {
+    getControllerState, isActiveCoach, isLineCoach, canEditPlayByPlay,
+    releaseControllerRole,
+    startControllerPolling, stopControllerPolling,
+    isControllerPollingActive, getPollingGameId,
+    setControllerButtonsVisible, showControllerToast, dismissToast,
+    getCurrentUserId, pingController,
+};
+// getControllerState: called bare by converted ui/panelSystem.js (typeof-guarded,
+// resolves via window) and classic game/selectLine.js, gameScreenEvents.js,
+// gameScreenSync.js.
 window.getControllerState = getControllerState;
-window.getMyControllerRole = getMyControllerRole;
-
-// Role checks
+// isActiveCoach / isLineCoach: read via window.* by converted modules and bare
+// by classic game/playByPlay files.
 window.isActiveCoach = isActiveCoach;
 window.isLineCoach = isLineCoach;
+// canEditPlayByPlay: called bare by classic game/gameScreenEvents.js and
+// playByPlay/* files.
 window.canEditPlayByPlay = canEditPlayByPlay;
-window.canEditLineup = canEditLineup;
-
-// Actions
-window.claimActiveCoach = claimActiveCoach;
-window.claimLineCoach = claimLineCoach;
+// releaseControllerRole: called bare by classic game/gameScreenEvents.js.
 window.releaseControllerRole = releaseControllerRole;
-window.respondToHandoff = respondToHandoff;
-
-// Polling
+// startControllerPolling / stopControllerPolling: called bare by converted
+// screens/navigation.js (typeof-guarded, via window) and classic
+// game/gameScreenEvents.js, gameScreenSync.js; ALSO poked by Playwright e2e
+// (tests/scenarios/04 calls w.startControllerPolling / w.stopControllerPolling).
 window.startControllerPolling = startControllerPolling;
 window.stopControllerPolling = stopControllerPolling;
-window.fetchControllerState = fetchControllerState;
+// isControllerPollingActive / getPollingGameId: called bare by classic
+// game/gameScreenEvents.js.
 window.isControllerPollingActive = isControllerPollingActive;
 window.getPollingGameId = getPollingGameId;
-
-// UI (Phase 6)
+// setControllerButtonsVisible: called bare (typeof-guarded) by converted
+// screens/navigation.js (via window).
 window.setControllerButtonsVisible = setControllerButtonsVisible;
+// showControllerToast: called bare by classic game/selectLine.js,
+// gameScreenSync.js, gameScreenEvents.js, playByPlay/*, narration/micButton.js.
 window.showControllerToast = showControllerToast;
-window.hideHandoffRequestUI = hideHandoffRequestUI;
+// dismissToast / getCurrentUserId: called bare (typeof-guarded) by classic
+// game/gameScreenSync.js.
+window.dismissToast = dismissToast;
+window.getCurrentUserId = getCurrentUserId;
+window.pingController = pingController;  // PERMANENT window survivor: e2e test seam
+// Dropped shims (zero external references found): getMyControllerRole,
+// canEditLineup, claimActiveCoach, claimLineCoach, respondToHandoff,
+// fetchControllerState, hideHandoffRequestUI.
 
