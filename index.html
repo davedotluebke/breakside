@@ -526,7 +526,7 @@
             <div class="pwa-install-actions">
                 <button id="pwaInstallBtn" class="primary-btn" style="display: none;">Install App</button>
                 <a id="pwaInstructionsLink" href="/landing/#install" class="btn btn-secondary" style="display: none;">Installation Instructions</a>
-                <button onclick="closePwaInstallModal()" class="secondary-btn">Continue in Browser</button>
+                <button id="pwaContinueBrowserBtn" class="secondary-btn">Continue in Browser</button>
             </div>
         </div>
     </div>
@@ -536,15 +536,15 @@
         <div class="modal-content" style="max-width: 380px;">
             <div class="dialog-header prominent-dialog-header">
                 <h2>Pending Updates</h2>
-                <span class="close" onclick="closePendingSyncDialog()">&times;</span>
+                <span id="pendingSyncCloseX" class="close">&times;</span>
             </div>
             <p style="margin: 0 0 1rem; font-size: 0.9rem; color: #555;">
                 These changes were made while offline or failed to sync. They'll be sent to the server automatically when you're back online.
             </p>
             <div id="pendingSyncList" style="margin-bottom: 1rem;"></div>
             <div style="display: flex; gap: 0.5rem;">
-                <button class="primary-btn" style="flex: 1;" onclick="closePendingSyncDialog()">Keep</button>
-                <button class="secondary-btn" style="flex: 1;" onclick="confirmClearSyncQueue()">Clear All</button>
+                <button id="pendingSyncKeepBtn" class="primary-btn" style="flex: 1;">Keep</button>
+                <button id="pendingSyncClearAllBtn" class="secondary-btn" style="flex: 1;">Clear All</button>
             </div>
         </div>
     </div>
