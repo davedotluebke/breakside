@@ -100,10 +100,11 @@ function createHeaderContent() {
         </div>
         
         <div class="header-logo-container">
-            <img src="images/logo.disc.only.png" alt="Breakside" class="header-logo" id="gameScreenLogo">
+            <img src="images/logo.wordmark.png" alt="Breakside" class="header-logo" id="gameScreenLogo">
             <span class="header-version-overlay" id="gameVersionOverlay"></span>
         </div>
-        
+        <span class="header-staging-pill header-staging-pill--game">Staging</span>
+
         <div class="header-score-display">
             <div class="header-team-identity header-team-us" id="headerTeamUs">
                 <span class="team-identity-text">Us</span>

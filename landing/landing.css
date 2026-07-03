@@ -79,9 +79,10 @@ body {
     left: 0;
     right: 0;
     z-index: 100;
-    background: rgba(17, 24, 39, 0.9);
+    background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
 }
 
 .nav-content {
@@ -102,14 +103,8 @@ body {
 }
 
 .nav-logo-img {
-    height: 36px;
+    height: 48px;
     width: auto;
-}
-
-.nav-logo-text {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--brand-orange);
 }
 
 .nav-links {
@@ -119,7 +114,7 @@ body {
 }
 
 .nav-link {
-    color: var(--gray-300);
+    color: var(--gray-700);
     text-decoration: none;
     font-weight: 500;
     font-size: 0.9rem;
@@ -149,6 +144,63 @@ body {
 }
 
 /* =============================================================================
+   Landing header — white block at the very top (not fixed; scrolls away).
+   Holds a prominent, near-full-width wordmark with the Sign In / Sign Up
+   button centered below it, then the dark hero takes over underneath.
+   (The old .main-nav rules above are kept for landing/join.html.)
+   ============================================================================= */
+.landing-header {
+    background: #fff;
+    border-bottom: 3px solid var(--brand-orange);
+    padding: var(--space-md) var(--space-lg) var(--space-lg);
+}
+
+.landing-header-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.landing-header-logo {
+    width: 100%;
+    /* Cap below the asset's native width (1482px) so it stays crisp; full-width
+       on smaller screens for prominence. */
+    max-width: 500px;
+    height: auto;
+    display: block;
+}
+
+.landing-header-btn {
+    font-size: 1.05rem;
+    padding: 0.6rem var(--space-2xl);
+}
+
+/* Desktop: once there's room beside a 500px logo, left-justify the logo and
+   float the Sign In/Sign Up button up to share the row — right-justified and
+   bottom-aligned so it sits just above the orange delimiter line. */
+@media (min-width: 768px) {
+    .landing-header-inner {
+        flex-direction: row;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: var(--space-xl);
+    }
+
+    .landing-header-logo {
+        width: auto;      /* size to its 500px cap rather than full width */
+        flex: 0 1 auto;
+        min-width: 0;     /* allow graceful shrink on narrower desktops */
+    }
+
+    .landing-header-btn {
+        flex: 0 0 auto;
+    }
+}
+
+/* =============================================================================
    Hero Section
    ============================================================================= */
 
@@ -156,7 +208,9 @@ body {
     min-height: 100vh;
     display: flex;
     align-items: center;
-    padding: 6rem var(--space-lg) var(--space-3xl);
+    /* Top padding is just internal breathing room now — the header is in flow
+       above (no longer fixed), so no nav-clearance offset needed. */
+    padding: var(--space-2xl) var(--space-lg) var(--space-3xl);
     background: 
         radial-gradient(ellipse at 20% 0%, rgba(235, 130, 50, 0.15) 0%, transparent 50%),
         radial-gradient(ellipse at 80% 100%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
@@ -601,6 +655,51 @@ body {
 }
 
 /* =============================================================================
+   Quickstart Section
+   ============================================================================= */
+
+.quickstart {
+    padding: var(--space-3xl) var(--space-lg);
+    background: var(--gray-900);
+}
+
+/* Single card matching .install-card colors (gray-800 on the gray-900 band —
+   this section sits between the gray-800 features band and the install band). */
+.quickstart-card {
+    max-width: 720px;
+    margin: 0 auto;
+    background: var(--gray-800);
+    border: 1px solid var(--gray-700);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl) var(--space-xl) var(--space-lg);
+}
+
+/* Steps reuse .install-steps numbering; longer copy gets more air. */
+.quickstart-steps li {
+    margin-bottom: var(--space-lg);
+}
+
+.quickstart-steps li:last-child {
+    margin-bottom: 0;
+}
+
+.quickstart-steps a {
+    color: var(--brand-orange-light);
+    text-decoration: none;
+}
+
+.quickstart-steps a:hover {
+    text-decoration: underline;
+}
+
+.quickstart-cta {
+    text-align: center;
+    margin-top: var(--space-xl);
+    padding-top: var(--space-lg);
+    border-top: 1px solid var(--gray-700);
+}
+
+/* =============================================================================
    Auth Modal
    ============================================================================= */
 
@@ -658,7 +757,14 @@ body {
 }
 
 .auth-logo {
-    height: 60px;
+    /* Wordmark is black text, so sit it on a small white chip to stay visible
+       on the dark modal. */
+    height: 44px;
+    width: auto;
+    background: #fff;
+    padding: 8px 14px;
+    border-radius: var(--radius-md);
+    box-sizing: content-box;
     margin-bottom: var(--space-md);
 }
 
@@ -928,7 +1034,7 @@ body {
     }
     
     .hero {
-        padding-top: 5rem;
+        padding-top: var(--space-xl);
     }
     
     .hero-actions {
