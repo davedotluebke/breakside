@@ -120,9 +120,11 @@ from .controller_storage import (
     ping_role,
     record_coach_ping,
     get_connected_coaches,
+    get_recent_activity,
     clear_game_state,
     get_active_games,
     HANDOFF_EXPIRY_SECONDS,
+    ACTIVITY_WINDOW_SECONDS,
 )
 
 __all__ = [
@@ -227,7 +229,9 @@ __all__ = [
     "ping_role",
     "record_coach_ping",
     "get_connected_coaches",
+    "get_recent_activity",
     "clear_game_state",
     "get_active_games",
     "HANDOFF_EXPIRY_SECONDS",
+    "ACTIVITY_WINDOW_SECONDS",
 ]

@@ -10,22 +10,12 @@ from datetime import datetime
 from typing import Dict, List, Optional
 import shutil
 
-from pathlib import Path
-import sys
-
-# Import config - handle both relative and absolute imports
-try:
-    from config import GAMES_DIR, ENABLE_GIT_VERSIONING
-except ImportError:
-    # Try absolute import (when running as package)
-    try:
-        from ultistats_server.config import GAMES_DIR, ENABLE_GIT_VERSIONING
-    except ImportError:
-        # Fallback: add parent to path
-        sys.path.insert(0, str(Path(__file__).parent.parent))
-        from config import GAMES_DIR, ENABLE_GIT_VERSIONING
-
+from ._config import config
 from .file_utils import atomic_write_json
+from .index_storage import update_index_for_game
+
+GAMES_DIR = config.GAMES_DIR
+ENABLE_GIT_VERSIONING = config.ENABLE_GIT_VERSIONING
 
 # Cap retained version backups per game to bound disk growth. The most recent
 # MAX_VERSIONS are always kept; older ones are thinned to one-per-day so some
@@ -116,20 +106,6 @@ def merge_pending_next_line(existing: Optional[dict], incoming: Optional[dict]) 
         merged["activeType"] = incoming["activeType"]
 
     return merged
-
-
-def _update_index_for_game(game_id: str, game_data: dict) -> None:
-    """Update the index for this game. Imported lazily to avoid circular imports."""
-    try:
-        from storage.index_storage import update_index_for_game
-        update_index_for_game(game_id, game_data)
-    except ImportError:
-        try:
-            from ultistats_server.storage.index_storage import update_index_for_game
-            update_index_for_game(game_id, game_data)
-        except ImportError:
-            # Index storage not available, skip
-            pass
 
 
 def save_game_version(game_id: str, game_data: dict,
@@ -298,7 +274,7 @@ def _write_game_version(game_dir: Path, versions_dir: Path, current_file: Path,
             )
     
     # Update the index
-    _update_index_for_game(game_id, game_data)
+    update_index_for_game(game_id, game_data)
     
     return str(version_file)
 
@@ -398,7 +374,7 @@ def update_game_metadata(game_id: str, updates: dict) -> dict:
 
         atomic_write_json(current_file, game_data)
 
-    _update_index_for_game(game_id, game_data)
+    update_index_for_game(game_id, game_data)
     return game_data
 
 

@@ -20,13 +20,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-# Import config
-try:
-    from config import USERS_DIR
-except ImportError:
-    from ultistats_server.config import USERS_DIR
-
+from ._config import config
 from .file_utils import atomic_write_json, entity_lock
+
+USERS_DIR = config.USERS_DIR
 
 
 def _user_file(user_id: str) -> Path:

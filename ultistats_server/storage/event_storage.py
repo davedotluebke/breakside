@@ -1,80 +1,21 @@
 """
 Event storage using JSON files.
 Each event is stored as a separate JSON file: data/events/{event_id}.json
+
+CRUD mechanics live in the shared JsonEntityStore; this module binds it to
+EVENTS_DIR and keeps the long-standing public function API.
 """
-import json
-import re
-import random
-import string
-from pathlib import Path
-from datetime import datetime
-from typing import Dict, List, Optional
+from typing import List, Optional
 
-try:
-    from config import EVENTS_DIR
-except ImportError:
-    try:
-        from ultistats_server.config import EVENTS_DIR
-    except ImportError:
-        import sys
-        sys.path.insert(0, str(Path(__file__).parent.parent))
-        from config import EVENTS_DIR
+from ._config import config
+from .entity_store import JsonEntityStore
+from .file_utils import entity_lock
+from .id_utils import generate_entity_id
 
-from .file_utils import atomic_write_json, entity_lock
+EVENTS_DIR = config.EVENTS_DIR
 
 
-def generate_event_id(name: str) -> str:
-    """
-    Generate a short, human-readable event ID.
-    Format: {sanitized-name}-{4-char-hash}
-    """
-    safe_name = re.sub(r'[^a-zA-Z0-9\s-]', '', name)
-    safe_name = re.sub(r'\s+', '-', safe_name).strip('-')
-    safe_name = safe_name[:20]
-    safe_name = re.sub(r'-+$', '', safe_name)
-
-    if not safe_name:
-        safe_name = "event"
-
-    chars = string.ascii_lowercase + string.digits
-    hash_part = ''.join(random.choice(chars) for _ in range(4))
-
-    return f"{safe_name}-{hash_part}"
-
-
-def _ensure_unique_id(event_id: str) -> str:
-    """Ensure the event ID is unique."""
-    original_id = event_id
-    attempt = 0
-    while event_exists(event_id):
-        attempt += 1
-        chars = string.ascii_lowercase + string.digits
-        extra = ''.join(random.choice(chars) for _ in range(2))
-        event_id = f"{original_id}{extra}"
-        if attempt > 10:
-            event_id = f"{original_id}-{random.randint(1000, 9999)}"
-            break
-    return event_id
-
-
-def save_event(event_data: dict, event_id: Optional[str] = None) -> str:
-    """
-    Save an event. If no ID provided, generates one from the name.
-    Returns the event ID.
-    """
-    EVENTS_DIR.mkdir(parents=True, exist_ok=True)
-
-    if not event_id:
-        name = event_data.get('name', 'Unknown')
-        event_id = generate_event_id(name)
-        event_id = _ensure_unique_id(event_id)
-
-    now = datetime.now().isoformat()
-    if 'createdAt' not in event_data:
-        event_data['createdAt'] = now
-    event_data['updatedAt'] = now
-    event_data['id'] = event_id
-
+def _event_defaults(event_data: dict) -> None:
     # Ensure required fields
     if 'gameIds' not in event_data:
         event_data['gameIds'] = []
@@ -85,63 +26,56 @@ def save_event(event_data: dict, event_id: Optional[str] = None) -> str:
     if 'roster' not in event_data:
         event_data['roster'] = {'playerIds': [], 'pickupPlayers': []}
 
-    atomic_write_json(EVENTS_DIR / f"{event_id}.json", event_data)
 
-    return event_id
+# dir_getter re-reads the module global so tests can patch EVENTS_DIR.
+_store = JsonEntityStore(
+    kind="Event",
+    dir_getter=lambda: EVENTS_DIR,
+    sort_key=lambda e: e.get('createdAt', ''),
+    sort_reverse=True,
+    apply_defaults=_event_defaults,
+)
+
+
+def generate_event_id(name: str) -> str:
+    """
+    Generate a short, human-readable event ID.
+    Format: {sanitized-name}-{4-char-hash}
+    """
+    return generate_entity_id(name, "event")
+
+
+def save_event(event_data: dict, event_id: Optional[str] = None) -> str:
+    """
+    Save an event. If no ID provided, generates one from the name.
+    Returns the event ID.
+    """
+    return _store.save(event_data, event_id)
 
 
 def get_event(event_id: str) -> dict:
     """Get an event by ID."""
-    event_file = EVENTS_DIR / f"{event_id}.json"
-    if not event_file.exists():
-        raise FileNotFoundError(f"Event {event_id} not found")
-
-    with open(event_file, 'r') as f:
-        return json.load(f)
+    return _store.get(event_id)
 
 
 def list_events() -> List[dict]:
-    """List all events."""
-    events = []
-    if not EVENTS_DIR.exists():
-        return events
-
-    for event_file in EVENTS_DIR.glob("*.json"):
-        try:
-            with open(event_file, 'r') as f:
-                events.append(json.load(f))
-        except (json.JSONDecodeError, KeyError):
-            continue
-
-    events.sort(key=lambda e: e.get('createdAt', ''), reverse=True)
-    return events
+    """List all events, newest first."""
+    return _store.list()
 
 
 def update_event(event_id: str, event_data: dict) -> str:
     """Update an existing event."""
-    with entity_lock(f"event:{event_id}"):
-        if not event_exists(event_id):
-            raise FileNotFoundError(f"Event {event_id} not found")
-
-        existing = get_event(event_id)
-        event_data['createdAt'] = existing.get('createdAt', datetime.now().isoformat())
-
-        return save_event(event_data, event_id)
+    return _store.update(event_id, event_data)
 
 
 def delete_event(event_id: str) -> bool:
     """Delete an event. Returns True if deleted."""
-    event_file = EVENTS_DIR / f"{event_id}.json"
-    if not event_file.exists():
-        return False
-    event_file.unlink()
-    return True
+    return _store.delete(event_id)
 
 
 def event_exists(event_id: str) -> bool:
     """Check if an event exists."""
-    event_file = EVENTS_DIR / f"{event_id}.json"
-    return event_file.exists()
+    return _store.exists(event_id)
 
 
 def list_team_events(team_id: str) -> List[dict]:
@@ -153,7 +87,8 @@ def list_team_events(team_id: str) -> List[dict]:
 def add_game_to_event(event_id: str, game_id: str) -> None:
     """Add a game ID to an event's gameIds list (idempotent)."""
     # Serialize so two games syncing into the same event concurrently can't
-    # each read the old gameIds and drop one another's addition.
+    # each read the old gameIds and drop one another's addition. Uses the same
+    # lock key as update_event (via the store's "event:{id}" convention).
     with entity_lock(f"event:{event_id}"):
         event = get_event(event_id)
         if game_id not in event.get('gameIds', []):

@@ -59,6 +59,12 @@ STALE_TIMEOUT_SECONDS = int(os.getenv("BREAKSIDE_STALE_TIMEOUT", "120"))
 # Handoff auto-approves after this time (must match client-side HANDOFF_TIMEOUT_SECONDS)
 HANDOFF_EXPIRY_SECONDS = int(os.getenv("BREAKSIDE_HANDOFF_EXPIRY", "10"))
 
+# Window for reporting a coach as "active" on game lists (see
+# get_recent_activity). Distinct from STALE_TIMEOUT_SECONDS, which governs
+# when a role claim expires. Previously duplicated as a literal 5 minutes in
+# main.py's game-activity enrichment.
+ACTIVITY_WINDOW_SECONDS = 5 * 60
+
 
 # =============================================================================
 # In-Memory State
@@ -152,6 +158,24 @@ def _auto_approve_handoff(state: ControllerState) -> None:
     state["pendingHandoff"] = None
 
 
+def _clean(state: ControllerState) -> None:
+    """
+    Drop stale role claims and auto-approve an expired handoff.
+
+    Called at the top of every read/mutate path that must observe a fresh
+    view of the roles (get/auto-assign/claim/handoff-request). Must be called
+    within lock context.
+    """
+    # Clean up stale claims
+    for role in ["activeCoach", "lineCoach"]:
+        if _is_stale(state.get(role)):
+            state[role] = None
+
+    # Handle expired handoffs (auto-approve)
+    if _is_handoff_expired(state.get("pendingHandoff")):
+        _auto_approve_handoff(state)
+
+
 # =============================================================================
 # Public API
 # =============================================================================
@@ -172,16 +196,9 @@ def get_controller_state(game_id: str) -> ControllerState:
     """
     with _lock:
         state = _controller_states.get(game_id, _get_empty_state())
-        
-        # Clean up stale claims
-        for role in ["activeCoach", "lineCoach"]:
-            if _is_stale(state.get(role)):
-                state[role] = None
-        
-        # Handle expired handoffs (auto-approve)
-        if _is_handoff_expired(state.get("pendingHandoff")):
-            _auto_approve_handoff(state)
-        
+
+        _clean(state)
+
         _controller_states[game_id] = state
         return dict(state)  # Return a copy
 
@@ -210,16 +227,9 @@ def auto_assign_roles_if_unclaimed(
     """
     with _lock:
         state = _controller_states.get(game_id, _get_empty_state())
-        
-        # Clean up stale claims first
-        for role in ["activeCoach", "lineCoach"]:
-            if _is_stale(state.get(role)):
-                state[role] = None
-        
-        # Handle expired handoffs
-        if _is_handoff_expired(state.get("pendingHandoff")):
-            _auto_approve_handoff(state)
-        
+
+        _clean(state)
+
         # Check if this user recently released roles (cooldown to prevent immediate re-assignment)
         release_key = (game_id, user_id)
         if release_key in _recent_releases:
@@ -280,16 +290,9 @@ def claim_role(
     """
     with _lock:
         state = _controller_states.get(game_id, _get_empty_state())
-        
-        # Clean stale claims first
-        for r in ["activeCoach", "lineCoach"]:
-            if _is_stale(state.get(r)):
-                state[r] = None
-        
-        # Handle expired handoffs
-        if _is_handoff_expired(state.get("pendingHandoff")):
-            _auto_approve_handoff(state)
-        
+
+        _clean(state)
+
         current_holder = state.get(role)
         now = datetime.now().isoformat()
         
@@ -352,18 +355,11 @@ def request_handoff(
     """
     with _lock:
         state = _controller_states.get(game_id, _get_empty_state())
-        
-        # Clean stale claims first
-        for r in ["activeCoach", "lineCoach"]:
-            if _is_stale(state.get(r)):
-                state[r] = None
-        
-        # Handle expired handoffs
-        if _is_handoff_expired(state.get("pendingHandoff")):
-            _auto_approve_handoff(state)
-        
+
+        _clean(state)
+
         current_holder = state.get(role)
-        
+
         # Can't request handoff for vacant role
         if not current_holder:
             _controller_states[game_id] = state
@@ -537,6 +533,38 @@ def ping_role(
         current_holder["lastPing"] = datetime.now().isoformat()
         _controller_states[game_id] = state
         return {"success": True, "state": dict(state)}
+
+
+def get_recent_activity(game_id: str, window_seconds: int = ACTIVITY_WINDOW_SECONDS):
+    """
+    Summarize recent coach activity for a game from role-holder pings.
+
+    Returns:
+        (last_activity, active_coaches) — the most recent lastPing ISO string
+        (or None if no role holder has pinged) and the display names of role
+        holders who pinged within ``window_seconds``.
+    """
+    cutoff = datetime.now().timestamp() - window_seconds
+    state = get_controller_state(game_id)
+
+    last_pings = []
+    active_coaches = []
+
+    for role in ("activeCoach", "lineCoach"):
+        holder = state.get(role)
+        if holder and holder.get("lastPing"):
+            ping_time = holder["lastPing"]
+            last_pings.append(ping_time)
+            try:
+                ping_ts = datetime.fromisoformat(ping_time).timestamp()
+                if ping_ts > cutoff:
+                    name = holder.get("displayName", "Unknown")
+                    if name not in active_coaches:
+                        active_coaches.append(name)
+            except (ValueError, TypeError):
+                pass
+
+    return (max(last_pings) if last_pings else None), active_coaches
 
 
 def record_coach_ping(game_id: str, user_id: str, display_name: str) -> None:
