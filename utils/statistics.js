@@ -3,6 +3,8 @@
  * Functions for calculating player and team statistics from game events
  */
 
+import { currentTeam } from '../store/storage.js';
+
 /**
  * Calculate player statistics from game events
  * Returns a map of player name -> stats object
@@ -84,3 +86,7 @@ function calculatePlayerStatsFromEvents(game) {
     return stats;
 }
 
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+export { calculatePlayerStatsFromEvents };
+window.calculatePlayerStatsFromEvents = calculatePlayerStatsFromEvents;

@@ -115,4 +115,7 @@ function showStatsHelpModal(help) {
     modal.onclick = (e) => { if (e.target === modal) close(); };
 }
 
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+export { attachStatsColumnHelp };
 window.attachStatsColumnHelp = attachStatsColumnHelp;

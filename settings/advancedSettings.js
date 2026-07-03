@@ -18,7 +18,7 @@
  *   2. the stored localStorage value;
  *   3. the built-in default.
  */
-(function() {
+const advancedSettings = (function() {
     const STORAGE_KEY = 'breakside_advanced_settings';
 
     // Common ultimate-frisbee jargon to bias transcription toward. Spelled
@@ -436,7 +436,7 @@
     }
 
     // Expose
-    window.advancedSettings = {
+    return {
         get,
         set,
         getRefreshIntervalMs,
@@ -447,3 +447,8 @@
         showAdvancedSettings
     };
 })();
+
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+export { advancedSettings };
+window.advancedSettings = advancedSettings;

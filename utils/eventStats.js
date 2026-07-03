@@ -5,6 +5,10 @@
  * onto the team object until individually opened.
  */
 
+import { Role } from '../store/models.js';
+import { currentTeam } from '../store/storage.js';
+import { loadGameFromCloud, listServerGames } from '../store/sync.js';
+
 /**
  * Load all games for an event from cloud storage.
  * @param {object} event - TournamentEvent with gameIds array
@@ -425,6 +429,20 @@ async function getEventRecord(event, options = {}) {
     return { wins, losses, ties };
 }
 
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+export {
+    loadEventGames,
+    accumulateGameStats,
+    classifyPoint,
+    getGameTeamStats,
+    getEventTeamStats,
+    formatTeamStatsLine,
+    getGamePlayerStats,
+    getTeamPlayerStats,
+    getEventPlayerStats,
+    getEventRecord
+};
 window.getGamePlayerStats = getGamePlayerStats;
 window.getEventPlayerStats = getEventPlayerStats;
 window.getTeamPlayerStats = getTeamPlayerStats;
@@ -434,3 +452,4 @@ window.getGameTeamStats = getGameTeamStats;
 window.getEventTeamStats = getEventTeamStats;
 window.classifyPoint = classifyPoint;
 window.formatTeamStatsLine = formatTeamStatsLine;
+window.accumulateGameStats = accumulateGameStats;

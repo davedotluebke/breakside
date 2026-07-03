@@ -750,16 +750,8 @@
     <!-- helpers.js must precede storage.js: storage.js initializes teams at
          load time, which reaches getPlayerFromName via deserializeEvent -->
 
-    <!-- Settings (per-device preferences) -->
-    <script src="settings/advancedSettings.js"></script>
-
-    <!-- Utility modules (helpers.js loads earlier, with the data layer) -->
-    <script src="utils/statistics.js"></script>
-    <script src="utils/eventStats.js"></script>
-    <script src="utils/tableSort.js"></script>
-    <script src="utils/statsHelp.js"></script>
+    <!-- Settings + utility modules are ES modules now — imported from main.js -->
     <script src="vendor/xlsx.mini.min.js"></script>
-    <script src="utils/xlsxExport.js"></script>
 
     <!-- UI modules -->
     <script src="ui/activePlayersDisplay.js"></script>

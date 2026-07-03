@@ -61,6 +61,12 @@ import './store/models.js';
 import './utils/helpers.js';
 import './store/storage.js';
 import './store/sync.js';
+import './settings/advancedSettings.js';
+import './utils/statistics.js';
+import './utils/eventStats.js';
+import './utils/tableSort.js';
+import './utils/statsHelp.js';
+import './utils/xlsxExport.js';
 
 // Skip the service worker during local development (localhost / 127.0.0.1).
 // Its offline precache otherwise serves stale JS/CSS across edits, so source
