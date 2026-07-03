@@ -100,10 +100,25 @@ async function authFetch(url, options = {}) {
         }
     }
     
-    return fetch(url, {
+    const response = await fetch(url, {
         ...options,
         headers
     });
+
+    // Self-heal a stale offline flag. isOnline can be set false by a single
+    // transient fetch failure in the sync queue (or a missed browser 'online'
+    // event, e.g. a frozen mobile PWA), and the 'online' event is the only
+    // other thing that resets it — if the browser never saw the network drop,
+    // the app stays stuck "Offline" (pill, pending queue, empty game lists)
+    // even while non-gated calls like controller pings succeed. Any completed
+    // round-trip here proves connectivity, whatever the HTTP status.
+    if (!isOnline) {
+        isOnline = true;
+        console.log('🌐 Connectivity restored (successful request cleared stale offline flag)');
+        processSyncQueue();
+    }
+
+    return response;
 }
 
 // Storage keys
