@@ -1,0 +1,58 @@
+# Shared S3 sync exclude list for the PWA deploys:
+#   production: .github/workflows/main.yml
+#   staging:    scripts/deploy-staging.sh
+# Blank lines and lines starting with # are ignored.
+#
+# service-worker.js and version.json are excluded from the bulk sync because
+# both deploys upload deploy-time-stamped copies separately with no-cache
+# headers (build number = git rev-list --count HEAD; see VERSIONING.md).
+#
+# NOTE: `aws s3 sync --delete` does not delete bucket files matching an
+# exclude — files published before a pattern was added must be removed once
+# with `aws s3 rm`.
+
+# VCS / tooling / editor config
+.git/*
+.github/*
+.gitignore
+.claude/*
+.cursor/*
+.vscode/*
+.worktrees/*
+.pytest_cache/*
+__pycache__/*
+*/__pycache__/*
+.DS_Store
+*/.DS_Store
+
+# Backend, data, scripts, tests — not part of the PWA
+ultistats_server/*
+data/*
+.dev-data/*
+scripts/*
+tests/*
+*.py
+*.sh
+
+# Docs and license
+*.md
+LICENSE
+
+# Local-only secrets / test data (gitignored, but staging deploys the
+# working directory, so exclude them from the sync too)
+test-credentials.local
+api_key.sec
+recv.txt
+teamData.*.json
+test_team.json
+
+# Raw/intermediate audio (FLAC is the committed canonical format)
+*.wav
+*.ogg
+*.m4a
+*.webm
+*.pcm
+
+# Uploaded separately with deploy-time stamping + no-cache headers
+service-worker.js
+version.json
