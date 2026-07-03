@@ -18,6 +18,7 @@
  *   // Sign out
  *   await signOut();
  */
+import { authFetch } from '../store/sync.js';
 
 // =============================================================================
 // State
@@ -39,8 +40,9 @@ let authStateListeners = [];
  */
 async function initializeAuth() {
     if (authInitialized) return;
-    
+
     // Check if Supabase is available
+    // supabase: classic CDN script global (index.html)
     if (typeof window.supabase === 'undefined') {
         console.warn('Supabase JS not loaded. Auth features disabled.');
         authInitialized = true;
@@ -421,46 +423,10 @@ function handleLoginRedirect() {
 // API Helpers
 // =============================================================================
 
-/**
- * Make an authenticated API request.
- * Automatically adds auth headers if user is authenticated.
- * 
- * @param {string} url - The URL to fetch
- * @param {object} options - Fetch options
- * @returns {Promise<Response>}
- */
-async function authFetch(url, options = {}) {
-    const buildOptions = (authHeaders) => ({
-        ...options,
-        headers: {
-            'Content-Type': 'application/json',
-            ...authHeaders,
-            ...options.headers,
-        },
-    });
-
-    let response = await fetch(url, buildOptions(await getAuthHeaders()));
-
-    // Retry once on 401 with a freshly-refreshed token: getSession() can hand
-    // back a stale cached token that the server rejects. A forced refresh +
-    // single retry recovers transparently. (Skip in test mode — no real JWT.)
-    if (response.status === 401 && !_testModeUserId && supabaseClient && isAuthenticated()) {
-        try {
-            const { data, error } = await supabaseClient.auth.refreshSession();
-            if (!error && data && data.session) {
-                currentSession = data.session;
-                currentUser = data.session.user || null;
-                response = await fetch(url, buildOptions({
-                    'Authorization': `Bearer ${data.session.access_token}`,
-                }));
-            }
-        } catch (e) {
-            console.warn('401 retry refresh failed:', e);
-        }
-    }
-
-    return response;
-}
+// authFetch: this file's local 401-retry variant was DELETED at C8 — it had been
+// shadowed dead code since pre-migration (store/sync.js's classic-script authFetch
+// overwrote the global, so every runtime call already got sync's version; see the
+// C1 commit). Consolidating onto the 401-retry variant is a flagged follow-up.
 
 /**
  * Sync current user to our backend.
@@ -485,66 +451,6 @@ async function syncUserToBackend() {
         return null;
     }
 }
-
-// =============================================================================
-// Exports (Global)
-// =============================================================================
-
-// Make functions available globally for vanilla JS
-// Legacy export for compatibility
-window.BreaksideAuth = {
-    initializeAuth,
-    isAuthenticated,
-    canActOffline,
-    getCurrentUser,
-    getCurrentSession,
-    onAuthStateChange,
-    getAuthHeaders,
-    getAccessToken,
-    signOut,
-    redirectToLogin,
-    handleLoginRedirect,
-    authFetch,
-    syncUserToBackend,
-};
-
-// Primary export used by sync.js, main.js, and loginScreen.js
-window.breakside = window.breakside || {};
-window.breakside.auth = {
-    // Initialization
-    initializeAuth,
-    
-    // State queries
-    isAuthenticated,
-    isLoggedIn: isAuthenticated,  // alias for consistency
-    canActOffline,
-    getCurrentUser,
-    getCurrentSession,
-    getSession: getCurrentSession,  // alias
-    
-    // Event listeners
-    onAuthStateChange,
-    
-    // Token management
-    getAuthHeaders,
-    getAccessToken,
-    
-    // Sign in/up/out
-    signIn,
-    signUp,
-    signOut,
-    resetPassword,
-    signInWithGoogle,
-    
-    // Utilities
-    redirectToLogin,
-    handleLoginRedirect,
-    authFetch,
-    syncUserToBackend,
-
-    // Test support
-    enableTestMode,
-};
 
 // =============================================================================
 // Sign In/Up Functions (for loginScreen.js)
@@ -684,3 +590,56 @@ async function signInWithGoogle() {
         return { error: { message: error.message || 'Google sign in failed' } };
     }
 }
+
+// =============================================================================
+// Exports
+// =============================================================================
+
+// The auth namespace consumed by main.js, store/sync.js, game/controllerState.js,
+// teams/syncStatusUI.js, and teams/teamSettings.js — all reach it via
+// window.breakside.auth at call time; auth/loginScreen.js also merges its own
+// namespace into window.breakside. Note: authFetch here is store/sync.js's
+// version (imported above) — the runtime winner since pre-migration.
+// window.BreaksideAuth (a legacy duplicate of this object) was dropped at C8:
+// grep found zero references anywhere (code, tests, landing/, HTML).
+const breaksideAuth = {
+    // Initialization
+    initializeAuth,
+
+    // State queries
+    isAuthenticated,
+    isLoggedIn: isAuthenticated,  // alias for consistency
+    canActOffline,
+    getCurrentUser,
+    getCurrentSession,
+    getSession: getCurrentSession,  // alias
+
+    // Event listeners
+    onAuthStateChange,
+
+    // Token management
+    getAuthHeaders,
+    getAccessToken,
+
+    // Sign in/up/out
+    signIn,
+    signUp,
+    signOut,
+    resetPassword,
+    signInWithGoogle,
+
+    // Utilities
+    redirectToLogin,
+    handleLoginRedirect,
+    authFetch,
+    syncUserToBackend,
+
+    // Test support
+    enableTestMode,
+};
+
+// --- ES-module export; the window.breakside merge is the shim consumed by the
+// --- window-qualified call sites listed above (converted to imports at C10).
+export { breaksideAuth };
+window.breakside = window.breakside || {};
+window.breakside.auth = breaksideAuth;

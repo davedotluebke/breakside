@@ -741,11 +741,9 @@
         </footer>
     </section>
 
-    <!-- Auth modules (must load before other modules) -->
-    <!-- auth/config.js is an ES module now — imported from main.js -->
-    <script src="auth/auth.js"></script>
-    <script src="auth/loginScreen.js"></script>
-    
+    <!-- Auth modules (auth/config.js, auth/auth.js, auth/loginScreen.js) are
+         ES modules now — imported from main.js -->
+
     <!-- Data layer modules -->
     <!-- helpers.js must precede storage.js: storage.js initializes teams at
          load time, which reaches getPlayerFromName via deserializeEvent -->
@@ -768,12 +766,9 @@
     <!-- Play-by-play modules (playByPlay/*) and narration/eventBus.js are
          ES modules now — imported from main.js -->
 
-    <!-- AI Narration (speech-to-events) -->
-    <script src="narration/realtimeSession.js"></script>
-    <script src="narration/narrationEngine.js"></script>
-    <script src="narration/transcriptDisplay.js"></script>
-    <script src="narration/micButton.js"></script>
-    
+    <!-- AI Narration modules (narration/*, speech-to-events) are ES modules
+         now — imported from main.js -->
+
     <!-- Main application -->
     <script type="module" src="main.js"></script>
 </body>

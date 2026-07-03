@@ -27,8 +27,9 @@
  * WebSocket subprotocol proves unreliable in a given browser, switching to
  * WebRTC is a scoped change within this module.
  */
+import { authFetch, API_BASE_URL } from '../store/sync.js';
 
-(function() {
+const narrationRealtimeSession = (function() {
     const OPENAI_REALTIME_URL = 'wss://api.openai.com/v1/realtime';
     const TOKEN_ENDPOINT_PATH = '/api/narration/token';
     const TARGET_SAMPLE_RATE = 24000;  // OpenAI Realtime API expects 24kHz PCM16
@@ -338,7 +339,7 @@
     // ---------------------------------------------------------------------
 
     async function fetchEphemeralToken({ mode, model, transcriptionModel }) {
-        // Uses the authFetch helper defined in store/sync.js
+        // Uses the authFetch helper imported from store/sync.js
         if (typeof authFetch !== 'function') {
             throw new Error('authFetch not available');
         }
@@ -604,10 +605,15 @@
         return btoa(binary);
     }
 
-    // Expose globally
-    window.narrationRealtimeSession = {
+    // Public API
+    return {
         start,
         stop,
         isActive
     };
 })();
+
+// --- ES-module export. The sole consumer (narration/narrationEngine.js)
+// --- imports it directly; no window shim needed — grep found no other
+// --- window.narrationRealtimeSession references (code, tests, or HTML).
+export { narrationRealtimeSession };
