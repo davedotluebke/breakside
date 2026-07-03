@@ -262,11 +262,9 @@ async function forceAppUpdate() {
     }
 }
 
-// Consumed by teams/syncStatusUI.js (via window) and, until the inline-handler
-// conversion lands, by index.html's onclick="closePwaInstallModal()".
+// Consumed by teams/syncStatusUI.js (via window; import at final sweep).
 window.checkForAppUpdate = checkForAppUpdate;
 window.forceAppUpdate = forceAppUpdate;
-window.closePwaInstallModal = closePwaInstallModal;
 
 /******************************************************************************/
 /********************************** Auth Initialization ***********************/
@@ -702,6 +700,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize app hamburger menu
     initializeAppMenu();
+
+    // PWA install modal "Continue in Browser" (was an inline onclick pre-ESM)
+    document.getElementById('pwaContinueBrowserBtn')
+        ?.addEventListener('click', () => closePwaInstallModal());
 
     // Game summary back button — navigate based on where we came from
     const backFromSummaryBtn = document.getElementById('backFromSummaryBtn');

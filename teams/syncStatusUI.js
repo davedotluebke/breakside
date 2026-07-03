@@ -344,6 +344,12 @@ window.addEventListener('click', function(event) {
     }
 });
 
+// Pending-sync dialog buttons (were inline onclick in index.html pre-ESM).
+// Module evaluation happens after DOM parse, so the elements exist here.
+document.getElementById('pendingSyncCloseX')?.addEventListener('click', closePendingSyncDialog);
+document.getElementById('pendingSyncKeepBtn')?.addEventListener('click', closePendingSyncDialog);
+document.getElementById('pendingSyncClearAllBtn')?.addEventListener('click', confirmClearSyncQueue);
+
 // --- ES-module exports; window.* shims below are transitional or documented
 // --- survivors (generated-HTML / index.html inline onclick handlers).
 export {
@@ -362,7 +368,3 @@ window.handleSignOut = handleSignOut;
 window.showPendingSyncDialog = showPendingSyncDialog;
 // window survivor: referenced by generated-HTML onclick
 window.confirmAppUpdate = confirmAppUpdate;
-// window survivor: referenced by index.html inline onclick (converted later in migration)
-window.closePendingSyncDialog = closePendingSyncDialog;
-// window survivor: referenced by index.html inline onclick (converted later in migration)
-window.confirmClearSyncQueue = confirmClearSyncQueue;
