@@ -274,9 +274,17 @@ function showPendingSyncDialog() {
             const retryNote = item.retryCount > 0
                 ? ` <span style="color:#c00; font-size:0.8rem;">(${item.retryCount} failed attempt${item.retryCount > 1 ? 's' : ''})</span>`
                 : '';
+            // Surface the most recent failure so a stuck item is diagnosable
+            // from the UI (offline-classified failures retry forever and would
+            // otherwise show no reason at all). escapeHtml is late-bound via
+            // window (owned by game/gameScreenSync.js, a later layer).
+            const errNote = item.lastError
+                ? `<div style="font-size:0.75rem; color:#c00; word-break:break-word;">last error: ${(window.escapeHtml ? window.escapeHtml(item.lastError) : '').slice(0, 300)}</div>`
+                : '';
             return `<div style="padding: 0.4rem 0; border-bottom: 1px solid #eee;">
                 <span style="font-weight:600;">${item.action}</span> ${label}${retryNote}
                 <div style="font-size:0.8rem; color:#888;">${age}</div>
+                ${errNote}
             </div>`;
         });
         if (items.length > maxShown) {

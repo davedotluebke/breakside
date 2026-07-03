@@ -307,8 +307,17 @@ async function processSyncQueue() {
 
             // A connectivity failure isn't the item's fault — stop processing
             // and let the online listener / retry timer pick it back up. Don't
-            // count it against the retry cap.
+            // count it against the retry cap, but DO record what happened so
+            // the pending-sync dialog can show why an item is stuck (an
+            // offline-classified failure loops forever by design, which is
+            // invisible without this).
             if (isOfflineError(error)) {
+                const queueItem = syncQueue.find(q => q.type === item.type && q.id === item.id);
+                if (queueItem) {
+                    queueItem.lastError = `${error.message} (classified offline; navigator.onLine=${navigator.onLine})`;
+                    queueItem.lastAttemptAt = Date.now();
+                    saveSyncQueue();
+                }
                 isOnline = false;
                 break;
             }
