@@ -26,6 +26,8 @@ try:
 except ImportError:
     from ultistats_server.config import USERS_DIR
 
+from .file_utils import atomic_write_json, entity_lock
+
 
 def _user_file(user_id: str) -> Path:
     """Get the path to a user's JSON file."""
@@ -75,10 +77,9 @@ def save_user(user_data: Dict[str, Any]) -> str:
     
     # Ensure directory exists
     USERS_DIR.mkdir(parents=True, exist_ok=True)
-    
-    with open(_user_file(user_id), "w") as f:
-        json.dump(user_data, f, indent=2)
-    
+
+    atomic_write_json(_user_file(user_id), user_data)
+
     return user_id
 
 
@@ -97,25 +98,26 @@ def create_or_update_user(user_id: str, email: str, display_name: Optional[str] 
     Returns:
         The user dict
     """
-    existing = get_user(user_id)
-    
-    if existing:
-        # Update email if changed
-        if existing.get("email") != email:
-            existing["email"] = email
-            existing["updatedAt"] = datetime.now().isoformat()
-            save_user(existing)
-        return existing
-    
-    # Create new user
-    user_data = {
-        "id": user_id,
-        "email": email,
-        "displayName": display_name or email.split("@")[0],
-        "isAdmin": False,
-    }
-    save_user(user_data)
-    return get_user(user_id)
+    with entity_lock(f"user:{user_id}"):
+        existing = get_user(user_id)
+
+        if existing:
+            # Update email if changed
+            if existing.get("email") != email:
+                existing["email"] = email
+                existing["updatedAt"] = datetime.now().isoformat()
+                save_user(existing)
+            return existing
+
+        # Create new user
+        user_data = {
+            "id": user_id,
+            "email": email,
+            "displayName": display_name or email.split("@")[0],
+            "isAdmin": False,
+        }
+        save_user(user_data)
+        return get_user(user_id)
 
 
 def update_user(user_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -129,19 +131,22 @@ def update_user(user_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any
     Returns:
         Updated user dict, or None if user doesn't exist
     """
-    user = get_user(user_id)
-    if not user:
-        return None
-    
-    # Don't allow updating certain fields
-    protected_fields = {"id", "createdAt"}
-    for field in protected_fields:
-        updates.pop(field, None)
-    
-    user.update(updates)
-    user["updatedAt"] = datetime.now().isoformat()
-    save_user(user)
-    
+    # Serialize the read-modify-write so concurrent profile updates (and the
+    # create_or_update_user write on every /auth/me) can't lose each other.
+    with entity_lock(f"user:{user_id}"):
+        user = get_user(user_id)
+        if not user:
+            return None
+
+        # Don't allow updating certain fields
+        protected_fields = {"id", "createdAt"}
+        for field in protected_fields:
+            updates.pop(field, None)
+
+        user.update(updates)
+        user["updatedAt"] = datetime.now().isoformat()
+        save_user(user)
+
     return user
 
 

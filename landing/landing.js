@@ -25,6 +25,12 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
     auth: { lock: noOpLock }
 });
 
+// Set true when the user actively signs in/up on this page (form submit or
+// Google button). The SIGNED_IN redirect is gated on this so a *restored*
+// session (which also surfaces as an auth event on load) doesn't immediately
+// bounce a returning visitor off the landing page.
+let userInitiatedAuth = false;
+
 // =============================================================================
 // DOM Elements
 // =============================================================================
@@ -156,7 +162,9 @@ signinForm?.addEventListener('submit', async (e) => {
     
     const email = document.getElementById('signinEmail').value;
     const password = document.getElementById('signinPassword').value;
-    
+
+    userInitiatedAuth = true;
+
     const submitBtn = signinForm.querySelector('button[type="submit"]');
     const originalText = submitBtn.textContent;
     submitBtn.textContent = 'Signing in...';
@@ -208,7 +216,9 @@ signupForm?.addEventListener('submit', async (e) => {
         showAuthMessage('Passwords do not match');
         return;
     }
-    
+
+    userInitiatedAuth = true;
+
     const submitBtn = signupForm.querySelector('button[type="submit"]');
     const originalText = submitBtn.textContent;
     submitBtn.textContent = 'Creating account...';
@@ -383,8 +393,10 @@ async function initializeAuth() {
             updateUIForUser(session?.user || null);
             
             // Handle specific events
-            if (event === 'SIGNED_IN') {
-                // Redirect to the main app
+            if (event === 'SIGNED_IN' && userInitiatedAuth) {
+                // Only redirect on a genuine, user-initiated sign-in — NOT on a
+                // restored session surfacing as SIGNED_IN on page load, which
+                // would bounce a returning visitor straight off the landing page.
                 window.location.href = '/';
             } else if (event === 'SIGNED_OUT') {
                 closeModal();

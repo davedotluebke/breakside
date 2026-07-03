@@ -11,6 +11,7 @@ export default defineConfig({
   expect: { timeout: 8_000 },
   fullyParallel: false,   // keep sequential — multi-coach tests share server state
   retries: 2,   // multi-coach/sleep-wake tests poll timing-sensitive controller state; retry transient flakes
+  globalSetup: './global-setup.ts',   // wipe test-data-dir each run so it can't accumulate across runs
 
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
   outputDir: 'test-results',

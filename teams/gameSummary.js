@@ -97,10 +97,10 @@ function renderGameSummaryStatsTable(game) {
     } else {
         const base = (typeof currentTeam !== 'undefined' && currentTeam
             && currentTeam.teamRoster) ? currentTeam.teamRoster : [];
-        const haveNames = new Set(base.map(p => p.name));
-        const fromStats = Object.keys(playerStats)
-            .filter(name => !haveNames.has(name))
-            .map(name => ({ name }));
+        const haveIds = new Set(base.map(p => p.id));
+        const fromStats = Object.entries(playerStats)
+            .filter(([id]) => !haveIds.has(id))
+            .map(([id, s]) => ({ id, name: s.name || id }));
         players = [...base, ...fromStats];
     }
 
@@ -125,7 +125,7 @@ function renderGameSummaryStatsTable(game) {
 
     // Player rows
     players.forEach(player => {
-        const ps = playerStats[player.name] || {};
+        const ps = playerStats[player.id] || {};
         const row = createGameSummaryPlayerRow(player, ps, totals);
         tbody.appendChild(row);
     });

@@ -19,6 +19,11 @@ except ImportError:
         sys.path.insert(0, str(Path(__file__).parent.parent))
         from config import INDEX_FILE, GAMES_DIR, TEAMS_DIR, PLAYERS_DIR
 
+from .file_utils import atomic_write_json, entity_lock
+
+# Serializes read-modify-write of the cross-entity index file.
+_INDEX_LOCK_KEY = "entity-index"
+
 
 def _load_index() -> dict:
     """Load the index from disk, or return empty structure if not exists."""
@@ -39,10 +44,8 @@ def _load_index() -> dict:
 
 
 def _save_index(index: dict) -> None:
-    """Save the index to disk."""
-    INDEX_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(INDEX_FILE, 'w') as f:
-        json.dump(index, f, indent=2)
+    """Save the index to disk atomically."""
+    atomic_write_json(INDEX_FILE, index)
 
 
 def rebuild_index() -> dict:
@@ -236,51 +239,52 @@ def update_index_for_game(game_id: str, game_data: dict) -> None:
         game_id: The game's ID
         game_data: The game data
     """
-    index = _load_index()
-    if index.get("lastRebuilt") is None:
-        # No index yet, do full rebuild
-        rebuild_index()
-        return
-    
-    team_id = game_data.get('teamId')
-    
-    # Update teamGames
-    if team_id:
-        if team_id not in index["teamGames"]:
-            index["teamGames"][team_id] = []
-        if game_id not in index["teamGames"][team_id]:
-            index["teamGames"][team_id].append(game_id)
-    
-    # Extract player IDs
-    player_ids = set()
-    
-    roster_snapshot = game_data.get('rosterSnapshot', {})
-    for player in roster_snapshot.get('players', []):
-        if 'id' in player:
-            player_ids.add(player['id'])
-    
-    for point in game_data.get('points', []):
-        for player_ref in point.get('players', []):
-            if isinstance(player_ref, str) and '-' in player_ref:
-                player_ids.add(player_ref)
-        
-        for possession in point.get('possessions', []):
-            for event in possession.get('events', []):
-                for key in ['throwerId', 'receiverId', 'defenderId', 'pullerId']:
-                    if key in event and event[key]:
-                        player_ids.add(event[key])
-    
-    # Update gameRoster
-    index["gameRoster"][game_id] = list(player_ids)
-    
-    # Update playerGames
-    for player_id in player_ids:
-        if player_id not in index["playerGames"]:
-            index["playerGames"][player_id] = []
-        if game_id not in index["playerGames"][player_id]:
-            index["playerGames"][player_id].append(game_id)
-    
-    _save_index(index)
+    with entity_lock(_INDEX_LOCK_KEY):
+        index = _load_index()
+        if index.get("lastRebuilt") is None:
+            # No index yet, do full rebuild
+            rebuild_index()
+            return
+
+        team_id = game_data.get('teamId')
+
+        # Update teamGames
+        if team_id:
+            if team_id not in index["teamGames"]:
+                index["teamGames"][team_id] = []
+            if game_id not in index["teamGames"][team_id]:
+                index["teamGames"][team_id].append(game_id)
+
+        # Extract player IDs
+        player_ids = set()
+
+        roster_snapshot = game_data.get('rosterSnapshot', {})
+        for player in roster_snapshot.get('players', []):
+            if 'id' in player:
+                player_ids.add(player['id'])
+
+        for point in game_data.get('points', []):
+            for player_ref in point.get('players', []):
+                if isinstance(player_ref, str) and '-' in player_ref:
+                    player_ids.add(player_ref)
+
+            for possession in point.get('possessions', []):
+                for event in possession.get('events', []):
+                    for key in ['throwerId', 'receiverId', 'defenderId', 'pullerId']:
+                        if key in event and event[key]:
+                            player_ids.add(event[key])
+
+        # Update gameRoster
+        index["gameRoster"][game_id] = list(player_ids)
+
+        # Update playerGames
+        for player_id in player_ids:
+            if player_id not in index["playerGames"]:
+                index["playerGames"][player_id] = []
+            if game_id not in index["playerGames"][player_id]:
+                index["playerGames"][player_id].append(game_id)
+
+        _save_index(index)
 
 
 def update_index_for_team(team_id: str, team_data: dict) -> None:
@@ -291,19 +295,20 @@ def update_index_for_team(team_id: str, team_data: dict) -> None:
         team_id: The team's ID
         team_data: The team data
     """
-    index = _load_index()
-    if index.get("lastRebuilt") is None:
-        rebuild_index()
-        return
-    
-    player_ids = team_data.get('playerIds', [])
-    
-    # Update playerTeams
-    for player_id in player_ids:
-        if player_id not in index["playerTeams"]:
-            index["playerTeams"][player_id] = []
-        if team_id not in index["playerTeams"][player_id]:
-            index["playerTeams"][player_id].append(team_id)
-    
-    _save_index(index)
+    with entity_lock(_INDEX_LOCK_KEY):
+        index = _load_index()
+        if index.get("lastRebuilt") is None:
+            rebuild_index()
+            return
+
+        player_ids = team_data.get('playerIds', [])
+
+        # Update playerTeams
+        for player_id in player_ids:
+            if player_id not in index["playerTeams"]:
+                index["playerTeams"][player_id] = []
+            if team_id not in index["playerTeams"][player_id]:
+                index["playerTeams"][player_id].append(team_id)
+
+        _save_index(index)
 

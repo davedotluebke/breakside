@@ -10,12 +10,25 @@
  * Canonical interaction spec: mockups/field-position/index.html and
  * mockups/field-position/FIELD_MODE.md.
  *
- * Coordinate system (orientation-INDEPENDENT canonical coords):
- *   - l: 0..120 along length (0 = own back line, 120 = attacking back line)
- *   - w: 0..40 across width
- *   - Endzones l 0..25 (Defend) and 95..120 (Attack). Playing field 25..95.
- *   - Red-zone / brick lines at l = 45 and 75. Two display flips (flipAD /
- *     flipHA) are applied only at render time.
+ * Coordinate system (STORED on events — orientation- AND size-INDEPENDENT,
+ * NORMALIZED field frame). Each Throw/Turnover/Defense/Pull `from`/`to` is an
+ * {x, y} with:
+ *   - x = progress toward the ATTACKING endzone. x=0 at the DEFENDING endzone
+ *     (goal) line, x=1 at the ATTACKING endzone (goal) line; x<0 is inside the
+ *     defending endzone, x>1 is inside the attacking endzone.
+ *   - y = across the field: y=0 at the HOME sideline, y=1 at the AWAY sideline.
+ *
+ * The normalized frame is deliberately decoupled from yards/meters and from the
+ * endzone-depth setting: changing endzone depth (or playing a small 4v4/5v5/
+ * middle-school field) only re-scales the endzone *margins* at render time and
+ * never moves a stored point relative to the playing field. This supersedes the
+ * old "canonical yards keyed off endzone depth" frame, which re-scaled past
+ * games when the depth setting changed. The two display flips (flipAD / flipHA)
+ * remain render-time only; stored {x, y} never change.
+ *
+ * At render time the normalized {x, y} is scaled to the on-screen field (whose
+ * length includes the depth-dependent endzones) by pct()/toField(), which work
+ * in canonical yards (EZ/L/W); toNorm()/fromNorm() bridge the two frames.
  *
  * Phases done here:
  *   0: tab scaffold + static field render.
@@ -35,18 +48,21 @@
     // USAU; some leagues use 25). L and the red-zone/brick lines derive from
     // EZ, so they're refreshed from the setting on every render.
     //
-    // NOTE: stored event coordinates are in these canonical yards, so changing
-    // the endzone depth re-scales the field a past game was recorded in. This
-    // is fine for the (new, data-free) Field tab; if real spatial data later
-    // needs to survive a depth change, persist EZ per game and map on read.
+    // These yards are a RENDER-ONLY frame: they map the on-screen field, whose
+    // length includes the depth-dependent endzones. Stored event coordinates are
+    // NOT in yards — they are the size-independent normalized {x, y} frame (see
+    // the file header). toNorm()/fromNorm() bridge yards <-> normalized, so an
+    // endzone-depth change re-scales only the endzone margins on screen and never
+    // moves a stored point relative to the playing field.
     // -----------------------------------------------------------------
     const W = 40;                         // field width (fixed)
     const PLAYING = 70;                   // playing field proper, between goal lines (fixed)
+    const BRICK_OFFSET = 20;              // brick mark: yards in from each goal line
     const LANES = [W / 3, 2 * W / 3];
     const VISIBLE = 4;                    // recent markers/arrows kept solid
     let EZ = 20;                          // endzone depth (refreshed from settings)
     let L = PLAYING + 2 * EZ;             // total length
-    let RZ = [EZ + 20, L - EZ - 20];      // red-zone / brick lines (20 yd off each goal line)
+    let RZ = [EZ + BRICK_OFFSET, L - EZ - BRICK_OFFSET];  // red-zone / brick lines
     let BRICK = RZ.slice();
 
     function refreshGeometry() {
@@ -54,8 +70,30 @@
             ? window.advancedSettings.getEndzoneYards() : 20;
         EZ = (Number.isFinite(y) && y > 0) ? y : 20;
         L = PLAYING + 2 * EZ;
-        RZ = [EZ + 20, L - EZ - 20];
+        RZ = [EZ + BRICK_OFFSET, L - EZ - BRICK_OFFSET];
         BRICK = RZ.slice();
+    }
+
+    // -----------------------------------------------------------------
+    // Stored-event coordinate frame: NORMALIZED {x, y} <-> canonical yards
+    // {l, w}. Events are persisted as {x, y} (size-independent, see file
+    // header); the render/tap math (pct/toField/clampLoc, the static geometry)
+    // works in yards. These two converters are the ONLY bridge between the
+    // frames. Each returns a FRESH object, so callers never alias coordinates.
+    //   x = (l - EZ) / PLAYING   (0 at defending goal line, 1 at attacking)
+    //   y = w / W                (0 at home sideline, 1 at away)
+    // -----------------------------------------------------------------
+    function toNorm(loc) {
+        if (!loc) return null;
+        return { x: (loc.l - EZ) / PLAYING, y: loc.w / W };
+    }
+    function fromNorm(n) {
+        if (!n) return null;
+        // New, normalized form.
+        if (typeof n.x === 'number') return { l: EZ + n.x * PLAYING, w: n.y * W };
+        // Tolerate any legacy canonical {l, w} so older data still renders.
+        if (typeof n.l === 'number') return { l: n.l, w: n.w };
+        return null;
     }
 
     // -----------------------------------------------------------------
@@ -205,7 +243,13 @@
         else { dl = fx * L; dw = fy * W; }
         return { l: effFlipAD() ? (L - dl) : dl, w: S.flipHA ? (W - dw) : dw };
     }
-    function inAttackEZ(p) { return p.l >= L - EZ; }
+    // p is a STORED (normalized) coord. x>=1 is at/over the attacking goal line.
+    function inAttackEZ(p) {
+        if (!p) return false;
+        if (typeof p.x === 'number') return p.x >= 1;
+        if (typeof p.l === 'number') return p.l >= L - EZ;  // legacy {l,w}
+        return false;
+    }
     function clampLoc(l, w) {
         return { l: Math.max(1, Math.min(L - 1, l)), w: Math.max(1, Math.min(W - 1, w)) };
     }
@@ -213,11 +257,24 @@
     // -----------------------------------------------------------------
     // State derivation (shared possession core).
     // -----------------------------------------------------------------
+    // Tracks the Point object reference last seen by reconstructState so we can
+    // detect crossing a point boundary and drop stale pickup state. Mirrors the
+    // _lastSeenPointRef guard in fullPbp.js: without it, a manual holder /
+    // pickup spot tapped in a prior point can survive into a new point when the
+    // point ends via a path that doesn't run Field's own handlers (Simple-mode
+    // "They Score", narration), so the next point would start with a phantom
+    // holder/disc.
+    let _lastSeenPointRef = null;
     function reconstructState() {
+        const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
+        if (point !== _lastSeenPointRef) {
+            S.manualHolder = null;
+            S.pickupLoc = null;
+            _lastSeenPointRef = point;
+        }
         if (window.pbpPossession && typeof window.pbpPossession.reconstructState === 'function') {
             return window.pbpPossession.reconstructState();
         }
-        const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
         const mode = (point && point.startingPosition === 'defense') ? 'defense' : 'offense';
         return { mode, holder: null, point };
     }
@@ -406,7 +463,8 @@
             + `<path d="M0,0 L5,2.5 L0,5 z" fill="#fff"/></marker></defs>`;
         flat.forEach((e, gi) => {
             if (!shown(gi) || !e.from || !e.to) return;
-            const a = pct(e.from.l, e.from.w), b = pct(e.to.l, e.to.w);
+            const ef = fromNorm(e.from), et = fromNorm(e.to);
+            const a = pct(ef.l, ef.w), b = pct(et.l, et.w);
             const dash = e.type === 'Pull' ? 'stroke-dasharray="3 2"' : '';
             const style = depthOf(gi) === 1 ? ` style="${fadeAnim.slice(1)}"` : '';
             svg += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${arrowColor(e)}" stroke-width="0.8" marker-end="url(#fpah)" ${dash} vector-effect="non-scaling-stroke"${style}/>`;
@@ -416,7 +474,8 @@
 
         flat.forEach((e, gi) => {
             if (!shown(gi) || !e.to) return;
-            const p = pct(e.to.l, e.to.w);
+            const et = fromNorm(e.to);
+            const p = pct(et.l, et.w);
             const m = markerStyle(e, gi);
             // All shown markers (current + fading-previous) are draggable so a
             // previous location can be adjusted during the fade window.
@@ -433,7 +492,8 @@
             }
         }
         if (discPos) {
-            const d = pct(discPos.l, discPos.w);
+            const dl = fromNorm(discPos);
+            const d = pct(dl.l, dl.w);
             h += `<div class="fp-disc" style="left:${d.x}%;top:${d.y}%"></div>`;
         }
 
@@ -838,13 +898,14 @@
             S.pullRunning = false;
             if (pullTimer) { clearInterval(pullTimer); pullTimer = null; }
         }
-        // We pull from our defending goal line (canonical Defend end, goal line
-        // at l = EZ). On a brick the receiving (opponent) offense takes it to
-        // the brick mark in front of the endzone they're attacking — i.e. the
-        // FAR brick mark, near our attacking end (BRICK[1] = L - EZ - 20), not
-        // the near one by our defending end.
-        const from = { l: EZ, w: W / 2 };
-        const to = brick ? { l: BRICK[1], w: W / 2 } : clampLoc(l, w);
+        // We pull from our defending goal line (normalized x=0, mid-width). On a
+        // brick the receiving (opponent) offense takes it to the brick mark in
+        // front of the endzone they're attacking — i.e. the FAR brick mark, near
+        // our attacking end (BRICK[1] = L - EZ - BRICK_OFFSET), not the near one
+        // by our defending end. Stored normalized so it's independent of the
+        // per-point attack direction (effFlipAD is render-only) and of EZ depth.
+        const from = toNorm({ l: EZ, w: W / 2 });
+        const to = brick ? toNorm({ l: BRICK[1], w: W / 2 }) : toNorm(clampLoc(l, w));
 
         const opts = { from, to, hang: (typeof S.pullMs === 'number' && S.pullMs > 0) ? S.pullMs : null, brick: !!brick };
         S.pullMods.forEach(label => {
@@ -934,7 +995,7 @@
         // they picked it up — it anchors the first throw, it is NOT a throw, so
         // don't open the receiver popover.
         if (S.manualHolder && !S.pickupLoc && !S.pending) {
-            S.pickupLoc = clampLoc(loc.l, loc.w);
+            S.pickupLoc = toNorm(clampLoc(loc.l, loc.w));
             render();
             return;
         }
@@ -943,7 +1004,7 @@
             // where, anchoring the next throw at that spot.
             popPicker(cx, cy, player => {
                 S.manualHolder = player;
-                S.pickupLoc = clampLoc(loc.l, loc.w);
+                S.pickupLoc = toNorm(clampLoc(loc.l, loc.w));
                 render();
             }, 'Who picked it up?');
             return;
@@ -963,8 +1024,10 @@
         if (!requireActiveCoach()) return;
         const state = reconstructState();
         const holder = effectiveHolder(state);
+        // `from` is the disc's current spot (already a stored, normalized coord);
+        // `to` is the tap, converted from yards to the normalized stored frame.
         const from = discLoc(state);
-        const to = clampLoc(loc.l, loc.w);
+        const to = toNorm(clampLoc(loc.l, loc.w));
 
         if (S.pending === 'drop') {
             // Drop: thrower = holder (Unknown if nobody established), the
@@ -1039,7 +1102,7 @@
         window.pbpPossession.createTurnover(thrower, null, {
             throwaway: true,
             from: discLoc(state),
-            to: clampLoc(loc.l, loc.w)
+            to: toNorm(clampLoc(loc.l, loc.w))
         });
         clearEntryState();
         render();
@@ -1095,7 +1158,7 @@
     function placeD(l, w) {
         if (!requireActiveCoach()) return;
         if (!S.armed || !S.dPlacing) return;
-        const opts = { to: clampLoc(l, w) };
+        const opts = { to: toNorm(clampLoc(l, w)) };
         if (S.dPlacing === 'block') opts.block = true;
         else if (S.dPlacing === 'interception') opts.interception = true;
         else if (S.dPlacing === 'stall') opts.stall = true;
@@ -1214,6 +1277,11 @@
     // on window, so per-render DOM rebuilds don't break an active drag.
     // -----------------------------------------------------------------
     const DRAG_THRESHOLD_PX = 6;
+    // While dragging a player chip, the pegman's target ("X") floats this many
+    // screen px above the finger so the fingertip never occludes the precise
+    // drop spot (Google-Maps-Street-View style). The disc is recorded at the
+    // lifted X, not under the finger — see onPointerMove / onPointerUp.
+    const DRAG_LIFT_PX = 56;
     const LONGPRESS_MS = 500;
     let drag = null;     // {kind:'chip'|'marker'|'field', ...}
     let pegEl = null;    // floating pegman element while dragging a chip
@@ -1299,13 +1367,25 @@
         }
         if (drag.kind === 'chip') {
             if (!pegEl) {
+                // Street-View-style pegman: a name pill + figure standing on a
+                // ground shadow, with an "X" marking the exact drop point. The
+                // container is anchored at the drop point (the X); children sit
+                // above it. Positioned in onPointerMove at (finger - lift).
                 pegEl = document.createElement('div');
                 pegEl.className = 'fp-pegman';
-                pegEl.textContent = '🧍 ' + (drag.name === UNKNOWN_PLAYER ? 'Unknown' : drag.name);
+                pegEl.innerHTML =
+                    '<div class="fp-peg-name"></div>' +
+                    '<div class="fp-peg-figure">' +
+                        '<img src="images/player.reach.png" alt="" draggable="false">' +
+                    '</div>' +
+                    '<div class="fp-peg-shadow"></div>' +
+                    '<div class="fp-peg-x">✕</div>';
+                pegEl.querySelector('.fp-peg-name').textContent =
+                    drag.name === UNKNOWN_PLAYER ? 'Unknown' : drag.name;
                 document.body.appendChild(pegEl);
             }
             pegEl.style.left = e.clientX + 'px';
-            pegEl.style.top = (e.clientY - 6) + 'px';
+            pegEl.style.top = (e.clientY - DRAG_LIFT_PX) + 'px';
         } else if (drag.kind === 'marker') {
             const loc = pointInField(e.clientX, e.clientY);
             if (loc) moveMarker(drag.idx, clampLoc(loc.l, loc.w));
@@ -1321,7 +1401,9 @@
 
         if (d.kind === 'chip') {
             if (!d.moved) { handleChipTap(d.name); return; }
-            const loc = pointInField(e.clientX, e.clientY);
+            // Record at the lifted X (the pegman's drop point), not under the
+            // finger — keeps the recorded spot where the coach actually aimed.
+            const loc = pointInField(e.clientX, e.clientY - DRAG_LIFT_PX);
             if (!loc) { render(); return; }
             // Chip dropped on the field — one-gesture pick + place.
             handleChipDrop(d.name, loc);
@@ -1348,7 +1430,7 @@
             // No holder — dragging a player to a spot records the pickup
             // (player + location), no event.
             S.manualHolder = p;
-            S.pickupLoc = clampLoc(loc.l, loc.w);
+            S.pickupLoc = toNorm(clampLoc(loc.l, loc.w));
             render();
             return;
         }
@@ -1367,8 +1449,11 @@
         const evs = pointEvents(state.point);
         const ev = evs[idx];
         if (!ev || !ev.to) return;
-        ev.to = loc;
-        if (evs[idx + 1] && evs[idx + 1].from) evs[idx + 1].from = loc;
+        // `loc` is a yards {l,w} tap; store the normalized form. toNorm() returns
+        // a FRESH object per call, so ev.to and the chained next.from never alias
+        // the same object — a later drag of one no longer silently moves the other.
+        ev.to = toNorm(loc);
+        if (evs[idx + 1] && evs[idx + 1].from) evs[idx + 1].from = toNorm(loc);
         render();
     }
 

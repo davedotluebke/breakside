@@ -131,10 +131,16 @@ function setAuthLoading(loading) {
     buttons.forEach(btn => {
         btn.disabled = loading;
         if (loading) {
-            btn.dataset.originalText = btn.textContent;
+            // Only capture the real label the first time — a double-submit while
+            // already loading would otherwise record "Loading..." as the
+            // original and leave the button stuck on it after completion.
+            if (!btn.dataset.originalText) {
+                btn.dataset.originalText = btn.textContent;
+            }
             btn.textContent = 'Loading...';
         } else if (btn.dataset.originalText) {
             btn.textContent = btn.dataset.originalText;
+            delete btn.dataset.originalText;
         }
     });
 }

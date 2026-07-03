@@ -82,39 +82,49 @@ async function initializeAuth() {
             currentSession = session;
             currentUser = session.user;
             console.log('Auth: Restored session for', currentUser.email);
-            
-            // Sync user's teams from server on session restore
-            // Use setTimeout to avoid blocking initialization
-            setTimeout(async () => {
+
+            // Sync user's teams from server on session restore. Run immediately
+            // (no blocking await of initializeAuth, no magic 500ms delay) and
+            // signal completion via a 'breakside:teams-synced' event so the UI
+            // re-renders the team list deterministically when the data lands —
+            // rather than rendering empty then repopulating on a timer.
+            (async () => {
                 if (typeof window.syncUserTeams === 'function') {
                     try {
                         const result = await window.syncUserTeams();
                         if (result.synced > 0) {
                             console.log(`Auth: Synced ${result.synced} teams from server`);
-                            // Refresh the team selection screen if it's visible
-                            if (typeof showSelectTeamScreen === 'function' && 
-                                document.getElementById('selectTeamScreen')?.style.display !== 'none') {
-                                showSelectTeamScreen();
-                            }
                         }
                     } catch (e) {
                         console.warn('Failed to sync user teams on session restore:', e);
                     }
                 }
-                
+
+                window.dispatchEvent(new CustomEvent('breakside:teams-synced'));
+
                 // Start auto-sync polling
                 if (typeof window.startAutoSync === 'function') {
                     window.startAutoSync();
                 }
-            }, 500);
+            })();
         }
         
         // Listen for auth state changes
         supabaseClient.auth.onAuthStateChange((event, session) => {
             console.log('Auth state changed:', event);
-            currentSession = session;
-            currentUser = session?.user || null;
-            
+            // Supabase fires transient events (INITIAL_SESSION, TOKEN_REFRESHED,
+            // etc.) that can carry a null session; don't let those clobber a
+            // valid in-memory session and flip isAuthenticated() to false
+            // mid-use. Only clear on an explicit SIGNED_OUT.
+            if (session) {
+                currentSession = session;
+                currentUser = session.user || null;
+            } else if (event === 'SIGNED_OUT') {
+                currentSession = null;
+                currentUser = null;
+            }
+            // else: spurious null session — keep the existing one.
+
             // Notify listeners
             authStateListeners.forEach(listener => {
                 try {
@@ -147,6 +157,35 @@ function isAuthenticated() {
 }
 
 /**
+ * Whether the app can safely act on the user's behalf despite not having a
+ * confirmed authenticated session — i.e. distinguish "genuinely signed out"
+ * from "we can't reach Supabase to know".
+ *
+ * Offline-first surfaces (e.g. create-team) should fall back to a local +
+ * queue-for-sync path when this returns true, and only hard-block on
+ * "please sign in" when it returns false.
+ *
+ * @returns {boolean} true if authenticated OR auth status is indeterminate
+ *                    (device offline / Supabase client unavailable);
+ *                    false only when genuinely signed out while online.
+ */
+function canActOffline() {
+    // A confirmed session always qualifies.
+    if (isAuthenticated()) return true;
+
+    // No session — figure out whether that's authoritative. If the device is
+    // offline, or the Supabase client never came up (JS not loaded, config
+    // missing, or init failed), we can't actually know the auth state, so
+    // treat it as "offline/degraded" rather than "signed out".
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+    if (typeof window.supabase === 'undefined') return true;
+    if (!supabaseClient) return true;
+
+    // Online, Supabase available, and no session → genuinely signed out.
+    return false;
+}
+
+/**
  * Enable test mode: inject a fake authenticated session without Supabase.
  * For automated testing only — never call this in production.
  * @param {string} userId - Test user ID (default: 'test-user')
@@ -154,6 +193,13 @@ function isAuthenticated() {
 let _testModeUserId = null;
 
 function enableTestMode(userId = 'test-user') {
+    // Defense in depth: test mode is for local dev / agent debug servers only.
+    // Refuse to inject a fake session anywhere but localhost so a ?testMode=true
+    // URL can never become an auth bypass against staging/production.
+    if (!['localhost', '127.0.0.1'].includes(location.hostname)) {
+        console.warn('[Test] enableTestMode ignored outside localhost');
+        return;
+    }
     _testModeUserId = userId;
     currentUser = { id: userId, email: `${userId}@breakside.test` };
     currentSession = { user: currentUser, access_token: 'test-mode-token' };
@@ -193,10 +239,53 @@ function onAuthStateChange(listener) {
 // Auth Headers
 // =============================================================================
 
+// Refresh the access token when it's expired or within this many seconds of
+// expiring. getSession() returns the *cached* session and does NOT proactively
+// refresh, so on a long sideline session the token can expire and API calls go
+// out with a stale bearer → 401. We check expires_at ourselves and refresh.
+const TOKEN_REFRESH_MARGIN_S = 60;
+
+/**
+ * Get a non-expired session, refreshing if the cached token is at/near expiry.
+ * Single source of truth for token freshness so a future tweak lands in one
+ * place. Updates the in-memory session/user on a successful refresh.
+ * @returns {Promise<object|null>} A current session, or null if unavailable.
+ */
+async function getFreshSession() {
+    if (!supabaseClient) return null;
+
+    let session;
+    try {
+        const { data, error } = await supabaseClient.auth.getSession();
+        if (error || !data || !data.session) return null;
+        session = data.session;
+    } catch (error) {
+        console.error('Error getting session:', error);
+        return null;
+    }
+
+    const expiresAt = session.expires_at;  // epoch seconds
+    const nowS = Math.floor(Date.now() / 1000);
+    if (expiresAt && (expiresAt - nowS) <= TOKEN_REFRESH_MARGIN_S) {
+        try {
+            const { data, error } = await supabaseClient.auth.refreshSession();
+            if (!error && data && data.session) {
+                currentSession = data.session;
+                currentUser = data.session.user || null;
+                return data.session;
+            }
+            console.warn('Token refresh near expiry failed; using cached session');
+        } catch (e) {
+            console.warn('Token refresh threw; using cached session:', e);
+        }
+    }
+    return session;
+}
+
 /**
  * Get authorization headers for API calls.
  * Returns headers with Bearer token if authenticated, empty object otherwise.
- * 
+ *
  * @returns {Promise<object>} Headers object
  */
 async function getAuthHeaders() {
@@ -208,24 +297,16 @@ async function getAuthHeaders() {
     if (!isAuthenticated() || !supabaseClient) {
         return {};
     }
-    
-    try {
-        // Get fresh session (handles token refresh automatically)
-        const { data: { session }, error } = await supabaseClient.auth.getSession();
-        
-        if (error || !session) {
-            console.warn('Failed to get session for auth headers');
-            return {};
-        }
-        
-        return {
-            'Authorization': `Bearer ${session.access_token}`,
-        };
-        
-    } catch (error) {
-        console.error('Error getting auth headers:', error);
+
+    const session = await getFreshSession();
+    if (!session) {
+        console.warn('Failed to get session for auth headers');
         return {};
     }
+
+    return {
+        'Authorization': `Bearer ${session.access_token}`,
+    };
 }
 
 /**
@@ -236,14 +317,9 @@ async function getAccessToken() {
     if (!isAuthenticated() || !supabaseClient) {
         return null;
     }
-    
-    try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        return session?.access_token || null;
-    } catch (error) {
-        console.error('Error getting access token:', error);
-        return null;
-    }
+
+    const session = await getFreshSession();
+    return session?.access_token || null;
 }
 
 // =============================================================================
@@ -354,18 +430,36 @@ function handleLoginRedirect() {
  * @returns {Promise<Response>}
  */
 async function authFetch(url, options = {}) {
-    const authHeaders = await getAuthHeaders();
-    
-    const mergedOptions = {
+    const buildOptions = (authHeaders) => ({
         ...options,
         headers: {
             'Content-Type': 'application/json',
             ...authHeaders,
             ...options.headers,
         },
-    };
-    
-    return fetch(url, mergedOptions);
+    });
+
+    let response = await fetch(url, buildOptions(await getAuthHeaders()));
+
+    // Retry once on 401 with a freshly-refreshed token: getSession() can hand
+    // back a stale cached token that the server rejects. A forced refresh +
+    // single retry recovers transparently. (Skip in test mode — no real JWT.)
+    if (response.status === 401 && !_testModeUserId && supabaseClient && isAuthenticated()) {
+        try {
+            const { data, error } = await supabaseClient.auth.refreshSession();
+            if (!error && data && data.session) {
+                currentSession = data.session;
+                currentUser = data.session.user || null;
+                response = await fetch(url, buildOptions({
+                    'Authorization': `Bearer ${data.session.access_token}`,
+                }));
+            }
+        } catch (e) {
+            console.warn('401 retry refresh failed:', e);
+        }
+    }
+
+    return response;
 }
 
 /**
@@ -401,6 +495,7 @@ async function syncUserToBackend() {
 window.BreaksideAuth = {
     initializeAuth,
     isAuthenticated,
+    canActOffline,
     getCurrentUser,
     getCurrentSession,
     onAuthStateChange,
@@ -422,6 +517,7 @@ window.breakside.auth = {
     // State queries
     isAuthenticated,
     isLoggedIn: isAuthenticated,  // alias for consistency
+    canActOffline,
     getCurrentUser,
     getCurrentSession,
     getSession: getCurrentSession,  // alias

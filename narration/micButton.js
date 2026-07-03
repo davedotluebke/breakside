@@ -36,6 +36,22 @@
         return !!(window.narrationEngine && window.narrationEngine.isRecording && window.narrationEngine.isRecording());
     }
 
+    /** Current engine phase ('idle'|'connecting'|'recording'|'finalizing'), or null. */
+    function currentPhase() {
+        return (window.narrationEngine && window.narrationEngine.getPhase)
+            ? window.narrationEngine.getPhase()
+            : null;
+    }
+
+    /**
+     * Whether the session is live OR mid-handshake. Releasing/cancelling during
+     * 'connecting' must still stop, otherwise the connect completes after the
+     * user lifted and the mic is left hot with no UI affordance to stop it.
+     */
+    function isRecordingOrConnecting() {
+        return isRecording() || currentPhase() === 'connecting';
+    }
+
     /**
      * Whether narration is available at all (engine loaded + browser supports
      * microphone). We show the button even when disabled so the user knows it
@@ -106,7 +122,7 @@
      */
     function onLongPressFired() {
         pressWasLongPress = true;
-        if (!isRecording()) {
+        if (!isRecordingOrConnecting()) {
             startRecording();
         }
     }
@@ -134,14 +150,15 @@
         const pressDuration = Date.now() - pressStartTime;
 
         if (pressWasLongPress) {
-            // Temporary recording mode: stop on release.
-            if (isRecording()) {
+            // Temporary recording mode: stop on release (even if we're still
+            // connecting — stopRecording aborts an in-flight connect).
+            if (isRecordingOrConnecting()) {
                 stopRecording();
             }
         } else {
-            // Short tap: toggle.
+            // Short tap: toggle. While connecting/recording, a tap stops.
             if (pressDuration < LONG_PRESS_MS) {
-                if (isRecording()) {
+                if (isRecordingOrConnecting()) {
                     stopRecording();
                 } else {
                     startRecording();
@@ -157,9 +174,10 @@
             clearTimeout(pressTimerId);
             pressTimerId = null;
         }
-        // If the long-press already fired (we started recording), treat this
-        // cancellation as a release so we don't leave the mic hot.
-        if (pressWasLongPress && isRecording()) {
+        // If the long-press already fired (we started recording, or are still
+        // connecting), treat this cancellation as a release so we don't leave
+        // the mic hot — stopRecording aborts an in-flight connect.
+        if (pressWasLongPress && isRecordingOrConnecting()) {
             stopRecording();
         }
     }

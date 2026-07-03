@@ -33,6 +33,15 @@ the main worktree's `data/` into a gitignored per-instance `.dev-data/<label>/`,
 runs with auth disabled. Pair a frontend via `?api=http://localhost:<port>`. See
 ARCHITECTURE.md § Local development backends.
 
+To **drive the in-IDE preview against a backend yourself** (create a team,
+start a game, etc.): a localhost preview can't hit the prod API — prod CORS only
+allows the real origins, so data calls fail and no teams show. Don't add
+localhost to prod CORS; instead start a `dev-backend.sh` (auth-disabled, CORS
+`*`) and load the preview with `?api=http://localhost:<port>`, then create
+throwaway test data. For a user exploring their *own real* teams, use **staging**
+(a CORS-allowed origin) and the user-login handoff instead. See ARCHITECTURE.md
+§ Driving the preview against a local backend.
+
 ### Local dev server
 ```bash
 ./scripts/dev-server.sh        # serves frontend on http://localhost:3000

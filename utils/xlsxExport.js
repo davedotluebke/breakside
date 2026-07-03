@@ -76,8 +76,8 @@ function aggregateTotalsRow(label, perPlayerPs) {
  * Build a 2D array for one stats sheet: header row, one row per player,
  * Team aggregate row, optional blank + footer block (e.g., team-stats line).
  *
- * @param {Array<object>} players - roster: {name, gender?, number?}
- * @param {object} playerStats - map of playerName → ps
+ * @param {Array<object>} players - roster: {id, name, gender?, number?}
+ * @param {object} playerStats - map of playerId → ps
  * @param {object} [teamStats] - output of getGameTeamStats (drives footer)
  * @param {object} [opts]
  * @param {string} [opts.titleRow] - optional title above the table
@@ -95,7 +95,7 @@ function buildStatsSheetAoA(players, playerStats, teamStats, opts = {}) {
 
     const psList = [];
     players.forEach(p => {
-        const ps = playerStats[p.name] || {};
+        const ps = playerStats[p.id] || {};
         psList.push(ps);
         aoa.push(buildPlayerStatsRow(p.name, ps));
     });

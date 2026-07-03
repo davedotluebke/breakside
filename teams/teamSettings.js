@@ -14,21 +14,10 @@ let pendingJoinInfo = null;
 // API Helpers
 // =============================================================================
 
-async function getAuthHeaders() {
-    if (!window.breakside?.auth?.isAuthenticated?.()) {
-        throw new Error('Not authenticated');
-    }
-    
-    const token = await window.breakside?.auth?.getAccessToken?.();
-    if (!token) {
-        throw new Error('No access token');
-    }
-    
-    return {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-    };
-}
+// Authenticated requests go through the shared global `authFetch` (auth.js),
+// which attaches the bearer token and Content-Type and centralizes any
+// retry/refresh behavior. Unauthenticated endpoints (invite info, image proxy)
+// use plain `fetch`.
 
 function getApiBaseUrl() {
     return typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
@@ -183,9 +172,12 @@ async function loadTeamMembers() {
     
     if (!membersList) return;
     
-    // Check if authenticated
-    if (!window.breakside?.auth?.isAuthenticated?.()) {
-        membersList.innerHTML = '<p class="info-message">Sign in to view team members</p>';
+    // Check if authenticated (distinguish "signed out" from "offline/degraded")
+    const auth = window.breakside?.auth;
+    if (!auth?.isAuthenticated?.()) {
+        membersList.innerHTML = (auth?.canActOffline?.() ?? !navigator.onLine)
+            ? '<p class="info-message">You\'re offline. Members will load when you\'re back online.</p>'
+            : '<p class="info-message">Sign in to view team members</p>';
         if (memberCount) memberCount.textContent = '0';
         return;
     }
@@ -199,11 +191,8 @@ async function loadTeamMembers() {
     membersList.innerHTML = '<p class="loading-message">Loading members...</p>';
     
     try {
-        const headers = await getAuthHeaders();
-        const response = await fetch(`${getApiBaseUrl()}/api/teams/${currentTeam.id}/members`, {
-            headers
-        });
-        
+        const response = await authFetch(`${getApiBaseUrl()}/api/teams/${currentTeam.id}/members`);
+
         if (response.status === 403) {
             membersList.innerHTML = '<p class="info-message">You don\'t have access to view members</p>';
             if (memberCount) memberCount.textContent = '?';
@@ -257,14 +246,14 @@ function renderMemberItem(member) {
             <div class="member-info">
                 <span class="member-icon">${roleIcon}</span>
                 <div class="member-details">
-                    <span class="member-name">${escapeHtml(displayName)}${isSelf ? ' (you)' : ''}</span>
-                    <span class="member-email">${escapeHtml(member.email || '')}</span>
+                    <span class="member-name">${escapeHtmlAttr(displayName)}${isSelf ? ' (you)' : ''}</span>
+                    <span class="member-email">${escapeHtmlAttr(member.email || '')}</span>
                 </div>
-                <span class="member-role ${roleClass}">${member.role}</span>
+                <span class="member-role ${roleClass}">${escapeHtmlAttr(member.role || '')}</span>
             </div>
-            <button class="remove-member-btn icon-button" 
-                    data-user-id="${member.userId}" 
-                    data-name="${escapeHtml(displayName)}"
+            <button class="remove-member-btn icon-button"
+                    data-user-id="${escapeHtmlAttr(member.userId || '')}"
+                    data-name="${escapeHtmlAttr(displayName)}"
                     title="Remove member">
                 <i class="fas fa-times"></i>
             </button>
@@ -278,12 +267,10 @@ async function removeMember(userId, name) {
     }
     
     try {
-        const headers = await getAuthHeaders();
-        const response = await fetch(`${getApiBaseUrl()}/api/teams/${currentTeam.id}/members/${userId}`, {
-            method: 'DELETE',
-            headers
+        const response = await authFetch(`${getApiBaseUrl()}/api/teams/${currentTeam.id}/members/${userId}`, {
+            method: 'DELETE'
         });
-        
+
         if (response.status === 400) {
             const data = await response.json();
             alert(data.detail || 'Cannot remove this member');
@@ -312,9 +299,12 @@ async function loadTeamInvites() {
     
     if (!invitesList) return;
     
-    // Check if authenticated
-    if (!window.breakside?.auth?.isAuthenticated?.()) {
-        invitesList.innerHTML = '<p class="info-message">Sign in to view invites</p>';
+    // Check if authenticated (distinguish "signed out" from "offline/degraded")
+    const auth = window.breakside?.auth;
+    if (!auth?.isAuthenticated?.()) {
+        invitesList.innerHTML = (auth?.canActOffline?.() ?? !navigator.onLine)
+            ? '<p class="info-message">You\'re offline. Invites will load when you\'re back online.</p>'
+            : '<p class="info-message">Sign in to view invites</p>';
         return;
     }
     
@@ -326,11 +316,8 @@ async function loadTeamInvites() {
     invitesList.innerHTML = '<p class="loading-message">Loading invites...</p>';
     
     try {
-        const headers = await getAuthHeaders();
-        const response = await fetch(`${getApiBaseUrl()}/api/teams/${currentTeam.id}/invites`, {
-            headers
-        });
-        
+        const response = await authFetch(`${getApiBaseUrl()}/api/teams/${currentTeam.id}/invites`);
+
         if (response.status === 403) {
             invitesList.innerHTML = '<p class="info-message">You don\'t have access to manage invites</p>';
             return;
@@ -386,18 +373,18 @@ function renderInviteItem(invite) {
             <div class="invite-info">
                 <span class="invite-role-icon">${roleIcon}</span>
                 <div class="invite-details">
-                    <span class="invite-code">${invite.code}</span>
-                    <span class="invite-meta">${invite.role} • expires ${expiresDate}</span>
+                    <span class="invite-code">${escapeHtmlAttr(invite.code || '')}</span>
+                    <span class="invite-meta">${escapeHtmlAttr(invite.role || '')} • expires ${escapeHtmlAttr(expiresDate)}</span>
                 </div>
             </div>
             <div class="invite-actions">
-                <button class="copy-invite-code-btn icon-button" 
-                        data-code="${invite.code}"
+                <button class="copy-invite-code-btn icon-button"
+                        data-code="${escapeHtmlAttr(invite.code || '')}"
                         title="Copy code">
                     <i class="fas fa-copy"></i>
                 </button>
-                <button class="revoke-invite-btn icon-button" 
-                        data-invite-id="${invite.id}"
+                <button class="revoke-invite-btn icon-button"
+                        data-invite-id="${escapeHtmlAttr(invite.id || '')}"
                         title="Revoke invite">
                     <i class="fas fa-times"></i>
                 </button>
@@ -412,12 +399,10 @@ async function revokeInvite(inviteId) {
     }
     
     try {
-        const headers = await getAuthHeaders();
-        const response = await fetch(`${getApiBaseUrl()}/api/invites/${inviteId}`, {
-            method: 'DELETE',
-            headers
+        const response = await authFetch(`${getApiBaseUrl()}/api/invites/${inviteId}`, {
+            method: 'DELETE'
         });
-        
+
         if (!response.ok) {
             throw new Error('Failed to revoke invite');
         }
@@ -436,8 +421,13 @@ async function revokeInvite(inviteId) {
 // =============================================================================
 
 async function createInvite(role) {
-    if (!window.breakside?.auth?.isAuthenticated?.()) {
-        alert('Please sign in to create invites');
+    // Minting an invite code requires a live server round-trip, so this can't
+    // happen offline — but tell an offline user that rather than "sign in".
+    const auth = window.breakside?.auth;
+    if (!auth?.isAuthenticated?.()) {
+        alert((auth?.canActOffline?.() ?? !navigator.onLine)
+            ? 'You\'re offline. Reconnect to create invites.'
+            : 'Please sign in to create invites');
         return;
     }
     
@@ -447,10 +437,8 @@ async function createInvite(role) {
     }
     
     try {
-        const headers = await getAuthHeaders();
-        const response = await fetch(`${getApiBaseUrl()}/api/teams/${currentTeam.id}/invites`, {
+        const response = await authFetch(`${getApiBaseUrl()}/api/teams/${currentTeam.id}/invites`, {
             method: 'POST',
-            headers,
             body: JSON.stringify({ role })
         });
         
@@ -623,12 +611,10 @@ async function confirmJoinTeam() {
     }
     
     try {
-        const headers = await getAuthHeaders();
-        const response = await fetch(`${getApiBaseUrl()}/api/invites/${pendingJoinInfo.code}/redeem`, {
-            method: 'POST',
-            headers
+        const response = await authFetch(`${getApiBaseUrl()}/api/invites/${pendingJoinInfo.code}/redeem`, {
+            method: 'POST'
         });
-        
+
         if (response.status === 409) {
             alert("You're already on this team!");
             hideJoinModal();
@@ -676,7 +662,52 @@ async function confirmJoinTeam() {
 // =============================================================================
 
 const ICON_CACHE_KEY = 'breakside_team_icons';
-const MAX_ICON_SIZE = 128; // Maximum dimension for cached icons
+const MAX_ICON_SIZE = 128;            // Maximum dimension for cached icons
+const MAX_CACHED_ICONS = 50;          // Cap on icon-cache entries (evict oldest)
+const MAX_ICON_BYTES = 256 * 1024;    // Per-image byte cap (~256KB decoded)
+
+/**
+ * Approximate decoded byte size of a data URL (from its base64 payload).
+ */
+function dataUrlByteSize(dataUrl) {
+    if (typeof dataUrl !== 'string') return 0;
+    const comma = dataUrl.indexOf(',');
+    const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+    const padding = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
+    return Math.max(0, Math.floor(b64.length * 3 / 4) - padding);
+}
+
+/**
+ * Persist the icon cache. Returns true on success, false if the write failed
+ * (e.g. localStorage quota exceeded) — callers decide how to surface that.
+ */
+function persistIconCache(cache) {
+    try {
+        localStorage.setItem(ICON_CACHE_KEY, JSON.stringify(cache));
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+/**
+ * Trim the cache down to at most `maxEntries`, evicting the oldest entries
+ * first (by `cachedAt`; entries without a timestamp count as oldest). Never
+ * evicts `protectTeamId`. Mutates `cache` in place.
+ */
+function evictOldestIcons(cache, maxEntries, protectTeamId) {
+    const ids = Object.keys(cache);
+    if (ids.length <= maxEntries) return;
+    const candidates = ids
+        .filter(id => id !== protectTeamId)
+        .sort((a, b) => (cache[a]?.cachedAt || 0) - (cache[b]?.cachedAt || 0));
+    let toRemove = ids.length - maxEntries;
+    for (const id of candidates) {
+        if (toRemove <= 0) break;
+        delete cache[id];
+        toRemove--;
+    }
+}
 
 /**
  * Load team identity fields into the form
@@ -731,14 +762,28 @@ function getOriginalIconUrl(teamId) {
  * Save the original URL when caching an icon
  */
 function saveOriginalIconUrl(teamId, url) {
+    let cache;
     try {
-        const cache = JSON.parse(localStorage.getItem(ICON_CACHE_KEY) || '{}');
-        if (!cache[teamId]) cache[teamId] = {};
-        cache[teamId].originalUrl = url;
-        localStorage.setItem(ICON_CACHE_KEY, JSON.stringify(cache));
+        cache = JSON.parse(localStorage.getItem(ICON_CACHE_KEY) || '{}');
     } catch (e) {
-        console.warn('Failed to save original icon URL:', e);
+        cache = {};
     }
+    if (!cache[teamId]) cache[teamId] = {};
+    cache[teamId].originalUrl = url;
+    cache[teamId].cachedAt = Date.now();
+
+    // Keep the cache bounded, evicting the oldest entries first.
+    evictOldestIcons(cache, MAX_CACHED_ICONS, teamId);
+
+    if (persistIconCache(cache)) return true;
+
+    // Write failed (most likely quota). Evict aggressively and retry once.
+    evictOldestIcons(cache, Math.floor(MAX_CACHED_ICONS / 2), teamId);
+    if (persistIconCache(cache)) return true;
+
+    // Still failing — surface it rather than swallowing the quota error.
+    console.error('Team icon cache: localStorage quota exceeded; icon URL not saved for', teamId);
+    return false;
 }
 
 /**
@@ -801,10 +846,17 @@ async function fetchAndCacheIcon() {
         const data = await response.json();
         
         if (data.dataUrl) {
+            // Enforce a per-image byte cap so one oversized icon can't blow the
+            // localStorage quota for the whole teams blob.
+            const bytes = dataUrlByteSize(data.dataUrl);
+            if (bytes > MAX_ICON_BYTES) {
+                throw new Error(`Image too large to cache (${Math.round(bytes / 1024)}KB; max ${Math.round(MAX_ICON_BYTES / 1024)}KB)`);
+            }
+
             // Save to team and update preview
             currentTeam.iconUrl = data.dataUrl;
-            saveOriginalIconUrl(currentTeam.id, url);
-            
+            const saved = saveOriginalIconUrl(currentTeam.id, url);
+
             if (iconPreview) {
                 iconPreview.src = data.dataUrl;
             }
@@ -812,8 +864,10 @@ async function fetchAndCacheIcon() {
                 iconPreviewContainer.style.display = 'flex';
             }
             if (iconStatus) {
-                iconStatus.textContent = 'Icon loaded and cached!';
-                iconStatus.className = 'icon-status success';
+                iconStatus.textContent = saved
+                    ? 'Icon loaded and cached!'
+                    : 'Icon loaded (cache full — original URL not saved)';
+                iconStatus.className = saved ? 'icon-status success' : 'icon-status';
             }
         } else {
             throw new Error('No image data returned');
@@ -963,11 +1017,14 @@ function initializeTeamIdentityHandlers() {
 // Utility Functions
 // =============================================================================
 
-function escapeHtml(str) {
-    if (!str) return '';
+function escapeHtmlAttr(str) {
+    if (str === null || str === undefined || str === '') return '';
+    // textContent→innerHTML escapes &, <, > but NOT quotes, so values
+    // interpolated into double-quoted attributes (data-code, data-user-id…)
+    // could still break out. Escape quotes too for attribute safety.
     const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    div.textContent = String(str);
+    return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function formatDate(isoString) {

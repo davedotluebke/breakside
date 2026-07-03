@@ -21,6 +21,8 @@ except ImportError:
         sys.path.insert(0, str(Path(__file__).parent.parent))
         from config import PLAYERS_DIR
 
+from .file_utils import atomic_write_json, entity_lock
+
 
 def generate_player_id(name: str) -> str:
     """
@@ -90,10 +92,8 @@ def save_player(player_data: dict, player_id: Optional[str] = None) -> str:
     player_data['updatedAt'] = now
     player_data['id'] = player_id
     
-    player_file = PLAYERS_DIR / f"{player_id}.json"
-    with open(player_file, 'w') as f:
-        json.dump(player_data, f, indent=2)
-    
+    atomic_write_json(PLAYERS_DIR / f"{player_id}.json", player_data)
+
     return player_id
 
 
@@ -157,14 +157,17 @@ def update_player(player_id: str, player_data: dict) -> str:
     Raises:
         FileNotFoundError: If player doesn't exist
     """
-    if not player_exists(player_id):
-        raise FileNotFoundError(f"Player {player_id} not found")
-    
-    # Preserve createdAt from existing record
-    existing = get_player(player_id)
-    player_data['createdAt'] = existing.get('createdAt', datetime.now().isoformat())
-    
-    return save_player(player_data, player_id)
+    # Serialize the read (createdAt) + write so concurrent updates to the same
+    # player can't interleave.
+    with entity_lock(f"player:{player_id}"):
+        if not player_exists(player_id):
+            raise FileNotFoundError(f"Player {player_id} not found")
+
+        # Preserve createdAt from existing record
+        existing = get_player(player_id)
+        player_data['createdAt'] = existing.get('createdAt', datetime.now().isoformat())
+
+        return save_player(player_data, player_id)
 
 
 def delete_player(player_id: str) -> bool:

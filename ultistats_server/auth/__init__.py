@@ -32,11 +32,13 @@ from .dependencies import (
     require_game_team_coach,
     require_game_team_access,
     require_player_edit_access,
+    require_player_read_access,
+    assert_player_edit_access,
 )
 
 __all__ = [
     "get_current_user",
-    "get_optional_user", 
+    "get_optional_user",
     "verify_supabase_token",
     "is_admin",
     "require_admin",
@@ -45,5 +47,7 @@ __all__ = [
     "require_game_team_coach",
     "require_game_team_access",
     "require_player_edit_access",
+    "require_player_read_access",
+    "assert_player_edit_access",
 ]
 

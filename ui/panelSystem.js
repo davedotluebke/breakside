@@ -1291,6 +1291,26 @@ function getActiveTab() {
 }
 
 /**
+ * Map the active UI tab to the data-recording mode in effect, one of
+ * 'simple' | 'full' | 'field'. This is what gets stamped onto points and
+ * possessions (Point.modes / Possession.modes) so later analytics can tell
+ * how thoroughly each was recorded.
+ *
+ * - 'all' shows the Simple-mode PBP surface, so it records as 'simple'.
+ * - 'line' and 'log' aren't recording surfaces; fall back to the last play
+ *   surface the coach used (lastPbpTab) as the best proxy for what's being
+ *   captured — a coach glancing at the Line/Log tabs hasn't changed how the
+ *   in-progress point is being recorded.
+ */
+function getCurrentMode() {
+    let tab = activeTab;
+    if (tab === 'line' || tab === 'log') tab = lastPbpTab;
+    if (tab === 'full') return 'full';
+    if (tab === 'field') return 'field';
+    return 'simple'; // 'simple', 'all', or any unexpected value
+}
+
+/**
  * Get the most recently visited PBP tab ('simple' or 'full').
  * Used by the Line-tab Start Point button (phase 6) to auto-navigate
  * back to the user's preferred play-by-play surface.
@@ -1383,6 +1403,7 @@ window.updatePanelsForGameState = updatePanelsForGameState;
 // Tab system
 window.switchTab = switchTab;
 window.getActiveTab = getActiveTab;
+window.getCurrentMode = getCurrentMode;
 window.getLastPbpTab = getLastPbpTab;
 window.rememberCurrentPbpTab = rememberCurrentPbpTab;
 window.applyTabState = applyTabState;

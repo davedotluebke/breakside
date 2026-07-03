@@ -98,10 +98,29 @@ function showStartGameSubscreen() {
     }
 }
 
+// Tracks how Edit Roster was entered so its Back button knows where to go:
+//  - true  → reached as a cross-link from the Start Game subscreen
+//            (#showRosterBtn); Back returns to Start Game.
+//  - false → reached as a top-level destination from the team list or a live
+//            game (showEditRosterScreen); Back exits via rosterFlowBack.
+let _editRosterCameFromStartGame = false;
+
 function showEditRosterSubscreen() {
     document.getElementById('startGameSubscreen').style.display = 'none';
     document.getElementById('editRosterSubscreen').style.display = '';
     if (typeof updateTeamRosterDisplay === 'function') updateTeamRosterDisplay();
+}
+
+// Back handler for the Edit Roster subscreen. Returns to Start Game when Edit
+// Roster was opened from there (matching the #backToStartGameBtn name),
+// otherwise exits the roster screen entirely.
+function editRosterBack() {
+    if (_editRosterCameFromStartGame) {
+        _editRosterCameFromStartGame = false;
+        showStartGameSubscreen();
+    } else {
+        rosterFlowBack();
+    }
 }
 
 // =============================================================================
@@ -145,6 +164,8 @@ function rosterFlowBack() {
 // Open the Edit Roster screen as a standalone destination.
 function showEditRosterScreen(returnTarget) {
     setRosterFlowReturn(returnTarget);
+    // Top-level entry: Back exits the roster screen, not to Start Game.
+    _editRosterCameFromStartGame = false;
     // Recompute scoped stats on entry so newly-played points / added games show.
     if (typeof invalidateRosterStatsCache === 'function') invalidateRosterStatsCache();
     showScreen('teamRosterScreen');
@@ -167,12 +188,15 @@ function showStartGameScreen(returnTarget) {
 document.addEventListener('DOMContentLoaded', () => {
     const showRosterBtn = document.getElementById('showRosterBtn');
     if (showRosterBtn) {
-        // Cross-link from Start Game → Edit Roster, preserving the return target.
-        showRosterBtn.addEventListener('click', showEditRosterSubscreen);
+        // Cross-link from Start Game → Edit Roster; Back should return here.
+        showRosterBtn.addEventListener('click', () => {
+            _editRosterCameFromStartGame = true;
+            showEditRosterSubscreen();
+        });
     }
     const backFromRosterBtn = document.getElementById('backToStartGameBtn');
     if (backFromRosterBtn) {
-        backFromRosterBtn.addEventListener('click', rosterFlowBack);
+        backFromRosterBtn.addEventListener('click', editRosterBack);
     }
     const backFromStartGameBtn = document.getElementById('backFromStartGameBtn');
     if (backFromStartGameBtn) {
