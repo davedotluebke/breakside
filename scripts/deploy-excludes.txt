@@ -12,6 +12,9 @@
 # with `aws s3 rm`.
 
 # VCS / tooling / editor config
+# (.git is a plain gitdir-pointer FILE in worktrees, a directory in normal
+# checkouts — exclude both forms)
+.git
 .git/*
 .github/*
 .gitignore
