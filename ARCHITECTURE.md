@@ -1117,36 +1117,30 @@ Exported via `window.breakside.auth`:
 
 **Production** — GitHub Actions workflow (`.github/workflows/main.yml`):
 1. Triggers on push to `main` branch
-2. Increments build version if not already bumped (e.g., PR merges)
-3. Syncs PWA files to S3 (`breakside.pro`)
-4. Syncs viewer to S3
-5. Invalidates CloudFront cache (`E6M9KCXIU9CKD`)
+2. Stamps the deploy-time build number into the checkout (`increment-version.py stamp` — see *Version stamping* below); nothing is committed or pushed back
+3. Syncs PWA files to S3 (`breakside.pro`) using the shared exclude list `scripts/deploy-excludes.txt`
+4. Uploads the stamped `version.json` and `service-worker.js` with no-cache headers
+5. Syncs viewer to S3
+6. Invalidates CloudFront cache (`E6M9KCXIU9CKD`)
 
-**Version bumping** — Build number in `version.json` increments automatically:
-- Direct commits to main: pre-commit hook (`.git/hooks/pre-commit`)
-- PR merges: CI workflow detects missing `version.json` change and bumps
-- Feature branches: hook skips to avoid merge conflicts across worktrees
+**Version stamping** — Build numbers are **never committed**. The committed `version.json` carries the placeholder `build: "dev"` (and `service-worker.js` the cacheName `'build-dev'`); the committed semver `version` string is bumped manually via `python3 increment-version.py major|minor|patch`. At deploy time, both the production workflow and `deploy-staging.sh` run `increment-version.py stamp`, which:
+- computes the build number as `git rev-list --count HEAD` (deterministic, monotonic on `main`, no committed state);
+- writes it (plus `deployStamp`, and `deployLabel` on staging) into the *deployed* `version.json`;
+- rewrites the service-worker `cacheName` to `build-<n>` (staging: `build-<n>-stg-<stamp>`).
 
-**Cherry-pick gotcha** — `git cherry-pick` does **not** reliably fire the pre-commit hook on every git version, so a cherry-picked commit lands on `main` without the version bump. `git commit --amend` (even with `--no-edit`) does fire the hook, so the workaround is:
+The client (`main.js` `checkForAppUpdate`) compares builds and deploy stamps by **inequality**, not ordering, so any newly stamped deploy triggers the update prompt, and the new SW cacheName purges old CacheStorage on activate. Because nothing is committed at deploy time there are no CI bot commits, no pre-commit hook bump, and no cherry-pick caveat — a cherry-picked commit on `main` gets its build number stamped at deploy like any other push.
 
-```bash
-git cherry-pick <sha>
-python3 increment-version.py build       # bumps version.json + cacheName
-git add version.json service-worker.js
-git commit --amend --no-edit             # fires pre-commit, which re-bumps + re-adds
-```
-
-The amend triggers the hook a second time. That's harmless — the script re-reads `version.json`, increments by one again, re-writes both files. You end up two builds higher than the cherry-pick base, which is fine. Without this workaround the new commit ships with a stale `cacheName` and PWA users won't see the change until the next push. Symptoms to watch for: pushed a fix, GitHub Actions deployed, but the cached PWA still serves the old code.
+**S3 exclude list** — `scripts/deploy-excludes.txt` is the single source of truth for what the PWA syncs exclude, shared by production CI and the staging script (backend, data, scripts, tests, docs, dot-directories, gitignored local secrets). Note `aws s3 sync --delete` never deletes bucket objects matching an exclude, so files published before a pattern was added must be removed once with `aws s3 rm`.
 
 **Staging** — Manual deploy via `./scripts/deploy-staging.sh "<short version description>"`:
 
-Always pass a short version description (e.g. `"test audio narration v2"`) so testers can visually verify which build they're running. The label flows through to:
+Always pass a short version description (e.g. `"test audio narration v2"`) so testers can visually verify which build they're running. The deploy:
 
-1. `version.json` `deployLabel` field, plus a `deployStamp` timestamp
-2. S3 sync of working directory to `staging.breakside.pro`
-3. `version.json` and service worker uploaded with no-cache headers
-4. Viewer synced to S3
-5. CloudFront cache invalidated (`E12N2STN9MM8FA`)
+1. Stamps build number + `deployStamp` + `deployLabel` into temp copies of `version.json`/`service-worker.js` (working tree untouched)
+2. Syncs the working directory to `staging.breakside.pro` (same shared exclude list as prod)
+3. Uploads the stamped `version.json` and service worker with no-cache headers
+4. Syncs viewer to S3
+5. Invalidates CloudFront cache (`E12N2STN9MM8FA`)
 
 Staging has a purple header (vs production orange) via `body.staging` CSS class. The deploy stamp lets the PWA detect redeploys without a commit — tap Online/About to check for updates. The label appears in the version toast as `[label]`, making it the easiest way to confirm "am I actually on the build I just deployed?"
 

@@ -1,6 +1,8 @@
 #!/bin/bash
 # Deploy current working directory to the staging S3 bucket.
-# Mirrors production exclusions. Includes service worker with no-cache headers.
+# Shares the production exclude list (scripts/deploy-excludes.txt) and the
+# deploy-time version stamping scheme (increment-version.py stamp).
+# Includes service worker and version.json with no-cache headers.
 #
 # Usage: ./scripts/deploy-staging.sh ["optional label"]
 #
@@ -25,60 +27,40 @@ LABEL="${1:-}"
 STAMP=$(date -u +%Y%m%d%H%M%S)
 echo "Deploying $DIR to s3://$BUCKET (stamp: $STAMP${LABEL:+, label: $LABEL}) ..."
 
-# Create a stamped version.json for staging (detects redeploys without a commit)
+# Stamp the deploy-time build number (git rev-list --count HEAD), deployStamp
+# and optional deployLabel into temp copies of version.json/service-worker.js.
+# The SW cacheName gets a -stg-<stamp> suffix so every staging deploy registers
+# as an SW update (purging old CacheStorage on activate) even without a commit.
+# The working tree is left untouched.
 STAGED_VERSION=$(mktemp)
-python3 -c "
-import json, sys
-v = json.load(open('$DIR/version.json'))
-v['deployStamp'] = '$STAMP'
-label = '$LABEL'
-if label:
-    v['deployLabel'] = label
-json.dump(v, sys.stdout, indent=2)
-" > "$STAGED_VERSION"
+STAGED_SW=$(mktemp)
+(cd "$DIR" && python3 increment-version.py stamp \
+    --deploy-stamp "$STAMP" \
+    ${LABEL:+--deploy-label "$LABEL"} \
+    --cache-suffix "stg-$STAMP" \
+    --out-version "$STAGED_VERSION" \
+    --out-sw "$STAGED_SW")
 
-aws s3 sync "$DIR" "s3://$BUCKET/" \
-  --exclude ".git/*" \
-  --exclude ".github/*" \
-  --exclude ".claude/*" \
-  --exclude ".worktrees/*" \
-  --exclude ".vscode/*" \
-  --exclude ".pytest_cache/*" \
-  --exclude ".gitignore" \
-  --exclude "ultistats_server/*" \
-  --exclude "data/*" \
-  --exclude "scripts/*" \
-  --exclude "*.py" \
-  --exclude "*.sh" \
-  --exclude "__pycache__/*" \
-  --exclude "*.md" \
-  --exclude ".DS_Store" \
-  --exclude "*.wav" \
-  --exclude "*.ogg" \
-  --exclude "*.m4a" \
-  --exclude "*.webm" \
-  --exclude "service-worker.js" \
-  --exclude "version.json" \
-  --exclude "LICENSE" \
-  --exclude "CLAUDE.md" \
-  --delete
+# Build --exclude args from the shared exclude list
+EXCLUDES=()
+while IFS= read -r pattern; do
+  [[ -z "$pattern" || "$pattern" == \#* ]] && continue
+  EXCLUDES+=(--exclude "$pattern")
+done < "$DIR/scripts/deploy-excludes.txt"
 
-# Upload version.json with deploy stamp and no-cache headers
+aws s3 sync "$DIR" "s3://$BUCKET/" "${EXCLUDES[@]}" --delete
+
+# Upload stamped version.json with no-cache headers
 aws s3 cp "$STAGED_VERSION" "s3://$BUCKET/version.json" \
   --cache-control "no-cache, no-store, must-revalidate" \
   --content-type "application/json"
-rm -f "$STAGED_VERSION"
 
-# Upload service worker with a per-deploy cache name so it registers as an
-# update (purging old CacheStorage on activate) on every staging deploy — the
-# committed build number doesn't change on staging. Served with no-cache headers.
-STAGED_SW=$(mktemp)
-sed "s/^const cacheName = '\([^']*\)';/const cacheName = '\1-stg-$STAMP';/" \
-  "$DIR/service-worker.js" > "$STAGED_SW"
+# Upload stamped service worker with no-cache headers
 aws s3 cp "$STAGED_SW" "s3://$BUCKET/service-worker.js" \
   --cache-control "no-cache, no-store, must-revalidate" \
   --content-type "application/javascript"
-rm -f "$STAGED_SW"
+
+rm -f "$STAGED_VERSION" "$STAGED_SW"
 
 # Sync viewer files
 aws s3 sync "$DIR/ultistats_server/static/viewer/" "s3://$BUCKET/viewer/"
