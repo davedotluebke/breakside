@@ -6,8 +6,9 @@
  */
 
 // Note: This module depends on store/models.js for data structures
-// It also depends on getPlayerFromName which will be defined in utils/helpers.js
-// For now, we'll reference it as a global function that will be available
+// and on getPlayerFromName from utils/helpers.js, which must be loaded
+// before this file (initializeTeams() runs at module load and can reach
+// getPlayerFromName via the deserializeEvent chain)
 
 /**
  * Serialize an event to JSON
@@ -374,6 +375,50 @@ function deserializePlayer(playerData) {
 }
 
 /**
+ * Coerce a stored alternateGenderRatio value to its string form.
+ * Legacy games stored a boolean; current games store 'Alternating'/'No'.
+ */
+function normalizeAlternateGenderRatio(value) {
+    if (value === true) return 'Alternating';
+    if (value === false || !value) return 'No';
+    return value;
+}
+
+/**
+ * Rebuild Point/Possession/Event instances from serialized point data
+ * (the format produced by serializeGame, whether read back from
+ * localStorage or from the server).
+ * Shared by deserializeGame, loadGameFromCloud, and
+ * refreshGameStateFromCloud so the rebuild logic can't drift between the
+ * local-load and cloud-refresh paths.
+ * @param {Array} pointsData - Serialized points array
+ * @returns {Array} Array of Point instances
+ */
+function deserializePointsFromServer(pointsData) {
+    return (pointsData || []).map(pointData => {
+        const point = new Point(pointData.players || [], pointData.startingPosition);
+        point.startTimestamp = pointData.startTimestamp ? new Date(pointData.startTimestamp) : null;
+        point.endTimestamp = pointData.endTimestamp ? new Date(pointData.endTimestamp) : null;
+        point.winner = pointData.winner;
+        point.totalPointTime = pointData.totalPointTime || 0;
+        point.lastPauseTime = pointData.lastPauseTime ? new Date(pointData.lastPauseTime) : null;
+        point.substitutedOutPlayers = pointData.substitutedOutPlayers || [];  // Players subbed out mid-point
+        if (pointData.possessions && Array.isArray(pointData.possessions)) {
+            point.possessions = pointData.possessions.map(possessionData => {
+                const possession = new Possession(possessionData.offensive);
+                possession.modes = possessionData.modes || [];  // empty for legacy data
+                if (possessionData.events && Array.isArray(possessionData.events)) {
+                    possession.events = possessionData.events.map(eventData => deserializeEvent(eventData));
+                }
+                return possession;
+            });
+        }
+        point.modes = point.getModes();  // derive from restored possessions (empty for legacy data)
+        return point;
+    });
+}
+
+/**
  * Deserialize a single game from data
  * Handles both legacy and new formats
  */
@@ -392,13 +437,7 @@ function deserializeGame(gameData) {
     game.gameEndTimestamp = gameData.gameEndTimestamp ? new Date(gameData.gameEndTimestamp) : null;
     
     // Handle backward compatibility: convert boolean to string format
-    if (gameData.alternateGenderRatio === true) {
-        game.alternateGenderRatio = 'Alternating';
-    } else if (gameData.alternateGenderRatio === false || !gameData.alternateGenderRatio) {
-        game.alternateGenderRatio = 'No';
-    } else {
-        game.alternateGenderRatio = gameData.alternateGenderRatio;
-    }
+    game.alternateGenderRatio = normalizeAlternateGenderRatio(gameData.alternateGenderRatio);
     
     game.alternateGenderPulls = gameData.alternateGenderPulls || false;
     game.startingGenderRatio = gameData.startingGenderRatio || null;
@@ -449,23 +488,7 @@ function deserializeGame(gameData) {
     }
     // If no pendingNextLine, the default from Game constructor is used
     
-    game.points = gameData.points.map(pointData => {
-        const point = new Point(pointData.players, pointData.startingPosition);
-        point.startTimestamp = pointData.startTimestamp ? new Date(pointData.startTimestamp) : null;
-        point.endTimestamp = pointData.endTimestamp ? new Date(pointData.endTimestamp) : null;
-        point.winner = pointData.winner;
-        point.totalPointTime = pointData.totalPointTime || 0;
-        point.lastPauseTime = pointData.lastPauseTime ? new Date(pointData.lastPauseTime) : null;
-        point.substitutedOutPlayers = pointData.substitutedOutPlayers || [];  // Players subbed out mid-point
-        point.possessions = pointData.possessions.map(possessionData => {
-            const possession = new Possession(possessionData.offensive);
-            possession.modes = possessionData.modes || [];  // empty for legacy data
-            possession.events = possessionData.events.map(eventData => deserializeEvent(eventData));
-            return possession;
-        });
-        point.modes = point.getModes();  // derive from restored possessions (empty for legacy data)
-        return point;
-    });
+    game.points = deserializePointsFromServer(gameData.points);
     
     // Recalculate scores from points to ensure consistency
     // This fixes cases where gameData.scores is missing, incorrect, or out of sync
@@ -530,18 +553,6 @@ function deserializeTeams(serializedData) {
         
         return team;
     });
-}
-
-/**
- * Given a player name, return the corresponding Player object from the team roster
- * This is a helper function used by deserializeEvent
- * TODO: Move this to utils/helpers.js
- */
-function getPlayerFromName(playerName) {
-    if (playerName === UNKNOWN_PLAYER) {
-        return UNKNOWN_PLAYER_OBJ;  // Return the singleton instance
-    }
-    return currentTeam ? currentTeam.teamRoster.find(player => player.name === playerName) : null;
 }
 
 /**
