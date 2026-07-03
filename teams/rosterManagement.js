@@ -4,6 +4,32 @@
  * 
  * Phase 4 update: Player IDs, cloud sync for player creation/updates
  */
+import { Gender, Player, Role } from '../store/models.js';
+import { currentTeam, currentEvent, saveAllTeamsData, isViewer } from '../store/storage.js';
+import {
+    currentGame, formatPlayerName, formatPlayTime, extractPlayerName,
+    isPointInProgress,
+} from '../utils/helpers.js';
+import { calculatePlayerStatsFromEvents } from '../utils/statistics.js';
+import {
+    getGamePlayerStats, getEventPlayerStats, getTeamPlayerStats,
+    getEventRecord, accumulateGameStats, getGameTeamStats,
+} from '../utils/eventStats.js';
+import {
+    createPlayerOffline, syncPlayerToCloud, syncTeamToCloud, syncEventToCloud,
+    checkForUpdates, syncUserTeams, listServerGames, listTeamEvents,
+    loadGameFromCloud,
+} from '../store/sync.js';
+import {
+    buildStatsSheetAoA, aoaToFormattedSheet, downloadWorkbook,
+    safeSheetName, safeFilename,
+} from '../utils/xlsxExport.js';
+import {
+    appendRosterCell, buildRosterRow,
+    formatSigned, formatSignedFixed, formatPercentOrDash,
+} from './rosterRowHelpers.js';
+import { showScreen } from '../screens/navigation.js';
+import { showSelectTeamScreen } from './teamList.js';
 
 // Whether developer debug affordances (e.g. the raw player-ID display in the
 // edit-player dialog) should be shown. Off by default in production; enable
@@ -39,7 +65,6 @@ let _rosterStatsCache = { key: null, byId: {} };
 function invalidateRosterStatsCache() {
     _rosterStatsCache = { key: null, byId: {} };
 }
-window.invalidateRosterStatsCache = invalidateRosterStatsCache;
 
 // Column descriptors (everything after the checkbox). `num` columns default to
 // descending on first click; text columns to ascending.
@@ -84,7 +109,7 @@ function updateTeamRosterDisplay() {
     }
 
     // Hide editing controls for viewers
-    const viewerMode = typeof window.isViewer === 'function' && window.isViewer();
+    const viewerMode = isViewer();
     const rosterScreen = document.getElementById('teamRosterScreen');
     if (rosterScreen) {
         // Hide management rows (add player, create line) and start game subscreen for viewers
@@ -1463,4 +1488,16 @@ document.addEventListener('breakside:screen-shown', (e) => {
         stopRosterPolling();
     }
 });
+
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+export {
+    updateTeamRosterDisplay, invalidateRosterStatsCache,
+    showEditPlayerDialog, closeEditPlayerDialog, validateJerseyNumber,
+};
+// updateTeamRosterDisplay: called bare by game/gameLogic.js (classic), main.js,
+// and converted modules store/sync.js / screens/navigation.js (typeof-guarded).
+window.updateTeamRosterDisplay = updateTeamRosterDisplay;
+// invalidateRosterStatsCache: called bare (typeof-guarded) by screens/navigation.js.
+window.invalidateRosterStatsCache = invalidateRosterStatsCache;
 

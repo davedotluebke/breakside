@@ -72,6 +72,15 @@ import './ui/eventLogDisplay.js';
 import './ui/buttonLayout.js';
 import './ui/panelSystem.js';
 import './screens/navigation.js';
+import './teams/rosterRowHelpers.js';
+import './teams/rosterManagement.js';
+import './teams/teamList.js';
+import './teams/eventDialogs.js';
+import './teams/syncStatusUI.js';
+import './teams/activeGamePolling.js';
+import './teams/teamSettings.js';
+import './teams/eventRoster.js';
+import './teams/gameSummary.js';
 
 // Skip the service worker during local development (localhost / 127.0.0.1).
 // Its offline precache otherwise serves stale JS/CSS across edits, so source

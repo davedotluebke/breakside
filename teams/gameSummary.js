@@ -3,6 +3,19 @@
  * Shows a completed game's player stats table (sortable) and full event log.
  * Reuses the gameSummaryScreen section, adapting it for review from team list.
  */
+import { Gender, Role } from '../store/models.js';
+import { currentTeam } from '../store/storage.js';
+import { currentGame, formatPlayerName, formatPlayTime } from '../utils/helpers.js';
+import {
+    getGamePlayerStats, getGameTeamStats, formatTeamStatsLine, classifyPoint,
+} from '../utils/eventStats.js';
+import { createTableSortController } from '../utils/tableSort.js';
+import { attachStatsColumnHelp } from '../utils/statsHelp.js';
+import {
+    buildStatsSheetAoA, aoaToFormattedSheet, downloadWorkbook,
+    safeSheetName, safeFilename,
+} from '../utils/xlsxExport.js';
+import { showScreen } from '../screens/navigation.js';
 
 // Track where we came from so back button navigates correctly
 let gameSummaryOrigin = 'teamRosterScreen'; // default for post-game flow
@@ -451,6 +464,10 @@ function getGameSummaryBackTarget() {
 // Wire up XLSX export button
 document.getElementById('exportGameSummaryBtn')?.addEventListener('click', exportGameSummaryXLSX);
 
-window.showGameSummaryFromList = showGameSummaryFromList;
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+export { showGameSummaryFromList, showGameSummaryPostGame, getGameSummaryBackTarget };
+// showGameSummaryPostGame: called bare (typeof-guarded) by classic game/gameScreenEvents.js.
 window.showGameSummaryPostGame = showGameSummaryPostGame;
+// getGameSummaryBackTarget: called bare (typeof-guarded) by main.js.
 window.getGameSummaryBackTarget = getGameSummaryBackTarget;

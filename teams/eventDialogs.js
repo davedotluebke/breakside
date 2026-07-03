@@ -2,6 +2,14 @@
  * Event creation/settings dialogs and event-game start flow.
  * Split out of teamSelection.js (D2 refactor).
  */
+import {
+    authFetch, API_BASE_URL, updateEventOnCloud, deleteEventFromCloud,
+    listServerGames, updateGamePhase,
+} from '../store/sync.js';
+import { setCurrentEvent, deserializeTournamentEvent } from '../store/storage.js';
+import { showScreen } from '../screens/navigation.js';
+import { selectCloudTeam, populateCloudTeamsAndGames } from './teamList.js';
+import { showEventRosterUI } from './eventRoster.js';
 
 /**
  * Show create event dialog
@@ -405,9 +413,7 @@ async function startNewEventGame(event, team) {
     await selectCloudTeam(team);
 
     // Set the current event
-    currentEvent = typeof deserializeTournamentEvent === 'function'
-        ? deserializeTournamentEvent(event)
-        : event;
+    setCurrentEvent(deserializeTournamentEvent(event));
 
     // Pre-fill game settings from event defaults
     const defaults = event.defaults || {};
@@ -432,11 +438,14 @@ async function startNewEventGame(event, team) {
  * Navigate to event roster screen
  */
 function showEventRosterScreen(event, team) {
-    if (typeof showEventRosterUI === 'function') {
-        selectCloudTeam(team).then(() => {
-            showEventRosterUI(event);
-        });
-    } else {
-        alert('Event roster screen not available yet.');
-    }
+    selectCloudTeam(team).then(() => {
+        showEventRosterUI(event);
+    });
 }
+
+// --- ES-module exports; consumed only by teams/teamList.js (converted),
+// --- so no window.* shims are needed.
+export {
+    showCreateEventDialog, showEventSettingsDialog, startNewEventGame,
+    showEventRosterScreen,
+};
