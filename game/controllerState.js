@@ -507,8 +507,8 @@ document.addEventListener('visibilitychange', async () => {
     // --- Pause game state refresh during recovery ---
     // Prevents the refresh timer from racing with this handler and making
     // decisions based on stale controller state.
-    if (typeof stopGameStateRefresh === 'function') {
-        stopGameStateRefresh();
+    if (typeof window.stopGameStateRefresh === 'function') {
+        window.stopGameStateRefresh(); // owned by game/gameScreenSync.js; via window to avoid an import cycle (import at C10)
     }
 
     // --- Check for ended or stale game before attempting recovery ---
@@ -529,8 +529,8 @@ document.addEventListener('visibilitychange', async () => {
             console.log('🎮 Game ended while away — returning to team selection');
             showControllerToast('Game has ended', 'info', 3000);
             stopControllerPolling();
-            if (typeof exitGameScreen === 'function') {
-                exitGameScreen();
+            if (typeof window.exitGameScreen === 'function') {
+                window.exitGameScreen(); // owned by game/gameScreenSync.js; via window to avoid an import cycle (import at C10)
             }
             if (typeof showSelectTeamScreen === 'function') {
                 showSelectTeamScreen();
@@ -570,8 +570,8 @@ document.addEventListener('visibilitychange', async () => {
                     );
                     if (keepGoing) {
                         stopControllerPolling();
-                        if (typeof exitGameScreen === 'function') {
-                            exitGameScreen();
+                        if (typeof window.exitGameScreen === 'function') {
+                            window.exitGameScreen(); // owned by game/gameScreenSync.js; via window to avoid an import cycle (import at C10)
                         }
                         if (typeof showSelectTeamScreen === 'function') {
                             showSelectTeamScreen();
@@ -662,8 +662,8 @@ document.addEventListener('visibilitychange', async () => {
     }
 
     // Restart game state refresh now that recovery is complete
-    if (typeof startGameStateRefresh === 'function') {
-        startGameStateRefresh();
+    if (typeof window.startGameStateRefresh === 'function') {
+        window.startGameStateRefresh(); // owned by game/gameScreenSync.js; via window to avoid an import cycle (import at C10)
     }
 });
 
@@ -1389,6 +1389,10 @@ export {
     isControllerPollingActive, getPollingGameId,
     setControllerButtonsVisible, showControllerToast, dismissToast,
     getCurrentUserId, pingController,
+    // Role-claim click handlers: imported by game/gameScreenEvents.js for the
+    // game-screen role buttons (its old typeof-guarded bare references went
+    // silently dead at C6a when this file became a module).
+    handleActiveCoachClick, handleLineCoachClick,
 };
 // getControllerState: called bare by converted ui/panelSystem.js (typeof-guarded,
 // resolves via window) and classic game/selectLine.js, gameScreenEvents.js,

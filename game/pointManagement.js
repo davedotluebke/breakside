@@ -206,11 +206,11 @@ function startCountdown() {
     let timeRemaining = countdownSeconds;
     isCountdownRunning = true;
 
-    window.updateTimerDisplay(timeRemaining); // gameTimer.js's implementation (still classic; import at C10)
+    window.updateTimerDisplay(timeRemaining); // gameTimer.js's implementation (module now; window seam until C10)
 
     countdownInterval = setInterval(() => {
         timeRemaining--;
-        window.updateTimerDisplay(timeRemaining); // gameTimer.js's implementation (still classic; import at C10)
+        window.updateTimerDisplay(timeRemaining); // gameTimer.js's implementation (module now; window seam until C10)
     }, 1000);
 }
 

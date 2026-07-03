@@ -4,6 +4,23 @@
  * and the effective-line resolution for the next point.
  * Split from the former monolithic gameScreen.js (refactor, no behavior change).
  */
+import { Gender } from '../store/models.js';
+import { currentTeam, currentEvent, getActiveRoster, saveAllTeamsData } from '../store/storage.js';
+import {
+    currentGame, isPointInProgress, determineStartingPosition,
+    getPlayerGameTime, formatPlayTime, formatPlayerName,
+    getGenderRatioForPoint, getExpectedGenderRatio, getExpectedGenderCounts,
+} from '../utils/helpers.js';
+import { getEventPlayerStats } from '../utils/eventStats.js';
+import { clearNextLineSelections, getRunningScores } from '../ui/activePlayersDisplay.js';
+import { setPanelSubtitle, setPanelTitle, isGameScreenVisible } from '../ui/panelSystem.js';
+import { getControllerState, showControllerToast } from './controllerState.js';
+import { startNextPoint } from './pointManagement.js';
+import { WHOLESALE_ICON_SVG, noteLineCoachViewing } from './gameScreenPanels.js';
+import {
+    canEditPlayByPlayPanel, updatePlayByPlayPanelState,
+    updateSubPlayersCount, handleLineupReadyTap,
+} from './gameScreenEvents.js';
 
 // =============================================================================
 // Select Next Line Panel
@@ -326,11 +343,6 @@ function computeAutoLine(alreadySelected = []) {
     // No ratio: fill remaining slots by the priority comparator
     addFrom([...roster].sort(cmp), expectedCount - result.length);
     return result;
-}
-
-if (typeof window !== 'undefined') {
-    window.computeAutoLine = computeAutoLine;
-    window.buildAutoLineStats = buildAutoLineStats;
 }
 
 /**
@@ -2036,11 +2048,43 @@ function updateSelectLinePanel() {
     updateODToggleButton();
 }
 
-// Select Next Line panel
+// Setters for module-scoped mutable state — converted writers
+// (game/gameScreenSync.js, game/gameScreenEvents.js) import these instead of
+// assigning the bare globals.
+function setPanelStatsMode(v) { panelStatsMode = v; }
+function setPanelShowingTotalStats(v) { panelShowingTotalStats = v; }
+function setCachedPanelEventStats(v) { cachedPanelEventStats = v; }
+function setLastConflictToastPointIndex(v) { lastConflictToastPointIndex = v; }
+
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+export {
+    wireSelectLineEvents,
+    clearLineSelection, autoFillLineSelection,
+    computeAutoLine, buildAutoLineStats,
+    handlePanelStartPoint, checkPanelGenderRatio,
+    getSelectedPlayersFromPanel, getEffectiveLineForNextPoint,
+    selectAppropriateLineAtPointEnd, autoSelectActiveTypeForNextPoint,
+    showGameUpdatedToast,
+    updateSelectLinePanel, updateSelectLinePanelState, updateSelectLineTable,
+    updateSelectLineTimeCells,
+    setPanelStatsMode, setPanelShowingTotalStats,
+    setCachedPanelEventStats, setLastConflictToastPointIndex,
+};
+// handlePanelStartPoint: called bare by classic playByPlay/fullPbp.js and
+// playByPlay/fieldPbp.js.
+window.handlePanelStartPoint = handlePanelStartPoint;
+// getEffectiveLineForNextPoint: called bare (typeof-guarded) by converted
+// game/pointManagement.js (resolves via window; import at C10).
+window.getEffectiveLineForNextPoint = getEffectiveLineForNextPoint;
+// updateSelectLinePanel: called bare (typeof-guarded) by converted
+// teams/rosterManagement.js (resolves via window; import at C10).
 window.updateSelectLinePanel = updateSelectLinePanel;
-window.updateSelectLineTable = updateSelectLineTable;
-window.updateSelectLinePanelState = updateSelectLinePanelState;
-window.updateSelectLineSubtitle = updateSelectLineSubtitle;
-window.canEditSelectLinePanel = canEditSelectLinePanel;
-window.getSelectedPlayersFromPanel = getSelectedPlayersFromPanel;
-window.savePanelSelectionsToPendingNextLine = savePanelSelectionsToPendingNextLine;
+// computeAutoLine / buildAutoLineStats: console/debug seam — kept deliberately
+// so the Auto-line logic can be exercised from the dev console (see the
+// buildAutoLineStats doc comment).
+window.computeAutoLine = computeAutoLine;
+window.buildAutoLineStats = buildAutoLineStats;
+// Dropped shims (zero external references found): updateSelectLineTable,
+// updateSelectLinePanelState, updateSelectLineSubtitle, canEditSelectLinePanel,
+// savePanelSelectionsToPendingNextLine.
