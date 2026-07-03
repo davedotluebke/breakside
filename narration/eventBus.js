@@ -87,9 +87,8 @@ const narrationEventBus = (function() {
     };
 })();
 
-// --- ES-module export; window shim is transitional for classic narration
-// --- files (narrationEngine, transcriptDisplay, micButton) and for the
-// --- window-qualified call sites in converted files (playByPlay/*,
-// --- game/gameScreenEvents.js) until C10.
+// --- ES-module export; window shim is transitional for the window-qualified
+// --- call sites in converted files (playByPlay/*, game/gameScreenEvents.js)
+// --- until C10. The narration files import it directly as of C8.
 export { narrationEventBus };
 window.narrationEventBus = narrationEventBus;

@@ -20,8 +20,19 @@
  * When the slow pass returns, its operations (CONFIRM/AMEND/RETRACT/ADD) are
  * applied by mutating the possession's events array and publishing bus events.
  */
+import { Throw, Turnover, Defense, Role } from '../store/models.js';
+import { saveAllTeamsData } from '../store/storage.js';
+import { authFetch, API_BASE_URL } from '../store/sync.js';
+import { currentGame, getPlayerFromName } from '../utils/helpers.js';
+import { logEvent } from '../ui/eventLogDisplay.js';
+import { updateScore } from '../game/gameLogic.js';
+import { moveToNextPoint } from '../game/pointManagement.js';
+import { ensurePossessionExists } from '../playByPlay/keyPlayDialog.js';
+import { advancedSettings } from '../settings/advancedSettings.js';
+import { narrationEventBus } from './eventBus.js';
+import { narrationRealtimeSession } from './realtimeSession.js';
 
-(function() {
+const narrationEngine = (function() {
     const FINALIZE_ENDPOINT = '/api/narration/finalize';
     // OpenAI Realtime API GA model. The older `gpt-4o-realtime-preview` has
     // graduated; `gpt-realtime` is the current production identifier.
@@ -60,6 +71,10 @@
 
     function setPhase(p) {
         phase = p;
+        // micButton is reached via window (not an import): importing it here
+        // would invert the eval order (micButton before engine) and create an
+        // engine↔micButton cycle — micButton's init() would then run before
+        // the engine exists. Call-time window lookup preserves the old order.
         if (window.narrationMicButton && window.narrationMicButton.refresh) {
             window.narrationMicButton.refresh();
         }
@@ -265,13 +280,13 @@ Just listen. Transcription happens automatically.`;
 
     /** Publish an eventAdded message to the bus. */
     function publishAdded(evt, provisionalId) {
-        if (!window.narrationEventBus) return;
-        window.narrationEventBus.publish('eventAdded', {
+        if (!narrationEventBus) return;
+        narrationEventBus.publish('eventAdded', {
             event: evt,
             source: 'narration',
             provisionalId: provisionalId
         });
-        window.narrationEventBus.publish('provisionalEventAdded', {
+        narrationEventBus.publish('provisionalEventAdded', {
             event: evt,
             provisionalId: provisionalId
         });
@@ -556,9 +571,9 @@ Just listen. Transcription happens automatically.`;
         if (!prov) return;
         prov._finalized = true;
 
-        if (!window.narrationEventBus) return;
+        if (!narrationEventBus) return;
         if (status === 'confirmed') {
-            window.narrationEventBus.publish('provisionalEventFinalized', {
+            narrationEventBus.publish('provisionalEventFinalized', {
                 provisionalId, status: 'confirmed', event: prov.event
             });
         }
@@ -578,11 +593,11 @@ Just listen. Transcription happens automatically.`;
         revertEventStats(prov.event);
 
         if (typeof logEvent === 'function') logEvent(`Retracted: ${prov.event.summarize ? prov.event.summarize() : prov.event.type}`);
-        if (window.narrationEventBus) {
-            window.narrationEventBus.publish('eventRetracted', {
+        if (narrationEventBus) {
+            narrationEventBus.publish('eventRetracted', {
                 event: prov.event, source: 'narration', provisionalId
             });
-            window.narrationEventBus.publish('provisionalEventFinalized', {
+            narrationEventBus.publish('provisionalEventFinalized', {
                 provisionalId, status: 'retracted', event: prov.event
             });
         }
@@ -616,7 +631,7 @@ Just listen. Transcription happens automatically.`;
 
     async function startRecording() {
         if (recording || phase === 'connecting') return;
-        if (!window.narrationRealtimeSession) {
+        if (!narrationRealtimeSession) {
             throw new Error('Realtime session module not loaded');
         }
 
@@ -655,12 +670,12 @@ Just listen. Transcription happens automatically.`;
         // reduction, transcription model, vocabulary biasing, force-English,
         // browser audio constraints). Falls back to module defaults when the
         // settings module isn't loaded.
-        const advOpts = (window.advancedSettings && window.advancedSettings.getNarrationSessionOptions)
-            ? window.advancedSettings.getNarrationSessionOptions(rosterInfo)
+        const advOpts = (advancedSettings && advancedSettings.getNarrationSessionOptions)
+            ? advancedSettings.getNarrationSessionOptions(rosterInfo)
             : {};
 
         try {
-            await window.narrationRealtimeSession.start({
+            await narrationRealtimeSession.start({
                 // Transcription-only mode is the default path now: no LLM
                 // in the loop, no acknowledgment-text spam, cheaper. The
                 // conversational gpt-realtime path (with tools and live
@@ -678,8 +693,8 @@ Just listen. Transcription happens automatically.`;
                 onTranscriptDelta: (delta) => {
                     accumulatedTranscript += delta;
                     // Publish for the live transcript display UI to render.
-                    if (window.narrationEventBus) {
-                        window.narrationEventBus.publish('transcriptUpdated', {
+                    if (narrationEventBus) {
+                        narrationEventBus.publish('transcriptUpdated', {
                             delta,
                             full: accumulatedTranscript
                         });
@@ -690,8 +705,8 @@ Just listen. Transcription happens automatically.`;
                     // haven't already picked up this text via deltas.
                     if (utterance && !accumulatedTranscript.endsWith(utterance)) {
                         accumulatedTranscript += utterance;
-                        if (window.narrationEventBus) {
-                            window.narrationEventBus.publish('transcriptUpdated', {
+                        if (narrationEventBus) {
+                            narrationEventBus.publish('transcriptUpdated', {
                                 delta: utterance,
                                 full: accumulatedTranscript
                             });
@@ -716,8 +731,8 @@ Just listen. Transcription happens automatically.`;
             if (abortRequested) {
                 abortRequested = false;
                 try {
-                    if (window.narrationRealtimeSession.isActive()) {
-                        await window.narrationRealtimeSession.stop();
+                    if (narrationRealtimeSession.isActive()) {
+                        await narrationRealtimeSession.stop();
                     }
                 } catch (_) { /* best-effort teardown */ }
                 recording = false;
@@ -748,8 +763,8 @@ Just listen. Transcription happens automatically.`;
         recording = false;
 
         try {
-            if (window.narrationRealtimeSession && window.narrationRealtimeSession.isActive()) {
-                const result = await window.narrationRealtimeSession.stop();
+            if (narrationRealtimeSession && narrationRealtimeSession.isActive()) {
+                const result = await narrationRealtimeSession.stop();
                 if (result && result.transcript) {
                     // Use the session's own transcript as the source of truth
                     // for the slow pass — it's what the server actually heard.
@@ -768,8 +783,8 @@ Just listen. Transcription happens automatically.`;
         }
     }
 
-    // Expose
-    window.narrationEngine = {
+    // Public API
+    return {
         startRecording,
         stopRecording,
         isRecording,
@@ -782,3 +797,10 @@ Just listen. Transcription happens automatically.`;
         _resolvePlayerName: resolvePlayerName
     };
 })();
+
+// --- ES-module export; the window shim is transitional for the
+// --- window-qualified read in main.js (isReloadUnsafe checks
+// --- window.narrationEngine.getPhase) until C10, and doubles as the
+// --- devtools inspection seam noted above.
+export { narrationEngine };
+window.narrationEngine = narrationEngine;

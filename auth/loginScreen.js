@@ -3,6 +3,8 @@
  * 
  * Handles the visual login/signup interface and user interactions
  */
+import { exitGameScreen } from '../game/gameScreenSync.js';
+import { showSelectTeamScreen } from '../teams/teamList.js';
 
 // Track current mode: 'login' | 'signup' | 'reset'
 let authMode = 'login';
@@ -338,12 +340,19 @@ function hideAuthScreen() {
     if (header) header.style.display = '';
 }
 
-// Export for use in main.js
-window.breakside = window.breakside || {};
-window.breakside.loginScreen = {
+// The loginScreen namespace consumed by main.js and teams/syncStatusUI.js —
+// both reach it via window.breakside.loginScreen at call time; auth/auth.js
+// merges its own namespace into window.breakside the same way.
+const breaksideLoginScreen = {
     initializeLoginScreen,
     showAuthScreen,
     hideAuthScreen,
     switchAuthMode
 };
+
+// --- ES-module export; the window.breakside merge is the shim consumed by the
+// --- window-qualified call sites listed above (converted to imports at C10).
+export { breaksideLoginScreen };
+window.breakside = window.breakside || {};
+window.breakside.loginScreen = breaksideLoginScreen;
 

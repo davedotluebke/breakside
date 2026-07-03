@@ -18,7 +18,12 @@
  * the coach can see they're being heard — important confidence-builder
  * since structured events now only appear after stop (transcription-only
  * fast pass).
+ *
+ * Exposes nothing — pure side-effect module (builds the panel, subscribes to
+ * the bus, polls the engine phase). No exports, no window shims.
  */
+import { narrationEventBus } from './eventBus.js';
+import { narrationEngine } from './narrationEngine.js';
 
 (function() {
     const PANEL_ID = 'narrationTranscriptPanel';
@@ -90,8 +95,8 @@
      * for phase changes; polling is cheap.
      */
     function pollPhase() {
-        if (!window.narrationEngine || !window.narrationEngine.getPhase) return;
-        const phase = window.narrationEngine.getPhase();
+        if (!narrationEngine || !narrationEngine.getPhase) return;
+        const phase = narrationEngine.getPhase();
         if (!labelEl) return;
         if (phase === 'connecting') {
             labelEl.textContent = 'Connecting…';
@@ -118,8 +123,8 @@
     function init() {
         ensurePanel();
 
-        if (window.narrationEventBus) {
-            window.narrationEventBus.subscribe('transcriptUpdated', (payload) => {
+        if (narrationEventBus) {
+            narrationEventBus.subscribe('transcriptUpdated', (payload) => {
                 if (payload && typeof payload.full === 'string') {
                     setText(payload.full);
                 }

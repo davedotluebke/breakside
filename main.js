@@ -57,6 +57,8 @@
 // calls happen at call time (after DOMContentLoaded), so the mixed phase is
 // safe. This list grows as the migration converts each layer.
 import './auth/config.js';
+import './auth/auth.js';
+import './auth/loginScreen.js';
 import './store/models.js';
 import './utils/helpers.js';
 import './store/storage.js';
@@ -101,6 +103,10 @@ import './playByPlay/fieldPbp.js';
 // evaluating it here — earlier than its old tag position after the pbp files —
 // is harmless: its top level only builds the namespace object.
 import './narration/eventBus.js';
+import './narration/realtimeSession.js';
+import './narration/narrationEngine.js';
+import './narration/transcriptDisplay.js';
+import './narration/micButton.js';
 
 // Skip the service worker during local development (localhost / 127.0.0.1).
 // Its offline precache otherwise serves stale JS/CSS across edits, so source

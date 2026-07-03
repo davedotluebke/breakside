@@ -13,10 +13,13 @@
  * not emit events.
  *
  * This module does not know anything about audio or LLMs — it delegates to
- * window.narrationEngine.startRecording() / stopRecording().
+ * narrationEngine.startRecording() / stopRecording().
  */
+import { isGameScreenVisible } from '../ui/panelSystem.js';
+import { showControllerToast } from '../game/controllerState.js';
+import { narrationEngine } from './narrationEngine.js';
 
-(function() {
+const narrationMicButton = (function() {
     const BTN_ID = 'narrationMicBtn';
     const LONG_PRESS_MS = 400;
     const VISIBILITY_POLL_MS = 500;
@@ -33,13 +36,13 @@
      * Falls back to false if the engine isn't loaded yet.
      */
     function isRecording() {
-        return !!(window.narrationEngine && window.narrationEngine.isRecording && window.narrationEngine.isRecording());
+        return !!(narrationEngine && narrationEngine.isRecording && narrationEngine.isRecording());
     }
 
     /** Current engine phase ('idle'|'connecting'|'recording'|'finalizing'), or null. */
     function currentPhase() {
-        return (window.narrationEngine && window.narrationEngine.getPhase)
-            ? window.narrationEngine.getPhase()
+        return (narrationEngine && narrationEngine.getPhase)
+            ? narrationEngine.getPhase()
             : null;
     }
 
@@ -58,7 +61,7 @@
      * exists; they just can't tap it.
      */
     function isNarrationAvailable() {
-        if (!window.narrationEngine) return false;
+        if (!narrationEngine) return false;
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
         return true;
     }
@@ -72,8 +75,8 @@
         btn.classList.remove('mic-idle', 'mic-recording', 'mic-connecting', 'mic-disabled', 'mic-finalizing');
 
         // Check if engine reports a transient connecting/finalizing phase
-        const phase = window.narrationEngine && window.narrationEngine.getPhase
-            ? window.narrationEngine.getPhase()
+        const phase = narrationEngine && narrationEngine.getPhase
+            ? narrationEngine.getPhase()
             : null;
 
         if (!isNarrationAvailable()) {
@@ -192,7 +195,7 @@
             return;
         }
         refreshButtonState();  // Show connecting state immediately
-        window.narrationEngine.startRecording()
+        narrationEngine.startRecording()
             .then(() => refreshButtonState())
             .catch(err => {
                 console.error('[micButton] startRecording failed:', err);
@@ -204,8 +207,8 @@
     }
 
     function stopRecording() {
-        if (!window.narrationEngine) return;
-        window.narrationEngine.stopRecording()
+        if (!narrationEngine) return;
+        narrationEngine.stopRecording()
             .then(() => refreshButtonState())
             .catch(err => {
                 console.error('[micButton] stopRecording failed:', err);
@@ -254,19 +257,6 @@
 
         // Poll visibility since enterGameScreen/exitGameScreen don't emit events.
         setInterval(refreshVisibility, VISIBILITY_POLL_MS);
-
-        // Listen on the event bus for phase changes (engine tells us when
-        // connecting/recording/finalizing changes) so we can update promptly.
-        if (window.narrationEventBus) {
-            // We don't have a dedicated channel for phase; the engine calls
-            // window.narrationMicButton.refresh() directly. Expose it.
-        }
-
-        // Expose a refresh hook for the engine to call on phase transitions.
-        window.narrationMicButton = {
-            refresh: refreshButtonState,
-            refreshVisibility: refreshVisibility
-        };
     }
 
     if (document.readyState === 'loading') {
@@ -274,4 +264,19 @@
     } else {
         init();
     }
+
+    // Public API: the refresh hook the engine calls on phase transitions.
+    // (There's no dedicated bus channel for phase; the engine invokes
+    // window.narrationMicButton.refresh() directly.)
+    return {
+        refresh: refreshButtonState,
+        refreshVisibility: refreshVisibility
+    };
 })();
+
+// --- ES-module export; the window shim is REQUIRED (not just transitional
+// --- convenience): narrationEngine.setPhase() reaches this via
+// --- window.narrationMicButton at call time to avoid an engine↔micButton
+// --- import cycle that would invert their eval order (see setPhase).
+export { narrationMicButton };
+window.narrationMicButton = narrationMicButton;
