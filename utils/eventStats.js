@@ -32,15 +32,80 @@ async function loadEventGames(event) {
 }
 
 /**
+ * Build a name → id resolver scoped to one game.
+ *
+ * `point.players` has only ever stored player *names* (see the Point
+ * constructor in store/models.js) — unlike events, it carries no id. To key
+ * stats by id we still need to resolve those names, so we build a map from
+ * the best historically-accurate source available:
+ *   1. `game.rosterSnapshot` — the roster as it stood when the game was
+ *      played; the correct source for a renamed/since-removed player.
+ *   2. ids already embedded on this game's own events (thrower/receiver/
+ *      puller/defender/assist carry both name and id once resolved — see
+ *      store/storage.js resolvePlayerReference).
+ *   3. the current team roster, as a last resort (logged — a player renamed
+ *      since this game was played could resolve to the wrong id here).
+ * A name that maps to more than one distinct id across these sources is
+ * ambiguous and is NOT guessed at; it gets its own per-name bucket so stats
+ * don't silently merge into the wrong player.
+ * @param {object} game - Deserialized Game object
+ * @returns {function(string): string} resolve(name) → a stable stats key
+ */
+function buildPlayerNameResolver(game) {
+    const byName = {};
+    function add(name, id) {
+        if (!name || !id) return;
+        if (byName[name] && byName[name] !== id) {
+            byName[name] = 'AMBIGUOUS';
+        } else if (!byName[name]) {
+            byName[name] = id;
+        }
+    }
+
+    (game?.rosterSnapshot?.players || []).forEach(p => add(p.name, p.id));
+
+    (game?.points || []).forEach(point => {
+        (point.possessions || []).forEach(poss => {
+            (poss.events || []).forEach(event => {
+                ['thrower', 'receiver', 'puller', 'defender', 'assist'].forEach(role => {
+                    const ref = event[role];
+                    if (ref && typeof ref === 'object') add(ref.name, ref.id);
+                });
+            });
+        });
+    });
+
+    if (typeof currentTeam !== 'undefined' && currentTeam?.teamRoster) {
+        currentTeam.teamRoster.forEach(p => add(p.name, p.id));
+    }
+
+    return function resolve(name) {
+        const id = byName[name];
+        if (!id) {
+            console.warn('[eventStats] Could not resolve player name to id — stats will be keyed by name as a fallback:', name);
+            return `unresolved:${name}`;
+        }
+        if (id === 'AMBIGUOUS') {
+            console.warn('[eventStats] Ambiguous player name (matches multiple ids) — keeping separate to avoid merging stats:', name);
+            return `ambiguous:${name}`;
+        }
+        return id;
+    };
+}
+
+/**
  * Accumulate stats from a single game into an existing stats map.
  * Shared by getGamePlayerStats and getEventPlayerStats.
  * @param {object} game - Deserialized Game object
- * @param {object} stats - Mutable map of playerName → stats (will be populated)
+ * @param {object} stats - Mutable map of playerId → stats (will be populated)
  */
 function accumulateGameStats(game, stats) {
-    function ensurePlayer(name) {
-        if (!stats[name]) {
-            stats[name] = {
+    const resolveName = buildPlayerNameResolver(game);
+
+    function ensurePlayer(id, name) {
+        if (!stats[id]) {
+            stats[id] = {
+                name,
                 pointsPlayed: 0,
                 timePlayed: 0,
                 goals: 0,
@@ -58,7 +123,17 @@ function accumulateGameStats(game, stats) {
                 dPlays: 0
             };
         }
-        return stats[name];
+        return stats[id];
+    }
+
+    // Resolve a player reference that may be a resolved object ({name, id, ...})
+    // or (legacy/live) a bare name string, to a {name, id} pair.
+    function resolveRef(ref) {
+        if (ref && typeof ref === 'object') {
+            return { name: ref.name, id: ref.id || (ref.name ? resolveName(ref.name) : null) };
+        }
+        if (ref) return { name: ref, id: resolveName(ref) };
+        return { name: null, id: null };
     }
 
     const points = game.points || [];
@@ -70,7 +145,8 @@ function accumulateGameStats(game, stats) {
         const isWin = point.winner === 'team' || point.winner === Role.TEAM;
 
         pointPlayers.forEach(playerName => {
-            const s = ensurePlayer(playerName);
+            const id = resolveName(playerName);
+            const s = ensurePlayer(id, playerName);
             s.pointsPlayed++;
             s.timePlayed += pointDuration;
             if (isWin) {
@@ -87,9 +163,9 @@ function accumulateGameStats(game, stats) {
             const events = poss.events || [];
             events.forEach((event, idx) => {
                 if (event.type === 'Throw') {
-                    const throwerName = event.thrower?.name || event.thrower;
-                    if (throwerName) {
-                        const s = ensurePlayer(throwerName);
+                    const thrower = resolveRef(event.thrower);
+                    if (thrower.name) {
+                        const s = ensurePlayer(thrower.id, thrower.name);
                         s.totalThrows++;
                         s.completions++;
                         if (event.huck_flag) {
@@ -99,17 +175,17 @@ function accumulateGameStats(game, stats) {
                         if (event.score_flag) s.assists++;
                     }
                     if (event.score_flag) {
-                        const receiverName = event.receiver?.name || event.receiver;
-                        if (receiverName) ensurePlayer(receiverName).goals++;
+                        const receiver = resolveRef(event.receiver);
+                        if (receiver.name) ensurePlayer(receiver.id, receiver.name).goals++;
 
                         // Hockey assist: previous Throw in this possession.
                         // Walk back, skipping non-Throw events (Violations etc).
                         for (let j = idx - 1; j >= 0; j--) {
                             const prev = events[j];
                             if (prev.type === 'Throw') {
-                                const haName = prev.thrower?.name || prev.thrower;
-                                if (haName) {
-                                    const s = ensurePlayer(haName);
+                                const ha = resolveRef(prev.thrower);
+                                if (ha.name) {
+                                    const s = ensurePlayer(ha.id, ha.name);
                                     s.hockeyAssists++;
                                     if (prev.huck_flag) s.huckHockeyAssists++;
                                 }
@@ -118,20 +194,20 @@ function accumulateGameStats(game, stats) {
                         }
                     }
                 } else if (event.type === 'Turnover') {
-                    const throwerName = event.thrower?.name || event.thrower;
-                    if (throwerName) {
-                        const s = ensurePlayer(throwerName);
+                    const thrower = resolveRef(event.thrower);
+                    if (thrower.name) {
+                        const s = ensurePlayer(thrower.id, thrower.name);
                         s.turnovers++;
                         s.totalThrows++;
                         if (event.huck_flag) s.totalHucks++;
                     }
                     if (event.drop_flag) {
-                        const receiverName = event.receiver?.name || event.receiver;
-                        if (receiverName) ensurePlayer(receiverName).turnovers++;
+                        const receiver = resolveRef(event.receiver);
+                        if (receiver.name) ensurePlayer(receiver.id, receiver.name).turnovers++;
                     }
                 } else if (event.type === 'Defense') {
-                    const defenderName = event.defender?.name || event.defender;
-                    if (defenderName) ensurePlayer(defenderName).dPlays++;
+                    const defender = resolveRef(event.defender);
+                    if (defender.name) ensurePlayer(defender.id, defender.name).dPlays++;
                 }
             });
         });
@@ -250,7 +326,7 @@ function formatTeamStatsLine(t) {
 /**
  * Get player stats for a single game.
  * @param {object} game - Deserialized Game object
- * @returns {Object} Map of playerName → stats
+ * @returns {Object} Map of playerId → stats
  */
 function getGamePlayerStats(game) {
     if (!game) return {};
@@ -271,7 +347,7 @@ function getGamePlayerStats(game) {
  * from cloud by id and deduped.
  *
  * @param {object} team - Team object (needs id; games[] used when present)
- * @returns {Promise<Object>} Map of playerName → stats
+ * @returns {Promise<Object>} Map of playerId → stats
  */
 async function getTeamPlayerStats(team) {
     if (!team) return {};
@@ -311,7 +387,7 @@ async function getTeamPlayerStats(team) {
  * Get aggregate player stats for an event across all its games.
  * @param {object} event - TournamentEvent object (must have gameIds)
  * @param {object} [options] - { phase: string } to restrict to one phase label
- * @returns {Promise<Object>} Map of playerName → stats
+ * @returns {Promise<Object>} Map of playerId → stats
  */
 async function getEventPlayerStats(event, options = {}) {
     if (!event) return {};

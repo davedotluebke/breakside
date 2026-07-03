@@ -63,9 +63,26 @@ ENABLE_GIT_VERSIONING = os.getenv("ULTISTATS_ENABLE_GIT_VERSIONING", "false").lo
 # =============================================================================
 # Feature flags
 # =============================================================================
-# Set to True to require authentication for all API endpoints
-# Set to False to allow anonymous access (useful during development/migration)
-AUTH_REQUIRED = os.getenv("ULTISTATS_AUTH_REQUIRED", "false").lower() == "true"
+def auth_required() -> bool:
+    """Single source of truth for whether the API enforces authentication.
+
+    Defaults to TRUE (secure by default). The ONLY supported way to disable
+    auth is to explicitly set ``ULTISTATS_AUTH_REQUIRED=false`` — which local
+    dev / agent tooling does (see ``scripts/dev-backend.sh``) and production
+    never does.
+
+    Read at call time (not frozen at import) so tests and dev servers can
+    toggle the env var at runtime. Every per-request guard MUST call this
+    rather than re-reading ``os.getenv`` with its own default — previously
+    ``config.py`` defaulted ``false`` while the guards defaulted ``true``, so
+    whether the API was open depended on which layer you looked at.
+    """
+    return os.getenv("ULTISTATS_AUTH_REQUIRED", "true").lower() == "true"
+
+
+# Backwards-compatible module constant, evaluated once at import. Prefer
+# ``auth_required()`` for per-request checks so a runtime env change is seen.
+AUTH_REQUIRED = auth_required()
 
 # =============================================================================
 # AI Narration (speech-to-events)

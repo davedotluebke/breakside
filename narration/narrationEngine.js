@@ -49,6 +49,11 @@
     // -----------------------------------------------------------------
     let phase = 'idle';  // 'idle' | 'connecting' | 'recording' | 'finalizing'
     let recording = false;
+    // Set when stop is requested while we're still 'connecting' (the realtime
+    // session is mid-handshake). startRecording()'s continuation checks this
+    // once start() resolves and tears the half-open session down, so a cancel
+    // during connect never leaves the mic hot.
+    let abortRequested = false;
     let provisionalEvents = [];  // { id, event, possession, pointIndex }
     let accumulatedTranscript = '';
     let provisionalIdCounter = 0;
@@ -610,12 +615,13 @@ Just listen. Transcription happens automatically.`;
     // -----------------------------------------------------------------
 
     async function startRecording() {
-        if (recording) return;
+        if (recording || phase === 'connecting') return;
         if (!window.narrationRealtimeSession) {
             throw new Error('Realtime session module not loaded');
         }
 
         setPhase('connecting');
+        abortRequested = false;
         provisionalEvents = [];
         accumulatedTranscript = '';
 
@@ -692,19 +698,53 @@ Just listen. Transcription happens automatically.`;
                         }
                     }
                 },
-                onError: (err) => console.error('[narrationEngine] Session error:', err)
+                onError: (err) => {
+                    console.error('[narrationEngine] Session error:', err);
+                    // Abnormal socket close / fatal session error while we were
+                    // recording or connecting: reconcile our state so the UI
+                    // doesn't latch in "recording". (During 'finalizing' the stop
+                    // path owns the phase, so leave it alone.)
+                    if (phase === 'recording' || phase === 'connecting') {
+                        recording = false;
+                        setPhase('idle');
+                    }
+                }
             });
+
+            // If a stop was requested while we were connecting, don't go live —
+            // tear the just-opened session back down and return to idle.
+            if (abortRequested) {
+                abortRequested = false;
+                try {
+                    if (window.narrationRealtimeSession.isActive()) {
+                        await window.narrationRealtimeSession.stop();
+                    }
+                } catch (_) { /* best-effort teardown */ }
+                recording = false;
+                setPhase('idle');
+                return;
+            }
+
             recording = true;
             setPhase('recording');
         } catch (err) {
             recording = false;
+            abortRequested = false;
             setPhase('idle');
             throw err;
         }
     }
 
     async function stopRecording() {
-        if (!recording && phase !== 'connecting') return;
+        // If we're still connecting, the realtime session isn't live yet — flag
+        // an abort so startRecording()'s continuation tears it down once it
+        // resolves, rather than racing it here (which would let it finish
+        // connecting and leave the mic hot).
+        if (phase === 'connecting') {
+            abortRequested = true;
+            return;
+        }
+        if (!recording) return;
         recording = false;
 
         try {

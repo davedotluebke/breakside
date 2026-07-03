@@ -158,8 +158,10 @@ function serializeGame(game) {
             totalPointTime: point.totalPointTime,
             lastPauseTime: point.lastPauseTime ? (typeof point.lastPauseTime === 'string' ? point.lastPauseTime : point.lastPauseTime.toISOString()) : null,
             substitutedOutPlayers: point.substitutedOutPlayers || [],  // Players subbed out mid-point
+            modes: point.getModes(),  // PBP modes recorded during this point (union of possessions)
             possessions: point.possessions.map(possession => ({
                 offensive: possession.offensive,
+                modes: possession.modes || [],  // PBP modes events were recorded under in this possession
                 events: possession.events.map(event => serializeEvent(event))
             }))
         }))
@@ -457,9 +459,11 @@ function deserializeGame(gameData) {
         point.substitutedOutPlayers = pointData.substitutedOutPlayers || [];  // Players subbed out mid-point
         point.possessions = pointData.possessions.map(possessionData => {
             const possession = new Possession(possessionData.offensive);
+            possession.modes = possessionData.modes || [];  // empty for legacy data
             possession.events = possessionData.events.map(eventData => deserializeEvent(eventData));
             return possession;
         });
+        point.modes = point.getModes();  // derive from restored possessions (empty for legacy data)
         return point;
     });
     
@@ -559,7 +563,7 @@ function loadTeams(silent = false) {
  * Initialize teams from local storage or create a sample team
  */
 function initializeTeams() {
-    loadTeams({ silent: true })
+    loadTeams(true)
     if (teams.length === 0) {
         const sampleNames = ["Cyrus L","Leif","Cesc","Cyrus J","Abby","Avery","James","Simeon","Soren","Walden"];
         sampleTeam = new Team("Sample Team", sampleNames);  // A sample team with 10 players

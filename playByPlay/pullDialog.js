@@ -410,8 +410,11 @@ function createPullEvent() {
         point.addPossession(firstPossession);
     }
     
-    // Add pull event at the beginning of the event list
+    // Add pull event at the beginning of the event list. Recording a pull is a
+    // meaningful PBP entry, so stamp the surface it was recorded under — the
+    // unshift bypasses Possession.addEvent (which does this for other events).
     firstPossession.events.unshift(pullEvent);
+    if (typeof getCurrentMode === 'function') { firstPossession.addMode(getCurrentMode()); }
     logEvent(pullEvent.summarize());
 
     // Sync to cloud for live viewer updates

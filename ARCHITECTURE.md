@@ -302,6 +302,39 @@ Key runtime properties:
 
 Full design + decision history: **docs/full-pbp-requirements.md**.
 
+### Field PBP spatial coordinate frame
+
+The "Field" tab (`playByPlay/fieldPbp.js`) is a spatial event-entry surface: the
+coach taps a drawn field to record *where* each throw / catch / turnover / block
+/ pull happened. It writes the same `Throw` / `Turnover` / `Defense` / `Pull`
+events as the other tabs (through `pbpPossession`), but each event also stores a
+`from` / `to` location.
+
+Stored locations use a **normalized, size-independent field frame** — an `{x, y}`
+pair on each event's `from` / `to`:
+
+- **`x` = progress toward the attacking endzone.** `x = 0` at the **defending**
+  endzone (goal) line, `x = 1` at the **attacking** endzone (goal) line. `x < 0`
+  is inside the defending endzone; `x > 1` is inside the attacking endzone.
+- **`y` = across the field.** `y = 0` at the **home** sideline, `y = 1` at the
+  **away** sideline.
+
+Why normalized rather than yards: the frame is deliberately decoupled from the
+endzone-depth setting and from yards/meters, so it works unchanged for short
+fields (4v4/5v5/middle-school) and **a change to the endzone-depth setting only
+re-scales the on-screen endzone margins — it never moves a stored point relative
+to the playing field.** (This supersedes an earlier "canonical yards keyed off
+endzone depth" frame, which re-scaled past games when the depth setting changed.)
+
+At render time the normalized `{x, y}` is scaled to the on-screen field — whose
+length *includes* the depth-dependent endzones — by the yard-based `pct()` /
+`toField()` helpers; `toNorm()` / `fromNorm()` in `fieldPbp.js` are the only
+bridge between the two frames. The two display flips (`flipAD` = attack
+direction, which auto-alternates per point; `flipHA` = which sideline is home)
+are **render-time only** — stored `{x, y}` never change, so re-opening a game or
+flipping orientation never moves a recorded event. The canonical convention lives
+in the `fieldPbp.js` file header; keep the two in sync.
+
 ### Feature Worktrees
 
 For parallel development, feature branches use git worktrees in `.worktrees/<feature-name>`. See CLAUDE.md for the workflow.
@@ -1147,6 +1180,43 @@ Notes:
   re-runs the auth check (it won't log them out, but avoid surprising them).
 - This is for *interactive* verification only. Never ask the user for their
   password or try to type their credentials — they sign in themselves.
+
+### Driving the preview against a local backend (no prod CORS change)
+
+The preview server is served from `http://localhost:<port>`, but the **prod
+API's CORS allowlist only contains the real origins** (`www`/`staging.breakside.pro`)
+— a localhost preview origin is blocked, so its data calls (list teams, load
+games, sync) silently fail and **no teams appear** even though Supabase login
+succeeded. Do **not** "fix" this by adding the localhost origin to prod
+`ULTISTATS_ALLOWED_ORIGINS` (that's the temp hack TODO.md tracks for removal).
+Instead, point the preview at an **isolated local backend**, which runs
+auth-disabled and returns `Access-Control-Allow-Origin: *`:
+
+1. **Start an isolated backend** for the worktree (see § Local development
+   backends). `--fresh` starts empty; omit it to seed from the main worktree's
+   `data/`:
+   ```bash
+   ./scripts/dev-backend.sh --port 8007 --label <feature> --fresh
+   ```
+2. **Point the preview frontend at it** — load the app once with the `?api=`
+   override (saved to that origin's localStorage; `?api=reset` clears it):
+   ```js
+   location.href = '/index.html?api=http://localhost:8007';
+   ```
+   Supabase login still works (auth is independent of the data API), so an
+   already-signed-in preview session stays signed in; only data calls re-route.
+3. **Create test data and drive the flow.** Because the isolated backend has
+   its own data store, the user's *real* cloud teams won't be listed (its
+   membership store doesn't link the logged-in user) — so create a throwaway
+   team + game in the UI and exercise the feature against that. This is the
+   right tool when **Claude needs to drive the app end-to-end itself**
+   (create team → start game → …), as opposed to the interactive handoff above
+   where the user explores their own real data on **staging** (a real,
+   CORS-allowed origin).
+
+Cleanup when done: stop the preview server(s) and `kill` the `dev-backend.sh`
+uvicorn process (or just close the terminal running it); the `.dev-data/<label>/`
+copy is gitignored and disposable.
 
 ### EC2 / API
 

@@ -771,8 +771,12 @@
     
     <!-- Screen and team modules -->
     <script src="screens/navigation.js"></script>
+    <script src="teams/rosterRowHelpers.js"></script>
     <script src="teams/rosterManagement.js"></script>
-    <script src="teams/teamSelection.js"></script>
+    <script src="teams/teamList.js"></script>
+    <script src="teams/eventDialogs.js"></script>
+    <script src="teams/syncStatusUI.js"></script>
+    <script src="teams/activeGamePolling.js"></script>
     <script src="teams/teamSettings.js"></script>
     <script src="teams/eventRoster.js"></script>
     <script src="teams/gameSummary.js"></script>
@@ -783,7 +787,14 @@
     <script src="game/gameLogic.js"></script>
     <script src="game/controllerState.js"></script>
     <script src="ui/hints.js"></script>
-    <script src="game/gameScreen.js"></script>
+    <!-- gameScreen.js was split into focused files (refactor, no behavior change).
+         Load order: panels/events/timer/select-line first; sync LAST because its
+         updateControllerUI wrapper must capture controllerState.js's original. -->
+    <script src="game/gameScreenPanels.js"></script>
+    <script src="game/gameScreenEvents.js"></script>
+    <script src="game/gameTimer.js"></script>
+    <script src="game/selectLine.js"></script>
+    <script src="game/gameScreenSync.js"></script>
 
     <!-- Play-by-play modules -->
     <script src="playByPlay/scoreAttribution.js"></script>

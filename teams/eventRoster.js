@@ -191,7 +191,9 @@ async function renderEventRosterTable() {
     // Team player rows
     const roster = currentTeam ? currentTeam.teamRoster : [];
     roster.forEach(player => {
-        const row = createEventRosterPlayerRow(player, eventPlayerStats, hasStats, totals, {
+        const computed = computeEventRosterPlayerStats(eventPlayerStats[player.id] || {});
+        if (hasStats) accumulateEventRosterTotals(totals, computed);
+        const row = createEventRosterPlayerRow(player, computed, hasStats, {
             isPickup: false,
             checked: eventRosterPlayerIds.has(player.id),
             onCheckChange: (checked) => {
@@ -204,7 +206,9 @@ async function renderEventRosterTable() {
 
     // Pickup player rows
     eventRosterPickups.forEach((pickup, idx) => {
-        const row = createEventRosterPlayerRow(pickup, eventPlayerStats, hasStats, totals, {
+        const computed = computeEventRosterPlayerStats(eventPlayerStats[pickup.id] || {});
+        if (hasStats) accumulateEventRosterTotals(totals, computed);
+        const row = createEventRosterPlayerRow(pickup, computed, hasStats, {
             isPickup: true,
             pickupIndex: idx
         });
@@ -213,22 +217,6 @@ async function renderEventRosterTable() {
 
     // Team aggregate row
     if (hasStats) {
-        const aggRow = document.createElement('tr');
-        aggRow.classList.add('team-aggregate-row');
-
-        const emptyCell = document.createElement('td');
-        emptyCell.classList.add('team-total-cell');
-        aggRow.appendChild(emptyCell);
-
-        const teamCell = document.createElement('td');
-        teamCell.textContent = 'Team';
-        teamCell.classList.add('roster-name-column', 'team-total-cell');
-        aggRow.appendChild(teamCell);
-
-        const teamCompPct = totals.totalThrows > 0
-            ? ((totals.completions / totals.totalThrows) * 100).toFixed(0) : '-';
-        const teamHuckPct = totals.totalHucks > 0
-            ? ((totals.huckCompletions / totals.totalHucks) * 100).toFixed(0) : '-';
         const totalPoints = totals.pointsPlayed > 0 ? totals.pointsPlayed : 0;
         const pmPerPt = totalPoints > 0 ? (totals.plusMinus / totalPoints).toFixed(2) : '0.0';
 
@@ -239,20 +227,20 @@ async function renderEventRosterTable() {
             totals.assists,
             totals.hockeyAssists,
             totals.huckHockeyAssists,
-            teamCompPct !== '-' ? `${teamCompPct}%` : teamCompPct,
-            teamHuckPct !== '-' ? `${teamHuckPct}%` : teamHuckPct,
+            formatPercentOrDash(totals.completions, totals.totalThrows),
+            formatPercentOrDash(totals.huckCompletions, totals.totalHucks),
             totals.dPlays,
             totals.turnovers,
-            totals.plusMinus > 0 ? `+${totals.plusMinus}` : totals.plusMinus,
-            pmPerPt > 0 ? `+${pmPerPt}` : pmPerPt
+            formatSigned(totals.plusMinus),
+            formatSigned(pmPerPt)
         ];
 
-        aggValues.forEach(val => {
-            const td = document.createElement('td');
-            td.textContent = val;
-            td.classList.add('team-total-cell');
-            aggRow.appendChild(td);
-        });
+        const aggRow = buildRosterRow([
+            { value: '', className: 'team-total-cell' },
+            { value: 'Team', className: ['roster-name-column', 'team-total-cell'] },
+            ...aggValues.map(val => ({ value: val, className: 'team-total-cell' }))
+        ]);
+        aggRow.classList.add('team-aggregate-row');
 
         tbody.appendChild(aggRow);
     }
@@ -299,34 +287,94 @@ async function renderEventRosterTable() {
 }
 
 /**
- * Create a player row for the event roster table
+ * Compute the display values and raw stat contributions for one event-roster
+ * row. Pure — does not touch the `totals` accumulator (see
+ * accumulateEventRosterTotals) and does not build any DOM.
+ * @param {Object} ps - this player's stats from eventPlayerStats (or {})
  */
-function createEventRosterPlayerRow(player, eventPlayerStats, hasStats, totals, options) {
-    const row = document.createElement('tr');
-    if (options.isPickup) row.className = 'pickup-row';
+function computeEventRosterPlayerStats(ps) {
+    const pts = ps.pointsPlayed || 0;
+    const time = ps.timePlayed || 0;
+    const goals = ps.goals || 0;
+    const assists = ps.assists || 0;
+    const hockeyAssists = ps.hockeyAssists || 0;
+    const huckHockeyAssists = ps.huckHockeyAssists || 0;
+    const completions = ps.completions || 0;
+    const totalThrows = ps.totalThrows || 0;
+    const huckCompletions = ps.huckCompletions || 0;
+    const totalHucks = ps.totalHucks || 0;
+    const dPlays = ps.dPlays || 0;
+    const turnovers = ps.turnovers || 0;
+    const pm = ps.plusMinus || 0;
+    const pmPerPt = pts > 0 ? (pm / pts).toFixed(2) : '0.0';
 
-    // Checkbox cell
-    const tdCheck = document.createElement('td');
-    tdCheck.style.textAlign = 'center';
-    if (!options.isPickup) {
+    return {
+        pts, time, goals, assists, hockeyAssists, huckHockeyAssists,
+        completions, totalThrows, huckCompletions, totalHucks, dPlays, turnovers, pm,
+        values: [
+            pts,
+            typeof formatPlayTime === 'function' ? formatPlayTime(time) : '0:00',
+            goals,
+            assists,
+            hockeyAssists,
+            huckHockeyAssists,
+            formatPercentOrDash(completions, totalThrows),
+            formatPercentOrDash(huckCompletions, totalHucks),
+            dPlays,
+            turnovers,
+            formatSigned(pm),
+            formatSigned(pmPerPt)
+        ]
+    };
+}
+
+/**
+ * Add one player's raw stat contributions into the shared event-roster
+ * totals accumulator. Call once per row, separately from row construction.
+ */
+function accumulateEventRosterTotals(totals, computed) {
+    totals.pointsPlayed += computed.pts;
+    totals.timePlayed += computed.time;
+    totals.goals += computed.goals;
+    totals.assists += computed.assists;
+    totals.hockeyAssists += computed.hockeyAssists;
+    totals.huckHockeyAssists += computed.huckHockeyAssists;
+    totals.completions += computed.completions;
+    totals.totalThrows += computed.totalThrows;
+    totals.huckCompletions += computed.huckCompletions;
+    totals.totalHucks += computed.totalHucks;
+    totals.dPlays += computed.dPlays;
+    totals.turnovers += computed.turnovers;
+    totals.plusMinus += computed.pm;
+}
+
+/**
+ * Build a player row for the event roster table from precomputed stats.
+ */
+function createEventRosterPlayerRow(player, computed, hasStats, options) {
+    const displayName = typeof formatPlayerName === 'function' ? formatPlayerName(player) : player.name;
+    const nameClasses = [];
+    if (player.gender === Gender.FMP) nameClasses.push('player-fmp');
+    else if (player.gender === Gender.MMP) nameClasses.push('player-mmp');
+
+    let checkCell;
+    if (options.isPickup) {
+        checkCell = { value: '', style: { textAlign: 'center' } };
+    } else {
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.checked = options.checked;
         checkbox.onchange = () => options.onCheckChange(checkbox.checked);
-        tdCheck.appendChild(checkbox);
+        checkCell = { element: checkbox, style: { textAlign: 'center' } };
     }
-    row.appendChild(tdCheck);
 
-    // Name cell
-    const tdName = document.createElement('td');
-    const displayName = typeof formatPlayerName === 'function' ? formatPlayerName(player) : player.name;
-    tdName.textContent = options.isPickup ? `${displayName} (pickup)` : displayName;
-    if (player.gender === Gender.FMP) tdName.classList.add('player-fmp');
-    else if (player.gender === Gender.MMP) tdName.classList.add('player-mmp');
-
+    const nameCell = {
+        value: options.isPickup ? `${displayName} (pickup)` : displayName,
+        className: nameClasses.length ? nameClasses : undefined
+    };
     if (options.isPickup) {
-        tdName.style.cursor = 'pointer';
-        tdName.onclick = () => {
+        nameCell.style = { cursor: 'pointer' };
+        nameCell.onClick = () => {
             showEditPlayerDialog(player, {
                 context: 'pickup',
                 onSave: (updated) => {
@@ -341,66 +389,14 @@ function createEventRosterPlayerRow(player, eventPlayerStats, hasStats, totals, 
             });
         };
     }
-    row.appendChild(tdName);
 
-    // Stats cells
+    const cells = [checkCell, nameCell];
     if (hasStats) {
-        const ps = eventPlayerStats[player.name] || {};
-        const pts = ps.pointsPlayed || 0;
-        const time = ps.timePlayed || 0;
-        const goals = ps.goals || 0;
-        const assists = ps.assists || 0;
-        const hockeyAssists = ps.hockeyAssists || 0;
-        const huckHockeyAssists = ps.huckHockeyAssists || 0;
-        const completions = ps.completions || 0;
-        const totalThrows = ps.totalThrows || 0;
-        const huckCompletions = ps.huckCompletions || 0;
-        const totalHucks = ps.totalHucks || 0;
-        const dPlays = ps.dPlays || 0;
-        const turnovers = ps.turnovers || 0;
-        const pm = ps.plusMinus || 0;
-
-        // Accumulate totals
-        totals.pointsPlayed += pts;
-        totals.timePlayed += time;
-        totals.goals += goals;
-        totals.assists += assists;
-        totals.hockeyAssists += hockeyAssists;
-        totals.huckHockeyAssists += huckHockeyAssists;
-        totals.completions += completions;
-        totals.totalThrows += totalThrows;
-        totals.huckCompletions += huckCompletions;
-        totals.totalHucks += totalHucks;
-        totals.dPlays += dPlays;
-        totals.turnovers += turnovers;
-        totals.plusMinus += pm;
-
-        const compPct = totalThrows > 0 ? ((completions / totalThrows) * 100).toFixed(0) : '-';
-        const huckPct = totalHucks > 0 ? ((huckCompletions / totalHucks) * 100).toFixed(0) : '-';
-        const pmPerPt = pts > 0 ? (pm / pts).toFixed(2) : '0.0';
-
-        const values = [
-            pts,
-            typeof formatPlayTime === 'function' ? formatPlayTime(time) : '0:00',
-            goals,
-            assists,
-            hockeyAssists,
-            huckHockeyAssists,
-            compPct !== '-' ? `${compPct}%` : compPct,
-            huckPct !== '-' ? `${huckPct}%` : huckPct,
-            dPlays,
-            turnovers,
-            pm > 0 ? `+${pm}` : pm,
-            pmPerPt > 0 ? `+${pmPerPt}` : pmPerPt
-        ];
-
-        values.forEach(val => {
-            const td = document.createElement('td');
-            td.textContent = val;
-            row.appendChild(td);
-        });
+        computed.values.forEach(val => cells.push({ value: val }));
     }
 
+    const row = buildRosterRow(cells);
+    if (options.isPickup) row.className = 'pickup-row';
     return row;
 }
 

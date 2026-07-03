@@ -29,9 +29,15 @@ try:
 except ImportError:
     from ultistats_server.config import MEMBERSHIPS_DIR
 
+from .file_utils import atomic_write_json, entity_lock
+
 
 # Index file for fast lookups
 INDEX_FILE = MEMBERSHIPS_DIR / "_index.json"
+
+# Serializes read-modify-write of the membership index so two concurrent
+# membership changes can't each overwrite the other (dropping a membership).
+_INDEX_LOCK_KEY = "membership-index"
 
 
 def _membership_file(membership_id: str) -> Path:
@@ -57,56 +63,56 @@ def _load_index() -> Dict[str, Any]:
 
 
 def _save_index(index: Dict[str, Any]) -> None:
-    """Save the membership index."""
-    MEMBERSHIPS_DIR.mkdir(parents=True, exist_ok=True)
-    with open(INDEX_FILE, "w") as f:
-        json.dump(index, f, indent=2)
+    """Save the membership index atomically."""
+    atomic_write_json(INDEX_FILE, index)
 
 
 def _update_index_add(membership: Dict[str, Any]) -> None:
-    """Add a membership to the index."""
-    index = _load_index()
-    
+    """Add a membership to the index (serialized read-modify-write)."""
     user_id = membership["userId"]
     team_id = membership["teamId"]
     mem_id = membership["id"]
-    
-    # Add to user index
-    if user_id not in index["byUser"]:
-        index["byUser"][user_id] = []
-    if mem_id not in index["byUser"][user_id]:
-        index["byUser"][user_id].append(mem_id)
-    
-    # Add to team index
-    if team_id not in index["byTeam"]:
-        index["byTeam"][team_id] = []
-    if mem_id not in index["byTeam"][team_id]:
-        index["byTeam"][team_id].append(mem_id)
-    
-    _save_index(index)
+
+    with entity_lock(_INDEX_LOCK_KEY):
+        index = _load_index()
+
+        # Add to user index
+        if user_id not in index["byUser"]:
+            index["byUser"][user_id] = []
+        if mem_id not in index["byUser"][user_id]:
+            index["byUser"][user_id].append(mem_id)
+
+        # Add to team index
+        if team_id not in index["byTeam"]:
+            index["byTeam"][team_id] = []
+        if mem_id not in index["byTeam"][team_id]:
+            index["byTeam"][team_id].append(mem_id)
+
+        _save_index(index)
 
 
 def _update_index_remove(membership: Dict[str, Any]) -> None:
-    """Remove a membership from the index."""
-    index = _load_index()
-    
+    """Remove a membership from the index (serialized read-modify-write)."""
     user_id = membership["userId"]
     team_id = membership["teamId"]
     mem_id = membership["id"]
-    
-    # Remove from user index
-    if user_id in index["byUser"]:
-        index["byUser"][user_id] = [m for m in index["byUser"][user_id] if m != mem_id]
-        if not index["byUser"][user_id]:
-            del index["byUser"][user_id]
-    
-    # Remove from team index
-    if team_id in index["byTeam"]:
-        index["byTeam"][team_id] = [m for m in index["byTeam"][team_id] if m != mem_id]
-        if not index["byTeam"][team_id]:
-            del index["byTeam"][team_id]
-    
-    _save_index(index)
+
+    with entity_lock(_INDEX_LOCK_KEY):
+        index = _load_index()
+
+        # Remove from user index
+        if user_id in index["byUser"]:
+            index["byUser"][user_id] = [m for m in index["byUser"][user_id] if m != mem_id]
+            if not index["byUser"][user_id]:
+                del index["byUser"][user_id]
+
+        # Remove from team index
+        if team_id in index["byTeam"]:
+            index["byTeam"][team_id] = [m for m in index["byTeam"][team_id] if m != mem_id]
+            if not index["byTeam"][team_id]:
+                del index["byTeam"][team_id]
+
+        _save_index(index)
 
 
 def membership_exists(membership_id: str) -> bool:
@@ -161,12 +167,11 @@ def create_membership(
     
     # Ensure directory exists
     MEMBERSHIPS_DIR.mkdir(parents=True, exist_ok=True)
-    
-    with open(_membership_file(membership["id"]), "w") as f:
-        json.dump(membership, f, indent=2)
-    
+
+    atomic_write_json(_membership_file(membership["id"]), membership)
+
     _update_index_add(membership)
-    
+
     return membership
 
 
@@ -185,10 +190,9 @@ def update_membership_role(
         return None
     
     membership["role"] = new_role
-    
-    with open(_membership_file(membership_id), "w") as f:
-        json.dump(membership, f, indent=2)
-    
+
+    atomic_write_json(_membership_file(membership_id), membership)
+
     return membership
 
 

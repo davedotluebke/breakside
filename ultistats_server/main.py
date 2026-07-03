@@ -5,13 +5,15 @@ from fastapi import FastAPI, HTTPException, Body, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.concurrency import run_in_threadpool
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Literal
 from datetime import datetime
 
 # Import config - handle both relative and absolute imports
 try:
-    from config import HOST, PORT, DEBUG, ALLOWED_ORIGINS, AUTH_REQUIRED
+    from config import HOST, PORT, DEBUG, ALLOWED_ORIGINS, AUTH_REQUIRED, auth_required
+    from validation import validate_id, safe_static_path
     from storage import (
         # Game storage
         save_game_version,
@@ -105,10 +107,13 @@ try:
         require_game_team_coach,
         require_game_team_access,
         require_player_edit_access,
+        require_player_read_access,
+        assert_player_edit_access,
     )
 except ImportError:
     # Try absolute import (when running as package)
-    from ultistats_server.config import HOST, PORT, DEBUG, ALLOWED_ORIGINS, AUTH_REQUIRED
+    from ultistats_server.config import HOST, PORT, DEBUG, ALLOWED_ORIGINS, AUTH_REQUIRED, auth_required
+    from ultistats_server.validation import validate_id, safe_static_path
     from ultistats_server.storage import (
         # Game storage
         save_game_version,
@@ -202,6 +207,8 @@ except ImportError:
         require_game_team_coach,
         require_game_team_access,
         require_player_edit_access,
+        require_player_read_access,
+        assert_player_edit_access,
     )
 
 # Create FastAPI app
@@ -240,6 +247,43 @@ pwa_static_dirs = ["data", "game", "playByPlay", "screens", "teams", "ui", "util
 # Landing page directory
 landing_dir = pwa_dir / "landing"
 
+# Media types for static file serving (shared by all PWA/landing handlers).
+_STATIC_MEDIA_TYPES = {
+    '.js': 'application/javascript',
+    '.css': 'text/css',
+    '.json': 'application/json',
+    '.html': 'text/html',
+    '.png': 'image/png',
+    '.ico': 'image/x-icon',
+    '.webmanifest': 'application/manifest+json',
+}
+
+
+def _serve_static_file(base_dir: Path, filename: str,
+                       allowed_first_parts: Optional[set] = None) -> FileResponse:
+    """Serve a static file from ``base_dir``, guarding against path traversal.
+
+    If ``allowed_first_parts`` is given, the first path segment must be in that
+    whitelist. In all cases the resolved path is confirmed to stay inside
+    ``base_dir`` (``safe_static_path``) so escapes like ``game/../../secret``
+    that slip past the first-segment whitelist are rejected.
+    """
+    if allowed_first_parts is not None:
+        first_part = filename.split('/')[0] if '/' in filename else filename
+        if first_part not in allowed_first_parts:
+            raise HTTPException(status_code=404, detail="File not found")
+
+    safe_path = safe_static_path(base_dir, filename)
+    if safe_path is None:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    media_type = _STATIC_MEDIA_TYPES.get(safe_path.suffix.lower(), 'application/octet-stream')
+    return FileResponse(safe_path, media_type=media_type)
+
+
+# Whitelisted top-level files/dirs for PWA serving.
+_PWA_ALLOWED_FIRST_PARTS = set(pwa_static_files) | set(pwa_static_dirs)
+
 @app.get("/")
 async def root():
     """Serve the PWA index.html at root (redirects to /ultistats/ for PWA compatibility)"""
@@ -269,28 +313,7 @@ async def app_page():
 @app.get("/app/{filename:path}")
 async def serve_app_file(filename: str):
     """Serve PWA files under /app/ path."""
-    file_path = pwa_dir / filename
-    
-    # Check if it's a known static file or in a known directory
-    first_part = filename.split('/')[0] if '/' in filename else filename
-    
-    if first_part in pwa_static_files or first_part in pwa_static_dirs:
-        if file_path.exists() and file_path.is_file():
-            # Determine media type
-            suffix = file_path.suffix.lower()
-            media_types = {
-                '.js': 'application/javascript',
-                '.css': 'text/css',
-                '.json': 'application/json',
-                '.html': 'text/html',
-                '.png': 'image/png',
-                '.ico': 'image/x-icon',
-                '.webmanifest': 'application/manifest+json',
-            }
-            media_type = media_types.get(suffix, 'application/octet-stream')
-            return FileResponse(file_path, media_type=media_type)
-    
-    raise HTTPException(status_code=404, detail="File not found")
+    return _serve_static_file(pwa_dir, filename, _PWA_ALLOWED_FIRST_PARTS)
 
 
 # =============================================================================
@@ -327,22 +350,7 @@ async def landing_page():
 @app.get("/landing/{filename:path}")
 async def serve_landing_file(filename: str):
     """Serve landing page static files."""
-    file_path = landing_dir / filename
-    
-    if file_path.exists() and file_path.is_file():
-        suffix = file_path.suffix.lower()
-        media_types = {
-            '.js': 'application/javascript',
-            '.css': 'text/css',
-            '.json': 'application/json',
-            '.html': 'text/html',
-            '.png': 'image/png',
-            '.ico': 'image/x-icon',
-        }
-        media_type = media_types.get(suffix, 'application/octet-stream')
-        return FileResponse(file_path, media_type=media_type)
-    
-    raise HTTPException(status_code=404, detail="File not found")
+    return _serve_static_file(landing_dir, filename)
 
 
 # =============================================================================
@@ -373,28 +381,7 @@ async def ultistats_root():
 @app.get("/ultistats/{filename:path}")
 async def serve_ultistats_file(filename: str):
     """Serve PWA files under /ultistats/ path."""
-    file_path = pwa_dir / filename
-    
-    # Check if it's a known static file or in a known directory
-    first_part = filename.split('/')[0] if '/' in filename else filename
-    
-    if first_part in pwa_static_files or first_part in pwa_static_dirs:
-        if file_path.exists() and file_path.is_file():
-            # Determine media type
-            suffix = file_path.suffix.lower()
-            media_types = {
-                '.js': 'application/javascript',
-                '.css': 'text/css',
-                '.json': 'application/json',
-                '.html': 'text/html',
-                '.png': 'image/png',
-                '.ico': 'image/x-icon',
-                '.webmanifest': 'application/manifest+json',
-            }
-            media_type = media_types.get(suffix, 'application/octet-stream')
-            return FileResponse(file_path, media_type=media_type)
-    
-    raise HTTPException(status_code=404, detail="File not found")
+    return _serve_static_file(pwa_dir, filename, _PWA_ALLOWED_FIRST_PARTS)
 
 @app.get("/api")
 async def api_info():
@@ -416,17 +403,70 @@ async def health():
 # Image Proxy endpoint
 # =============================================================================
 
+def _assert_public_http_url(url: str) -> None:
+    """Reject a URL whose host resolves to a non-public IP (SSRF guard).
+
+    Resolves the hostname and raises HTTP 400 if ANY resolved address is
+    private, loopback, link-local (incl. the cloud metadata 169.254.169.254),
+    reserved, multicast or unspecified. This blocks server-side fetches of
+    internal services and instance-metadata endpoints.
+
+    Note: a fully robust guard would also pin the socket to the validated IP to
+    defeat DNS-rebinding (TOCTOU between this check and httpx's own resolution);
+    combined with redirects disabled, this check closes the practical vectors.
+    """
+    import socket
+    import ipaddress
+    from urllib.parse import urlparse
+
+    host = urlparse(url).hostname
+    if not host:
+        raise HTTPException(status_code=400, detail="Invalid URL: missing host")
+
+    # If the host is a literal IP, validate it directly; otherwise resolve.
+    candidates = set()
+    try:
+        ipaddress.ip_address(host)
+        candidates.add(host)
+    except ValueError:
+        try:
+            for info in socket.getaddrinfo(host, None):
+                candidates.add(info[4][0])
+        except socket.gaierror:
+            raise HTTPException(status_code=400, detail="Could not resolve image host")
+
+    if not candidates:
+        raise HTTPException(status_code=400, detail="Could not resolve image host")
+
+    for addr in candidates:
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid resolved address")
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            raise HTTPException(
+                status_code=400,
+                detail="URL host is not allowed (resolves to a non-public address)"
+            )
+
+
 @app.post("/api/proxy-image")
-async def proxy_image(body: dict = Body(...)):
+async def proxy_image(body: dict = Body(...), user: dict = Depends(get_current_user)):
     """
     Proxy and resize an image from a URL.
-    
+
     This endpoint fetches an image from a URL (bypassing CORS),
     resizes it to max 128x128, and returns it as a base64 data URL.
-    
+
+    Requires authentication. To prevent SSRF, the target host is resolved and
+    rejected if it maps to a private/loopback/link-local address (e.g. the EC2
+    metadata endpoint 169.254.169.254 or internal services), and redirects are
+    disabled so a public URL can't bounce to an internal one.
+
     Request body:
         url: str - The image URL to fetch
-    
+
     Returns:
         dataUrl: str - The resized image as a data URL (PNG format)
         originalUrl: str - The original URL that was fetched
@@ -434,28 +474,32 @@ async def proxy_image(body: dict = Body(...)):
     import httpx
     import base64
     from io import BytesIO
-    
+
     url = body.get("url")
     if not url:
         raise HTTPException(status_code=400, detail="Missing 'url' in request body")
-    
+
     # Validate URL format
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Invalid URL format")
-    
+
+    # SSRF guard: reject hosts that resolve to non-public addresses.
+    _assert_public_http_url(url)
+
     MAX_SIZE = 256
     MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB max download
-    
+
     try:
-        # Fetch the image
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        # Fetch the image. Redirects are disabled so a public URL can't 302 to
+        # an internal address that bypassed the pre-flight DNS check.
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
             response = await client.get(url, headers={
                 "User-Agent": "Breakside/1.0 (Team Icon Fetcher)"
             })
-            
+
             if response.status_code != 200:
                 raise HTTPException(
-                    status_code=400, 
+                    status_code=400,
                     detail=f"Failed to fetch image: HTTP {response.status_code}"
                 )
             
@@ -517,6 +561,10 @@ async def proxy_image(body: dict = Body(...)):
         
         return {"dataUrl": data_url, "originalUrl": url}
         
+    except HTTPException:
+        # Don't let the generic handler below mask our own 400s (bad
+        # status / not-an-image / too-large) as 500s.
+        raise
     except httpx.TimeoutException:
         raise HTTPException(status_code=408, detail="Timeout fetching image")
     except httpx.RequestError as e:
@@ -694,7 +742,7 @@ async def create_event(
         raise HTTPException(status_code=400, detail="teamId is required")
 
     # Verify coach access to team
-    if AUTH_REQUIRED:
+    if auth_required():
         role = get_user_team_role(user['id'], team_id)
         if role != 'coach':
             raise HTTPException(status_code=403, detail="Coach access required")
@@ -709,6 +757,7 @@ async def get_event_endpoint(
     user: dict = Depends(get_current_user)
 ):
     """Get an event by ID."""
+    validate_id(event_id, "event_id")
     if not event_exists(event_id):
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
     return get_event(event_id)
@@ -721,13 +770,14 @@ async def update_event_endpoint(
     user: dict = Depends(get_current_user)
 ):
     """Update an event. Requires coach access to the event's team."""
+    validate_id(event_id, "event_id")
     if not event_exists(event_id):
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
 
     existing = get_event(event_id)
     team_id = existing.get('teamId')
 
-    if AUTH_REQUIRED and team_id:
+    if auth_required() and team_id:
         role = get_user_team_role(user['id'], team_id)
         if role != 'coach':
             raise HTTPException(status_code=403, detail="Coach access required")
@@ -744,13 +794,14 @@ async def delete_event_endpoint(
     user: dict = Depends(get_current_user)
 ):
     """Delete an event. Requires coach access to the event's team."""
+    validate_id(event_id, "event_id")
     if not event_exists(event_id):
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
 
     existing = get_event(event_id)
     team_id = existing.get('teamId')
 
-    if AUTH_REQUIRED and team_id:
+    if auth_required() and team_id:
         role = get_user_team_role(user['id'], team_id)
         if role != 'coach':
             raise HTTPException(status_code=403, detail="Coach access required")
@@ -820,9 +871,13 @@ async def sync_game(
     except Exception:
         authoritative = True
 
-    # Save with versioning
-    version_file = save_game_version(game_id, game_data,
-                                     authoritative_game_data=authoritative)
+    # Save with versioning. Run off the event loop: the storage write does
+    # fsync'd file I/O (and optional blocking git subprocess calls) that would
+    # otherwise stall the whole single-worker server during every sync.
+    version_file = await run_in_threadpool(
+        save_game_version, game_id, game_data,
+        authoritative_game_data=authoritative,
+    )
     version_timestamp = Path(version_file).stem
 
     return {
@@ -977,9 +1032,10 @@ async def get_version(game_id: str, timestamp: str, user: dict = Depends(require
     
     Requires: Coach or Viewer access to the game's team.
     """
+    validate_id(timestamp, "timestamp")
     if not game_exists(game_id):
         raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
-    
+
     try:
         game_data = get_game_version(game_id, timestamp)
         return game_data
@@ -994,12 +1050,13 @@ async def restore_version(game_id: str, timestamp: str, user: dict = Depends(req
     
     Requires: Coach access to the game's team.
     """
+    validate_id(timestamp, "timestamp")
     if not game_exists(game_id):
         raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
-    
+
     try:
         game_data = get_game_version(game_id, timestamp)
-        save_game_version(game_id, game_data)
+        await run_in_threadpool(save_game_version, game_id, game_data)
         return {"status": "restored", "game_id": game_id, "timestamp": timestamp}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Version {timestamp} not found")
@@ -1379,8 +1436,9 @@ async def get_game_by_share(hash: str):
     
     This is a public endpoint - no authentication required.
     """
+    validate_id(hash, "share hash")
     share = get_share_by_hash(hash)
-    
+
     if not share:
         raise HTTPException(status_code=404, detail="Share link not found")
     
@@ -1474,6 +1532,7 @@ async def get_invite_info(code: str):
     Returns team name and role, but not internal details.
     No auth required.
     """
+    validate_id(code, "invite code")
     invite = get_invite_by_code(code.upper())
     
     if not invite:
@@ -1521,6 +1580,7 @@ async def redeem_invite_endpoint(
     
     Creates a team membership for the authenticated user.
     """
+    validate_id(code, "invite code")
     result = redeem_invite(code.upper(), user["id"])
     
     if not result["success"]:
@@ -1658,37 +1718,75 @@ async def create_player(
     
     If 'id' is provided in the body, it will be used (for offline-created players).
     Otherwise, an ID will be generated from the name.
-    
-    Requires: Any authenticated user can create players.
+
+    Requires: Coach access. Supplying an existing player's `id` overwrites
+    that player, so the caller must be a Coach of a team that player is on
+    (closing the hole where any authed user could overwrite any player).
     """
     if "name" not in player_data:
         raise HTTPException(status_code=400, detail="Player name is required")
-    
+
     # Check if client provided an ID (offline creation)
     provided_id = player_data.get('id')
-    
+    if provided_id:
+        validate_id(provided_id, "player id")
+
+    # Authorize: overwriting an existing player requires edit access to it;
+    # creating a brand-new player requires being a coach of some team.
+    assert_player_edit_access(
+        user,
+        provided_id if (provided_id and player_exists(provided_id)) else None,
+    )
+
     # If ID was provided and already exists, this is an update/sync
     if provided_id and player_exists(provided_id):
         update_player(provided_id, player_data)
         return {"status": "updated", "player_id": provided_id, "player": get_player(provided_id)}
-    
+
     player_id = save_player(player_data, provided_id)
     return {"status": "created", "player_id": player_id, "player": get_player(player_id)}
 
 
 @app.get("/api/players")
-async def list_players_endpoint():
-    """List all players."""
-    players = list_players()
+async def list_players_endpoint(user: Optional[dict] = Depends(get_optional_user)):
+    """
+    List players visible to the caller.
+
+    Player records are private: returns only players on teams the user has
+    access to. Admins see all; anonymous callers get an empty list.
+    """
+    if not user:
+        return {"players": [], "count": 0}
+
+    if is_admin(user["id"]):
+        players = list_players()
+        return {"players": players, "count": len(players)}
+
+    # Union of rosters across teams the user is a member of (coach or viewer).
+    seen: Dict[str, dict] = {}
+    for team_id in get_user_teams(user["id"]):
+        try:
+            for player in get_team_players(team_id):
+                pid = player.get("id")
+                if pid:
+                    seen[pid] = player
+        except FileNotFoundError:
+            continue
+
+    players = sorted(seen.values(), key=lambda p: p.get("name", "").lower())
     return {"players": players, "count": len(players)}
 
 
 @app.get("/api/players/{player_id}")
-async def get_player_endpoint(player_id: str):
-    """Get a player by ID."""
+async def get_player_endpoint(player_id: str, user: dict = Depends(require_player_read_access)):
+    """
+    Get a player by ID.
+
+    Requires: membership (coach or viewer) of a team the player is on.
+    """
     if not player_exists(player_id):
         raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
-    
+
     return get_player(player_id)
 
 
@@ -1725,18 +1823,26 @@ async def delete_player_endpoint(player_id: str, user: dict = Depends(require_pl
 
 
 @app.get("/api/players/{player_id}/games")
-async def get_player_games_endpoint(player_id: str):
-    """Get all games a player has participated in."""
+async def get_player_games_endpoint(player_id: str, user: dict = Depends(require_player_read_access)):
+    """
+    Get all games a player has participated in.
+
+    Requires: membership (coach or viewer) of a team the player is on.
+    """
     if not player_exists(player_id):
         raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
-    
+
     game_ids = get_player_games(player_id)
     return {"player_id": player_id, "game_ids": game_ids, "count": len(game_ids)}
 
 
 @app.get("/api/players/{player_id}/teams")
-async def get_player_teams_endpoint(player_id: str):
-    """Get all teams a player belongs to."""
+async def get_player_teams_endpoint(player_id: str, user: dict = Depends(require_player_read_access)):
+    """
+    Get all teams a player belongs to.
+
+    Requires: membership (coach or viewer) of a team the player is on.
+    """
     if not player_exists(player_id):
         raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
     
@@ -1999,30 +2105,8 @@ async def get_index_status_endpoint():
 # PWA file serving - MUST be last to avoid catching API routes
 @app.get("/{filename:path}")
 async def serve_pwa_file(filename: str):
-    """Serve PWA files from parent directory."""
-    # Security: only serve known files/directories
-    file_path = pwa_dir / filename
-    
-    # Check if it's a known static file or in a known directory
-    first_part = filename.split('/')[0] if '/' in filename else filename
-    
-    if first_part in pwa_static_files or first_part in pwa_static_dirs:
-        if file_path.exists() and file_path.is_file():
-            # Determine media type
-            suffix = file_path.suffix.lower()
-            media_types = {
-                '.js': 'application/javascript',
-                '.css': 'text/css',
-                '.json': 'application/json',
-                '.html': 'text/html',
-                '.png': 'image/png',
-                '.ico': 'image/x-icon',
-                '.webmanifest': 'application/manifest+json',
-            }
-            media_type = media_types.get(suffix, 'application/octet-stream')
-            return FileResponse(file_path, media_type=media_type)
-    
-    raise HTTPException(status_code=404, detail="File not found")
+    """Serve PWA files from parent directory (only whitelisted files/dirs)."""
+    return _serve_static_file(pwa_dir, filename, _PWA_ALLOWED_FIRST_PARTS)
 
 
 if __name__ == "__main__":

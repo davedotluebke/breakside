@@ -122,7 +122,6 @@ function Game(teamName, opponentName, startOn, teamId = null) {
     this.points = [];  // An array of Point objects
     this.gameStartTimestamp = new Date();
     this.gameEndTimestamp = null;
-    this.pointsData = [];  // Array of objects, each object will have player names as keys and true/false as values.
     this.lastLineUsed = null; // Track the last line used in this game
     this.alternateGenderRatio = 'No'; // Gender ratio enforcement: 'No', 'Alternating', or ratio string like '4:3'
     this.alternateGenderPulls = false; // Whether to follow Mixed rules for alternating gender pulls
@@ -397,12 +396,12 @@ class Violation extends Event {
     // Override summarize for Violation events  
     summarize() {
         let summary = 'Violation called: ';
-        if (this.offensive_flag)        { summary += 'Offensive foul '; }
+        if (this.ofoul_flag)            { summary += 'Offensive foul '; }
         if (this.strip_flag)            { summary += 'Strip '; }
         if (this.pick_flag)             { summary += 'Pick '; }
         if (this.travel_flag)           { summary += 'Travel '; }
-        if (this.contested_flag)        { summary += 'Contested foul '; }
-        if (this.doubleTeam_flag)       { summary += 'Double team '; }
+        if (this.contest_flag)          { summary += 'Contested foul '; }
+        if (this.dblteam_flag)          { summary += 'Double team '; }
         return summary;
     }
 }
@@ -513,15 +512,45 @@ class Pull extends Event {
     }
 }
 
+// Which play-by-play surface ('simple' | 'full' | 'field') is active right now,
+// per the UI. Returns null when the panel system hasn't loaded yet (e.g. during
+// deserialization), in which case nothing is stamped. Lives here so addEvent can
+// self-stamp the recording mode without each call site having to thread it in.
+function captureCurrentMode() {
+    return (typeof window !== 'undefined' && typeof window.getCurrentMode === 'function')
+        ? window.getCurrentMode()
+        : null;
+}
+
 // Possession class
 class Possession {
     constructor(offensive) {
         this.offensive = offensive; // true for offensive, false for defensive
         this.events = [];
+        // Distinct PBP modes ('simple' | 'full' | 'field') under which events
+        // were actually *recorded* into this possession, in first-seen order.
+        // Stamped on event entry (see addEvent / addMode) — NOT on creation or
+        // tab switches — so merely browsing tabs or starting in the wrong tab
+        // leaves no trace; only meaningful recording taps count. Drives later
+        // analytics: e.g. 'field' alone => location data for every throw;
+        // 'simple' present => individual throws likely weren't all recorded.
+        this.modes = [];
     }
 
     addEvent(event) {
         this.events.push(event);
+        // Stamp the surface this event was recorded under. addEvent is the
+        // chokepoint for all PBP events (throws, turnovers, scores, defense);
+        // the pull, which is unshifted in directly, stamps itself separately.
+        this.addMode(captureCurrentMode());
+    }
+
+    // Record that `mode` was active (an event was recorded) during this
+    // possession (deduped, ignores null/empty).
+    addMode(mode) {
+        if (mode && !this.modes.includes(mode)) {
+            this.modes.push(mode);
+        }
     }
 }
 
@@ -531,16 +560,33 @@ class Point {
         this.possessions = [];
         this.players = playingPlayers;  // An array of player names who played the point
         this.startingPosition = startOn;  // Either 'offense' or 'defense'
-        this.winner = "";  // Either 'team' or 'opponent'     
+        this.winner = "";  // Either 'team' or 'opponent'
         this.startTimestamp = null;
         this.endTimestamp = null;
         this.totalPointTime = 0;  // Accumulated time tracking
         this.lastPauseTime = null;  // Track when the point was last paused
         this.substitutedOutPlayers = [];  // Players who were subbed out mid-point (for injury/fatigue)
+        // Distinct PBP modes recorded during this point — derived from its
+        // possessions (see getModes). Kept as a field for convenient in-memory
+        // reads; serialization writes the freshly-derived value.
+        this.modes = [];
     }
 
     addPossession(possession) {
         this.possessions.push(possession);
+    }
+
+    // Union of the modes recorded across this point's possessions, in
+    // first-seen order. This is the authoritative value; a point "used" a mode
+    // iff some possession in it recorded an event under that mode.
+    getModes() {
+        const seen = [];
+        for (const possession of this.possessions) {
+            for (const mode of (possession.modes || [])) {
+                if (!seen.includes(mode)) { seen.push(mode); }
+            }
+        }
+        return seen;
     }
 }
 

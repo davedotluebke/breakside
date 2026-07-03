@@ -7,11 +7,6 @@ let countdownSeconds = 90;
 let isCountdownRunning = false;
 let isPaused = false;
 
-
-const pauseResumeBtn = document.getElementById('pauseResumeBtn');
-const pauseResumeText = pauseResumeBtn ? pauseResumeBtn.querySelector('.pause-resume-text') : null;
-const pauseResumeIcon = pauseResumeBtn ? pauseResumeBtn.querySelector('i') : null;
-
 function moveToNextPoint() {
     console.log('moveToNextPoint() called');
 
@@ -242,42 +237,6 @@ document.addEventListener('DOMContentLoaded', function() {
     matchButtonWidths();
     setTimeout(matchButtonWidths, 100);
 });
-
-if (pauseResumeBtn) {
-    pauseResumeBtn.addEventListener('click', () => {
-    const point = getLatestPoint();
-    if (!point) {
-        console.warn("Warning: pause/resume button clicked, but no current point");
-        return;
-    }
-
-    isPaused = !isPaused;
-    if (isPaused) {
-        // Pause logic
-        point.lastPauseTime = new Date();
-        if (point.startTimestamp) {
-            point.totalPointTime += (point.lastPauseTime - point.startTimestamp);
-            point.startTimestamp = null;
-        }
-        if (pauseResumeIcon) {
-            pauseResumeIcon.className = 'fas fa-play';
-        }
-        if (pauseResumeText) {
-            pauseResumeText.textContent = 'Resume';
-        }
-    } else {
-        // Resume logic
-        point.startTimestamp = new Date();
-        point.lastPauseTime = null;
-        if (pauseResumeIcon) {
-            pauseResumeIcon.className = 'fas fa-pause';
-        }
-        if (pauseResumeText) {
-            pauseResumeText.textContent = 'Pause';
-        }
-    }
-});
-}
 
 function updatePointTimer() {
     const point = getLatestPoint();
