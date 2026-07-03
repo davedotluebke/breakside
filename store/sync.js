@@ -8,6 +8,13 @@
  * - Entities created offline are marked with _localOnly: true
  */
 
+import { Role, Gender, Team, generatePlayerId, generateTeamId } from './models.js';
+import {
+    teams, serializeGame, saveAllTeamsData, deserializePlayer,
+    deserializePointsFromServer, deserializeGame, serializeTournamentEvent,
+} from './storage.js';
+import { currentGame } from '../utils/helpers.js';
+
 // =============================================================================
 // Configuration
 // =============================================================================
@@ -1822,3 +1829,32 @@ window.syncUserTeams = syncUserTeams;
 window.checkForUpdates = checkForUpdates;
 window.startAutoSync = startAutoSync;
 window.stopAutoSync = stopAutoSync;
+
+// Previously implicit globals (top-level function/const in a classic script)
+// still consumed bare by not-yet-converted classic scripts. Transitional —
+// removed at end of the ES-module migration. NOTE: window.authFetch here is
+// the runtime winner that all callers already got pre-migration (auth.js's
+// same-named 401-retry variant was dead code: sync.js loaded after it and
+// overwrote the global).
+window.authFetch = authFetch;
+window.API_BASE_URL = API_BASE_URL;
+
+// --- ES-module exports (the window.* assignments above are transitional
+// --- shims for classic scripts, removed at end of the migration).
+export {
+    getApiBaseUrl, API_BASE_URL, authFetch,
+    loadSyncQueue, saveSyncQueue, addToSyncQueue, getPendingSyncCount,
+    hasPendingSync, isOfflineError, quarantineSyncItem, processSyncQueue,
+    clearLocalOnlyFlag,
+    createPlayerOffline, syncPlayerToCloud, loadPlayerFromCloud,
+    listCloudPlayers, deletePlayerFromCloud,
+    createTeamOffline, syncTeamToCloud, loadTeamFromCloud, listCloudTeams,
+    deleteTeamFromCloud,
+    syncEventToCloud, createEventOnCloud, updateEventOnCloud,
+    deleteEventFromCloud, listTeamEvents, updateGamePhase,
+    generateGameId, createGameOffline, prepareGameForSync, syncGameToCloud,
+    listServerGames, loadGameFromCloud, mergePendingNextLine,
+    refreshPendingLineFromCloud, refreshGameStateFromCloud, deleteGameFromCloud,
+    syncUserTeams, checkForUpdates, startAutoSync, stopAutoSync,
+    syncAllData, pullFromCloud, getSyncStatus, checkIsOnline, clearSyncData,
+};

@@ -51,6 +51,17 @@
  *
  ************************************************************************/
 
+// Converted ES modules, imported in the old <script>-tag order so top-level
+// side effects (state init, DOM wiring) keep their relative ordering. Classic
+// scripts still listed in index.html run before all of these; cross-layer
+// calls happen at call time (after DOMContentLoaded), so the mixed phase is
+// safe. This list grows as the migration converts each layer.
+import './auth/config.js';
+import './store/models.js';
+import './utils/helpers.js';
+import './store/storage.js';
+import './store/sync.js';
+
 // Skip the service worker during local development (localhost / 127.0.0.1).
 // Its offline precache otherwise serves stale JS/CSS across edits, so source
 // changes appear to have no effect until a manual cache purge. On localhost we
