@@ -626,3 +626,99 @@ These five own **disjoint directories**, so they can run concurrently. Each does
 | **B5 teams** | ✅ | ✅ | ✅ | ✅ | ⚠️ | — |
 
 ✅ = safe to run in parallel · ⚠️ = coordinate (shared file or a downstream task bridges them)
+
+---
+
+## 7. Post-execution audit & remaining work (2026-07-03)
+
+All planned tasks (A1, B1–B5, C1, D1–D4, E1 ES-modules, E2 deploy-time versioning) are merged
+to main. Four audit agents re-verified every Section-5 finding against the current code
+(line numbers below are current, unlike Sections 5's stale ones).
+
+### Audit summary
+
+| Area | Audited | Fixed/Obsolete | Partial | Remaining |
+|---|---|---|---|---|
+| Backend | 25 | 17 | 1 | 7 |
+| Game core | 24 | 12 | 1 | 11 |
+| PBP / UI | 25 | 14 | 3 | 8 |
+| Store/Utils + Teams | 55 | 28 | 4 | 23 |
+| Platform + Cross-cutting | 46 | 31 | 1 | 12+ |
+
+**Every frontend 🔴 correctness bug is verified fixed.** The remaining items are three backend
+🔴s, one important PARTIAL (stats migration), and a long tail of 🟡/🟠 cleanups. Note: the
+Supabase RLS item the audit flagged as "open" was already resolved by Dave (decision 12 — no
+public tables, default-RLS trigger installed).
+
+### F1 · Backend closeout (the last real 🔴s + small 🟡s)
+
+- 🔴 `routers/events.py:36,46-54,105-113` — event read/list endpoints still require only
+  authentication (not team access), and write checks are still inline `if auth_required():`
+  instead of the shared `require_*` dependencies.
+- 🔴 `auth/dependencies.py:204-205` — `require_game_team_coach` still reads the request body
+  in a dependency and trusts body `teamId` verbatim for new games.
+- 🔴 `routers/games.py:227-243` — `restore_version` re-merges `pendingNextLine` and always
+  runs authoritative, so a restore is not a faithful rollback. **Needs Dave's call:** faithful
+  rollback, or current merge-on-restore behavior kept and documented?
+- 🟡 `routers/games.py:64-66` — print + broad `except` in `sync_game`; no logging module
+  anywhere in the backend. 🟡 `storage/game_storage.py:427` `any` → `typing.Any`.
+  🟡 `auth/jwt_validation.py:32-37` — no JWT-secret fail-fast at boot when auth required.
+  (Accepted/deferred: `entity_store.save()` caller-dict mutation now documented as
+  intentional; `list_events()` unbounded scan noted for later.)
+
+### F2 · Finish the stats name→ID migration (PARTIAL)
+
+- `utils/statistics.js` `calculatePlayerStatsFromEvents` still keys by **name**, and
+  `teams/rosterManagement.js:442` `updateGameSummaryRosterDisplay` consumes it (and still
+  reads legacy per-player fields). Finish ID-keying this last path, reconcile
+  `updateGameSummaryRosterDisplay` with the shared `rosterRowHelpers.js`, and normalize the
+  duplicate-name guard (case/whitespace variants still allowed; consequence now limited to
+  this path).
+
+### F3 · Frontend cleanup sweep (the 🟡/🟠 tail — one task, everything else is quiet)
+
+Game: undoEvent decision tree (`gameLogic.js:438-632`); pendingNextLine machine untested
+(`selectLine.js:1315` +2 files); endGameFlow copy-paste (`gameScreenEvents.js:492/1444`);
+swipe-toast document-listener leak + duplication (`controllerState.js:888-941,1215-1265`);
+poll-interval idiom ×3 (`controllerState.js:399/429/597`); arg-ignoring updateGameLogScore
+wrappers (`gameScreenSync.js:113-124`); stop-point-timer dup (`gameScreenEvents.js:662/697`);
+timer warning-band literals (`gameTimer.js:180-183,221-234`); canEditPlayByPlay dual chains
+(`controllerState.js:717` vs `gameScreenEvents.js:1069`); stale XXX + unconditional undo log
+(`gameLogic.js:478,629-630`); dead `proceedToDefenseScreen` (`pointManagement.js:193`).
+PBP/UI: pullDialog clone-node workaround (`pullDialog.js:212`); getExpectedPullGender nesting
+(`pullDialog.js:465-517`); pull modal still bypasses `createPull` via unshift
+(`pullDialog.js:409-423`); Key Play auto-commit on both-selected (`keyPlayDialog.js:586-589`);
+panelSystem five parallel arrays + dup contentPanels (`panelSystem.js:35-49,1118,1198`);
+style.height state checks (`keyPlayDialog.js:191/511/658`); Callahan if/else collapse
+(`scoreAttribution.js:338`); dead phase-5/7 stubs (`fieldPbp.js:1200`, `fullPbp.js:896`);
+fullyPhysicalPanelDragging dead config (`panelSystem.js:308`).
+Store/Teams: refreshGameStateFromCloud mixed return (`sync.js:1301`); serial per-team player
+fetch (`sync.js:1461`); hardcoded stat-preservation allowlist (`sync.js:1487`); event
+queued-vs-direct dual paths; generateGameId divergence; serializeEvent default-diff;
+score-recalc heuristic (`storage.js:503`); saveAllTeamsData hidden sync; createSampleTeam dup;
+voidthrower sentinels; inferred_flag dup; eventStats serial cloud loads; `Role.TEAM || 'team'`;
+stats-field shape triplication; xlsx hardcoded column letters; header-click expand toggle;
+caller-less deprecated shims (populateCloudGames, importCloudGame, selectTeam,
+triggerManualSync, pullDataFromCloud, removeGameStatsFromRoster); deleteCloudGame near-dupes.
+Platform: confirmed_at check (`join.js:369`, `landing.js:241` — check `data.session` instead);
+invite-info endpoint never returns 409 so the preview already-member branch is unreachable
+(`routers/invites.py:91-120` — backend touch); 409 redeem leaves button stuck
+(`join.js:262-270`); noOpLock ×3 (`auth.js:63`, `landing.js:23`, `join.js:21`);
+manageControllerButtons dead param (`navigation.js:73-81`); lifetime intervals
+(`micButton.js:259`, `transcriptDisplay.js:135`); transcript dedupe divergence
+(`narrationEngine.js:706` vs `realtimeSession.js:407`); FAST_PASS dead path still in-file
+(`narrationEngine.js:56` — flag-name concern verified a NON-bug). Deferred/known debt:
+ScriptProcessorNode → AudioWorklet.
+Plus: the `console.*` sweep (~378 calls) — introduce a tiny logger/debug-flag wrapper.
+
+### F4 · CSS modernization (never scheduled — new project)
+
+`main.css` now 4503 lines, ~410 hardcoded-hex lines, 27 `!important`, no `:root` tokens.
+Extract a custom-property palette, split by screen, migrate the JS-set colors the D2 sticky
+work left behind.
+
+### F5 · Repo hygiene
+
+Worktree count grew to **53** (was 38) — prune clean worktrees whose branches are merged
+(branches stay, per CLAUDE.md). Update `.claude/launch.json` entries pointing at removed
+worktrees.
