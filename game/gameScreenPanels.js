@@ -19,6 +19,11 @@
  * 5. Game Events Panel - End Game, Timeout, etc.
  * 6. Follow Panel - Event log (fills remaining space)
  */
+import { currentTeam } from '../store/storage.js';
+import { currentGame } from '../utils/helpers.js';
+import { createPanelTitleBar } from '../ui/panelSystem.js';
+import { isLineCoach } from './controllerState.js';
+import { wireGameScreenEvents } from './gameScreenEvents.js';
 
 // =============================================================================
 // Game Screen State
@@ -650,5 +655,15 @@ function updateHeaderTeamIdentities() {
 // Exports
 // =============================================================================
 
-window.initGameScreen = initGameScreen;
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+export {
+    WHOLESALE_ICON_SVG, AUTO_ICON_SVG,
+    initGameScreen, updateHeaderTeamIdentities, noteLineCoachViewing,
+    gameScreenInitialized,
+};
+// updateHeaderTeamIdentities: called bare (typeof-guarded) by converted
+// teams/teamSettings.js (resolves via window; import at C10).
 window.updateHeaderTeamIdentities = updateHeaderTeamIdentities;
+// Dropped shim (zero external references found): initGameScreen — its only
+// consumer, game/gameScreenSync.js, imports it now.

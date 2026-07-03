@@ -86,6 +86,11 @@ import './game/pointManagement.js';
 import './game/gameLogic.js';
 import './game/controllerState.js';
 import './ui/hints.js';
+import './game/gameScreenPanels.js';
+import './game/gameScreenEvents.js';
+import './game/gameTimer.js';
+import './game/selectLine.js';
+import './game/gameScreenSync.js';
 
 // Skip the service worker during local development (localhost / 127.0.0.1).
 // Its offline precache otherwise serves stale JS/CSS across edits, so source

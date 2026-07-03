@@ -762,15 +762,8 @@
     <!-- Game modules (genderRatioDropdown, pointManagement, gameLogic,
          controllerState) and ui/hints.js are ES modules now — imported from
          main.js -->
-    <!-- gameScreen.js was split into focused files (refactor, no behavior change).
-         Load order: panels/events/timer/select-line first; sync last (it now
-         reacts to controllerState.js via the 'breakside:controller-ui-updated'
-         event rather than wrapping window.updateControllerUI). -->
-    <script src="game/gameScreenPanels.js"></script>
-    <script src="game/gameScreenEvents.js"></script>
-    <script src="game/gameTimer.js"></script>
-    <script src="game/selectLine.js"></script>
-    <script src="game/gameScreenSync.js"></script>
+    <!-- Game-screen modules (gameScreenPanels, gameScreenEvents, gameTimer,
+         selectLine, gameScreenSync) are ES modules now — imported from main.js -->
 
     <!-- Play-by-play modules -->
     <script src="playByPlay/scoreAttribution.js"></script>

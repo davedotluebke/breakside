@@ -1,10 +1,46 @@
 /*
  * Game screen — lifecycle, log/score updates, role buttons & cloud/controller sync.
  * enter/exit game screen, game-log/score panel updates, role-button state, the
- * cloud game-state refresh loop, and the updateControllerUI integration wrapper.
- * Loads LAST (its updateControllerUI wrapper captures controllerState's original).
+ * cloud game-state refresh loop, and the controller-state UI integration (a
+ * 'breakside:controller-ui-updated' listener; controllerState.js dispatches it
+ * at the end of updateControllerUI — replaced the old monkey-patch wrapper).
  * Split from the former monolithic gameScreen.js (refactor, no behavior change).
  */
+import { Role } from '../store/models.js';
+import {
+    currentTeam, currentEvent, setCurrentEvent, deserializeTournamentEvent,
+} from '../store/storage.js';
+import { currentGame, isPointInProgress } from '../utils/helpers.js';
+import {
+    listTeamEvents, refreshPendingLineFromCloud, refreshGameStateFromCloud,
+} from '../store/sync.js';
+import {
+    isGameScreenVisible, showGameScreen, hideGameScreen, resetAllPanelStates,
+    getPanelState, setPanelState, MIN_PANEL_HEIGHT, updatePanelsForRole,
+    resetMultiCoachDetected,
+} from '../ui/panelSystem.js';
+import { startActiveGamePolling, stopActiveGamePolling } from '../teams/activeGamePolling.js';
+import { showSelectTeamScreen } from '../teams/teamList.js';
+import {
+    getControllerState, getCurrentUserId, startControllerPolling,
+    stopControllerPolling, showControllerToast, dismissToast,
+} from './controllerState.js';
+import { summarizeGame } from './gameLogic.js';
+import {
+    initGameScreen, gameScreenInitialized, updateHeaderTeamIdentities,
+} from './gameScreenPanels.js';
+import {
+    ensureDialogVisible, setupPlayByPlayResizeObserver, updatePlayByPlayPanelState,
+} from './gameScreenEvents.js';
+import {
+    updateTimerDisplay, updateTimerPauseButton, startGameScreenTimerLoop,
+    stopGameScreenTimerLoop, setPointTimerPaused,
+} from './gameTimer.js';
+import {
+    updateSelectLinePanel, updateSelectLinePanelState, updateSelectLineTable,
+    autoSelectActiveTypeForNextPoint, showGameUpdatedToast,
+    setPanelStatsMode, setPanelShowingTotalStats, setCachedPanelEventStats,
+} from './selectLine.js';
 
 // =============================================================================
 // UI Updates
@@ -291,10 +327,11 @@ function updateGameScreenRoleButtons(state) {
  * Called when starting a point or entering a game
  */
 function enterGameScreen() {
-    // Reset stats mode
-    panelStatsMode = 'game';
-    panelShowingTotalStats = false;
-    cachedPanelEventStats = null;
+    // Reset stats mode (module-scoped state owned by game/selectLine.js —
+    // written via its exported setters)
+    setPanelStatsMode('game');
+    setPanelShowingTotalStats(false);
+    setCachedPanelEventStats(null);
 
     // Set currentEvent if game is part of an event
     const currentGameObj = typeof currentGame === 'function' ? currentGame() : null;
@@ -304,8 +341,8 @@ function enterGameScreen() {
             listTeamEvents(currentGameObj.teamId).then(events => {
                 const ev = events.find(e => e.id === currentGameObj.eventId);
                 if (ev) {
-                    currentEvent = typeof deserializeTournamentEvent === 'function'
-                        ? deserializeTournamentEvent(ev) : ev;
+                    setCurrentEvent(typeof deserializeTournamentEvent === 'function'
+                        ? deserializeTournamentEvent(ev) : ev);
                 }
             }).catch(() => {});
         }
@@ -339,8 +376,8 @@ function enterGameScreen() {
     noRolesWarningToast = null;
     gameScreenEnteredAt = Date.now();
     
-    // Reset timer pause state when entering
-    pointTimerPaused = false;
+    // Reset timer pause state when entering (state owned by game/gameTimer.js)
+    setPointTimerPaused(false);
     
     // Update displays
     let game;
@@ -422,9 +459,10 @@ function exitGameScreen() {
     stopGameScreenTimerLoop();
     stopGameStateRefresh();
 
-    // Clear event context when leaving game
-    currentEvent = null;
-    cachedPanelEventStats = null;
+    // Clear event context when leaving game (state owned by store/storage.js
+    // and game/selectLine.js — written via their exported setters)
+    setCurrentEvent(null);
+    setCachedPanelEventStats(null);
 
     // Reset multi-coach detection for next game
     if (typeof resetMultiCoachDetected === 'function') {
@@ -668,15 +706,37 @@ document.addEventListener('breakside:controller-ui-updated', (e) => {
         startGameStateRefresh();
     }
 });
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+export {
+    enterGameScreen, exitGameScreen,
+    updateGameScreenScore, updateGameLogEvents,
+    startGameStateRefresh, stopGameStateRefresh,
+    escapeHtml,
+};
+// enterGameScreen: called bare (typeof-guarded) by converted game/gameLogic.js,
+// game/pointManagement.js, screens/navigation.js, teams/rosterManagement.js,
+// teams/teamList.js (resolve via window; import at C10).
 window.enterGameScreen = enterGameScreen;
+// exitGameScreen: called bare by classic auth/loginScreen.js and (typeof-guarded
+// bare / via window) by converted game/controllerState.js and game/gameLogic.js.
 window.exitGameScreen = exitGameScreen;
+// updateGameScreenScore: called bare (typeof-guarded) by converted
+// game/gameLogic.js (resolves via window; import at C10).
 window.updateGameScreenScore = updateGameScreenScore;
-window.updateGameScreenRoleButtons = updateGameScreenRoleButtons;
-// isGameScreenVisible is owned and shimmed by ui/panelSystem.js (module);
-// re-assigning it here would throw at classic parse time (bare reference to a
-// module-scoped name) and abort this script's tail.
-
-// Game Log panel
-window.updateGameLogPanel = updateGameLogPanel;
+// updateGameLogEvents: called bare (typeof-guarded) by converted
+// ui/eventLogDisplay.js (resolves via window; import at C10).
 window.updateGameLogEvents = updateGameLogEvents;
-window.updateGameLogStatus = updateGameLogStatus;
+// startGameStateRefresh / stopGameStateRefresh: called bare (typeof-guarded)
+// by converted game/controllerState.js (resolve via window; import at C10).
+window.startGameStateRefresh = startGameStateRefresh;
+window.stopGameStateRefresh = stopGameStateRefresh;
+// escapeHtml: was an implicit global owned by this file pre-migration. Still
+// called bare by converted utils/statsHelp.js and teams/gameSummary.js —
+// left bare there (resolving via this window shim) rather than imported, to
+// avoid a teams/gameSummary ↔ game-screen import cycle (gameScreenEvents
+// imports showGameSummaryPostGame from gameSummary). Exported above for C10.
+window.escapeHtml = escapeHtml;
+// isGameScreenVisible is owned and shimmed by ui/panelSystem.js.
+// Dropped shims (zero external references found): updateGameScreenRoleButtons,
+// updateGameLogPanel, updateGameLogStatus.

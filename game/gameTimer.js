@@ -3,6 +3,10 @@
  * Point-timer pause/resume + header timer display and the per-second update loop.
  * Split from the former monolithic gameScreen.js (refactor, no behavior change).
  */
+import { saveAllTeamsData } from '../store/storage.js';
+import { currentGame, getLatestPoint } from '../utils/helpers.js';
+import { isGameScreenVisible } from '../ui/panelSystem.js';
+import { updateSelectLineTimeCells } from './selectLine.js';
 
 // =============================================================================
 // Settings Dialog
@@ -121,9 +125,6 @@ function autoResumePointTimer() {
         updateTimerPauseButton();
     }
 }
-
-// Export for use by play-by-play handlers
-window.autoResumePointTimer = autoResumePointTimer;
 
 /**
  * Update the timer display
@@ -289,4 +290,21 @@ function stopGameScreenTimerLoop() {
         timerUpdateInterval = null;
     }
 }
-window.autoResumePointTimer = autoResumePointTimer;
+
+// Setter for module-scoped mutable state — the converted writer
+// (game/gameScreenSync.js) imports this instead of assigning the bare global.
+function setPointTimerPaused(v) { pointTimerPaused = v; }
+
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+export {
+    updateTimerDisplay, updateTimerPauseButton,
+    handleTimerToggle, handleTimerPauseClick,
+    autoResumePointTimer,
+    startGameScreenTimerLoop, stopGameScreenTimerLoop,
+    setPointTimerPaused,
+};
+// updateTimerDisplay: consumed via window by game/pointManagement.js (import at C10).
+window.updateTimerDisplay = updateTimerDisplay;
+// Dropped shim (zero external references found): autoResumePointTimer — its
+// only consumer, game/gameScreenEvents.js, imports it now.

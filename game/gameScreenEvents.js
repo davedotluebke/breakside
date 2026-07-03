@@ -5,6 +5,47 @@
  * play-by-play panel/start-point button state.
  * Split from the former monolithic gameScreen.js (refactor, no behavior change).
  */
+import { Role, Gender, Other, Possession, isTestGame } from '../store/models.js';
+import { teams, currentTeam, saveAllTeamsData } from '../store/storage.js';
+import {
+    currentGame, getLatestPoint, isPointInProgress,
+    determineStartingPosition, formatPlayerName,
+} from '../utils/helpers.js';
+import { refreshPendingLineFromCloud } from '../store/sync.js';
+import { logEvent } from '../ui/eventLogDisplay.js';
+import {
+    hideGameScreen, setPanelVisible, switchTab, getActiveTab,
+    updateSegmentedSlider,
+} from '../ui/panelSystem.js';
+import {
+    showScreen, showEditRosterScreen, showEditRosterSubscreen,
+    showStartGameScreen,
+} from '../screens/navigation.js';
+import { showSelectTeamScreen } from '../teams/teamList.js';
+import { showTeamSettingsScreen } from '../teams/teamSettings.js';
+import { showGameSummaryPostGame } from '../teams/gameSummary.js';
+import { showConnectionInfo } from '../teams/syncStatusUI.js';
+import { moveToNextPoint, stopCountdown } from './pointManagement.js';
+import { updateScore, undoEvent, appVersion } from './gameLogic.js';
+import {
+    getControllerState, isActiveCoach, isLineCoach, releaseControllerRole,
+    stopControllerPolling, getPollingGameId, showControllerToast,
+    handleActiveCoachClick, handleLineCoachClick,
+} from './controllerState.js';
+import { WHOLESALE_ICON_SVG, AUTO_ICON_SVG } from './gameScreenPanels.js';
+import {
+    autoResumePointTimer, handleTimerToggle, handleTimerPauseClick,
+} from './gameTimer.js';
+import {
+    wireSelectLineEvents, handlePanelStartPoint, clearLineSelection,
+    autoFillLineSelection, checkPanelGenderRatio, getEffectiveLineForNextPoint,
+    getSelectedPlayersFromPanel, selectAppropriateLineAtPointEnd,
+    updateSelectLinePanel, setLastConflictToastPointIndex,
+} from './selectLine.js';
+import {
+    exitGameScreen, updateGameScreenScore, updateGameLogEvents,
+    startGameStateRefresh,
+} from './gameScreenSync.js';
 
 // =============================================================================
 // Event Wiring
@@ -457,8 +498,10 @@ function handleEndGame() {
     }
     
     // Use existing end game confirmation if available
-    if (typeof endGameConfirm === 'function') {
-        endGameConfirm();
+    // (endGameConfirm has no module owner — legacy global, not defined
+    // anywhere in the current codebase, so the fallback below always runs)
+    if (typeof window.endGameConfirm === 'function') {
+        window.endGameConfirm();
     } else {
         // Fallback: implement end game logic directly
         // Skip the confirm for test games (throwaway dev data).
@@ -1055,8 +1098,9 @@ function ensureDialogVisible(dialogId) {
  * - Minimize the Play-by-Play panel
  */
 function transitionToBetweenPoints() {
-    // Reset conflict tracking for new between-points phase
-    lastConflictToastPointIndex = -1;
+    // Reset conflict tracking for new between-points phase (module-scoped
+    // state owned by game/selectLine.js — written via its exported setter)
+    setLastConflictToastPointIndex(-1);
     
     // Update score display
     let game;
@@ -1379,7 +1423,6 @@ function applySwitchSides() {
     }
     if (typeof showControllerToast === 'function') showControllerToast('Switched sides', 'info');
 }
-window.applySwitchSides = applySwitchSides;
 
 /**
  * Handle Switch Sides game event (from the Game Events modal).
@@ -1396,8 +1439,10 @@ function handleGameEventEndGame() {
     hideGameEventsModal();
     
     // Use existing end game functionality if available
-    if (typeof endGameConfirm === 'function') {
-        endGameConfirm();
+    // (endGameConfirm has no module owner — legacy global, not defined
+    // anywhere in the current codebase, so the fallback below always runs)
+    if (typeof window.endGameConfirm === 'function') {
+        window.endGameConfirm();
     } else {
         // Fallback: implement end game logic directly
         // Skip the confirm for test games (throwaway dev data).
@@ -1865,16 +1910,41 @@ function setupPlayByPlayResizeObserver() {
     updatePlayByPlayLayout();
 }
 
-// Play-by-Play panel
-window.updatePlayByPlayPanelState = updatePlayByPlayPanelState;
-window.showGameEventsModal = showGameEventsModal;
-window.hideGameEventsModal = hideGameEventsModal;
-
-// Between-points transition
-window.transitionToBetweenPoints = transitionToBetweenPoints;
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+export {
+    wireGameScreenEvents,
+    canEditPlayByPlayPanel, ensureDialogVisible,
+    transitionToBetweenPoints,
+    updatePlayByPlayPanelState, updatePlayByPlayLayout,
+    updateLineTabStartPointBtn, setupPlayByPlayResizeObserver,
+    applyStartPointButtonState,
+    handlePbpTheyScore, handlePbpGameEvents,
+    handleLineupReadyTap, updateSubPlayersCount,
+};
+// ensureDialogVisible: called bare by classic playByPlay/fullPbp.js and
+// playByPlay/fieldPbp.js.
 window.ensureDialogVisible = ensureDialogVisible;
-
-// Tab control
-window.wireTabControlEvents = wireTabControlEvents;
+// applyStartPointButtonState: called bare (typeof-guarded) by classic
+// playByPlay/fullPbp.js.
+window.applyStartPointButtonState = applyStartPointButtonState;
+// handlePbpTheyScore: called bare by classic playByPlay/fullPbp.js and
+// playByPlay/fieldPbp.js.
+window.handlePbpTheyScore = handlePbpTheyScore;
+// handlePbpGameEvents: called bare by classic playByPlay/fullPbp.js.
+window.handlePbpGameEvents = handlePbpGameEvents;
+// transitionToBetweenPoints: called bare (typeof-guarded) by converted
+// game/gameLogic.js, game/pointManagement.js, screens/navigation.js,
+// teams/rosterManagement.js, teams/teamList.js (resolve via window; import at C10).
+window.transitionToBetweenPoints = transitionToBetweenPoints;
+// updatePlayByPlayPanelState: called via window by converted
+// game/controllerState.js (import at C10).
+window.updatePlayByPlayPanelState = updatePlayByPlayPanelState;
+// updatePlayByPlayLayout / updateLineTabStartPointBtn: called bare
+// (typeof-guarded) by converted ui/panelSystem.js (resolve via window; import at C10).
+window.updatePlayByPlayLayout = updatePlayByPlayLayout;
+window.updateLineTabStartPointBtn = updateLineTabStartPointBtn;
+// Dropped shims (zero external references found): showGameEventsModal,
+// hideGameEventsModal, applySwitchSides, wireTabControlEvents.
 
 
