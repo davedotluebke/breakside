@@ -35,6 +35,32 @@ MVP shipped. Coach speaks naturally; the system extracts structured game events.
 
 ## Near Term
 
+### ES-module migration follow-ups (from task E1, 2026-07-03)
+
+The frontend is now native ES modules (branch `es-modules`). Cleanups the
+migration surfaced but deliberately did not do (behavior-preserving rule):
+
+- [ ] **Consolidate authFetch onto the 401-retry variant.** auth/auth.js's
+      401-refresh-retry `authFetch` had been dead code since store/sync.js's
+      simpler same-named global overwrote it at load time; the migration
+      deleted the dead copy to preserve runtime behavior. The retry logic was
+      the better implementation (B2 work) — port it into `store/sync.js`'s
+      `authFetch` deliberately, with the test-mode guard intact.
+- [ ] **Delete dead code found during conversion** (zero consumers, kept
+      unexported): `teams/teamList.js` `selectTeam`/`populateCloudGames`/
+      `deleteCloudGame`/`importCloudGame`/`triggerManualSync`/`pullDataFromCloud`/
+      `showSetServerDialog`, `teams/rosterManagement.js`
+      `updateGameSummaryRosterDisplay`/`removeGameStatsFromRoster`,
+      `game/gameScreenEvents.js` `endGameConfirm` references (function defined
+      nowhere), `ui/activePlayersDisplay.js` guarded calls to
+      `updateGenderRatioDisplay`/`checkPlayerCount` (defined nowhere).
+- [ ] **Countdown timer display**: `game/pointManagement.js`'s
+      `updateTimerDisplay(seconds)` (targeting `#timerDisplay`) had been
+      shadowed by `game/gameTimer.js`'s zero-arg version since gameTimer was
+      introduced — its countdown ticks never updated `#timerDisplay`. The
+      migration preserved that (deleted the shadowed copy). Decide whether the
+      `#countdownTimer` UI is dead and remove it, or fix it to render again.
+
 ### Backend test suite: fix or retire the stale test_api/test_auth failures
 
 `pytest ultistats_server/` is not green and hasn't been for a while — ~48 pre-existing
