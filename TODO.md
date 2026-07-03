@@ -548,5 +548,12 @@ cd /opt/breakside && sudo git pull && sudo systemctl restart breakside
       so browsers block the response and fetch rejects with a TypeError
       ("Load failed" on Safari) — the client can't tell a server bug from a
       network drop. Add an exception handler / middleware ordering fix so
-      error responses carry CORS headers. This turned the rosterSnapshot-null
-      sync 500 into an "offline-classified" poison pill on staging.
+      error responses carry CORS headers. Confirmed in the wild 2026-07-03:
+      a PermissionError 500 on game sync surfaced in Safari as "Load failed"
+      with no status code, costing three diagnosis round-trips.
+- [ ] **Version-backup write failure shouldn't 500 the whole sync.** The
+      2026-07-03 staging incident was a root-owned `versions/` dir under one
+      old game in `/var/lib/breakside/data/games/` (PermissionError in
+      `atomic_write_json`) failing every sync of that game. Consider: log
+      loudly + still accept the game state (or return a structured error),
+      and add a startup ownership/writability check over the data tree.
