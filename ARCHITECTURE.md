@@ -459,21 +459,42 @@ unreachable` log lines are just the box falling back from IPv6 to IPv4.
 
 ```
 ultistats_server/
-├── main.py              # FastAPI application and routes
+├── main.py              # App wiring only: FastAPI app, CORS, router includes
 ├── config.py            # Configuration from environment variables
 ├── narration.py         # AI narration router (token + finalize endpoints)
+├── validation.py        # ID validation + safe static-path resolution
 ├── requirements.txt     # Python dependencies
+│
+├── routers/             # API endpoints, one APIRouter per group
+│   ├── __init__.py
+│   ├── _shared.py       # Dual-mode import shim (storage/auth/config re-exports)
+│   ├── auth_api.py      # /api/auth/* (me, sync-check, teams)
+│   ├── events.py        # /api/events*, /api/teams/{id}/events
+│   ├── games.py         # /api/games* (sync, list, phase, versions, restore)
+│   ├── controller.py    # Controller roles: status/claim/release/handoff/ping
+│   ├── shares.py        # Game share links + public /api/share/{hash}
+│   ├── invites.py       # Team invites + redeem/revoke
+│   ├── teams.py         # Team CRUD, members, roster, games, active-game
+│   ├── players.py       # Player CRUD + games/teams lookups
+│   ├── misc.py          # /api info, /health, /api/proxy-image, /api/index/*
+│   └── static_files.py  # PWA/landing/join serving; /{path} catch-all is LAST
 │
 ├── storage/             # Data storage layer
 │   ├── __init__.py
-│   ├── game_storage.py  # Game CRUD operations
+│   ├── _config.py       # Dual-mode config import (single copy of the dance)
+│   ├── file_utils.py    # atomic_write_json + entity_lock (crash/race safety)
+│   ├── id_utils.py      # Shared {name}-{hash} ID generation
+│   ├── entity_store.py  # JsonEntityStore: shared CRUD for player/team/event
+│   ├── json_index.py    # JsonIndex: locked, atomic _index.json plumbing
+│   ├── game_storage.py  # Game versioning, merge, pruning
 │   ├── team_storage.py  # Team CRUD operations
 │   ├── player_storage.py# Player CRUD operations
+│   ├── event_storage.py # Tournament/event CRUD operations
 │   ├── user_storage.py  # User account CRUD operations
 │   ├── membership_storage.py # Team membership management
 │   ├── invite_storage.py    # Invite code management
 │   ├── share_storage.py     # Game sharing management
-│   ├── controller_storage.py # In-memory game controller state
+│   ├── controller_storage.py # In-memory game controller state (single-worker!)
 │   └── index_storage.py # Cross-entity index management
 │
 ├── static/
