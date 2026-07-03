@@ -928,44 +928,10 @@ function createGameOffline(gameData) {
  * Returns a plain object, not a JSON string
  */
 function prepareGameForSync(game) {
-    // Use the serializeGame function from storage.js if available
-    if (typeof serializeGame === 'function') {
-        const serialized = serializeGame(game);
-        serialized.id = serialized.id || generateGameId(game);
-        return serialized;
-    }
-    
-    // Fallback: manual serialization
-    return {
-        id: game.id || generateGameId(game),
-        teamId: game.teamId || null,
-        team: game.team,
-        opponent: game.opponent,
-        startingPosition: game.startingPosition,
-        scores: game.scores,
-        gameStartTimestamp: game.gameStartTimestamp.toISOString(),
-        gameEndTimestamp: game.gameEndTimestamp ? game.gameEndTimestamp.toISOString() : null,
-        alternateGenderRatio: game.alternateGenderRatio,
-        alternateGenderPulls: game.alternateGenderPulls,
-        startingGenderRatio: game.startingGenderRatio,
-        lastLineUsed: game.lastLineUsed,
-        rosterSnapshot: game.rosterSnapshot || null,
-        points: game.points.map(point => ({
-            players: point.players,
-            startingPosition: point.startingPosition,
-            winner: point.winner,
-            startTimestamp: point.startTimestamp ? point.startTimestamp.toISOString() : null,
-            endTimestamp: point.endTimestamp ? point.endTimestamp.toISOString() : null,
-            totalPointTime: point.totalPointTime,
-            lastPauseTime: point.lastPauseTime ? point.lastPauseTime.toISOString() : null,
-            modes: point.getModes(),  // PBP modes recorded during this point (union of possessions)
-            possessions: point.possessions.map(possession => ({
-                offensive: possession.offensive,
-                modes: possession.modes || [],  // PBP modes events were recorded under in this possession
-                events: possession.events.map(event => serializeEvent(event))
-            }))
-        }))
-    };
+    // serializeGame comes from storage.js, which always loads before this file
+    const serialized = serializeGame(game);
+    serialized.id = serialized.id || generateGameId(game);
+    return serialized;
 }
 
 /**
@@ -1060,13 +1026,9 @@ async function listServerGames() {
 async function loadGameFromCloud(gameId) {
     // Check local cache first
     if (localGames[gameId]) {
-        const cachedGame = localGames[gameId];
-        if (typeof deserializeGame === 'function') {
-            return deserializeGame(cachedGame);
-        }
-        return cachedGame;
+        return deserializeGame(localGames[gameId]);
     }
-    
+
     if (!isOnline) {
         throw new Error('Cannot load game: Offline');
     }
@@ -1076,65 +1038,13 @@ async function loadGameFromCloud(gameId) {
         if (!response.ok) {
             throw new Error(`Failed to load game: ${response.statusText}`);
         }
-        
+
         const gameData = await response.json();
-        
-        // Use deserializeGame from storage.js if available
-        if (typeof deserializeGame === 'function') {
-            const game = deserializeGame(gameData);
-            game.id = gameId;
-            return game;
-        }
-        
-        // Fallback: manual deserialization
-        const game = new Game(
-            gameData.team,
-            gameData.opponent,
-            gameData.startingPosition,
-            gameData.teamId || null
-        );
+
+        // deserializeGame comes from storage.js, which always loads before
+        // this file (it also rebuilds points via deserializePointsFromServer)
+        const game = deserializeGame(gameData);
         game.id = gameId;
-        game.gameStartTimestamp = new Date(gameData.gameStartTimestamp);
-        game.gameEndTimestamp = gameData.gameEndTimestamp ? new Date(gameData.gameEndTimestamp) : null;
-        
-        if (gameData.alternateGenderRatio === 'Alternating' || gameData.alternateGenderRatio === true) {
-            game.alternateGenderRatio = 'Alternating';
-        } else if (gameData.alternateGenderRatio === 'No' || gameData.alternateGenderRatio === false || !gameData.alternateGenderRatio) {
-            game.alternateGenderRatio = 'No';
-        } else {
-            game.alternateGenderRatio = gameData.alternateGenderRatio;
-        }
-        
-        game.alternateGenderPulls = gameData.alternateGenderPulls || false;
-        game.startingGenderRatio = gameData.startingGenderRatio || null;
-        game.lastLineUsed = gameData.lastLineUsed || null;
-        game.rosterSnapshot = gameData.rosterSnapshot || null;
-        game.scores = gameData.scores || { [Role.TEAM]: 0, [Role.OPPONENT]: 0 };
-
-        if (gameData.points) {
-            game.points = gameData.points.map(pointData => {
-                const point = new Point(pointData.players, pointData.startingPosition);
-                point.startTimestamp = pointData.startTimestamp ? new Date(pointData.startTimestamp) : null;
-                point.endTimestamp = pointData.endTimestamp ? new Date(pointData.endTimestamp) : null;
-                point.winner = pointData.winner;
-                point.totalPointTime = pointData.totalPointTime || 0;
-                point.lastPauseTime = pointData.lastPauseTime ? new Date(pointData.lastPauseTime) : null;
-
-                if (pointData.possessions) {
-                    point.possessions = pointData.possessions.map(possessionData => {
-                        const possession = new Possession(possessionData.offensive);
-                        possession.modes = possessionData.modes || [];  // empty for legacy data
-                        if (possessionData.events) {
-                            possession.events = possessionData.events.map(eventData => deserializeEvent(eventData));
-                        }
-                        return possession;
-                    });
-                }
-                point.modes = point.getModes();  // derive from restored possessions (empty for legacy data)
-                return point;
-            });
-        }
-        
         return game;
 
     } catch (error) {
@@ -1165,6 +1075,55 @@ function toMs(v) {
     return Number.isNaN(t) ? 0 : t;
 }
 
+/**
+ * Merge a server pendingNextLine into the local one, last-writer-wins per
+ * field group on that group's own timestamp. Shared by
+ * refreshPendingLineFromCloud and refreshGameStateFromCloud so the two
+ * polling paths can't diverge on which fields they merge.
+ *
+ * Field groups:
+ * - Each line type (oLine/dLine/odLine/odOnDeckLine) on its *ModifiedAt.
+ * - "Lineup Ready" multi-coach signal: the Line Coach is the sole writer;
+ *   Active Coach reads. Fire-and-forget — the AC's polling shows a toast on
+ *   advance; no persistent latch.
+ * - LC-viewing signal (only the LC writes this) — the AC reads it to render
+ *   the "Line Coach: viewing the X line" sub-header.
+ * - Combined/Separate planning mode (either coach may flip it).
+ *
+ * Note: activeType is intentionally NOT synced — it's local UI state; each
+ * user independently chooses which line type to view/edit.
+ *
+ * Mutates and returns localPending.
+ */
+function mergePendingNextLine(serverPending, localPending) {
+    // Check each line type and use whichever is newer
+    ['oLine', 'dLine', 'odLine', 'odOnDeckLine'].forEach(lineKey => {
+        const modKey = lineKey.replace('Line', 'LineModifiedAt');
+        if (toMs(serverPending[modKey]) > toMs(localPending[modKey])) {
+            // Server has newer data for this line type
+            localPending[lineKey] = serverPending[lineKey] || [];
+            localPending[modKey] = serverPending[modKey];
+        }
+    });
+
+    if (toMs(serverPending.lineupReadyAt) > toMs(localPending.lineupReadyAt)) {
+        localPending.lineupReadyAt = serverPending.lineupReadyAt;
+        localPending.lineupReadyBy = serverPending.lineupReadyBy || null;
+    }
+
+    if (toMs(serverPending.lineCoachViewingAt) > toMs(localPending.lineCoachViewingAt)) {
+        localPending.lineCoachViewing = serverPending.lineCoachViewing || null;
+        localPending.lineCoachViewingAt = serverPending.lineCoachViewingAt;
+    }
+
+    if (toMs(serverPending.useSeparateLinesAt) > toMs(localPending.useSeparateLinesAt)) {
+        localPending.useSeparateLines = !!serverPending.useSeparateLines;
+        localPending.useSeparateLinesAt = serverPending.useSeparateLinesAt;
+    }
+
+    return localPending;
+}
+
 async function refreshPendingLineFromCloud(gameId) {
     if (!isOnline || !gameId) {
         return null;
@@ -1190,48 +1149,8 @@ async function refreshPendingLineFromCloud(gameId) {
         }
         
         // Merge pendingNextLine - use server data if it's newer
-        const serverPending = gameData.pendingNextLine;
-        const localPending = game.pendingNextLine || {};
-        
-        // Check each line type and use whichever is newer
-        ['oLine', 'dLine', 'odLine', 'odOnDeckLine'].forEach(lineKey => {
-            const modKey = lineKey.replace('Line', 'LineModifiedAt');
-            const serverModTime = toMs(serverPending[modKey]);
-            const localModTime = toMs(localPending[modKey]);
-
-            if (serverModTime > localModTime) {
-                // Server has newer data for this line type
-                localPending[lineKey] = serverPending[lineKey] || [];
-                localPending[modKey] = serverPending[modKey];
-            }
-        });
-
-        // Merge "Lineup Ready" multi-coach signal. The Line Coach is the
-        // sole writer; Active Coach reads. Last-writer-wins by timestamp,
-        // same as the line-type fields. Fire-and-forget — the AC's polling
-        // shows a toast on advance; no persistent latch.
-        if (toMs(serverPending.lineupReadyAt) > toMs(localPending.lineupReadyAt)) {
-            localPending.lineupReadyAt = serverPending.lineupReadyAt;
-            localPending.lineupReadyBy = serverPending.lineupReadyBy || null;
-        }
-
-        // Merge LC-viewing signal (only the LC writes this). Independent
-        // last-writer-wins on lineCoachViewingAt — AC reads to render the
-        // "Line Coach: viewing the X line" sub-header.
-        if (toMs(serverPending.lineCoachViewingAt) > toMs(localPending.lineCoachViewingAt)) {
-            localPending.lineCoachViewing = serverPending.lineCoachViewing || null;
-            localPending.lineCoachViewingAt = serverPending.lineCoachViewingAt;
-        }
-
-        // Merge Combined/Separate planning mode (either coach may flip it).
-        // Last-writer-wins on its own timestamp, like the signals above.
-        if (toMs(serverPending.useSeparateLinesAt) > toMs(localPending.useSeparateLinesAt)) {
-            localPending.useSeparateLines = !!serverPending.useSeparateLines;
-            localPending.useSeparateLinesAt = serverPending.useSeparateLinesAt;
-        }
-
-        // Note: activeType is intentionally NOT synced - it's local UI state
-        // Each user independently chooses which line type to view/edit
+        const localPending = mergePendingNextLine(
+            gameData.pendingNextLine, game.pendingNextLine || {});
 
         game.pendingNextLine = localPending;
 
@@ -1288,43 +1207,10 @@ async function refreshGameStateFromCloud(gameId) {
             game.scores = gameData.scores;
         }
         
-        // Update points array (the main game data)
+        // Update points array (the main game data), rebuilding class
+        // instances via the shared helper from storage.js
         if (gameData.points && Array.isArray(gameData.points)) {
-            // Deserialize points from server format
-            game.points = gameData.points.map(pointData => {
-                const point = new Point(pointData.players || [], pointData.startingPosition);
-                point.startTimestamp = pointData.startTimestamp ? new Date(pointData.startTimestamp) : null;
-                point.endTimestamp = pointData.endTimestamp ? new Date(pointData.endTimestamp) : null;
-                point.winner = pointData.winner;
-                point.totalPointTime = pointData.totalPointTime || 0;
-                point.lastPauseTime = pointData.lastPauseTime ? new Date(pointData.lastPauseTime) : null;
-
-                if (pointData.possessions && Array.isArray(pointData.possessions)) {
-                    point.possessions = pointData.possessions.map(possessionData => {
-                        const possession = new Possession(possessionData.offensive);
-                        possession.modes = possessionData.modes || [];  // empty for legacy data
-                        if (possessionData.events && Array.isArray(possessionData.events)) {
-                            possession.events = possessionData.events.map(eventData => {
-                                // Use deserializeEvent if available
-                                if (typeof deserializeEvent === 'function') {
-                                    return deserializeEvent(eventData);
-                                }
-                                // Fallback: create basic event
-                                const event = new Event(eventData.type, eventData.timestamp ? new Date(eventData.timestamp) : null);
-                                event.player = eventData.player;
-                                event.possession = eventData.possession;
-                                event.disc = eventData.disc;
-                                event.xCoord = eventData.xCoord;
-                                event.yCoord = eventData.yCoord;
-                                return event;
-                            });
-                        }
-                        return possession;
-                    });
-                }
-                point.modes = point.getModes();  // derive from restored possessions (empty for legacy data)
-                return point;
-            });
+            game.points = deserializePointsFromServer(gameData.points);
         }
 
         // Update other game metadata
@@ -1337,43 +1223,8 @@ async function refreshGameStateFromCloud(gameId) {
         
         // Also update pendingNextLine (line selections) using same logic
         if (gameData.pendingNextLine) {
-            const serverPending = gameData.pendingNextLine;
-            const localPending = game.pendingNextLine || {};
-            
-            ['oLine', 'dLine', 'odLine', 'odOnDeckLine'].forEach(lineKey => {
-                const modKey = lineKey.replace('Line', 'LineModifiedAt');
-                const serverModTime = toMs(serverPending[modKey]);
-                const localModTime = toMs(localPending[modKey]);
-
-                if (serverModTime > localModTime) {
-                    localPending[lineKey] = serverPending[lineKey] || [];
-                    localPending[modKey] = serverPending[modKey];
-                }
-            });
-
-            // Lineup Ready multi-coach signal — same merge contract as
-            // refreshPendingLineFromCloud.
-            if (toMs(serverPending.lineupReadyAt) > toMs(localPending.lineupReadyAt)) {
-                localPending.lineupReadyAt = serverPending.lineupReadyAt;
-                localPending.lineupReadyBy = serverPending.lineupReadyBy || null;
-            }
-
-            // LC-viewing signal — independent timestamp merge.
-            if (toMs(serverPending.lineCoachViewingAt) > toMs(localPending.lineCoachViewingAt)) {
-                localPending.lineCoachViewing = serverPending.lineCoachViewing || null;
-                localPending.lineCoachViewingAt = serverPending.lineCoachViewingAt;
-            }
-
-            // Merge Combined/Separate planning mode — same contract as
-            // refreshPendingLineFromCloud. Without this, a coach who flips
-            // planning mode only propagates it via the line-refresh path, not
-            // this full-state path, leaving the two pollers in disagreement.
-            if (toMs(serverPending.useSeparateLinesAt) > toMs(localPending.useSeparateLinesAt)) {
-                localPending.useSeparateLines = !!serverPending.useSeparateLines;
-                localPending.useSeparateLinesAt = serverPending.useSeparateLinesAt;
-            }
-
-            game.pendingNextLine = localPending;
+            game.pendingNextLine = mergePendingNextLine(
+                gameData.pendingNextLine, game.pendingNextLine || {});
         }
         
         // Detect what changed
