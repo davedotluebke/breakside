@@ -6,6 +6,8 @@
  * worksheet so number/time types survive Excel's type detection.
  */
 
+import { formatTeamStatsLine } from './eventStats.js';
+
 const STATS_COLUMNS = [
     'Name', 'Pts', 'Minutes', 'Goals', 'Assists', 'HA', 'Huck HA',
     'Comp%', 'Huck%', 'Ds', 'TOs', '+/-', '+/- per pt'
@@ -114,6 +116,7 @@ function buildStatsSheetAoA(players, playerStats, teamStats, opts = {}) {
         }
     }
 
+    // XLSX: classic vendor script global (vendor/xlsx.mini.min.js)
     const autofilterRef = XLSX.utils.encode_range(
         { r: headerRowIdx, c: 0 },
         { r: Math.max(lastPlayerRowIdx, headerRowIdx), c: STATS_COLUMNS.length - 1 }
@@ -194,6 +197,15 @@ function safeFilename(name) {
     return (name || 'export').replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-');
 }
 
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+export {
+    buildStatsSheetAoA,
+    aoaToFormattedSheet,
+    downloadWorkbook,
+    safeSheetName,
+    safeFilename
+};
 window.buildStatsSheetAoA = buildStatsSheetAoA;
 window.aoaToFormattedSheet = aoaToFormattedSheet;
 window.downloadWorkbook = downloadWorkbook;
