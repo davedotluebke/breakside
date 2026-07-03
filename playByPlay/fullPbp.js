@@ -32,8 +32,21 @@
  *   - "Last pass was a:" / "Last D was a:" modifier panel (phase 4)
  *   - "…" popover (Stall / Good D / Callahan) (phase 5)
  */
+import { UNKNOWN_PLAYER } from '../store/models.js';
+import { saveAllTeamsData } from '../store/storage.js';
+import { getLatestPoint, getPlayerFromName, isPointInProgress } from '../utils/helpers.js';
+import { logEvent } from '../ui/eventLogDisplay.js';
+import { undoEvent } from '../game/gameLogic.js';
+import { startNextPoint } from '../game/pointManagement.js';
+import { showControllerToast } from '../game/controllerState.js';
+import {
+    ensureDialogVisible, applyStartPointButtonState,
+    handlePbpTheyScore, handlePbpGameEvents,
+} from '../game/gameScreenEvents.js';
+import { handlePanelStartPoint } from '../game/selectLine.js';
+import { showScoreAttributionDialog } from './scoreAttribution.js';
 
-(function() {
+const fullPbp = (function() {
     // -----------------------------------------------------------------
     // Module-level state
     // -----------------------------------------------------------------
@@ -1098,7 +1111,7 @@
     // Public API
     // -----------------------------------------------------------------
 
-    window.fullPbp = {
+    return {
         createPlayByPlayFullPanel,
         render,
         wireEvents,
@@ -1108,3 +1121,10 @@
         _reconstruct: reconstructState
     };
 })();
+
+// --- ES-module export; the window shim is transitional for the
+// --- window-qualified call sites in converted ui/panelSystem.js,
+// --- game/gameScreenPanels.js, and game/gameScreenEvents.js (real imports at
+// --- C10), and doubles as the devtools inspection seam noted above.
+export { fullPbp };
+window.fullPbp = fullPbp;

@@ -29,7 +29,7 @@
  *   narrationEventBus.publish('eventAdded', { event, source: 'narration' });
  */
 
-(function() {
+const narrationEventBus = (function() {
     const CHANNELS = [
         'eventAdded',
         'eventAmended',
@@ -80,10 +80,16 @@
         });
     }
 
-    // Expose globally (no module system in this project)
-    window.narrationEventBus = {
+    return {
         subscribe,
         publish,
         CHANNELS
     };
 })();
+
+// --- ES-module export; window shim is transitional for classic narration
+// --- files (narrationEngine, transcriptDisplay, micButton) and for the
+// --- window-qualified call sites in converted files (playByPlay/*,
+// --- game/gameScreenEvents.js) until C10.
+export { narrationEventBus };
+window.narrationEventBus = narrationEventBus;

@@ -24,7 +24,17 @@
  * not duplicated.
  */
 
-(function() {
+import {
+    Throw, Turnover, Defense, Pull, Role, UNKNOWN_PLAYER,
+} from '../store/models.js';
+import { saveAllTeamsData } from '../store/storage.js';
+import { getLatestPoint, getPlayerFromName } from '../utils/helpers.js';
+import { logEvent } from '../ui/eventLogDisplay.js';
+import { updateScore } from '../game/gameLogic.js';
+import { moveToNextPoint } from '../game/pointManagement.js';
+import { ensurePossessionExists } from './keyPlayDialog.js';
+
+const pbpPossession = (function() {
     // -----------------------------------------------------------------
     // State reconstruction — derive (mode, holder) from the event stream.
     // Last-event-wins; we trust event semantics over possession.offensive
@@ -275,7 +285,7 @@
     // -----------------------------------------------------------------
     // Public API
     // -----------------------------------------------------------------
-    window.pbpPossession = {
+    return {
         reconstructState,
         findLastEditableEvent,
         getUnknown,
@@ -286,3 +296,9 @@
         createPull
     };
 })();
+
+// --- ES-module export; the window shim is transitional for the
+// --- window-qualified call sites in scoreAttribution.js, keyPlayDialog.js,
+// --- fullPbp.js, and fieldPbp.js (converted to real imports at C10).
+export { pbpPossession };
+window.pbpPossession = pbpPossession;

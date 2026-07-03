@@ -46,6 +46,12 @@ import {
     exitGameScreen, updateGameScreenScore, updateGameLogEvents,
     startGameStateRefresh,
 } from './gameScreenSync.js';
+// Cycle note: scoreAttribution/keyPlayDialog import nothing from this file
+// (they pull from models/helpers/storage/gameLogic/pointManagement/
+// controllerState only), and neither side calls across at module-eval time,
+// so these back-edge imports are safe.
+import { showScoreAttributionDialog } from '../playByPlay/scoreAttribution.js';
+import { showKeyPlayDialog } from '../playByPlay/keyPlayDialog.js';
 
 // =============================================================================
 // Event Wiring
@@ -1922,16 +1928,13 @@ export {
     handlePbpTheyScore, handlePbpGameEvents,
     handleLineupReadyTap, updateSubPlayersCount,
 };
-// ensureDialogVisible: called bare by classic playByPlay/fullPbp.js and
-// playByPlay/fieldPbp.js.
+// ensureDialogVisible / applyStartPointButtonState / handlePbpTheyScore /
+// handlePbpGameEvents: their playByPlay consumers (fullPbp.js, fieldPbp.js)
+// import them since C7 — shims kept only until the C10 sweep confirms no
+// stragglers.
 window.ensureDialogVisible = ensureDialogVisible;
-// applyStartPointButtonState: called bare (typeof-guarded) by classic
-// playByPlay/fullPbp.js.
 window.applyStartPointButtonState = applyStartPointButtonState;
-// handlePbpTheyScore: called bare by classic playByPlay/fullPbp.js and
-// playByPlay/fieldPbp.js.
 window.handlePbpTheyScore = handlePbpTheyScore;
-// handlePbpGameEvents: called bare by classic playByPlay/fullPbp.js.
 window.handlePbpGameEvents = handlePbpGameEvents;
 // transitionToBetweenPoints: called bare (typeof-guarded) by converted
 // game/gameLogic.js, game/pointManagement.js, screens/navigation.js,

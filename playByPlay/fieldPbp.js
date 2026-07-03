@@ -40,8 +40,20 @@
  * Still to come: defense entry (4), offense entry + drag gestures (5),
  * score dialog (6), modifier strip / orientation flips / polish (7).
  */
+import { UNKNOWN_PLAYER } from '../store/models.js';
+import { saveAllTeamsData } from '../store/storage.js';
+import {
+    currentGame, getLatestPoint, getPlayerFromName, isPointInProgress,
+    determineStartingPosition,
+} from '../utils/helpers.js';
+import { undoEvent } from '../game/gameLogic.js';
+import { startNextPoint } from '../game/pointManagement.js';
+import { showControllerToast } from '../game/controllerState.js';
+import { ensureDialogVisible, handlePbpTheyScore } from '../game/gameScreenEvents.js';
+import { handlePanelStartPoint } from '../game/selectLine.js';
+import { showScoreAttributionDialog } from './scoreAttribution.js';
 
-(function() {
+const fieldPbp = (function() {
     // -----------------------------------------------------------------
     // Field geometry (canonical yards). Width and the playing field proper are
     // fixed; endzone depth (EZ) comes from Advanced Settings (default 20 yd,
@@ -1645,7 +1657,7 @@
     // -----------------------------------------------------------------
     // Public API
     // -----------------------------------------------------------------
-    window.fieldPbp = {
+    return {
         createPlayByPlayFieldPanel,
         render,
         wireEvents,
@@ -1661,3 +1673,11 @@
         _toField: toField
     };
 })();
+
+// --- ES-module export; the window shim is transitional for the
+// --- window-qualified call sites in converted ui/panelSystem.js,
+// --- game/gameScreenPanels.js, game/gameScreenEvents.js, and
+// --- game/pointManagement.js (real imports at C10), and doubles as the
+// --- devtools inspection seam noted above.
+export { fieldPbp };
+window.fieldPbp = fieldPbp;

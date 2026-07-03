@@ -2,6 +2,13 @@
  * Pull Dialog
  * Handles the pull dialog for logging pulls on defense points
  */
+import { Gender, Pull, Possession, UNKNOWN_PLAYER } from '../store/models.js';
+import { saveAllTeamsData } from '../store/storage.js';
+import {
+    currentGame, getLatestPoint, getPlayerFromName, getGenderRatioForPoint,
+} from '../utils/helpers.js';
+import { logEvent } from '../ui/eventLogDisplay.js';
+import { getCurrentMode } from '../ui/panelSystem.js';
 
 // Track Pull dialog state
 let pullSelectedPlayer = undefined; // undefined = no selection yet, null = Unknown Player selected, Player object = specific player selected
@@ -504,8 +511,16 @@ function getExpectedPullGender(game) {
     
     // If no previous pull, return null (user must select)
     if (!lastPullGender) return null;
-    
+
     // Return opposite gender
     return lastPullGender === Gender.FMP ? Gender.MMP : Gender.FMP;
 }
+
+// --- ES-module exports; the window shim below is transitional (removed at C10).
+// showPullDialog is imported by game/pointManagement.js — no shim needed.
+export { initializePullDialog, showPullDialog };
+// initializePullDialog: called bare (typeof-guarded) by main.js's
+// DOMContentLoaded wiring — the guard resolves against window, so without this
+// shim the dialog would silently never initialize.
+window.initializePullDialog = initializePullDialog;
 
