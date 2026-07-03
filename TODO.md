@@ -35,6 +35,25 @@ MVP shipped. Coach speaks naturally; the system extracts structured game events.
 
 ## Near Term
 
+### Backend test suite: fix or retire the stale test_api/test_auth failures
+
+`pytest ultistats_server/` is not green and hasn't been for a while — ~48 pre-existing
+failures, none caught by the D3 refactor (failure set is identical before/after; verified
+against a recorded baseline). Two distinct problems:
+
+- [ ] `test_api.py` (~20 failures even standalone): tests still call **unprefixed paths**
+      (`/players/{id}`, `/teams/{id}`, …) from before the `/api/` prefix; those now fall
+      through to the PWA static catch-all and 404. Either update the paths to `/api/...`
+      and re-assert, or delete the cases that `test_security.py` already covers better.
+- [ ] `test_auth.py` + `test_existing_data.py` (fail only in the full-suite run, pass
+      standalone): cross-test interference — module-level `from main import app` snapshots
+      config/data dirs at collection time, so whichever test file patches `config` first
+      wins. Isolate with per-module fixtures (like `test_security.py` does) or run against
+      a tmp data dir via `ULTISTATS_DATA_DIR`.
+- [ ] `tests/narration/test_scenarios.py`: live-LLM calls, inherently flaky (1–2 scenarios
+      flip per run). Consider marking them `@pytest.mark.narration` and excluding from the
+      default run so "pytest green" is meaningful again.
+
 ### Multi-user rollout — final items
 
 The multi-user push is mostly done. A few items linger:
