@@ -230,6 +230,16 @@ function hasPendingSync(type, id) {
 // can't loop forever every 5s.
 const MAX_SYNC_RETRIES = 5;
 
+// Poison-pill guard: an "offline"-classified failure that happens while
+// connectivity is demonstrably fine (isOnline was just true — other requests
+// are succeeding) isn't really connectivity. One real-world cause: an
+// unhandled server 500 comes back without CORS headers, so the browser blocks
+// it and fetch rejects with a TypeError, indistinguishable from a network
+// drop. Such failures retry forever without this cap. Genuine sideline
+// dead-zones are safe from it: there nothing succeeds, isOnline stays false,
+// the queue is gated, and this counter can't accumulate.
+const MAX_ONLINE_TYPEERROR_RETRIES = 10;
+
 /**
  * Decide whether a sync failure is a connectivity problem (pause and retry)
  * versus a hard server error (count against the retry cap).
@@ -307,15 +317,31 @@ async function processSyncQueue() {
 
             // A connectivity failure isn't the item's fault — stop processing
             // and let the online listener / retry timer pick it back up. Don't
-            // count it against the retry cap, but DO record what happened so
-            // the pending-sync dialog can show why an item is stuck (an
-            // offline-classified failure loops forever by design, which is
-            // invisible without this).
+            // count it against the normal retry cap, but DO record what
+            // happened so the pending-sync dialog can show why an item is
+            // stuck, and DO count it against the poison-pill cap: this attempt
+            // started with isOnline true (processSyncQueue is gated on it), so
+            // if connectivity keeps healing and this one item keeps failing,
+            // the item — not the network — is the problem (see
+            // MAX_ONLINE_TYPEERROR_RETRIES).
             if (isOfflineError(error)) {
                 const queueItem = syncQueue.find(q => q.type === item.type && q.id === item.id);
                 if (queueItem) {
                     queueItem.lastError = `${error.message} (classified offline; navigator.onLine=${navigator.onLine})`;
                     queueItem.lastAttemptAt = Date.now();
+                    queueItem.onlineTypeErrorCount = (queueItem.onlineTypeErrorCount || 0) + 1;
+
+                    if (queueItem.onlineTypeErrorCount >= MAX_ONLINE_TYPEERROR_RETRIES) {
+                        syncQueue = syncQueue.filter(q =>
+                            !(q.type === item.type && q.id === item.id)
+                        );
+                        quarantineSyncItem(queueItem);
+                        saveSyncQueue();
+                        // The item was the problem; don't flip the app offline
+                        // for it. Move on to the next queue item.
+                        continue;
+                    }
+
                     saveSyncQueue();
                 }
                 isOnline = false;
