@@ -2,6 +2,12 @@
  * Team Settings Screen
  * Manages team members, invites, and joining teams
  */
+import { currentTeam, saveAllTeamsData } from '../store/storage.js';
+import { authFetch, syncTeamToCloud, syncUserTeams } from '../store/sync.js';
+import { showScreen } from '../screens/navigation.js';
+import { showGameScreen } from '../ui/panelSystem.js';
+import { updateTeamRosterDisplay } from './rosterManagement.js';
+import { showSelectTeamScreen } from './teamList.js';
 
 // =============================================================================
 // State
@@ -1076,4 +1082,11 @@ if (document.readyState === 'loading') {
 } else {
     initializeTeamSettings();
 }
+
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+export { showTeamSettingsScreen };
+// showTeamSettingsScreen: called bare (typeof-guarded) by classic
+// game/gameScreenEvents.js and by main.js.
+window.showTeamSettingsScreen = showTeamSettingsScreen;
 

@@ -3,6 +3,24 @@
  * Manages the roster for a TournamentEvent: select attending players and add pickups.
  * Table-based layout matching team roster UI pattern.
  */
+import { Gender, generateShortId } from '../store/models.js';
+import { currentTeam } from '../store/storage.js';
+import { formatPlayerName, formatPlayTime } from '../utils/helpers.js';
+import {
+    getEventPlayerStats, getEventRecord, getEventTeamStats, formatTeamStatsLine,
+} from '../utils/eventStats.js';
+import { createTableSortController } from '../utils/tableSort.js';
+import { attachStatsColumnHelp } from '../utils/statsHelp.js';
+import {
+    buildStatsSheetAoA, aoaToFormattedSheet, downloadWorkbook,
+    safeSheetName, safeFilename,
+} from '../utils/xlsxExport.js';
+import { updateEventOnCloud } from '../store/sync.js';
+import { showScreen } from '../screens/navigation.js';
+import { buildRosterRow, formatSigned, formatPercentOrDash } from './rosterRowHelpers.js';
+import {
+    showEditPlayerDialog, closeEditPlayerDialog, validateJerseyNumber,
+} from './rosterManagement.js';
 
 // Module-level state
 let currentEventRosterEvent = null;
@@ -522,4 +540,6 @@ async function exportEventRosterXLSX() {
     }
 })();
 
-window.showEventRosterUI = showEventRosterUI;
+// --- ES-module export; consumed only by teams/eventDialogs.js (converted),
+// --- so no window.* shim is needed.
+export { showEventRosterUI };

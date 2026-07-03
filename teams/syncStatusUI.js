@@ -3,6 +3,10 @@
  * connection info, and app-update helpers for the teams screen.
  * Split out of teamSelection.js (D2 refactor).
  */
+import {
+    API_BASE_URL, getSyncStatus, processSyncQueue, syncUserTeams, pullFromCloud,
+} from '../store/sync.js';
+import { populateCloudTeamsAndGames } from './teamList.js';
 
 function showSetServerDialog() {
     const currentUrl = localStorage.getItem('ultistats_api_url') ||
@@ -49,11 +53,7 @@ function showSetServerDialog() {
  * Build the HTML for the sync status indicator
  */
 function buildSyncStatusHTML() {
-    let status = { pendingCount: 0, pendingByType: { player: 0, team: 0, game: 0 }, isOnline: navigator.onLine };
-
-    if (typeof getSyncStatus === 'function') {
-        status = getSyncStatus();
-    }
+    let status = getSyncStatus();
 
     const isOnline = status.isOnline;
     const totalPending = status.pendingCount || 0;
@@ -215,10 +215,11 @@ async function showConnectionInfo() {
     let versionLine = `Version: ${version} (Build ${build})${label ? ' [' + label + ']' : ''}`;
     let updateButton = '';
 
-    // Check for updates if online
-    if (isOnline && typeof checkForAppUpdate === 'function') {
+    // Check for updates if online (checkForAppUpdate is main.js-owned; stays
+    // window-qualified until the migration's final consolidation pass)
+    if (isOnline && typeof window.checkForAppUpdate === 'function') {
         try {
-            const updateInfo = await checkForAppUpdate();
+            const updateInfo = await window.checkForAppUpdate();
             if (updateInfo.hasUpdate) {
                 versionLine = `Version: ${version} (Build ${build}) → <b>${updateInfo.latestBuild} available</b>`;
                 updateButton = `<br><button onclick="confirmAppUpdate()" style="margin-top:6px;padding:4px 12px;background:#28a745;color:white;border:none;border-radius:4px;cursor:pointer;">Update Now</button>`;
@@ -244,8 +245,9 @@ function confirmAppUpdate() {
     // No confirmation prompt: the "Update Now" button already takes several
     // steps to reach, and the worst case if hit by accident is just re-joining
     // the game from the Teams screen.
-    if (typeof forceAppUpdate === 'function') {
-        forceAppUpdate();
+    // forceAppUpdate is main.js-owned; window-qualified until final consolidation
+    if (typeof window.forceAppUpdate === 'function') {
+        window.forceAppUpdate();
     } else {
         // Fallback: just reload with cache clear
         window.location.reload(true);
@@ -256,7 +258,9 @@ function confirmAppUpdate() {
  * Show the pending sync dialog with a summary of queued items.
  */
 function showPendingSyncDialog() {
-    const items = typeof getSyncQueueItems === 'function' ? getSyncQueueItems() : [];
+    // TODO(esm): sync.js exposes the queue accessors on window only — import
+    // them once store/sync.js exports getSyncQueueItems/clearSyncQueue.
+    const items = typeof window.getSyncQueueItems === 'function' ? window.getSyncQueueItems() : [];
     const listEl = document.getElementById('pendingSyncList');
     if (!listEl) return;
 
@@ -323,8 +327,9 @@ function closePendingSyncDialog() {
 
 function confirmClearSyncQueue() {
     if (!confirm('Discard all pending updates? These changes will be lost.')) return;
-    if (typeof clearSyncQueue === 'function') {
-        clearSyncQueue();
+    // TODO(esm): window-only sync.js queue accessor (see showPendingSyncDialog)
+    if (typeof window.clearSyncQueue === 'function') {
+        window.clearSyncQueue();
     }
     closePendingSyncDialog();
     updateSyncStatusDisplay();
@@ -338,8 +343,25 @@ window.addEventListener('click', function(event) {
     }
 });
 
-// Make functions available globally for onclick handlers
-window.handleSignOut = handleSignOut;
-window.doFullRefresh = doFullRefresh;
+// --- ES-module exports; window.* shims below are transitional or documented
+// --- survivors (generated-HTML / index.html inline onclick handlers).
+export {
+    buildSyncStatusHTML, updateSyncStatusDisplay, doFullRefresh,
+    showConnectionInfo,
+};
+// updateSyncStatusDisplay: called bare (typeof-guarded) by converted store/sync.js.
+window.updateSyncStatusDisplay = updateSyncStatusDisplay;
+// showConnectionInfo: called bare by game/gameScreenEvents.js (classic) and
+// main.js; also a generated-HTML onclick survivor (sync-status bar).
+// window survivor: referenced by generated-HTML onclick
 window.showConnectionInfo = showConnectionInfo;
+// window survivor: referenced by generated-HTML onclick
+window.handleSignOut = handleSignOut;
+// window survivor: referenced by generated-HTML onclick
+window.showPendingSyncDialog = showPendingSyncDialog;
+// window survivor: referenced by generated-HTML onclick
 window.confirmAppUpdate = confirmAppUpdate;
+// window survivor: referenced by index.html inline onclick (converted later in migration)
+window.closePendingSyncDialog = closePendingSyncDialog;
+// window survivor: referenced by index.html inline onclick (converted later in migration)
+window.confirmClearSyncQueue = confirmClearSyncQueue;

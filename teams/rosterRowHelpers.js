@@ -69,3 +69,10 @@ function formatSignedFixed(value, digits) {
 function formatPercentOrDash(made, attempted, dash = '-') {
     return attempted > 0 ? `${((made / attempted) * 100).toFixed(0)}%` : dash;
 }
+
+// --- ES-module exports; consumed only by other teams/ modules (all converted),
+// --- so no window.* shims are needed.
+export {
+    appendRosterCell, buildRosterRow,
+    formatSigned, formatSignedFixed, formatPercentOrDash,
+};

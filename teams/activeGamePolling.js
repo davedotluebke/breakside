@@ -2,6 +2,9 @@
  * Active-game polling (auto-join prompt) and the teams-screen auto-refresh
  * interval. Split out of teamSelection.js (D2 refactor).
  */
+import { listServerGames } from '../store/sync.js';
+import { _cloudTeamsCache, isGameActive, resumeCloudGame } from './teamList.js';
+import { doFullRefresh } from './syncStatusUI.js';
 
 // Active-game polling state
 let _activeGamePollInterval = null;
@@ -38,7 +41,6 @@ function stopActiveGamePolling() {
  */
 async function checkForActiveGames() {
     if (!navigator.onLine) return;
-    if (typeof listServerGames !== 'function') return;
 
     try {
         const allGames = await listServerGames();
@@ -85,10 +87,6 @@ async function checkForActiveGames() {
     }
 }
 
-// Export polling functions
-window.startActiveGamePolling = startActiveGamePolling;
-window.stopActiveGamePolling = stopActiveGamePolling;
-
 // Auto-refresh every 10 seconds when on the team selection screen
 let _autoRefreshInterval = null;
 
@@ -113,3 +111,12 @@ function stopAutoRefresh() {
 
 // Start auto-refresh on load
 startAutoRefresh();
+
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+export { startActiveGamePolling, stopActiveGamePolling };
+// startActiveGamePolling: called bare by converted screens/navigation.js
+// (typeof-guarded) and classic game/gameScreenSync.js.
+window.startActiveGamePolling = startActiveGamePolling;
+// stopActiveGamePolling: called bare by classic game/gameScreenSync.js.
+window.stopActiveGamePolling = stopActiveGamePolling;

@@ -7,6 +7,27 @@
  * sync-status UI, syncStatusUI.js; event dialogs, eventDialogs.js; and
  * active-game polling, activeGamePolling.js.
  */
+import { Team, isTestTeam } from '../store/models.js';
+import {
+    teams, currentTeam, setCurrentTeam, setCurrentEvent, setCurrentTeamRole,
+    saveAllTeamsData, serializeTeam, deserializeTeams, deserializePlayer,
+    deserializeTournamentEvent,
+} from '../store/storage.js';
+import {
+    authFetch, API_BASE_URL, listServerGames, listTeamEvents, updateGamePhase,
+    deleteGameFromCloud, deleteTeamFromCloud, loadGameFromCloud, syncUserTeams,
+    createTeamOffline, clearSyncData,
+} from '../store/sync.js';
+import { getPlayerFromName, isPointInProgress } from '../utils/helpers.js';
+import { showScreen, showEditRosterScreen, showStartGameScreen } from '../screens/navigation.js';
+import { buildSyncStatusHTML } from './syncStatusUI.js';
+import {
+    showCreateEventDialog, showEventSettingsDialog, startNewEventGame,
+    showEventRosterScreen,
+} from './eventDialogs.js';
+import { updateTeamRosterDisplay } from './rosterManagement.js';
+import { showTeamSettingsScreen } from './teamSettings.js';
+import { showGameSummaryFromList } from './gameSummary.js';
 
 function showSelectTeamScreen(firsttime = false) {
     console.log('showSelectTeamScreen called (cloud-only mode)');
@@ -334,9 +355,7 @@ async function populateCloudTeamsAndGames() {
             rosterBtn.title = 'View Roster';
             rosterBtn.onclick = (e) => {
                 e.stopPropagation();
-                if (typeof window.setCurrentTeamRole === 'function') {
-                    window.setCurrentTeamRole(role);
-                }
+                setCurrentTeamRole(role);
                 selectCloudTeam(team, { landOn: 'roster' });
             };
             bottomRow.appendChild(rosterBtn);
@@ -561,7 +580,7 @@ async function selectCloudTeam(cloudTeam, options = {}) {
             }
         }
 
-        currentTeam = localTeam;
+        setCurrentTeam(localTeam);
 
         if (typeof updateTeamRosterDisplay === 'function') {
             updateTeamRosterDisplay();
@@ -609,7 +628,7 @@ async function deleteCloudTeam(team) {
 
             // If we deleted the current team, switch to another
             if (currentTeam && currentTeam.id === team.id) {
-                currentTeam = teams.length > 0 ? teams[0] : null;
+                setCurrentTeam(teams.length > 0 ? teams[0] : null);
             }
 
             if (typeof saveAllTeamsData === 'function') {
@@ -646,9 +665,7 @@ async function resumeCloudGame(cloudTeam, gameId, role) {
 
     try {
         // Set the team role before entering the game screen
-        if (typeof window.setCurrentTeamRole === 'function') {
-            window.setCurrentTeamRole(role || 'coach');
-        }
+        setCurrentTeamRole(role || 'coach');
 
         // First ensure the team is loaded
         await selectCloudTeam(cloudTeam);
@@ -678,8 +695,7 @@ async function resumeCloudGame(cloudTeam, gameId, role) {
                 const events = await listTeamEvents(cloudTeam.id);
                 const ev = events.find(e => e.id === game.eventId);
                 if (ev) {
-                    currentEvent = typeof deserializeTournamentEvent === 'function'
-                        ? deserializeTournamentEvent(ev) : ev;
+                    setCurrentEvent(deserializeTournamentEvent(ev));
                 }
             } catch (e) {
                 console.warn('Could not load event for game:', e);
@@ -786,7 +802,7 @@ function removeGameStatsFromRoster(team, game) {
  */
 function selectTeam(index) {
     if (index >= 0 && index < teams.length) {
-        currentTeam = teams[index];
+        setCurrentTeam(teams[index]);
         if (typeof updateTeamRosterDisplay === 'function') {
             updateTeamRosterDisplay();
         }
@@ -810,7 +826,7 @@ function initializeTeamSelection() {
                     const newTeams = deserializeTeams(JSON.stringify([jsonData]));
                     if (newTeams && newTeams[0]) {
                         teams.push(newTeams[0]);
-                        currentTeam = newTeams[0];
+                        setCurrentTeam(newTeams[0]);
                         if (typeof updateTeamRosterDisplay === 'function') {
                             updateTeamRosterDisplay();
                         }
@@ -912,7 +928,7 @@ function initializeTeamSelection() {
                 console.log('📴 Offline - creating team locally and queueing for sync');
                 const newTeam = new Team(newTeamName);
                 teams.push(newTeam);
-                currentTeam = newTeam;
+                setCurrentTeam(newTeam);
 
                 if (typeof createTeamOffline === 'function') {
                     createTeamOffline({
@@ -974,7 +990,7 @@ function initializeTeamSelection() {
 
                 // Add to local state
                 teams.push(newTeam);
-                currentTeam = newTeam;
+                setCurrentTeam(newTeam);
 
                 if (typeof saveAllTeamsData === 'function') {
                     saveAllTeamsData();
@@ -1036,7 +1052,7 @@ function initializeTeamSelection() {
 
                 // Set currentTeam to the first team if teams were loaded
                 if (teams.length > 0) {
-                    currentTeam = teams[0];
+                    setCurrentTeam(teams[0]);
                 }
                 if (currentTeam && typeof updateTeamRosterDisplay === 'function') {
                     updateTeamRosterDisplay();
@@ -1063,7 +1079,7 @@ function initializeTeamSelection() {
             if (confirm('Clear local cache? This will remove all locally cached data. Your data on the cloud will NOT be affected.\n\nYou will need to re-sync from the cloud after clearing.')) {
                 // Clear local teams array
                 teams.length = 0;
-                currentTeam = null;
+                setCurrentTeam(null);
 
                 // Clear local storage caches
                 if (typeof clearSyncData === 'function') {
@@ -1186,12 +1202,6 @@ function openCreateTeamModal() {
     modal.style.display = 'block';
     if (input) input.focus();
 }
-
-// Make functions available globally for onclick handlers
-window.handleJoinCodeFromTeamsScreen = handleJoinCodeFromTeamsScreen;
-window.openJoinTeamModal = openJoinTeamModal;
-window.closeJoinTeamModal = closeJoinTeamModal;
-window.openCreateTeamModal = openCreateTeamModal;
 
 /**
  * Render a single game list item
@@ -1463,3 +1473,19 @@ function renderEventContainer(event, games, team, role) {
 
     return container;
 }
+
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+// _cloudTeamsCache is a live binding read by teams/activeGamePolling.js.
+export {
+    showSelectTeamScreen, isGameActive, populateCloudTeamsAndGames,
+    selectCloudTeam, resumeCloudGame, _cloudTeamsCache,
+};
+// showSelectTeamScreen: called bare by classic scripts (auth/loginScreen.js,
+// game/controllerState.js, game/gameScreenEvents.js, game/gameScreenSync.js),
+// by main.js, and typeof-guarded by converted store/sync.js & screens/navigation.js.
+window.showSelectTeamScreen = showSelectTeamScreen;
+// window survivor: referenced by generated-HTML onclick
+window.openJoinTeamModal = openJoinTeamModal;
+// window survivor: referenced by generated-HTML onclick
+window.openCreateTeamModal = openCreateTeamModal;
