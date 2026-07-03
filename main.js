@@ -205,9 +205,11 @@ async function forceAppUpdate() {
     }
 }
 
-// Export for use in other modules
+// Consumed by teams/syncStatusUI.js (via window) and, until the inline-handler
+// conversion lands, by index.html's onclick="closePwaInstallModal()".
 window.checkForAppUpdate = checkForAppUpdate;
 window.forceAppUpdate = forceAppUpdate;
+window.closePwaInstallModal = closePwaInstallModal;
 
 /******************************************************************************/
 /********************************** Auth Initialization ***********************/
