@@ -32,6 +32,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 const authModal = document.getElementById('authModal');
 const loginBtn = document.getElementById('loginBtn');
 const getStartedBtn = document.getElementById('getStartedBtn');
+const quickstartBtn = document.getElementById('quickstartBtn');
 const closeAuthModal = document.getElementById('closeAuthModal');
 
 // Auth forms
@@ -76,6 +77,7 @@ function closeModal() {
 // Event listeners for opening/closing modal
 loginBtn?.addEventListener('click', openAuthModal);
 getStartedBtn?.addEventListener('click', openAuthModal);
+quickstartBtn?.addEventListener('click', openAuthModal);
 closeAuthModal?.addEventListener('click', closeModal);
 
 // Close on backdrop click

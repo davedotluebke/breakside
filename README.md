@@ -1,6 +1,14 @@
-# Breakside
+<div align="center">
+  <img src="images/logo.wordmark.png" alt="Breakside" width="480">
 
-A real-time Progressive Web App for tracking play-by-play statistics in ultimate frisbee games.
+  <p><strong>A real-time Progressive Web App for tracking play-by-play statistics in ultimate frisbee games.</strong></p>
+
+  <p>
+    <a href="https://www.breakside.pro"><img src="https://img.shields.io/badge/live%20app-breakside.pro-EB8232" alt="Live app: breakside.pro"></a>
+    <img src="https://img.shields.io/badge/status-beta-8B5CF6" alt="Status: beta">
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-1F2937" alt="License: MIT"></a>
+  </p>
+</div>
 
 ## Overview
 
@@ -18,7 +26,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 * [Install Breakside](#installation) by navigating to the Breakside website on a phone and choosing `Add to home screen`
 * Launch Breakside from the icon on the home screen
 * Create a new team and give it a name
-* Add a bunch of players (tap the `Add player` box and enter their name, then hit enter or tap the `+` button
+* Add a bunch of players (tap the `Add player` box and enter their name, then hit enter or tap the `+` button)
 * Start a game! Enter the opponent name and indicate whether your team is starting on Offense or Defense
   * Select 7 players and tap `Start Point`
   * Enter a few points! 
@@ -29,7 +37,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
   * Tap the `End Game` button and admire your team's statistics!
 * Download a copy of the game database, copy the game log summary to the clipboard for pasting in other apps, or start a new game
 
-
+</details>
 
 <details>
 <summary><h2>📋 Features</h2></summary>
