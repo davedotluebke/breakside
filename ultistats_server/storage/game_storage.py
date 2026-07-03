@@ -101,6 +101,14 @@ def merge_pending_next_line(existing: Optional[dict], incoming: Optional[dict]) 
         merged["lineCoachViewing"] = incoming.get("lineCoachViewing")
         merged["lineCoachViewingAt"] = incoming.get("lineCoachViewingAt")
 
+    # Combined/Separate planning mode: either coach may flip it. Same
+    # timestamped last-writer-wins as the groups above — without this, a
+    # coach re-syncing full game state with an older copy would silently
+    # revert the other coach's newer mode flip.
+    if _ts(incoming.get("useSeparateLinesAt")) > _ts(existing.get("useSeparateLinesAt")):
+        merged["useSeparateLines"] = bool(incoming.get("useSeparateLines"))
+        merged["useSeparateLinesAt"] = incoming.get("useSeparateLinesAt")
+
     # activeType is local UI state; honor the most recent writer's value if set.
     if "activeType" in incoming:
         merged["activeType"] = incoming["activeType"]

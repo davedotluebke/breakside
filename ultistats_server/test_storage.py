@@ -567,6 +567,68 @@ class TestGameStorage:
 
 
 # =============================================================================
+# pendingNextLine Merge Tests
+# =============================================================================
+
+class TestMergePendingNextLine:
+    """Tests for merge_pending_next_line (server-side sync merge)."""
+
+    def test_newer_line_wins(self, isolate_test_data):
+        """A line group with a newer *ModifiedAt replaces the stored one."""
+        from storage.game_storage import merge_pending_next_line
+
+        existing = {"oLine": ["A"], "oLineModifiedAt": 1000}
+        incoming = {"oLine": ["B", "C"], "oLineModifiedAt": 2000}
+        merged = merge_pending_next_line(existing, incoming)
+        assert merged["oLine"] == ["B", "C"]
+        assert merged["oLineModifiedAt"] == 2000
+
+    def test_stale_line_does_not_revert(self, isolate_test_data):
+        """A line group with an older *ModifiedAt keeps the stored value."""
+        from storage.game_storage import merge_pending_next_line
+
+        existing = {"oLine": ["A"], "oLineModifiedAt": 2000}
+        incoming = {"oLine": ["B"], "oLineModifiedAt": 1000}
+        merged = merge_pending_next_line(existing, incoming)
+        assert merged["oLine"] == ["A"]
+        assert merged["oLineModifiedAt"] == 2000
+
+    def test_newer_use_separate_lines_flip_wins(self, isolate_test_data):
+        """Regression: a newer Combined/Separate mode flip must propagate.
+
+        Previously useSeparateLines was missing from the merge entirely, so
+        a sync carrying a newer flip was silently reverted to the stored
+        value (the client-side merge in store/sync.js does honor it).
+        """
+        from storage.game_storage import merge_pending_next_line
+
+        existing = {"useSeparateLines": True, "useSeparateLinesAt": 1000}
+        incoming = {"useSeparateLines": False, "useSeparateLinesAt": 2000}
+        merged = merge_pending_next_line(existing, incoming)
+        assert merged["useSeparateLines"] is False
+        assert merged["useSeparateLinesAt"] == 2000
+
+    def test_stale_use_separate_lines_does_not_revert(self, isolate_test_data):
+        """An older mode flip must not roll back the stored newer one."""
+        from storage.game_storage import merge_pending_next_line
+
+        existing = {"useSeparateLines": False, "useSeparateLinesAt": 2000}
+        incoming = {"useSeparateLines": True, "useSeparateLinesAt": 1000}
+        merged = merge_pending_next_line(existing, incoming)
+        assert merged["useSeparateLines"] is False
+        assert merged["useSeparateLinesAt"] == 2000
+
+    def test_use_separate_lines_missing_timestamps_no_change(self, isolate_test_data):
+        """Absent useSeparateLinesAt on both sides leaves the stored value."""
+        from storage.game_storage import merge_pending_next_line
+
+        existing = {"useSeparateLines": True}
+        incoming = {"useSeparateLines": False}
+        merged = merge_pending_next_line(existing, incoming)
+        assert merged["useSeparateLines"] is True
+
+
+# =============================================================================
 # Index Storage Tests
 # =============================================================================
 
