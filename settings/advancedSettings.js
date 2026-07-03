@@ -448,7 +448,9 @@ const advancedSettings = (function() {
     };
 })();
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module export ---
 export { advancedSettings };
+// window survivor: late-bound state accessor (settings namespace read
+// window-qualified by main.js, ui/hints.js, store/sync.js and game/* modules;
+// window.advancedSettings is the documented settings surface)
 window.advancedSettings = advancedSettings;

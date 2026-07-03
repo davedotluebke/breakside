@@ -87,8 +87,9 @@ const narrationEventBus = (function() {
     };
 })();
 
-// --- ES-module export; window shim is transitional for the window-qualified
-// --- call sites in converted files (playByPlay/*, game/gameScreenEvents.js)
-// --- until C10. The narration files import it directly as of C8.
+// --- ES-module export ---
 export { narrationEventBus };
+// window survivor: late-bound back-edge hook (namespace called window-qualified
+// by playByPlay/* and game/gameScreenEvents.js — they evaluate before this
+// file; the narration files import it directly)
 window.narrationEventBus = narrationEventBus;

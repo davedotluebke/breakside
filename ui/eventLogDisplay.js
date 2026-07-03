@@ -13,14 +13,19 @@ function logEvent(description) {
     /* update the running event log on the screen */
     const eventLog = document.getElementById('eventLog');
     if (eventLog) {
-        eventLog.value = summarizeGame();           // Replace log with the new game summary
+        // late-bound back-edge (summarizeGame's owner game/gameLogic.js lives
+        // "above" this layer); see ARCHITECTURE.md § ES modules — the window
+        // shim at the owner is kept deliberately.
+        eventLog.value = window.summarizeGame();    // Replace log with the new game summary
         eventLog.scrollTop = eventLog.scrollHeight; // Auto-scroll to the bottom
     }
-    
+
     // Also update the new game screen Game Log panel if visible
-    if (typeof updateGameLogEvents === 'function' && typeof isGameScreenVisible === 'function') {
+    // late-bound back-edge (updateGameLogEvents' owner game/gameScreenSync.js
+    // lives "above" this layer); owner keeps the shim.
+    if (typeof window.updateGameLogEvents === 'function' && typeof isGameScreenVisible === 'function') {
         if (isGameScreenVisible()) {
-            updateGameLogEvents();
+            window.updateGameLogEvents();
         }
     }
 }
@@ -57,7 +62,6 @@ if (document.readyState === 'loading') {
     initializeEventLogToggle();
 }
 
-// --- ES-module exports; window.* shims are transitional until all consumers import ---
+// --- ES-module exports ---
 export { logEvent };
-window.logEvent = logEvent;
 

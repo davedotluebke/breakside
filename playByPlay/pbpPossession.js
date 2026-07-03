@@ -297,8 +297,8 @@ const pbpPossession = (function() {
     };
 })();
 
-// --- ES-module export; the window shim is transitional for the
-// --- window-qualified call sites in scoreAttribution.js, keyPlayDialog.js,
-// --- fullPbp.js, and fieldPbp.js (converted to real imports at C10).
+// --- ES-module export ---
 export { pbpPossession };
+// window survivor: late-bound back-edge hook (namespace called window-qualified
+// by playByPlay/scoreAttribution.js, keyPlayDialog.js, fullPbp.js, fieldPbp.js)
 window.pbpPossession = pbpPossession;

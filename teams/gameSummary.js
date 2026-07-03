@@ -413,7 +413,10 @@ function renderGameSummaryEventLog(game) {
             lineClass += ' game-log-roster';
         }
 
-        const escaped = escapeHtml(line);
+        // late-bound back-edge (escapeHtml's owner game/gameScreenSync.js lives
+        // "above" this layer — importing it would create a cycle via
+        // gameScreenEvents→gameSummary); the owner keeps its window shim.
+        const escaped = window.escapeHtml(line);
         html += `<div class="${lineClass}">${escaped}</div>`;
     }
 
@@ -464,10 +467,5 @@ function getGameSummaryBackTarget() {
 // Wire up XLSX export button
 document.getElementById('exportGameSummaryBtn')?.addEventListener('click', exportGameSummaryXLSX);
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 export { showGameSummaryFromList, showGameSummaryPostGame, getGameSummaryBackTarget };
-// showGameSummaryPostGame: called bare (typeof-guarded) by classic game/gameScreenEvents.js.
-window.showGameSummaryPostGame = showGameSummaryPostGame;
-// getGameSummaryBackTarget: called bare (typeof-guarded) by main.js.
-window.getGameSummaryBackTarget = getGameSummaryBackTarget;

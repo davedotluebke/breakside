@@ -508,7 +508,7 @@ document.addEventListener('visibilitychange', async () => {
     // Prevents the refresh timer from racing with this handler and making
     // decisions based on stale controller state.
     if (typeof window.stopGameStateRefresh === 'function') {
-        window.stopGameStateRefresh(); // owned by game/gameScreenSync.js; via window to avoid an import cycle (import at C10)
+        window.stopGameStateRefresh(); // late-bound back-edge (owner game/gameScreenSync.js keeps the shim; import would cycle)
     }
 
     // --- Check for ended or stale game before attempting recovery ---
@@ -530,7 +530,7 @@ document.addEventListener('visibilitychange', async () => {
             showControllerToast('Game has ended', 'info', 3000);
             stopControllerPolling();
             if (typeof window.exitGameScreen === 'function') {
-                window.exitGameScreen(); // owned by game/gameScreenSync.js; via window to avoid an import cycle (import at C10)
+                window.exitGameScreen(); // late-bound back-edge (owner game/gameScreenSync.js keeps the shim; import would cycle)
             }
             if (typeof showSelectTeamScreen === 'function') {
                 showSelectTeamScreen();
@@ -571,7 +571,7 @@ document.addEventListener('visibilitychange', async () => {
                     if (keepGoing) {
                         stopControllerPolling();
                         if (typeof window.exitGameScreen === 'function') {
-                            window.exitGameScreen(); // owned by game/gameScreenSync.js; via window to avoid an import cycle (import at C10)
+                            window.exitGameScreen(); // late-bound back-edge (owner game/gameScreenSync.js keeps the shim; import would cycle)
                         }
                         if (typeof showSelectTeamScreen === 'function') {
                             showSelectTeamScreen();
@@ -663,7 +663,7 @@ document.addEventListener('visibilitychange', async () => {
 
     // Restart game state refresh now that recovery is complete
     if (typeof window.startGameStateRefresh === 'function') {
-        window.startGameStateRefresh(); // owned by game/gameScreenSync.js; via window to avoid an import cycle (import at C10)
+        window.startGameStateRefresh(); // late-bound back-edge (owner game/gameScreenSync.js keeps the shim; import would cycle)
     }
 });
 
@@ -1379,9 +1379,7 @@ if (document.readyState === 'loading') {
 // Exports
 // =============================================================================
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration),
-// --- except where marked PERMANENT.
+// --- ES-module exports ---
 export {
     getControllerState, isActiveCoach, isLineCoach, canEditPlayByPlay,
     releaseControllerRole,
@@ -1394,40 +1392,38 @@ export {
     // silently dead at C6a when this file became a module).
     handleActiveCoachClick, handleLineCoachClick,
 };
-// getControllerState: called bare by converted ui/panelSystem.js (typeof-guarded,
-// resolves via window) and classic game/selectLine.js, gameScreenEvents.js,
-// gameScreenSync.js.
+// window survivor: late-bound back-edge hook (called window-qualified by
+// ui/panelSystem.js, which evaluates before this file)
 window.getControllerState = getControllerState;
-// isActiveCoach / isLineCoach: read via window.* by converted modules and bare
-// by classic game/playByPlay files.
+// window survivor: late-bound back-edge hook (read window-qualified by
+// game/selectLine.js, playByPlay modules)
 window.isActiveCoach = isActiveCoach;
+// window survivor: late-bound back-edge hook (read window-qualified by
+// game/selectLine.js, playByPlay modules)
 window.isLineCoach = isLineCoach;
-// canEditPlayByPlay: called bare by classic game/gameScreenEvents.js and
-// playByPlay/* files.
+// window survivor: late-bound back-edge hook (called window-qualified by
+// game/gameScreenEvents.js and playByPlay modules)
 window.canEditPlayByPlay = canEditPlayByPlay;
-// releaseControllerRole: called bare by classic game/gameScreenEvents.js.
-window.releaseControllerRole = releaseControllerRole;
-// startControllerPolling / stopControllerPolling: called bare by converted
-// screens/navigation.js (typeof-guarded, via window) and classic
-// game/gameScreenEvents.js, gameScreenSync.js; ALSO poked by Playwright e2e
-// (tests/scenarios/04 calls w.startControllerPolling / w.stopControllerPolling).
+// window survivor: e2e test seam — Playwright scenario 04 calls
+// w.startControllerPolling / w.stopControllerPolling; also called by
+// screens/navigation.js (evaluates before this file; late-bound back-edge)
 window.startControllerPolling = startControllerPolling;
+// window survivor: e2e test seam + late-bound back-edge hook (called by
+// screens/navigation.js)
 window.stopControllerPolling = stopControllerPolling;
-// isControllerPollingActive / getPollingGameId: called bare by classic
-// game/gameScreenEvents.js.
+// window survivor: late-bound back-edge hook (called window-qualified by
+// game/gameScreenEvents.js)
 window.isControllerPollingActive = isControllerPollingActive;
+// window survivor: late-bound back-edge hook (called window-qualified by
+// game/gameScreenEvents.js)
 window.getPollingGameId = getPollingGameId;
-// setControllerButtonsVisible: called bare (typeof-guarded) by converted
-// screens/navigation.js (via window).
+// window survivor: late-bound back-edge hook (called by screens/navigation.js,
+// which evaluates before this file)
 window.setControllerButtonsVisible = setControllerButtonsVisible;
-// showControllerToast: called bare by classic game/selectLine.js,
-// gameScreenSync.js, gameScreenEvents.js, playByPlay/*, narration/micButton.js.
-window.showControllerToast = showControllerToast;
-// dismissToast / getCurrentUserId: called bare (typeof-guarded) by classic
-// game/gameScreenSync.js.
-window.dismissToast = dismissToast;
-window.getCurrentUserId = getCurrentUserId;
-window.pingController = pingController;  // PERMANENT window survivor: e2e test seam
+// window survivor: e2e test seam — the Playwright suite REPLACES
+// window.pingController to simulate sleep (scenario 04); the polling loop
+// invokes it via window.pingController so the override takes effect. PERMANENT.
+window.pingController = pingController;
 // Dropped shims (zero external references found): getMyControllerRole,
 // canEditLineup, claimActiveCoach, claimLineCoach, respondToHandoff,
 // fetchControllerState, hideHandoffRequestUI.

@@ -15,7 +15,7 @@ import {
     Throw, Turnover, Violation, Defense, Other, Pull,
     Possession, Point,
 } from './models.js';
-import { getPlayerFromName } from '../utils/helpers.js';
+import { getPlayerFromName, currentGame } from '../utils/helpers.js';
 
 /**
  * Serialize an event to JSON
@@ -230,12 +230,15 @@ function saveAllTeamsData() {
     // Note: Team data logging disabled to reduce console noise
     // Uncomment for debugging: teams.forEach(team => logTeamData(team));
 
-    // SYNC: Attempt to sync current game to cloud if available
-    if (typeof syncGameToCloud === 'function' && typeof currentGame === 'function') {
+    // SYNC: Attempt to sync current game to cloud if available.
+    // syncGameToCloud is a late-bound back-edge (store/sync.js lives "above"
+    // this layer; importing it here would add a storage↔sync eval-time cycle) —
+    // resolved via the window shim sync.js keeps deliberately.
+    if (typeof window.syncGameToCloud === 'function' && typeof currentGame === 'function') {
         try {
             const game = currentGame();
             if (game) {
-                syncGameToCloud(game);
+                window.syncGameToCloud(game);
             }
         } catch (e) {
             // Ignore errors if no current game (e.g. during initialization)
@@ -592,10 +595,9 @@ function initializeTeams() {
 
 /*
  * Shared application state — owned by this module.
- * Exported as live bindings below; converted modules read them via import and
- * write through the exported setters. Classic scripts keep reading/writing the
- * bare globals through the Object.defineProperty accessors at the bottom of
- * this file (transitional, removed at end of the ES-module migration).
+ * Exported as live bindings below; modules read them via import and write
+ * through the exported setters. (The one surviving window accessor —
+ * window.teams — is documented at the bottom of this file.)
  */
 let teams = [];                 // An array of teams
 let currentTeam = null;         // The current team being tracked
@@ -706,40 +708,15 @@ export {
     getCurrentTeamRole, setCurrentTeamRole, isViewer, createSampleTeam,
 };
 
-// --- Transitional shims for not-yet-converted classic scripts (removed at end
-// --- of the ES-module migration). The state vars use live accessors — a plain
-// --- `window.currentTeam = currentTeam` copy would go stale on reassignment,
-// --- and classic scripts also WRITE these as bare globals (the setters below
-// --- keep those writes flowing into module state).
+// window survivor: late-bound state accessor (read by store/models.js
+// isTestGame — models evaluates before this file and cannot import from it).
+// Live accessor: a plain copy would go stale on reassignment.
 Object.defineProperty(window, 'teams', { configurable: true, get: () => teams, set: v => { teams = v; } });
-Object.defineProperty(window, 'currentTeam', { configurable: true, get: () => currentTeam, set: v => { currentTeam = v; } });
-Object.defineProperty(window, 'currentEvent', { configurable: true, get: () => currentEvent, set: v => { currentEvent = v; } });
-Object.defineProperty(window, 'sampleTeam', { configurable: true, get: () => sampleTeam, set: v => { sampleTeam = v; } });
-Object.defineProperty(window, 'currentTeamRole', { configurable: true, get: () => currentTeamRole, set: v => { currentTeamRole = v; } });
-Object.defineProperty(window, 'UNKNOWN_PLAYER_OBJ', { configurable: true, get: () => UNKNOWN_PLAYER_OBJ });
-
-window.serializeEvent = serializeEvent;
-window.serializePlayer = serializePlayer;
-window.serializeGame = serializeGame;
-window.serializeTeam = serializeTeam;
-window.logTeamData = logTeamData;
-window.saveAllTeamsData = saveAllTeamsData;
-window.deserializeEvent = deserializeEvent;
-window.resolvePlayerReference = resolvePlayerReference;
-window.getPlayerById = getPlayerById;
-window.deserializePlayer = deserializePlayer;
-window.normalizeAlternateGenderRatio = normalizeAlternateGenderRatio;
-window.deserializePointsFromServer = deserializePointsFromServer;
-window.deserializeGame = deserializeGame;
-window.deserializeTeams = deserializeTeams;
-window.loadTeams = loadTeams;
-window.initializeTeams = initializeTeams;
+// window survivor: late-bound back-edge hook (called by auth/auth.js on sign-out;
+// auth evaluates before this file and cannot import from it)
 window.clearAllTeamsData = clearAllTeamsData;
-window.serializeTournamentEvent = serializeTournamentEvent;
-window.deserializeTournamentEvent = deserializeTournamentEvent;
-window.getActiveRoster = getActiveRoster;
-window.getCurrentTeamRole = getCurrentTeamRole;
-window.setCurrentTeamRole = setCurrentTeamRole;
+// window survivor: late-bound back-edge hook (called window-qualified by
+// ui/panelSystem.js, game/controllerState.js, game/gameScreenEvents.js,
+// game/gameScreenSync.js)
 window.isViewer = isViewer;
-window.createSampleTeam = createSampleTeam;
 

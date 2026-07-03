@@ -197,8 +197,7 @@ function safeFilename(name) {
     return (name || 'export').replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-');
 }
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 export {
     buildStatsSheetAoA,
     aoaToFormattedSheet,
@@ -206,8 +205,3 @@ export {
     safeSheetName,
     safeFilename
 };
-window.buildStatsSheetAoA = buildStatsSheetAoA;
-window.aoaToFormattedSheet = aoaToFormattedSheet;
-window.downloadWorkbook = downloadWorkbook;
-window.safeSheetName = safeSheetName;
-window.safeFilename = safeFilename;

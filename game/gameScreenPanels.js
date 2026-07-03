@@ -655,15 +655,14 @@ function updateHeaderTeamIdentities() {
 // Exports
 // =============================================================================
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 export {
     WHOLESALE_ICON_SVG, AUTO_ICON_SVG,
     initGameScreen, updateHeaderTeamIdentities, noteLineCoachViewing,
     gameScreenInitialized,
 };
-// updateHeaderTeamIdentities: called bare (typeof-guarded) by converted
-// teams/teamSettings.js (resolves via window; import at C10).
+// window survivor: late-bound back-edge hook (called by teams/teamSettings.js,
+// which evaluates before this file)
 window.updateHeaderTeamIdentities = updateHeaderTeamIdentities;
 // Dropped shim (zero external references found): initGameScreen — its only
 // consumer, game/gameScreenSync.js, imports it now.

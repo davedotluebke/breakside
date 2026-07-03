@@ -25,11 +25,14 @@ function moveToNextPoint() {
     logEvent("New point started");
 
     // Enter panel UI in between-points state
-    if (typeof enterGameScreen === 'function') {
-        enterGameScreen();
+    // late-bound back-edge (gameScreenSync/gameScreenEvents live "above" this
+    // layer); see ARCHITECTURE.md § ES modules — the window shim at the owner
+    // is kept deliberately.
+    if (typeof window.enterGameScreen === 'function') {
+        window.enterGameScreen();
     }
-    if (typeof transitionToBetweenPoints === 'function') {
-        transitionToBetweenPoints();
+    if (typeof window.transitionToBetweenPoints === 'function') {
+        window.transitionToBetweenPoints();
     }
 
     // Start the countdown timer
@@ -85,8 +88,10 @@ function startNextPoint() {
     // common case via autoSelectActiveTypeForNextPoint.
     const game = currentGame();
     let activePlayersForThisPoint = [];
-    if (game && typeof getEffectiveLineForNextPoint === 'function') {
-        const effective = getEffectiveLineForNextPoint(game);
+    // late-bound back-edge (selectLine lives "above" this layer); see
+    // ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
+    if (game && typeof window.getEffectiveLineForNextPoint === 'function') {
+        const effective = window.getEffectiveLineForNextPoint(game);
         activePlayersForThisPoint = [...(effective.line || [])];
         console.log(`📋 Effective line for next point: source=${effective.source}, players=`,
             activePlayersForThisPoint);
@@ -145,8 +150,10 @@ function startNextPoint() {
     point.startTimestamp = new Date();
 
     // Enter the panel-based game screen
-    if (typeof enterGameScreen === 'function') {
-        enterGameScreen();
+    // late-bound back-edge (gameScreenSync lives "above" this layer); see
+    // ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
+    if (typeof window.enterGameScreen === 'function') {
+        window.enterGameScreen();
     }
 
     // If the user started this point from the Line tab (e.g. they're a
@@ -210,11 +217,14 @@ function startCountdown() {
     let timeRemaining = countdownSeconds;
     isCountdownRunning = true;
 
-    window.updateTimerDisplay(timeRemaining); // gameTimer.js's implementation (module now; window seam until C10)
+    // late-bound back-edge (updateTimerDisplay's owner game/gameTimer.js lives
+    // "above" this layer); see ARCHITECTURE.md § ES modules — the window shim
+    // at the owner is kept deliberately.
+    window.updateTimerDisplay(timeRemaining);
 
     countdownInterval = setInterval(() => {
         timeRemaining--;
-        window.updateTimerDisplay(timeRemaining); // gameTimer.js's implementation (module now; window seam until C10)
+        window.updateTimerDisplay(timeRemaining); // late-bound back-edge (see above)
     }, 1000);
 }
 
@@ -264,22 +274,12 @@ setInterval(updatePointTimer, 1000);
 function setIsPaused(v) { isPaused = v; }
 function setCountdownSeconds(v) { countdownSeconds = v; }
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 export {
     moveToNextPoint, startNextPoint, stopCountdown,
     isPaused, countdownSeconds, setIsPaused, setCountdownSeconds,
 };
-// moveToNextPoint: called bare by classic narration/narrationEngine.js
-// (converts at C8); other former window consumers (gameScreenEvents,
-// scoreAttribution, pbpPossession) import it now.
-window.moveToNextPoint = moveToNextPoint;
-// startNextPoint: former window consumers (selectLine, fullPbp, fieldPbp)
-// import it since C6b/C7 — shim kept until the C10 sweep.
-window.startNextPoint = startNextPoint;
-// stopCountdown: called bare (typeof-guarded) by classic game/gameScreenEvents.js.
-window.stopCountdown = stopCountdown;
-// Live accessors — utils/helpers.js reads bare `typeof isPaused`, and classic
-// game files may read/write these bare; a static copy would go stale.
+// window survivor: late-bound state accessor (read by utils/helpers.js
+// getPlayerGameTime — helpers evaluates before this file and cannot import
+// from it). Live accessor: a static copy would go stale on reassignment.
 Object.defineProperty(window, 'isPaused', { configurable: true, get: () => isPaused, set: v => { isPaused = v; } });
-Object.defineProperty(window, 'countdownSeconds', { configurable: true, get: () => countdownSeconds, set: v => { countdownSeconds = v; } });

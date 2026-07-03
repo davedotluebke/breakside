@@ -628,9 +628,11 @@ function validateJerseyNumber(input) {
             // If a game is live, refresh the line-selection panel so the new
             // player can be put on the very next line without leaving and
             // re-entering the game.
+            // late-bound back-edge (game/selectLine lives "above" this layer);
+            // see ARCHITECTURE.md § ES modules — owner keeps the shim.
             if (typeof currentGame === 'function' && currentGame() &&
-                typeof updateSelectLinePanel === 'function') {
-                updateSelectLinePanel();
+                typeof window.updateSelectLinePanel === 'function') {
+                window.updateSelectLinePanel();
             }
 
             // Save locally
@@ -686,11 +688,14 @@ function validateJerseyNumber(input) {
     if (continueGameBtn) {
         continueGameBtn.addEventListener('click', () => {
             if (currentTeam.games.length > 0) {
-                if (typeof enterGameScreen === 'function') {
-                    enterGameScreen();
+                // late-bound back-edge (gameScreenSync/gameScreenEvents live
+                // "above" this layer); see ARCHITECTURE.md § ES modules — the
+                // window shims at the owners are kept deliberately.
+                if (typeof window.enterGameScreen === 'function') {
+                    window.enterGameScreen();
                     if (isPointInProgress() === false) {
-                        if (typeof transitionToBetweenPoints === 'function') {
-                            transitionToBetweenPoints();
+                        if (typeof window.transitionToBetweenPoints === 'function') {
+                            window.transitionToBetweenPoints();
                         }
                     }
                     continueGameBtn.classList.add('inactive');
@@ -1490,15 +1495,15 @@ document.addEventListener('breakside:screen-shown', (e) => {
     }
 });
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 export {
     updateTeamRosterDisplay, invalidateRosterStatsCache,
     showEditPlayerDialog, closeEditPlayerDialog, validateJerseyNumber,
 };
-// updateTeamRosterDisplay: called bare by game/gameLogic.js (classic), main.js,
-// and converted modules store/sync.js / screens/navigation.js (typeof-guarded).
+// window survivor: late-bound back-edge hook (called by store/sync.js,
+// screens/navigation.js — both evaluate before this file and cannot import
+// from it without a cycle/reorder)
 window.updateTeamRosterDisplay = updateTeamRosterDisplay;
-// invalidateRosterStatsCache: called bare (typeof-guarded) by screens/navigation.js.
+// window survivor: late-bound back-edge hook (called by screens/navigation.js)
 window.invalidateRosterStatsCache = invalidateRosterStatsCache;
 

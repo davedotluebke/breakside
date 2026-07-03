@@ -36,8 +36,9 @@ function updateActivePlayersList() {
     });
     
     // Update gender ratio display
-    if (typeof updateGenderRatioDisplay === 'function') {
-        updateGenderRatioDisplay();
+    // defined nowhere — dead guarded branch (pre-existing); cleanup candidate
+    if (typeof window.updateGenderRatioDisplay === 'function') {
+        window.updateGenderRatioDisplay();
     }
 }
 
@@ -422,13 +423,12 @@ function togglePlayerStats() {
     });
 
     // Make sure the Start Point button state is correct
-    if (typeof checkPlayerCount === 'function') {
-        checkPlayerCount();
+    // defined nowhere — dead guarded branch (pre-existing); cleanup candidate
+    if (typeof window.checkPlayerCount === 'function') {
+        window.checkPlayerCount();
     }
 }
 
-// --- ES-module exports; window.* shims are transitional until all consumers import ---
+// --- ES-module exports ---
 export { clearNextLineSelections, getRunningScores };
-window.clearNextLineSelections = clearNextLineSelections;
-window.getRunningScores = getRunningScores;
 

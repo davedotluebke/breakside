@@ -1916,8 +1916,7 @@ function setupPlayByPlayResizeObserver() {
     updatePlayByPlayLayout();
 }
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 export {
     wireGameScreenEvents,
     canEditPlayByPlayPanel, ensureDialogVisible,
@@ -1928,24 +1927,17 @@ export {
     handlePbpTheyScore, handlePbpGameEvents,
     handleLineupReadyTap, updateSubPlayersCount,
 };
-// ensureDialogVisible / applyStartPointButtonState / handlePbpTheyScore /
-// handlePbpGameEvents: their playByPlay consumers (fullPbp.js, fieldPbp.js)
-// import them since C7 — shims kept only until the C10 sweep confirms no
-// stragglers.
-window.ensureDialogVisible = ensureDialogVisible;
-window.applyStartPointButtonState = applyStartPointButtonState;
-window.handlePbpTheyScore = handlePbpTheyScore;
-window.handlePbpGameEvents = handlePbpGameEvents;
-// transitionToBetweenPoints: called bare (typeof-guarded) by converted
-// game/gameLogic.js, game/pointManagement.js, screens/navigation.js,
-// teams/rosterManagement.js, teams/teamList.js (resolve via window; import at C10).
+// window survivor: late-bound back-edge hook (called by game/gameLogic.js,
+// game/pointManagement.js, screens/navigation.js, teams/rosterManagement.js,
+// teams/teamList.js — all evaluate before this file)
 window.transitionToBetweenPoints = transitionToBetweenPoints;
-// updatePlayByPlayPanelState: called via window by converted
-// game/controllerState.js (import at C10).
+// window survivor: late-bound back-edge hook (called window-qualified by
+// game/controllerState.js, which evaluates before this file)
 window.updatePlayByPlayPanelState = updatePlayByPlayPanelState;
-// updatePlayByPlayLayout / updateLineTabStartPointBtn: called bare
-// (typeof-guarded) by converted ui/panelSystem.js (resolve via window; import at C10).
+// window survivor: late-bound back-edge hook (called by ui/panelSystem.js,
+// which evaluates before this file)
 window.updatePlayByPlayLayout = updatePlayByPlayLayout;
+// window survivor: late-bound back-edge hook (called by ui/panelSystem.js)
 window.updateLineTabStartPointBtn = updateLineTabStartPointBtn;
 // Dropped shims (zero external references found): showGameEventsModal,
 // hideGameEventsModal, applySwitchSides, wireTabControlEvents.
