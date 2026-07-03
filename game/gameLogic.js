@@ -82,11 +82,14 @@ function startNewGame(startingPosition, seconds) {
     setCountdownSeconds(seconds);
 
     // Enter the panel-based game screen
-    if (typeof enterGameScreen === 'function') {
-        enterGameScreen();
+    // late-bound back-edge (gameScreenSync/gameScreenEvents live "above" this
+    // layer); see ARCHITECTURE.md § ES modules — the window shim at the owner
+    // is kept deliberately.
+    if (typeof window.enterGameScreen === 'function') {
+        window.enterGameScreen();
     }
-    if (typeof transitionToBetweenPoints === 'function') {
-        transitionToBetweenPoints();
+    if (typeof window.transitionToBetweenPoints === 'function') {
+        window.transitionToBetweenPoints();
     }
     console.log('🎮 New game started with panel UI');
 }
@@ -227,9 +230,11 @@ function updateScore(winner) {
     });
 
     // Phase 6b: Update game screen score display
-    if (typeof updateGameScreenScore === 'function') {
+    // late-bound back-edge (gameScreenSync lives "above" this layer); see
+    // ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
+    if (typeof window.updateGameScreenScore === 'function') {
         const game = currentGame();
-        updateGameScreenScore(game.scores[Role.TEAM], game.scores[Role.OPPONENT]);
+        window.updateGameScreenScore(game.scores[Role.TEAM], game.scores[Role.OPPONENT]);
     }
 
     summarizeGame();
@@ -258,8 +263,10 @@ document.getElementById('anotherGameBtn').addEventListener('click', function() {
     clearNextLineSelections();
 
     // Phase 6b: Exit game screen if visible
-    if (typeof exitGameScreen === 'function') {
-        exitGameScreen();
+    // late-bound back-edge (gameScreenSync lives "above" this layer); see
+    // ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
+    if (typeof window.exitGameScreen === 'function') {
+        window.exitGameScreen();
     }
     
     updateTeamRosterDisplay();
@@ -411,9 +418,11 @@ function revertPointScore(point) {
     point.endTimestamp = null;
     point.startTimestamp = new Date();
 
-    if (typeof updateGameScreenScore === 'function') {
+    // late-bound back-edge (gameScreenSync lives "above" this layer); see
+    // ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
+    if (typeof window.updateGameScreenScore === 'function') {
         const game = currentGame();
-        updateGameScreenScore(game.scores[Role.TEAM], game.scores[Role.OPPONENT]);
+        window.updateGameScreenScore(game.scores[Role.TEAM], game.scores[Role.OPPONENT]);
     }
 
     // Stop between-points countdown and restore in-point panel layout
@@ -445,8 +454,10 @@ function undoEvent() {
                 stopCountdown();
                 setIsPaused(false);
                 clearNextLineSelections();
-                if (typeof exitGameScreen === 'function') {
-                    exitGameScreen();
+                // late-bound back-edge (gameScreenSync lives "above" this layer);
+                // see ARCHITECTURE.md § ES modules — owner keeps the shim.
+                if (typeof window.exitGameScreen === 'function') {
+                    window.exitGameScreen();
                 }
                 updateTeamRosterDisplay();
                 document.getElementById('continueGameBtn').classList.add('inactive');
@@ -628,26 +639,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 export {
     updateScore, summarizeGame, downloadJSON, undoEvent,
     configureStartGameMode, appVersion,
 };
-// updateScore: called bare by classic narration/narrationEngine.js and
-// game/gameScreenEvents.js.
-window.updateScore = updateScore;
-// summarizeGame: called bare by converted ui/eventLogDisplay.js (resolves via
-// window — importing it there would add a gameLogic↔eventLogDisplay cycle for
-// no gain; C10 converts it) and typeof-guarded by classic game/gameScreenSync.js.
+// window survivor: late-bound back-edge hook (called by ui/eventLogDisplay.js,
+// which evaluates before this file — importing from here would add a
+// gameLogic↔eventLogDisplay cycle)
 window.summarizeGame = summarizeGame;
-// undoEvent: called bare by classic game/gameScreenEvents.js and
-// playByPlay/fullPbp.js.
-window.undoEvent = undoEvent;
-// configureStartGameMode: called bare (typeof-guarded) by converted
-// screens/navigation.js (resolves via window; import at C10 would create a
-// gameLogic↔navigation cycle).
+// window survivor: late-bound back-edge hook (called by screens/navigation.js,
+// which evaluates before this file — importing from here would create a
+// gameLogic↔navigation cycle)
 window.configureStartGameMode = configureStartGameMode;
-// appVersion: read bare by main.js and classic game/gameScreenEvents.js —
-// live getter, a static copy would stay null (loadVersion() assigns it async).
-Object.defineProperty(window, 'appVersion', { configurable: true, get: () => appVersion });

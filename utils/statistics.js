@@ -86,7 +86,5 @@ function calculatePlayerStatsFromEvents(game) {
     return stats;
 }
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 export { calculatePlayerStatsFromEvents };
-window.calculatePlayerStatsFromEvents = calculatePlayerStatsFromEvents;

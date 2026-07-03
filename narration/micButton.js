@@ -274,9 +274,9 @@ const narrationMicButton = (function() {
     };
 })();
 
-// --- ES-module export; the window shim is REQUIRED (not just transitional
-// --- convenience): narrationEngine.setPhase() reaches this via
-// --- window.narrationMicButton at call time to avoid an engine↔micButton
-// --- import cycle that would invert their eval order (see setPhase).
+// --- ES-module export ---
 export { narrationMicButton };
+// window survivor: late-bound back-edge hook (called window-qualified by
+// narration/narrationEngine.js setPhase — an engine↔micButton import cycle
+// would invert their eval order; see setPhase)
 window.narrationMicButton = narrationMicButton;

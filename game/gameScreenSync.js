@@ -706,37 +706,33 @@ document.addEventListener('breakside:controller-ui-updated', (e) => {
         startGameStateRefresh();
     }
 });
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 export {
     enterGameScreen, exitGameScreen,
     updateGameScreenScore, updateGameLogEvents,
     startGameStateRefresh, stopGameStateRefresh,
     escapeHtml,
 };
-// enterGameScreen: called bare (typeof-guarded) by converted game/gameLogic.js,
+// window survivor: late-bound back-edge hook (called by game/gameLogic.js,
 // game/pointManagement.js, screens/navigation.js, teams/rosterManagement.js,
-// teams/teamList.js (resolve via window; import at C10).
+// teams/teamList.js — all evaluate before this file)
 window.enterGameScreen = enterGameScreen;
-// exitGameScreen: called bare by classic auth/loginScreen.js and (typeof-guarded
-// bare / via window) by converted game/controllerState.js and game/gameLogic.js.
+// window survivor: late-bound back-edge hook (called by auth/loginScreen.js,
+// game/controllerState.js, game/gameLogic.js — all evaluate before this file)
 window.exitGameScreen = exitGameScreen;
-// updateGameScreenScore: called bare (typeof-guarded) by converted
-// game/gameLogic.js (resolves via window; import at C10).
+// window survivor: late-bound back-edge hook (called by game/gameLogic.js)
 window.updateGameScreenScore = updateGameScreenScore;
-// updateGameLogEvents: called bare (typeof-guarded) by converted
-// ui/eventLogDisplay.js (resolves via window; import at C10).
+// window survivor: late-bound back-edge hook (called by ui/eventLogDisplay.js)
 window.updateGameLogEvents = updateGameLogEvents;
-// startGameStateRefresh / stopGameStateRefresh: called bare (typeof-guarded)
-// by converted game/controllerState.js (resolve via window; import at C10).
+// window survivor: late-bound back-edge hook (called window-qualified by
+// game/controllerState.js, which evaluates before this file)
 window.startGameStateRefresh = startGameStateRefresh;
+// window survivor: late-bound back-edge hook (called window-qualified by
+// game/controllerState.js)
 window.stopGameStateRefresh = stopGameStateRefresh;
-// escapeHtml: was an implicit global owned by this file pre-migration. Still
-// called bare by converted utils/statsHelp.js and teams/gameSummary.js —
-// left bare there (resolving via this window shim) rather than imported, to
-// avoid a teams/gameSummary ↔ game-screen import cycle (gameScreenEvents
-// imports showGameSummaryPostGame from gameSummary). Exported above for C10.
+// window survivor: late-bound back-edge hook (called by utils/statsHelp.js and
+// teams/gameSummary.js — importing there would create a teams/gameSummary ↔
+// game-screen import cycle via gameScreenEvents→gameSummary)
 window.escapeHtml = escapeHtml;
-// isGameScreenVisible is owned and shimmed by ui/panelSystem.js.
 // Dropped shims (zero external references found): updateGameScreenRoleButtons,
 // updateGameLogPanel, updateGameLogStatus.

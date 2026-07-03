@@ -169,9 +169,11 @@ function getPlayerGameTime(playerName) {
                     // For completed points, just use the totalPointTime
                     totalTime += point.totalPointTime;
                 } else if (!point.winner) {
-                    // For the current point (in progress), handle paused state
-                    // Note: isPaused is a global variable defined in main.js
-                    if (typeof isPaused !== 'undefined' && isPaused) {
+                    // For the current point (in progress), handle paused state.
+                    // late-bound state read (isPaused lives in
+                    // game/pointManagement.js, "above" this layer — its window
+                    // accessor is kept deliberately; see ARCHITECTURE.md § ES modules).
+                    if (typeof window.isPaused !== 'undefined' && window.isPaused) {
                         // If paused, just use the accumulated time
                         totalTime += point.totalPointTime;
                     } else if (point.startTimestamp) {
@@ -303,10 +305,7 @@ function getExpectedGenderCounts(expectedCount, expectedRatio) {
     }
 }
 
-// --- ES-module exports. window.* assignments are transitional shims for
-// --- not-yet-converted classic scripts, removed at the end of the migration —
-// --- EXCEPT window.currentGame, which is a permanent test seam (the Playwright
-// --- e2e suite reads it via page.evaluate).
+// --- ES-module exports ---
 export {
     getPlayerFromName, currentGame, getLatestPoint, getLatestPossession,
     getLatestEvent, getPossessionOf, getPointOf, isPointInProgress,
@@ -315,22 +314,7 @@ export {
     getGenderRatioForPoint, getExpectedGenderRatio, getExpectedGenderCounts,
 };
 
-window.getPlayerFromName = getPlayerFromName;
-window.currentGame = currentGame;   // permanent: e2e test seam
-window.getLatestPoint = getLatestPoint;
-window.getLatestPossession = getLatestPossession;
-window.getLatestEvent = getLatestEvent;
-window.getPossessionOf = getPossessionOf;
-window.getPointOf = getPointOf;
-window.isPointInProgress = isPointInProgress;
-window.getActivePossession = getActivePossession;
-window.getPlayerGameTime = getPlayerGameTime;
-window.formatPlayTime = formatPlayTime;
-window.determineStartingPosition = determineStartingPosition;
-window.capitalize = capitalize;
-window.formatPlayerName = formatPlayerName;
-window.extractPlayerName = extractPlayerName;
-window.getGenderRatioForPoint = getGenderRatioForPoint;
-window.getExpectedGenderRatio = getExpectedGenderRatio;
-window.getExpectedGenderCounts = getExpectedGenderCounts;
+// window survivor: e2e test seam — the Playwright suite reads
+// window.currentGame via page.evaluate (scenarios 03/04/05). Permanent.
+window.currentGame = currentGame;
 

@@ -789,18 +789,17 @@ Just listen. Transcription happens automatically.`;
         stopRecording,
         isRecording,
         getPhase,
-        // Inspection helpers — useful from the devtools console:
-        //   window.narrationEngine.getTranscript()   // accumulated text
-        //   window.narrationEngine.getProvisionals() // events from fast pass
+        // Inspection helpers (import { narrationEngine } — the window shim
+        // was removed at the end of the ES-module migration):
+        //   narrationEngine.getTranscript()   // accumulated text
+        //   narrationEngine.getProvisionals() // events from fast pass
         getTranscript: () => accumulatedTranscript,
         getProvisionals: () => provisionalEvents.slice(),
         _resolvePlayerName: resolvePlayerName
     };
 })();
 
-// --- ES-module export; the window shim is transitional for the
-// --- window-qualified read in main.js (isReloadUnsafe checks
-// --- window.narrationEngine.getPhase) until C10, and doubles as the
-// --- devtools inspection seam noted above.
+// --- ES-module export (main.js imports this for isReloadUnsafe; devtools
+// --- narration debugging goes through the documented window.narrationMicButton
+// --- seam and the engine's exported API).
 export { narrationEngine };
-window.narrationEngine = narrationEngine;

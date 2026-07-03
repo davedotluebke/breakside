@@ -3,7 +3,7 @@
  * Manages team members, invites, and joining teams
  */
 import { currentTeam, saveAllTeamsData } from '../store/storage.js';
-import { authFetch, syncTeamToCloud, syncUserTeams } from '../store/sync.js';
+import { authFetch, syncTeamToCloud, syncUserTeams, API_BASE_URL } from '../store/sync.js';
 import { showScreen } from '../screens/navigation.js';
 import { showGameScreen } from '../ui/panelSystem.js';
 import { updateTeamRosterDisplay } from './rosterManagement.js';
@@ -25,8 +25,10 @@ let pendingJoinInfo = null;
 // retry/refresh behavior. Unauthenticated endpoints (invite info, image proxy)
 // use plain `fetch`.
 
+// Local wrapper kept deliberately (this file's documented API-base accessor);
+// API_BASE_URL is imported from store/sync.js.
 function getApiBaseUrl() {
-    return typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
+    return API_BASE_URL;
 }
 
 // =============================================================================
@@ -965,8 +967,10 @@ function saveTeamIdentity() {
     }
     
     // Update header if visible
-    if (typeof updateHeaderTeamIdentities === 'function') {
-        updateHeaderTeamIdentities();
+    // late-bound back-edge (game/gameScreenPanels lives "above" this layer);
+    // see ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
+    if (typeof window.updateHeaderTeamIdentities === 'function') {
+        window.updateHeaderTeamIdentities();
     }
     
     // Visual feedback
@@ -1083,10 +1087,6 @@ if (document.readyState === 'loading') {
     initializeTeamSettings();
 }
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 export { showTeamSettingsScreen };
-// showTeamSettingsScreen: called bare (typeof-guarded) by classic
-// game/gameScreenEvents.js and by main.js.
-window.showTeamSettingsScreen = showTeamSettingsScreen;
 

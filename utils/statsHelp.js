@@ -100,13 +100,16 @@ function showStatsHelpModal(help) {
     modal.id = 'statsHelpModal';
     modal.className = 'modal';
     modal.style.display = 'flex';
+    // late-bound back-edge (escapeHtml's owner game/gameScreenSync.js lives
+    // "above" this layer); see ARCHITECTURE.md § ES modules — the window shim
+    // at the owner is kept deliberately.
     modal.innerHTML = `
         <div class="modal-content stats-help-modal-content">
             <div class="dialog-header prominent-dialog-header">
-                <h2>${escapeHtml(help.name)}</h2>
+                <h2>${window.escapeHtml(help.name)}</h2>
                 <span class="close">&times;</span>
             </div>
-            <div class="stats-help-body">${escapeHtml(help.desc)}</div>
+            <div class="stats-help-body">${window.escapeHtml(help.desc)}</div>
         </div>
     `;
     document.body.appendChild(modal);
@@ -115,7 +118,5 @@ function showStatsHelpModal(help) {
     modal.onclick = (e) => { if (e.target === modal) close(); };
 }
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 export { attachStatsColumnHelp };
-window.attachStatsColumnHelp = attachStatsColumnHelp;

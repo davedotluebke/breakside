@@ -8,6 +8,7 @@
  * - Entities created offline are marked with _localOnly: true
  */
 
+import { BREAKSIDE_AUTH } from '../auth/config.js';
 import { Role, Gender, Team, generatePlayerId, generateTeamId } from './models.js';
 import {
     teams, serializeGame, saveAllTeamsData, deserializePlayer,
@@ -48,12 +49,12 @@ function getApiBaseUrl() {
     const storedUrl = localStorage.getItem('ultistats_api_url');
     if (storedUrl) return storedUrl;
     
-    // Check if config is available (set by auth/config.js)
-    if (window.BREAKSIDE_AUTH?.API_BASE_URL) {
+    // Check if config is available (auth/config.js)
+    if (BREAKSIDE_AUTH?.API_BASE_URL) {
         // In production, use the configured API URL
-        if (window.location.hostname !== 'localhost' && 
+        if (window.location.hostname !== 'localhost' &&
             window.location.hostname !== '127.0.0.1') {
-            return window.BREAKSIDE_AUTH.API_BASE_URL;
+            return BREAKSIDE_AUTH.API_BASE_URL;
         }
     }
     
@@ -864,11 +865,6 @@ async function listTeamEvents(teamId) {
     return result.events || [];
 }
 
-window.syncEventToCloud = syncEventToCloud;
-window.createEventOnCloud = createEventOnCloud;
-window.updateEventOnCloud = updateEventOnCloud;
-window.deleteEventFromCloud = deleteEventFromCloud;
-window.listTeamEvents = listTeamEvents;
 
 /**
  * Update only a game's phase label (retroactive labeling).
@@ -891,8 +887,6 @@ async function updateGamePhase(gameId, phase) {
     }
     return response.json();
 }
-
-window.updateGamePhase = updateGamePhase;
 
 // =============================================================================
 // Game Sync Functions
@@ -1619,23 +1613,26 @@ function startAutoSync() {
                 const result = await syncUserTeams();
                 
                 if (result.success) {
+                    // Data→UI notifications: late-bound back-edges (teams/* UI
+                    // lives "above" this layer); see ARCHITECTURE.md § ES
+                    // modules — the window shims at the owners are kept.
                     // Refresh the team selection screen if visible
                     if (document.getElementById('selectTeamScreen')?.style.display !== 'none') {
-                        if (typeof showSelectTeamScreen === 'function') {
-                            showSelectTeamScreen();
+                        if (typeof window.showSelectTeamScreen === 'function') {
+                            window.showSelectTeamScreen();
                         }
                     }
-                    
+
                     // Refresh the roster screen if visible
                     if (document.getElementById('teamRosterScreen')?.style.display !== 'none') {
-                        if (typeof updateTeamRosterDisplay === 'function') {
-                            updateTeamRosterDisplay();
+                        if (typeof window.updateTeamRosterDisplay === 'function') {
+                            window.updateTeamRosterDisplay();
                         }
                     }
-                    
+
                     // Update sync status display
-                    if (typeof updateSyncStatusDisplay === 'function') {
-                        updateSyncStatusDisplay();
+                    if (typeof window.updateSyncStatusDisplay === 'function') {
+                        window.updateSyncStatusDisplay();
                     }
                 }
             }
@@ -1780,71 +1777,33 @@ function clearSyncData() {
 // Exports
 // =============================================================================
 
-// Clear data (for sign out)
-window.clearSyncData = clearSyncData;
-
-// Sync queue access (for pending dialog)
-window.getSyncQueueItems = function() { return syncQueue.slice(); };
-window.clearSyncQueue = function() {
+// Sync queue access (for the pending-sync dialog in teams/syncStatusUI.js)
+function getSyncQueueItems() { return syncQueue.slice(); }
+function clearSyncQueue() {
     syncQueue = [];
     saveSyncQueue();
-};
-window.reloadSyncQueue = function() {
-    syncQueue = loadSyncQueue();
-};
+}
 
-// Game sync (existing)
+// window survivor: late-bound back-edge hook (called by store/storage.js
+// saveAllTeamsData — storage evaluates before this file; importing from here
+// would create a storage↔sync eval-time cycle)
 window.syncGameToCloud = syncGameToCloud;
+// window survivor: late-bound back-edge hook (called window-qualified by
+// game/gameLogic.js)
 window.generateGameId = generateGameId;
-window.listServerGames = listServerGames;
-window.loadGameFromCloud = loadGameFromCloud;
-window.refreshPendingLineFromCloud = refreshPendingLineFromCloud;
-window.refreshGameStateFromCloud = refreshGameStateFromCloud;
-window.deleteGameFromCloud = deleteGameFromCloud;
-window.createGameOffline = createGameOffline;
 
-// Player sync (new)
-window.createPlayerOffline = createPlayerOffline;
-window.syncPlayerToCloud = syncPlayerToCloud;
-window.loadPlayerFromCloud = loadPlayerFromCloud;
-window.listCloudPlayers = listCloudPlayers;
-window.deletePlayerFromCloud = deletePlayerFromCloud;
-
-// Team sync (new)
-window.createTeamOffline = createTeamOffline;
-window.syncTeamToCloud = syncTeamToCloud;
-window.loadTeamFromCloud = loadTeamFromCloud;
-window.listCloudTeams = listCloudTeams;
-window.deleteTeamFromCloud = deleteTeamFromCloud;
-
-// Full sync (new)
-window.syncAllData = syncAllData;
-window.pullFromCloud = pullFromCloud;
-window.getSyncStatus = getSyncStatus;
-window.checkIsOnline = checkIsOnline;
-window.getPendingSyncCount = getPendingSyncCount;
-window.hasPendingSync = hasPendingSync;
-window.processSyncQueue = processSyncQueue;
-
-// User team sync
+// window survivors: late-bound back-edge hooks called by auth/auth.js
+// (sign-in/sign-out flows) — auth evaluates before this file and cannot
+// import from it without reordering evaluation.
 window.syncUserTeams = syncUserTeams;
-
-// Auto-sync polling
-window.checkForUpdates = checkForUpdates;
+// window survivor: late-bound back-edge hook (called by auth/auth.js)
 window.startAutoSync = startAutoSync;
+// window survivor: late-bound back-edge hook (called by auth/auth.js)
 window.stopAutoSync = stopAutoSync;
+// window survivor: late-bound back-edge hook (called by auth/auth.js on sign-out)
+window.clearSyncData = clearSyncData;
 
-// Previously implicit globals (top-level function/const in a classic script)
-// still consumed bare by not-yet-converted classic scripts. Transitional —
-// removed at end of the ES-module migration. NOTE: window.authFetch here is
-// the runtime winner that all callers already got pre-migration (auth.js's
-// same-named 401-retry variant was dead code: sync.js loaded after it and
-// overwrote the global).
-window.authFetch = authFetch;
-window.API_BASE_URL = API_BASE_URL;
-
-// --- ES-module exports (the window.* assignments above are transitional
-// --- shims for classic scripts, removed at end of the migration).
+// --- ES-module exports ---
 export {
     getApiBaseUrl, API_BASE_URL, authFetch,
     loadSyncQueue, saveSyncQueue, addToSyncQueue, getPendingSyncCount,
@@ -1861,4 +1820,5 @@ export {
     refreshPendingLineFromCloud, refreshGameStateFromCloud, deleteGameFromCloud,
     syncUserTeams, checkForUpdates, startAutoSync, stopAutoSync,
     syncAllData, pullFromCloud, getSyncStatus, checkIsOnline, clearSyncData,
+    getSyncQueueItems, clearSyncQueue,
 };

@@ -70,7 +70,9 @@ const hints = (function() {
     return { maybeShow, resetAll };
 })();
 
-// --- ES-module export; window shim is transitional for classic consumers
-// --- (playByPlay/fieldPbp.js) and window-qualified use in advancedSettings.js.
+// --- ES-module export ---
 export { hints };
+// window survivor: late-bound back-edge hook (read window-qualified by
+// settings/advancedSettings.js — evaluates before this file — and
+// playByPlay/fieldPbp.js)
 window.hints = hints;

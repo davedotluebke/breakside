@@ -295,8 +295,7 @@ function stopGameScreenTimerLoop() {
 // (game/gameScreenSync.js) imports this instead of assigning the bare global.
 function setPointTimerPaused(v) { pointTimerPaused = v; }
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 export {
     updateTimerDisplay, updateTimerPauseButton,
     handleTimerToggle, handleTimerPauseClick,
@@ -304,7 +303,8 @@ export {
     startGameScreenTimerLoop, stopGameScreenTimerLoop,
     setPointTimerPaused,
 };
-// updateTimerDisplay: consumed via window by game/pointManagement.js (import at C10).
+// window survivor: late-bound back-edge hook (called window-qualified by
+// game/pointManagement.js, which evaluates before this file)
 window.updateTimerDisplay = updateTimerDisplay;
 // Dropped shim (zero external references found): autoResumePointTimer — its
 // only consumer, game/gameScreenEvents.js, imports it now.

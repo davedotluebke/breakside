@@ -516,11 +516,8 @@ function getExpectedPullGender(game) {
     return lastPullGender === Gender.FMP ? Gender.MMP : Gender.FMP;
 }
 
-// --- ES-module exports; the window shim below is transitional (removed at C10).
+// --- ES-module exports ---
 // showPullDialog is imported by game/pointManagement.js — no shim needed.
 export { initializePullDialog, showPullDialog };
-// initializePullDialog: called bare (typeof-guarded) by main.js's
-// DOMContentLoaded wiring — the guard resolves against window, so without this
-// shim the dialog would silently never initialize.
-window.initializePullDialog = initializePullDialog;
+
 

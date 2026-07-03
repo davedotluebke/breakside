@@ -2056,8 +2056,7 @@ function setPanelShowingTotalStats(v) { panelShowingTotalStats = v; }
 function setCachedPanelEventStats(v) { cachedPanelEventStats = v; }
 function setLastConflictToastPointIndex(v) { lastConflictToastPointIndex = v; }
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 export {
     wireSelectLineEvents,
     clearLineSelection, autoFillLineSelection,
@@ -2071,19 +2070,16 @@ export {
     setPanelStatsMode, setPanelShowingTotalStats,
     setCachedPanelEventStats, setLastConflictToastPointIndex,
 };
-// handlePanelStartPoint: called bare by classic playByPlay/fullPbp.js and
-// playByPlay/fieldPbp.js.
-window.handlePanelStartPoint = handlePanelStartPoint;
-// getEffectiveLineForNextPoint: called bare (typeof-guarded) by converted
-// game/pointManagement.js (resolves via window; import at C10).
+// window survivor: late-bound back-edge hook (called by
+// game/pointManagement.js, which evaluates before this file)
 window.getEffectiveLineForNextPoint = getEffectiveLineForNextPoint;
-// updateSelectLinePanel: called bare (typeof-guarded) by converted
-// teams/rosterManagement.js (resolves via window; import at C10).
+// window survivor: late-bound back-edge hook (called by
+// teams/rosterManagement.js, which evaluates before this file)
 window.updateSelectLinePanel = updateSelectLinePanel;
-// computeAutoLine / buildAutoLineStats: console/debug seam — kept deliberately
-// so the Auto-line logic can be exercised from the dev console (see the
-// buildAutoLineStats doc comment).
+// window survivor: debug seam — Auto-line logic exercisable from the dev
+// console (see the buildAutoLineStats doc comment)
 window.computeAutoLine = computeAutoLine;
+// window survivor: debug seam (paired with computeAutoLine above)
 window.buildAutoLineStats = buildAutoLineStats;
 // Dropped shims (zero external references found): updateSelectLineTable,
 // updateSelectLinePanelState, updateSelectLineSubtitle, canEditSelectLinePanel,

@@ -978,7 +978,9 @@ function updatePanelsForRole() {
     // Hide role buttons when solo coaching.
     // Server tracks how many coaches are actively polling this game.
     // Once we detect multiple coaches, latch visible for the session.
-    const state = typeof getControllerState === 'function' ? getControllerState() : {};
+    // late-bound back-edge (game/controllerState lives "above" this layer);
+    // see ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
+    const state = typeof window.getControllerState === 'function' ? window.getControllerState() : {};
     if ((state.connectedCoaches?.length || 0) > 1) {
         _multiCoachDetected = true;
     }
@@ -1264,14 +1266,16 @@ function applyTabState() {
     }
 
     // After tab switch, update PBP layout if visible (it may now have more space)
-    if (typeof updatePlayByPlayLayout === 'function') {
-        requestAnimationFrame(() => updatePlayByPlayLayout());
+    // late-bound back-edge (game/gameScreenEvents lives "above" this layer);
+    // see ARCHITECTURE.md § ES modules — the window shims at the owner are kept.
+    if (typeof window.updatePlayByPlayLayout === 'function') {
+        requestAnimationFrame(() => window.updatePlayByPlayLayout());
     }
 
     // Refresh the Line-tab Start Point button — its visibility is gated on
     // the active tab being 'line', so a tab switch can flip it on or off.
-    if (typeof updateLineTabStartPointBtn === 'function') {
-        updateLineTabStartPointBtn();
+    if (typeof window.updateLineTabStartPointBtn === 'function') {
+        window.updateLineTabStartPointBtn();
     }
 }
 
@@ -1362,7 +1366,7 @@ if (document.readyState === 'loading') {
 // Exports
 // =============================================================================
 
-// --- ES-module exports; window.* shims are transitional until all consumers import ---
+// --- ES-module exports ---
 // Only names consumed by other files are exported/shimmed. Names that were on
 // window purely "for testing/debugging" with zero external references
 // (loadPanelStates, savePanelStates, isPanelMinimized, minimizePanel,
@@ -1391,34 +1395,27 @@ export {
     rememberCurrentPbpTab, updateSegmentedSlider,
 };
 
-window.getPanelState = getPanelState;
+// window survivor: late-bound back-edge hook (called window-qualified by game/gameScreenEvents.js)
 window.setPanelState = setPanelState;
-// MIN_PANEL_HEIGHT: consumed by game/gameScreenSync.js; as a classic-script
-// const it was visible via the global lexical scope, which module consts are
-// not — the shim keeps that working until gameScreenSync converts.
-window.MIN_PANEL_HEIGHT = MIN_PANEL_HEIGHT;
-window.setPanelVisible = setPanelVisible;
-window.setPanelSubtitle = setPanelSubtitle;
-window.setPanelTitle = setPanelTitle;
-window.resetAllPanelStates = resetAllPanelStates;
+// window survivor: late-bound back-edge hook (called window-qualified by playByPlay/fullPbp.js, playByPlay/fieldPbp.js)
 window.createPanelTitleBar = createPanelTitleBar;
+// window survivor: debug seam (console toggle for physical panel dragging; no in-app UI yet)
 window.setFullyPhysicalPanelDragging = setFullyPhysicalPanelDragging;
+// window survivor: debug seam (paired getter for the above)
 window.getFullyPhysicalPanelDragging = getFullyPhysicalPanelDragging;
-window.resetMultiCoachDetected = resetMultiCoachDetected;
+// window survivor: late-bound back-edge hook (called window-qualified by game/gameScreenEvents.js)
 window.forceMultiCoachDetected = forceMultiCoachDetected;
+// window survivor: late-bound back-edge hook (called window-qualified by game/selectLine.js, game/controllerState.js)
 window.isMultiCoachDetected = isMultiCoachDetected;
-window.showGameScreen = showGameScreen;
-window.hideGameScreen = hideGameScreen;
-// isGameScreenVisible: game/gameScreenSync.js re-assigns this global to itself
-// at classic-parse time; this module shim overwrites it at module eval with the
-// same (only real) implementation — no behavior change.
-window.isGameScreenVisible = isGameScreenVisible;
-window.updatePanelsForRole = updatePanelsForRole;
-window.updatePanelsForGameState = updatePanelsForGameState;
+// window survivor: late-bound back-edge hook (called window-qualified by game/pointManagement.js)
 window.switchTab = switchTab;
+// window survivor: late-bound back-edge hook (called window-qualified by game/pointManagement.js, game/gameScreenEvents.js)
 window.getActiveTab = getActiveTab;
+// window survivor: late-bound back-edge hook (called by store/models.js
+// captureCurrentMode — models evaluates before this file and cannot import from it)
 window.getCurrentMode = getCurrentMode;
+// window survivor: late-bound back-edge hook (called window-qualified by game/pointManagement.js)
 window.getLastPbpTab = getLastPbpTab;
+// window survivor: late-bound back-edge hook (called window-qualified by game/pointManagement.js)
 window.rememberCurrentPbpTab = rememberCurrentPbpTab;
-window.updateSegmentedSlider = updateSegmentedSlider;
 

@@ -54,8 +54,10 @@ function showScreen(screenId) {
     manageControllerButtons(screenId);
 
     // Start active-game polling on non-game screens
-    if (nonGameScreenIds.includes(screenId) && typeof startActiveGamePolling === 'function') {
-        startActiveGamePolling();
+    // late-bound back-edge (teams/activeGamePolling lives "above" this layer);
+    // see ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
+    if (nonGameScreenIds.includes(screenId) && typeof window.startActiveGamePolling === 'function') {
+        window.startActiveGamePolling();
     }
 
     // Hook point for cross-module reactions to navigation (replaces the old
@@ -69,11 +71,13 @@ function showScreen(screenId) {
  * so hide them on all navigation-managed screens.
  */
 function manageControllerButtons(screenId) {
-    if (typeof setControllerButtonsVisible !== 'function') {
+    // late-bound back-edge (game/controllerState lives "above" this layer);
+    // see ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
+    if (typeof window.setControllerButtonsVisible !== 'function') {
         return;
     }
     // All screens managed by showScreen() are non-game screens
-    setControllerButtonsVisible(false);
+    window.setControllerButtonsVisible(false);
 }
 
 /**
@@ -81,13 +85,15 @@ function manageControllerButtons(screenId) {
  * Stops polling when entering a non-game screen.
  */
 function manageControllerPolling(screenId) {
-    if (typeof startControllerPolling !== 'function' ||
-        typeof stopControllerPolling !== 'function') {
+    // late-bound back-edge (game/controllerState lives "above" this layer);
+    // see ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
+    if (typeof window.startControllerPolling !== 'function' ||
+        typeof window.stopControllerPolling !== 'function') {
         return;
     }
 
     if (nonGameScreenIds.includes(screenId)) {
-        stopControllerPolling();
+        window.stopControllerPolling();
     }
 }
 
@@ -100,8 +106,10 @@ function showStartGameSubscreen() {
     document.getElementById('editRosterSubscreen').style.display = 'none';
     // Default to new-game mode; showStartGameScreen('gameScreen') re-applies
     // mid-game mode afterward when appropriate.
-    if (typeof configureStartGameMode === 'function') {
-        configureStartGameMode(false);
+    // late-bound back-edge (game/gameLogic lives "above" this layer); see
+    // ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
+    if (typeof window.configureStartGameMode === 'function') {
+        window.configureStartGameMode(false);
     }
 }
 
@@ -115,7 +123,9 @@ let _editRosterCameFromStartGame = false;
 function showEditRosterSubscreen() {
     document.getElementById('startGameSubscreen').style.display = 'none';
     document.getElementById('editRosterSubscreen').style.display = '';
-    if (typeof updateTeamRosterDisplay === 'function') updateTeamRosterDisplay();
+    // late-bound back-edge (teams/rosterManagement lives "above" this layer);
+    // see ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
+    if (typeof window.updateTeamRosterDisplay === 'function') window.updateTeamRosterDisplay();
 }
 
 // Back handler for the Edit Roster subscreen. Returns to Start Game when Edit
@@ -146,12 +156,15 @@ function setRosterFlowReturn(target) {
 // Re-enter the live game from a roster/start-game screen (mirrors the
 // Continue Game button behavior).
 function returnToGameFromRoster() {
-    if (typeof enterGameScreen === 'function' && currentTeam &&
+    // late-bound back-edge (gameScreenSync/gameScreenEvents live "above" this
+    // layer); see ARCHITECTURE.md § ES modules — the window shim at the owner
+    // is kept deliberately.
+    if (typeof window.enterGameScreen === 'function' && currentTeam &&
         currentTeam.games && currentTeam.games.length > 0) {
-        enterGameScreen();
+        window.enterGameScreen();
         if (typeof isPointInProgress === 'function' && isPointInProgress() === false &&
-            typeof transitionToBetweenPoints === 'function') {
-            transitionToBetweenPoints();
+            typeof window.transitionToBetweenPoints === 'function') {
+            window.transitionToBetweenPoints();
         }
     }
 }
@@ -161,8 +174,10 @@ function returnToGameFromRoster() {
 function rosterFlowBack() {
     if (_rosterFlowReturn === 'gameScreen') {
         returnToGameFromRoster();
-    } else if (typeof showSelectTeamScreen === 'function') {
-        showSelectTeamScreen();
+    // late-bound back-edge (teams/teamList lives "above" this layer); see
+    // ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
+    } else if (typeof window.showSelectTeamScreen === 'function') {
+        window.showSelectTeamScreen();
     } else {
         showScreen('selectTeamScreen');
     }
@@ -174,7 +189,9 @@ function showEditRosterScreen(returnTarget) {
     // Top-level entry: Back exits the roster screen, not to Start Game.
     _editRosterCameFromStartGame = false;
     // Recompute scoped stats on entry so newly-played points / added games show.
-    if (typeof invalidateRosterStatsCache === 'function') invalidateRosterStatsCache();
+    // late-bound back-edge (teams/rosterManagement lives "above" this layer);
+    // see ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
+    if (typeof window.invalidateRosterStatsCache === 'function') window.invalidateRosterStatsCache();
     showScreen('teamRosterScreen');
     showEditRosterSubscreen();
 }
@@ -186,8 +203,10 @@ function showStartGameScreen(returnTarget) {
     setRosterFlowReturn(returnTarget);
     showScreen('teamRosterScreen');
     showStartGameSubscreen();
-    if (typeof configureStartGameMode === 'function') {
-        configureStartGameMode(returnTarget === 'gameScreen');
+    // late-bound back-edge (game/gameLogic lives "above" this layer); see
+    // ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
+    if (typeof window.configureStartGameMode === 'function') {
+        window.configureStartGameMode(returnTarget === 'gameScreen');
     }
 }
 
@@ -211,13 +230,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// --- ES-module exports; window.* shims are transitional until all consumers import ---
+// --- ES-module exports ---
 export {
     showScreen, showEditRosterScreen, showEditRosterSubscreen,
     showStartGameScreen, returnToGameFromRoster,
 };
-window.showScreen = showScreen;
-window.showEditRosterScreen = showEditRosterScreen;
-window.showEditRosterSubscreen = showEditRosterSubscreen;
-window.showStartGameScreen = showStartGameScreen;
-window.returnToGameFromRoster = returnToGameFromRoster;

@@ -571,11 +571,8 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
     }
 }
 
-// --- ES-module exports; the window shim below is transitional (removed at C10).
+// --- ES-module exports ---
 // showScoreAttributionDialog is imported by game/gameScreenEvents.js,
 // playByPlay/fullPbp.js, and playByPlay/fieldPbp.js — no shim needed.
 export { initializeScoreAttributionDialog, showScoreAttributionDialog };
-// initializeScoreAttributionDialog: called bare (typeof-guarded) by main.js's
-// DOMContentLoaded wiring — the guard resolves against window, so without this
-// shim the dialog would silently never initialize.
-window.initializeScoreAttributionDialog = initializeScoreAttributionDialog;
+

@@ -235,7 +235,5 @@ function createTableSortController(options) {
     };
 }
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 export { createTableSortController };
-window.createTableSortController = createTableSortController;

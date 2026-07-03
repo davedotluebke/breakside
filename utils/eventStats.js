@@ -429,8 +429,7 @@ async function getEventRecord(event, options = {}) {
     return { wins, losses, ties };
 }
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 export {
     loadEventGames,
     accumulateGameStats,
@@ -443,13 +442,3 @@ export {
     getEventPlayerStats,
     getEventRecord
 };
-window.getGamePlayerStats = getGamePlayerStats;
-window.getEventPlayerStats = getEventPlayerStats;
-window.getTeamPlayerStats = getTeamPlayerStats;
-window.getEventRecord = getEventRecord;
-window.loadEventGames = loadEventGames;
-window.getGameTeamStats = getGameTeamStats;
-window.getEventTeamStats = getEventTeamStats;
-window.classifyPoint = classifyPoint;
-window.formatTeamStatsLine = formatTeamStatsLine;
-window.accumulateGameStats = accumulateGameStats;

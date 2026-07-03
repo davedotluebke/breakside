@@ -778,16 +778,10 @@ function updateKeyPlayPlayerHeader(subButtonType, panelType) {
     }
 }
 
-// --- ES-module exports; window.* shims below are transitional (removed at C10).
+// --- ES-module exports ---
 // showKeyPlayDialog is imported by game/gameScreenEvents.js — no shim needed.
 // ensurePossessionExists is imported by playByPlay/pbpPossession.js and
 // playByPlay/scoreAttribution.js.
 export { initializeKeyPlayDialog, showKeyPlayDialog, ensurePossessionExists };
-// initializeKeyPlayDialog: called bare (typeof-guarded) by main.js's
-// DOMContentLoaded wiring — the guard resolves against window, so without this
-// shim the dialog would silently never initialize.
-window.initializeKeyPlayDialog = initializeKeyPlayDialog;
-// ensurePossessionExists: called bare (typeof-guarded) by still-classic
-// narration/narrationEngine.js (converts at C8).
-window.ensurePossessionExists = ensurePossessionExists;
+
 

@@ -638,8 +638,11 @@ const breaksideAuth = {
     enableTestMode,
 };
 
-// --- ES-module export; the window.breakside merge is the shim consumed by the
-// --- window-qualified call sites listed above (converted to imports at C10).
+// --- ES-module export ---
 export { breaksideAuth };
+// window survivor: auth namespace surface — window.breakside.auth is the
+// documented API consumed window-qualified by main.js and app modules; the
+// merge pattern (auth + loginScreen each contribute their namespace) is
+// deliberate and kept.
 window.breakside = window.breakside || {};
 window.breakside.auth = breaksideAuth;

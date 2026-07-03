@@ -5,6 +5,7 @@
  */
 import {
     API_BASE_URL, getSyncStatus, processSyncQueue, syncUserTeams, pullFromCloud,
+    getSyncQueueItems, clearSyncQueue,
 } from '../store/sync.js';
 import { populateCloudTeamsAndGames } from './teamList.js';
 import { showControllerToast } from '../game/controllerState.js';
@@ -259,9 +260,7 @@ function confirmAppUpdate() {
  * Show the pending sync dialog with a summary of queued items.
  */
 function showPendingSyncDialog() {
-    // TODO(esm): sync.js exposes the queue accessors on window only — import
-    // them once store/sync.js exports getSyncQueueItems/clearSyncQueue.
-    const items = typeof window.getSyncQueueItems === 'function' ? window.getSyncQueueItems() : [];
+    const items = getSyncQueueItems();
     const listEl = document.getElementById('pendingSyncList');
     if (!listEl) return;
 
@@ -328,10 +327,7 @@ function closePendingSyncDialog() {
 
 function confirmClearSyncQueue() {
     if (!confirm('Discard all pending updates? These changes will be lost.')) return;
-    // TODO(esm): window-only sync.js queue accessor (see showPendingSyncDialog)
-    if (typeof window.clearSyncQueue === 'function') {
-        window.clearSyncQueue();
-    }
+    clearSyncQueue();
     closePendingSyncDialog();
     updateSyncStatusDisplay();
 }
@@ -350,17 +346,15 @@ document.getElementById('pendingSyncCloseX')?.addEventListener('click', closePen
 document.getElementById('pendingSyncKeepBtn')?.addEventListener('click', closePendingSyncDialog);
 document.getElementById('pendingSyncClearAllBtn')?.addEventListener('click', confirmClearSyncQueue);
 
-// --- ES-module exports; window.* shims below are transitional or documented
-// --- survivors (generated-HTML / index.html inline onclick handlers).
+// --- ES-module exports ---
 export {
     buildSyncStatusHTML, updateSyncStatusDisplay, doFullRefresh,
     showConnectionInfo,
 };
-// updateSyncStatusDisplay: called bare (typeof-guarded) by converted store/sync.js.
+// window survivor: late-bound back-edge hook (called by store/sync.js, which
+// evaluates before this file and cannot import from it without a reorder)
 window.updateSyncStatusDisplay = updateSyncStatusDisplay;
-// showConnectionInfo: called bare by game/gameScreenEvents.js (classic) and
-// main.js; also a generated-HTML onclick survivor (sync-status bar).
-// window survivor: referenced by generated-HTML onclick
+// window survivor: generated-HTML onclick (sync-status bar)
 window.showConnectionInfo = showConnectionInfo;
 // window survivor: referenced by generated-HTML onclick
 window.handleSignOut = handleSignOut;

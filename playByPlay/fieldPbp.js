@@ -1674,10 +1674,10 @@ const fieldPbp = (function() {
     };
 })();
 
-// --- ES-module export; the window shim is transitional for the
-// --- window-qualified call sites in converted ui/panelSystem.js,
-// --- game/gameScreenPanels.js, game/gameScreenEvents.js, and
-// --- game/pointManagement.js (real imports at C10), and doubles as the
-// --- devtools inspection seam noted above.
+// --- ES-module export ---
 export { fieldPbp };
+// window survivor: late-bound back-edge hook (namespace called window-qualified
+// by ui/panelSystem.js, game/gameScreenPanels.js, game/gameScreenEvents.js,
+// game/pointManagement.js — all evaluate before this file); also a devtools
+// inspection seam (see above)
 window.fieldPbp = fieldPbp;

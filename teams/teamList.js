@@ -709,11 +709,14 @@ async function resumeCloudGame(cloudTeam, gameId, role) {
         }
 
         // Navigate to panel-based game screen
-        if (typeof enterGameScreen === 'function') {
-            enterGameScreen();
+        // late-bound back-edge (gameScreenSync/gameScreenEvents live "above"
+        // this layer); see ARCHITECTURE.md § ES modules — the window shims at
+        // the owners are kept deliberately.
+        if (typeof window.enterGameScreen === 'function') {
+            window.enterGameScreen();
             const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
-            if (!pointInProgress && typeof transitionToBetweenPoints === 'function') {
-                transitionToBetweenPoints();
+            if (!pointInProgress && typeof window.transitionToBetweenPoints === 'function') {
+                window.transitionToBetweenPoints();
             }
         }
 
@@ -1475,16 +1478,15 @@ function renderEventContainer(event, games, team, role) {
     return container;
 }
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 // _cloudTeamsCache is a live binding read by teams/activeGamePolling.js.
 export {
     showSelectTeamScreen, isGameActive, populateCloudTeamsAndGames,
     selectCloudTeam, resumeCloudGame, _cloudTeamsCache,
 };
-// showSelectTeamScreen: called bare by classic scripts (auth/loginScreen.js,
-// game/controllerState.js, game/gameScreenEvents.js, game/gameScreenSync.js),
-// by main.js, and typeof-guarded by converted store/sync.js & screens/navigation.js.
+// window survivor: late-bound back-edge hook (called by auth/loginScreen.js,
+// store/sync.js, screens/navigation.js — all evaluate before this file and
+// cannot import from it without a cycle/reorder)
 window.showSelectTeamScreen = showSelectTeamScreen;
 // window survivor: referenced by generated-HTML onclick
 window.openJoinTeamModal = openJoinTeamModal;

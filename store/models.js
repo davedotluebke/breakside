@@ -517,6 +517,9 @@ class Pull extends Event {
 // deserialization), in which case nothing is stamped. Lives here so addEvent can
 // self-stamp the recording mode without each call site having to thread it in.
 function captureCurrentMode() {
+    // late-bound back-edge (getCurrentMode's owner ui/panelSystem.js lives
+    // "above" this layer); see ARCHITECTURE.md § ES modules — the window shim
+    // at the owner is kept deliberately.
     return (typeof window !== 'undefined' && typeof window.getCurrentMode === 'function')
         ? window.getCurrentMode()
         : null;
@@ -653,17 +656,18 @@ function isTestGame(game) {
     // teamId lookup against the global `teams` array when the name isn't on the
     // game object itself.
     if (isTestName(game.team)) return true;
-    if (game.teamId && typeof teams !== 'undefined' && Array.isArray(teams)) {
-        const team = teams.find(t => t && t.id === game.teamId);
+    // late-bound state read (store/storage.js lives "above" this layer — its
+    // window.teams accessor is kept deliberately; importing would invert the
+    // models←storage dependency). See ARCHITECTURE.md § ES modules.
+    if (game.teamId && Array.isArray(window.teams)) {
+        const team = window.teams.find(t => t && t.id === game.teamId);
         if (team && isTestName(team.name)) return true;
     }
     return false;
 }
 
-// --- ES-module exports. The window.* assignments below are transitional shims
-// --- for classic scripts that haven't been converted yet; they are removed at
-// --- the end of the ES-module migration. `Event` is deliberately NOT shimmed
-// --- onto window — that would clobber the DOM Event constructor.
+// --- ES-module exports. `Event` is deliberately NOT exported under that name
+// --- onto window anywhere — it would clobber the DOM Event constructor.
 export {
     Role, Gender, UNKNOWN_PLAYER,
     Player, Game, Team, TournamentEvent,
@@ -673,29 +677,4 @@ export {
     generateShortId, generatePlayerId, generateTeamId, generateEventId,
     isTestName, isTestTeam, isTestGame,
 };
-
-window.Role = Role;
-window.Gender = Gender;
-window.UNKNOWN_PLAYER = UNKNOWN_PLAYER;
-window.Player = Player;
-window.Game = Game;
-window.Team = Team;
-window.TournamentEvent = TournamentEvent;
-window.Throw = Throw;
-window.Turnover = Turnover;
-window.Violation = Violation;
-window.Defense = Defense;
-window.Other = Other;
-window.Pull = Pull;
-window.Possession = Possession;
-window.Point = Point;
-window.createRosterSnapshot = createRosterSnapshot;
-window.captureCurrentMode = captureCurrentMode;
-window.generateShortId = generateShortId;
-window.generatePlayerId = generatePlayerId;
-window.generateTeamId = generateTeamId;
-window.generateEventId = generateEventId;
-window.isTestName = isTestName;
-window.isTestTeam = isTestTeam;
-window.isTestGame = isTestGame;
 

@@ -5,9 +5,10 @@
  *   File Structure Map
  *
  *   ultistats/
- *   ├── data/                    # Data layer
+ *   ├── store/                   # Data layer
  *   │   ├── models.js           # Data structure definitions (Player, Game, Team, Point, Possession, Event classes)
- *   │   └── storage.js          # Serialization/deserialization and local storage operations
+ *   │   ├── storage.js          # Serialization/deserialization, local storage, shared app state
+ *   │   └── sync.js             # Server sync + offline queue
  *   │
  *   ├── utils/                   # Utility functions
  *   │   ├── helpers.js          # Pure utility functions and current state accessors
@@ -51,17 +52,18 @@
  *
  ************************************************************************/
 
-// Converted ES modules, imported in the old <script>-tag order so top-level
-// side effects (state init, DOM wiring) keep their relative ordering. Classic
-// scripts still listed in index.html run before all of these; cross-layer
-// calls happen at call time (after DOMContentLoaded), so the mixed phase is
-// safe. This list grows as the migration converts each layer.
+// The full app module graph, imported in the pre-ESM <script>-tag order so
+// top-level side effects (state init, DOM wiring) keep their historical
+// relative ordering. Add new files here at their layer's position — see
+// ARCHITECTURE.md § Module Loading. Names imported here are the ones main.js
+// itself calls; bare `import './x.js'` lines are order-keeping side-effect
+// imports.
 import './auth/config.js';
 import './auth/auth.js';
 import './auth/loginScreen.js';
 import './store/models.js';
 import './utils/helpers.js';
-import './store/storage.js';
+import { currentTeam } from './store/storage.js';
 import './store/sync.js';
 import './settings/advancedSettings.js';
 import './utils/statistics.js';
@@ -71,21 +73,21 @@ import './utils/statsHelp.js';
 import './utils/xlsxExport.js';
 import './ui/activePlayersDisplay.js';
 import './ui/eventLogDisplay.js';
-import './ui/buttonLayout.js';
-import './ui/panelSystem.js';
-import './screens/navigation.js';
+import { matchButtonWidths } from './ui/buttonLayout.js';
+import { isGameScreenVisible } from './ui/panelSystem.js';
+import { showScreen, showEditRosterScreen, showEditRosterSubscreen } from './screens/navigation.js';
 import './teams/rosterRowHelpers.js';
-import './teams/rosterManagement.js';
-import './teams/teamList.js';
+import { updateTeamRosterDisplay } from './teams/rosterManagement.js';
+import { showSelectTeamScreen } from './teams/teamList.js';
 import './teams/eventDialogs.js';
-import './teams/syncStatusUI.js';
+import { showConnectionInfo } from './teams/syncStatusUI.js';
 import './teams/activeGamePolling.js';
-import './teams/teamSettings.js';
+import { showTeamSettingsScreen } from './teams/teamSettings.js';
 import './teams/eventRoster.js';
-import './teams/gameSummary.js';
+import { getGameSummaryBackTarget } from './teams/gameSummary.js';
 import './game/genderRatioDropdown.js';
 import './game/pointManagement.js';
-import './game/gameLogic.js';
+import { appVersion } from './game/gameLogic.js';
 import './game/controllerState.js';
 import './ui/hints.js';
 import './game/gameScreenPanels.js';
@@ -93,9 +95,9 @@ import './game/gameScreenEvents.js';
 import './game/gameTimer.js';
 import './game/selectLine.js';
 import './game/gameScreenSync.js';
-import './playByPlay/scoreAttribution.js';
-import './playByPlay/keyPlayDialog.js';
-import './playByPlay/pullDialog.js';
+import { initializeScoreAttributionDialog } from './playByPlay/scoreAttribution.js';
+import { initializeKeyPlayDialog } from './playByPlay/keyPlayDialog.js';
+import { initializePullDialog } from './playByPlay/pullDialog.js';
 import './playByPlay/pbpPossession.js';
 import './playByPlay/fullPbp.js';
 import './playByPlay/fieldPbp.js';
@@ -104,7 +106,7 @@ import './playByPlay/fieldPbp.js';
 // is harmless: its top level only builds the namespace object.
 import './narration/eventBus.js';
 import './narration/realtimeSession.js';
-import './narration/narrationEngine.js';
+import { narrationEngine } from './narration/narrationEngine.js';
 import './narration/transcriptDisplay.js';
 import './narration/micButton.js';
 
@@ -134,8 +136,8 @@ if ('serviceWorker' in navigator && swDisabledForDev) {
  */
 function isReloadUnsafe() {
     try {
-        if (window.narrationEngine && typeof window.narrationEngine.getPhase === 'function'
-            && window.narrationEngine.getPhase() !== 'idle') {
+        if (narrationEngine && typeof narrationEngine.getPhase === 'function'
+            && narrationEngine.getPhase() !== 'idle') {
             return true;
         }
         if (typeof isGameScreenVisible === 'function' && isGameScreenVisible()) {
@@ -164,6 +166,7 @@ if ('serviceWorker' in navigator && !swDisabledForDev) {
         if (!hadControllerAtLoad) return;  // first-visit claim, not an update
         if (isReloadUnsafe()) {
             console.log('Service Worker: update ready, deferring reload (game/recording active)');
+            // window survivor: main.js bootstrap global (read by teams/syncStatusUI.js)
             window.__breaksideUpdatePending = true;
             return;
         }
@@ -179,6 +182,7 @@ if ('serviceWorker' in navigator && !swDisabledForDev) {
                 console.log('Service Worker: Registered');
 
                 // Store registration globally for manual update checks
+                // window survivor: main.js bootstrap global (read by teams/syncStatusUI.js)
                 window.swRegistration = reg;
 
                 // Check for updates immediately
@@ -262,8 +266,10 @@ async function forceAppUpdate() {
     }
 }
 
-// Consumed by teams/syncStatusUI.js (via window; import at final sweep).
+// window survivor: main.js bootstrap globals — consumed by teams/syncStatusUI.js
+// via window (main.js is the module entry; nothing may import from it).
 window.checkForAppUpdate = checkForAppUpdate;
+// window survivor: main.js bootstrap global (see above)
 window.forceAppUpdate = forceAppUpdate;
 
 /******************************************************************************/
@@ -472,6 +478,7 @@ function closePwaInstallModal(installed = false) {
 // Capture the beforeinstallprompt event for Android
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
+    // window survivor: main.js bootstrap global (read locally at prompt time)
     window.deferredInstallPrompt = e;
 });
 
@@ -690,9 +697,14 @@ document.addEventListener('DOMContentLoaded', function() {
     fetch('./version.json')
         .then(r => r.json())
         .then(v => {
+            // window survivor: main.js bootstrap globals (read by
+            // teams/syncStatusUI.js and checkForAppUpdate via window)
             window.APP_VERSION = v.version || 'unknown';
+            // window survivor: main.js bootstrap global (see above)
             window.APP_BUILD = v.build || 'unknown';
+            // window survivor: main.js bootstrap global (see above)
             window.APP_DEPLOY_STAMP = v.deployStamp || null;
+            // window survivor: main.js bootstrap global (see above)
             window.APP_DEPLOY_LABEL = v.deployLabel || null;
             console.log(`App version: ${window.APP_VERSION} (Build ${window.APP_BUILD})${window.APP_DEPLOY_STAMP ? ' deploy:' + window.APP_DEPLOY_STAMP : ''}${window.APP_DEPLOY_LABEL ? ' [' + window.APP_DEPLOY_LABEL + ']' : ''}`);
         })

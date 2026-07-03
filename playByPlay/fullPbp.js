@@ -1122,9 +1122,9 @@ const fullPbp = (function() {
     };
 })();
 
-// --- ES-module export; the window shim is transitional for the
-// --- window-qualified call sites in converted ui/panelSystem.js,
-// --- game/gameScreenPanels.js, and game/gameScreenEvents.js (real imports at
-// --- C10), and doubles as the devtools inspection seam noted above.
+// --- ES-module export ---
 export { fullPbp };
+// window survivor: late-bound back-edge hook (namespace called window-qualified
+// by ui/panelSystem.js, game/gameScreenPanels.js, game/gameScreenEvents.js —
+// all evaluate before this file); also a devtools inspection seam (see above)
 window.fullPbp = fullPbp;

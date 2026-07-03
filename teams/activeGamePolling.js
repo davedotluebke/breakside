@@ -113,11 +113,8 @@ function stopAutoRefresh() {
 // Start auto-refresh on load
 startAutoRefresh();
 
-// --- ES-module exports; window.* shims below are transitional for
-// --- not-yet-converted classic scripts (removed at end of migration).
+// --- ES-module exports ---
 export { startActiveGamePolling, stopActiveGamePolling };
-// startActiveGamePolling: called bare by converted screens/navigation.js
-// (typeof-guarded) and classic game/gameScreenSync.js.
+// window survivor: late-bound back-edge hook (called by screens/navigation.js,
+// which evaluates before this file and cannot import from it without a reorder)
 window.startActiveGamePolling = startActiveGamePolling;
-// stopActiveGamePolling: called bare by classic game/gameScreenSync.js.
-window.stopActiveGamePolling = stopActiveGamePolling;
