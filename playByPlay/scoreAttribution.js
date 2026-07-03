@@ -3,6 +3,14 @@
  * Handles the "We Score" player attribution dialog (thrower/receiver selection).
  * Extracted from simpleModeScreen.js during legacy screen cleanup.
  */
+import { Throw, Possession, Role, UNKNOWN_PLAYER } from '../store/models.js';
+import { saveAllTeamsData } from '../store/storage.js';
+import { getLatestPoint, getPlayerFromName } from '../utils/helpers.js';
+import { logEvent } from '../ui/eventLogDisplay.js';
+import { updateScore } from '../game/gameLogic.js';
+import { moveToNextPoint } from '../game/pointManagement.js';
+import { showControllerToast } from '../game/controllerState.js';
+import { ensurePossessionExists } from './keyPlayDialog.js';
 
 // Track selected players for score attribution
 let selectedThrower = null;
@@ -562,3 +570,12 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
         commitScoreAttribution();
     }
 }
+
+// --- ES-module exports; the window shim below is transitional (removed at C10).
+// showScoreAttributionDialog is imported by game/gameScreenEvents.js,
+// playByPlay/fullPbp.js, and playByPlay/fieldPbp.js — no shim needed.
+export { initializeScoreAttributionDialog, showScoreAttributionDialog };
+// initializeScoreAttributionDialog: called bare (typeof-guarded) by main.js's
+// DOMContentLoaded wiring — the guard resolves against window, so without this
+// shim the dialog would silently never initialize.
+window.initializeScoreAttributionDialog = initializeScoreAttributionDialog;

@@ -9,6 +9,10 @@ import { logEvent } from '../ui/eventLogDisplay.js';
 import { matchButtonWidths } from '../ui/buttonLayout.js';
 import { clearNextLineSelections } from '../ui/activePlayersDisplay.js';
 import { canEditPlayByPlay, showControllerToast } from './controllerState.js';
+// Cycle note: pullDialog's import chain (models/helpers/storage/
+// eventLogDisplay/panelSystem) never reaches back into this file, and
+// showPullDialog is only called at point-start time — safe back-edge import.
+import { showPullDialog } from '../playByPlay/pullDialog.js';
 
 let countdownInterval = null;
 let countdownSeconds = 90;
@@ -266,11 +270,12 @@ export {
     moveToNextPoint, startNextPoint, stopCountdown,
     isPaused, countdownSeconds, setIsPaused, setCountdownSeconds,
 };
-// moveToNextPoint: called bare by classic narration/narrationEngine.js,
-// game/gameScreenEvents.js, playByPlay/scoreAttribution.js.
+// moveToNextPoint: called bare by classic narration/narrationEngine.js
+// (converts at C8); other former window consumers (gameScreenEvents,
+// scoreAttribution, pbpPossession) import it now.
 window.moveToNextPoint = moveToNextPoint;
-// startNextPoint: called bare by classic game/selectLine.js,
-// playByPlay/fullPbp.js, playByPlay/fieldPbp.js.
+// startNextPoint: former window consumers (selectLine, fullPbp, fieldPbp)
+// import it since C6b/C7 — shim kept until the C10 sweep.
 window.startNextPoint = startNextPoint;
 // stopCountdown: called bare (typeof-guarded) by classic game/gameScreenEvents.js.
 window.stopCountdown = stopCountdown;

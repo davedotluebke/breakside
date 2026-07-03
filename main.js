@@ -91,6 +91,16 @@ import './game/gameScreenEvents.js';
 import './game/gameTimer.js';
 import './game/selectLine.js';
 import './game/gameScreenSync.js';
+import './playByPlay/scoreAttribution.js';
+import './playByPlay/keyPlayDialog.js';
+import './playByPlay/pullDialog.js';
+import './playByPlay/pbpPossession.js';
+import './playByPlay/fullPbp.js';
+import './playByPlay/fieldPbp.js';
+// narration/eventBus.js converted with C7 (the playByPlay layer imports it);
+// evaluating it here — earlier than its old tag position after the pbp files —
+// is harmless: its top level only builds the namespace object.
+import './narration/eventBus.js';
 
 // Skip the service worker during local development (localhost / 127.0.0.1).
 // Its offline precache otherwise serves stale JS/CSS across edits, so source

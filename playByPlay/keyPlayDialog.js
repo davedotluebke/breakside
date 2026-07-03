@@ -2,6 +2,8 @@
  * Key Play Dialog
  * Handles the key play dialog for logging throws, turnovers, and defense events
  */
+import { Possession, UNKNOWN_PLAYER } from '../store/models.js';
+import { getLatestPoint, getPlayerFromName, getActivePossession } from '../utils/helpers.js';
 
 // Track Key Play dialog state
 let keyPlaySelectedSubButtons = [];
@@ -775,4 +777,17 @@ function updateKeyPlayPlayerHeader(subButtonType, panelType) {
         header.textContent = 'Players';
     }
 }
+
+// --- ES-module exports; window.* shims below are transitional (removed at C10).
+// showKeyPlayDialog is imported by game/gameScreenEvents.js — no shim needed.
+// ensurePossessionExists is imported by playByPlay/pbpPossession.js and
+// playByPlay/scoreAttribution.js.
+export { initializeKeyPlayDialog, showKeyPlayDialog, ensurePossessionExists };
+// initializeKeyPlayDialog: called bare (typeof-guarded) by main.js's
+// DOMContentLoaded wiring — the guard resolves against window, so without this
+// shim the dialog would silently never initialize.
+window.initializeKeyPlayDialog = initializeKeyPlayDialog;
+// ensurePossessionExists: called bare (typeof-guarded) by still-classic
+// narration/narrationEngine.js (converts at C8).
+window.ensurePossessionExists = ensurePossessionExists;
 
