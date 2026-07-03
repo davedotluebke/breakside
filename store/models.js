@@ -660,7 +660,37 @@ function isTestGame(game) {
     return false;
 }
 
-// ID generation functions - needed by sync.js for offline entity creation
+// --- ES-module exports. The window.* assignments below are transitional shims
+// --- for classic scripts that haven't been converted yet; they are removed at
+// --- the end of the ES-module migration. `Event` is deliberately NOT shimmed
+// --- onto window — that would clobber the DOM Event constructor.
+export {
+    Role, Gender, UNKNOWN_PLAYER,
+    Player, Game, Team, TournamentEvent,
+    Event, Throw, Turnover, Violation, Defense, Other, Pull,
+    Possession, Point,
+    createRosterSnapshot, captureCurrentMode,
+    generateShortId, generatePlayerId, generateTeamId, generateEventId,
+    isTestName, isTestTeam, isTestGame,
+};
+
+window.Role = Role;
+window.Gender = Gender;
+window.UNKNOWN_PLAYER = UNKNOWN_PLAYER;
+window.Player = Player;
+window.Game = Game;
+window.Team = Team;
+window.TournamentEvent = TournamentEvent;
+window.Throw = Throw;
+window.Turnover = Turnover;
+window.Violation = Violation;
+window.Defense = Defense;
+window.Other = Other;
+window.Pull = Pull;
+window.Possession = Possession;
+window.Point = Point;
+window.createRosterSnapshot = createRosterSnapshot;
+window.captureCurrentMode = captureCurrentMode;
 window.generateShortId = generateShortId;
 window.generatePlayerId = generatePlayerId;
 window.generateTeamId = generateTeamId;

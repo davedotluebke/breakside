@@ -5,10 +5,17 @@
  * Phase 2 update: Support for ID-based player references alongside name-based (legacy)
  */
 
-// Note: This module depends on store/models.js for data structures
-// and on getPlayerFromName from utils/helpers.js, which must be loaded
-// before this file (initializeTeams() runs at module load and can reach
-// getPlayerFromName via the deserializeEvent chain)
+// initializeTeams() runs at module load and can reach getPlayerFromName via
+// the deserializeEvent chain. The helpers.js ↔ storage.js import cycle is safe:
+// both sides only reference the other's hoisted function declarations at
+// call time (never during module evaluation).
+import {
+    Role, Gender, UNKNOWN_PLAYER,
+    Player, Game, Team, TournamentEvent,
+    Throw, Turnover, Violation, Defense, Other, Pull,
+    Possession, Point,
+} from './models.js';
+import { getPlayerFromName } from '../utils/helpers.js';
 
 /**
  * Serialize an event to JSON
@@ -584,21 +591,23 @@ function initializeTeams() {
 }
 
 /*
- * Global variables - initialized by this module
- * These globals are shared across the application
- * Using var to ensure they are in global scope
+ * Shared application state — owned by this module.
+ * Exported as live bindings below; converted modules read them via import and
+ * write through the exported setters. Classic scripts keep reading/writing the
+ * bare globals through the Object.defineProperty accessors at the bottom of
+ * this file (transitional, removed at end of the ES-module migration).
  */
-var teams = [];                 // An array of teams
-var currentTeam = null;         // The current team being tracked
-var currentEvent = null;        // The current TournamentEvent (null when standalone game)
-var sampleTeam = null;          // A sample team with 10 players, used if no teams are found
-var currentTeamRole = null;     // The user's role on the current team ('coach' or 'viewer')
+let teams = [];                 // An array of teams
+let currentTeam = null;         // The current team being tracked
+let currentEvent = null;        // The current TournamentEvent (null when standalone game)
+let sampleTeam = null;          // A sample team with 10 players, used if no teams are found
+let currentTeamRole = null;     // The user's role on the current team ('coach' or 'viewer')
 
-/*
- * Global initialization
- * Note: Player class must be defined before creating UNKNOWN_PLAYER_OBJ
- */
-var UNKNOWN_PLAYER_OBJ = new Player(UNKNOWN_PLAYER);
+const UNKNOWN_PLAYER_OBJ = new Player(UNKNOWN_PLAYER);
+
+function setCurrentTeam(team) { currentTeam = team; }
+function setCurrentEvent(event) { currentEvent = event; }
+function setTeams(newTeams) { teams = newTeams; }
 
 // Initialize teams on module load
 initializeTeams();
@@ -668,20 +677,9 @@ function getActiveRoster() {
     return currentTeam ? currentTeam.teamRoster : [];
 }
 
-window.getActiveRoster = getActiveRoster;
-window.serializeTournamentEvent = serializeTournamentEvent;
-window.deserializeTournamentEvent = deserializeTournamentEvent;
-
 function getCurrentTeamRole() { return currentTeamRole; }
 function setCurrentTeamRole(role) { currentTeamRole = role; }
 function isViewer() { return currentTeamRole === 'viewer'; }
-
-window.getCurrentTeamRole = getCurrentTeamRole;
-window.setCurrentTeamRole = setCurrentTeamRole;
-window.isViewer = isViewer;
-
-// Expose clearAllTeamsData globally for auth module
-window.clearAllTeamsData = clearAllTeamsData;
 
 /**
  * Create a sample team with predefined players
@@ -691,4 +689,57 @@ function createSampleTeam() {
     const sampleNames = ["Cyrus L","Leif","Cesc","Cyrus J","Abby","Avery","James","Simeon","Soren","Walden"];
     return new Team("Sample Team", sampleNames);
 }
+
+// --- ES-module exports. State vars are live bindings: importers see
+// --- reassignments; cross-module writes go through the set* functions.
+export {
+    teams, currentTeam, currentEvent, sampleTeam, currentTeamRole,
+    UNKNOWN_PLAYER_OBJ,
+    setCurrentTeam, setCurrentEvent, setTeams,
+    serializeEvent, serializePlayer, serializeGame, serializeTeam,
+    logTeamData, saveAllTeamsData,
+    deserializeEvent, resolvePlayerReference, getPlayerById, deserializePlayer,
+    normalizeAlternateGenderRatio, deserializePointsFromServer,
+    deserializeGame, deserializeTeams, loadTeams, initializeTeams,
+    clearAllTeamsData,
+    serializeTournamentEvent, deserializeTournamentEvent, getActiveRoster,
+    getCurrentTeamRole, setCurrentTeamRole, isViewer, createSampleTeam,
+};
+
+// --- Transitional shims for not-yet-converted classic scripts (removed at end
+// --- of the ES-module migration). The state vars use live accessors — a plain
+// --- `window.currentTeam = currentTeam` copy would go stale on reassignment,
+// --- and classic scripts also WRITE these as bare globals (the setters below
+// --- keep those writes flowing into module state).
+Object.defineProperty(window, 'teams', { configurable: true, get: () => teams, set: v => { teams = v; } });
+Object.defineProperty(window, 'currentTeam', { configurable: true, get: () => currentTeam, set: v => { currentTeam = v; } });
+Object.defineProperty(window, 'currentEvent', { configurable: true, get: () => currentEvent, set: v => { currentEvent = v; } });
+Object.defineProperty(window, 'sampleTeam', { configurable: true, get: () => sampleTeam, set: v => { sampleTeam = v; } });
+Object.defineProperty(window, 'currentTeamRole', { configurable: true, get: () => currentTeamRole, set: v => { currentTeamRole = v; } });
+Object.defineProperty(window, 'UNKNOWN_PLAYER_OBJ', { configurable: true, get: () => UNKNOWN_PLAYER_OBJ });
+
+window.serializeEvent = serializeEvent;
+window.serializePlayer = serializePlayer;
+window.serializeGame = serializeGame;
+window.serializeTeam = serializeTeam;
+window.logTeamData = logTeamData;
+window.saveAllTeamsData = saveAllTeamsData;
+window.deserializeEvent = deserializeEvent;
+window.resolvePlayerReference = resolvePlayerReference;
+window.getPlayerById = getPlayerById;
+window.deserializePlayer = deserializePlayer;
+window.normalizeAlternateGenderRatio = normalizeAlternateGenderRatio;
+window.deserializePointsFromServer = deserializePointsFromServer;
+window.deserializeGame = deserializeGame;
+window.deserializeTeams = deserializeTeams;
+window.loadTeams = loadTeams;
+window.initializeTeams = initializeTeams;
+window.clearAllTeamsData = clearAllTeamsData;
+window.serializeTournamentEvent = serializeTournamentEvent;
+window.deserializeTournamentEvent = deserializeTournamentEvent;
+window.getActiveRoster = getActiveRoster;
+window.getCurrentTeamRole = getCurrentTeamRole;
+window.setCurrentTeamRole = setCurrentTeamRole;
+window.isViewer = isViewer;
+window.createSampleTeam = createSampleTeam;
 

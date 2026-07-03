@@ -742,17 +742,13 @@
     </section>
 
     <!-- Auth modules (must load before other modules) -->
-    <script src="auth/config.js"></script>
+    <!-- auth/config.js is an ES module now — imported from main.js -->
     <script src="auth/auth.js"></script>
     <script src="auth/loginScreen.js"></script>
     
     <!-- Data layer modules -->
     <!-- helpers.js must precede storage.js: storage.js initializes teams at
          load time, which reaches getPlayerFromName via deserializeEvent -->
-    <script src="store/models.js"></script>
-    <script src="utils/helpers.js"></script>
-    <script src="store/storage.js"></script>
-    <script src="store/sync.js"></script>
 
     <!-- Settings (per-device preferences) -->
     <script src="settings/advancedSettings.js"></script>

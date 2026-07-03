@@ -2,6 +2,8 @@
  * Utility Functions
  * Pure utility functions and data accessors
  */
+import { UNKNOWN_PLAYER } from '../store/models.js';
+import { UNKNOWN_PLAYER_OBJ, currentTeam } from '../store/storage.js';
 
 /**
  * Given a player name, return the corresponding Player object from the team roster
@@ -300,4 +302,35 @@ function getExpectedGenderCounts(expectedCount, expectedRatio) {
         return { fmp: minority, mmp: majority };
     }
 }
+
+// --- ES-module exports. window.* assignments are transitional shims for
+// --- not-yet-converted classic scripts, removed at the end of the migration —
+// --- EXCEPT window.currentGame, which is a permanent test seam (the Playwright
+// --- e2e suite reads it via page.evaluate).
+export {
+    getPlayerFromName, currentGame, getLatestPoint, getLatestPossession,
+    getLatestEvent, getPossessionOf, getPointOf, isPointInProgress,
+    getActivePossession, getPlayerGameTime, formatPlayTime,
+    determineStartingPosition, capitalize, formatPlayerName, extractPlayerName,
+    getGenderRatioForPoint, getExpectedGenderRatio, getExpectedGenderCounts,
+};
+
+window.getPlayerFromName = getPlayerFromName;
+window.currentGame = currentGame;   // permanent: e2e test seam
+window.getLatestPoint = getLatestPoint;
+window.getLatestPossession = getLatestPossession;
+window.getLatestEvent = getLatestEvent;
+window.getPossessionOf = getPossessionOf;
+window.getPointOf = getPointOf;
+window.isPointInProgress = isPointInProgress;
+window.getActivePossession = getActivePossession;
+window.getPlayerGameTime = getPlayerGameTime;
+window.formatPlayTime = formatPlayTime;
+window.determineStartingPosition = determineStartingPosition;
+window.capitalize = capitalize;
+window.formatPlayerName = formatPlayerName;
+window.extractPlayerName = extractPlayerName;
+window.getGenderRatioForPoint = getGenderRatioForPoint;
+window.getExpectedGenderRatio = getExpectedGenderRatio;
+window.getExpectedGenderCounts = getExpectedGenderCounts;
 

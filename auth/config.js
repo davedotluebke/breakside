@@ -12,11 +12,14 @@ const BREAKSIDE_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3
 // API base URL
 const BREAKSIDE_API_BASE_URL = 'https://api.breakside.pro';
 
-// Export for use in other modules
-// Note: These are intentionally in global scope for vanilla JS modules
-window.BREAKSIDE_AUTH = {
+// --- ES-module export. The window.BREAKSIDE_AUTH assignment is a transitional
+// --- shim for not-yet-converted classic scripts (removed at end of migration).
+// --- landing/ pages do NOT load this file — they carry their own config.
+export const BREAKSIDE_AUTH = {
     SUPABASE_URL: BREAKSIDE_SUPABASE_URL,
     SUPABASE_ANON_KEY: BREAKSIDE_SUPABASE_ANON_KEY,
     API_BASE_URL: BREAKSIDE_API_BASE_URL,
 };
+
+window.BREAKSIDE_AUTH = BREAKSIDE_AUTH;
 
