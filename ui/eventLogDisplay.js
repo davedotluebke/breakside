@@ -2,6 +2,7 @@
  * Event Log Display
  * Handles event logging and event log UI management
  */
+import { isGameScreenVisible } from './panelSystem.js';
 
 /**
  * Log an event and update the event log display
@@ -55,4 +56,8 @@ if (document.readyState === 'loading') {
 } else {
     initializeEventLogToggle();
 }
+
+// --- ES-module exports; window.* shims are transitional until all consumers import ---
+export { logEvent };
+window.logEvent = logEvent;
 

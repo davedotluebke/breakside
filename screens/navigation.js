@@ -3,6 +3,9 @@
  * Handles transitions between major app screens.
  * In-game UI is handled by the panel system (gameScreen.js / panelSystem.js).
  */
+import { currentTeam } from '../store/storage.js';
+import { isPointInProgress } from '../utils/helpers.js';
+
 const screens = [
     document.getElementById('selectTeamScreen'),
     document.getElementById('teamRosterScreen'),
@@ -54,6 +57,10 @@ function showScreen(screenId) {
     if (nonGameScreenIds.includes(screenId) && typeof startActiveGamePolling === 'function') {
         startActiveGamePolling();
     }
+
+    // Hook point for cross-module reactions to navigation (replaces the old
+    // window.showScreen monkey-patch pattern, which can't survive ES modules).
+    document.dispatchEvent(new CustomEvent('breakside:screen-shown', { detail: { screenId } }));
 }
 
 /**
@@ -203,3 +210,14 @@ document.addEventListener('DOMContentLoaded', () => {
         backFromStartGameBtn.addEventListener('click', rosterFlowBack);
     }
 });
+
+// --- ES-module exports; window.* shims are transitional until all consumers import ---
+export {
+    showScreen, showEditRosterScreen, showEditRosterSubscreen,
+    showStartGameScreen, returnToGameFromRoster,
+};
+window.showScreen = showScreen;
+window.showEditRosterScreen = showEditRosterScreen;
+window.showEditRosterSubscreen = showEditRosterSubscreen;
+window.showStartGameScreen = showStartGameScreen;
+window.returnToGameFromRoster = returnToGameFromRoster;
