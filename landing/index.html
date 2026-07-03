@@ -22,21 +22,14 @@
     <link rel="stylesheet" href="landing.css">
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="main-nav">
-        <div class="nav-content">
-            <a href="/" class="nav-logo">
-                <img src="/images/logo.disc.only.png" alt="Breakside" class="nav-logo-img">
-                <span class="nav-logo-text">Breakside</span>
-            </a>
-            <div class="nav-links">
-                <a href="#features" class="nav-link">Features</a>
-                <a href="#install" class="nav-link">Install</a>
-                <a href="/viewer/" class="nav-link">Live Games</a>
-                <button id="loginBtn" class="nav-btn">Sign In / Sign Up</button>
-            </div>
+    <!-- Landing header — white block with a prominent full-width logo and the
+         Sign In / Sign Up button below; scrolls away with the page. -->
+    <header class="landing-header">
+        <div class="landing-header-inner">
+            <img src="/images/logo.wordmark.png" alt="Breakside" class="landing-header-logo">
+            <button id="loginBtn" class="nav-btn landing-header-btn">Sign In / Sign Up</button>
         </div>
-    </nav>
+    </header>
 
     <!-- Hero Section -->
     <section class="hero">
@@ -132,6 +125,26 @@
         </div>
     </section>
 
+    <!-- Quickstart Section -->
+    <section id="quickstart" class="quickstart">
+        <div class="section-content">
+            <h2 class="section-title">Your First Game in Five Minutes</h2>
+            <p class="section-subtitle">From install to stats—here's the whole loop.</p>
+            <div class="quickstart-card">
+                <ol class="install-steps quickstart-steps">
+                    <li><strong>Install Breakside</strong> — <a href="#install">add it to your home screen</a> and launch it like any other app. Create an account and log in.</li>
+                    <li><strong>Create a team</strong> — give it a name, then add your players: tap the <strong>Add player</strong> box, type a name, hit enter.</li>
+                    <li><strong>Start a game</strong> — enter the opponent, choose Offense or Defense, select 7 players, and tap <strong>Start Point</strong>.</li>
+                    <li><strong>Track a few points</strong> — try <strong>We Score</strong>, <strong>They Score</strong>, and <strong>Key Play</strong>, changing the lineup between points, and watch the roster tally each player's time and points. Peek at the <strong>Log</strong> tab for a running game summary, or the <strong>Full</strong> tab for every-throw play-by-play.</li>
+                    <li><strong>End the game</strong> — admire your team's statistics, download the game data, or copy the log for pasting anywhere.</li>
+                </ol>
+                <div class="quickstart-cta">
+                    <button id="quickstartBtn" class="btn btn-primary">Get Started Free</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Install Section -->
     <section id="install" class="install">
         <div class="section-content">
@@ -168,7 +181,7 @@
         <div class="modal-content auth-modal">
             <button class="modal-close" id="closeAuthModal">&times;</button>
             <div class="auth-header">
-                <img src="/images/logo.disc.only.png" alt="Breakside" class="auth-logo">
+                <img src="/images/logo.wordmark.png" alt="Breakside" class="auth-logo">
                 <h2>Welcome to Breakside</h2>
                 <p class="auth-subtitle">Sign in to sync your teams across devices</p>
             </div>

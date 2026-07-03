@@ -48,11 +48,18 @@ self.addEventListener('fetch', e => {
 
     const isSameOrigin = requestUrl.origin === self.location.origin;
 
-    console.log('Service Worker: Fetching', e.request.url);
+    // For our OWN (largely unversioned) assets, bypass the browser HTTP cache on
+    // the network attempt so a redeploy is picked up immediately instead of the
+    // browser handing back a stale cached landing.css/logo/etc. Cross-origin CDN
+    // assets (Google Fonts, Supabase, Font Awesome) keep their normal caching.
+    const networkFetch = isSameOrigin
+        ? fetch(e.request, { cache: 'reload' })
+        : fetch(e.request);
+
     e.respondWith(
         Promise.race([
             // Try network first
-            fetch(e.request)
+            networkFetch
                 .then(networkResponse => {
                     // Only cache successful, same-origin GET responses. Caching
                     // error responses (404/500) or opaque cross-origin responses

@@ -16,12 +16,12 @@
     top: 0;
     left: 0;
     z-index: 100;
-    /* Cover the safe area (notch/dynamic island) */
-    padding-top: env(safe-area-inset-top, 0);
+    /* Cover the side/bottom safe areas here; the top inset (notch/dynamic
+       island) is filled by the white .panel-header instead, so the top reads
+       white rather than grey. */
     padding-left: env(safe-area-inset-left, 0);
     padding-right: env(safe-area-inset-right, 0);
     padding-bottom: env(safe-area-inset-bottom, 0);
-    /* Extend background behind safe area */
     box-sizing: border-box;
 }
 
@@ -287,15 +287,35 @@ body.game-screen-active header {
 
 .panel-header {
     flex: 0 0 auto;
-    background: #EB8232;
-    color: #fff;
+    background: #fff;
+    color: #333;
+    border-bottom: 3px solid #EB8232; /* brand orange accent — matches main header */
+    position: relative;
+    /* Fill the iOS safe area (notch/dynamic island) white */
+    padding-top: env(safe-area-inset-top, 0);
 }
 
 .panel-header .panel-title-bar {
     background: transparent;
     border-bottom: none;
     cursor: default;
-    padding: 10px 12px;
+    padding: 6px 12px;
+}
+
+/* Staging badge in the in-game header — anchored within the title row at the
+   right, overlapping the timer readout (acceptable). pointer-events:none so taps
+   pass through to the timer. Shown only on staging via the body.staging rule. */
+.panel-header .header-content-row {
+    position: relative;
+}
+
+.header-staging-pill--game {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    z-index: 5;
+    pointer-events: none;
 }
 
 .header-content-row {
@@ -311,10 +331,10 @@ body.game-screen-active header {
     height: 36px;
     padding: 0;
     margin: 0;
-    background: rgba(255,255,255,0.15);
+    background: rgba(0,0,0,0.06);
     border: none;
     border-radius: 6px;
-    color: #fff;
+    color: #4a4a4a;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -324,7 +344,7 @@ body.game-screen-active header {
 }
 
 .header-menu-btn:hover {
-    background: rgba(255,255,255,0.25);
+    background: rgba(0,0,0,0.12);
 }
 
 /* Menu dropdown container */
@@ -426,9 +446,8 @@ body.game-screen-active header {
 }
 
 .header-logo {
-    height: 32px;
+    height: 30px;
     width: auto;
-    border-radius: 4px;
     cursor: pointer;
 }
 
@@ -472,17 +491,17 @@ body.game-screen-active header {
 }
 
 .header-score-us {
-    color: #fff;
+    color: #222;
 }
 
 .header-score-separator {
-    color: rgba(255,255,255,0.5);
+    color: rgba(0,0,0,0.3);
     font-weight: 400;
     font-size: 1.1rem;
 }
 
 .header-score-them {
-    color: rgba(255,255,255,0.85);
+    color: #555;
 }
 
 /* Team identity containers */
@@ -514,7 +533,7 @@ body.game-screen-active header {
 .team-identity-text {
     font-size: 0.7rem;
     font-weight: 600;
-    color: rgba(255,255,255,0.9);
+    color: #444;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -524,7 +543,7 @@ body.game-screen-active header {
 }
 
 .team-identity-fallback {
-    color: rgba(255,255,255,0.6);
+    color: rgba(0,0,0,0.4);
     font-weight: 500;
 }
 
@@ -534,14 +553,14 @@ body.game-screen-active header {
     height: 34px;
     border-radius: 6px;
     object-fit: contain;
-    background: rgba(255,255,255,0.15);
+    background: rgba(0,0,0,0.05);
 }
 
 /* Large team symbol (4-char abbreviation, main display) */
 .team-identity-symbol-large {
     font-size: 1rem;
     font-weight: 700;
-    color: #fff;
+    color: #333;
     text-transform: uppercase;
     letter-spacing: 1px;
     font-family: 'JetBrains Mono', monospace;
@@ -553,7 +572,7 @@ body.game-screen-active header {
     flex-direction: column;
     align-items: center;
     padding: 4px 8px;
-    background: rgba(255,255,255,0.15);
+    background: rgba(0,0,0,0.05);
     border-radius: 6px;
     cursor: pointer;
     min-width: 60px;
@@ -564,13 +583,13 @@ body.game-screen-active header {
     font-family: 'JetBrains Mono', monospace;
     font-size: 1rem;
     font-weight: 700;
-    color: #fff;
+    color: #222;
     transition: color 0.3s;
 }
 
 .header-timer-label {
     font-size: 0.6rem;
-    color: rgba(255,255,255,0.7);
+    color: #888;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -587,7 +606,7 @@ body.game-screen-active header {
     margin: 0;
     border: none;
     border-radius: 50%;
-    background: rgba(255,255,255,0.25);
+    background: rgba(0,0,0,0.35);
     color: #fff;
     cursor: pointer;
     display: none; /* Hidden by default, shown for point timer */
@@ -598,25 +617,25 @@ body.game-screen-active header {
 }
 
 .header-timer-pause-btn:hover {
-    background: rgba(255,255,255,0.4);
+    background: rgba(0,0,0,0.5);
 }
 
 .header-timer-pause-btn.paused {
     background: rgba(40, 167, 69, 0.8);
 }
 
-/* Timer state colors */
+/* Timer state colors (tuned for the white header) */
 .header-timer-value.timer-warning {
-    color: #ffc107;
+    color: #E08600;
 }
 
 .header-timer-value.timer-danger {
-    color: #ff6b6b;
+    color: #e53935;
     animation: timerPulse 1s infinite;
 }
 
 .header-timer-value.timer-negative {
-    color: #ff4444;
+    color: #d32f2f;
     animation: timerPulse 0.5s infinite;
 }
 
@@ -2575,7 +2594,7 @@ body.panel-dragging .panel-content {
 
 .header-seg-control {
     display: flex;
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.07);
     border-radius: 8px;
     padding: 2px;
     position: relative;
@@ -2585,7 +2604,7 @@ body.panel-dragging .panel-content {
     flex: 1;
     background: none;
     border: none;
-    color: rgba(255, 255, 255, 0.65);
+    color: #666;
     font-size: 12px;
     font-weight: 600;
     padding: 3px 0;
@@ -2602,7 +2621,7 @@ body.panel-dragging .panel-content {
 }
 
 .header-seg-control button.disabled {
-    color: rgba(255, 255, 255, 0.25);
+    color: rgba(0, 0, 0, 0.25);
     pointer-events: none;
 }
 

@@ -4,22 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Breakside - Ultimate Frisbee Tracker</title>
-    
+
     <!-- PWA Meta Tags -->
     <meta name="description" content="A PWA for tracking Ultimate Frisbee games and team statistics.">
-    <meta name="theme-color" content="#E19049">
+    <!-- White theme to match the clean white header. NOTE: no viewport-fit=cover —
+         the app has several top-anchored fixed elements (countdown timer, toasts)
+         that aren't safe-area aware, so we keep the layout viewport below the notch.
+         status-bar-style "default" gives a white status bar with dark glyphs. -->
+    <meta name="theme-color" content="#ffffff">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <script>window._isStaging = location.hostname === 'staging.breakside.pro';</script>
     <meta name="apple-mobile-web-app-title" id="appTitle" content="Breakside">
-    <meta name="msapplication-TileColor" content="#E19049">
+    <meta name="msapplication-TileColor" content="#ffffff">
     <meta name="msapplication-config" content="browserconfig.xml">
     <script>
         if(window._isStaging) {
             document.getElementById('appTitle').content = 'Breakside STG';
-            document.querySelector('meta[name="theme-color"]').content = '#9B32EB';
-            document.querySelector('meta[name="msapplication-TileColor"]').content = '#9B32EB';
         }
     </script>
 
@@ -197,11 +199,10 @@
                 </div>
             </div>
             <div class="header-logo-container">
-                <img src="images/logo.disc.only.png" alt="Breakside Logo" id="headerLogo">
+                <img src="images/logo.wordmark.png" alt="Breakside" id="headerLogo">
                 <div id="versionOverlay" class="version-overlay" style="display: none;"></div>
             </div>
-            <span class="header-app-title">Breakside</span>
-            <div class="header-spacer"></div>
+            <span class="header-staging-pill">Staging</span>
         </div>
     </header>
 
