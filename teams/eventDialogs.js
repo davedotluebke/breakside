@@ -10,6 +10,7 @@ import { setCurrentEvent, deserializeTournamentEvent } from '../store/storage.js
 import { showScreen } from '../screens/navigation.js';
 import { selectCloudTeam, populateCloudTeamsAndGames } from './teamList.js';
 import { showEventRosterUI } from './eventRoster.js';
+import { generateGenderRatioOptions } from '../game/genderRatioDropdown.js';
 
 /**
  * Show create event dialog

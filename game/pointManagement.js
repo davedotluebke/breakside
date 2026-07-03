@@ -2,6 +2,14 @@
  * Point Management
  * Handles point creation, transitions, and timing controls.
  */
+import { Point } from '../store/models.js';
+import { saveAllTeamsData } from '../store/storage.js';
+import { currentGame, getLatestPoint, determineStartingPosition } from '../utils/helpers.js';
+import { logEvent } from '../ui/eventLogDisplay.js';
+import { matchButtonWidths } from '../ui/buttonLayout.js';
+import { clearNextLineSelections } from '../ui/activePlayersDisplay.js';
+import { canEditPlayByPlay, showControllerToast } from './controllerState.js';
+
 let countdownInterval = null;
 let countdownSeconds = 90;
 let isCountdownRunning = false;
@@ -181,23 +189,10 @@ if (startPointBtn) {
     startPointBtn.addEventListener('click', startNextPoint);
 }
 
-function updateTimerDisplay(seconds) {
-    const display = document.getElementById('timerDisplay');
-    const minutes = Math.floor(Math.abs(seconds) / 60);
-    const remainingSeconds = Math.abs(seconds) % 60;
-    const sign = seconds < 0 ? '-' : '';
-    display.textContent = `${sign}${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
-
-    // Update color based on remaining time
-    display.className = '';
-    if (seconds < 0) {
-        display.classList.add('timer-danger');
-    } else if (seconds <= 30) {
-        display.classList.add('timer-warning');
-    } else {
-        display.classList.add('timer-normal');
-    }
-}
+// This file's local updateTimerDisplay(seconds) was DELETED here: it had been
+// shadowed dead code since game/gameTimer.js was introduced (its zero-arg
+// global overwrote this one at load time, so every runtime call already ran
+// gameTimer's version — including this file's own calls below).
 
 function startCountdown() {
     // Show the timer when starting countdown
@@ -211,11 +206,11 @@ function startCountdown() {
     let timeRemaining = countdownSeconds;
     isCountdownRunning = true;
 
-    updateTimerDisplay(timeRemaining);
+    window.updateTimerDisplay(timeRemaining); // gameTimer.js's implementation (still classic; import at C10)
 
     countdownInterval = setInterval(() => {
         timeRemaining--;
-        updateTimerDisplay(timeRemaining);
+        window.updateTimerDisplay(timeRemaining); // gameTimer.js's implementation (still classic; import at C10)
     }, 1000);
 }
 
@@ -259,3 +254,27 @@ function updatePointTimer() {
 }
 
 setInterval(updatePointTimer, 1000);
+
+// Setters for module-scoped mutable state — converted writers (game/gameLogic.js)
+// import these instead of assigning the bare globals.
+function setIsPaused(v) { isPaused = v; }
+function setCountdownSeconds(v) { countdownSeconds = v; }
+
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+export {
+    moveToNextPoint, startNextPoint, stopCountdown,
+    isPaused, countdownSeconds, setIsPaused, setCountdownSeconds,
+};
+// moveToNextPoint: called bare by classic narration/narrationEngine.js,
+// game/gameScreenEvents.js, playByPlay/scoreAttribution.js.
+window.moveToNextPoint = moveToNextPoint;
+// startNextPoint: called bare by classic game/selectLine.js,
+// playByPlay/fullPbp.js, playByPlay/fieldPbp.js.
+window.startNextPoint = startNextPoint;
+// stopCountdown: called bare (typeof-guarded) by classic game/gameScreenEvents.js.
+window.stopCountdown = stopCountdown;
+// Live accessors — utils/helpers.js reads bare `typeof isPaused`, and classic
+// game files may read/write these bare; a static copy would go stale.
+Object.defineProperty(window, 'isPaused', { configurable: true, get: () => isPaused, set: v => { isPaused = v; } });
+Object.defineProperty(window, 'countdownSeconds', { configurable: true, get: () => countdownSeconds, set: v => { countdownSeconds = v; } });

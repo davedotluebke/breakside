@@ -81,6 +81,11 @@ import './teams/activeGamePolling.js';
 import './teams/teamSettings.js';
 import './teams/eventRoster.js';
 import './teams/gameSummary.js';
+import './game/genderRatioDropdown.js';
+import './game/pointManagement.js';
+import './game/gameLogic.js';
+import './game/controllerState.js';
+import './ui/hints.js';
 
 // Skip the service worker during local development (localhost / 127.0.0.1).
 // Its offline precache otherwise serves stale JS/CSS across edits, so source

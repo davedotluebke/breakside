@@ -14,6 +14,10 @@ import {
     deserializePointsFromServer, deserializeGame, serializeTournamentEvent,
 } from './storage.js';
 import { currentGame } from '../utils/helpers.js';
+// Import cycle with controllerState.js (it imports authFetch/API_BASE_URL from
+// here) — safe: both sides export hoisted function declarations used only at
+// call time, and neither top level calls into the other at eval time.
+import { showControllerToast } from '../game/controllerState.js';
 
 // =============================================================================
 // Configuration

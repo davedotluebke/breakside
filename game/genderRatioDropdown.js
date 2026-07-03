@@ -97,3 +97,8 @@ function initializeGenderRatioDropdown() {
     }
 }
 
+// --- ES-module exports; no window.* shims needed — all consumers are
+// --- converted modules (teams/eventDialogs.js, teams/rosterManagement.js,
+// --- game/gameLogic.js) that import these directly.
+export { generateGenderRatioOptions, populateGenderRatioDropdown, initializeGenderRatioDropdown };
+

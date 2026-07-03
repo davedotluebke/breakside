@@ -4,6 +4,22 @@
  * 
  * Phase 4 update: Games use teamId and create rosterSnapshot
  */
+import { Role, Game, Throw, Defense, createRosterSnapshot, isTestGame } from '../store/models.js';
+import { currentTeam, currentEvent, saveAllTeamsData, serializeTeam } from '../store/storage.js';
+import { syncGameToCloud, deleteGameFromCloud } from '../store/sync.js';
+import { currentGame, getLatestPoint, getActivePossession, getPlayerFromName } from '../utils/helpers.js';
+import { logEvent } from '../ui/eventLogDisplay.js';
+import { updatePanelsForGameState } from '../ui/panelSystem.js';
+import { clearNextLineSelections } from '../ui/activePlayersDisplay.js';
+import { showScreen, returnToGameFromRoster } from '../screens/navigation.js';
+import { updateTeamRosterDisplay } from '../teams/rosterManagement.js';
+import { populateGenderRatioDropdown } from './genderRatioDropdown.js';
+import {
+    moveToNextPoint, stopCountdown, countdownSeconds,
+    setIsPaused, setCountdownSeconds,
+} from './pointManagement.js';
+import { showControllerToast } from './controllerState.js';
+
 let appVersion = null;
 
 function startNewGame(startingPosition, seconds) {
@@ -63,7 +79,7 @@ function startNewGame(startingPosition, seconds) {
     logEvent(`New game started against ${opponentName}`);
 
     // Set countdown seconds before moving to next point
-    countdownSeconds = seconds;
+    setCountdownSeconds(seconds);
 
     // Enter the panel-based game screen
     if (typeof enterGameScreen === 'function') {
@@ -153,7 +169,7 @@ function applyGameSettingsToCurrentGame() {
     const timer = document.getElementById('pointTimerInput');
     if (timer) {
         const secs = parseInt(timer.value, 10);
-        if (!isNaN(secs)) countdownSeconds = secs;
+        if (!isNaN(secs)) setCountdownSeconds(secs);
     }
 
     if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
@@ -238,7 +254,7 @@ document.getElementById('copySummaryBtn').addEventListener('click', function() {
 
 document.getElementById('anotherGameBtn').addEventListener('click', function() {
     stopCountdown();
-    isPaused = false;
+    setIsPaused(false);
     clearNextLineSelections();
 
     // Phase 6b: Exit game screen if visible
@@ -427,7 +443,7 @@ function undoEvent() {
                     deleteGameFromCloud(gameId);
                 }
                 stopCountdown();
-                isPaused = false;
+                setIsPaused(false);
                 clearNextLineSelections();
                 if (typeof exitGameScreen === 'function') {
                     exitGameScreen();
@@ -611,3 +627,27 @@ document.addEventListener('DOMContentLoaded', function() {
         undoBtn.addEventListener('click', undoEvent);
     }
 });
+
+// --- ES-module exports; window.* shims below are transitional for
+// --- not-yet-converted classic scripts (removed at end of migration).
+export {
+    updateScore, summarizeGame, downloadJSON, undoEvent,
+    configureStartGameMode, appVersion,
+};
+// updateScore: called bare by classic narration/narrationEngine.js and
+// game/gameScreenEvents.js.
+window.updateScore = updateScore;
+// summarizeGame: called bare by converted ui/eventLogDisplay.js (resolves via
+// window — importing it there would add a gameLogic↔eventLogDisplay cycle for
+// no gain; C10 converts it) and typeof-guarded by classic game/gameScreenSync.js.
+window.summarizeGame = summarizeGame;
+// undoEvent: called bare by classic game/gameScreenEvents.js and
+// playByPlay/fullPbp.js.
+window.undoEvent = undoEvent;
+// configureStartGameMode: called bare (typeof-guarded) by converted
+// screens/navigation.js (resolves via window; import at C10 would create a
+// gameLogic↔navigation cycle).
+window.configureStartGameMode = configureStartGameMode;
+// appVersion: read bare by main.js and classic game/gameScreenEvents.js —
+// live getter, a static copy would stay null (loadVersion() assigns it async).
+Object.defineProperty(window, 'appVersion', { configurable: true, get: () => appVersion });

@@ -5,6 +5,7 @@
 import { listServerGames } from '../store/sync.js';
 import { _cloudTeamsCache, isGameActive, resumeCloudGame } from './teamList.js';
 import { doFullRefresh } from './syncStatusUI.js';
+import { showControllerToast } from '../game/controllerState.js';
 
 // Active-game polling state
 let _activeGamePollInterval = null;

@@ -7,6 +7,7 @@ import {
     API_BASE_URL, getSyncStatus, processSyncQueue, syncUserTeams, pullFromCloud,
 } from '../store/sync.js';
 import { populateCloudTeamsAndGames } from './teamList.js';
+import { showControllerToast } from '../game/controllerState.js';
 
 function showSetServerDialog() {
     const currentUrl = localStorage.getItem('ultistats_api_url') ||

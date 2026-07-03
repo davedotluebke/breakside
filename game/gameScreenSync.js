@@ -636,14 +636,12 @@ function updateGameScreenAfterRefresh() {
     console.log('🔄 Updated UI after game state refresh');
 }
 
-// Hook into controller state updates if available
-const originalUpdateControllerUI = window.updateControllerUI;
-window.updateControllerUI = function(state, previousState) {
-    // Call original if it exists
-    if (typeof originalUpdateControllerUI === 'function') {
-        originalUpdateControllerUI(state, previousState);
-    }
-    
+// React to controller-state UI updates via the module-era hook (replaces
+// the old window.updateControllerUI wrapper, which broke once
+// controllerState.js became a module).
+document.addEventListener('breakside:controller-ui-updated', (e) => {
+    const { state, previousState } = e.detail;
+
     // Update game screen role buttons
     if (isGameScreenVisible()) {
         updateGameScreenRoleButtons(state);
@@ -669,7 +667,7 @@ window.updateControllerUI = function(state, previousState) {
         // Always keep game state refresh running (for viewers to see updates)
         startGameStateRefresh();
     }
-};
+});
 window.enterGameScreen = enterGameScreen;
 window.exitGameScreen = exitGameScreen;
 window.updateGameScreenScore = updateGameScreenScore;
