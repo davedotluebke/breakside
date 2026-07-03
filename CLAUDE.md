@@ -118,7 +118,7 @@ Keep feature branches after merging — don't delete them. Branch names serve as
 Before debugging any styling issue, skim **ARCHITECTURE.md § CSS Styling Gotchas** — it lists the non-obvious cascade/box-model traps that have bitten layout work here (global `button { margin: 10px }` inheritance, reusable button presets that carry their own size, `width: 100%` + padding interactions, flex/grid `min-width: 0` discipline, service-worker caching of CSS). Add new gotchas there as you find them, not to this file.
 
 ### Frontend (root directory)
-No build system — vanilla JS files loaded in order via `index.html`. No module bundler.
+Native **ES modules** — still no build system, no bundler; files ship to S3 as-is. `index.html` loads a single `<script type="module" src="main.js">` entry (plus the Supabase CDN and `vendor/xlsx` classic tags); `main.js`'s import block lists every module in load order. See ARCHITECTURE.md § Module Loading for the full rules.
 
 | Directory | Purpose |
 |-----------|---------|
@@ -132,8 +132,9 @@ No build system — vanilla JS files loaded in order via `index.html`. No module
 | `landing/` | Landing page and invite join flow |
 
 **Key patterns:**
-- Global state shared via `store/storage.js`
-- Dependency flow: Data → Utils → Features → UI (no circular deps)
+- Global state lives in `store/storage.js`, exported as live bindings; cross-module writes go through its setters (`setCurrentTeam()` etc.) — never assign to an imported binding
+- Dependency flow: Data → Utils → Features → UI for imports; upward calls are late-bound `window.*?.()` hooks or CustomEvents, each marked `// window survivor:` at its owner (do not add new bare `window.foo = ...` globals; see ARCHITECTURE.md § Module Loading)
+- New frontend file = new module: add `import './dir/file.js';` to `main.js` at its layer position — never a classic `<script>` tag (`landing/` and `service-worker.js` are the intentional exceptions)
 - Offline-first: localStorage + service worker (network-first with 5s timeout)
 - IDs use format `{sanitized-name}-{4-char-hash}` (e.g., "Alice-7f3a")
 

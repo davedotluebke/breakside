@@ -131,12 +131,60 @@ ultistats/
     └── favicon-*.png       # Various favicon sizes
 ```
 
-### Module Loading
+### Module Loading (ES modules)
 
-- Modules are loaded in order via `<script>` tags in `index.html`
-- Data layer (`store/`) loads first, followed by utilities, then feature modules
-- Global state is managed through shared variables in `store/storage.js`
-- No circular dependencies - clear data flow: data → utils → features → UI
+The frontend is native ES modules — still no build step, no bundler; every file
+ships to S3 as-is and runs directly in the browser.
+
+- `index.html` loads exactly one app script: `<script type="module" src="main.js">`.
+  The only other script tags are the Supabase CDN client, `vendor/xlsx.mini.min.js`
+  (both classic scripts providing the `supabase`/`XLSX` globals), and three tiny
+  inline bootstrap snippets (staging flag, icons, manifest).
+- `main.js` is the entry point. Its top import block lists every module in the
+  order the old `<script>` tags used, so top-level side effects (state init,
+  DOM wiring) keep their historical relative order. Modules import what they
+  use by name: `import { currentGame } from './utils/helpers.js'`.
+- Shared mutable state lives in `store/storage.js` (`currentTeam`, `teams`,
+  `currentEvent`, …) and is exported as **live bindings**. Reads import the
+  binding; cross-module **writes must use the exported setters**
+  (`setCurrentTeam()`, `setCurrentEvent()`, `setTeams()`) — assigning to an
+  imported binding is a runtime TypeError.
+- Dependency flow is still data → utils → features → UI for *imports*.
+  **Back-edges** (a lower layer notifying a higher one, e.g. `store/sync.js`
+  refreshing the teams screen) do NOT import upward; they call late-bound
+  window hooks: `window.updateSyncStatusDisplay?.()`. Each such hook is a
+  deliberate, documented `// window survivor:` at its owner. Cross-module
+  reactions also use DOM CustomEvents: `breakside:screen-shown` (dispatched by
+  `screens/navigation.js showScreen()`) and `breakside:controller-ui-updated`
+  (dispatched by `game/controllerState.js`) replaced the pre-module
+  monkey-patching of `window.showScreen`/`window.updateControllerUI`.
+- **Adding a new file**: create it as a module (use `export`, import what you
+  need), then add `import './dir/newFile.js';` to `main.js`'s import block at
+  the position matching its layer. Never add a classic `<script>` tag for app
+  code. If lower-layer code must call into your file, expose a
+  `window.myHook = myHook; // window survivor: late-bound back-edge hook` and
+  call it as `window.myHook?.()` from below — don't import upward.
+- **Module timing**: modules are deferred — they evaluate after the DOM is
+  parsed (so top-level `document.getElementById(...)` works) and before
+  `DOMContentLoaded` fires. Modules are always strict mode: undeclared-variable
+  assignments throw, so declare everything.
+- **Surviving `window.*` globals** are the exception, not the wiring. Every one
+  carries a `// window survivor:` comment at its assignment. Categories:
+  e2e test seams (`window.currentGame`, `window.pingController` — the Playwright
+  suite reads/replaces these, and controller polling deliberately calls
+  `window.pingController(...)` so the test override takes effect;
+  `window.startControllerPolling`/`stopControllerPolling`), generated-HTML
+  onclick handlers (`openJoinTeamModal`, `showConnectionInfo`, `handleSignOut`, …
+  in `teams/teamList.js`/`teams/syncStatusUI.js` templates), `main.js` bootstrap
+  globals (`APP_VERSION`/`APP_BUILD`/`swRegistration`/… — nothing may import
+  from the entry module), the `window.breakside.auth`/`.loginScreen` auth
+  namespace, late-bound back-edge hooks (above), and a few documented debug
+  seams.
+- `landing/` pages are separate HTML entry points with their own self-contained
+  classic scripts (they share no files with the app) and are exempt from all of
+  this. `service-worker.js` is a worker script — also classic, also exempt; it
+  caches module files at fetch time exactly like any other asset, so no SW
+  changes were needed for the migration.
 
 ### CSS Styling Gotchas
 
