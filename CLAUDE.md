@@ -65,13 +65,7 @@ Deploys current working directory (not committed state) to S3 + CloudFront inval
 - Only remind about server restart when changes touch `ultistats_server/` files.
 
 ### Version tracking
-`version.json` has version and build number. Build number auto-increments via:
-- **Direct commits to main**: pre-commit hook (`.git/hooks/pre-commit`) runs `increment-version.py`
-- **PR merges to main**: GitHub Actions workflow bumps version if the merge commit didn't already include a `version.json` change
-- **Feature branches**: pre-commit hook skips — no version bump (avoids merge conflicts across worktrees)
-- **Cherry-pick caveat**: `git cherry-pick` may skip the pre-commit hook entirely. After cherry-picking onto main, run `python3 increment-version.py build && git add version.json service-worker.js && git commit --amend --no-edit` so the cache version actually moves forward. See ARCHITECTURE.md § Deployment for the full explanation.
-
-On staging, the deploy script also writes a `deployStamp` field so the app detects redeploys even without a build number change.
+`version.json` holds the committed semver `version` string (bump manually with `python3 increment-version.py major|minor|patch`) and a `build` field whose committed value is the placeholder `"dev"` — **build numbers are never committed**. They are stamped at **deploy time only**: both the production GitHub Action and `deploy-staging.sh` run `increment-version.py stamp`, which computes `git rev-list --count HEAD` and writes it into the *deployed* `version.json` and service-worker `cacheName` (the client detects updates by build/stamp *inequality*, so any new deploy triggers the update prompt). Nothing is pushed back to main — there is no pre-commit bump, no CI bot commit, and no cherry-pick caveat. Staging additionally stamps `deployStamp`/`deployLabel` and suffixes the cacheName (`build-<n>-stg-<stamp>`) so redeploys without a commit are still detected. See VERSIONING.md.
 
 ## Multi-Session Development
 
@@ -87,7 +81,7 @@ cd .worktrees/<feature>
 ```
 
 ### Committing
-Commit early and often on feature branches. Commits are free — the pre-commit hook skips version bumps on non-main branches. Commit after each logical change (a function, a bug fix, a UI tweak) without waiting for the user to ask. This keeps `git status` clean and prevents uncommitted changes from blocking merges in other sessions.
+Commit early and often on feature branches. Commits are free — nothing bumps versions at commit time (build numbers are stamped at deploy time only). Commit after each logical change (a function, a bug fix, a UI tweak) without waiting for the user to ask. This keeps `git status` clean and prevents uncommitted changes from blocking merges in other sessions.
 
 ### Testing on staging
 ```bash
