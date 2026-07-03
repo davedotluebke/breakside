@@ -688,6 +688,87 @@ class TestIndexStorage:
         team_games = get_team_games("NewTeam-test")
         assert "new-game" in team_games
     
+    def test_update_index_for_game_null_roster_snapshot(self, isolate_test_data):
+        """Regression: clients may send rosterSnapshot: null for legacy games.
+
+        This used to raise AttributeError ('NoneType' has no attribute 'get')
+        and 500 the sync endpoint. Player IDs should still be extracted from
+        points as the fallback.
+        """
+        from storage.index_storage import (
+            rebuild_index, update_index_for_game, get_team_games, get_game_players
+        )
+
+        rebuild_index()
+
+        update_index_for_game("null-roster-game", {
+            "teamId": "NullTeam-test",
+            "rosterSnapshot": None,
+            "points": [{
+                "players": ["PointPlayer-test"],
+                "possessions": [{"events": [{"throwerId": "Thrower-test"}]}]
+            }]
+        })
+
+        assert "null-roster-game" in get_team_games("NullTeam-test")
+        game_players = get_game_players("null-roster-game")
+        assert "PointPlayer-test" in game_players
+        assert "Thrower-test" in game_players
+
+    def test_update_index_for_game_null_nested_fields(self, isolate_test_data):
+        """Regression: explicit nulls for points/players/possessions/events must not crash."""
+        from storage.index_storage import rebuild_index, update_index_for_game, get_team_games
+
+        rebuild_index()
+
+        update_index_for_game("null-fields-game", {
+            "teamId": "NullFieldsTeam-test",
+            "rosterSnapshot": {"players": None},
+            "points": [
+                {"players": None, "possessions": None},
+                {"players": [], "possessions": [{"events": None}]},
+            ]
+        })
+        update_index_for_game("null-points-game", {
+            "teamId": "NullFieldsTeam-test",
+            "rosterSnapshot": None,
+            "points": None
+        })
+
+        team_games = get_team_games("NullFieldsTeam-test")
+        assert "null-fields-game" in team_games
+        assert "null-points-game" in team_games
+
+    def test_rebuild_index_null_roster_snapshot(self, isolate_test_data):
+        """Regression: a stored game with rosterSnapshot: null must not break rebuild."""
+        from storage.game_storage import save_game_version
+        from storage.index_storage import rebuild_index, get_team_games, get_game_players
+
+        save_game_version("null-roster-rebuild", {
+            "team": "NullTeam",
+            "opponent": "Opp",
+            "teamId": "NullTeam-test",
+            "rosterSnapshot": None,
+            "points": [{
+                "players": ["PointPlayer-test"],
+                "possessions": None
+            }]
+        })
+
+        rebuild_index()
+
+        assert "null-roster-rebuild" in get_team_games("NullTeam-test")
+        assert "PointPlayer-test" in get_game_players("null-roster-rebuild")
+
+    def test_update_index_for_team_null_player_ids(self, isolate_test_data):
+        """Regression: playerIds: null must not crash the team index update."""
+        from storage.index_storage import rebuild_index, update_index_for_team
+
+        rebuild_index()
+
+        # Should simply be a no-op, not raise
+        update_index_for_team("NullPlayersTeam-test", {"playerIds": None})
+
     def test_update_index_for_team_incremental(self, isolate_test_data):
         """Test incremental index update for a team."""
         from storage.index_storage import rebuild_index, update_index_for_team, get_player_teams

@@ -65,7 +65,7 @@ def rebuild_index() -> dict:
                 with open(team_file, 'r') as f:
                     team_data = json.load(f)
                 team_id = team_data.get('id', team_file.stem)
-                player_ids = team_data.get('playerIds', [])
+                player_ids = team_data.get('playerIds') or []
                 
                 for player_id in player_ids:
                     if player_id not in index["playerTeams"]:
@@ -103,22 +103,23 @@ def rebuild_index() -> dict:
                 player_ids = set()
                 
                 # From rosterSnapshot (preferred)
-                roster_snapshot = game_data.get('rosterSnapshot', {})
-                for player in roster_snapshot.get('players', []):
+                # `or {}` — clients may send an explicit null for legacy games
+                roster_snapshot = game_data.get('rosterSnapshot') or {}
+                for player in roster_snapshot.get('players') or []:
                     if 'id' in player:
                         player_ids.add(player['id'])
                 
                 # From points (fallback for legacy or additional tracking)
-                for point in game_data.get('points', []):
+                for point in game_data.get('points') or []:
                     # Check point.players (might be IDs or names)
-                    for player_ref in point.get('players', []):
+                    for player_ref in point.get('players') or []:
                         if isinstance(player_ref, str) and '-' in player_ref:
                             # Looks like an ID (has hash suffix)
                             player_ids.add(player_ref)
                     
                     # Check events for player IDs
-                    for possession in point.get('possessions', []):
-                        for event in possession.get('events', []):
+                    for possession in point.get('possessions') or []:
+                        for event in possession.get('events') or []:
                             for key in ['throwerId', 'receiverId', 'defenderId', 'pullerId']:
                                 if key in event and event[key]:
                                     player_ids.add(event[key])
@@ -253,18 +254,19 @@ def update_index_for_game(game_id: str, game_data: dict) -> None:
         # Extract player IDs
         player_ids = set()
 
-        roster_snapshot = game_data.get('rosterSnapshot', {})
-        for player in roster_snapshot.get('players', []):
+        # `or {}` — clients may send an explicit null for legacy games
+        roster_snapshot = game_data.get('rosterSnapshot') or {}
+        for player in roster_snapshot.get('players') or []:
             if 'id' in player:
                 player_ids.add(player['id'])
 
-        for point in game_data.get('points', []):
-            for player_ref in point.get('players', []):
+        for point in game_data.get('points') or []:
+            for player_ref in point.get('players') or []:
                 if isinstance(player_ref, str) and '-' in player_ref:
                     player_ids.add(player_ref)
 
-            for possession in point.get('possessions', []):
-                for event in possession.get('events', []):
+            for possession in point.get('possessions') or []:
+                for event in possession.get('events') or []:
                     for key in ['throwerId', 'receiverId', 'defenderId', 'pullerId']:
                         if key in event and event[key]:
                             player_ids.add(event[key])
@@ -296,7 +298,7 @@ def update_index_for_team(team_id: str, team_data: dict) -> None:
             rebuild_index()
             return
 
-        player_ids = team_data.get('playerIds', [])
+        player_ids = team_data.get('playerIds') or []
 
         # Update playerTeams
         for player_id in player_ids:
