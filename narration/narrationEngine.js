@@ -30,7 +30,7 @@ import { moveToNextPoint } from '../game/pointManagement.js';
 import { ensurePossessionExists } from '../playByPlay/keyPlayDialog.js';
 import { advancedSettings } from '../settings/advancedSettings.js';
 import { narrationEventBus } from './eventBus.js';
-import { narrationRealtimeSession } from './realtimeSession.js';
+import { narrationRealtimeSession, mergeCompletedUtterance } from './realtimeSession.js';
 
 const narrationEngine = (function() {
     const FINALIZE_ENDPOINT = '/api/narration/finalize';
@@ -554,9 +554,11 @@ Just listen. Transcription happens automatically.`;
                 },
                 onTranscriptComplete: (utterance) => {
                     // Some servers emit only complete transcripts; merge if we
-                    // haven't already picked up this text via deltas.
-                    if (utterance && !accumulatedTranscript.endsWith(utterance)) {
-                        accumulatedTranscript += utterance;
+                    // haven't already picked up this text via deltas (shared
+                    // rule with realtimeSession's own accumulator).
+                    const merged = mergeCompletedUtterance(accumulatedTranscript, utterance);
+                    if (merged !== accumulatedTranscript) {
+                        accumulatedTranscript = merged;
                         if (narrationEventBus) {
                             narrationEventBus.publish('transcriptUpdated', {
                                 delta: utterance,

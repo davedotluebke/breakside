@@ -29,6 +29,20 @@
  */
 import { authFetch, API_BASE_URL } from '../store/sync.js';
 
+/**
+ * Merge a completed-utterance transcript into an accumulated transcript.
+ * Guards against double-appending text already received via streaming
+ * deltas: skip only when the accumulated text already ends with this
+ * utterance — an `includes` check would wrongly drop genuinely repeated
+ * phrases later in the recording. Shared by this module's accumulator and
+ * narrationEngine's slow-pass accumulator so the two can't diverge.
+ * @returns {string} The (possibly unchanged) accumulated transcript
+ */
+function mergeCompletedUtterance(accumulated, utterance) {
+    if (!utterance || accumulated.endsWith(utterance)) return accumulated;
+    return accumulated + utterance;
+}
+
 const narrationRealtimeSession = (function() {
     const OPENAI_REALTIME_URL = 'wss://api.openai.com/v1/realtime';
     const TOKEN_ENDPOINT_PATH = '/api/narration/token';
@@ -404,9 +418,7 @@ const narrationRealtimeSession = (function() {
 
             case 'conversation.item.input_audio_transcription.completed':
                 // Some transports only send the full transcript here, not deltas.
-                if (msg.transcript && !accumulatedTranscript.includes(msg.transcript)) {
-                    accumulatedTranscript += msg.transcript;
-                }
+                accumulatedTranscript = mergeCompletedUtterance(accumulatedTranscript, msg.transcript);
                 onTranscriptCompleteCb(msg.transcript || '');
                 // Transcription-only sessions never emit response.done —
                 // the final transcription.completed (after our manual
@@ -616,4 +628,4 @@ const narrationRealtimeSession = (function() {
 // --- ES-module export. The sole consumer (narration/narrationEngine.js)
 // --- imports it directly; no window shim needed — grep found no other
 // --- window.narrationRealtimeSession references (code, tests, or HTML).
-export { narrationRealtimeSession };
+export { narrationRealtimeSession, mergeCompletedUtterance };

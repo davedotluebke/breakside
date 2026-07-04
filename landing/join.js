@@ -7,21 +7,13 @@
 // Configuration
 // =============================================================================
 
-const SUPABASE_URL = 'https://mfuziqztsfqaqnnxjcrr.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mdXppcXp0c2ZxYXFubnhqY3JyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU3NTkzMDYsImV4cCI6MjA4MTMzNTMwNn0.ofe60cGBIC82rCoynvngiNEnXIKOyhpF_utezC8KG0w';
-
 // API base URL - use same origin in production, localhost in dev
-const API_BASE = window.location.hostname === 'localhost' 
+const API_BASE = window.location.hostname === 'localhost'
     ? 'http://localhost:8000'
     : window.location.origin;
 
-// Initialize Supabase client. No-op lock function disables the
-// Navigator Locks API — see landing.js for the rationale; same multi-tab
-// failure mode applies here.
-const noOpLock = async (name, acquireTimeout, fn) => fn();
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { lock: noOpLock }
-});
+// The Supabase client (`supabaseClient`) is created by supabaseInit.js,
+// loaded before this script — shared with landing.js via the global scope.
 
 // =============================================================================
 // State
