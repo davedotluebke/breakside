@@ -502,43 +502,44 @@ function handleEndGame() {
         }
         return;
     }
-    
-    // Use existing end game confirmation if available
-    // (endGameConfirm has no module owner — legacy global, not defined
-    // anywhere in the current codebase, so the fallback below always runs)
-    if (typeof window.endGameConfirm === 'function') {
-        window.endGameConfirm();
-    } else {
-        // Fallback: implement end game logic directly
-        // Skip the confirm for test games (throwaway dev data).
-        const skipEndConfirm = typeof isTestGame === 'function'
-            && typeof currentGame === 'function' && isTestGame(currentGame());
-        if (!skipEndConfirm && !confirm('Are you sure you want to end the game?')) {
-            return;
-        }
-        
-        // Stop any running timers
-        if (typeof stopCountdown === 'function') {
-            stopCountdown();
-        }
-        
-        // Set game end timestamp
-        if (typeof currentGame === 'function' && currentGame()) {
-            currentGame().gameEndTimestamp = new Date();
-        }
-        
-        // Exit game screen
-        exitGameScreen();
-        
-        // Show game summary screen
-        if (typeof showGameSummaryPostGame === 'function') {
-            showGameSummaryPostGame();
-        }
 
-        // Save data
-        if (typeof saveAllTeamsData === 'function') {
-            saveAllTeamsData();
-        }
+    endGameFlow();
+}
+
+/**
+ * Shared end-game flow (menu End Game + Game Events modal End Game).
+ * Confirms (skipped for test games), stops timers, stamps
+ * gameEndTimestamp, exits to the post-game summary, and saves.
+ */
+function endGameFlow() {
+    // Skip the confirm for test games (throwaway dev data).
+    const skipEndConfirm = typeof isTestGame === 'function'
+        && typeof currentGame === 'function' && isTestGame(currentGame());
+    if (!skipEndConfirm && !confirm('Are you sure you want to end the game?')) {
+        return;
+    }
+
+    // Stop any running timers
+    if (typeof stopCountdown === 'function') {
+        stopCountdown();
+    }
+
+    // Set game end timestamp
+    if (typeof currentGame === 'function' && currentGame()) {
+        currentGame().gameEndTimestamp = new Date();
+    }
+
+    // Exit game screen
+    exitGameScreen();
+
+    // Show game summary screen
+    if (typeof showGameSummaryPostGame === 'function') {
+        showGameSummaryPostGame();
+    }
+
+    // Save data
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
     }
 }
 
@@ -643,6 +644,19 @@ function togglePbpExpandedRow() {
 }
 
 /**
+ * Stop the point timer: fold the elapsed time since the point started into
+ * totalPointTime and clear startTimestamp. Shared by the We Score / They
+ * Score handlers.
+ */
+function stopPointTimeAccrual() {
+    const point = getLatestPoint();
+    if (point && point.startTimestamp) {
+        point.totalPointTime = (point.totalPointTime || 0) + (Date.now() - new Date(point.startTimestamp).getTime());
+        point.startTimestamp = null;
+    }
+}
+
+/**
  * Handle "We Score" button click
  * Shows score attribution dialog from existing simpleModeScreen.js
  */
@@ -657,14 +671,9 @@ function handlePbpWeScore() {
     
     // Auto-resume timer if paused
     autoResumePointTimer();
-    
-    // Stop the point timer
-    const point = getLatestPoint();
-    if (point && point.startTimestamp) {
-        point.totalPointTime = (point.totalPointTime || 0) + (Date.now() - new Date(point.startTimestamp).getTime());
-        point.startTimestamp = null;
-    }
-    
+
+    stopPointTimeAccrual();
+
     // Ensure the dialog is visible by moving it to body if needed
     ensureDialogVisible('scoreAttributionDialog');
     
@@ -692,14 +701,9 @@ function handlePbpTheyScore() {
     
     // Auto-resume timer if paused
     autoResumePointTimer();
-    
-    // Stop the point timer
-    const point = getLatestPoint();
-    if (point && point.startTimestamp) {
-        point.totalPointTime = (point.totalPointTime || 0) + (Date.now() - new Date(point.startTimestamp).getTime());
-        point.startTimestamp = null;
-    }
-    
+
+    stopPointTimeAccrual();
+
     // Update score and move to next point
     if (typeof updateScore === 'function' && typeof Role !== 'undefined') {
         updateScore(Role.OPPONENT);
@@ -1425,44 +1429,7 @@ function handleGameEventSwitchSides() {
  */
 function handleGameEventEndGame() {
     hideGameEventsModal();
-    
-    // Use existing end game functionality if available
-    // (endGameConfirm has no module owner — legacy global, not defined
-    // anywhere in the current codebase, so the fallback below always runs)
-    if (typeof window.endGameConfirm === 'function') {
-        window.endGameConfirm();
-    } else {
-        // Fallback: implement end game logic directly
-        // Skip the confirm for test games (throwaway dev data).
-        const skipEndConfirm = typeof isTestGame === 'function'
-            && typeof currentGame === 'function' && isTestGame(currentGame());
-        if (!skipEndConfirm && !confirm('Are you sure you want to end the game?')) {
-            return;
-        }
-        
-        // Stop any running timers
-        if (typeof stopCountdown === 'function') {
-            stopCountdown();
-        }
-        
-        // Set game end timestamp
-        if (typeof currentGame === 'function' && currentGame()) {
-            currentGame().gameEndTimestamp = new Date();
-        }
-        
-        // Exit game screen
-        exitGameScreen();
-        
-        // Show game summary screen
-        if (typeof showGameSummaryPostGame === 'function') {
-            showGameSummaryPostGame();
-        }
-
-        // Save data
-        if (typeof saveAllTeamsData === 'function') {
-            saveAllTeamsData();
-        }
-    }
+    endGameFlow();
 }
 
 /**

@@ -395,8 +395,22 @@ function startControllerPolling(gameId) {
     
     // Initial fetch
     fetchControllerState(gameId);
-    
+
     // Start polling (faster interval when holding a role)
+    const interval = installPingInterval();
+
+    console.log(`🎮 Controller polling started for game ${gameId} (${interval}ms)`);
+}
+
+/**
+ * (Re)install the controller ping interval, clearing any existing one.
+ * Interval is role-based: faster while holding a role.
+ * @returns {number} The interval in ms that was installed
+ */
+function installPingInterval() {
+    if (controllerPollIntervalId) {
+        clearInterval(controllerPollIntervalId);
+    }
     const hasRole = controllerState.isActiveCoach || controllerState.isLineCoach;
     const interval = hasRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
     controllerPollIntervalId = setInterval(() => {
@@ -404,8 +418,7 @@ function startControllerPolling(gameId) {
             window.pingController(currentGameIdForPolling); // via window: e2e test seam (tests replace window.pingController)
         }
     }, interval);
-
-    console.log(`🎮 Controller polling started for game ${gameId} (${interval}ms)`);
+    return interval;
 }
 
 /**
@@ -428,18 +441,7 @@ function stopControllerPolling() {
  */
 function adjustPollingInterval() {
     if (!controllerPollIntervalId || !currentGameIdForPolling) return;
-    
-    // Clear existing interval
-    clearInterval(controllerPollIntervalId);
-    
-    // Set new interval based on role (faster when holding a role)
-    const hasRole = controllerState.isActiveCoach || controllerState.isLineCoach;
-    const interval = hasRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
-    controllerPollIntervalId = setInterval(() => {
-        if (currentGameIdForPolling) {
-            window.pingController(currentGameIdForPolling); // via window: e2e test seam (tests replace window.pingController)
-        }
-    }, interval);
+    installPingInterval();
 }
 
 /**
@@ -593,16 +595,7 @@ document.addEventListener('visibilitychange', async () => {
     // Always restart the polling interval unconditionally.
     // After sleep, the browser may have frozen or invalidated the previous
     // interval — checking controllerPollIntervalId is unreliable here.
-    if (controllerPollIntervalId) {
-        clearInterval(controllerPollIntervalId);
-    }
-    const hasRole = controllerState.isActiveCoach || controllerState.isLineCoach;
-    const interval = hasRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
-    controllerPollIntervalId = setInterval(() => {
-        if (currentGameIdForPolling) {
-            window.pingController(currentGameIdForPolling); // via window: e2e test seam (tests replace window.pingController)
-        }
-    }, interval);
+    installPingInterval();
 
     // Immediately ping to get fresh server state, with retries.
     // The first ping after wake may fail if the network is still restoring.
@@ -829,7 +822,7 @@ function showControllerToast(message, type = 'info', duration = 4000, options = 
     }
 
     // Add swipe-to-dismiss functionality
-    addSwipeToDismiss(toast);
+    addSwipeToDismiss(toast, () => dismissToast(toast, true));
 
     container.appendChild(toast);
     
@@ -882,27 +875,31 @@ function dismissToast(toast, wasSwiped = false) {
 }
 
 /**
- * Add swipe-to-dismiss functionality to a toast
+ * Add swipe-up-to-dismiss behavior to a toast. Swiping up more than 50px
+ * triggers onSwipedAway; a shorter swipe springs the toast back.
+ * Shared by the regular controller toasts (swipe = dismiss) and the handoff
+ * toast (swipe = accept).
  * @param {HTMLElement} toast - The toast element
+ * @param {Function} onSwipedAway - Called when swiped up past the threshold
  */
-function addSwipeToDismiss(toast) {
+function addSwipeToDismiss(toast, onSwipedAway) {
     let startY = 0;
     let currentY = 0;
     let isDragging = false;
-    
+
     const handleStart = (e) => {
         isDragging = true;
         startY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
         currentY = startY;
         toast.classList.add('toast-swiping');
     };
-    
+
     const handleMove = (e) => {
         if (!isDragging) return;
-        
+
         currentY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
         const deltaY = currentY - startY;
-        
+
         // Only allow swiping up (negative deltaY)
         if (deltaY < 0) {
             // Prevent page scroll when swiping toast
@@ -911,34 +908,44 @@ function addSwipeToDismiss(toast) {
             toast.style.opacity = Math.max(0, 1 + deltaY / 100);
         }
     };
-    
+
     const handleEnd = () => {
         if (!isDragging) return;
         isDragging = false;
         toast.classList.remove('toast-swiping');
-        
+
         const deltaY = currentY - startY;
-        
-        // If swiped up more than 50px, dismiss immediately (no animation flicker)
+
+        // If swiped up more than 50px, complete the swipe (no animation flicker)
         if (deltaY < -50) {
-            dismissToast(toast, true);
+            onSwipedAway();
         } else {
             // Reset position
             toast.style.transform = '';
             toast.style.opacity = '';
         }
     };
-    
+
     // Touch events - use passive: false to allow preventDefault
     toast.addEventListener('touchstart', handleStart, { passive: true });
     toast.addEventListener('touchmove', handleMove, { passive: false });
     toast.addEventListener('touchend', handleEnd);
     toast.addEventListener('touchcancel', handleEnd);
-    
-    // Mouse events (for desktop testing)
-    toast.addEventListener('mousedown', handleStart);
-    document.addEventListener('mousemove', handleMove);
-    document.addEventListener('mouseup', handleEnd);
+
+    // Mouse events (for desktop testing). The document-level move/up
+    // listeners are installed only for the duration of a drag and removed
+    // on mouseup — attaching them permanently here used to leak one
+    // mousemove+mouseup pair (and retain the toast element) per toast shown.
+    const handleMouseUp = () => {
+        document.removeEventListener('mousemove', handleMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        handleEnd();
+    };
+    toast.addEventListener('mousedown', (e) => {
+        handleStart(e);
+        document.addEventListener('mousemove', handleMove);
+        document.addEventListener('mouseup', handleMouseUp);
+    });
 }
 
 /**
@@ -1157,7 +1164,7 @@ function showHandoffRequestUI(handoff) {
     denyBtn.addEventListener('click', handleDenyLocal);
     
     // Swipe-to-dismiss counts as Accept
-    addHandoffSwipeToDismiss(toast, handleAcceptLocal);
+    addSwipeToDismiss(toast, handleAcceptLocal);
     
     container.appendChild(toast);
     handoffToastElement = toast;
@@ -1205,63 +1212,6 @@ function showHandoffRequestUI(handoff) {
     if (typeof logEvent === 'function') {
         logEvent(`📲 ${requesterName} is requesting the ${roleName} role...`);
     }
-}
-
-/**
- * Add swipe-to-dismiss for handoff toast (swipe = accept)
- * @param {HTMLElement} toast - The toast element
- * @param {Function} onAccept - Callback when swiped away
- */
-function addHandoffSwipeToDismiss(toast, onAccept) {
-    let startY = 0;
-    let currentY = 0;
-    let isDragging = false;
-    
-    const handleStart = (e) => {
-        isDragging = true;
-        startY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
-        currentY = startY;
-        toast.classList.add('toast-swiping');
-    };
-    
-    const handleMove = (e) => {
-        if (!isDragging) return;
-        
-        currentY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
-        const deltaY = currentY - startY;
-        
-        // Only allow swiping up
-        if (deltaY < 0) {
-            e.preventDefault();
-            toast.style.transform = `translateY(${deltaY}px)`;
-            toast.style.opacity = Math.max(0, 1 + deltaY / 100);
-        }
-    };
-    
-    const handleEnd = () => {
-        if (!isDragging) return;
-        isDragging = false;
-        toast.classList.remove('toast-swiping');
-        
-        const deltaY = currentY - startY;
-        
-        // If swiped up more than 50px, accept
-        if (deltaY < -50) {
-            onAccept();
-        } else {
-            toast.style.transform = '';
-            toast.style.opacity = '';
-        }
-    };
-    
-    toast.addEventListener('touchstart', handleStart, { passive: true });
-    toast.addEventListener('touchmove', handleMove, { passive: false });
-    toast.addEventListener('touchend', handleEnd);
-    toast.addEventListener('touchcancel', handleEnd);
-    
-    toast.addEventListener('mousedown', handleStart);
-    document.addEventListener('mousemove', handleMove);
-    document.addEventListener('mouseup', handleEnd);
 }
 
 /**
