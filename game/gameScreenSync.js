@@ -57,9 +57,9 @@ function updateGameScreenScore(usScore, themScore) {
     
     if (usEl) usEl.textContent = usScore;
     if (themEl) themEl.textContent = themScore;
-    
-    // Also update game log score
-    updateGameLogScore(usScore, themScore);
+
+    // Also update game log score (reads current score from the game itself)
+    updateGameLogTitleScore();
 }
 
 // =============================================================================
@@ -105,22 +105,6 @@ function updateGameLogTitleScore() {
         const shortOpp = 'Opp.';
         titleTextEl.textContent = `${shortTeam} ${usScore} – ${shortOpp} ${themScore}`;
     }
-}
-
-/**
- * Update the Game Log panel status (teams and score in title bar)
- */
-function updateGameLogStatus() {
-    updateGameLogTitleScore();
-}
-
-/**
- * Update just the score in the Game Log panel title bar
- * @param {number} usScore - Our team's score (unused, reads from game)
- * @param {number} themScore - Opponent's score (unused, reads from game)
- */
-function updateGameLogScore(usScore, themScore) {
-    updateGameLogTitleScore();
 }
 
 /**
@@ -230,7 +214,7 @@ function escapeHtml(text) {
  * Call this when entering game screen or when game changes significantly
  */
 function updateGameLogPanel() {
-    updateGameLogStatus();
+    updateGameLogTitleScore();
     updateGameLogEvents();
 }
 

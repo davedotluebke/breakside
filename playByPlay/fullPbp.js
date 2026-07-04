@@ -559,16 +559,12 @@ const fullPbp = (function() {
         actions.className = 'full-pbp-row-actions';
 
         if (!isOffense) {
-            // D-mode: every row gets block / interception. Callahan + Stall
-            // land in the "…" popover in phase 5; the right-side "They
-            // turnover" button lands in phase 3.
+            // D-mode: every row gets block / interception.
             actions.classList.add('full-pbp-row-actions-defense');
             actions.appendChild(makeRowActionBtn('block', 'Block',
                 () => handleBlockTap(player)));
             actions.appendChild(makeRowActionBtn('interception', 'Interception',
                 () => handleInterceptionTap(player)));
-            actions.appendChild(makeRowActionBtn('more', '…',
-                () => handleMoreTap(player, false)));
         } else if (isHolder) {
             actions.appendChild(makeRowActionBtn('throwaway', 'Throwaway',
                 () => handleThrowawayTap()));
@@ -576,15 +572,11 @@ const fullPbp = (function() {
                 breakArmed ? 'Break ✓' : 'Break',
                 () => handleBreakTap(),
                 { armed: breakArmed }));
-            actions.appendChild(makeRowActionBtn('more', '…',
-                () => handleMoreTap(player, true)));
         } else {
             actions.appendChild(makeRowActionBtn('drop', 'Drop',
                 () => handleDropTap(player)));
             actions.appendChild(makeRowActionBtn('score', 'Score',
                 () => handleScoreTap(player)));
-            actions.appendChild(makeRowActionBtn('more', '…',
-                () => handleMoreTap(player, false)));
         }
 
         row.appendChild(actions);
@@ -888,13 +880,6 @@ const fullPbp = (function() {
         manualHolder = null;
         breakArmed = false;
         render();
-    }
-
-    /**
-     * "…" popover. Phase 5 will implement Stall / Good D / Callahan.
-     */
-    function handleMoreTap(player, isHolder) {
-        console.log('[fullPbp] "…" popover (phase 5):', player.name, isHolder ? '(holder)' : '');
     }
 
     /**

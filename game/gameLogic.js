@@ -475,7 +475,6 @@ function undoEvent() {
     }
     undoPastStartTimestamp = null; // Reset if there are events to undo
 
-    // XXX add logic to remove the most recent event from the current possession
     if (currentGame().points.length > 0) {
         const point = getLatestPoint();
 
@@ -626,8 +625,10 @@ function undoEvent() {
             }
         }
     }
-    // XXX update the event log
-    logEvent("Undo button pressed!");
+    // logEvent refreshes the on-screen log from summarizeGame(); the
+    // possession-pop branches above don't log anything themselves, so this
+    // final call is what keeps the display in sync on those paths.
+    logEvent("Undo applied");
     saveAllTeamsData(); // Save and Sync
 }
 

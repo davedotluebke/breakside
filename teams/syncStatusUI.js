@@ -157,10 +157,6 @@ async function doFullRefresh(silent = false) {
     }
 }
 
-// Keep old function names for backwards compatibility
-async function triggerManualSync() { return doFullRefresh(); }
-async function pullDataFromCloud() { return doFullRefresh(); }
-
 /**
  * Handle sign out - clears auth state and shows login screen
  */

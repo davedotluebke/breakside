@@ -39,21 +39,16 @@ const narrationEngine = (function() {
     // `gpt-realtime-mini` is a cheaper variant if cost becomes a concern.
     const REALTIME_MODEL = 'gpt-realtime';
 
-    // ===== Feature flag =====
-    // When TRUE the fast pass tries to extract structured events live during
-    // recording (function calls from gpt-realtime). This was the original
-    // design but proved unreliable in noisy outdoor conditions: the model
-    // confabulates events from garbled audio fragments. The tools, prompt,
-    // and event-application code are all kept intact — flip this back to
-    // true to re-enable when we want to revisit.
-    //
-    // When FALSE the fast pass does TRANSCRIPTION ONLY. The live transcript
-    // streams to the UI so the coach can see they're being heard, but no
-    // events are produced until the slow pass runs (on stop). This relies
-    // on Claude Sonnet via /api/narration/finalize for event extraction;
-    // the slow pass naturally handles "no provisionals + transcript" via
-    // its existing ADD operation.
-    const FAST_PASS_EVENTS_ENABLED = false;
+    // The fast pass is TRANSCRIPTION ONLY. Live event extraction during
+    // recording (gpt-realtime function calls) was the original design but
+    // proved unreliable in noisy outdoor conditions — the model confabulates
+    // events from garbled audio fragments. That path (buildTools /
+    // buildInstructions / handleFunctionCall + a FAST_PASS_EVENTS_ENABLED
+    // flag) was removed; recover it from git history if we ever revisit.
+    // The live transcript streams to the UI so the coach can see they're
+    // being heard; events are produced by the slow pass on stop (Claude via
+    // /api/narration/finalize), whose ADD operation routes through the
+    // shared apply* functions below.
 
     // -----------------------------------------------------------------
     // State
@@ -83,113 +78,11 @@ const narrationEngine = (function() {
     function isRecording() { return recording; }
     function getPhase() { return phase; }
 
-    // -----------------------------------------------------------------
-    // Tool definitions for the Realtime API
-    // -----------------------------------------------------------------
-    function buildTools() {
-        return [
-            {
-                type: 'function',
-                name: 'record_throw',
-                description: 'A completed pass from one player to another. Use for any successful throw + catch.',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        thrower: { type: 'string', description: 'Name of the player who threw the disc' },
-                        receiver: { type: 'string', description: 'Name of the player who caught it' },
-                        huck: { type: 'boolean', description: 'A long/deep throw' },
-                        break_throw: { type: 'boolean', description: 'A break-side throw (around/through the mark)' },
-                        dump: { type: 'boolean', description: 'A short backward reset throw' },
-                        hammer: { type: 'boolean', description: 'An overhead hammer throw' },
-                        sky: { type: 'boolean', description: 'Receiver skied/jumped over a defender' },
-                        layout: { type: 'boolean', description: 'Receiver laid out (dove) for the catch' },
-                        score: { type: 'boolean', description: 'This throw scored a goal' }
-                    },
-                    required: ['thrower', 'receiver']
-                }
-            },
-            {
-                type: 'function',
-                name: 'record_turnover',
-                description: 'A turnover: throwaway, drop, or stall. Attribute to the responsible player.',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        thrower: { type: 'string', description: 'Thrower on the turnover (always set unless pure drop with unknown thrower)' },
-                        receiver: { type: 'string', description: 'Intended receiver, if applicable (e.g. who dropped it)' },
-                        throwaway: { type: 'boolean', description: 'Thrower missed everyone / went out of bounds' },
-                        drop: { type: 'boolean', description: 'Receiver dropped a catchable pass' },
-                        huck: { type: 'boolean', description: 'Happened on a huck' },
-                        good_defense: { type: 'boolean', description: 'Caused by strong defensive pressure' },
-                        stall: { type: 'boolean', description: 'Thrower got stalled out' }
-                    }
-                }
-            },
-            {
-                type: 'function',
-                name: 'record_defense',
-                description: 'A defensive play that creates a turnover (block, interception, layout D, etc).',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        defender: { type: 'string', description: 'Name of the defender making the play' },
-                        block: { type: 'boolean', description: 'Disc deflected (footblock, knockdown) — defender did not catch it' },
-                        interception: { type: 'boolean', description: 'Defender caught the throw out of the air' },
-                        layout: { type: 'boolean' },
-                        sky: { type: 'boolean' },
-                        callahan: { type: 'boolean', description: 'Defender caught the disc in the opponent\'s endzone for a goal' }
-                    },
-                    required: ['defender']
-                }
-            },
-            {
-                type: 'function',
-                name: 'record_opponent_score',
-                description: 'The opposing team scored (we were on defense and they completed a goal).',
-                parameters: { type: 'object', properties: {} }
-            }
-        ];
-    }
-
-    function buildInstructions(rosterInfo, gameContext) {
-        const rosterLines = rosterInfo.map(p => {
-            const parts = [p.name];
-            if (p.nickname) parts.push(`"${p.nickname}"`);
-            if (p.number) parts.push(`#${p.number}`);
-            return `- ${parts.join(' ')}`;
-        }).join('\n');
-
-        return `You are tracking a live ultimate frisbee game from a coach's spoken narration.
-
-On-field players (our team):
-${rosterLines}
-
-Current context: we are on ${gameContext.offense ? 'OFFENSE' : 'DEFENSE'}. Score: our team ${gameContext.ourScore}, opponent ${gameContext.theirScore}.
-
-IMPORTANT — a single utterance from the coach often describes MULTIPLE
-events chained together ("A throws to B, who sends it deep to C for the
-score, it's a layout catch"). You MUST emit a SEPARATE function call for
-EACH event before your response ends. Do not stop after the first event.
-Keep calling functions until every event in the utterance has been
-recorded.
-
-Use the provided tools to record each event — each tool's description
-and parameter docs explain when to call it and which flags to set.
-
-Names may be partial, nicknames, or jersey numbers — match to the closest
-player. If the coach corrects themselves mid-sentence, use the corrected
-version. Be lenient: better to emit a best-guess event than nothing.
-
-Do not produce any text responses — only function calls. Emit one
-function call per event, multiple per response as needed.`;
-    }
-
     /**
-     * Transcription-only system prompt, used when FAST_PASS_EVENTS_ENABLED is
-     * false. We hand the model the player names so it can transcribe them
-     * accurately (otherwise "Cyrus" might come out as "Sirius" etc.) but
-     * give it nothing else to do — no tools, no event extraction. The slow
-     * pass handles all that on stop.
+     * Transcription-only system prompt. We hand the model the player names
+     * so it can transcribe them accurately (otherwise "Cyrus" might come out
+     * as "Sirius" etc.) but give it nothing else to do — no tools, no event
+     * extraction. The slow pass handles all that on stop.
      */
     function buildTranscriptOnlyInstructions(rosterInfo) {
         const names = rosterInfo
@@ -406,24 +299,6 @@ Just listen. Transcription happens automatically.`;
             if (typeof moveToNextPoint === 'function') moveToNextPoint();
         }
         if (typeof logEvent === 'function') logEvent('Opponent scored');
-    }
-
-    /** Dispatch a Realtime API function call to the right applier. */
-    function handleFunctionCall(name, args) {
-        console.log(`[narrationEngine] fn call: ${name}`, args);
-        const onField = getOnFieldPlayers();
-        try {
-            switch (name) {
-                case 'record_throw':        return applyThrow(args, onField);
-                case 'record_turnover':     return applyTurnover(args, onField);
-                case 'record_defense':      return applyDefense(args, onField);
-                case 'record_opponent_score': return applyOpponentScore();
-                default:
-                    console.warn('[narrationEngine] Unknown function:', name, args);
-            }
-        } catch (err) {
-            console.error('[narrationEngine] Function call handler threw:', err);
-        }
     }
 
     // -----------------------------------------------------------------
@@ -644,28 +519,6 @@ Just listen. Transcription happens automatically.`;
         const rosterInfo = onField.map(p => ({
             name: p.name, nickname: p.nickname || null, number: p.number || null
         }));
-        const game = typeof currentGame === 'function' ? currentGame() : null;
-        const gameContext = {
-            offense: game && game.points && game.points.length
-                ? (game.points[game.points.length - 1].startingPosition === 'offense')
-                : true,
-            ourScore: game && game.scores ? game.scores.team : 0,
-            theirScore: game && game.scores ? game.scores.opponent : 0
-        };
-
-        // Build the session config. In transcription-only mode (the default
-        // — see FAST_PASS_EVENTS_ENABLED) we deliberately pass an empty
-        // tools array and a stripped-down system prompt so gpt-realtime
-        // doesn't try to emit function calls. The live transcript still
-        // streams to the UI; events are produced by the slow pass on stop.
-        const sessionInstructions = FAST_PASS_EVENTS_ENABLED
-            ? buildInstructions(rosterInfo, gameContext)
-            : buildTranscriptOnlyInstructions(rosterInfo);
-        const sessionTools = FAST_PASS_EVENTS_ENABLED ? buildTools() : [];
-        const sessionFunctionCallHandler = FAST_PASS_EVENTS_ENABLED
-            ? handleFunctionCall
-            : (() => {});  // ignore any stray calls
-
         // Per-device tunables from Advanced Settings (VAD eagerness, noise
         // reduction, transcription model, vocabulary biasing, force-English,
         // browser audio constraints). Falls back to module defaults when the
@@ -676,20 +529,19 @@ Just listen. Transcription happens automatically.`;
 
         try {
             await narrationRealtimeSession.start({
-                // Transcription-only mode is the default path now: no LLM
-                // in the loop, no acknowledgment-text spam, cheaper. The
-                // conversational gpt-realtime path (with tools and live
-                // function calls) is reachable only when we re-enable
-                // FAST_PASS_EVENTS_ENABLED.
-                mode: FAST_PASS_EVENTS_ENABLED ? 'conversation' : 'transcription',
+                // Transcription-only: no LLM in the loop, no
+                // acknowledgment-text spam, cheaper. We pass no tools and a
+                // stripped-down system prompt so gpt-realtime doesn't try to
+                // emit function calls. The live transcript still streams to
+                // the UI; events are produced by the slow pass on stop.
+                mode: 'transcription',
                 model: REALTIME_MODEL,
-                instructions: sessionInstructions,
-                tools: sessionTools,
+                instructions: buildTranscriptOnlyInstructions(rosterInfo),
+                tools: [],
                 // Spread Advanced Settings: vadEagerness, noiseReduction,
                 // transcriptionModel, transcriptionLanguage, transcriptionPrompt,
                 // audioConstraints.
                 ...advOpts,
-                onFunctionCall: sessionFunctionCallHandler,
                 onTranscriptDelta: (delta) => {
                     accumulatedTranscript += delta;
                     // Publish for the live transcript display UI to render.
