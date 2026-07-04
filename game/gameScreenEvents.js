@@ -1228,11 +1228,14 @@ function showGameEventsModal() {
         document.body.appendChild(modal);
     }
     
+    // Show modal FIRST — updateGameEventsModalState early-returns while the
+    // modal is display:none, so updating before showing left stale states on
+    // every reopen (e.g. mid-point Injury-Sub-enabled states surviving into
+    // a between-points open).
+    modal.style.display = 'flex';
+
     // Update button states based on game state
     updateGameEventsModalState();
-    
-    // Show modal
-    modal.style.display = 'flex';
 }
 
 /**
