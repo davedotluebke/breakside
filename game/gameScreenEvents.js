@@ -1348,17 +1348,130 @@ function handleGameEventInjurySub() {
 }
 
 /**
- * Handle Timeout game event
+ * Handle Timeout game event — ask who called it before recording anything.
+ * The Other{timeout} event is only created once Us/Them/Neither is chosen
+ * in the follow-up dialog; closing it (X or backdrop tap) cancels with no
+ * event recorded.
  */
 function handleGameEventTimeout() {
-    if (typeof showControllerToast === 'function') {
-        showControllerToast('Timeout called', 'info');
-    }
-    
-    // Log the event (future: add to game log)
-    console.log('Game Event: Timeout');
-    
     hideGameEventsModal();
+
+    const game = (typeof currentGame === 'function') ? currentGame() : null;
+    if (!game || !game.points || !game.points.length) {
+        // Nowhere to attach the event yet (game not started / no first point).
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('No point recorded yet — timeout not saved', 'warning');
+        }
+        return;
+    }
+
+    showTimeoutWhoModal();
+}
+
+/**
+ * Show the "Who called timeout?" modal (created lazily, like the Game
+ * Events modal itself).
+ */
+function showTimeoutWhoModal() {
+    let modal = document.getElementById('timeoutWhoModal');
+    if (!modal) {
+        modal = createTimeoutWhoModal();
+        document.body.appendChild(modal);
+    }
+    modal.style.display = 'flex';
+}
+
+/**
+ * Hide the "Who called timeout?" modal
+ */
+function hideTimeoutWhoModal() {
+    const modal = document.getElementById('timeoutWhoModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Create the "Who called timeout?" modal
+ * @returns {HTMLElement}
+ */
+function createTimeoutWhoModal() {
+    const modal = document.createElement('div');
+    modal.id = 'timeoutWhoModal';
+    modal.className = 'modal game-events-modal';
+
+    modal.innerHTML = `
+        <div class="modal-content game-events-modal-content">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Who called timeout?</h2>
+                <span class="close" id="timeoutWhoModalClose">&times;</span>
+            </div>
+            <div class="game-events-buttons timeout-who-buttons">
+                <button id="toWhoUsBtn" class="ge-btn ge-btn-who-us">
+                    <i class="fas fa-users"></i>
+                    <span>Us</span>
+                </button>
+                <button id="toWhoThemBtn" class="ge-btn ge-btn-who-them">
+                    <i class="fas fa-user-friends"></i>
+                    <span>Them</span>
+                </button>
+                <button id="toWhoNeitherBtn" class="ge-btn ge-btn-who-neither">
+                    <i class="fas fa-minus-circle"></i>
+                    <span>Neither</span>
+                </button>
+            </div>
+        </div>
+    `;
+
+    // X / backdrop tap = cancel: no timeout event is created.
+    const closeBtn = modal.querySelector('#timeoutWhoModalClose');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', hideTimeoutWhoModal);
+    }
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            hideTimeoutWhoModal();
+        }
+    });
+
+    modal.querySelector('#toWhoUsBtn').addEventListener('click', () => recordTimeout('us'));
+    modal.querySelector('#toWhoThemBtn').addEventListener('click', () => recordTimeout('them'));
+    modal.querySelector('#toWhoNeitherBtn').addEventListener('click', () => recordTimeout('neither'));
+
+    return modal;
+}
+
+/**
+ * Record a timeout as an Other{timeout} event on the latest point's last
+ * possession. Works mid-point and between points — like Switch Sides, a
+ * between-points timeout attaches to the just-finished point.
+ * @param {'us'|'them'|'neither'} calledBy
+ */
+function recordTimeout(calledBy) {
+    hideTimeoutWhoModal();
+
+    const game = (typeof currentGame === 'function') ? currentGame() : null;
+    if (!game || !game.points || !game.points.length) return;
+
+    const point = game.points[game.points.length - 1];
+    point.possessions = point.possessions || [];
+    let poss = point.possessions[point.possessions.length - 1];
+    if (!poss) { poss = new Possession(true); point.possessions.push(poss); }
+
+    const timeoutEvent = new Other({ timeout: true, calledBy });
+    poss.events.push(timeoutEvent);
+
+    const summary = timeoutEvent.summarize().trim();
+    if (typeof logEvent === 'function') logEvent(summary);
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    if (typeof updateGameLogEvents === 'function') updateGameLogEvents();
+    // Publish so subscribed PBP tabs (Full/Field logs) repaint.
+    if (window.narrationEventBus && typeof window.narrationEventBus.publish === 'function') {
+        window.narrationEventBus.publish('eventAdded', { event: timeoutEvent });
+    }
+    if (typeof showControllerToast === 'function') {
+        showControllerToast(summary, 'success');
+    }
 }
 
 /**

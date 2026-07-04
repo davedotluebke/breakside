@@ -1500,6 +1500,38 @@ body.game-screen-active header {
     background: linear-gradient(135deg, #212529 0%, #1a1d20 100%);
 }
 
+/* "Who called timeout?" follow-up modal: three choices in one row */
+.timeout-who-buttons {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+/* Us - blue (matches the Timeout button) */
+.ge-btn-who-us {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+}
+
+.ge-btn-who-us:hover:not(:disabled) {
+    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+}
+
+/* Them - red (opponent) */
+.ge-btn-who-them {
+    background: linear-gradient(135deg, #dc3545 0%, #b02a37 100%);
+}
+
+.ge-btn-who-them:hover:not(:disabled) {
+    background: linear-gradient(135deg, #b02a37 0%, #921925 100%);
+}
+
+/* Neither - gray (untracked / technical stoppage) */
+.ge-btn-who-neither {
+    background: linear-gradient(135deg, #6c757d 0%, #545b62 100%);
+}
+
+.ge-btn-who-neither:hover:not(:disabled) {
+    background: linear-gradient(135deg, #545b62 0%, #43484d 100%);
+}
+
 /* =============================================================================
    Mobile Adjustments for Play-by-Play Panel
    ============================================================================= */
