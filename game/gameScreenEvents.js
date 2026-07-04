@@ -1159,11 +1159,15 @@ function showGameEventsModal() {
         document.body.appendChild(modal);
     }
     
+    // Show the modal BEFORE refreshing button states —
+    // updateGameEventsModalState early-returns while display is 'none', so
+    // the old order (update, then show) left every reopen with the button
+    // states from the previous open (e.g. End Game stuck disabled between
+    // points after the modal had been opened mid-point).
+    modal.style.display = 'flex';
+
     // Update button states based on game state
     updateGameEventsModalState();
-    
-    // Show modal
-    modal.style.display = 'flex';
 }
 
 /**
