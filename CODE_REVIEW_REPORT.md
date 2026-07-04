@@ -729,11 +729,18 @@ manageControllerButtons dead param (`navigation.js:73-81`); lifetime intervals
 ScriptProcessorNode → AudioWorklet.
 Plus: the `console.*` sweep (~378 calls) — introduce a tiny logger/debug-flag wrapper.
 
-### F4 · CSS modernization (never scheduled — new project)
+### F4 · CSS modernization — ✅ DONE (branch `css-tokens`)
 
-`main.css` now 4503 lines, ~410 hardcoded-hex lines, 27 `!important`, no `:root` tokens.
-Extract a custom-property palette, split by screen, migrate the JS-set colors the D2 sticky
-work left behind.
+`main.css` (4503 lines) replaced by `css/` — a `tokens.css` `:root` palette (~65 custom
+properties: brand orange/purple, Bootstrap-derived semantic families, gender FMP/MMP,
+surface/border/text tiers) plus nine per-concern files (base, tables, teams, game-dialogs,
+pbp, shell, teams-manage, toasts, settings) loaded as ordered `<link>` tags; rule order
+preserved end-to-end, so the cascade is unchanged. All JS-set app colors migrated to
+classes/tokens (fieldPbp.js's SVG data-viz palette intentionally left module-local).
+`!important` reduced 27 → 3 (survivors annotated with why). 14 near-duplicate hexes
+consolidated (flagged in the merge commits). Verified pixel-identical via a computed-style
+diff of old vs new CSS across teams/roster/game screens, all in-game tabs, dialogs, and
+mobile viewport — only the flagged consolidations differ.
 
 ### F5 · Repo hygiene
 
