@@ -217,7 +217,7 @@ function showEventSettingsDialog(event, team) {
             };
             const delBtn = document.createElement('button');
             delBtn.type = 'button';
-            delBtn.innerHTML = '<i class="fas fa-trash" style="color:#dc3545;"></i>';
+            delBtn.innerHTML = '<i class="fas fa-trash icon-danger"></i>';
             delBtn.className = 'icon-button';
             delBtn.title = 'Remove phase';
             delBtn.onclick = () => {

@@ -1182,7 +1182,7 @@ function showHandoffRequestUI(handoff) {
         // percent = remaining time (100% at start, 0% at end)
         // fillPercent = how much green to show (0% at start, 100% at end)
         const fillPercent = 100 - percent;
-        countdownOverlay.style.background = `linear-gradient(to bottom, #28a745 0%, #28a745 ${fillPercent}%, transparent ${fillPercent}%, transparent 100%)`;
+        countdownOverlay.style.background = `linear-gradient(to bottom, var(--color-success) 0%, var(--color-success) ${fillPercent}%, transparent ${fillPercent}%, transparent 100%)`;
         
         if (remaining <= 0) {
             // Auto-accept: show click animation then accept

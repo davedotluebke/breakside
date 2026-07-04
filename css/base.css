@@ -111,3 +111,13 @@ th, td {
     text-align: left;
 }
 
+
+/* Utility classes for JS-generated markup (replaces inline style="" colors) */
+.icon-danger {
+    color: var(--color-danger);
+}
+
+.text-hint {
+    font-size: 0.9em;
+    color: var(--text-muted);
+}

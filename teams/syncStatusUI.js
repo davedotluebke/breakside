@@ -224,7 +224,7 @@ async function showConnectionInfo() {
             const updateInfo = await window.checkForAppUpdate();
             if (updateInfo.hasUpdate) {
                 versionLine = `Version: ${version} (Build ${build}) → <b>${updateInfo.latestBuild} available</b>`;
-                updateButton = `<br><button onclick="confirmAppUpdate()" style="margin-top:6px;padding:4px 12px;background:#28a745;color:white;border:none;border-radius:4px;cursor:pointer;">Update Now</button>`;
+                updateButton = `<br><button onclick="confirmAppUpdate()" class="update-now-btn">Update Now</button>`;
             }
         } catch (e) {
             console.log('Update check failed:', e);
@@ -265,30 +265,30 @@ function showPendingSyncDialog() {
     if (!listEl) return;
 
     if (items.length === 0) {
-        listEl.innerHTML = '<p style="color:#888; font-style:italic;">No pending updates.</p>';
+        listEl.innerHTML = '<p class="pending-sync-empty">No pending updates.</p>';
     } else {
         const maxShown = 3;
         const lines = items.slice(0, maxShown).map(item => {
             const label = describeSyncItem(item);
             const age = formatSyncAge(item.timestamp);
             const retryNote = item.retryCount > 0
-                ? ` <span style="color:#c00; font-size:0.8rem;">(${item.retryCount} failed attempt${item.retryCount > 1 ? 's' : ''})</span>`
+                ? ` <span class="pending-sync-retry">(${item.retryCount} failed attempt${item.retryCount > 1 ? 's' : ''})</span>`
                 : '';
             // Surface the most recent failure so a stuck item is diagnosable
             // from the UI (offline-classified failures retry forever and would
             // otherwise show no reason at all). escapeHtml is late-bound via
             // window (owned by game/gameScreenSync.js, a later layer).
             const errNote = item.lastError
-                ? `<div style="font-size:0.75rem; color:#c00; word-break:break-word;">last error: ${(window.escapeHtml ? window.escapeHtml(item.lastError) : '').slice(0, 300)}</div>`
+                ? `<div class="pending-sync-error">last error: ${(window.escapeHtml ? window.escapeHtml(item.lastError) : '').slice(0, 300)}</div>`
                 : '';
-            return `<div style="padding: 0.4rem 0; border-bottom: 1px solid #eee;">
-                <span style="font-weight:600;">${item.action}</span> ${label}${retryNote}
-                <div style="font-size:0.8rem; color:#888;">${age}</div>
+            return `<div class="pending-sync-item">
+                <span class="pending-sync-action">${item.action}</span> ${label}${retryNote}
+                <div class="pending-sync-age">${age}</div>
                 ${errNote}
             </div>`;
         });
         if (items.length > maxShown) {
-            lines.push(`<div style="padding: 0.4rem 0; color: #888; font-style: italic;">...and ${items.length - maxShown} more</div>`);
+            lines.push(`<div class="pending-sync-more">...and ${items.length - maxShown} more</div>`);
         }
         listEl.innerHTML = lines.join('');
     }
