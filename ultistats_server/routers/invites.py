@@ -11,6 +11,7 @@ from ._shared import (
     get_invite,
     get_invite_by_code,
     get_invite_validity_reason,
+    get_optional_user,
     get_team,
     get_user,
     get_user_team_role,
@@ -89,12 +90,15 @@ async def list_team_invites_endpoint(
 
 
 @router.get("/api/invites/{code}/info")
-async def get_invite_info(code: str):
+async def get_invite_info(code: str, user: Optional[dict] = Depends(get_optional_user)):
     """
     Get public info about an invite (for landing page preview).
 
     Returns team name and role, but not internal details.
-    No auth required.
+    No auth required; if the caller IS authenticated and already a member of
+    the invite's team, returns 409 so the join page can show its
+    already-a-member state instead of a join button that would only 409 at
+    redeem time.
     """
     validate_id(code, "invite code")
     invite = get_invite_by_code(code.upper())
@@ -118,6 +122,9 @@ async def get_invite_info(code: str):
         team = get_team(invite["teamId"])
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Team not found")
+
+    if user and get_user_team_role(user["id"], invite["teamId"]) is not None:
+        raise HTTPException(status_code=409, detail="You're already a member of this team")
 
     # Get inviter's display name
     try:
