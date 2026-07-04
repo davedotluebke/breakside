@@ -357,30 +357,32 @@ const fullPbp = (function() {
     /**
      * Bottom action row — full-width strip below the modifier row.
      *
-     *   D-mode: [They turnover] [⚙ Events] [They score]
-     *   O-mode: [               ⚙ Events               ]
+     *   D-mode:         [They turnover] [⚙ Events] [They score]
+     *   O-mode:         [               ⚙ Events               ]
+     *   Between points: [               ⚙ Events               ]
      *
      * "Events" opens the existing Game Events modal (Timeout / Injury
      * Sub / Halftime / Switch Sides / End Game) — same modal Simple
      * mode uses. Routes through handlePbpGameEvents so role/permission
-     * checks stay consistent.
+     * checks stay consistent. The bar stays visible between points so
+     * timeouts / halftime / switch sides / end game (which mostly
+     * happen between points) remain reachable from Full mode; the
+     * modal itself disables Injury Sub then (updateGameEventsModalState
+     * in gameScreenEvents.js). The point-scoped They-turnover/They-score
+     * buttons only render mid-point.
      */
     function renderBottomActions(state, inPoint) {
         const bar = document.getElementById('fullPbpBottomActions');
         if (!bar) return;
 
-        if (!inPoint) {
-            bar.style.display = 'none';
-            bar.innerHTML = '';
-            return;
-        }
+        const dMode = inPoint && state.mode === 'defense';
 
         bar.style.display = '';
         bar.innerHTML = '';
-        bar.classList.toggle('mode-defense', state.mode === 'defense');
-        bar.classList.toggle('mode-offense', state.mode === 'offense');
+        bar.classList.toggle('mode-defense', dMode);
+        bar.classList.toggle('mode-offense', !dMode);
 
-        if (state.mode === 'defense') {
+        if (dMode) {
             const tt = document.createElement('button');
             tt.id = 'fullPbpTheyTurnoverBtn';
             tt.className = 'full-pbp-they-turnover-btn';
@@ -398,7 +400,7 @@ const fullPbp = (function() {
         ev.addEventListener('click', handleGameEventsTap);
         bar.appendChild(ev);
 
-        if (state.mode === 'defense') {
+        if (dMode) {
             const ts = document.createElement('button');
             ts.id = 'fullPbpTheyScoreBtn';
             ts.className = 'full-pbp-they-score-btn';
