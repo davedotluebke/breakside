@@ -673,14 +673,25 @@ public tables, default-RLS trigger installed).
 - Tests: `test_backend_closeout.py` (23 tests — event authz, sync teamId consistency,
   faithful restore, fail-fast).
 
-### F2 · Finish the stats name→ID migration (PARTIAL)
+### F2 · Finish the stats name→ID migration — ✅ DONE (branch `stats-id-finish`)
 
-- `utils/statistics.js` `calculatePlayerStatsFromEvents` still keys by **name**, and
-  `teams/rosterManagement.js:442` `updateGameSummaryRosterDisplay` consumes it (and still
-  reads legacy per-player fields). Finish ID-keying this last path, reconcile
-  `updateGameSummaryRosterDisplay` with the shared `rosterRowHelpers.js`, and normalize the
-  duplicate-name guard (case/whitespace variants still allowed; consequence now limited to
-  this path).
+- `updateGameSummaryRosterDisplay` (the sole consumer of the name-keyed
+  `calculatePlayerStatsFromEvents`) turned out to be DEAD — the post-game flow calls
+  gameSummary.js `showGameSummaryPostGame` (id-keyed). Deleted it, its broken
+  `appendEventTotalsToSummary` helper, and all of `utils/statistics.js` instead of converting.
+- Duplicate-name guard normalized (trim + case-fold via `playerNamesMatch`) in add-player and
+  edit-player; add flow now alerts on duplicates like the edit dialog.
+- Real-data verification found and fixed a LIVE bug in the migrated path: id-era games
+  (Nov-2025 CUDO Mixed) store player **ids** in `point.players`; the eventStats resolver
+  assumed names-only, so Pts/Time/+/- rendered 0 on the game summary and roster Game scope.
+  `buildPlayerNameResolver` now passes known ids through (name-era games unaffected). Also
+  fixed backend `get_optional_user` to honor the dev-mode test user so games/teams lists work
+  on auth-disabled dev backends.
+- Verified: old-vs-new stats replay over all 7 real local games (43 player-game stat lines —
+  identical except two cases where the new path is more correct); game-summary table vs
+  roster-table Game scope identical in the preview against the real SWW-2 game.
+  Prod teams (CUDO Spring 26 / Flickers / Mumbo Sauce) still to be spot-checked — needs a
+  prod data read (blocked on approval).
 
 ### F3 · Frontend cleanup sweep (the 🟡/🟠 tail — one task, everything else is quiet)
 
