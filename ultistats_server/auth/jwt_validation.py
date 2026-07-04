@@ -169,18 +169,34 @@ async def get_current_user(
 
 
 async def get_optional_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> Optional[dict]:
     """
     FastAPI dependency that extracts user info if a valid token is provided,
     but allows anonymous access.
-    
+
     Use this for endpoints that work for both authenticated and anonymous users,
     but may provide enhanced functionality for authenticated users.
-    
+
+    When auth is disabled (local dev / agent servers), mirrors
+    ``get_current_user``'s synthetic test user (``X-Test-User-Id`` or
+    "test-user") — otherwise optional-user endpoints like the games/teams
+    lists treat every dev request as anonymous and return empty lists,
+    while the rest of the API sees the test user. Ignored whenever auth is
+    required, so this can never widen production access.
+
     Returns:
         Dict with user info if authenticated, None otherwise
     """
+    if not auth_required():
+        test_user_id = request.headers.get("x-test-user-id", "test-user")
+        return {
+            "id": test_user_id,
+            "email": f"{test_user_id}@breakside.test",
+            "role": "authenticated",
+        }
+
     if credentials is None:
         return None
     
