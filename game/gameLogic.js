@@ -4,7 +4,7 @@
  * 
  * Phase 4 update: Games use teamId and create rosterSnapshot
  */
-import { Role, Game, Throw, Defense, createRosterSnapshot, isTestGame } from '../store/models.js';
+import { Role, Game, createRosterSnapshot, isTestGame } from '../store/models.js';
 import { currentTeam, currentEvent, saveAllTeamsData, serializeTeam } from '../store/storage.js';
 import { syncGameToCloud, deleteGameFromCloud } from '../store/sync.js';
 import { currentGame, getLatestPoint, getActivePossession, getPlayerFromName } from '../utils/helpers.js';
@@ -19,6 +19,7 @@ import {
     setIsPaused, setCountdownSeconds,
 } from './pointManagement.js';
 import { showControllerToast } from './controllerState.js';
+import { applyUndoToGame } from './undoLogic.js';
 import { log } from '../utils/logger.js';
 
 let appVersion = null;
@@ -476,159 +477,30 @@ function undoEvent() {
     }
     undoPastStartTimestamp = null; // Reset if there are events to undo
 
-    if (currentGame().points.length > 0) {
-        const point = getLatestPoint();
+    // The decision tree lives in undoLogic.js (pure, unit-tested); this
+    // function handles the UI/persistence side effects it prescribes.
+    const result = applyUndoToGame(currentGame(), {
+        getActivePossession,
+        resolvePlayer: getPlayerFromName,
+        revertPointScore,
+    });
 
-        // If the point was scored but the last event isn't a scoring event,
-        // revert only the score (handles "They Score" and "Skip" without event)
-        if (point.winner) {
-            let hasScoreEvent = false;
-            if (point.possessions.length > 0) {
-                const lastPoss = getActivePossession(point);
-                if (lastPoss.events.length > 0) {
-                    const lastEvent = lastPoss.events[lastPoss.events.length - 1];
-                    hasScoreEvent =
-                        (lastEvent instanceof Throw && lastEvent.score_flag) ||
-                        (lastEvent instanceof Defense && lastEvent.Callahan_flag);
-                }
-            }
-            if (!hasScoreEvent) {
-                revertPointScore(point);
-                // If the point has no possessions (e.g. "They Score" with no
-                // prior events), remove the entire point and go between-points
-                if (point.possessions.length === 0) {
-                    currentGame().points.pop();
-                    moveToNextPoint();
-                }
-                logEvent("Undo: score reverted");
-                saveAllTeamsData();
-                return;
-            }
-        }
-
-        if (point.possessions.length > 0) {
-            let currentPossession = getActivePossession(point);
-            if (currentPossession.events.length > 0) {
-                let undoneEvent = currentPossession.events.pop();
-                logEvent(`Undid event: ${undoneEvent.summarize()}`);
-                if (undoneEvent instanceof Throw) {
-                    // update player stats for the thrower and receiver
-                    if (undoneEvent.thrower) {
-                        undoneEvent.thrower.completedPasses--;
-                        // Ensure completedPasses doesn't go negative
-                        if (undoneEvent.thrower.completedPasses < 0) {
-                            undoneEvent.thrower.completedPasses = 0;
-                        }
-                    }
-                    if (undoneEvent.score_flag) {
-                        if (undoneEvent.receiver) {
-                            undoneEvent.receiver.goals--;
-                            // Ensure goals doesn't go negative
-                            if (undoneEvent.receiver.goals < 0) {
-                                undoneEvent.receiver.goals = 0;
-                            }
-                        }
-                        if (undoneEvent.thrower) {
-                            undoneEvent.thrower.assists--;
-                            // Ensure assists doesn't go negative
-                            if (undoneEvent.thrower.assists < 0) {
-                                undoneEvent.thrower.assists = 0;
-                            }
-                        }
-                    }
-                } else if (undoneEvent instanceof Defense) {
-                    // Handle Callahan: decrement defender's goals
-                    if (undoneEvent.Callahan_flag && undoneEvent.defender) {
-                        undoneEvent.defender.goals--;
-                        // Ensure goals doesn't go negative
-                        if (undoneEvent.defender.goals < 0) {
-                            undoneEvent.defender.goals = 0;
-                        }
-                    }
-                }
-                // If the undone event was a score, revert updateScore() changes
-                if (point.winner) {
-                    const wasScoreEvent =
-                        (undoneEvent instanceof Throw && undoneEvent.score_flag) ||
-                        (undoneEvent instanceof Defense && undoneEvent.Callahan_flag);
-                    if (wasScoreEvent) {
-                        revertPointScore(point);
-                    }
-                }
-                // Panel UI auto-updates based on game state — no legacy screen refresh needed
-
-                // If the possession is now empty after undoing (e.g. pull was only event),
-                // clean it up so the user isn't stranded mid-point with no way forward
-                if (currentPossession.events.length === 0) {
-                    point.possessions.pop();
-                    if (point.possessions.length === 0) {
-                        // No possessions left — remove the point and go to between-points.
-                        // Don't decrement player point stats: updateScore() was either never
-                        // called (unscored point) or already reverted by revertPointScore().
-                        currentGame().points.pop();
-                        moveToNextPoint();
-                    } else {
-                        // Go back to previous possession
-                        currentPossession = getActivePossession(point);
-                        currentPossession.endTimestamp = null;
-                    }
-                }
-            } else {
-                // no events in this possession, remove the possession
-                point.possessions.pop();
-                if (point.possessions.length === 0) {
-                    // no possessions left in this point, remove the point.
-                    // Only revert player point stats / game score if this point
-                    // was actually scored — updateScore() only increments those
-                    // on a score, so an unscored point being undone here was
-                    // never counted (decrementing it would corrupt earlier
-                    // points' stats). Mirrors revertPointScore() and the
-                    // parallel branch above that notes "Don't decrement player
-                    // point stats."
-                    if (point.winner) {
-                        point.players.forEach(playerName => {
-                            let player = getPlayerFromName(playerName);
-                            player.totalPointsPlayed--;
-                            player.consecutivePointsPlayed--;
-                            // Decrement time played for this point
-                            if (point.totalPointTime) {
-                                player.totalTimePlayed -= point.totalPointTime;
-                                // Ensure totalTimePlayed doesn't go negative
-                                if (player.totalTimePlayed < 0) {
-                                    player.totalTimePlayed = 0;
-                                }
-                            }
-                            // Decrement pointsWon or pointsLost based on winner
-                            if (point.winner === Role.TEAM) {
-                                player.pointsWon--;
-                                if (player.pointsWon < 0) {
-                                    player.pointsWon = 0;
-                                }
-                            } else if (point.winner === Role.OPPONENT) {
-                                player.pointsLost--;
-                                if (player.pointsLost < 0) {
-                                    player.pointsLost = 0;
-                                }
-                            }
-                        });
-                        // Decrement game score
-                        currentGame().scores[point.winner]--;
-                    }
-                    currentGame().points.pop();
-                    // display the "before point screen"
-                    moveToNextPoint();
-                } else {
-                    // Restore state for previous possession
-                    currentPossession = getActivePossession(point);
-                    currentPossession.endTimestamp = null;
-                    // Panel UI auto-updates — no legacy screen navigation needed
-                }
-            }
-        }
+    if (result.outcome === 'score-reverted') {
+        if (result.pointRemoved) moveToNextPoint();
+        logEvent("Undo: score reverted");
+        saveAllTeamsData();
+        return;
+    }
+    if (result.outcome === 'event-undone') {
+        logEvent(`Undid event: ${result.undoneEvent.summarize()}`);
+    }
+    if (result.pointRemoved) {
+        // display the "before point screen"
+        moveToNextPoint();
     }
     // logEvent refreshes the on-screen log from summarizeGame(); the
-    // possession-pop branches above don't log anything themselves, so this
-    // final call is what keeps the display in sync on those paths.
+    // possession-pop branch doesn't log anything itself, so this final
+    // call is what keeps the display in sync on that path.
     logEvent("Undo applied");
     saveAllTeamsData(); // Save and Sync
 }
