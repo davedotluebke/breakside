@@ -594,6 +594,14 @@ function wirePlayByPlayEvents() {
     if (undoBtn) {
         undoBtn.addEventListener('click', handlePbpUndo);
     }
+
+    // Line tab's Undo button — same handler as the PBP row's Undo (role
+    // check + undoEvent). Visibility is managed by updateLineTabStartPointBtn
+    // (shown only while the Line tab is the active tab).
+    const lineTabUndoBtn = document.getElementById('lineTabUndoBtn');
+    if (lineTabUndoBtn) {
+        lineTabUndoBtn.addEventListener('click', handlePbpUndo);
+    }
     
     // Sub Players button
     const subPlayersBtn = document.getElementById('pbpSubPlayersBtn');
@@ -1708,6 +1716,14 @@ function updateLineTabStartPointBtn() {
     if (!btn) return;
 
     const onLineTab = (typeof getActiveTab === 'function') && getActiveTab() === 'line';
+
+    // Undo sibling shares the same visibility lifecycle: Line tab only.
+    // Left clickable regardless of role — handlePbpUndo surfaces the
+    // role toast, matching the Start Point convention below.
+    const undoBtn = document.getElementById('lineTabUndoBtn');
+    if (undoBtn) {
+        undoBtn.style.display = onLineTab ? 'inline-flex' : 'none';
+    }
 
     // Always show on the Line tab. applyStartPointButtonState handles the
     // not-Active-Coach case with grey/inactive styling and leaves the

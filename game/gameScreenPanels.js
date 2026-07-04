@@ -403,6 +403,9 @@ function createSelectLineContent() {
             <button id="lineTabLineupReadyBtn" class="pbp-start-point-btn line-tab-lineup-ready-btn" style="display: none;">
                 Lineup Ready
             </button>
+            <button id="lineTabUndoBtn" class="line-tab-undo-btn" style="display: none;" title="Undo last event">
+                <i class="fas fa-undo"></i><span>Undo</span>
+            </button>
         </div>
         <div class="select-line-toolbar">
             <button class="select-line-action-btn select-line-action-btn--auto" id="panelAutoBtn" title="Auto-fill empty slots to complete the line">
