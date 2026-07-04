@@ -925,3 +925,52 @@
     text-decoration: underline;
 }
 
+
+/* Pending-sync dialog rows + Update Now button (markup generated in
+   teams/syncStatusUI.js — replaces the old inline style="" colors). */
+.update-now-btn {
+    /* global button margin is 10px; the old inline style only overrode the top */
+    margin: 6px 10px 10px;
+    padding: 4px 12px;
+    background: var(--color-success);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.pending-sync-empty {
+    color: var(--text-faint);
+    font-style: italic;
+}
+
+.pending-sync-item {
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--border-lighter);
+}
+
+.pending-sync-action {
+    font-weight: 600;
+}
+
+.pending-sync-retry {
+    color: var(--color-danger);
+    font-size: 0.8rem;
+}
+
+.pending-sync-error {
+    font-size: 0.75rem;
+    color: var(--color-danger);
+    word-break: break-word;
+}
+
+.pending-sync-age {
+    font-size: 0.8rem;
+    color: var(--text-faint);
+}
+
+.pending-sync-more {
+    padding: 0.4rem 0;
+    color: var(--text-faint);
+    font-style: italic;
+}
