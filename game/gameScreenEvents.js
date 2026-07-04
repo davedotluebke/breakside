@@ -1344,6 +1344,15 @@ function hideGameEventsModal() {
  * UI cleanly.
  */
 function handleGameEventInjurySub() {
+    // Between points the button renders disabled (class-only, so this
+    // handler still runs) — surface the same toast as the dedicated Sub
+    // button rather than doing nothing, and keep the Events modal open.
+    if (typeof isPointInProgress === 'function' && !isPointInProgress()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('No point in progress - use Select Next Line instead', 'info');
+        }
+        return;
+    }
     hideGameEventsModal();
     if (typeof handlePbpSubPlayers === 'function') {
         handlePbpSubPlayers();
@@ -1945,12 +1954,17 @@ function updateGameEventsModalState() {
         timeoutBtn.classList.toggle('disabled', !hasActiveCoachRole);
     }
 
-    // Injury Sub - only DURING a point (mid-point sub mechanism)
+    // Injury Sub - only DURING a point (mid-point sub mechanism).
+    // Class-only disabling (no disabled attribute): the tap must still reach
+    // handleGameEventInjurySub so it can explain WHY with the same
+    // "No point in progress" toast the dedicated Sub button shows, instead
+    // of dying silently on a disabled attribute.
     const injurySubBtn = modal.querySelector('#geInjurySubBtn');
     if (injurySubBtn) {
         const injuryEnabled = hasActiveCoachRole && pointInProgress;
-        injurySubBtn.disabled = !injuryEnabled;
+        injurySubBtn.disabled = false;
         injurySubBtn.classList.toggle('disabled', !injuryEnabled);
+        injurySubBtn.setAttribute('aria-disabled', String(!injuryEnabled));
     }
 
     // Halftime, Switch Sides, End Game - enabled BETWEEN points only
