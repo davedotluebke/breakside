@@ -981,8 +981,10 @@ const fieldPbp = (function() {
             render();
             return;
         }
-        if (holder && holder.name === name && !S.pending) {
-            // Tapping the holder is a no-op (nothing to throw to themselves).
+        if (holder && holder.name === name && holder.name !== UNKNOWN_PLAYER) {
+            // Tapping the holder is a no-op — they can't receive (or drop)
+            // their own throw. Unknown is exempt: unknown → unknown throws
+            // are legal (same convention as the score dialog).
             return;
         }
         // Arm/disarm as the receiver (or dropper, if a drop is pending).
@@ -1023,7 +1025,10 @@ const fieldPbp = (function() {
             return;
         }
         // Nothing armed — field-first popover picks the receiver (or dropper).
-        popPicker(cx, cy, player => { S.armed = player; placeOffense(player, loc); });
+        // The holder is excluded: they can't catch (or drop) their own throw.
+        const holder = effectiveHolder(state);
+        const excludeSelf = (holder && holder.name !== UNKNOWN_PLAYER) ? holder.name : null;
+        popPicker(cx, cy, player => { S.armed = player; placeOffense(player, loc); }, null, excludeSelf);
     }
 
     // ---- Offense placement ----
@@ -1037,6 +1042,19 @@ const fieldPbp = (function() {
         if (!requireActiveCoach()) return;
         const state = reconstructState();
         const holder = effectiveHolder(state);
+
+        // Self-pass guard (defense in depth behind the inert holder chip and
+        // the popover exclusion): the holder can't be their own receiver or
+        // dropper. Unknown → Unknown stays legal.
+        if (holder && receiver && holder.name === receiver.name
+            && holder.name !== UNKNOWN_PLAYER) {
+            if (typeof showControllerToast === 'function') {
+                showControllerToast(`${holder.name} already has the disc`, 'warning', 2000);
+            }
+            S.armed = null;
+            render();
+            return;
+        }
         // `from` is the disc's current spot (already a stored, normalized coord);
         // `to` is the tap, converted from yards to the normalized stored frame.
         const from = discLoc(state);
@@ -1204,7 +1222,9 @@ const fieldPbp = (function() {
     }
 
     // Field-side popover to pick a player when none is armed yet.
-    function popPicker(cx, cy, cb, title) {
+    // `excludeName` omits one roster player — used to keep the disc-holder
+    // out of receiver/dropper picks (no self-passes). Unknown always shows.
+    function popPicker(cx, cy, cb, title, excludeName) {
         document.querySelectorAll('.fp-picker').forEach(n => n.remove());
         const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
         const names = (point && point.players) ? point.players.slice() : [];
@@ -1215,6 +1235,7 @@ const fieldPbp = (function() {
             : S.pending === 'drop' ? 'Who dropped it?' : 'Who caught it?');
         let html = `<div class="fp-picker-ttl">${ttl}</div>`;
         names.forEach(name => {
+            if (excludeName && name === excludeName) return;
             const p = playerByName(name); if (!p) return;
             const lead = (p.number != null) ? `<span class="fp-num">${p.number}</span>` : '';
             html += `<div class="fp-chip" data-pname="${name}">${lead}<span class="fp-nm">${name}</span></div>`;
@@ -1358,6 +1379,16 @@ const fieldPbp = (function() {
             // pointer layer so the rail scrolls natively; the tap itself is
             // handled by the chip's click handler wired in wireDynamic.
             if (S.pulling) return;
+            // On offense the disc-holder's chip is inert — no drag (a player
+            // can't pass to themselves) and the tap is a no-op anyway.
+            // Unknown is exempt (unknown → unknown throws are legal).
+            if (!S.dPlacing) {
+                const st = reconstructState();
+                const holder = effectiveHolder(st);
+                if (st.mode === 'offense' && holder
+                    && holder.name === chip.dataset.pname
+                    && holder.name !== UNKNOWN_PLAYER) return;
+            }
             startDrag({ kind: 'chip', name: chip.dataset.pname }, e);
             return;
         }
