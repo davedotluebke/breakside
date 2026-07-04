@@ -463,7 +463,7 @@ ul {
    widths that vary with content and can't be known statically. */
 .active-checkbox-column {
     text-align: center;
-    padding: 5px !important;  /* Override default td padding */
+    padding: 5px !important;  /* !important is load-bearing: #subPlayersTable cells share this class and .sub-players-table-container td (later, higher specificity) sets 10px 15px */
     box-sizing: border-box;  /* Include padding in width calculation */
     position: sticky;
     left: 0;
@@ -507,7 +507,7 @@ ul {
 td.player-fmp,
 .active-name-column.player-fmp,
 .roster-name-column.player-fmp {
-    color: var(--gender-fmp) !important; /* Darker purple for better contrast */
+    color: var(--gender-fmp) !important; /* kept: applies across 4 tables incl. id-scoped sticky cells in ui/panelSystem.css */
     font-weight: bold;
 }
 
@@ -515,7 +515,7 @@ td.player-fmp,
 td.player-mmp,
 .active-name-column.player-mmp,
 .roster-name-column.player-mmp {
-    color: var(--gender-mmp) !important; /* Darker green */
+    color: var(--gender-mmp) !important; /* kept: same reason as .player-fmp above */
     font-weight: bold;
 }
 

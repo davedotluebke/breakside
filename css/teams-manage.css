@@ -530,23 +530,25 @@
     color: var(--text-secondary);
 }
 
-/* Override auth.css form-group input styles for identity form */
+/* Override auth.css .form-group input styles for the identity form — the extra
+   .identity-form ancestor outranks auth.css on specificity, so no !important
+   is needed even though auth.css loads later. */
 .identity-form .form-group input,
 .identity-form .form-group input[type="text"],
 .identity-form .form-group input[type="url"] {
-    background: var(--white) !important;
-    color: var(--text-primary) !important;
-    border: 2px solid var(--border-light) !important;
+    background: var(--white);
+    color: var(--text-primary);
+    border: 2px solid var(--border-light);
 }
 
 .identity-form .form-group input:focus {
-    border-color: var(--brand-orange) !important;
+    border-color: var(--brand-orange);
     outline: none;
-    box-shadow: none !important;
+    box-shadow: none;
 }
 
 .identity-form .form-group input::placeholder {
-    color: var(--text-placeholder) !important;
+    color: var(--text-placeholder);
 }
 
 .symbol-input {

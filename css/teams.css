@@ -319,13 +319,16 @@
     padding: 6px;
 }
 
+/* The button carries both classes ('new-game-btn new-event-btn'); these rules
+   must stay after the .new-game-btn green rules — later source order is what
+   lets the purple win at equal specificity. */
 .new-event-btn,
 .new-event-btn:active {
-    background: var(--accent-purple) !important;
+    background: var(--accent-purple);
 }
 
 .new-event-btn:hover {
-    background: var(--accent-purple-hover) !important;
+    background: var(--accent-purple-hover);
 }
 
 .team-action-buttons {
@@ -404,8 +407,8 @@
     width: 100%;
     padding: 12px;
     margin-top: 0.75rem;
-    background: var(--color-primary) !important;
-    color: var(--white) !important;
+    background: var(--color-primary);
+    color: var(--white);
     border: none;
     border-radius: 6px;
     font-size: 1rem;
@@ -414,7 +417,7 @@
 }
 
 .event-dialog-submit:hover {
-    background: var(--color-primary-hover) !important;
+    background: var(--color-primary-hover);
 }
 
 .event-dialog-delete {
@@ -422,17 +425,17 @@
     width: 100%;
     padding: 10px;
     margin-top: 0.5rem;
-    background: transparent !important;
-    color: var(--color-danger) !important;
-    border: 1px solid var(--color-danger) !important;
+    background: transparent;
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger);
     border-radius: 6px;
     font-size: 0.9rem;
     cursor: pointer;
 }
 
 .event-dialog-delete:hover {
-    background: var(--color-danger) !important;
-    color: var(--white) !important;
+    background: var(--color-danger);
+    color: var(--white);
 }
 
 /* Event Roster styles */
