@@ -27,34 +27,38 @@ const PBP_MIN_CONTENT_HEIGHT = 96;
 const FOLLOW_MIN_HEIGHT = 80;
 
 
-// Panel IDs in order (top to bottom)
+// Per-panel descriptors, in display order (top to bottom).
 // Note: gameEvents removed - now a modal popup from Play-by-Play
 // playByPlayFull is the Full-mode PBP panel — only visible when the "Full"
 // tab is active. Hidden by default everywhere else (including the All view,
 // which keeps Simple-mode PBP only — see docs/full-pbp-requirements.md).
-const PANEL_ORDER = ['header', 'roleButtons', 'playByPlay', 'playByPlayFull', 'playByPlayField', 'selectLine', 'follow'];
-
-// Panels that can be resized via drag (these have draggable title bars)
-// Dragging a title bar resizes that panel and the one above it
-const DRAGGABLE_PANELS = ['selectLine', 'follow'];
-
-// Panels that CAN be resized (excludes fixed-height header and roleButtons)
-// Note: playByPlayFull is full-tab-only and never resized via drag.
-const RESIZABLE_PANELS = ['playByPlay', 'selectLine', 'follow'];
-
-// Default panel states
-// height: null = natural/flexible height (Follow uses flex-fill)
-// height: MIN_PANEL_HEIGHT = "minimized" (title bar only)
-// height: number > MIN_PANEL_HEIGHT = explicit drag height
-const DEFAULT_PANEL_STATES = {
-    header: { hidden: false, height: null },
-    roleButtons: { hidden: false, height: null },
-    playByPlay: { hidden: false, height: PBP_MIN_CONTENT_HEIGHT },
-    playByPlayFull: { hidden: true, height: null },
-    playByPlayField: { hidden: true, height: null },
-    selectLine: { hidden: false, height: null },
-    follow: { hidden: false, height: null }
+//
+// Fields:
+//   content:   participates in tab switching (hidden/shown per tab)
+//   draggable: has a draggable title bar (dragging resizes it + the panel above)
+//   resizable: can be resized (excludes fixed-height header and roleButtons;
+//              playByPlayFull/Field are single-tab-only and never drag-resized)
+//   defaults:  initial {hidden, height} state —
+//              height: null = natural/flexible height (Follow uses flex-fill)
+//              height: MIN_PANEL_HEIGHT = "minimized" (title bar only)
+//              height: number > MIN_PANEL_HEIGHT = explicit drag height
+const PANELS = {
+    header:          { content: false, draggable: false, resizable: false, defaults: { hidden: false, height: null } },
+    roleButtons:     { content: false, draggable: false, resizable: false, defaults: { hidden: false, height: null } },
+    playByPlay:      { content: true,  draggable: false, resizable: true,  defaults: { hidden: false, height: PBP_MIN_CONTENT_HEIGHT } },
+    playByPlayFull:  { content: true,  draggable: false, resizable: false, defaults: { hidden: true,  height: null } },
+    playByPlayField: { content: true,  draggable: false, resizable: false, defaults: { hidden: true,  height: null } },
+    selectLine:      { content: true,  draggable: true,  resizable: true,  defaults: { hidden: false, height: null } },
+    follow:          { content: true,  draggable: true,  resizable: true,  defaults: { hidden: false, height: null } },
 };
+
+// Derived views of the descriptor table (kept under their historical names)
+const PANEL_ORDER = Object.keys(PANELS);
+const DRAGGABLE_PANELS = PANEL_ORDER.filter(id => PANELS[id].draggable);
+const RESIZABLE_PANELS = PANEL_ORDER.filter(id => PANELS[id].resizable);
+const CONTENT_PANELS = PANEL_ORDER.filter(id => PANELS[id].content);
+const DEFAULT_PANEL_STATES = Object.fromEntries(
+    PANEL_ORDER.map(id => [id, { ...PANELS[id].defaults }]));
 
 // Current panel states
 let panelStates = { ...DEFAULT_PANEL_STATES };
@@ -1193,13 +1197,10 @@ function switchTab(tabName) {
  */
 function applyTabState() {
     // playByPlayFull is a content panel like the others, but only ever
-    // visible in the Full tab — never in All. Listed here so the tab
-    // switcher can hide/show it consistently with the rest.
-    const contentPanels = ['playByPlay', 'playByPlayFull', 'playByPlayField', 'selectLine', 'follow'];
-
+    // visible in the Full tab — never in All (see CONTENT_PANELS).
     if (activeTab === 'all') {
         // Restore normal panel mode
-        contentPanels.forEach(id => {
+        CONTENT_PANELS.forEach(id => {
             const panel = getPanelElement(id);
             if (panel) panel.classList.remove('tab-fullscreen');
         });
@@ -1215,7 +1216,7 @@ function applyTabState() {
         // Single-tab mode: determine which panels to show
         let showPanels = [...(TAB_PANELS[activeTab] || [])];
 
-        contentPanels.forEach(id => {
+        CONTENT_PANELS.forEach(id => {
             const panel = getPanelElement(id);
             if (!panel) return;
             const shouldShow = showPanels.includes(id);

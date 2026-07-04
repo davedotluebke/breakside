@@ -1230,26 +1230,33 @@ async function refreshPendingLineFromCloud(gameId) {
  * Used by non-Active-Coach users to see game updates in real-time.
  * Active Coach should NOT call this - they are the authoritative source.
  * @param {string} gameId - Game ID to refresh
- * @returns {Promise<boolean>} True if game was updated
+ * @returns {Promise<{refreshed: boolean, scoreChanged: boolean,
+ *     pointCountChanged: boolean, gameJustEnded: boolean}>}
+ *     refreshed=false means nothing was applied.
  */
 async function refreshGameStateFromCloud(gameId) {
+    // Uniform return shape: refreshed=false means nothing was applied
+    // (offline, fetch failed, or the current game doesn't match gameId).
+    const notRefreshed = {
+        refreshed: false, scoreChanged: false, pointCountChanged: false, gameJustEnded: false,
+    };
     if (!isOnline || !gameId) {
-        return false;
+        return notRefreshed;
     }
-    
+
     try {
         const response = await authFetch(`${API_BASE_URL}/api/games/${gameId}`);
         if (!response.ok) {
             console.warn('Failed to refresh game state from cloud');
-            return false;
+            return notRefreshed;
         }
-        
+
         const gameData = await response.json();
-        
+
         // Get the current game
         const game = typeof currentGame === 'function' ? currentGame() : null;
         if (!game || game.id !== gameId) {
-            return false;
+            return notRefreshed;
         }
 
         // Capture current state before overwriting to detect changes
@@ -1290,19 +1297,17 @@ async function refreshGameStateFromCloud(gameId) {
             || newScores[Role.OPPONENT] !== oldScores[Role.OPPONENT];
         const pointCountChanged = newPointCount !== oldPointCount;
 
-        const hasChanges = scoreChanged || pointCountChanged || gameJustEnded;
-
-        if (hasChanges) {
+        if (scoreChanged || pointCountChanged || gameJustEnded) {
             console.log('📥 Refreshed game state from cloud — changes detected',
                 { scoreChanged, pointCountChanged, gameJustEnded });
         }
 
         // Return change details so callers can react (e.g. show a toast)
-        return hasChanges ? { scoreChanged, pointCountChanged, gameJustEnded } : true;
-        
+        return { refreshed: true, scoreChanged, pointCountChanged, gameJustEnded };
+
     } catch (error) {
         console.error('Error refreshing game state:', error);
-        return false;
+        return notRefreshed;
     }
 }
 

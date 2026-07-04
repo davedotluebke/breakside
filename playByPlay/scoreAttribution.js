@@ -337,18 +337,13 @@ function createPlayerButton(playerName) {
 
 function updateCallahanButtonState() {
     const callahanBtn = document.getElementById('callahanBtn');
-    if (callahanBtn) {
-        if (selectedReceiver && !selectedThrower) {
-            callahanBtn.disabled = false;
-            callahanBtn.classList.remove('inactive');
-        } else if (selectedThrower && !selectedReceiver) {
-            callahanBtn.disabled = false;
-            callahanBtn.classList.remove('inactive');
-        } else {
-            callahanBtn.disabled = true;
-            callahanBtn.classList.add('inactive');
-        }
-    }
+    if (!callahanBtn) return;
+    // Callahan needs exactly one player selected (the scorer) — with both a
+    // thrower and receiver picked it's a regular score, with none there's
+    // no one to credit.
+    const exactlyOneSelected = !!selectedThrower !== !!selectedReceiver;
+    callahanBtn.disabled = !exactlyOneSelected;
+    callahanBtn.classList.toggle('inactive', !exactlyOneSelected);
 }
 
 function updateScoreButtonState() {

@@ -280,9 +280,14 @@ async function redeemInvite() {
     } catch (error) {
         console.error('Redeem error:', error);
         showAuthMessage(error.message || 'Failed to join team');
+        redeemInProgress = false;  // allow a retry
+    } finally {
+        // Always restore the button: on success it's hidden behind the
+        // success state, on 409 we redirect shortly, on error the user can
+        // retry — previously the early 409 return left it stuck on
+        // "Joining...".
         joinTeamBtn.disabled = false;
         joinTeamBtn.textContent = 'Join Team';
-        redeemInProgress = false;  // allow a retry
     }
 }
 
@@ -357,8 +362,11 @@ signupForm?.addEventListener('submit', async (e) => {
         });
         
         if (error) throw error;
-        
-        if (data.user && !data.user.confirmed_at) {
+
+        // No session back from signUp = email confirmation required. (The
+        // old `!data.user.confirmed_at` check is unreliable — the presence
+        // of a session is what actually says "signed in now".)
+        if (!data.session) {
             // Email confirmation required
             showAuthMessage('Check your email for a message from "Supabase Auth" and click the link, then return here to join the team.', 'success');
             submitBtn.textContent = originalText;

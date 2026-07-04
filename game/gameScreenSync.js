@@ -585,9 +585,9 @@ function startGameStateRefresh() {
             // Line Coach / Viewer: Refresh full game state
             if (typeof refreshGameStateFromCloud === 'function') {
                 const result = await refreshGameStateFromCloud(gameId);
-                if (result) {
+                if (result.refreshed) {
                     // Game ended by another coach — navigate away
-                    if (typeof result === 'object' && result.gameJustEnded) {
+                    if (result.gameJustEnded) {
                         console.log('🏁 Game ended by another coach — leaving game screen');
                         if (typeof showControllerToast === 'function') {
                             showControllerToast('Game has ended', 'info', 4000);
@@ -606,7 +606,7 @@ function startGameStateRefresh() {
                     // Show conflict toast when another coach made meaningful changes
                     // (skip for viewers — they expect live updates)
                     const isViewerUser = typeof window.isViewer === 'function' && window.isViewer();
-                    if (!isViewerUser && typeof result === 'object' && (result.scoreChanged || result.pointCountChanged)) {
+                    if (!isViewerUser && (result.scoreChanged || result.pointCountChanged)) {
                         showGameUpdatedToast(result);
                     }
                 }
@@ -627,10 +627,6 @@ function stopGameStateRefresh() {
         console.log('⏹️ Stopped game state refresh polling');
     }
 }
-
-// Aliases for backwards compatibility
-function startPendingLineRefresh() { startGameStateRefresh(); }
-function stopPendingLineRefresh() { stopGameStateRefresh(); }
 
 /**
  * Update all game screen UI elements after a game state refresh

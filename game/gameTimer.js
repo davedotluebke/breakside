@@ -21,6 +21,20 @@ import { updateSelectLineTimeCells } from './selectLine.js';
 let timerMode = 'point'; // 'point' or 'game'
 let pointTimerPaused = false;
 
+// Timer warning bands (seconds). Point timer counts up: orange past
+// POINT_WARNING_SECS, red past POINT_DANGER_SECS. Cap countdown counts
+// down: shown only under CAP_COUNTDOWN_SECS remaining, orange under
+// CAP_WARNING_SECS, red under CAP_DANGER_SECS; past the cap the negative
+// time shows for CAP_OVERRUN_GRACE_SECS before reverting to elapsed time.
+const POINT_WARNING_SECS = 120;        // 2+ minute point
+const POINT_DANGER_SECS = 180;         // 3+ minute point
+const CAP_COUNTDOWN_SECS = 300;        // show countdown under 5 min to cap
+const CAP_WARNING_SECS = 180;          // under 3 min to cap
+const CAP_DANGER_SECS = 60;            // under 1 min to cap
+const CAP_OVERRUN_GRACE_SECS = 1800;   // show negative time up to 30 min past cap
+// Only use cap countdown for active games (started within the last 3 hours)
+const ACTIVE_GAME_WINDOW_MS = 3 * 60 * 60 * 1000;
+
 // `point.totalPointTime` is the accumulated *active* play time (ms) for the
 // point, banked from each running segment as it ends; `point.startTimestamp`
 // is the start of the currently-running segment (null while paused). This is
@@ -177,9 +191,9 @@ function updateTimerDisplay() {
             valueEl.textContent = formatTime(elapsed);
 
             // Add warning colors for long points
-            if (elapsed > 180) { // 3+ minutes
+            if (elapsed > POINT_DANGER_SECS) {
                 valueEl.classList.add('timer-danger');
-            } else if (elapsed > 120) { // 2+ minutes
+            } else if (elapsed > POINT_WARNING_SECS) {
                 valueEl.classList.add('timer-warning');
             }
         } else {
@@ -202,11 +216,9 @@ function updateTimerDisplay() {
                 valueEl.textContent = formatTime(totalSeconds);
             } else {
                 // Check if we should show countdown to cap
-                // Only use cap countdown for active games (started within last 3 hours)
-                const threeHoursMs = 3 * 60 * 60 * 1000;
                 let capTime = null;
-                
-                if (elapsedMs < threeHoursMs) {
+
+                if (elapsedMs < ACTIVE_GAME_WINDOW_MS) {
                     if (game.roundEndTime) {
                         capTime = new Date(game.roundEndTime).getTime();
                     } else if (game.gameDurationMinutes) {
@@ -218,19 +230,19 @@ function updateTimerDisplay() {
                     const remainingMs = capTime - now;
                     const remainingSeconds = Math.floor(remainingMs / 1000);
                     
-                    if (remainingSeconds <= -1800) {
-                        // More than 30 min past cap - just show elapsed time
+                    if (remainingSeconds <= -CAP_OVERRUN_GRACE_SECS) {
+                        // Long past the cap - just show elapsed time
                         valueEl.textContent = formatTime(elapsedSeconds);
                     } else if (remainingSeconds <= 0) {
-                        // Cap exceeded but within 30 min - show negative time in red
+                        // Cap exceeded but within grace - show negative time in red
                         valueEl.textContent = formatTime(remainingSeconds);
                         valueEl.classList.add('timer-negative');
-                    } else if (remainingSeconds <= 300) { // Under 5 minutes
+                    } else if (remainingSeconds <= CAP_COUNTDOWN_SECS) {
                         // Show countdown
                         valueEl.textContent = formatTime(remainingSeconds);
-                        if (remainingSeconds <= 60) {
+                        if (remainingSeconds <= CAP_DANGER_SECS) {
                             valueEl.classList.add('timer-danger');
-                        } else if (remainingSeconds <= 180) {
+                        } else if (remainingSeconds <= CAP_WARNING_SECS) {
                             valueEl.classList.add('timer-warning');
                         }
                     } else {
