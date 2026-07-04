@@ -30,7 +30,7 @@ import { updateScore, undoEvent, appVersion } from './gameLogic.js';
 import {
     getControllerState, isActiveCoach, isLineCoach, releaseControllerRole,
     stopControllerPolling, getPollingGameId, showControllerToast,
-    handleActiveCoachClick, handleLineCoachClick,
+    handleActiveCoachClick, handleLineCoachClick, canEditPlayByPlay,
 } from './controllerState.js';
 import { WHOLESALE_ICON_SVG, AUTO_ICON_SVG } from './gameScreenPanels.js';
 import {
@@ -366,7 +366,7 @@ function handleGameMenuClick(e) {
                 endGameBtn.style.display = 'none';
             } else {
                 endGameBtn.style.display = '';
-                const canEnd = canEditPlayByPlayPanel() ||
+                const canEnd = canEditPlayByPlay() ||
                     (typeof isLineCoach === 'function' && isLineCoach());
                 endGameBtn.disabled = !canEnd;
                 endGameBtn.title = canEnd ? 'End the game' : 'Only Active or Line Coach can end the game';
@@ -493,7 +493,7 @@ function handleEndGame() {
     closeGameMenu();
     
     // Check if user has permission
-    const isActive = canEditPlayByPlayPanel();
+    const isActive = canEditPlayByPlay();
     const isLine = typeof isLineCoach === 'function' && isLineCoach();
     
     if (!isActive && !isLine) {
@@ -648,7 +648,7 @@ function togglePbpExpandedRow() {
  */
 function handlePbpWeScore() {
     // Check if user has Active Coach role
-    if (!canEditPlayByPlayPanel()) {
+    if (!canEditPlayByPlay()) {
         if (typeof showControllerToast === 'function') {
             showControllerToast('You need Play-by-Play control to record scores', 'warning');
         }
@@ -683,7 +683,7 @@ function handlePbpWeScore() {
  */
 function handlePbpTheyScore() {
     // Check if user has Active Coach role
-    if (!canEditPlayByPlayPanel()) {
+    if (!canEditPlayByPlay()) {
         if (typeof showControllerToast === 'function') {
             showControllerToast('You need Play-by-Play control to record scores', 'warning');
         }
@@ -719,7 +719,7 @@ function handlePbpTheyScore() {
  */
 function handlePbpKeyPlay() {
     // Check if user has Active Coach role
-    if (!canEditPlayByPlayPanel()) {
+    if (!canEditPlayByPlay()) {
         if (typeof showControllerToast === 'function') {
             showControllerToast('You need Play-by-Play control to record key plays', 'warning');
         }
@@ -742,7 +742,7 @@ function handlePbpKeyPlay() {
  */
 function handlePbpUndo() {
     // Check if user has Active Coach role
-    if (!canEditPlayByPlayPanel()) {
+    if (!canEditPlayByPlay()) {
         if (typeof showControllerToast === 'function') {
             showControllerToast('You need Play-by-Play control to undo', 'warning');
         }
@@ -765,7 +765,7 @@ function handlePbpUndo() {
  */
 function handlePbpSubPlayers() {
     // Check if user has Active Coach role
-    if (!canEditPlayByPlayPanel()) {
+    if (!canEditPlayByPlay()) {
         if (typeof showControllerToast === 'function') {
             showControllerToast('You need Play-by-Play control to sub players', 'warning');
         }
@@ -1051,7 +1051,7 @@ function confirmSubstitution() {
  */
 function handlePbpGameEvents() {
     // Check if user has Active Coach role
-    if (!canEditPlayByPlayPanel()) {
+    if (!canEditPlayByPlay()) {
         if (typeof showControllerToast === 'function') {
             showControllerToast('You need Play-by-Play control to manage game events', 'warning');
         }
@@ -1059,24 +1059,6 @@ function handlePbpGameEvents() {
     }
     
     showGameEventsModal();
-}
-
-/**
- * Check if current user can edit play-by-play
- * Uses the global canEditPlayByPlay from controllerState.js if available
- * @returns {boolean}
- */
-function canEditPlayByPlayPanel() {
-    // Use the global canEditPlayByPlay from controllerState.js
-    if (typeof window.canEditPlayByPlay === 'function') {
-        return window.canEditPlayByPlay();
-    }
-    // Fallback: check if we have Active Coach role using the boolean flag
-    if (typeof window.isActiveCoach === 'function') {
-        return window.isActiveCoach();
-    }
-    // If controller system not available, allow (offline mode)
-    return true;
 }
 
 /**
@@ -1494,7 +1476,7 @@ function updatePlayByPlayPanelState() {
     const panel = document.getElementById('panel-playByPlay');
     if (!panel) return;
     
-    const hasActiveCoachRole = canEditPlayByPlayPanel();
+    const hasActiveCoachRole = canEditPlayByPlay();
     const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
     
     // Disable panel visually if not Active Coach (but don't block pointer events on whole panel)
@@ -1754,8 +1736,7 @@ function applyStartPointButtonState(btn, showPointInProgress = true) {
 
     const { feedbackClass, startOnLabel, pointInProgress, lineSource }
         = getStartPointButtonState();
-    const hasActiveCoachRole = (typeof canEditPlayByPlayPanel === 'function')
-        ? canEditPlayByPlayPanel() : true;
+    const hasActiveCoachRole = canEditPlayByPlay();
 
     // Reset all states
     btn.classList.remove('warning', 'inactive', 'point-in-progress',
@@ -1813,7 +1794,7 @@ function updateGameEventsModalState() {
     const modal = document.getElementById('gameEventsModal');
     if (!modal || modal.style.display === 'none') return;
 
-    const hasActiveCoachRole = canEditPlayByPlayPanel();
+    const hasActiveCoachRole = canEditPlayByPlay();
     const pointInProgress = typeof isPointInProgress === 'function' && isPointInProgress();
 
     // Timeout - enabled anytime (can be called during or between points)
@@ -1919,7 +1900,7 @@ function setupPlayByPlayResizeObserver() {
 // --- ES-module exports ---
 export {
     wireGameScreenEvents,
-    canEditPlayByPlayPanel, ensureDialogVisible,
+    ensureDialogVisible,
     transitionToBetweenPoints,
     updatePlayByPlayPanelState, updatePlayByPlayLayout,
     updateLineTabStartPointBtn, setupPlayByPlayResizeObserver,

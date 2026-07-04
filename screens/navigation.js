@@ -51,7 +51,7 @@ function showScreen(screenId) {
     manageControllerPolling(screenId);
 
     // Show/hide controller role buttons
-    manageControllerButtons(screenId);
+    manageControllerButtons();
 
     // Start active-game polling on non-game screens
     // late-bound back-edge (teams/activeGamePolling lives "above" this layer);
@@ -70,7 +70,7 @@ function showScreen(screenId) {
  * Controller buttons are only visible on the panel-based game screen,
  * so hide them on all navigation-managed screens.
  */
-function manageControllerButtons(screenId) {
+function manageControllerButtons() {
     // late-bound back-edge (game/controllerState lives "above" this layer);
     // see ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
     if (typeof window.setControllerButtonsVisible !== 'function') {

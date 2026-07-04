@@ -491,24 +491,6 @@ async function populateCloudTeamsAndGames() {
     }
 }
 
-// Keep old function name for backwards compatibility
-async function populateCloudGames() {
-    return populateCloudTeamsAndGames();
-}
-
-async function deleteCloudGame(gameId, team = null) {
-    // Skip the confirm for test teams (throwaway dev data).
-    const skipConfirm = typeof isTestTeam === 'function' && isTestTeam(team);
-    if (!skipConfirm && !confirm('Are you sure you want to delete this game from the cloud? This cannot be undone.')) return;
-
-    try {
-        await deleteGameFromCloud(gameId);
-        populateCloudTeamsAndGames(); // Refresh list
-    } catch (error) {
-        alert('Failed to delete game: ' + error.message);
-    }
-}
-
 /**
  * Delete a cloud game with confirmation (used by new UI)
  */
@@ -756,61 +738,6 @@ async function openCompletedGameSummary(cloudTeam, gameId) {
     } catch (error) {
         console.error('Error opening game summary:', error);
         alert('Failed to load game: ' + error.message);
-    }
-}
-
-// importCloudGame is no longer needed - games are accessed directly from the cloud
-// Keeping a stub for backwards compatibility
-async function importCloudGame(gameId) {
-    console.warn('importCloudGame is deprecated - use resumeCloudGame instead');
-    // Find the team for this game and resume it
-    try {
-        const games = await listServerGames();
-        const game = games.find(g => g.game_id === gameId);
-        if (game && game.teamId) {
-            const response = await authFetch(`${API_BASE_URL}/api/teams/${game.teamId}`);
-            if (response.ok) {
-                const team = await response.json();
-                await resumeCloudGame(team, gameId);
-                return;
-            }
-        }
-        alert('Could not find team for this game');
-    } catch (error) {
-        console.error('Import failed:', error);
-        alert('Failed to load game: ' + error.message);
-    }
-}
-
-function removeGameStatsFromRoster(team, game) {
-    const points = game.points || [];
-
-    points.forEach(point => {
-        const pointDuration = point.totalPointTime;
-        point.players.forEach(playerName => {
-            const player = getPlayerFromName(playerName);
-            if (player) {
-                player.totalPointsPlayed = Math.max(0, (player.totalPointsPlayed || 0) - 1);
-                player.totalTimePlayed = Math.max(0, (player.totalTimePlayed || 0) - pointDuration);
-                if (game === team.games[team.games.length - 1]) {
-                    player.consecutivePointsPlayed = 0;
-                }
-            }
-        });
-    });
-}
-
-/**
- * Select a team by index (legacy function - kept for backwards compatibility)
- * Use selectCloudTeam() for cloud-first workflow
- */
-function selectTeam(index) {
-    if (index >= 0 && index < teams.length) {
-        setCurrentTeam(teams[index]);
-        if (typeof updateTeamRosterDisplay === 'function') {
-            updateTeamRosterDisplay();
-        }
-        showScreen('teamRosterScreen');
     }
 }
 

@@ -14,11 +14,11 @@ import {
 import { getEventPlayerStats } from '../utils/eventStats.js';
 import { clearNextLineSelections, getRunningScores } from '../ui/activePlayersDisplay.js';
 import { setPanelSubtitle, setPanelTitle, isGameScreenVisible } from '../ui/panelSystem.js';
-import { getControllerState, showControllerToast } from './controllerState.js';
+import { getControllerState, showControllerToast, canEditPlayByPlay } from './controllerState.js';
 import { startNextPoint } from './pointManagement.js';
 import { WHOLESALE_ICON_SVG, noteLineCoachViewing } from './gameScreenPanels.js';
 import {
-    canEditPlayByPlayPanel, updatePlayByPlayPanelState,
+    updatePlayByPlayPanelState,
     updateSubPlayersCount, handleLineupReadyTap,
 } from './gameScreenEvents.js';
 
@@ -722,7 +722,7 @@ function handlePanelStartPoint() {
     }
     
     // Check if we can start a point (need Active Coach role, not just lineup edit)
-    if (!canEditPlayByPlayPanel()) {
+    if (!canEditPlayByPlay()) {
         if (typeof showControllerToast === 'function') {
             showControllerToast('Only the Active Coach can start a new point', 'warning');
         }

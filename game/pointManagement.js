@@ -190,11 +190,6 @@ function startNextPoint() {
     }
 }
 
-function proceedToDefenseScreen() {
-    // Panel UI handles defense display — no legacy screen navigation needed
-    console.log('proceedToDefenseScreen() called — panel UI active, no-op');
-}
-
 const startPointBtn = document.getElementById('startPointBtn');
 if (startPointBtn) {
     startPointBtn.addEventListener('click', startNextPoint);

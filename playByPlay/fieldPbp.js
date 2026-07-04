@@ -605,15 +605,13 @@ const fieldPbp = (function() {
         }
         if (inPoint && state.mode === 'defense') {
             return `<button class="fp-ebtn theyturn" data-act="theyturn">They turnover</button>`
-                + `<button class="fp-ebtn theyscore" data-act="theyscore">They score</button>`
-                + `<button class="fp-ebtn more" data-act="more">⋯ more</button>`;
+                + `<button class="fp-ebtn theyscore" data-act="theyscore">They score</button>`;
         }
         if (inPoint && state.mode === 'offense') {
             const on = a => S.pending === a ? ' on' : '';
             return `<button class="fp-ebtn drop${on('drop')}" data-act="drop">Drop</button>`
                 + `<button class="fp-ebtn throwaway${on('throwaway')}" data-act="throwaway">Throwaway</button>`
-                + `<button class="fp-ebtn score${on('score')}" data-act="score">Score</button>`
-                + `<button class="fp-ebtn more" data-act="more">⋯ more</button>`;
+                + `<button class="fp-ebtn score${on('score')}" data-act="score">Score</button>`;
         }
         return '';
     }
@@ -1197,11 +1195,6 @@ const fieldPbp = (function() {
         if (typeof handlePbpTheyScore === 'function') handlePbpTheyScore();
         render();
     }
-    function handleMore() {
-        // D overflow (footblock / handblock / bid / …) lands in Phase 7.
-        console.log('[fieldPbp] D "⋯ more" overflow (phase 7)');
-    }
-
     // Field-side popover to pick a player when none is armed yet.
     function popPicker(cx, cy, cb, title) {
         document.querySelectorAll('.fp-picker').forEach(n => n.remove());
@@ -1591,7 +1584,6 @@ const fieldPbp = (function() {
                 const act = b.dataset.act;
                 if (act === 'theyturn') handleTheyTurnover();
                 else if (act === 'theyscore') handleTheyScore();
-                else if (act === 'more') handleMore();
                 else if (act === 'drop' || act === 'throwaway' || act === 'score') togglePending(act);
             };
         });
