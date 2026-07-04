@@ -2,7 +2,7 @@
  * Unit tests pinning the behavior of the undo decision tree
  * (game/undoLogic.js), extracted from gameLogic.undoEvent in the F3 sweep.
  *
- * Run: node --test tests/unit/
+ * Run: node --test tests/unit/*.test.mjs
  * (no deps — plain node:test against the ES modules)
  */
 import { test } from 'node:test';

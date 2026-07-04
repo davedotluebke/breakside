@@ -3,7 +3,7 @@
  * extracted from store/sync.js, game/selectLine.js, and
  * game/gameScreenEvents.js in the F3 sweep.
  *
- * Run: node --test tests/unit/
+ * Run: node --test tests/unit/*.test.mjs
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
