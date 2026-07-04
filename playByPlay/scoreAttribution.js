@@ -263,7 +263,7 @@ function showScoreAttributionDialog(opts) {
     // it can never happen on an offensive possession (Field / Full PBP). In
     // those contexts we keep the button present-but-disabled as a reminder
     // that the option exists, but mark the dialog so the wide/landscape layout
-    // can collapse it away to reclaim room. See main.css (orientation:landscape).
+    // can collapse it away to reclaim room. See css/pbp.css (orientation:landscape).
     const callahanApplicable = opts.callahanApplicable === true;
     dialog.classList.toggle('callahan-inapplicable', !callahanApplicable);
 

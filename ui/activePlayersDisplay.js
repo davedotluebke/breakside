@@ -345,7 +345,7 @@ function clearNextLineSelections() {
  * Width-sync the sticky checkbox/name/time columns for horizontal scrolling.
  * Position, colors, borders, and z-index are static CSS (see
  * .active-checkbox-column / .active-name-column / .active-time-column /
- * .active-header-teams in main.css) — this only sets the numeric widths and
+ * .active-header-teams in css/tables.css) — this only sets the numeric widths and
  * `left` offsets that depend on measured column widths (checkbox width can
  * vary slightly by browser/zoom, and the name column's width varies with
  * player-name length), which CSS can't derive on its own.
