@@ -1458,7 +1458,13 @@ function recordTimeout(calledBy) {
     let poss = point.possessions[point.possessions.length - 1];
     if (!poss) { poss = new Possession(true); point.possessions.push(poss); }
 
-    const timeoutEvent = new Other({ timeout: true, calledBy });
+    // Resolve the display name now — the log reads "Timeout called by
+    // Rivals", not "by them" (summarize falls back to us/them for events
+    // recorded before calledByName existed).
+    const calledByName = calledBy === 'us' ? (game.team || null)
+        : calledBy === 'them' ? (game.opponent || null)
+        : null;
+    const timeoutEvent = new Other({ timeout: true, calledBy, calledByName });
     poss.events.push(timeoutEvent);
 
     const summary = timeoutEvent.summarize().trim();

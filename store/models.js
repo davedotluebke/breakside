@@ -451,7 +451,7 @@ class Defense extends Event {
 
 // Other event class
 class Other extends Event {
-    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null, description = null, calledBy = null}) {
+    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null, description = null, calledBy = null, calledByName = null}) {
         super('Other');
         this.timeout_flag = timeout;
         this.injury_flag = injury;
@@ -460,6 +460,7 @@ class Other extends Event {
         this.halftime_flag = halftime;
         this.description = description; // Generic description for custom events (e.g., substitutions)
         this.calledBy = calledBy; // Timeout attribution: 'us' | 'them' | 'neither' | null (legacy/unknown)
+        this.calledByName = calledByName; // Display name for calledBy, resolved at creation (team/opponent name)
     }
 
     // Override summarize for Other events
@@ -467,7 +468,8 @@ class Other extends Event {
         let summary = '';
         if (this.description)       { summary += this.description + ' '; }
         if (this.timeout_flag) {
-            if (this.calledBy === 'us')        { summary += 'Timeout called by us. '; }
+            if (this.calledByName)             { summary += `Timeout called by ${this.calledByName}. `; }
+            else if (this.calledBy === 'us')   { summary += 'Timeout called by us. '; }
             else if (this.calledBy === 'them') { summary += 'Timeout called by them. '; }
             else                               { summary += 'Timeout called. '; }
         }
