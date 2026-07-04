@@ -1368,6 +1368,25 @@ body.game-screen-active header {
     min-width: 0;
 }
 
+/* Compact Undo at the row's right edge — same quiet look as Field mode's
+ * action-row Undo, deliberately smaller than Start Point / Lineup Ready
+ * so it can't be fat-fingered when hustling to start the next point. */
+.line-tab-undo-btn {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding: 8px 14px;
+    border: 1px solid #bbb;
+    border-radius: 8px;
+    background: #fff;
+    color: #333;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
 /* Lineup Ready: blue idle, green when sent, desaturated blue when
  * disabled. The generic .pbp-start-point-btn.inactive rule above sets a
  * grey gradient, but the more specific blue rule for this variant wins
