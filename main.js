@@ -12,7 +12,7 @@
  *   │
  *   ├── utils/                   # Utility functions
  *   │   ├── helpers.js          # Pure utility functions and current state accessors
- *   │   └── statistics.js       # Statistics calculation and game summary generation
+ *   │   └── eventStats.js       # Player/team stats from game events (id-keyed)
  *   │
  *   ├── screens/                 # Screen management
  *   │   └── navigation.js       # Screen navigation and state management
@@ -66,7 +66,6 @@ import './utils/helpers.js';
 import { currentTeam } from './store/storage.js';
 import './store/sync.js';
 import './settings/advancedSettings.js';
-import './utils/statistics.js';
 import './utils/eventStats.js';
 import './utils/tableSort.js';
 import './utils/statsHelp.js';
