@@ -14,7 +14,7 @@ html {
 
 body {
     font-family: 'Poppins', sans-serif;
-    background-color: #f4f4f4;
+    background-color: var(--surface-page);
     text-align: center;
     margin: 0;
     padding: 5px;
@@ -23,14 +23,14 @@ body {
 }
 
 header, footer {
-    background-color: #c0c0c0;
-    color: #fff;
+    background-color: var(--gray-chrome);
+    color: var(--white);
     padding: 10px 0;
     text-align: center;
 }
 
 h2, h3, h4 {
-    color: #333;
+    color: var(--text-primary);
     margin: 10px 0;
     padding: 10px 0;
     text-align: center;
@@ -41,8 +41,8 @@ h2, h3, h4 {
 button {
     padding: 10px 15px;
     margin: 10px;
-    background-color: #444;
-    color: #fff;
+    background-color: var(--gray-dark);
+    color: var(--white);
     border: none;
     border-radius: 5px; /* Rounded corners */
     cursor: pointer;
@@ -52,27 +52,27 @@ button {
 }
 
 button.warning {
-    background-color: #d9534f; /* Bootstrap's button color for warning */
+    background-color: var(--color-danger); /* Bootstrap's button color for warning */
 }
 
 /* Selected button style */
 button.selected {
-    background-color: #007bff; /* A blue color to indicate selection, adjust as needed */
-    color: #ffffff;
+    background-color: var(--color-primary); /* A blue color to indicate selection, adjust as needed */
+    color: var(--white);
 }
 
 /* Inactive button style */
 button.inactive {
-    background-color: #cccccc; /* A gray color to indicate inactivity */
-    color: #666666;
+    background-color: var(--border-default); /* A gray color to indicate inactivity */
+    color: var(--text-muted);
     cursor: not-allowed; /* Change cursor to indicate the button is inactive */
     pointer-events: none; /* Prevent clicking on the button */
 }
 
 .warning-box {
-    border: 1px solid #d9534f; /* Bootstrap's warning color */
-    background-color: #f2dede;
-    color: #a94442;
+    border: 1px solid var(--color-danger); /* Bootstrap's warning color */
+    background-color: var(--color-danger-surface);
+    color: var(--color-danger-text);
     padding: 10px;
     margin-bottom: 10px;
     text-align: center;
@@ -100,14 +100,14 @@ table {
 }
 
 th, td {
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-light);
     padding: 8px;
     text-align: left;
 }
 
 /* Styling for header rows */
 th {
-    background-color: #f2f2f2;
+    background-color: var(--surface-header-cell);
 }
 
 /* Game summary event log */
@@ -116,8 +116,8 @@ th {
     overflow-y: auto;
     padding: 8px;
     font-size: 0.85rem;
-    background: #fafafa;
-    border: 1px solid #e0e0e0;
+    background: var(--surface-sticky);
+    border: 1px solid var(--surface-dim);
     border-radius: 4px;
 }
 
@@ -131,12 +131,12 @@ th {
 
 /* Styling for team aggregate row in game summary */
 .team-aggregate-row {
-    border-top: 2px solid #333;
+    border-top: 2px solid var(--text-primary);
     font-weight: 600;
 }
 
 .team-total-cell {
-    background-color: #e8e8e8;
+    background-color: var(--surface-raised);
     font-weight: 600;
 }
 
@@ -150,7 +150,7 @@ th {
     padding: 16px 20px;
     font-size: 1em;
     line-height: 1.4;
-    color: #333;
+    color: var(--text-primary);
 }
 
 /* Team-level breaks / holds summary line under the player stats table */
@@ -158,9 +158,9 @@ th {
     margin: 8px 10px 0;
     padding: 6px 10px;
     font-size: 0.9em;
-    color: #333;
-    background-color: #f4f4f4;
-    border-left: 3px solid #888;
+    color: var(--text-primary);
+    background-color: var(--surface-page);
+    border-left: 3px solid var(--text-faint);
     border-radius: 2px;
     /* Preserve newlines from formatTeamStatsLine() so each stat stays on its own line */
     white-space: pre-line;
@@ -177,7 +177,7 @@ th {
 
 .event-roster-filter-row label {
     font-weight: 600;
-    color: #444;
+    color: var(--gray-dark);
 }
 
 /* Phase grouping in the event games list */
@@ -185,13 +185,13 @@ th {
     padding: 6px 10px 2px;
     font-size: 0.85em;
     font-weight: 600;
-    color: #555;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
 
 .event-phase-header.event-phase-unassigned {
-    color: #999;
+    color: var(--text-placeholder);
 }
 
 /* Per-game phase picker on event game items — lives inline next to
@@ -207,14 +207,14 @@ th {
 .event-phases-section {
     margin: 12px 0;
     padding: 8px 0;
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--border-lighter);
 }
 
 .event-phases-label {
     display: block;
     font-weight: 600;
     margin-bottom: 6px;
-    color: #333;
+    color: var(--text-primary);
 }
 
 .event-phases-list {
@@ -246,7 +246,7 @@ th {
 
 .event-phase-add-btn {
     padding: 6px 12px;
-    background: #4a8;
+    background: var(--green-phase);
     color: white;
     border: none;
     border-radius: 4px;
@@ -258,16 +258,16 @@ th {
     width: 100%;
     margin-top: 10px;
     padding: 8px 12px;
-    background: #f0f0f0;
-    color: #333;
-    border: 1px solid #bbb;
+    background: var(--surface-light);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
     border-radius: 4px;
     cursor: pointer;
     font-size: 0.95em;
 }
 
 .event-phase-auto-btn:hover:not(:disabled) {
-    background: #e5e5e5;
+    background: var(--surface-mid);
 }
 
 .event-phase-auto-btn:disabled {
@@ -314,7 +314,7 @@ th {
 }
 
 .sub-action-btn.inactive {
-    background-color: #888888; /* Or any other style to indicate selection */
+    background-color: var(--text-faint); /* Or any other style to indicate selection */
 }
 
 .action-buttons {
@@ -340,13 +340,13 @@ th {
     grid-template-columns: 1fr 1fr; /* Creates two columns */
     grid-gap: 2px; /* Smaller gap between grid items */
     padding: 5px; /* Smaller padding for the panel */
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-default);
     margin-bottom: 5px;
-    background-color: #f8f8f8;
+    background-color: var(--surface-subtle);
 }
 
 .sub-action-btn.selected {
-    background-color: #2669b5; /* Or any other style to indicate selection */
+    background-color: var(--blue-sub-selected); /* Or any other style to indicate selection */
 }
 
 /* Optional: You might want to adjust the font-size for smaller buttons */
@@ -354,7 +354,7 @@ th {
     padding: 2px 5px; /* Smaller padding */
     margin: 2px; /* Smaller margin between buttons */
     font-size: 0.8rem; /* You can adjust the font size as needed */
-    background-color: #626262;
+    background-color: var(--text-muted);
     /* Other styles as needed */
 }
 
@@ -382,8 +382,8 @@ th {
 }
 
 #toggleEventLogBtn.selected {
-    background-color: #007bff;
-    color: #ffffff;
+    background-color: var(--color-primary);
+    color: var(--white);
 }
 
 #eventLog {
@@ -395,7 +395,7 @@ th {
     left: 0;
     padding: 5px;
     box-sizing: border-box;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-default);
     background-color: white;
     resize: none;
     overflow-y: auto;
@@ -405,7 +405,7 @@ th {
 input[type="text"], input[type="number"], select {
     padding: 8px;
     margin: 10px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-light);
     border-radius: 4px;
 }
 
@@ -469,22 +469,22 @@ ul {
 }
 .roster-scope-label {
     font-size: 0.85em;
-    color: #555;
+    color: var(--text-secondary);
 }
 .roster-scope-btn {
     margin: 0;  /* override global button margin */
     padding: 4px 12px;
-    border: 1px solid #bbb;
+    border: 1px solid var(--border-strong);
     border-radius: 14px;
-    background: #f0f0f0;
-    color: #333;
+    background: var(--surface-light);
+    color: var(--text-primary);
     font-size: 0.85em;
     cursor: pointer;
 }
 .roster-scope-btn.active {
-    background: #2d6cdf;
-    border-color: #2d6cdf;
-    color: #fff;
+    background: var(--blue-scope);
+    border-color: var(--blue-scope);
+    color: var(--white);
     font-weight: bold;
 }
 
@@ -494,10 +494,10 @@ ul {
     user-select: none;
 }
 .roster-sortable:hover {
-    background-color: #ececec;
+    background-color: var(--border-lighter);
 }
 .roster-sorted {
-    background-color: #e3ecfb;
+    background-color: var(--surface-sorted);
 }
 .roster-gender-column {
     text-align: center;
@@ -509,7 +509,7 @@ ul {
     position: sticky;
     top: 0;
     z-index: 2;
-    background-color: #f4f4f4;
+    background-color: var(--surface-page);
 }
 
 /* Sticky left columns: checkbox + name on event roster, name only on game summary */
@@ -524,7 +524,7 @@ ul {
     position: sticky;
     left: 40px;  /* width of checkbox column (30px + padding) */
     z-index: 1;
-    box-shadow: 2px 0 0 -1px #ccc;  /* subtle divider */
+    box-shadow: 2px 0 0 -1px var(--border-default);  /* subtle divider */
 }
 #eventRosterTable tr:first-child th:nth-child(1),
 #eventRosterTable tr:first-child th:nth-child(2) {
@@ -536,7 +536,7 @@ ul {
     position: sticky;
     left: 0;
     z-index: 1;
-    box-shadow: 2px 0 0 -1px #ccc;
+    box-shadow: 2px 0 0 -1px var(--border-default);
 }
 #gameSummaryTable tr:first-child th:nth-child(1) {
     z-index: 3;
@@ -545,7 +545,7 @@ ul {
 /* Team aggregate cells need to stay opaque when sticky-overlapped */
 #eventRosterTable .team-aggregate-row td,
 #gameSummaryTable .team-aggregate-row td {
-    background-color: #e8e8e8;
+    background-color: var(--surface-raised);
 }
 
 #activePlayersTable th, #activePlayersTable td {
@@ -565,8 +565,8 @@ ul {
     position: sticky;
     left: 0;
     z-index: 4;
-    background-color: #fafafa;
-    box-shadow: inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
+    background-color: var(--surface-sticky);
+    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
     border-left: none;
     border-right: none;
     border-top: none;
@@ -577,8 +577,8 @@ ul {
     position: sticky;
     left: 30px; /* overwritten dynamically to the measured checkbox column width */
     z-index: 3;
-    background-color: #fafafa;
-    box-shadow: inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey;
+    background-color: var(--surface-sticky);
+    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 0 -1px 0 0 grey;
     border-left: none;
     border-right: none;
     border-top: none;
@@ -587,12 +587,12 @@ ul {
 
 /* Header cell for merged sticky columns */
 .active-header-teams {
-    background-color: #fafafa;
+    background-color: var(--surface-sticky);
     box-sizing: border-box;
     position: sticky;
     left: 0;
     z-index: 5;
-    box-shadow: inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
+    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
     border-left: none;
     border-right: none;
     border-top: none;
@@ -604,7 +604,7 @@ ul {
 td.player-fmp,
 .active-name-column.player-fmp,
 .roster-name-column.player-fmp {
-    color: #7d3c98 !important; /* Darker purple for better contrast */
+    color: var(--gender-fmp) !important; /* Darker purple for better contrast */
     font-weight: bold;
 }
 
@@ -612,18 +612,18 @@ td.player-fmp,
 td.player-mmp,
 .active-name-column.player-mmp,
 .roster-name-column.player-mmp {
-    color: #2d8659 !important; /* Darker green */
+    color: var(--gender-mmp) !important; /* Darker green */
     font-weight: bold;
 }
 
 /* Gender ratio warning styling - matches player colors */
 #genderRatioText.gender-ratio-fmp-warning {
-    color: #7d3c98; /* Darker purple - matches FMP player color */
+    color: var(--gender-fmp); /* Darker purple - matches FMP player color */
     font-weight: bold;
 }
 
 #genderRatioText.gender-ratio-mmp-warning {
-    color: #2d8659; /* Darker green - matches MMP player color */
+    color: var(--gender-mmp); /* Darker green - matches MMP player color */
     font-weight: bold;
 }
 
@@ -636,14 +636,14 @@ td.player-mmp,
 
 /* Score cell coloring for alternating gender ratio games */
 .score-cell-fmp {
-    background-color: rgba(125, 60, 152, 0.2); /* Light darker purple background */
-    color: #000; /* Black text for better contrast */
+    background-color: var(--gender-fmp-tint); /* Light darker purple background */
+    color: var(--black); /* Black text for better contrast */
     font-weight: bold;
 }
 
 .score-cell-mmp {
-    background-color: rgba(45, 134, 89, 0.2); /* Light darker green background */
-    color: #000; /* Black text for better contrast */
+    background-color: var(--gender-mmp-tint); /* Light darker green background */
+    color: var(--black); /* Black text for better contrast */
     font-weight: bold;
 }
 
@@ -651,13 +651,13 @@ td.player-mmp,
 #startingGenderRatioSelection {
     font-size: 1.2rem;
     font-weight: bold;
-    color: #dc3545; /* Bright warning red */
+    color: var(--color-danger); /* Bright warning red */
     text-align: center;
 }
 
 #startingGenderRatioSelection > label:first-of-type {
     font-weight: bold;
-    color: #dc3545; /* Bright warning red */
+    color: var(--color-danger); /* Bright warning red */
     font-size: 1.2rem;
     margin-right: 0.75rem;
 }
@@ -665,7 +665,7 @@ td.player-mmp,
 #startingGenderRatioSelection label[for="startingRatioFMP"],
 #startingGenderRatioSelection label[for="startingRatioMMP"] {
     font-weight: bold;
-    color: #dc3545; /* Bright warning red */
+    color: var(--color-danger); /* Bright warning red */
     font-size: 1.2rem;
     margin: 0 0.5rem;
     cursor: pointer;
@@ -676,7 +676,7 @@ td.player-mmp,
     height: 1.2em;
     margin-right: 0.5rem;
     cursor: pointer;
-    accent-color: #dc3545; /* Bright warning red for radio button */
+    accent-color: var(--color-danger); /* Bright warning red for radio button */
 }
 
 .active-time-column {
@@ -684,8 +684,8 @@ td.player-mmp,
     left: 140px; /* this will be overwritten dynamically to width of left 2 columns */
     font-style: italic;
     z-index: 3;
-    background-color: #fafafa;
-    box-shadow: inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey;
+    background-color: var(--surface-sticky);
+    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 0 -1px 0 0 grey;
     border-left: none;
     border-right: none;
     border-top: none;
@@ -697,7 +697,7 @@ td.player-mmp,
     width: 3vw;        /* Or you can adjust this value as per your needs */
     overflow: hidden;
     text-align: left;
-    background-color: #fafafa;
+    background-color: var(--surface-sticky);
 
     border: 1px solid grey;
 }
@@ -723,8 +723,8 @@ td.player-mmp,
     position: sticky;
     left: 0;
     z-index: 4;
-    background-color: #fafafa;
-    box-shadow: inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
+    background-color: var(--surface-sticky);
+    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
     border-left: none;
     border-right: none;
     border-top: none;
@@ -738,8 +738,8 @@ td.player-mmp,
     position: sticky;
     left: 30px; /* overwritten dynamically to the measured checkbox column width */
     z-index: 3;
-    background-color: #fafafa;
-    box-shadow: inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey;
+    background-color: var(--surface-sticky);
+    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 0 -1px 0 0 grey;
     border-left: none;
     border-right: none;
     border-top: none;
@@ -797,15 +797,15 @@ td.player-mmp,
 }
 
 .modal-content {
-    background-color: #fefefe;
+    background-color: var(--white);
     margin: 15% auto; /* 15% from the top and centered */
     padding: 20px;
-    border: 1px solid #888;
+    border: 1px solid var(--text-faint);
     width: 80%; /* Could be more or less, depending on screen size */
 }
 
 .close {
-    color: #aaa;
+    color: var(--text-disabled);
     float: right;
     font-size: 28px;
     font-weight: bold;
@@ -820,7 +820,7 @@ td.player-mmp,
 }
 
 .team-row {
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--border-light);
 }
 
 .team-name {
@@ -838,16 +838,16 @@ td.player-mmp,
 }
 
 .team-section {
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-light);
     border-radius: 8px;
     margin-bottom: 7px;
     overflow: hidden;
-    background: #fff;
+    background: var(--white);
 }
 
 .team-section.has-active-games {
-    border-color: #28a745;
-    box-shadow: 0 0 5px rgba(40, 167, 69, 0.2);
+    border-color: var(--color-success);
+    box-shadow: 0 0 5px var(--color-success-tint);
 }
 
 .team-header {
@@ -855,22 +855,22 @@ td.player-mmp,
     flex-direction: column;
     gap: 2px;
     padding: 6px 12px;
-    background: #f8f9fa;
+    background: var(--surface-subtle);
     cursor: pointer;
     user-select: none;
     transition: background-color 0.15s ease;
 }
 
 .team-header:hover {
-    background: #e9ecef;
+    background: var(--surface-hover);
 }
 
 .team-section.has-active-games .team-header {
-    background: #e8f5e9;
+    background: var(--surface-game-active);
 }
 
 .team-section.has-active-games .team-header:hover {
-    background: #c8e6c9;
+    background: var(--surface-game-active-hover);
 }
 
 /* Top row: [active dot] [icon] [name] ... [trash] */
@@ -896,7 +896,7 @@ td.player-mmp,
 .team-header-name {
     font-weight: bold;
     font-size: 1.1em;
-    color: #333;
+    color: var(--text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -922,7 +922,7 @@ td.player-mmp,
     align-items: center;
     gap: 10px;
     font-size: 0.85em;
-    color: #666;
+    color: var(--text-muted);
     padding-left: 2px;
 }
 
@@ -934,24 +934,24 @@ td.player-mmp,
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    color: #555;
+    color: var(--text-secondary);
     font-size: 0.95em;
 }
 
 .team-header .role-badge.coach-badge i {
-    color: #e67e22;
+    color: var(--brand-orange);
 }
 
 .team-header .role-badge.viewer-badge {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    color: #6c757d;
+    color: var(--color-secondary);
     font-size: 0.95em;
 }
 
 .team-header .role-badge.viewer-badge i {
-    color: #6c757d;
+    color: var(--color-secondary);
 }
 
 /* On very narrow screens, hide the "Coach" text and show only the icon */
@@ -962,14 +962,14 @@ td.player-mmp,
 }
 
 .game-count {
-    color: #666;
+    color: var(--text-muted);
 }
 
 .team-header-bottom .text-icon-button {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    color: #333;
+    color: var(--text-primary);
     white-space: nowrap;
     padding: 2px 6px;
     border-radius: 4px;
@@ -982,7 +982,7 @@ td.player-mmp,
 .team-header .icon-button {
     padding: 4px 8px;
     border-radius: 4px;
-    color: #333;
+    color: var(--text-primary);
 }
 
 .team-header .icon-button:hover {
@@ -1010,8 +1010,8 @@ td.player-mmp,
 }
 
 .team-games-container {
-    border-top: 1px solid #ddd;
-    background: #fff;
+    border-top: 1px solid var(--border-light);
+    background: var(--white);
 }
 
 .new-game-btn {
@@ -1019,7 +1019,7 @@ td.player-mmp,
     width: calc(100% - 30px);
     margin: 10px 15px;
     padding: 10px;
-    background: #28a745;
+    background: var(--color-success);
     color: white;
     border: none;
     border-radius: 6px;
@@ -1030,7 +1030,7 @@ td.player-mmp,
 }
 
 .new-game-btn:hover {
-    background: #218838;
+    background: var(--color-success-hover);
 }
 
 .new-game-btn i {
@@ -1039,10 +1039,10 @@ td.player-mmp,
 
 /* Event container styles */
 .event-container {
-    border: 2px solid #ddd;
+    border: 2px solid var(--border-light);
     border-radius: 8px;
     margin: 8px 12px;
-    background: #f8f9fa;
+    background: var(--surface-subtle);
     overflow: hidden;
 }
 
@@ -1055,7 +1055,7 @@ td.player-mmp,
     flex-direction: column;
     gap: 4px;
     padding: 8px 12px;
-    background: #e8e8e8;
+    background: var(--surface-raised);
     /* Query container so the roster/settings labels collapse based on the
        event card's own width rather than the viewport width. */
     container-type: inline-size;
@@ -1081,7 +1081,7 @@ td.player-mmp,
 
 .event-record {
     font-size: 0.85rem;
-    color: #555;
+    color: var(--text-secondary);
     font-weight: 500;
     flex-shrink: 0;
 }
@@ -1097,7 +1097,7 @@ td.player-mmp,
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    color: #222;
+    color: var(--text-strong);
     padding: 3px 8px;
     border-radius: 4px;
     white-space: nowrap;
@@ -1144,11 +1144,11 @@ td.player-mmp,
 
 .new-event-btn,
 .new-event-btn:active {
-    background: #6c5ce7 !important;
+    background: var(--accent-purple) !important;
 }
 
 .new-event-btn:hover {
-    background: #5b4bd5 !important;
+    background: var(--accent-purple-hover) !important;
 }
 
 .team-action-buttons {
@@ -1168,7 +1168,7 @@ td.player-mmp,
 
 /* Event dialog styles — matches footer / game-settings look */
 .event-dialog {
-    color: #333;
+    color: var(--text-primary);
 }
 
 .event-dialog-body {
@@ -1177,7 +1177,7 @@ td.player-mmp,
 }
 
 .event-dialog-body label {
-    color: #333;
+    color: var(--text-primary);
     font-size: 0.95rem;
 }
 
@@ -1187,9 +1187,9 @@ td.player-mmp,
     padding: 10px;
     margin-bottom: 0.75rem;
     font-size: 1rem;
-    color: #333;
-    background: #fff;
-    border: 1px solid #ccc;
+    color: var(--text-primary);
+    background: var(--white);
+    border: 1px solid var(--border-default);
     border-radius: 5px;
     box-sizing: border-box;
 }
@@ -1198,9 +1198,9 @@ td.player-mmp,
     width: 60px;
     padding: 6px;
     font-size: 1rem;
-    color: #333;
-    background: #fff;
-    border: 1px solid #ccc;
+    color: var(--text-primary);
+    background: var(--white);
+    border: 1px solid var(--border-default);
     border-radius: 5px;
     text-align: center;
 }
@@ -1208,9 +1208,9 @@ td.player-mmp,
 .event-dialog-select {
     padding: 6px;
     font-size: 0.95rem;
-    color: #333;
-    background: #fff;
-    border: 1px solid #ccc;
+    color: var(--text-primary);
+    background: var(--white);
+    border: 1px solid var(--border-default);
     border-radius: 5px;
 }
 
@@ -1227,8 +1227,8 @@ td.player-mmp,
     width: 100%;
     padding: 12px;
     margin-top: 0.75rem;
-    background: #007bff !important;
-    color: #fff !important;
+    background: var(--color-primary) !important;
+    color: var(--white) !important;
     border: none;
     border-radius: 6px;
     font-size: 1rem;
@@ -1237,7 +1237,7 @@ td.player-mmp,
 }
 
 .event-dialog-submit:hover {
-    background: #0069d9 !important;
+    background: var(--color-primary-hover) !important;
 }
 
 .event-dialog-delete {
@@ -1246,21 +1246,21 @@ td.player-mmp,
     padding: 10px;
     margin-top: 0.5rem;
     background: transparent !important;
-    color: #dc3545 !important;
-    border: 1px solid #dc3545 !important;
+    color: var(--color-danger) !important;
+    border: 1px solid var(--color-danger) !important;
     border-radius: 6px;
     font-size: 0.9rem;
     cursor: pointer;
 }
 
 .event-dialog-delete:hover {
-    background: #dc3545 !important;
-    color: #fff !important;
+    background: var(--color-danger) !important;
+    color: var(--white) !important;
 }
 
 /* Event Roster styles */
 .pickup-row td {
-    background: #fff3cd;
+    background: var(--color-warning-surface);
 }
 
 .event-roster-actions {
@@ -1274,7 +1274,7 @@ td.player-mmp,
 
 .no-games-message {
     padding: 15px 20px;
-    color: #888;
+    color: var(--text-faint);
     font-style: italic;
     text-align: center;
 }
@@ -1290,7 +1290,7 @@ td.player-mmp,
     flex-direction: column;
     gap: 3px;
     padding: 8px 20px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--border-lighter);
     transition: background-color 0.15s ease;
 }
 
@@ -1299,20 +1299,20 @@ td.player-mmp,
 }
 
 .game-item:hover {
-    background: #f8f9fa;
+    background: var(--surface-subtle);
 }
 
 .game-item.game-active {
-    background: #e8f5e9;
+    background: var(--surface-game-active);
 }
 
 .game-item.game-active:hover {
-    background: #c8e6c9;
+    background: var(--surface-game-active-hover);
 }
 
 /* Line 1: date vs opponent score */
 .game-line1 {
-    color: #333;
+    color: var(--text-primary);
     font-size: 0.95em;
 }
 
@@ -1325,8 +1325,8 @@ td.player-mmp,
 
 .game-join-btn {
     background: none;
-    border: 1px solid #555;
-    color: #333;
+    border: 1px solid var(--text-secondary);
+    color: var(--text-primary);
     padding: 3px 14px;
     border-radius: 4px;
     font-size: 0.85em;
@@ -1336,7 +1336,7 @@ td.player-mmp,
 }
 
 .game-join-btn:hover {
-    background: #e9ecef;
+    background: var(--surface-hover);
 }
 
 /* Line 3: active coaches badge */
@@ -1346,8 +1346,8 @@ td.player-mmp,
 
 .game-active-badge {
     display: inline-block;
-    background: #d4edda;
-    color: #155724;
+    background: var(--color-success-surface);
+    color: var(--color-success-text);
     padding: 3px 10px;
     border-radius: 12px;
     font-size: 0.8em;
@@ -1380,8 +1380,8 @@ td.player-mmp,
 }
 
 .unknown-player {
-    background-color: #d0d0d0;
-    border: 2px dashed #999;
+    background-color: var(--border-muted);
+    border: 2px dashed var(--text-placeholder);
     font-style: italic;
 }
 
@@ -1410,9 +1410,9 @@ td.player-mmp,
     font-weight: bold;
 }
 
-.timer-normal { color: #007bff; }  /* Bootstrap blue */
-.timer-warning { color: #ffc107; } /* Bootstrap yellow */
-.timer-danger { color: #dc3545; }  /* Bootstrap red */
+.timer-normal { color: var(--color-primary); }  /* Bootstrap blue */
+.timer-warning { color: var(--color-warning); } /* Bootstrap yellow */
+.timer-danger { color: var(--color-danger); }  /* Bootstrap red */
 
 /* Delete Line Dialog Styles */
 .delete-line-overlay {
@@ -1472,11 +1472,11 @@ td.player-mmp,
 }
 
 .line-players {
-    color: #666;
+    color: var(--text-muted);
 }
 
 .delete-line-button.delete:disabled {
-    background-color: #cccccc;
+    background-color: var(--border-default);
     cursor: not-allowed;
     opacity: 0.7;
 }
@@ -1496,11 +1496,11 @@ td.player-mmp,
 }
 
 .delete-line-button.delete {
-    background-color: #dc3545;
+    background-color: var(--color-danger);
 }
 
 .delete-line-button.cancel {
-    background-color: #6c757d;
+    background-color: var(--color-secondary);
 }
 
 /* Line Selection Dialog Styles */
@@ -1536,9 +1536,9 @@ td.player-mmp,
     gap: 8px;
     margin-bottom: 15px;
     padding: 8px;
-    background-color: #f8f9fa;
+    background-color: var(--surface-subtle);
     border-radius: 4px;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--border-soft);
 }
 
 .clear-selections-checkbox-container input[type="checkbox"] {
@@ -1548,7 +1548,7 @@ td.player-mmp,
 .clear-selections-checkbox-container label {
     margin: 0;
     font-size: 0.9em;
-    color: #495057;
+    color: var(--ink-700);
     cursor: pointer;
 }
 
@@ -1578,8 +1578,8 @@ td.player-mmp,
 }
 
 .select-line-radio-option.last-used {
-    background-color: #f8f9fa;
-    border-left: 4px solid #007bff;
+    background-color: var(--surface-subtle);
+    border-left: 4px solid var(--color-primary);
     padding-left: 6px;
 }
 
@@ -1598,15 +1598,15 @@ td.player-mmp,
 }
 
 .select-line-button.select {
-    background-color: #28a745;
+    background-color: var(--color-success);
 }
 
 .select-line-button.cancel {
-    background-color: #6c757d;
+    background-color: var(--color-secondary);
 }
 
 .select-line-button.select:disabled {
-    background-color: #cccccc;
+    background-color: var(--border-default);
     cursor: not-allowed;
     opacity: 0.7;
 }
@@ -1624,8 +1624,8 @@ td.player-mmp,
     flex: 1;
     display: flex;
     flex-direction: column;
-    background-color: #f8f8f8;
-    border: 2px solid #ddd;
+    background-color: var(--surface-subtle);
+    border: 2px solid var(--border-light);
     border-radius: 4px;
     padding: 4px;
     min-width: 0;
@@ -1652,7 +1652,7 @@ td.player-mmp,
 .management-controls input[type="text"] {
     flex: 1;
     padding: 4px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-default);
     border-radius: 3px;
     font-size: 0.9em;
     min-width: 0;
@@ -1662,7 +1662,7 @@ td.player-mmp,
     width: 50px;
     flex: 0 0 50px;
     padding: 4px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-default);
     border-radius: 3px;
     font-size: 0.9em;
     text-align: center;
@@ -1679,10 +1679,10 @@ td.player-mmp,
     width: 28px;
     height: 28px;
     padding: 0;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-default);
     border-radius: 3px;
-    background-color: #f0f0f0;
-    color: #333;
+    background-color: var(--surface-light);
+    color: var(--text-primary);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -1707,29 +1707,29 @@ td.player-mmp,
 }
 
 .management-icons .gender-button.fmp-button {
-    background-color: #e8d5f2; /* Light purple background */
-    color: #7d3c98; /* Darker purple text - matches FMP player color */
-    border-color: #7d3c98;
+    background-color: var(--gender-fmp-surface); /* Light purple background */
+    color: var(--gender-fmp); /* Darker purple text - matches FMP player color */
+    border-color: var(--gender-fmp);
 }
 
 .management-icons .gender-button.fmp-button:hover {
-    background-color: #d4b5e5;
+    background-color: var(--gender-fmp-surface-hover);
 }
 
 .management-icons .gender-button.mmp-button {
-    background-color: #d4e8dd; /* Light green background */
-    color: #2d8659; /* Darker green text - matches MMP player color */
-    border-color: #2d8659;
+    background-color: var(--gender-mmp-surface); /* Light green background */
+    color: var(--gender-mmp); /* Darker green text - matches MMP player color */
+    border-color: var(--gender-mmp);
 }
 
 .management-icons .gender-button.mmp-button:hover {
-    background-color: #b8dcc8;
+    background-color: var(--gender-mmp-surface-hover);
 }
 
 /* Specific management icon button styles - gender buttons use .gender-button classes above */
 
 .management-icons .add-line-button {
-    color: #28a745;
+    color: var(--color-success);
 }
 
 /* Delete Line Dialog Button Styles */
@@ -1743,17 +1743,17 @@ td.player-mmp,
 }
 
 .delete-line-button.delete {
-    background-color: #dc3545;
+    background-color: var(--color-danger);
 }
 
 .delete-line-button.delete:disabled {
-    background-color: #cccccc;
+    background-color: var(--border-default);
     cursor: not-allowed;
     opacity: 0.7;
 }
 
 .delete-line-button.cancel {
-    background-color: #6c757d;
+    background-color: var(--color-secondary);
 }
 
 /* Games list icon button styles */
@@ -1791,7 +1791,7 @@ td.player-mmp,
     padding: 2rem;
     font-size: 2rem;
     border-radius: 1rem;
-    background-color: #4CAF50;
+    background-color: var(--green-bright);
     color: white;
     border: none;
     cursor: pointer;
@@ -1800,7 +1800,7 @@ td.player-mmp,
 
 
 #theyScoreBtn {
-    background-color: #f44336;
+    background-color: var(--red-bright);
 }
 
 
@@ -1819,7 +1819,7 @@ td.player-mmp,
     font-size: 1.5rem;
     font-weight: bold;
     cursor: pointer;
-    color: #666;
+    color: var(--text-muted);
 }
 
 /* Prominent Dialog Header Style - Applied to all dialogs */
@@ -1827,14 +1827,14 @@ td.player-mmp,
     text-align: center;
     margin-bottom: 1.5rem;
     padding-bottom: 1rem;
-    border-bottom: 2px solid #E19049;
+    border-bottom: 2px solid var(--brand-orange-soft);
 }
 
 .prominent-dialog-header h2 {
     margin: 0;
     font-size: 2rem;
     font-weight: 700;
-    color: #E19049;
+    color: var(--brand-orange-soft);
     text-transform: uppercase;
     letter-spacing: 0.1em;
 }
@@ -1904,10 +1904,10 @@ td.player-mmp,
 }
 
 .modal-content {
-    background-color: #fefefe;
+    background-color: var(--white);
     margin: 15% auto;
     padding: 1rem 1rem;
-    border: 1px solid #888;
+    border: 1px solid var(--text-faint);
     width: 90%;
     max-width: 500px;
     border-radius: 0.5rem;
@@ -1917,7 +1917,7 @@ td.player-mmp,
 .callahan-separator {
     width: 100%;
     margin: 0.5rem 0;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-default);
 }
 
 /* Score Attribution dialog: keep the whole thing on one screen so the Score
@@ -1990,7 +1990,7 @@ td.player-mmp,
     display: block;
     font-size: 0.78em;
     font-weight: 400;
-    color: #666;
+    color: var(--text-muted);
 }
 #scoreAttributionDialog .score-column-header .hdr-paren-narrow {
     display: none;   /* default shows the full paren */
@@ -2150,18 +2150,18 @@ td.player-mmp,
     gap: 0.4rem 0.5rem;
     margin: 1rem 0;
     padding: 0.5rem;
-    border-top: 1px solid #eee;
-    border-bottom: 1px solid #eee;
+    border-top: 1px solid var(--border-lighter);
+    border-bottom: 1px solid var(--border-lighter);
 }
 
 .throw-flag-btn {
     margin: 0;                 /* override global button { margin: 10px } */
     flex: 0 0 auto;
     padding: 0.3rem 0.7rem;
-    border: 1px solid #c4c4c4;
+    border: 1px solid var(--border-default);
     border-radius: 999px;
-    background: #f1f1f1;
-    color: #444;
+    background: var(--surface-light);
+    color: var(--gray-dark);
     font-size: 0.85rem;
     line-height: 1.1;
     white-space: nowrap;
@@ -2172,7 +2172,7 @@ td.player-mmp,
 /* button.selected (global) already supplies the blue fill + white text; just
    match the border so the pill reads as a solid chip when active. */
 .throw-flag-btn.selected {
-    border-color: #007bff;
+    border-color: var(--color-primary);
     font-weight: 600;
 }
 
@@ -2255,9 +2255,9 @@ td.player-mmp,
 }
 
 .key-play-panel {
-    border: 3px solid #000;
+    border: 3px solid var(--black);
     border-radius: 0.5rem;
-    background-color: #f8f9fa;
+    background-color: var(--surface-subtle);
     overflow: visible;
     position: relative;
     margin-top: 1rem;
@@ -2272,7 +2272,7 @@ td.player-mmp,
     padding: 0 0.75rem;
     font-weight: bold;
     font-size: 1.1rem;
-    color: #000;
+    color: var(--black);
     z-index: 1;
 }
 
@@ -2287,10 +2287,10 @@ td.player-mmp,
 
 .key-play-sub-btn {
     padding: 0.2rem 0.4rem;
-    border: 1px solid #000;
+    border: 1px solid var(--black);
     border-radius: 0.25rem;
-    background-color: #f8f9fa;
-    color: #000;
+    background-color: var(--surface-subtle);
+    color: var(--black);
     font-size: 0.85rem;
     cursor: pointer;
     transition: all 0.2s;
@@ -2310,9 +2310,9 @@ td.player-mmp,
 
 
 .key-play-sub-btn.selected {
-    background-color: #0066cc;
+    background-color: var(--blue-action);
     color: white;
-    border-color: #0066cc;
+    border-color: var(--blue-action);
 }
 
 /* Responsive adjustments for Key Play dialog */
@@ -2395,10 +2395,10 @@ td.player-mmp,
 
 .pull-quality-btn {
     padding: 0.7rem;
-    border: 2px solid #000;
+    border: 2px solid var(--black);
     border-radius: 0.5rem;
-    background-color: #f8f9fa;
-    color: #000;
+    background-color: var(--surface-subtle);
+    color: var(--black);
     font-size: 1rem;
     cursor: pointer;
     transition: all 0.2s;
@@ -2406,13 +2406,13 @@ td.player-mmp,
 }
 
 .pull-quality-btn:hover {
-    background-color: #e9ecef;
+    background-color: var(--surface-hover);
 }
 
 .pull-quality-btn.selected {
-    background-color: #0066cc;
+    background-color: var(--blue-action);
     color: white;
-    border-color: #0066cc;
+    border-color: var(--blue-action);
 }
 
 .pull-checkboxes {
@@ -2445,7 +2445,7 @@ td.player-mmp,
     padding: 0.8rem 2rem;
     border: none;
     border-radius: 0.5rem;
-    background-color: #28a745;
+    background-color: var(--color-success);
     color: white;
     font-size: 1rem;
     font-weight: bold;
@@ -2454,20 +2454,20 @@ td.player-mmp,
 }
 
 .pull-proceed-btn:hover:not(:disabled) {
-    background-color: #218838;
+    background-color: var(--color-success-hover);
 }
 
 .pull-proceed-btn:disabled {
-    background-color: #6c757d;
+    background-color: var(--color-secondary);
     cursor: not-allowed;
 }
 
 .pull-proceed-btn.warning {
-    background-color: #ff8800;
+    background-color: var(--orange-alert);
 }
 
 .pull-proceed-btn.warning:hover {
-    background-color: #ff7700;
+    background-color: var(--orange-alert-hover);
 }
 
 #pullGenderSelection {
@@ -2486,16 +2486,16 @@ td.player-mmp,
 }
 
 .player-button.ineligible-puller {
-    background-color: #a0a0a0; /* Medium grey - different from eligible players but not as light as disabled */
+    background-color: var(--text-disabled); /* Medium grey - different from eligible players but not as light as disabled */
     opacity: 1;
 }
 
 /* Selected ineligible player button - show selected style with warning orange */
 .player-button.selected.ineligible-puller {
-    background-color: #ff8800 !important; /* Full warning orange - matches Proceed button warning style */
+    background-color: var(--orange-alert) !important; /* Full warning orange - matches Proceed button warning style */
     opacity: 1 !important; /* Full opacity for selected style */
-    border: 2px solid #007bff !important; /* Add blue border to show selected state */
-    color: #fff !important; /* White text for contrast on orange background */
+    border: 2px solid var(--color-primary) !important; /* Add blue border to show selected state */
+    color: var(--white) !important; /* White text for contrast on orange background */
 }
 
 /* Edit Player Dialog Styles */
@@ -2542,7 +2542,7 @@ td.player-mmp,
 
 .edit-player-input {
     padding: 0.7rem;
-    border: 2px solid #ccc;
+    border: 2px solid var(--border-default);
     border-radius: 0.5rem;
     font-size: 1rem;
     width: 100%;
@@ -2551,7 +2551,7 @@ td.player-mmp,
 
 .edit-player-input:focus {
     outline: none;
-    border-color: #E19049;
+    border-color: var(--brand-orange-soft);
 }
 
 .edit-player-gender-field .gender-button {
@@ -2568,27 +2568,27 @@ td.player-mmp,
 }
 
 .edit-player-gender-field .gender-button.fmp-button {
-    background-color: #e8d5f2;
-    color: #7d3c98;
-    border-color: #7d3c98;
+    background-color: var(--gender-fmp-surface);
+    color: var(--gender-fmp);
+    border-color: var(--gender-fmp);
 }
 
 .edit-player-gender-field .gender-button.fmp-button.selected {
-    background-color: #7d3c98;
+    background-color: var(--gender-fmp);
     color: white;
-    border-color: #7d3c98;
+    border-color: var(--gender-fmp);
 }
 
 .edit-player-gender-field .gender-button.mmp-button {
-    background-color: #d4e8dd;
-    color: #2d8659;
-    border-color: #2d8659;
+    background-color: var(--gender-mmp-surface);
+    color: var(--gender-mmp);
+    border-color: var(--gender-mmp);
 }
 
 .edit-player-gender-field .gender-button.mmp-button.selected {
-    background-color: #2d8659;
+    background-color: var(--gender-mmp);
     color: white;
-    border-color: #2d8659;
+    border-color: var(--gender-mmp);
 }
 
 .edit-player-dialog-buttons {
@@ -2597,7 +2597,7 @@ td.player-mmp,
     gap: 1rem;
     margin-top: 1.5rem;
     padding-top: 1rem;
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--border-lighter);
 }
 
 .edit-player-dialog-buttons-right {
@@ -2634,23 +2634,23 @@ td.player-mmp,
 }
 
 .edit-player-cancel-btn {
-    background-color: #6c757d;
+    background-color: var(--color-secondary);
     color: white;
 }
 
 .edit-player-confirm-btn {
-    background-color: #28a745;
+    background-color: var(--color-success);
     color: white;
 }
 
 .edit-player-confirm-btn:disabled {
-    background-color: #6c757d;
+    background-color: var(--color-secondary);
     cursor: not-allowed;
     opacity: 0.6;
 }
 
 .edit-player-delete-btn {
-    background-color: #dc3545;
+    background-color: var(--color-danger);
     color: white;
 }
 
@@ -2681,9 +2681,9 @@ td.player-mmp,
 
 /* Header styles — compact unified header with hamburger menu */
 header {
-    background-color: #fff;
-    color: #333;
-    border-bottom: 3px solid #EB8232; /* brand orange accent (replaces full-orange fill) */
+    background-color: var(--white);
+    color: var(--text-primary);
+    border-bottom: 3px solid var(--brand-orange); /* brand orange accent (replaces full-orange fill) */
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     /* Break out of the body's 5px padding so the white header reaches the
        top/side edges, and fill the iOS safe area (notch/dynamic island) white */
@@ -2724,8 +2724,8 @@ header .header-logo-container img {
 .header-staging-pill {
     display: none;
     flex-shrink: 0;
-    background: #7B68AE;
-    color: #fff;
+    background: var(--brand-purple);
+    color: var(--white);
     font-size: 0.62rem;
     font-weight: 700;
     letter-spacing: 0.5px;
@@ -2750,8 +2750,8 @@ body.staging .header-staging-pill {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #EB8232;
-    color: #fff;
+    background: var(--brand-orange);
+    color: var(--white);
     font-size: 0.7rem;
     font-weight: 500;
     border-radius: 4px;
@@ -2769,7 +2769,7 @@ section > .panel-title-bar {
 .title-bar-back-btn {
     background: none;
     border: none;
-    color: #fff;
+    color: var(--white);
     font-size: 1rem;
     padding: 4px 8px;
     margin: 0 4px 0 0;
@@ -2793,8 +2793,8 @@ section > .panel-title-bar {
     width: 100%;
     margin: 0 0 10px 0;
     padding: 10px;
-    background: #5a6f8a;
-    color: #fff;
+    background: var(--slate);
+    color: var(--white);
     border: none;
     border-radius: 6px;
     font-size: 0.95rem;
@@ -2803,7 +2803,7 @@ section > .panel-title-bar {
 }
 
 .roster-nav-btn:hover {
-    background: #475a72;
+    background: var(--slate-hover);
 }
 
 /* Subscreen content padding */
@@ -2848,21 +2848,21 @@ section > .panel-title-bar {
 
 /* Add back specific button styles */
 .special-action-btn {
-    background-color: #ff9800;
+    background-color: var(--orange-vivid);
     color: white;
 }
 
 
 .special-action-btn.inactive,
 .special-action-btn:disabled {
-    background-color: #cccccc;
-    color: #666666;
+    background-color: var(--border-default);
+    color: var(--text-muted);
     cursor: not-allowed;
     opacity: 0.6;
 }
 
 .secondary-action-btn {
-    background-color: #0066cc;
+    background-color: var(--blue-action);
     color: white;
 }
 
@@ -2874,13 +2874,13 @@ section > .panel-title-bar {
  * Simple mode the auto-fire still fires before the user could reach
  * this button — it just sits as a visible affordance. */
 .primary-action-btn {
-    background-color: #16a34a;
+    background-color: var(--green-deep);
     color: white;
 }
 .primary-action-btn.inactive,
 .primary-action-btn:disabled {
-    background-color: #cccccc;
-    color: #666666;
+    background-color: var(--border-default);
+    color: var(--text-muted);
     cursor: not-allowed;
     opacity: 0.6;
 }
@@ -2893,8 +2893,8 @@ section > .panel-title-bar {
     justify-content: space-between;
     width: 80%;
     max-width: 400px;
-    background-color: #f5f5f5;
-    border: 2px solid #ddd;
+    background-color: var(--surface-row-hover);
+    border: 2px solid var(--border-light);
     border-radius: 1rem;
     padding: 1rem;
     margin: 2rem auto;
@@ -2907,10 +2907,10 @@ section > .panel-title-bar {
     font-family: 'JetBrains Mono', monospace;
     font-size: 2rem;
     font-weight: bold;
-    color: #333;
+    color: var(--text-primary);
     padding: 0.5rem 1rem;
     background-color: white;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-default);
     border-radius: 0.5rem;
     margin-right: 1rem;
     min-width: 100px;
@@ -2924,7 +2924,7 @@ section > .panel-title-bar {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background-color: #0066cc;
+    background-color: var(--blue-action);
     border: none;
     cursor: pointer;
     padding: 1rem;
@@ -2961,7 +2961,7 @@ section > .panel-title-bar {
     top: 0;
     left: 0;
     width: 100%;
-    background-color: #E19049;
+    background-color: var(--brand-orange-soft);
     color: white;
     z-index: 100;
     box-shadow: 0 2px 6px rgba(0,0,0,0.2);
@@ -2980,28 +2980,28 @@ section > .panel-title-bar {
     padding: 8px 12px;
     font-size: 0.9rem;
     border-radius: 4px;
-    background-color: #444;
+    background-color: var(--gray-dark);
     color: white;
     border: none;
     margin: 0;
 }
 
 #weScoreBtnMini {
-    background-color: #4CAF50;
+    background-color: var(--green-bright);
 }
 
 #theyScoreBtnMini {
-    background-color: #f44336;
+    background-color: var(--red-bright);
 }
 
 .mini-point-clock {
-    background-color: #f5f5f5;
-    border: 1px solid #ddd;
+    background-color: var(--surface-row-hover);
+    border: 1px solid var(--border-light);
     border-radius: 4px;
     padding: 8px 12px;
     font-family: 'JetBrains Mono', monospace;
     font-weight: 700;
-    color: #333;
+    color: var(--text-primary);
     min-width: 70px;
     text-align: center;
 }
@@ -3026,7 +3026,7 @@ section > .panel-title-bar {
     width: 80%;
     max-width: 400px;
     margin-top: 10px;
-    background-color: #0066cc;
+    background-color: var(--blue-action);
     color: white;
 }
 
@@ -3051,7 +3051,7 @@ section > .panel-title-bar {
     gap: 6px;
     margin: 0;
     padding: 8px 10px;
-    color: #fff;
+    color: var(--white);
     border: none;
     border-radius: 6px;
     font-size: 0.9rem;
@@ -3062,25 +3062,25 @@ section > .panel-title-bar {
 
 /* Reuse the app's established blue (primary) and green (positive) gradients. */
 .teams-action-join {
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-active) 100%);
 }
 
 .teams-action-join:hover {
-    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+    background: linear-gradient(135deg, var(--color-primary-active) 0%, var(--color-primary-deep) 100%);
 }
 
 .teams-action-create {
-    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%);
 }
 
 .teams-action-create:hover {
-    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+    background: linear-gradient(135deg, var(--color-success-hover) 0%, var(--color-success-active) 100%);
 }
 
 /* Invite-code form inside the Join-a-Team modal. */
 .join-modal-help {
     font-size: 0.9rem;
-    color: #555;
+    color: var(--text-secondary);
     margin: 0 0 12px;
 }
 
@@ -3103,10 +3103,10 @@ section > .panel-title-bar {
     padding: 6px 12px;
     font-size: 0.9rem;
     background: none;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-default);
     border-radius: 6px;
     cursor: pointer;
-    color: #333;
+    color: var(--text-primary);
 }
 
 .viewer-roster-back i {
@@ -3117,8 +3117,8 @@ section > .panel-title-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border: 1px solid #dee2e6;
+    background: linear-gradient(135deg, var(--surface-subtle) 0%, var(--surface-hover) 100%);
+    border: 1px solid var(--border-soft);
     border-radius: 8px;
     padding: 10px 15px;
     margin-bottom: 15px;
@@ -3139,11 +3139,11 @@ section > .panel-title-bar {
 
 .sync-status-text {
     font-weight: 500;
-    color: #495057;
+    color: var(--ink-700);
 }
 
 .pending-badge {
-    background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+    background: linear-gradient(135deg, var(--orange-vivid) 0%, var(--orange-vivid-deep) 100%);
     color: white;
     padding: 3px 8px;
     border-radius: 12px;
@@ -3158,7 +3158,7 @@ section > .panel-title-bar {
 }
 
 .synced-badge {
-    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%);
     color: white;
     padding: 3px 8px;
     border-radius: 12px;
@@ -3172,7 +3172,7 @@ section > .panel-title-bar {
 }
 
 .sync-btn {
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-active) 100%);
     color: white;
     border: none;
     padding: 6px 12px;
@@ -3188,12 +3188,12 @@ section > .panel-title-bar {
 }
 
 .sync-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+    background: linear-gradient(135deg, var(--color-primary-active) 0%, var(--color-primary-deep) 100%);
     transform: translateY(-1px);
 }
 
 .sync-btn:disabled {
-    background: #6c757d;
+    background: var(--color-secondary);
     cursor: not-allowed;
     opacity: 0.7;
 }
@@ -3204,12 +3204,12 @@ section > .panel-title-bar {
 
 /* Sign out button - distinct styling */
 .sync-btn.sign-out-btn {
-    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    background: linear-gradient(135deg, var(--color-secondary) 0%, var(--ink-700) 100%);
     margin-left: 8px;
 }
 
 .sync-btn.sign-out-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, #5a6268 0%, #343a40 100%);
+    background: linear-gradient(135deg, var(--color-secondary-hover) 0%, var(--ink-800) 100%);
 }
 
 .fa-spin {
@@ -3236,8 +3236,8 @@ section > .panel-title-bar {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    background: #fff3cd;
-    color: #856404;
+    background: var(--color-warning-surface);
+    color: var(--color-warning-text);
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 0.7rem;
@@ -3251,7 +3251,7 @@ section > .panel-title-bar {
 
 /* Player ID display in edit dialog */
 .edit-player-id-field {
-    background: #f8f9fa;
+    background: var(--surface-subtle);
     border-radius: 4px;
     padding: 8px 12px;
     margin-bottom: 10px;
@@ -3259,11 +3259,11 @@ section > .panel-title-bar {
 
 .player-id-code {
     font-family: 'JetBrains Mono', monospace;
-    background: #e9ecef;
+    background: var(--surface-hover);
     padding: 2px 6px;
     border-radius: 3px;
     font-size: 0.85rem;
-    color: #495057;
+    color: var(--ink-700);
     user-select: all;
 }
 /* =============================================================================
@@ -3278,7 +3278,7 @@ section > .panel-title-bar {
 
 
 .back-button {
-    background: #6c757d;
+    background: var(--color-secondary);
     color: white;
     border: none;
     padding: 8px 16px;
@@ -3291,7 +3291,7 @@ section > .panel-title-bar {
 }
 
 .back-button:hover {
-    background: #5a6268;
+    background: var(--color-secondary-hover);
 }
 
 .settings-content {
@@ -3310,9 +3310,9 @@ section > .panel-title-bar {
     margin: 0 0 12px 0;
     padding: 0;
     font-size: 1rem;
-    color: #333;
+    color: var(--text-primary);
     text-align: left;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--border-lighter);
     padding-bottom: 8px;
 }
 
@@ -3341,7 +3341,7 @@ section > .panel-title-bar {
     align-items: center;
     justify-content: space-between;
     padding: 10px;
-    background: #f8f9fa;
+    background: var(--surface-subtle);
     border-radius: 8px;
 }
 
@@ -3364,12 +3364,12 @@ section > .panel-title-bar {
 
 .member-name {
     font-weight: 500;
-    color: #333;
+    color: var(--text-primary);
 }
 
 .member-email {
     font-size: 0.8rem;
-    color: #666;
+    color: var(--text-muted);
 }
 
 .member-role {
@@ -3381,26 +3381,26 @@ section > .panel-title-bar {
 }
 
 .member-role.role-coach {
-    background: #28a745;
+    background: var(--color-success);
     color: white;
 }
 
 .member-role.role-viewer {
-    background: #17a2b8;
+    background: var(--color-info);
     color: white;
 }
 
 .remove-member-btn {
     background: none;
     border: none;
-    color: #dc3545;
+    color: var(--color-danger);
     cursor: pointer;
     padding: 5px;
     border-radius: 4px;
 }
 
 .remove-member-btn:hover {
-    background: #f8d7da;
+    background: var(--color-danger-surface);
 }
 
 /* Invites List */
@@ -3416,7 +3416,7 @@ section > .panel-title-bar {
     align-items: center;
     justify-content: space-between;
     padding: 10px;
-    background: #f8f9fa;
+    background: var(--surface-subtle);
     border-radius: 8px;
 }
 
@@ -3440,12 +3440,12 @@ section > .panel-title-bar {
     font-family: 'JetBrains Mono', monospace;
     font-weight: 600;
     font-size: 1rem;
-    color: #333;
+    color: var(--text-primary);
 }
 
 .invite-meta {
     font-size: 0.75rem;
-    color: #666;
+    color: var(--text-muted);
 }
 
 .invite-actions {
@@ -3476,21 +3476,21 @@ section > .panel-title-bar {
 }
 
 .invite-btn.coach-invite {
-    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%);
     color: white;
 }
 
 .invite-btn.coach-invite:hover {
-    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+    background: linear-gradient(135deg, var(--color-success-hover) 0%, var(--color-success-active) 100%);
 }
 
 .invite-btn.viewer-invite {
-    background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+    background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info-hover) 100%);
     color: white;
 }
 
 .invite-btn.viewer-invite:hover {
-    background: linear-gradient(135deg, #138496 0%, #117a8b 100%);
+    background: linear-gradient(135deg, var(--color-info-hover) 0%, var(--color-info-active) 100%);
 }
 
 /* Join Team Form */
@@ -3507,18 +3507,18 @@ section > .panel-title-bar {
     text-transform: uppercase;
     text-align: center;
     letter-spacing: 3px;
-    border: 2px solid #ddd;
+    border: 2px solid var(--border-light);
     border-radius: 8px;
 }
 
 .join-code-input:focus {
-    border-color: #007bff;
+    border-color: var(--color-primary);
     outline: none;
 }
 
 .join-btn {
     padding: 10px 20px;
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-active) 100%);
     color: white;
     border: none;
     border-radius: 8px;
@@ -3527,13 +3527,13 @@ section > .panel-title-bar {
 }
 
 .join-btn:hover {
-    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+    background: linear-gradient(135deg, var(--color-primary-active) 0%, var(--color-primary-deep) 100%);
 }
 
 /* Team Identity Section */
 .section-description {
     font-size: 0.85rem;
-    color: #666;
+    color: var(--text-muted);
     margin: -8px 0 15px 0;
 }
 
@@ -3552,26 +3552,26 @@ section > .panel-title-bar {
 .identity-form .form-group label {
     font-size: 0.85rem;
     font-weight: 500;
-    color: #555;
+    color: var(--text-secondary);
 }
 
 /* Override auth.css form-group input styles for identity form */
 .identity-form .form-group input,
 .identity-form .form-group input[type="text"],
 .identity-form .form-group input[type="url"] {
-    background: #fff !important;
-    color: #333 !important;
-    border: 2px solid #ddd !important;
+    background: var(--white) !important;
+    color: var(--text-primary) !important;
+    border: 2px solid var(--border-light) !important;
 }
 
 .identity-form .form-group input:focus {
-    border-color: #EB8232 !important;
+    border-color: var(--brand-orange) !important;
     outline: none;
     box-shadow: none !important;
 }
 
 .identity-form .form-group input::placeholder {
-    color: #999 !important;
+    color: var(--text-placeholder) !important;
 }
 
 .symbol-input {
@@ -3599,7 +3599,7 @@ section > .panel-title-bar {
 
 .fetch-icon-btn {
     padding: 10px 15px;
-    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    background: linear-gradient(135deg, var(--color-secondary) 0%, var(--ink-700) 100%);
     color: white;
     border: none;
     border-radius: 8px;
@@ -3608,7 +3608,7 @@ section > .panel-title-bar {
 }
 
 .fetch-icon-btn:hover {
-    background: linear-gradient(135deg, #5a6268 0%, #343a40 100%);
+    background: linear-gradient(135deg, var(--color-secondary-hover) 0%, var(--ink-800) 100%);
 }
 
 .fetch-icon-btn:disabled {
@@ -3621,7 +3621,7 @@ section > .panel-title-bar {
     align-items: center;
     gap: 10px;
     padding: 10px;
-    background: #f8f9fa;
+    background: var(--surface-subtle);
     border-radius: 8px;
     margin-top: 8px;
 }
@@ -3632,12 +3632,12 @@ section > .panel-title-bar {
     border-radius: 8px;
     object-fit: contain;
     background: white;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-light);
 }
 
 .clear-icon-btn {
     padding: 6px 10px;
-    background: #dc3545;
+    background: var(--color-danger);
     color: white;
     border: none;
     border-radius: 6px;
@@ -3646,26 +3646,26 @@ section > .panel-title-bar {
 }
 
 .clear-icon-btn:hover {
-    background: #c82333;
+    background: var(--color-danger-hover);
 }
 
 .icon-status {
     font-size: 0.8rem;
-    color: #666;
+    color: var(--text-muted);
     margin: 4px 0 0 0;
 }
 
 .icon-status.success {
-    color: #28a745;
+    color: var(--color-success);
 }
 
 .icon-status.error {
-    color: #dc3545;
+    color: var(--color-danger);
 }
 
 .save-identity-btn {
     padding: 12px 20px;
-    background: linear-gradient(135deg, #EB8232 0%, #d06e1f 100%);
+    background: linear-gradient(135deg, var(--brand-orange) 0%, var(--brand-orange-deep) 100%);
     color: white;
     border: none;
     border-radius: 8px;
@@ -3680,7 +3680,7 @@ section > .panel-title-bar {
 }
 
 .save-identity-btn:hover {
-    background: linear-gradient(135deg, #d06e1f 0%, #b85a10 100%);
+    background: linear-gradient(135deg, var(--brand-orange-deep) 0%, var(--brand-orange-deeper) 100%);
 }
 
 .save-identity-btn:disabled {
@@ -3694,12 +3694,12 @@ section > .panel-title-bar {
 .error-message {
     padding: 15px;
     text-align: center;
-    color: #666;
+    color: var(--text-muted);
     font-style: italic;
 }
 
 .error-message {
-    color: #dc3545;
+    color: var(--color-danger);
 }
 
 /* Invite Created Modal */
@@ -3728,7 +3728,7 @@ section > .panel-title-bar {
 
 .modal-content h3 {
     margin: 0 0 15px 0;
-    color: #333;
+    color: var(--text-primary);
 }
 
 .invite-modal {
@@ -3740,7 +3740,7 @@ section > .panel-title-bar {
     align-items: center;
     justify-content: center;
     gap: 10px;
-    background: #f8f9fa;
+    background: var(--surface-subtle);
     padding: 15px 20px;
     border-radius: 12px;
     margin: 15px 0;
@@ -3751,12 +3751,12 @@ section > .panel-title-bar {
     font-size: 2rem;
     font-weight: 700;
     letter-spacing: 5px;
-    color: #333;
+    color: var(--text-primary);
 }
 
 .invite-link-text {
     font-size: 0.9rem;
-    color: #666;
+    color: var(--text-muted);
     margin: 10px 0 5px;
 }
 
@@ -3769,17 +3769,17 @@ section > .panel-title-bar {
 .invite-link-display input {
     flex: 1;
     padding: 8px 12px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-light);
     border-radius: 6px;
     font-size: 0.85rem;
-    color: #666;
+    color: var(--text-muted);
 }
 
 /* Copy button styling in invite modals */
 .invite-code-display .icon-button,
 .invite-link-display .icon-button {
-    color: #333;
-    background: #e9ecef;
+    color: var(--text-primary);
+    background: var(--surface-hover);
     border-radius: 6px;
     padding: 8px 12px;
     transition: all 0.2s ease;
@@ -3787,18 +3787,18 @@ section > .panel-title-bar {
 
 .invite-code-display .icon-button:hover,
 .invite-link-display .icon-button:hover {
-    background: #dee2e6;
-    color: #000;
+    background: var(--border-soft);
+    color: var(--black);
 }
 
 .invite-expiry {
     font-size: 0.85rem;
-    color: #666;
+    color: var(--text-muted);
     margin-bottom: 15px;
 }
 
 .primary-btn {
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-active) 100%);
     color: white;
     border: none;
     padding: 12px 30px;
@@ -3809,11 +3809,11 @@ section > .panel-title-bar {
 }
 
 .primary-btn:hover {
-    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+    background: linear-gradient(135deg, var(--color-primary-active) 0%, var(--color-primary-deep) 100%);
 }
 
 .secondary-btn {
-    background: #6c757d;
+    background: var(--color-secondary);
     color: white;
     border: none;
     padding: 12px 30px;
@@ -3824,7 +3824,7 @@ section > .panel-title-bar {
 }
 
 .secondary-btn:hover {
-    background: #5a6268;
+    background: var(--color-secondary-hover);
 }
 
 /* Join Team Modal */
@@ -3833,7 +3833,7 @@ section > .panel-title-bar {
 }
 
 .join-team-preview {
-    background: #f8f9fa;
+    background: var(--surface-subtle);
     padding: 20px;
     border-radius: 12px;
     margin: 15px 0;
@@ -3842,19 +3842,19 @@ section > .panel-title-bar {
 .join-team-name {
     font-size: 1.5rem;
     font-weight: 700;
-    color: #333;
+    color: var(--text-primary);
     margin-bottom: 8px;
 }
 
 .join-team-role {
     font-size: 1rem;
-    color: #666;
+    color: var(--text-muted);
     margin-bottom: 5px;
 }
 
 .join-team-inviter {
     font-size: 0.9rem;
-    color: #888;
+    color: var(--text-faint);
 }
 
 .modal-buttons {
@@ -3880,12 +3880,12 @@ section > .panel-title-bar {
 
 .pwa-install-modal h3 {
     margin: 0 0 15px 0;
-    color: #333;
+    color: var(--text-primary);
     font-size: 1.3rem;
 }
 
 .pwa-install-message {
-    color: #555;
+    color: var(--text-secondary);
     line-height: 1.6;
     margin-bottom: 20px;
 }
@@ -3918,35 +3918,35 @@ section > .panel-title-bar {
 }
 
 .pwa-install-actions .primary-btn {
-    background: linear-gradient(135deg, #e87722 0%, #d35400 100%);
+    background: linear-gradient(135deg, var(--orange-cta) 0%, var(--orange-cta-deep) 100%);
     color: white;
     border: none;
     font-weight: 600;
 }
 
 .pwa-install-actions .primary-btn:hover {
-    background: linear-gradient(135deg, #d35400 0%, #c0392b 100%);
+    background: linear-gradient(135deg, var(--orange-cta-deep) 0%, var(--orange-cta-deeper) 100%);
 }
 
 .pwa-install-actions .btn-secondary {
-    background: #f0f0f0;
-    color: #333;
-    border: 1px solid #ddd;
+    background: var(--surface-light);
+    color: var(--text-primary);
+    border: 1px solid var(--border-light);
 }
 
 .pwa-install-actions .btn-secondary:hover {
-    background: #e0e0e0;
+    background: var(--surface-dim);
 }
 
 .pwa-install-actions .secondary-btn {
     background: transparent;
-    color: #666;
+    color: var(--text-muted);
     border: none;
     font-size: 0.9rem;
 }
 
 .pwa-install-actions .secondary-btn:hover {
-    color: #333;
+    color: var(--text-primary);
     text-decoration: underline;
 }
 
@@ -3956,8 +3956,8 @@ section > .panel-title-bar {
 
 /* Handoff Toast - special styling for handoff requests */
 .toast.toast-handoff {
-    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-    color: #721c24;
+    background: linear-gradient(135deg, var(--color-danger-surface) 0%, var(--color-danger-surface-deep) 100%);
+    color: var(--color-danger-text);
     padding: 10px 12px;
     gap: 8px;
 }
@@ -4002,9 +4002,9 @@ section > .panel-title-bar {
 }
 
 .handoff-circular-btn.accept-btn {
-    background: #007bff;
+    background: var(--color-primary);
     color: white;
-    box-shadow: 0 2px 6px rgba(0, 123, 255, 0.4);
+    box-shadow: 0 2px 6px var(--color-primary-glow);
 }
 
 .handoff-circular-btn.accept-btn i {
@@ -4013,9 +4013,9 @@ section > .panel-title-bar {
 }
 
 .handoff-circular-btn.deny-btn {
-    background: #dc3545;
+    background: var(--color-danger);
     color: white;
-    box-shadow: 0 2px 6px rgba(220, 53, 69, 0.4);
+    box-shadow: 0 2px 6px var(--color-danger-glow);
 }
 
 /* Countdown overlay on accept button - vertical fill animation */
@@ -4077,22 +4077,22 @@ section > .panel-title-bar {
 }
 
 .toast.toast-success {
-    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%);
     color: white;
 }
 
 .toast.toast-info {
-    background: linear-gradient(135deg, #17a2b8 0%, #117a8b 100%);
+    background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info-active) 100%);
     color: white;
 }
 
 .toast.toast-warning {
-    background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
-    color: #333;
+    background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-hover) 100%);
+    color: var(--text-primary);
 }
 
 .toast.toast-error {
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-hover) 100%);
     color: white;
 }
 
@@ -4170,12 +4170,12 @@ section > .panel-title-bar {
 }
 
 .line-promoted-modal h3 {
-    color: #28a745;
+    color: var(--color-success);
     margin-bottom: 10px;
 }
 
 .line-promoted-modal p {
-    color: #666;
+    color: var(--text-muted);
     margin-bottom: 20px;
 }
 
@@ -4194,7 +4194,7 @@ section > .panel-title-bar {
 
 .sub-players-modal-content .dialog-header {
     padding: 15px 20px;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--border-light);
     margin-bottom: 0;
 }
 
@@ -4206,9 +4206,9 @@ section > .panel-title-bar {
 .sub-players-info {
     padding: 10px 20px;
     font-size: 0.9rem;
-    color: #666;
-    border-bottom: 1px solid #eee;
-    background: #f8f9fa;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-lighter);
+    background: var(--surface-subtle);
 }
 
 .sub-players-table-container {
@@ -4223,11 +4223,11 @@ section > .panel-title-bar {
 }
 
 .sub-players-table-container tr {
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--border-lighter);
 }
 
 .sub-players-table-container tr:hover {
-    background: #f5f5f5;
+    background: var(--surface-row-hover);
 }
 
 .sub-players-table-container td {
@@ -4245,8 +4245,8 @@ section > .panel-title-bar {
     gap: 12px;
     padding: 15px 20px;
     justify-content: flex-end;
-    border-top: 1px solid #ddd;
-    background: #f8f9fa;
+    border-top: 1px solid var(--border-light);
+    background: var(--surface-subtle);
 }
 
 .sub-players-buttons .ge-btn {
@@ -4254,28 +4254,28 @@ section > .panel-title-bar {
     font-size: 1rem;
     border-radius: 6px;
     cursor: pointer;
-    border: 1px solid #ccc;
-    background: #fff;
-    color: #333;
+    border: 1px solid var(--border-default);
+    background: var(--white);
+    color: var(--text-primary);
 }
 
 .sub-players-buttons .ge-btn:hover {
-    background: #e9ecef;
+    background: var(--surface-hover);
 }
 
 .sub-players-buttons .ge-btn-confirm {
-    background: #28a745;
+    background: var(--color-success);
     color: white;
-    border-color: #28a745;
+    border-color: var(--color-success);
 }
 
 .sub-players-buttons .ge-btn-confirm:hover {
-    background: #218838;
+    background: var(--color-success-hover);
 }
 
 .sub-players-buttons .ge-btn-confirm:disabled {
-    background: #6c757d;
-    border-color: #6c757d;
+    background: var(--color-secondary);
+    border-color: var(--color-secondary);
     cursor: not-allowed;
 }
 
@@ -4317,14 +4317,14 @@ section > .panel-title-bar {
 .adv-group-title {
     margin: 12px 0 4px;
     font-size: 1.05rem;
-    color: #333;
-    border-bottom: 1px solid #eee;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-lighter);
     padding-bottom: 6px;
 }
 
 .adv-group-note {
     font-size: 0.8rem;
-    color: #888;
+    color: var(--text-faint);
     font-style: italic;
     margin-bottom: 10px;
 }
@@ -4335,7 +4335,7 @@ section > .panel-title-bar {
     justify-content: space-between;
     gap: 14px;
     padding: 10px 0;
-    border-bottom: 1px solid #f3f3f3;
+    border-bottom: 1px solid var(--surface-header-cell);
 }
 
 .adv-setting-row:last-child {
@@ -4350,13 +4350,13 @@ section > .panel-title-bar {
 .adv-setting-label {
     display: block;
     font-weight: 600;
-    color: #2c2c2c;
+    color: var(--text-primary);
     font-size: 0.95rem;
 }
 
 .adv-setting-help {
     font-size: 0.8rem;
-    color: #888;
+    color: var(--text-faint);
     margin-top: 2px;
     line-height: 1.35;
 }
@@ -4366,9 +4366,9 @@ section > .panel-title-bar {
     margin: 0;
     max-width: 48%;
     padding: 7px 8px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-default);
     border-radius: 8px;
-    background: #fff;
+    background: var(--white);
     font-size: 0.9rem;
 }
 
@@ -4397,13 +4397,13 @@ section > .panel-title-bar {
     width: 100%;
     box-sizing: border-box;
     padding: 8px 10px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-default);
     border-radius: 8px;
-    background: #fff;
+    background: var(--white);
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
     font-size: 0.82rem;
     line-height: 1.4;
-    color: #2c2c2c;
+    color: var(--text-primary);
     resize: vertical;
     min-height: 80px;
 }
@@ -4412,26 +4412,26 @@ section > .panel-title-bar {
     align-self: flex-end;
     margin: 0;
     padding: 5px 12px;
-    background: #f3f3f3;
-    color: #555;
-    border: 1px solid #d0d0d0;
+    background: var(--surface-header-cell);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-muted);
     border-radius: 6px;
     font-size: 0.8rem;
     cursor: pointer;
 }
 
 .adv-reset-btn:hover {
-    background: #e8e8e8;
-    color: #333;
+    background: var(--surface-raised);
+    color: var(--text-primary);
 }
 
 /* Help text in setting rows allows inline <code> for placeholders like {names}. */
 .adv-setting-help code {
-    background: #f0f0f0;
+    background: var(--surface-light);
     padding: 1px 5px;
     border-radius: 4px;
     font-size: 0.78rem;
-    color: #444;
+    color: var(--gray-dark);
 }
 
 /* iOS toggle switch */
@@ -4455,7 +4455,7 @@ section > .panel-title-bar {
     position: absolute;
     cursor: pointer;
     top: 0; left: 0; right: 0; bottom: 0;
-    background-color: #ccc;
+    background-color: var(--border-default);
     transition: 0.2s;
     border-radius: 26px;
 }
@@ -4467,13 +4467,13 @@ section > .panel-title-bar {
     width: 20px;
     left: 3px;
     bottom: 3px;
-    background-color: #fff;
+    background-color: var(--white);
     transition: 0.2s;
     border-radius: 50%;
 }
 
 .adv-switch input:checked + .adv-slider {
-    background-color: #E8743B;
+    background-color: var(--brand-orange);
 }
 
 .adv-switch input:checked + .adv-slider::before {
@@ -4482,15 +4482,15 @@ section > .panel-title-bar {
 
 .adv-settings-footer {
     padding: 14px 22px 18px;
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--border-lighter);
     text-align: right;
 }
 
 .adv-done-btn {
     margin: 0;
     padding: 9px 22px;
-    background: #E8743B;
-    color: #fff;
+    background: var(--brand-orange);
+    color: var(--white);
     border: none;
     border-radius: 10px;
     font-size: 0.95rem;
@@ -4499,5 +4499,5 @@ section > .panel-title-bar {
 }
 
 .adv-done-btn:hover {
-    background: #d6622b;
+    background: var(--brand-orange-deep);
 }
