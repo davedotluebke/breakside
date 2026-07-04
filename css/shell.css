@@ -168,7 +168,7 @@ section > .panel-title-bar {
 
 /* Make sure the timer text itself uses JetBrains Mono */
 #pointTimer {
-    font-family: 'JetBrains Mono', monospace !important;
+    font-family: 'JetBrains Mono', monospace; /* id selector beats the global * { font-family } */
     font-weight: 700;
     letter-spacing: -0.5px;
 }

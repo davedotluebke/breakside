@@ -529,7 +529,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 2px !important;
+    margin: 2px; /* class beats the global button { margin: 10px } on specificity */
     position: relative;
     z-index: 2;
 }
@@ -580,7 +580,7 @@
         padding: 0.2rem 0.4rem;
         font-size: 0.8rem;
         min-height: 1.6rem;
-        margin: 1px !important;
+        margin: 1px;
     }
 }
 
@@ -594,7 +594,7 @@
         padding: 0.15rem 0.3rem;
         font-size: 0.75rem;
         min-height: 1.4rem;
-        margin: 1px !important;
+        margin: 1px;
     }
 }
 
@@ -722,10 +722,12 @@
 
 /* Selected ineligible player button - show selected style with warning orange */
 .player-button.selected.ineligible-puller {
-    background-color: var(--orange-alert) !important; /* Full warning orange - matches Proceed button warning style */
-    opacity: 1 !important; /* Full opacity for selected style */
-    border: 2px solid var(--color-primary) !important; /* Add blue border to show selected state */
-    color: var(--white) !important; /* White text for contrast on orange background */
+    /* triple-class specificity already beats button.selected and
+       .player-button.ineligible-puller — no !important needed */
+    background-color: var(--orange-alert); /* Full warning orange - matches Proceed button warning style */
+    opacity: 1; /* Full opacity for selected style */
+    border: 2px solid var(--color-primary); /* Add blue border to show selected state */
+    color: var(--white); /* White text for contrast on orange background */
 }
 
 /* Edit Player Dialog Styles */
