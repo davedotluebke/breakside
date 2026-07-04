@@ -9,6 +9,7 @@ import {
 } from '../store/sync.js';
 import { populateCloudTeamsAndGames } from './teamList.js';
 import { showControllerToast } from '../game/controllerState.js';
+import { log } from '../utils/logger.js';
 
 function showSetServerDialog() {
     const currentUrl = localStorage.getItem('ultistats_api_url') ||
@@ -174,7 +175,7 @@ async function handleSignOut() {
 
     try {
         await window.breakside.auth.signOut();
-        console.log('Signed out successfully');
+        log('Signed out successfully');
 
         // Show the login screen
         if (window.breakside?.loginScreen?.showAuthScreen) {
@@ -223,7 +224,7 @@ async function showConnectionInfo() {
                 updateButton = `<br><button onclick="confirmAppUpdate()" style="margin-top:6px;padding:4px 12px;background:#28a745;color:white;border:none;border-radius:4px;cursor:pointer;">Update Now</button>`;
             }
         } catch (e) {
-            console.log('Update check failed:', e);
+            log('Update check failed:', e);
         }
     }
 

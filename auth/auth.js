@@ -19,6 +19,7 @@
  *   await signOut();
  */
 import { authFetch } from '../store/sync.js';
+import { log } from '../utils/logger.js';
 
 // =============================================================================
 // State
@@ -83,7 +84,7 @@ async function initializeAuth() {
         } else if (session) {
             currentSession = session;
             currentUser = session.user;
-            console.log('Auth: Restored session for', currentUser.email);
+            log('Auth: Restored session for', currentUser.email);
 
             // Sync user's teams from server on session restore. Run immediately
             // (no blocking await of initializeAuth, no magic 500ms delay) and
@@ -95,7 +96,7 @@ async function initializeAuth() {
                     try {
                         const result = await window.syncUserTeams();
                         if (result.synced > 0) {
-                            console.log(`Auth: Synced ${result.synced} teams from server`);
+                            log(`Auth: Synced ${result.synced} teams from server`);
                         }
                     } catch (e) {
                         console.warn('Failed to sync user teams on session restore:', e);
@@ -113,7 +114,7 @@ async function initializeAuth() {
         
         // Listen for auth state changes
         supabaseClient.auth.onAuthStateChange((event, session) => {
-            console.log('Auth state changed:', event);
+            log('Auth state changed:', event);
             // Supabase fires transient events (INITIAL_SESSION, TOKEN_REFRESHED,
             // etc.) that can carry a null session; don't let those clobber a
             // valid in-memory session and flip isAuthenticated() to false
@@ -138,7 +139,7 @@ async function initializeAuth() {
         });
         
         authInitialized = true;
-        console.log('Auth: Initialized');
+        log('Auth: Initialized');
         
     } catch (error) {
         console.error('Auth initialization failed:', error);
@@ -206,7 +207,7 @@ function enableTestMode(userId = 'test-user') {
     currentUser = { id: userId, email: `${userId}@breakside.test` };
     currentSession = { user: currentUser, access_token: 'test-mode-token' };
     authInitialized = true;
-    console.log('[Test] Auth: test mode enabled, userId =', userId);
+    log('[Test] Auth: test mode enabled, userId =', userId);
 }
 
 /**
@@ -333,7 +334,7 @@ async function getAccessToken() {
  * Called on sign out to prevent data leaking between accounts.
  */
 function clearLocalData() {
-    console.log('Clearing local data on sign out...');
+    log('Clearing local data on sign out...');
     
     // Clear main teams/games data
     localStorage.removeItem('teamsData');
@@ -354,7 +355,7 @@ function clearLocalData() {
         window.clearSyncData();
     }
     
-    console.log('Local data cleared');
+    log('Local data cleared');
 }
 
 /**

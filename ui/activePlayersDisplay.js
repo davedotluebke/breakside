@@ -8,6 +8,7 @@ import {
     currentGame, getPlayerFromName, getPlayerGameTime, formatPlayTime,
     formatPlayerName, getGenderRatioForPoint
 } from '../utils/helpers.js';
+import { log } from '../utils/logger.js';
 
 let showingTotalStats = false;
 let nextLineSelections = null;
@@ -17,7 +18,7 @@ let nextLineSelections = null;
  * This is the main entry point for refreshing the table
  */
 function updateActivePlayersList() {
-    console.log('Updating active players list...');
+    log('Updating active players list...');
 
     // Clear and recreate the table structure
     createActivePlayersTable();
@@ -28,7 +29,7 @@ function updateActivePlayersList() {
     // Populate player statistics and point data
     populatePlayerStats();
 
-    console.log('Finished updating active players list');
+    log('Finished updating active players list');
     // After adding all rows to the tableBody, calculate the widths
     // Use requestAnimationFrame to ensure DOM is fully laid out
     requestAnimationFrame(() => {
@@ -117,7 +118,7 @@ function createPlayerRows() {
     // Determine players from the last point using utility function
     const lastPointPlayers = getLastPointPlayers();
 
-    console.log('Last point players: ', lastPointPlayers);
+    log('Last point players: ', lastPointPlayers);
 
     // Sort roster into 3 alphabetical lists: played the last point, played any points, played no points
     currentTeam.teamRoster.sort((a, b) => {
@@ -196,14 +197,14 @@ function createPlayerRows() {
 function setCheckboxStates() {
     // Get the players to check based on current strategy
     const playersToCheck = getPlayersToCheck();
-    console.log('setCheckboxStates() using players:', playersToCheck);
+    log('setCheckboxStates() using players:', playersToCheck);
 
     // Set checkbox states
     const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
     checkboxes.forEach((checkbox, index) => {
         const player = currentTeam.teamRoster[index];
         if (player && playersToCheck.includes(player.name)) {
-            console.log('Checking checkbox for player:', player.name);
+            log('Checking checkbox for player:', player.name);
             checkbox.checked = true;
         } else {
             checkbox.checked = false;
@@ -218,13 +219,13 @@ function setCheckboxStates() {
 function getPlayersToCheck() {
     // If we have stored next line selections, use those
     if (nextLineSelections !== null) {
-        console.log('Using stored next line selections:', nextLineSelections);
+        log('Using stored next line selections:', nextLineSelections);
         return nextLineSelections;
     }
 
     // Otherwise, use the last point's players
     const lastPointPlayers = getLastPointPlayers();
-    console.log('No stored selections, using last point players:', lastPointPlayers);
+    log('No stored selections, using last point players:', lastPointPlayers);
 
     // In the future, this could be extended to support:
     // - Line-based selection
@@ -328,7 +329,7 @@ function captureNextLineSelections() {
     });
 
     nextLineSelections = selectedPlayers;
-    console.log('Captured next line selections:', nextLineSelections);
+    log('Captured next line selections:', nextLineSelections);
 }
 
 /**
@@ -336,7 +337,7 @@ function captureNextLineSelections() {
  */
 function clearNextLineSelections() {
     if (nextLineSelections !== null) {
-        console.log('Clearing next line selections (was:', nextLineSelections, ')');
+        log('Clearing next line selections (was:', nextLineSelections, ')');
     }
     nextLineSelections = null;
 }

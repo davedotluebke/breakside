@@ -52,6 +52,7 @@ import {
 // so these back-edge imports are safe.
 import { showScoreAttributionDialog } from '../playByPlay/scoreAttribution.js';
 import { showKeyPlayDialog } from '../playByPlay/keyPlayDialog.js';
+import { log } from '../utils/logger.js';
 
 // =============================================================================
 // Event Wiring
@@ -332,7 +333,7 @@ function handleGameMenuClick(e) {
                 && window.isControllerPollingActive();
             const showRejoin = !pollingActive;
             rejoinGameBtn.style.display = showRejoin ? '' : 'none';
-            console.log('🔌 Rejoin Game visibility:',
+            log('🔌 Rejoin Game visibility:',
                 { pollingActive, showRejoin,
                   pollingGameId: (typeof window.getPollingGameId === 'function') ? window.getPollingGameId() : '(unavailable)',
                   hasCurrentGame: !!(typeof currentGame === 'function' && currentGame()?.id) });
@@ -419,7 +420,7 @@ function handleRejoinGame() {
         }
     }
 
-    console.log('🔌 Rejoin Game tapped — resolved:', { game: game?.id, resolvedFrom });
+    log('🔌 Rejoin Game tapped — resolved:', { game: game?.id, resolvedFrom });
 
     if (!game?.id) {
         if (typeof showControllerToast === 'function') {
@@ -465,7 +466,7 @@ function handleLeaveGame() {
                 if (typeof isLineCoach === 'function' && isLineCoach()) heldRoles.push('lineCoach');
                 heldRoles.forEach(role => {
                     releaseControllerRole(gameId, role).catch(err => {
-                        console.log(`Could not release ${role} role:`, err);
+                        log(`Could not release ${role} role:`, err);
                     });
                 });
             }
@@ -1079,7 +1080,7 @@ function ensureDialogVisible(dialogId) {
     // This ensures it can be displayed above all other content
     if (dialog.parentElement !== document.body) {
         document.body.appendChild(dialog);
-        console.log(`📦 Moved ${dialogId} to body for visibility`);
+        log(`📦 Moved ${dialogId} to body for visibility`);
     }
 }
 
@@ -1342,7 +1343,7 @@ function handleGameEventTimeout() {
     }
     
     // Log the event (future: add to game log)
-    console.log('Game Event: Timeout');
+    log('Game Event: Timeout');
     
     hideGameEventsModal();
 }
@@ -1356,7 +1357,7 @@ function handleGameEventHalfTime() {
     }
     
     // Log the event
-    console.log('Game Event: Half Time');
+    log('Game Event: Half Time');
     
     hideGameEventsModal();
 }

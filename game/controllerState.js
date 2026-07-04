@@ -16,6 +16,7 @@ import { isTestGame } from '../store/models.js';
 import { currentGame } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { showSelectTeamScreen } from '../teams/teamList.js';
+import { log } from '../utils/logger.js';
 
 // =============================================================================
 // State
@@ -59,7 +60,7 @@ async function fetchControllerState(gameId) {
         const response = await authFetch(`${API_BASE_URL}/api/games/${gameId}/controller`);
         if (!response.ok) {
             if (response.status === 401) {
-                console.log('Controller: Not authenticated');
+                log('Controller: Not authenticated');
                 return null;
             }
             throw new Error(`Failed to fetch controller state: ${response.statusText}`);
@@ -340,7 +341,7 @@ function updateLocalControllerState(data) {
     } else {
         // Server says no pending handoff - clear resolved flag and hide any toast
         if (handoffResolved) {
-            console.log('🎮 Server confirmed handoff resolved, clearing flag');
+            log('🎮 Server confirmed handoff resolved, clearing flag');
             handoffResolved = false;
         }
         // Hide any lingering handoff toast
@@ -384,7 +385,7 @@ function startControllerPolling(gameId) {
 
     // Viewers don't participate in controller state — they only watch via refreshGameState()
     if (typeof window.isViewer === 'function' && window.isViewer()) {
-        console.log('👁️ Viewer mode: skipping controller polling');
+        log('👁️ Viewer mode: skipping controller polling');
         return;
     }
     
@@ -399,7 +400,7 @@ function startControllerPolling(gameId) {
     // Start polling (faster interval when holding a role)
     const interval = installPingInterval();
 
-    console.log(`🎮 Controller polling started for game ${gameId} (${interval}ms)`);
+    log(`🎮 Controller polling started for game ${gameId} (${interval}ms)`);
 }
 
 /**
@@ -433,7 +434,7 @@ function stopControllerPolling() {
     // Drop any outstanding handoff request so its resolution toast can't leak
     // into a later game session.
     myOutstandingHandoff = null;
-    console.log('🎮 Controller polling stopped');
+    log('🎮 Controller polling stopped');
 }
 
 /**
@@ -496,7 +497,7 @@ document.addEventListener('visibilitychange', async () => {
     if (!gameId) {
         const game = (typeof currentGame === 'function') ? currentGame() : null;
         if (game?.id) {
-            console.log('🎮 Page became visible — polling was stopped; restarting from currentGame()');
+            log('🎮 Page became visible — polling was stopped; restarting from currentGame()');
             startControllerPolling(game.id);
             gameId = game.id;
         } else {
@@ -504,7 +505,7 @@ document.addEventListener('visibilitychange', async () => {
         }
     }
 
-    console.log('🎮 Page became visible — recovering game session...');
+    log('🎮 Page became visible — recovering game session...');
 
     // --- Pause game state refresh during recovery ---
     // Prevents the refresh timer from racing with this handler and making
@@ -528,7 +529,7 @@ document.addEventListener('visibilitychange', async () => {
 
         // Gap 1: Game was ended by another coach while we were away
         if (game.gameEndTimestamp) {
-            console.log('🎮 Game ended while away — returning to team selection');
+            log('🎮 Game ended while away — returning to team selection');
             showControllerToast('Game has ended', 'info', 3000);
             stopControllerPolling();
             if (typeof window.exitGameScreen === 'function') {
@@ -548,7 +549,7 @@ document.addEventListener('visibilitychange', async () => {
         // sessions — skip the stale-game wake nag entirely for them.
         const isTestFixture = typeof isTestGame === 'function' && isTestGame(game);
         if (isTestFixture) {
-            console.log('🎮 Test game — skipping stale-game wake check');
+            log('🎮 Test game — skipping stale-game wake check');
         }
         if (gameStart && !isTestFixture) {
             const hoursElapsed = (Date.now() - gameStart) / (1000 * 60 * 60);
@@ -565,7 +566,7 @@ document.addEventListener('visibilitychange', async () => {
                 const hoursSinceActivity = (Date.now() - lastActivity) / (1000 * 60 * 60);
 
                 if (hoursSinceActivity > STALE_GAME_HOURS) {
-                    console.log(`🎮 Game idle for ${hoursSinceActivity.toFixed(1)}h — prompting user`);
+                    log(`🎮 Game idle for ${hoursSinceActivity.toFixed(1)}h — prompting user`);
                     const keepGoing = confirm(
                         `This game has been idle for ${Math.floor(hoursSinceActivity)} hours.\n\n` +
                         'Return to the team list?'
@@ -626,29 +627,29 @@ document.addEventListener('visibilitychange', async () => {
         const lineCoachVacant = !controllerState.lineCoach;
 
         if (lostActiveCoach && !activeCoachVacant) {
-            console.log('🎮 Active Coach taken by another coach during sleep — not re-claiming');
+            log('🎮 Active Coach taken by another coach during sleep — not re-claiming');
         }
         if (lostLineCoach && !lineCoachVacant) {
-            console.log('🎮 Line Coach taken by another coach during sleep — not re-claiming');
+            log('🎮 Line Coach taken by another coach during sleep — not re-claiming');
         }
 
         const reclaimActive = lostActiveCoach && activeCoachVacant;
         const reclaimLine = lostLineCoach && lineCoachVacant;
 
         if (reclaimActive || reclaimLine) {
-            console.log(`🎮 Roles lost during sleep and now vacant — re-claiming (active: ${reclaimActive}, line: ${reclaimLine})`);
+            log(`🎮 Roles lost during sleep and now vacant — re-claiming (active: ${reclaimActive}, line: ${reclaimLine})`);
 
             if (reclaimActive) {
                 const claimResult = await claimActiveCoach(gameId);
                 if (claimResult?.success) {
-                    console.log('🎮 Re-claimed Active Coach after wake');
+                    log('🎮 Re-claimed Active Coach after wake');
                 }
             }
 
             if (reclaimLine) {
                 const claimResult = await claimLineCoach(gameId);
                 if (claimResult?.success) {
-                    console.log('🎮 Re-claimed Line Coach after wake');
+                    log('🎮 Re-claimed Line Coach after wake');
                 }
             }
         }
@@ -778,7 +779,7 @@ function getHandoffKey(handoff) {
 function showControllerToast(message, type = 'info', duration = 4000, options = {}) {
     const container = document.getElementById('toastContainer');
     if (!container) {
-        console.log(`🎮 Controller [${type}]: ${message}`);
+        log(`🎮 Controller [${type}]: ${message}`);
         return null;
     }
     
@@ -841,7 +842,7 @@ function showControllerToast(message, type = 'info', duration = 4000, options = 
     if (typeof logEvent === 'function') {
         logEvent(`🎮 ${message}`);
     }
-    console.log(`🎮 Controller [${type}]: ${message}`);
+    log(`🎮 Controller [${type}]: ${message}`);
     
     return toast;
 }
@@ -1013,7 +1014,7 @@ function updateControllerUI(state, previousState) {
     const prevRoleStr = prevRoles.length > 0 ? prevRoles.join('+') : 'none';
     const currRoleStr = currRoles.length > 0 ? currRoles.join('+') : 'none';
     if (prevRoleStr !== currRoleStr) {
-        console.log(`🎮 Role changed: ${prevRoleStr} → ${currRoleStr}`);
+        log(`🎮 Role changed: ${prevRoleStr} → ${currRoleStr}`);
     }
     
     // Update Play-by-Play panel state when roles change
@@ -1078,13 +1079,13 @@ function setControllerButtonsVisible(show) {
 function showHandoffRequestUI(handoff) {
     const container = document.getElementById('toastContainer');
     if (!container) {
-    console.log(`🎮 Handoff requested by ${handoff.requesterName} for ${handoff.role}`);
+    log(`🎮 Handoff requested by ${handoff.requesterName} for ${handoff.role}`);
         return;
     }
     
     // Don't create new toasts if we just resolved a handoff (wait for server to confirm)
     if (handoffResolved) {
-        console.log('🎮 Handoff already resolved, waiting for server confirmation');
+        log('🎮 Handoff already resolved, waiting for server confirmation');
         return;
     }
     
@@ -1110,7 +1111,7 @@ function showHandoffRequestUI(handoff) {
     const remainingMs = remainingSeconds * 1000;
     const totalMs = handoffTimeoutSeconds * 1000;
     
-    console.log(`🎮 Creating handoff toast: ${requesterName} wants ${roleName}, ${remainingSeconds}s remaining`);
+    log(`🎮 Creating handoff toast: ${requesterName} wants ${roleName}, ${remainingSeconds}s remaining`);
     
     // Create handoff toast
     const toast = document.createElement('div');
@@ -1135,7 +1136,7 @@ function showHandoffRequestUI(handoff) {
     
     // Cleanup function - marks handoff as resolved to prevent recreation
     const cleanup = () => {
-        console.log('🎮 Cleaning up handoff toast');
+        log('🎮 Cleaning up handoff toast');
         clearInterval(handoffCountdownInterval);
         handoffCountdownInterval = null;
         if (toast.parentElement) {
@@ -1148,14 +1149,14 @@ function showHandoffRequestUI(handoff) {
     
     // Accept handler
     const handleAcceptLocal = () => {
-        console.log('🎮 Accept clicked/triggered');
+        log('🎮 Accept clicked/triggered');
         cleanup();
         handleHandoffAccept();
     };
     
     // Deny handler
     const handleDenyLocal = () => {
-        console.log('🎮 Deny clicked');
+        log('🎮 Deny clicked');
         cleanup();
         handleHandoffDeny();
     };
@@ -1193,7 +1194,7 @@ function showHandoffRequestUI(handoff) {
         
         if (remaining <= 0) {
             // Auto-accept: show click animation then accept
-            console.log('🎮 Countdown complete, auto-accepting');
+            log('🎮 Countdown complete, auto-accepting');
             clearInterval(handoffCountdownInterval);
             handoffCountdownInterval = null;
             acceptBtn.classList.add('auto-clicked');
@@ -1229,7 +1230,7 @@ function hideHandoffRequestUI() {
     handoffToastElement = null;
     currentHandoffId = null;
     
-    console.log('🎮 Handoff UI hidden');
+    log('🎮 Handoff UI hidden');
 }
 
 /**
@@ -1314,7 +1315,7 @@ function initControllerUI() {
     
     // Handoff accept/deny handlers are attached dynamically to each toast
     
-    console.log('🎮 Controller UI initialized');
+    log('🎮 Controller UI initialized');
 }
 
 // Initialize UI when DOM is ready

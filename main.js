@@ -58,6 +58,7 @@
 // ARCHITECTURE.md § Module Loading. Names imported here are the ones main.js
 // itself calls; bare `import './x.js'` lines are order-keeping side-effect
 // imports.
+import { log } from './utils/logger.js';
 import './auth/config.js';
 import './auth/auth.js';
 import './auth/loginScreen.js';
@@ -124,7 +125,7 @@ if ('serviceWorker' in navigator && swDisabledForDev) {
     if (window.caches && caches.keys) {
         caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
     }
-    console.log('Service Worker: disabled on localhost (dev)');
+    log('Service Worker: disabled on localhost (dev)');
 }
 
 /**
@@ -164,13 +165,13 @@ if ('serviceWorker' in navigator && !swDisabledForDev) {
         if (reloadingForUpdate) return;
         if (!hadControllerAtLoad) return;  // first-visit claim, not an update
         if (isReloadUnsafe()) {
-            console.log('Service Worker: update ready, deferring reload (game/recording active)');
+            log('Service Worker: update ready, deferring reload (game/recording active)');
             // window survivor: main.js bootstrap global (read by teams/syncStatusUI.js)
             window.__breaksideUpdatePending = true;
             return;
         }
         reloadingForUpdate = true;
-        console.log('Service Worker: new version activated, reloading');
+        log('Service Worker: new version activated, reloading');
         window.location.reload();
     });
 
@@ -178,27 +179,27 @@ if ('serviceWorker' in navigator && !swDisabledForDev) {
         navigator.serviceWorker
             .register('./service-worker.js')
             .then(reg => {
-                console.log('Service Worker: Registered');
+                log('Service Worker: Registered');
 
                 // Store registration globally for manual update checks
                 // window survivor: main.js bootstrap global (read by teams/syncStatusUI.js)
                 window.swRegistration = reg;
 
                 // Check for updates immediately
-                reg.update().catch(err => console.log('SW update check failed:', err));
+                reg.update().catch(err => log('SW update check failed:', err));
 
                 // Check for updates periodically (every 5 minutes while app is open)
                 setInterval(() => {
-                    reg.update().catch(err => console.log('SW update check failed:', err));
+                    reg.update().catch(err => log('SW update check failed:', err));
                 }, 5 * 60 * 1000);
 
                 // Log when a new worker is found; the actual reload is handled by
                 // the controllerchange listener above (gated on isReloadUnsafe()).
                 reg.addEventListener('updatefound', () => {
-                    console.log('Service Worker: Update found, installing...');
+                    log('Service Worker: Update found, installing...');
                 });
             })
-            .catch(err => console.log(`Service Worker Error: ${err}`));
+            .catch(err => log(`Service Worker Error: ${err}`));
     });
 }
 
@@ -290,7 +291,7 @@ async function initializeApp() {
     if (isTestModeAllowed() && new URLSearchParams(window.location.search).get('testMode') === 'true') {
         const params = new URLSearchParams(window.location.search);
         const testUserId = params.get('testUserId') || 'test-user';
-        console.log('[Test] Test mode: injecting fake auth session for', testUserId);
+        log('[Test] Test mode: injecting fake auth session for', testUserId);
         if (window.breakside?.auth?.enableTestMode) {
             window.breakside.auth.enableTestMode(testUserId);
         }
@@ -317,7 +318,7 @@ async function initializeApp() {
             
             if (loggedIn) {
                 // User is logged in, show the app
-                console.log('User is authenticated, showing app');
+                log('User is authenticated, showing app');
                 hideAuthScreenAndShowApp();
                 
                 // Show PWA install prompt for newly authenticated users
@@ -333,13 +334,13 @@ async function initializeApp() {
                 // User is not logged in
                 // If not returning from auth callback, redirect to landing page
                 if (!hasAuthCallback) {
-                    console.log('User not authenticated, redirecting to landing page');
+                    log('User not authenticated, redirecting to landing page');
                     window.location.href = '/landing/';
                     return;
                 }
                 // If returning from auth but not logged in, something went wrong
                 // Show auth screen to let them try again
-                console.log('Auth callback but not authenticated, showing login');
+                log('Auth callback but not authenticated, showing login');
                 if (window.breakside?.loginScreen?.showAuthScreen) {
                     window.breakside.loginScreen.showAuthScreen();
                 }
@@ -360,7 +361,7 @@ async function initializeApp() {
  * Handle auth state changes
  */
 function handleAuthStateChange(event, session) {
-    console.log('Auth state change:', event);
+    log('Auth state change:', event);
     
     switch (event) {
         case 'SIGNED_IN':
@@ -705,9 +706,9 @@ document.addEventListener('DOMContentLoaded', function() {
             window.APP_DEPLOY_STAMP = v.deployStamp || null;
             // window survivor: main.js bootstrap global (see above)
             window.APP_DEPLOY_LABEL = v.deployLabel || null;
-            console.log(`App version: ${window.APP_VERSION} (Build ${window.APP_BUILD})${window.APP_DEPLOY_STAMP ? ' deploy:' + window.APP_DEPLOY_STAMP : ''}${window.APP_DEPLOY_LABEL ? ' [' + window.APP_DEPLOY_LABEL + ']' : ''}`);
+            log(`App version: ${window.APP_VERSION} (Build ${window.APP_BUILD})${window.APP_DEPLOY_STAMP ? ' deploy:' + window.APP_DEPLOY_STAMP : ''}${window.APP_DEPLOY_LABEL ? ' [' + window.APP_DEPLOY_LABEL + ']' : ''}`);
         })
-        .catch(err => console.log('Could not load version.json:', err));
+        .catch(err => log('Could not load version.json:', err));
     
     // Initialize app hamburger menu
     initializeAppMenu();

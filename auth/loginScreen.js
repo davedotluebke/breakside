@@ -5,6 +5,7 @@
  */
 import { exitGameScreen } from '../game/gameScreenSync.js';
 import { showSelectTeamScreen } from '../teams/teamList.js';
+import { log } from '../utils/logger.js';
 
 // Track current mode: 'login' | 'signup' | 'reset'
 let authMode = 'login';
@@ -169,7 +170,7 @@ async function handleLogin(e) {
             showAuthError(error.message || 'Failed to sign in');
         } else if (user) {
             // Auth state change listener will handle showing the app
-            console.log('Login successful');
+            log('Login successful');
         }
     } catch (err) {
         showAuthError('An unexpected error occurred');

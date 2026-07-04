@@ -24,6 +24,7 @@ import { currentGame } from '../utils/helpers.js';
 import { createPanelTitleBar } from '../ui/panelSystem.js';
 import { isLineCoach } from './controllerState.js';
 import { wireGameScreenEvents } from './gameScreenEvents.js';
+import { log } from '../utils/logger.js';
 
 // =============================================================================
 // Game Screen State
@@ -592,7 +593,7 @@ function buildGameScreenContainer() {
  */
 function initGameScreen() {
     if (gameScreenInitialized) {
-        console.log('🎮 Game screen already initialized');
+        log('🎮 Game screen already initialized');
         return;
     }
     
@@ -604,7 +605,7 @@ function initGameScreen() {
     wireGameScreenEvents();
     
     gameScreenInitialized = true;
-    console.log('🎮 Game screen initialized');
+    log('🎮 Game screen initialized');
 }
 
 /**

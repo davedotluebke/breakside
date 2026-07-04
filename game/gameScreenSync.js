@@ -41,6 +41,7 @@ import {
     autoSelectActiveTypeForNextPoint, showGameUpdatedToast,
     setPanelStatsMode, setPanelShowingTotalStats, setCachedPanelEventStats,
 } from './selectLine.js';
+import { log } from '../utils/logger.js';
 
 // =============================================================================
 // UI Updates
@@ -431,7 +432,7 @@ function enterGameScreen() {
     // Set up ResizeObserver for Play-by-Play panel layout
     setupPlayByPlayResizeObserver();
 
-    console.log('🎮 Entered game screen');
+    log('🎮 Entered game screen');
 }
 
 /**
@@ -458,7 +459,7 @@ function exitGameScreen() {
         startActiveGamePolling();
     }
 
-    console.log('🎮 Exited game screen');
+    log('🎮 Exited game screen');
 }
 
 // =============================================================================
@@ -520,7 +521,7 @@ function startGameStateRefresh() {
                 const result = await refreshPendingLineFromCloud(gameId);
                 if (result && typeof result === 'object' && result.gameJustEnded) {
                     // Game ended by another session/device
-                    console.log('🏁 Game ended by another session — leaving game screen');
+                    log('🏁 Game ended by another session — leaving game screen');
                     if (typeof showControllerToast === 'function') {
                         showControllerToast('Game has ended', 'info', 4000);
                     }
@@ -588,7 +589,7 @@ function startGameStateRefresh() {
                 if (result.refreshed) {
                     // Game ended by another coach — navigate away
                     if (result.gameJustEnded) {
-                        console.log('🏁 Game ended by another coach — leaving game screen');
+                        log('🏁 Game ended by another coach — leaving game screen');
                         if (typeof showControllerToast === 'function') {
                             showControllerToast('Game has ended', 'info', 4000);
                         }
@@ -614,7 +615,7 @@ function startGameStateRefresh() {
         }
     }, 3000);
     
-    console.log('🔄 Started game state refresh polling');
+    log('🔄 Started game state refresh polling');
 }
 
 /**
@@ -624,7 +625,7 @@ function stopGameStateRefresh() {
     if (gameStateRefreshIntervalId) {
         clearInterval(gameStateRefreshIntervalId);
         gameStateRefreshIntervalId = null;
-        console.log('⏹️ Stopped game state refresh polling');
+        log('⏹️ Stopped game state refresh polling');
     }
 }
 
@@ -651,7 +652,7 @@ function updateGameScreenAfterRefresh() {
     // Update Play-by-Play panel state
     updatePlayByPlayPanelState();
 
-    console.log('🔄 Updated UI after game state refresh');
+    log('🔄 Updated UI after game state refresh');
 }
 
 // React to controller-state UI updates via the module-era hook (replaces

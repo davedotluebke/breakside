@@ -9,6 +9,7 @@
  * Panel state is saved to localStorage per-client.
  */
 import { showScreen } from '../screens/navigation.js';
+import { log } from '../utils/logger.js';
 
 // =============================================================================
 // Panel State Management
@@ -1067,7 +1068,7 @@ function resetPanelHeights() {
         }
     });
     savePanelStates();
-    console.log('🎛️ Panel heights reset');
+    log('🎛️ Panel heights reset');
 }
 
 /**
@@ -1090,7 +1091,7 @@ function resetAllPanelStates() {
     });
     
     applyAllPanelStates();
-    console.log('🎛️ All panel states reset to defaults');
+    log('🎛️ All panel states reset to defaults');
 }
 
 // =============================================================================
@@ -1353,7 +1354,7 @@ function rememberCurrentPbpTab() {
 function initPanelSystem() {
     loadPanelStates();
     initDragListeners();
-    console.log('🎛️ Panel system initialized');
+    log('🎛️ Panel system initialized');
 }
 
 // Initialize when DOM is ready

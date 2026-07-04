@@ -11,6 +11,7 @@ import { updateScore } from '../game/gameLogic.js';
 import { moveToNextPoint } from '../game/pointManagement.js';
 import { showControllerToast } from '../game/controllerState.js';
 import { ensurePossessionExists } from './keyPlayDialog.js';
+import { log } from '../utils/logger.js';
 
 // Track selected players for score attribution
 let selectedThrower = null;
@@ -124,7 +125,7 @@ function initializeScoreAttributionDialog() {
                 from: pendingFrom,
                 to: pendingTo
             });
-            if (!defender) console.log('Warning: no defender selected for Callahan');
+            if (!defender) log('Warning: no defender selected for Callahan');
             if (dialog) dialog.style.display = 'none';
             if (!callahanEvent) {
                 // No defender → createDefense no-ops. Preserve the legacy

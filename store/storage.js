@@ -16,6 +16,7 @@ import {
     Possession, Point,
 } from './models.js';
 import { getPlayerFromName, currentGame } from '../utils/helpers.js';
+import { log } from '../utils/logger.js';
 
 /**
  * Serialize an event to JSON
@@ -211,10 +212,10 @@ function serializeTeam(team) {
  * Log team data to the console
  */
 function logTeamData(team) {
-    console.log("Team data: ");
-    console.log(team);
-    console.log("Serialized team data: ");
-    console.log(serializeTeam(team));
+    log("Team data: ");
+    log(team);
+    log("Serialized team data: ");
+    log(serializeTeam(team));
 }
 
 /**
@@ -242,7 +243,7 @@ function saveAllTeamsData() {
             }
         } catch (e) {
             // Ignore errors if no current game (e.g. during initialization)
-            console.log("Skipping cloud sync: " + e.message);
+            log("Skipping cloud sync: " + e.message);
         }
     }
 }
@@ -517,7 +518,7 @@ function deserializeGame(gameData) {
         const storedTotal = (game.scores[Role.TEAM] || 0) + (game.scores[Role.OPPONENT] || 0);
         const calculatedTotal = calculatedScores[Role.TEAM] + calculatedScores[Role.OPPONENT];
         if (storedTotal !== calculatedTotal) {
-            console.log(`📊 Recalculated scores from ${game.scores[Role.TEAM]}-${game.scores[Role.OPPONENT]} to ${calculatedScores[Role.TEAM]}-${calculatedScores[Role.OPPONENT]}`);
+            log(`📊 Recalculated scores from ${game.scores[Role.TEAM]}-${game.scores[Role.OPPONENT]} to ${calculatedScores[Role.TEAM]}-${calculatedScores[Role.OPPONENT]}`);
             game.scores = calculatedScores;
         }
     }
@@ -573,7 +574,7 @@ function loadTeams(silent = false) {
     if (serializedTeams) {
         teams = deserializeTeams(serializedTeams);
     } else {
-        console.log("No saved team data found.");
+        log("No saved team data found.");
         if (!silent) {
             alert('No saved team data found.');
         }
@@ -619,7 +620,7 @@ initializeTeams();
  * Called on sign out to prevent data leaking between accounts.
  */
 function clearAllTeamsData() {
-    console.log('Clearing in-memory teams data...');
+    log('Clearing in-memory teams data...');
     teams = [];
     currentTeam = null;
     currentEvent = null;
