@@ -4,11 +4,12 @@ Game endpoints: sync, retrieval, listing, metadata, deletion, and versions.
 Note: All API routes use /api/ prefix to avoid conflicts with PWA static file
 serving.
 """
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 
 from ._shared import (
@@ -19,12 +20,14 @@ from ._shared import (
     get_controller_state,
     get_game_current,
     get_game_version,
+    get_json_body,
     get_optional_user,
     get_recent_activity,
     get_user_teams,
     is_admin,
     list_all_games,
     list_game_versions,
+    require_game_sync_coach,
     require_game_team_access,
     require_game_team_coach,
     save_game_version,
@@ -32,14 +35,16 @@ from ._shared import (
     validate_id,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
 @router.post("/api/games/{game_id}/sync")
 async def sync_game(
     game_id: str,
-    game_data: Dict[str, Any] = Body(...),
-    user: dict = Depends(require_game_team_coach)
+    game_data: Dict[str, Any] = Depends(get_json_body),
+    user: dict = Depends(require_game_sync_coach)
 ):
     """
     Full game sync - replaces entire game state.
@@ -47,12 +52,9 @@ async def sync_game(
 
     Creates a new version on each sync.
 
-    Requires: Coach access to the game's team.
+    Requires: Coach access to the game's team (for a new game, the team
+    claimed by the body's teamId — the same parsed body that gets stored).
     """
-    # Basic validation
-    if not isinstance(game_data, dict):
-        raise HTTPException(status_code=400, detail="Invalid game data: must be a dictionary")
-
     if "team" not in game_data or "opponent" not in game_data:
         raise HTTPException(status_code=400, detail="Invalid game data: missing team or opponent")
 
@@ -61,9 +63,12 @@ async def sync_game(
     if event_id and event_exists(event_id):
         try:
             add_game_to_event(event_id, game_id)
-        except Exception as e:
+        except Exception:
             # Non-fatal: log but don't fail the sync
-            print(f"Warning: could not add game {game_id} to event {event_id}: {e}")
+            logger.warning(
+                "Could not add game %s to event %s", game_id, event_id,
+                exc_info=True,
+            )
 
     # Determine whether this writer owns the game's play data. The Active
     # Coach owns points/scores/events; a Line Coach (or any other coach)
@@ -229,6 +234,11 @@ async def restore_version(game_id: str, timestamp: str, user: dict = Depends(req
     """
     Restore game to a specific version.
 
+    This is a FAITHFUL rollback: the restored snapshot becomes the new
+    current state verbatim — no pendingNextLine re-merge against the state
+    being rolled back (merge_pending_lines=False). The restore itself is
+    versioned, so nothing is lost and a restore can be undone.
+
     Requires: Coach access to the game's team.
     """
     validate_id(timestamp, "timestamp")
@@ -237,7 +247,10 @@ async def restore_version(game_id: str, timestamp: str, user: dict = Depends(req
 
     try:
         game_data = get_game_version(game_id, timestamp)
-        await run_in_threadpool(save_game_version, game_id, game_data)
+        await run_in_threadpool(
+            save_game_version, game_id, game_data,
+            merge_pending_lines=False,
+        )
         return {"status": "restored", "game_id": game_id, "timestamp": timestamp}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Version {timestamp} not found")

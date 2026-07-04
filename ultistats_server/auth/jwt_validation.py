@@ -36,6 +36,26 @@ def get_jwt_secret() -> str:
     return os.getenv("SUPABASE_JWT_SECRET", SUPABASE_JWT_SECRET)
 
 
+def assert_auth_configured() -> None:
+    """Fail fast at startup if auth is required but no JWT secret is set.
+
+    Without this, a misconfigured server boots fine and then 500s on every
+    authenticated request (get_jwt_secret is read per-request). Called from
+    the app lifespan in main.py, so uvicorn refuses to start — and systemd
+    marks the unit failed — instead of serving a broken API.
+
+    Raises:
+        RuntimeError: If auth_required() and SUPABASE_JWT_SECRET is empty.
+    """
+    if auth_required() and not get_jwt_secret():
+        raise RuntimeError(
+            "SUPABASE_JWT_SECRET is not set but auth is required "
+            "(ULTISTATS_AUTH_REQUIRED defaults to true) — no request could "
+            "ever authenticate. Set SUPABASE_JWT_SECRET, or explicitly set "
+            "ULTISTATS_AUTH_REQUIRED=false for a local/dev server."
+        )
+
+
 def verify_supabase_token(token: str) -> dict:
     """
     Verify a Supabase JWT and return the decoded payload.

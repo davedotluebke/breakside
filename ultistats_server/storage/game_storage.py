@@ -7,7 +7,7 @@ import subprocess
 import threading
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import shutil
 
 from ._config import config
@@ -117,7 +117,8 @@ def merge_pending_next_line(existing: Optional[dict], incoming: Optional[dict]) 
 
 
 def save_game_version(game_id: str, game_data: dict,
-                      authoritative_game_data: bool = True) -> str:
+                      authoritative_game_data: bool = True,
+                      merge_pending_lines: bool = True) -> str:
     """
     Save game with versioning.
 
@@ -126,18 +127,24 @@ def save_game_version(game_id: str, game_data: dict,
 
     Incoming state is merged against the existing current.json so that
     concurrent coaches don't clobber each other:
-      - pendingNextLine is always merged per-field by timestamp (see
+      - pendingNextLine is merged per-field by timestamp (see
         merge_pending_next_line) — a stale line copy never reverts a newer one.
       - When authoritative_game_data is False, the caller is a writer who does
         NOT own the game's play data (e.g. a Line Coach syncing while another
         coach holds the Active Coach role). Their points/scores/events are
         ignored and the server's existing game data is preserved; only their
         merged line selections are applied.
+      - merge_pending_lines=False disables ALL merging: game_data is written
+        verbatim as the new current state. Used by version restore, which must
+        be a faithful rollback — a pendingNextLine newer than the snapshot
+        being restored must not survive the restore.
 
     Args:
         game_id: Unique game identifier
         game_data: Complete game data dictionary
         authoritative_game_data: Whether this writer owns the play data
+        merge_pending_lines: Merge pendingNextLine against current state
+            (False = write game_data verbatim; implies authoritative)
 
     Returns:
         Path to the version file that was created
@@ -157,7 +164,7 @@ def save_game_version(game_id: str, game_data: dict,
             except (json.JSONDecodeError, OSError):
                 existing = None
 
-        if existing is not None:
+        if existing is not None and merge_pending_lines:
             merged_pnl = merge_pending_next_line(
                 existing.get("pendingNextLine"), game_data.get("pendingNextLine")
             )
@@ -169,7 +176,8 @@ def save_game_version(game_id: str, game_data: dict,
             if merged_pnl is not None:
                 final_data["pendingNextLine"] = merged_pnl
         else:
-            # First write for this game — nothing to merge against.
+            # First write for this game (nothing to merge against), or a
+            # merge_pending_lines=False restore (snapshot written verbatim).
             final_data = game_data
 
         return _write_game_version(game_dir, versions_dir, current_file,
@@ -424,7 +432,7 @@ def delete_game(game_id: str) -> bool:
     return True
 
 
-def list_all_games() -> List[Dict[str, any]]:
+def list_all_games() -> List[Dict[str, Any]]:
     """
     List all games with metadata.
     

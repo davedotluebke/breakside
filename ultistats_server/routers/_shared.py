@@ -46,12 +46,17 @@ globals().update({_name: getattr(storage, _name) for _name in storage.__all__})
 # Auth dependencies — explicit so they stay greppable.
 get_current_user = auth.get_current_user
 get_optional_user = auth.get_optional_user
+get_json_body = auth.get_json_body
 is_admin = auth.is_admin
 require_admin = auth.require_admin
 require_team_coach = auth.require_team_coach
 require_team_access = auth.require_team_access
 require_game_team_coach = auth.require_game_team_coach
+require_game_sync_coach = auth.require_game_sync_coach
 require_game_team_access = auth.require_game_team_access
+require_event_team_coach = auth.require_event_team_coach
+require_event_team_access = auth.require_event_team_access
+require_body_team_coach = auth.require_body_team_coach
 require_player_edit_access = auth.require_player_edit_access
 require_player_read_access = auth.require_player_read_access
 assert_player_edit_access = auth.assert_player_edit_access

@@ -5,6 +5,8 @@ App wiring only: the endpoints live in the routers/ package (games, teams,
 players, invites, shares, controller, events, auth_api, misc, static_files)
 and share storage/auth imports via routers/_shared.py.
 """
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -17,18 +19,39 @@ from fastapi.staticfiles import StaticFiles
 # routers/_shared.py.
 try:
     from config import HOST, PORT, DEBUG, ALLOWED_ORIGINS
+    from auth.jwt_validation import assert_auth_configured
     from narration import router as narration_router
     import routers
 except ImportError:
     from ultistats_server.config import HOST, PORT, DEBUG, ALLOWED_ORIGINS
+    from ultistats_server.auth.jwt_validation import assert_auth_configured
     from ultistats_server.narration import router as narration_router
     from ultistats_server import routers
+
+# Minimal app-wide logging setup. Uvicorn configures its own access/error
+# loggers; this covers our module loggers (logging.getLogger(__name__)),
+# which otherwise print nothing above WARNING. Under systemd, stdout/stderr
+# land in the journal.
+logging.basicConfig(
+    level=logging.DEBUG if DEBUG else logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Fail fast on a broken auth config (auth required, no JWT secret)
+    # instead of 500ing on every request after a seemingly clean boot.
+    assert_auth_configured()
+    yield
+
 
 # Create FastAPI app
 app = FastAPI(
     title="Ultistats API",
     description="API for the Ultistats PWA - Ultimate Frisbee Statistics Tracker",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS middleware
