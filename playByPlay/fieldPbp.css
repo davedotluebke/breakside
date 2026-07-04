@@ -98,7 +98,8 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 }
 .fp-modepill.offense { background: var(--fp-blue); }
 .fp-modepill.defense { background: var(--fp-red); }
-.fp-undo {
+.fp-undo,
+.fp-gameevents {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 7px 13px;
     border: 1px solid #bbb; border-radius: 7px;

@@ -49,7 +49,7 @@ import {
 import { undoEvent } from '../game/gameLogic.js';
 import { startNextPoint } from '../game/pointManagement.js';
 import { showControllerToast } from '../game/controllerState.js';
-import { ensureDialogVisible, handlePbpTheyScore } from '../game/gameScreenEvents.js';
+import { ensureDialogVisible, handlePbpTheyScore, handlePbpGameEvents } from '../game/gameScreenEvents.js';
 import { handlePanelStartPoint } from '../game/selectLine.js';
 import { showScoreAttributionDialog } from './scoreAttribution.js';
 
@@ -764,6 +764,7 @@ const fieldPbp = (function() {
                 ${leftSlot}
                 <span class="fp-actionrow-spacer"></span>
                 <span class="fp-status-inline">${statusText(state, inPoint)}</span>
+                <button class="fp-gameevents" id="fpGameEventsBtn" title="Timeout, injury sub, halftime, switch sides, end game"><i class="fas fa-cog"></i><span>Events</span></button>
                 <button class="fp-undo" id="fpUndoBtn" title="Undo last event"><i class="fas fa-undo"></i><span>Undo</span></button>
             </div>
             <div class="fp-play${inPoint ? '' : ' fp-between-points'}">
@@ -1562,6 +1563,15 @@ const fieldPbp = (function() {
 
         const undoBtn = root.querySelector('#fpUndoBtn');
         if (undoBtn) undoBtn.onclick = handleUndo;
+
+        // Game Events (timeout / injury sub / halftime / switch sides / end
+        // game) — same modal as Simple/Full, routed through
+        // handlePbpGameEvents so role checks stay consistent. Lives in the
+        // action row (outside .fp-play's between-points greyout) so game
+        // events stay reachable between points; the modal itself
+        // enables/disables per point state (updateGameEventsModalState).
+        const geBtn = root.querySelector('#fpGameEventsBtn');
+        if (geBtn) geBtn.onclick = handlePbpGameEvents;
 
         const startBtn = root.querySelector('#fpStartPointBtn');
         if (startBtn) startBtn.onclick = handleStartPoint;
