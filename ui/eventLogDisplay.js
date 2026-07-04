@@ -3,13 +3,14 @@
  * Handles event logging and event log UI management
  */
 import { isGameScreenVisible } from './panelSystem.js';
+import { log } from '../utils/logger.js';
 
 /**
  * Log an event and update the event log display
  * @param {string} description - Description of the event to log
  */
 function logEvent(description) {
-    console.log("Event: " + description);
+    log("Event: " + description);
     /* update the running event log on the screen */
     const eventLog = document.getElementById('eventLog');
     if (eventLog) {

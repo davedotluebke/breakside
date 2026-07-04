@@ -19,6 +19,7 @@ import { currentGame } from '../utils/helpers.js';
 // here) — safe: both sides export hoisted function declarations used only at
 // call time, and neither top level calls into the other at eval time.
 import { showControllerToast } from '../game/controllerState.js';
+import { log } from '../utils/logger.js';
 
 // =============================================================================
 // Configuration
@@ -33,10 +34,10 @@ function getApiBaseUrl() {
     if (apiParam) {
         if (apiParam === 'reset') {
             localStorage.removeItem('ultistats_api_url');
-            console.log('API override cleared');
+            log('API override cleared');
         } else {
             localStorage.setItem('ultistats_api_url', apiParam);
-            console.log(`API override set: ${apiParam}`);
+            log(`API override set: ${apiParam}`);
         }
         // Clean the URL
         params.delete('api');
@@ -72,7 +73,7 @@ function getApiBaseUrl() {
 }
 
 const API_BASE_URL = getApiBaseUrl();
-console.log(`📡 Sync API URL: ${API_BASE_URL}`);
+log(`📡 Sync API URL: ${API_BASE_URL}`);
 
 /**
  * Make an authenticated fetch request if auth is available
@@ -96,7 +97,7 @@ async function authFetch(url, options = {}) {
             }
         } catch (e) {
             // Auth not available, continue without
-            console.log('Auth not available for request');
+            log('Auth not available for request');
         }
     }
     
@@ -114,7 +115,7 @@ async function authFetch(url, options = {}) {
     // round-trip here proves connectivity, whatever the HTTP status.
     if (!isOnline) {
         isOnline = true;
-        console.log('🌐 Connectivity restored (successful request cleared stale offline flag)');
+        log('🌐 Connectivity restored (successful request cleared stale offline flag)');
         processSyncQueue();
     }
 
@@ -146,13 +147,13 @@ let localGames = loadLocalGames();
 
 window.addEventListener('online', () => {
     isOnline = true;
-    console.log('🌐 App is online, processing sync queue...');
+    log('🌐 App is online, processing sync queue...');
     processSyncQueue();
 });
 
 window.addEventListener('offline', () => {
     isOnline = false;
-    console.log('📴 App is offline, queuing changes...');
+    log('📴 App is offline, queuing changes...');
 });
 
 // =============================================================================
@@ -202,7 +203,7 @@ function addToSyncQueue(type, action, id, data) {
     });
     
     saveSyncQueue();
-    console.log(`📝 Queued ${action} for ${type} ${id}`);
+    log(`📝 Queued ${action} for ${type} ${id}`);
 }
 
 /**
@@ -291,7 +292,7 @@ async function processSyncQueue() {
     if (isSyncing || syncQueue.length === 0 || !isOnline) return;
     
     isSyncing = true;
-    console.log(`🔄 Processing ${syncQueue.length} items in sync queue...`);
+    log(`🔄 Processing ${syncQueue.length} items in sync queue...`);
     
     // Sort queue by type (players first, then teams, then events, then games)
     const typeOrder = { player: 0, team: 1, event: 2, game: 3 };
@@ -443,7 +444,7 @@ async function syncQueueItem(item) {
             throw new Error(`Unknown entity type: ${type}`);
     }
     
-    console.log(`📤 Syncing ${type} ${id} (${action})...`);
+    log(`📤 Syncing ${type} ${id} (${action})...`);
     
     const response = await authFetch(url, {
         method: method,
@@ -456,7 +457,7 @@ async function syncQueueItem(item) {
     }
     
     const result = await response.json();
-    console.log(`✅ Synced ${type} ${id}:`, result);
+    log(`✅ Synced ${type} ${id}:`, result);
     
     return result;
 }
@@ -561,7 +562,7 @@ function createPlayerOffline(playerData) {
         processSyncQueue();
     }
     
-    console.log(`👤 Created player offline: ${player.name} (${id})`);
+    log(`👤 Created player offline: ${player.name} (${id})`);
     return player;
 }
 
@@ -705,7 +706,7 @@ function createTeamOffline(teamData) {
         processSyncQueue();
     }
     
-    console.log(`👥 Created team offline: ${team.name} (${id})`);
+    log(`👥 Created team offline: ${team.name} (${id})`);
     return team;
 }
 
@@ -736,7 +737,7 @@ async function syncTeamToCloud(team) {
         iconUrl: team.iconUrl || null
     };
     
-    console.log('📤 Queueing team sync:', {
+    log('📤 Queueing team sync:', {
         id: teamData.id,
         name: teamData.name,
         teamSymbol: teamData.teamSymbol,
@@ -974,7 +975,7 @@ function createGameOffline(gameData) {
     localGames[id] = gameData;
     saveLocalGames();
     
-    console.log(`🎮 Created game offline: ${id}`);
+    log(`🎮 Created game offline: ${id}`);
     return gameData;
 }
 
@@ -1212,11 +1213,11 @@ async function refreshPendingLineFromCloud(gameId) {
         // Detect if game was ended by another session/device
         if (gameData.gameEndTimestamp && !game.gameEndTimestamp) {
             game.gameEndTimestamp = new Date(gameData.gameEndTimestamp);
-            console.log('📥 Refreshed pending line — game ended by another session');
+            log('📥 Refreshed pending line — game ended by another session');
             return { gameJustEnded: true, pendingLine: localPending };
         }
 
-        console.log('📥 Refreshed pending line from cloud');
+        log('📥 Refreshed pending line from cloud');
         return localPending;
         
     } catch (error) {
@@ -1298,7 +1299,7 @@ async function refreshGameStateFromCloud(gameId) {
         const pointCountChanged = newPointCount !== oldPointCount;
 
         if (scoreChanged || pointCountChanged || gameJustEnded) {
-            console.log('📥 Refreshed game state from cloud — changes detected',
+            log('📥 Refreshed game state from cloud — changes detected',
                 { scoreChanged, pointCountChanged, gameJustEnded });
         }
 
@@ -1339,17 +1340,17 @@ async function deleteGameFromCloud(gameId) {
  */
 async function syncUserTeams() {
     if (!isOnline) {
-        console.log('📴 Cannot sync user teams: Offline');
+        log('📴 Cannot sync user teams: Offline');
         return { success: false, error: 'Offline' };
     }
     
     // Check if user is authenticated
     if (!window.breakside?.auth?.isAuthenticated?.()) {
-        console.log('👤 Cannot sync user teams: Not authenticated');
+        log('👤 Cannot sync user teams: Not authenticated');
         return { success: false, error: 'Not authenticated' };
     }
     
-    console.log('🔄 Syncing user teams from server...');
+    log('🔄 Syncing user teams from server...');
     
     try {
         // Fetch teams the user has access to
@@ -1357,7 +1358,7 @@ async function syncUserTeams() {
         
         if (!response.ok) {
             if (response.status === 401) {
-                console.log('👤 Auth expired, skipping team sync');
+                log('👤 Auth expired, skipping team sync');
                 return { success: false, error: 'Auth expired' };
             }
             throw new Error(`Failed to fetch user teams: ${response.statusText}`);
@@ -1366,7 +1367,7 @@ async function syncUserTeams() {
         const data = await response.json();
         const serverTeams = data.teams || [];
         
-        console.log(`📥 Found ${serverTeams.length} teams on server`);
+        log(`📥 Found ${serverTeams.length} teams on server`);
         
         let syncedCount = 0;
         let updatedCount = 0;
@@ -1381,7 +1382,7 @@ async function syncUserTeams() {
             
             if (localTeamIndex === -1) {
                 // Team doesn't exist locally - create it
-                console.log(`📥 Downloading team: ${serverTeam.name} (${serverTeam.id})`, {
+                log(`📥 Downloading team: ${serverTeam.name} (${serverTeam.id})`, {
                     teamSymbol: serverTeam.teamSymbol,
                     iconUrl: serverTeam.iconUrl ? `${serverTeam.iconUrl.substring(0, 50)}...` : null
                 });
@@ -1413,7 +1414,7 @@ async function syncUserTeams() {
                 const localUpdated = new Date(localTeam.updatedAt || 0);
                 
                 // Debug: Log what we received from server
-                console.log(`📥 Server team data for ${serverTeam.name}:`, {
+                log(`📥 Server team data for ${serverTeam.name}:`, {
                     teamSymbol: serverTeam.teamSymbol,
                     iconUrl: serverTeam.iconUrl ? `${serverTeam.iconUrl.substring(0, 50)}...` : null,
                     serverUpdated: serverTeam.updatedAt,
@@ -1427,7 +1428,7 @@ async function syncUserTeams() {
                 );
                 
                 if (serverUpdated > localUpdated) {
-                    console.log(`🔄 Updating team: ${serverTeam.name} (server is newer)`);
+                    log(`🔄 Updating team: ${serverTeam.name} (server is newer)`);
                     
                     // Update local team with server data
                     localTeam.name = serverTeam.name;
@@ -1447,7 +1448,7 @@ async function syncUserTeams() {
                     updatedCount++;
                 } else if (localMissingIdentity) {
                     // Timestamps equal/local newer, but server has identity fields we're missing
-                    console.log(`🔄 Updating team: ${serverTeam.name} (filling missing identity fields)`);
+                    log(`🔄 Updating team: ${serverTeam.name} (filling missing identity fields)`);
                     
                     if (!localTeam.teamSymbol && serverTeam.teamSymbol) {
                         localTeam.teamSymbol = serverTeam.teamSymbol;
@@ -1458,7 +1459,7 @@ async function syncUserTeams() {
                     
                     updatedCount++;
                 } else {
-                    console.log(`⏭️ Skipping team ${serverTeam.name}: local is same or newer`);
+                    log(`⏭️ Skipping team ${serverTeam.name}: local is same or newer`);
                 }
             }
             
@@ -1514,7 +1515,7 @@ async function syncUserTeams() {
                             }
                             
                             if (teamPlayersUpdated > 0) {
-                                console.log(`👥 Updated ${teamPlayersUpdated} players for team ${serverTeam.name}`);
+                                log(`👥 Updated ${teamPlayersUpdated} players for team ${serverTeam.name}`);
                                 playersCount += teamPlayersUpdated;
                             }
                             
@@ -1533,9 +1534,9 @@ async function syncUserTeams() {
             if (typeof saveAllTeamsData === 'function') {
                 saveAllTeamsData();
             }
-            console.log(`✅ Synced ${syncedCount} new teams, updated ${updatedCount} teams, ${playersCount} players`);
+            log(`✅ Synced ${syncedCount} new teams, updated ${updatedCount} teams, ${playersCount} players`);
         } else {
-            console.log('✅ All teams and players already in sync');
+            log('✅ All teams and players already in sync');
         }
         
         return { 
@@ -1601,7 +1602,7 @@ async function checkForUpdates() {
         );
         
         if (hasUpdates) {
-            console.log('🔔 Updates detected on server:', {
+            log('🔔 Updates detected on server:', {
                 teams: `${lastSyncCheck.teamCount} → ${serverState.teamCount}`,
                 players: `${lastSyncCheck.playerCount} → ${serverState.playerCount}`,
                 lastUpdate: serverState.latestUpdate,
@@ -1636,7 +1637,7 @@ function startAutoSync() {
         return; // Already running
     }
     
-    console.log('🔄 Starting auto-sync polling...');
+    log('🔄 Starting auto-sync polling...');
     
     // Initialize last known state from local data
     lastSyncCheck.teamCount = teams.length;
@@ -1664,7 +1665,7 @@ function startAutoSync() {
             const hasUpdates = await checkForUpdates();
             
             if (hasUpdates) {
-                console.log('📥 Auto-syncing due to detected updates...');
+                log('📥 Auto-syncing due to detected updates...');
                 const result = await syncUserTeams();
                 
                 if (result.success) {
@@ -1704,7 +1705,7 @@ function stopAutoSync() {
     if (autoSyncIntervalId) {
         clearInterval(autoSyncIntervalId);
         autoSyncIntervalId = null;
-        console.log('⏹️ Stopped auto-sync polling');
+        log('⏹️ Stopped auto-sync polling');
     }
 }
 
@@ -1718,11 +1719,11 @@ function stopAutoSync() {
  */
 async function syncAllData() {
     if (!isOnline) {
-        console.log('📴 Cannot sync: Offline');
+        log('📴 Cannot sync: Offline');
         return { success: false, error: 'Offline' };
     }
     
-    console.log('🔄 Starting full sync...');
+    log('🔄 Starting full sync...');
     
     try {
         // Process sync queue (already ordered by type)
@@ -1732,10 +1733,10 @@ async function syncAllData() {
         const totalPending = pendingCounts.player + pendingCounts.team + pendingCounts.event + pendingCounts.game;
         
         if (totalPending === 0) {
-            console.log('✅ Full sync complete');
+            log('✅ Full sync complete');
             return { success: true, synced: syncQueue.length };
         } else {
-            console.log(`⚠️ Sync incomplete: ${totalPending} items pending`);
+            log(`⚠️ Sync incomplete: ${totalPending} items pending`);
             return { success: false, pending: pendingCounts };
         }
     } catch (error) {
@@ -1750,11 +1751,11 @@ async function syncAllData() {
  */
 async function pullFromCloud() {
     if (!isOnline) {
-        console.log('📴 Cannot pull: Offline');
+        log('📴 Cannot pull: Offline');
         return { success: false, error: 'Offline' };
     }
     
-    console.log('📥 Pulling from cloud...');
+    log('📥 Pulling from cloud...');
     
     try {
         const [players, teams, games] = await Promise.all([
@@ -1763,7 +1764,7 @@ async function pullFromCloud() {
             listServerGames()
         ]);
         
-        console.log(`📥 Pulled ${players.length} players, ${teams.length} teams, ${games.length} games`);
+        log(`📥 Pulled ${players.length} players, ${teams.length} teams, ${games.length} games`);
         
         return {
             success: true,
@@ -1811,7 +1812,7 @@ function checkIsOnline() {
  * Called on sign out to prevent data leaking between accounts.
  */
 function clearSyncData() {
-    console.log('Clearing sync data...');
+    log('Clearing sync data...');
     
     // Clear in-memory caches
     syncQueue = [];
@@ -1825,7 +1826,7 @@ function clearSyncData() {
     localStorage.removeItem(LOCAL_TEAMS_KEY);
     localStorage.removeItem(LOCAL_GAMES_KEY);
     
-    console.log('Sync data cleared');
+    log('Sync data cleared');
 }
 
 // =============================================================================

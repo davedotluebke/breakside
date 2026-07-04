@@ -19,6 +19,7 @@ import {
     setIsPaused, setCountdownSeconds,
 } from './pointManagement.js';
 import { showControllerToast } from './controllerState.js';
+import { log } from '../utils/logger.js';
 
 let appVersion = null;
 
@@ -47,7 +48,7 @@ function startNewGame(startingPosition, seconds) {
     // Create roster snapshot — from event roster if in event, else team roster
     if (typeof createRosterSnapshot === 'function') {
         newGame.rosterSnapshot = createRosterSnapshot(currentTeam, currentEvent || undefined);
-        console.log('📸 Created roster snapshot:', newGame.rosterSnapshot);
+        log('📸 Created roster snapshot:', newGame.rosterSnapshot);
     }
     
     // Set mixed rules flags from dropdown and checkbox
@@ -91,7 +92,7 @@ function startNewGame(startingPosition, seconds) {
     if (typeof window.transitionToBetweenPoints === 'function') {
         window.transitionToBetweenPoints();
     }
-    console.log('🎮 New game started with panel UI');
+    log('🎮 New game started with panel UI');
 }
 
 document.getElementById('startGameOnOBtn').addEventListener('click', function() {
@@ -381,7 +382,7 @@ function summarizeGame() {
             }
         }
     });
-    console.log(summary);
+    log(summary);
     return summary;
 }
 

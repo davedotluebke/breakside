@@ -4,6 +4,7 @@
  */
 import { Possession, UNKNOWN_PLAYER } from '../store/models.js';
 import { getLatestPoint, getPlayerFromName, getActivePossession } from '../utils/helpers.js';
+import { log } from '../utils/logger.js';
 
 // Track Key Play dialog state
 let keyPlaySelectedSubButtons = [];
@@ -514,13 +515,13 @@ function createKeyPlayDefenseEvent(player) {
     });
 
     if (!defenseEvent) {
-        console.log('Warning: defense event not created (no defender selected)');
+        log('Warning: defense event not created (no defender selected)');
     }
 
     // Close dialog
     document.getElementById('keyPlayDialog').style.display = 'none';
 
-    if (defenseEvent) console.log('Defense event created:', defenseEvent.summarize());
+    if (defenseEvent) log('Defense event created:', defenseEvent.summarize());
 }
 
 function handleKeyPlayPlayerSelection(playerName, buttonElement) {
@@ -609,13 +610,13 @@ function ensurePossessionExists(isOffensive) {
         // No possession exists, create a new one
         currentPossession = new Possession(isOffensive);
         point.addPossession(currentPossession);
-        console.log(`Created new ${isOffensive ? 'offensive' : 'defensive'} possession for Key Play event`);
+        log(`Created new ${isOffensive ? 'offensive' : 'defensive'} possession for Key Play event`);
     } else if (currentPossession.offensive !== isOffensive) {
         // Current possession doesn't match the required type, create a new one
         const previousType = currentPossession.offensive ? 'offensive' : 'defensive';
         currentPossession = new Possession(isOffensive);
         point.addPossession(currentPossession);
-        console.log(`Created new ${isOffensive ? 'offensive' : 'defensive'} possession (switched from ${previousType}) for Key Play event`);
+        log(`Created new ${isOffensive ? 'offensive' : 'defensive'} possession (switched from ${previousType}) for Key Play event`);
     }
 
     return currentPossession;
@@ -657,7 +658,7 @@ function createKeyPlayThrowEvent() {
     // Close dialog
     document.getElementById('keyPlayDialog').style.display = 'none';
 
-    if (throwEvent) console.log('Throw event created:', throwEvent.summarize());
+    if (throwEvent) log('Throw event created:', throwEvent.summarize());
 }
 
 function handleKeyPlayHeaderToggle() {
@@ -759,7 +760,7 @@ function createKeyPlayTurnoverEvent(player) {
     // Close dialog
     document.getElementById('keyPlayDialog').style.display = 'none';
 
-    if (turnoverEvent) console.log('Turnover event created:', turnoverEvent.summarize());
+    if (turnoverEvent) log('Turnover event created:', turnoverEvent.summarize());
 }
 
 function updateKeyPlayPlayerHeader(subButtonType, panelType) {

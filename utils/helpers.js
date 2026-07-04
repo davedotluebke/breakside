@@ -4,6 +4,7 @@
  */
 import { UNKNOWN_PLAYER } from '../store/models.js';
 import { UNKNOWN_PLAYER_OBJ, currentTeam } from '../store/storage.js';
+import { log } from './logger.js';
 
 /**
  * Given a player name, return the corresponding Player object from the team roster
@@ -20,7 +21,7 @@ function getPlayerFromName(playerName) {
  */
 function currentGame() {
     if (!currentTeam || currentTeam.games.length === 0) {
-        console.log("Warning: No current game");
+        log("Warning: No current game");
         return null;
     }
     return currentTeam.games[currentTeam.games.length - 1];
@@ -142,11 +143,11 @@ function isPointInProgress() {
  */
 function getActivePossession(activePoint) {
     if (!activePoint) {
-        console.log("getActivePossession() called, but no active point");
+        log("getActivePossession() called, but no active point");
         return null;
     }
     if (activePoint.possessions.length === 0) {
-        console.log("getActivePossession() called, but no possessions in active point");
+        log("getActivePossession() called, but no possessions in active point");
         return null;
     }
     return activePoint.possessions[activePoint.possessions.length - 1];
@@ -212,7 +213,7 @@ function formatPlayTime(totalTimePlayed) {
  * Pure game logic: inspects completed points, switchsides events, and point winners.
  */
 function determineStartingPosition() {
-    if (!currentGame()) { console.log("Warning: No current game"); return 'offense'; }
+    if (!currentGame()) { log("Warning: No current game"); return 'offense'; }
     let startPointOn = currentGame().startingPosition;
     currentGame().points.forEach(point => {
         let switchsides = false;

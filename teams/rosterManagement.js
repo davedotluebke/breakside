@@ -30,6 +30,7 @@ import {
 import { showScreen } from '../screens/navigation.js';
 import { showSelectTeamScreen } from './teamList.js';
 import { initializeGenderRatioDropdown } from '../game/genderRatioDropdown.js';
+import { log } from '../utils/logger.js';
 
 // Whether developer debug affordances (e.g. the raw player-ID display in the
 // edit-player dialog) should be shown. Off by default in production; enable
@@ -1343,7 +1344,7 @@ function startRosterPolling() {
                 const hasUpdates = await checkForUpdates();
                 
                 if (hasUpdates && typeof syncUserTeams === 'function') {
-                    console.log('📥 Roster: Updates detected, syncing...');
+                    log('📥 Roster: Updates detected, syncing...');
                     const result = await syncUserTeams();
                     
                     // Always refresh roster display after sync completes
@@ -1352,7 +1353,7 @@ function startRosterPolling() {
                         if (typeof updateTeamRosterDisplay === 'function') {
                             updateTeamRosterDisplay();
                         }
-                        console.log('✅ Roster: Refreshed display after sync');
+                        log('✅ Roster: Refreshed display after sync');
                     }
                 }
             }
@@ -1361,7 +1362,7 @@ function startRosterPolling() {
         }
     }, (window.advancedSettings?.getRefreshIntervalMs?.() || ROSTER_POLL_INTERVAL));
     
-    console.log('🔄 Started roster polling');
+    log('🔄 Started roster polling');
 }
 
 /**
@@ -1371,7 +1372,7 @@ function stopRosterPolling() {
     if (rosterPollIntervalId) {
         clearInterval(rosterPollIntervalId);
         rosterPollIntervalId = null;
-        console.log('⏹️ Stopped roster polling');
+        log('⏹️ Stopped roster polling');
     }
 }
 

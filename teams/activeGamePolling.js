@@ -6,6 +6,7 @@ import { listServerGames } from '../store/sync.js';
 import { _cloudTeamsCache, isGameActive, resumeCloudGame } from './teamList.js';
 import { doFullRefresh } from './syncStatusUI.js';
 import { showControllerToast } from '../game/controllerState.js';
+import { log } from '../utils/logger.js';
 
 // Active-game polling state
 let _activeGamePollInterval = null;
@@ -23,7 +24,7 @@ function startActiveGamePolling() {
 
     checkForActiveGames(); // immediate first check
     _activeGamePollInterval = setInterval(checkForActiveGames, 30000);
-    console.log('📡 Active-game polling started');
+    log('📡 Active-game polling started');
 }
 
 /**
@@ -33,7 +34,7 @@ function stopActiveGamePolling() {
     if (_activeGamePollInterval) {
         clearInterval(_activeGamePollInterval);
         _activeGamePollInterval = null;
-        console.log('📡 Active-game polling stopped');
+        log('📡 Active-game polling stopped');
     }
 }
 

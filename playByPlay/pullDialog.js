@@ -9,6 +9,7 @@ import {
 } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { getCurrentMode } from '../ui/panelSystem.js';
+import { log } from '../utils/logger.js';
 
 // Track Pull dialog state
 let pullSelectedPlayer = undefined; // undefined = no selection yet, null = Unknown Player selected, Player object = specific player selected
@@ -161,7 +162,7 @@ function showPullDialog() {
     updatePullDialogState();
 
     // Show dialog
-    console.log('Showing pull dialog');
+    log('Showing pull dialog');
     dialog.style.display = 'block';
     
     // Ensure dialog is visible (in case CSS is hiding it)
@@ -373,7 +374,7 @@ function updatePullDialogState() {
 }
 
 function createPullEvent() {
-    console.log('createPullEvent() called');
+    log('createPullEvent() called');
     const game = currentGame();
     const point = getLatestPoint();
     if (!game || !point) {
@@ -432,11 +433,11 @@ function createPullEvent() {
     // Close dialog and proceed to defense screen
     closePullDialog();
 
-    console.log('Pull event created:', pullEvent.summarize());
+    log('Pull event created:', pullEvent.summarize());
 }
 
 function closePullDialog() {
-    console.log('closePullDialog() called');
+    log('closePullDialog() called');
     document.getElementById('pullDialog').style.display = 'none';
     
     // Panel UI stays on game screen — no legacy screen navigation needed

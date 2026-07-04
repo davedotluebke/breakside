@@ -28,6 +28,7 @@
  * WebRTC is a scoped change within this module.
  */
 import { authFetch, API_BASE_URL } from '../store/sync.js';
+import { log } from '../utils/logger.js';
 
 /**
  * Merge a completed-utterance transcript into an accumulated transcript.
@@ -133,7 +134,7 @@ const narrationRealtimeSession = (function() {
 
         // Timing breakdown — helps diagnose slow orange→green button transitions.
         const t0 = performance.now();
-        const logPhase = (label) => console.log(`[realtimeSession] ${label}: ${Math.round(performance.now() - t0)}ms`);
+        const logPhase = (label) => log(`[realtimeSession] ${label}: ${Math.round(performance.now() - t0)}ms`);
 
         // 1. Fetch ephemeral token from our backend (mode determines which
         //    OpenAI endpoint the server hits; we never see the real key).
@@ -462,7 +463,7 @@ const narrationRealtimeSession = (function() {
                 // strong enough to force a tool call, or the audio was
                 // ambiguous. Log it so we can tune.
                 if (msg.delta) {
-                    console.log('[rt] MODEL TEXT OUTPUT (not expected):', msg.delta);
+                    log('[rt] MODEL TEXT OUTPUT (not expected):', msg.delta);
                 }
                 break;
 
@@ -487,7 +488,7 @@ const narrationRealtimeSession = (function() {
                     if (fnCalls === 0) {
                         console.warn(`[rt] response.done with no function calls (status=${r.status}, items: ${items.length}, texts: ${texts})`, r);
                     } else {
-                        console.log(`[rt] response.done: ${fnCalls} function call(s), status=${r.status}`);
+                        log(`[rt] response.done: ${fnCalls} function call(s), status=${r.status}`);
                     }
                 } catch (_) {}
                 if (pendingResponseDone) {
@@ -507,7 +508,7 @@ const narrationRealtimeSession = (function() {
                     errMsg.includes('buffer_empty') ||
                     errMsg.includes('active response') ||
                     msg.error?.code === 'conversation_already_has_active_response') {
-                    console.log('[rt] (ignored) server already handled commit/response:', errMsg);
+                    log('[rt] (ignored) server already handled commit/response:', errMsg);
                     break;
                 }
                 onErrorCb(new Error(errMsg));

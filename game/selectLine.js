@@ -21,6 +21,7 @@ import {
     updatePlayByPlayPanelState,
     updateSubPlayersCount, handleLineupReadyTap,
 } from './gameScreenEvents.js';
+import { log } from '../utils/logger.js';
 
 // =============================================================================
 // Select Next Line Panel
@@ -713,11 +714,11 @@ function updateODToggleButton() {
  * Validates selection and starts the point with role-aware panel transitions
  */
 function handlePanelStartPoint() {
-    console.log('🏃 handlePanelStartPoint called');
+    log('🏃 handlePanelStartPoint called');
     
     // Check if point is already in progress
     if (typeof isPointInProgress === 'function' && isPointInProgress()) {
-        console.log('🏃 Point already in progress, ignoring');
+        log('🏃 Point already in progress, ignoring');
         return;
     }
     
@@ -731,7 +732,7 @@ function handlePanelStartPoint() {
     
     // Get selected players
     const selectedPlayers = getSelectedPlayersFromPanel();
-    console.log('🏃 Selected players:', selectedPlayers);
+    log('🏃 Selected players:', selectedPlayers);
     
     // Get expected player count
     const expectedCount = parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
@@ -754,7 +755,7 @@ function handlePanelStartPoint() {
     
     // Use existing startNextPoint logic from pointManagement.js
     if (typeof startNextPoint === 'function') {
-        console.log('🏃 Calling startNextPoint()');
+        log('🏃 Calling startNextPoint()');
         startNextPoint();
         
         // Role-aware panel transitions (only if we didn't navigate away)

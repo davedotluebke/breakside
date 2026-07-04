@@ -13,6 +13,7 @@ import { canEditPlayByPlay, showControllerToast } from './controllerState.js';
 // eventLogDisplay/panelSystem) never reaches back into this file, and
 // showPullDialog is only called at point-start time — safe back-edge import.
 import { showPullDialog } from '../playByPlay/pullDialog.js';
+import { log } from '../utils/logger.js';
 
 let countdownInterval = null;
 let countdownSeconds = 90;
@@ -20,7 +21,7 @@ let isCountdownRunning = false;
 let isPaused = false;
 
 function moveToNextPoint() {
-    console.log('moveToNextPoint() called');
+    log('moveToNextPoint() called');
 
     logEvent("New point started");
 
@@ -93,7 +94,7 @@ function startNextPoint() {
     if (game && typeof window.getEffectiveLineForNextPoint === 'function') {
         const effective = window.getEffectiveLineForNextPoint(game);
         activePlayersForThisPoint = [...(effective.line || [])];
-        console.log(`📋 Effective line for next point: source=${effective.source}, players=`,
+        log(`📋 Effective line for next point: source=${effective.source}, players=`,
             activePlayersForThisPoint);
     } else {
         // Fallback: read from the visible panel checkboxes (legacy path).
@@ -103,7 +104,7 @@ function startNextPoint() {
                 activePlayersForThisPoint.push(checkbox.dataset.playerName);
             }
         });
-        console.log('📋 Got players from panel table (fallback):', activePlayersForThisPoint);
+        log('📋 Got players from panel table (fallback):', activePlayersForThisPoint);
     }
 
     // Promote the On Deck line into Next (side-agnostic). Done AFTER reading
@@ -122,11 +123,11 @@ function startNextPoint() {
         game.pendingNextLine.odLineModifiedAt = nowIso;
         game.pendingNextLine.odOnDeckLine = [];
         game.pendingNextLine.odOnDeckLineModifiedAt = nowIso;
-        console.log('📋 Promoted On Deck line into Next (odLine):', game.pendingNextLine.odLine);
+        log('📋 Promoted On Deck line into Next (odLine):', game.pendingNextLine.odLine);
     }
 
     // Clear the stored next line selections since we're now using them
-    console.log('About to clear next line selections in startNextPoint after using them');
+    log('About to clear next line selections in startNextPoint after using them');
     clearNextLineSelections();
 
     // No need to clear lineupReadyAt/By on point start — the toast-only

@@ -29,9 +29,10 @@ import { updateTeamRosterDisplay } from './rosterManagement.js';
 import { showTeamSettingsScreen } from './teamSettings.js';
 import { showGameSummaryFromList } from './gameSummary.js';
 import { downloadJSON } from '../game/gameLogic.js';
+import { log } from '../utils/logger.js';
 
 function showSelectTeamScreen(firsttime = false) {
-    console.log('showSelectTeamScreen called (cloud-only mode)');
+    log('showSelectTeamScreen called (cloud-only mode)');
     const teamListElement = document.getElementById('teamList');
     const teamListWarning = document.getElementById('teamListWarning');
     if (!teamListElement || !teamListWarning) {
@@ -512,7 +513,7 @@ async function deleteCloudGameWithConfirm(gameId, team = null) {
  * Ensures the team is loaded into local state for the app to work with
  */
 async function selectCloudTeam(cloudTeam, options = {}) {
-    console.log('📥 Selecting cloud team:', cloudTeam.name);
+    log('📥 Selecting cloud team:', cloudTeam.name);
     // landOn: 'roster' opens the Edit Roster screen directly; anything else
     // (default) opens the Start/Continue Game screen.
     const landOn = options.landOn || 'startGame';
@@ -523,7 +524,7 @@ async function selectCloudTeam(cloudTeam, options = {}) {
 
         if (!localTeam) {
             // Team not in local state - sync it
-            console.log('📥 Team not in local state, syncing...');
+            log('📥 Team not in local state, syncing...');
             if (typeof syncUserTeams === 'function') {
                 await syncUserTeams();
                 localTeam = teams.find(t => t.id === cloudTeam.id);
@@ -532,7 +533,7 @@ async function selectCloudTeam(cloudTeam, options = {}) {
 
         if (!localTeam) {
             // Still not found - create it from cloud data
-            console.log('📥 Creating local team from cloud data...');
+            log('📥 Creating local team from cloud data...');
             localTeam = new Team(cloudTeam.name, [], cloudTeam.id);
             localTeam.createdAt = cloudTeam.createdAt || new Date().toISOString();
             localTeam.updatedAt = cloudTeam.updatedAt || localTeam.createdAt;
@@ -644,7 +645,7 @@ function gameMatchesId(g, gameId) {
 }
 
 async function resumeCloudGame(cloudTeam, gameId, role) {
-    console.log('📥 Resuming cloud game:', gameId, role ? `(${role})` : '');
+    log('📥 Resuming cloud game:', gameId, role ? `(${role})` : '');
 
     try {
         // Set the team role before entering the game screen
@@ -856,7 +857,7 @@ function initializeTeamSelection() {
 
             // Shared offline fallback: create the team locally and queue for sync.
             const createTeamLocally = () => {
-                console.log('📴 Offline - creating team locally and queueing for sync');
+                log('📴 Offline - creating team locally and queueing for sync');
                 const newTeam = new Team(newTeamName);
                 teams.push(newTeam);
                 setCurrentTeam(newTeam);
@@ -917,7 +918,7 @@ function initializeTeamSelection() {
                 }
 
                 const result = await response.json();
-                console.log('✅ Team created on server:', result);
+                log('✅ Team created on server:', result);
 
                 // Add to local state
                 teams.push(newTeam);
