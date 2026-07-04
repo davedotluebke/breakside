@@ -188,7 +188,7 @@ function handleKeyPlayPanelToggle(panelType, headerElement) {
     const subButtonsContainer = headerElement.parentElement.querySelector('.key-play-sub-buttons');
     
     // Check if this panel is currently unfurled
-    const isCurrentlyUnfurled = subButtonsContainer.style.height !== '0px';
+    const isCurrentlyUnfurled = subButtonsContainer.classList.contains('kp-unfurled');
     
     if (isCurrentlyUnfurled) {
         // Furl this panel
@@ -212,26 +212,48 @@ function handleKeyPlayPanelToggle(panelType, headerElement) {
     }
 }
 
+// Furled/unfurled state is tracked with the `kp-unfurled` class — the
+// inline height is animation plumbing, not state (checking it via string
+// comparison against '0px'/'0' was fragile).
 function furlPanel(container) {
+    container.classList.remove('kp-unfurled');
     // Set height to 0 and opacity to 0 for smooth transition
     container.style.height = '0';
     container.style.opacity = '0';
 }
 
 function unfurlPanel(container) {
+    container.classList.add('kp-unfurled');
     // Temporarily set height to auto to measure content
     container.style.height = 'auto';
     const fullHeight = container.scrollHeight;
-    
+
     // Set height to 0 first, then animate to full height
     container.style.height = '0';
     container.style.opacity = '0';
-    
+
     // Use requestAnimationFrame to ensure the height: 0 is applied
     requestAnimationFrame(() => {
         container.style.height = fullHeight + 'px';
         container.style.opacity = '1';
     });
+}
+
+/**
+ * Find the currently unfurled key-play panel, if any.
+ * @returns {{panel: HTMLElement|null, panelType: string|null}}
+ */
+function getUnfurledPanelInfo() {
+    let panel = null;
+    let panelType = null;
+    document.querySelectorAll('#keyPlayPanels .key-play-sub-buttons').forEach(container => {
+        if (container.classList.contains('kp-unfurled')) {
+            panel = container;
+            const parentPanel = container.closest('.key-play-panel');
+            panelType = parentPanel ? parentPanel.dataset.panelType : null;
+        }
+    });
+    return { panel, panelType };
 }
 
 function handleKeyPlaySubButton(subButtonType, panelType, buttonElement) {
@@ -502,20 +524,10 @@ function createKeyPlayDefenseEvent(player) {
 }
 
 function handleKeyPlayPlayerSelection(playerName, buttonElement) {
-    // Check which panel is currently unfurled (height > 0)
-    const panels = document.querySelectorAll('#keyPlayPanels .key-play-sub-buttons');
-    let unfurledPanel = null;
-    let panelType = null;
-    
-    panels.forEach(panel => {
-        if (panel.style.height && panel.style.height !== '0px' && panel.style.height !== '0') {
-            unfurledPanel = panel;
-            // Get panel type from the parent panel's data attribute
-            const parentPanel = panel.closest('.key-play-panel');
-            panelType = parentPanel ? parentPanel.dataset.panelType : null;
-        }
-    });
-    
+    // Check which panel is currently unfurled
+    const { panel: unfurledPanel, panelType } = getUnfurledPanelInfo();
+
+
     if (unfurledPanel && panelType) {
         if (panelType === 'throw') {
             handleThrowPlayerSelection(playerName, buttonElement);
@@ -650,18 +662,9 @@ function createKeyPlayThrowEvent() {
 
 function handleKeyPlayHeaderToggle() {
     // Check which panel is currently unfurled
-    const panels = document.querySelectorAll('#keyPlayPanels .key-play-sub-buttons');
-    let unfurledPanel = null;
-    let panelType = null;
-    
-    panels.forEach(panel => {
-        if (panel.style.height && panel.style.height !== '0px' && panel.style.height !== '0') {
-            unfurledPanel = panel;
-            const parentPanel = panel.closest('.key-play-panel');
-            panelType = parentPanel ? parentPanel.dataset.panelType : null;
-        }
-    });
-    
+    const { panel: unfurledPanel, panelType } = getUnfurledPanelInfo();
+
+
     // Only allow header toggling for throw events (multi-player selection)
     if (unfurledPanel && panelType === 'throw') {
         // Toggle between thrower and receiver selection

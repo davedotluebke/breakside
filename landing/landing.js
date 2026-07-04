@@ -222,8 +222,11 @@ signupForm?.addEventListener('submit', async (e) => {
         });
         
         if (error) throw error;
-        
-        if (data.user && !data.user.confirmed_at) {
+
+        // No session back from signUp = email confirmation required. (The
+        // old `!data.user.confirmed_at` check is unreliable — the presence
+        // of a session is what actually says "signed in now".)
+        if (!data.session) {
             showAuthMessage('Check your email for a message from "Supabase Auth" and click the link to activate your account.', 'success');
             // After 10 seconds, switch back to sign-in tab
             setTimeout(() => {
