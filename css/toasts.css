@@ -1,0 +1,237 @@
+/* ==========================================================================
+   toasts.css — Toasts & notifications: handoff toast, countdown overlay, toast
+   container, line promoted modal.
+   Split from main.css (F4); rule order preserved — these files load in
+   sequence (see index.html) and must stay in that order.
+   Colors come from the token palette in css/tokens.css.
+   ========================================================================== */
+
+/* =============================================================================
+   Phase 6: Controller UI - Handoff Panel, Toast Notifications
+   ============================================================================= */
+
+/* Handoff Toast - special styling for handoff requests */
+.toast.toast-handoff {
+    background: linear-gradient(135deg, var(--color-danger-surface) 0%, var(--color-danger-surface-deep) 100%);
+    color: var(--color-danger-text);
+    padding: 10px 12px;
+    gap: 8px;
+}
+
+.toast.toast-handoff .toast-message {
+    font-size: 0.85rem;
+    line-height: 1.3;
+}
+
+.toast.toast-handoff .toast-message strong {
+    font-weight: 600;
+}
+
+.handoff-toast-buttons {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.handoff-circular-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    position: relative;
+    margin: 0;
+    padding: 0;
+}
+
+.handoff-circular-btn:hover {
+    transform: scale(1.1);
+}
+
+.handoff-circular-btn:active {
+    transform: scale(0.95);
+}
+
+.handoff-circular-btn.accept-btn {
+    background: var(--color-primary);
+    color: white;
+    box-shadow: 0 2px 6px var(--color-primary-glow);
+}
+
+.handoff-circular-btn.accept-btn i {
+    position: relative;
+    z-index: 2;
+}
+
+.handoff-circular-btn.deny-btn {
+    background: var(--color-danger);
+    color: white;
+    box-shadow: 0 2px 6px var(--color-danger-glow);
+}
+
+/* Countdown overlay on accept button - vertical fill animation */
+.countdown-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 1;
+    /* Background set via inline style for animation */
+}
+
+/* Click animation for auto-accept */
+@keyframes buttonClick {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.9); }
+    100% { transform: scale(1); }
+}
+
+.handoff-circular-btn.auto-clicked {
+    animation: buttonClick 0.2s ease;
+}
+
+/* Toast Notification Container - positioned at top of screen */
+.toast-container {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    /* Above the Field landscape takeover panel (z-index 9999) so hints/toasts
+       are visible in full-screen Field mode, not hidden behind it. */
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+    max-width: 90%;
+    width: 350px;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    animation: toastSlideDown 0.3s ease-out;
+    pointer-events: auto;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: grab;
+    user-select: none;
+    touch-action: pan-y;
+    transition: transform 0.1s ease-out, opacity 0.1s ease-out;
+}
+
+.toast.toast-success {
+    background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%);
+    color: white;
+}
+
+.toast.toast-info {
+    background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info-active) 100%);
+    color: white;
+}
+
+.toast.toast-warning {
+    background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-hover) 100%);
+    color: var(--text-primary);
+}
+
+.toast.toast-error {
+    background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-hover) 100%);
+    color: white;
+}
+
+.toast i {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.toast-message {
+    flex: 1;
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    color: inherit;
+    opacity: 0.7;
+    cursor: pointer;
+    padding: 4px;
+    font-size: 1rem;
+    line-height: 1;
+    flex-shrink: 0;
+    margin: 0;
+}
+
+.toast-close:hover {
+    opacity: 1;
+}
+
+.toast.toast-swiping {
+    transition: none;
+}
+
+.toast.toast-hiding {
+    animation: toastSlideUp 0.3s ease-in forwards;
+}
+
+@keyframes toastSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes toastSlideUp {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-30px);
+    }
+}
+
+@media (max-width: 480px) {
+    .toast-container {
+        top: 8px;
+        width: 95%;
+    }
+}
+
+/* Line Promoted Modal */
+.line-promoted-modal {
+    text-align: center;
+}
+
+.line-promoted-modal .modal-icon {
+    font-size: 3rem;
+    margin-bottom: 15px;
+}
+
+.line-promoted-modal h3 {
+    color: var(--color-success);
+    margin-bottom: 10px;
+}
+
+.line-promoted-modal p {
+    color: var(--text-muted);
+    margin-bottom: 20px;
+}
+

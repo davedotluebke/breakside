@@ -1,0 +1,593 @@
+/* ==========================================================================
+   teams.css — Teams screen: team cards, events, event dialogs, event roster,
+   games list.
+   Split from main.css (F4); rule order preserved — these files load in
+   sequence (see index.html) and must stay in that order.
+   Colors come from the token palette in css/tokens.css.
+   ========================================================================== */
+
+/* ============================================
+   Collapsible Team List Styles (Phase 6b)
+   ============================================ */
+
+.teams-list-container {
+    margin-top: 1em;
+}
+
+.team-section {
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    margin-bottom: 7px;
+    overflow: hidden;
+    background: var(--white);
+}
+
+.team-section.has-active-games {
+    border-color: var(--color-success);
+    box-shadow: 0 0 5px var(--color-success-tint);
+}
+
+.team-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 12px;
+    background: var(--surface-subtle);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease;
+}
+
+.team-header:hover {
+    background: var(--surface-hover);
+}
+
+.team-section.has-active-games .team-header {
+    background: var(--surface-game-active);
+}
+
+.team-section.has-active-games .team-header:hover {
+    background: var(--surface-game-active-hover);
+}
+
+/* Top row: [active dot] [icon] [name] ... [trash] */
+.team-header-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    /* Query container so the "Team settings" label hides based on the
+       header row's own width rather than the viewport width. */
+    container-type: inline-size;
+    container-name: team-header-row;
+}
+
+.team-header-top-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.team-header-name {
+    font-weight: bold;
+    font-size: 1.1em;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.team-header-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.team-active-indicator {
+    flex-shrink: 0;
+    animation: pulse 2s infinite;
+}
+
+/* Bottom row: [coach badge] [game count] [roster btn] */
+.team-header-bottom {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    padding-left: 2px;
+}
+
+.team-header .role-badge {
+    flex-shrink: 0;
+}
+
+.team-header .role-badge.coach-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-secondary);
+    font-size: 0.95em;
+}
+
+.team-header .role-badge.coach-badge i {
+    color: var(--brand-orange);
+}
+
+.team-header .role-badge.viewer-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--color-secondary);
+    font-size: 0.95em;
+}
+
+.team-header .role-badge.viewer-badge i {
+    color: var(--color-secondary);
+}
+
+/* On very narrow screens, hide the "Coach" text and show only the icon */
+@media (max-width: 360px) {
+    .role-badge-text {
+        display: none;
+    }
+}
+
+.game-count {
+    color: var(--text-muted);
+}
+
+.team-header-bottom .text-icon-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.team-header-bottom .text-icon-button:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.team-header .icon-button {
+    padding: 4px 8px;
+    border-radius: 4px;
+    color: var(--text-primary);
+}
+
+.team-header .icon-button:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+/* Team settings button: gear icon with a responsive text label. */
+.team-settings-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.team-settings-btn .icon-button-label {
+    font-size: 0.9em;
+}
+
+/* Drop the text label when the header row is too narrow to fit it
+   alongside the team name; the gear icon stays. */
+@container team-header-row (max-width: 380px) {
+    .team-settings-btn .icon-button-label {
+        display: none;
+    }
+}
+
+.team-games-container {
+    border-top: 1px solid var(--border-light);
+    background: var(--white);
+}
+
+.new-game-btn {
+    display: block;
+    width: calc(100% - 30px);
+    margin: 10px 15px;
+    padding: 10px;
+    background: var(--color-success);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.new-game-btn:hover {
+    background: var(--color-success-hover);
+}
+
+.new-game-btn i {
+    margin-right: 4px;
+}
+
+/* Event container styles */
+.event-container {
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+    margin: 8px 12px;
+    background: var(--surface-subtle);
+    overflow: hidden;
+}
+
+.event-container.event-closed {
+    opacity: 0.7;
+}
+
+.event-header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 12px;
+    background: var(--surface-raised);
+    /* Query container so the roster/settings labels collapse based on the
+       event card's own width rather than the viewport width. */
+    container-type: inline-size;
+    container-name: event-header-row;
+}
+
+.event-header-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.event-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.event-record {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.event-header-btns {
+    display: flex;
+    gap: 6px;
+}
+
+/* Roster & settings controls on the event header's second row. Dark text for
+   contrast against the grey header band. */
+.event-header-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-strong);
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    font-size: 0.85rem;
+}
+
+.event-header-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+/* Responsive label collapse. Widest: "Event roster" + "Event settings".
+   Narrower in stages: settings label drops, then "Event roster" → "Roster",
+   then roster label drops to icon-only. Thresholds are tuned to the buttons'
+   actual rendered widths (both labels need ~217px, "Event roster"+gear ~126px,
+   "Roster"+gear ~93px) so labels stay visible whenever there's real room. */
+.event-header-btn .ev-roster-short {
+    display: none;
+}
+
+@container event-header-row (max-width: 230px) {
+    .event-header-btn .ev-settings-label { display: none; }
+}
+
+@container event-header-row (max-width: 140px) {
+    .event-header-btn .ev-roster-full { display: none; }
+    .event-header-btn .ev-roster-short { display: inline; }
+}
+
+@container event-header-row (max-width: 100px) {
+    .event-header-btn .ev-roster-short { display: none; }
+}
+
+.event-games-list {
+    margin: 0;
+    padding: 0;
+}
+
+.event-new-game-btn {
+    margin: 4px 8px 8px;
+    width: calc(100% - 16px);
+    font-size: 0.85rem;
+    padding: 6px;
+}
+
+.new-event-btn,
+.new-event-btn:active {
+    background: var(--accent-purple) !important;
+}
+
+.new-event-btn:hover {
+    background: var(--accent-purple-hover) !important;
+}
+
+.team-action-buttons {
+    display: flex;
+    gap: 8px;
+    padding: 8px 15px;
+    overflow: hidden;
+}
+
+.team-action-buttons .new-game-btn {
+    display: block;
+    width: auto;
+    min-width: 0;
+    flex: 1;
+    margin: 0;
+}
+
+/* Event dialog styles — matches footer / game-settings look */
+.event-dialog {
+    color: var(--text-primary);
+}
+
+.event-dialog-body {
+    padding: 0.5rem 0;
+    text-align: center;
+}
+
+.event-dialog-body label {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.event-dialog-input {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+    color: var(--text-primary);
+    background: var(--white);
+    border: 1px solid var(--border-default);
+    border-radius: 5px;
+    box-sizing: border-box;
+}
+
+.event-dialog-number {
+    width: 60px;
+    padding: 6px;
+    font-size: 1rem;
+    color: var(--text-primary);
+    background: var(--white);
+    border: 1px solid var(--border-default);
+    border-radius: 5px;
+    text-align: center;
+}
+
+.event-dialog-select {
+    padding: 6px;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    background: var(--white);
+    border: 1px solid var(--border-default);
+    border-radius: 5px;
+}
+
+.event-dialog-row {
+    margin-bottom: 0.6rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+}
+
+.event-dialog-submit {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    margin-top: 0.75rem;
+    background: var(--color-primary) !important;
+    color: var(--white) !important;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.event-dialog-submit:hover {
+    background: var(--color-primary-hover) !important;
+}
+
+.event-dialog-delete {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    margin-top: 0.5rem;
+    background: transparent !important;
+    color: var(--color-danger) !important;
+    border: 1px solid var(--color-danger) !important;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.event-dialog-delete:hover {
+    background: var(--color-danger) !important;
+    color: var(--white) !important;
+}
+
+/* Event Roster styles */
+.pickup-row td {
+    background: var(--color-warning-surface);
+}
+
+.event-roster-actions {
+    padding: 0.5rem 20px 1rem;
+}
+
+#eventRosterTable input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+}
+
+.no-games-message {
+    padding: 15px 20px;
+    color: var(--text-faint);
+    font-style: italic;
+    text-align: center;
+}
+
+.games-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.game-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--border-lighter);
+    transition: background-color 0.15s ease;
+}
+
+.game-item:last-child {
+    border-bottom: none;
+}
+
+.game-item:hover {
+    background: var(--surface-subtle);
+}
+
+.game-item.game-active {
+    background: var(--surface-game-active);
+}
+
+.game-item.game-active:hover {
+    background: var(--surface-game-active-hover);
+}
+
+/* Line 1: date vs opponent score */
+.game-line1 {
+    color: var(--text-primary);
+    font-size: 0.95em;
+}
+
+/* Line 2: Join button + delete */
+.game-line2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.game-join-btn {
+    background: none;
+    border: 1px solid var(--text-secondary);
+    color: var(--text-primary);
+    padding: 3px 14px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.game-join-btn:hover {
+    background: var(--surface-hover);
+}
+
+/* Line 3: active coaches badge */
+.game-line3 {
+    padding-top: 2px;
+}
+
+.game-active-badge {
+    display: inline-block;
+    background: var(--color-success-surface);
+    color: var(--color-success-text);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 500;
+    animation: pulse 2s infinite;
+    white-space: nowrap;
+}
+
+/* Legacy games-list li styles (kept for backwards compatibility) */
+.games-list li:not(.game-item) {
+    padding: 0.5em 1em;
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+.icon-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.2em 0.4em;
+    font-size: 1em;
+}
+
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+.unknown-player {
+    background-color: var(--border-muted);
+    border: 2px dashed var(--text-placeholder);
+    font-style: italic;
+}
+
+.countdown-timer {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 5px 10px;
+    border-radius: 5px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: monospace;
+}
+
+.timer-label {
+    font-size: 0.8em;
+    color: white;
+    margin-bottom: 2px;
+}
+
+#timerDisplay {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.timer-normal { color: var(--color-primary); }  /* Bootstrap blue */
+.timer-warning { color: var(--color-warning); } /* Bootstrap yellow */
+.timer-danger { color: var(--color-danger); }  /* Bootstrap red */
+

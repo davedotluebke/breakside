@@ -1,0 +1,927 @@
+/* ==========================================================================
+   teams-manage.css — Teams management: sync status bar, join team, viewer roster, sign out,
+   team settings, members, invites, join modal, PWA install prompt.
+   Split from main.css (F4); rule order preserved — these files load in
+   sequence (see index.html) and must stay in that order.
+   Colors come from the token palette in css/tokens.css.
+   ========================================================================== */
+
+/* =============================================================================
+   Sync Status Bar (Phase 4)
+   ============================================================================= */
+
+/* Join Team section on teams screen */
+/* Compact actions row on the teams screen: Join / Create. */
+.teams-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.teams-action-btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 0;
+    padding: 8px 10px;
+    color: var(--white);
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+/* Reuse the app's established blue (primary) and green (positive) gradients. */
+.teams-action-join {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-active) 100%);
+}
+
+.teams-action-join:hover {
+    background: linear-gradient(135deg, var(--color-primary-active) 0%, var(--color-primary-deep) 100%);
+}
+
+.teams-action-create {
+    background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%);
+}
+
+.teams-action-create:hover {
+    background: linear-gradient(135deg, var(--color-success-hover) 0%, var(--color-success-active) 100%);
+}
+
+/* Invite-code form inside the Join-a-Team modal. */
+.join-modal-help {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin: 0 0 12px;
+}
+
+#joinTeamCodeModal .join-team-form {
+    margin-bottom: 12px;
+}
+
+#joinTeamCodeModal .join-code-input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#joinTeamCodeModal .join-btn {
+    width: 100%;
+}
+
+/* Viewer roster back button */
+.viewer-roster-back {
+    margin-bottom: 8px;
+    padding: 6px 12px;
+    font-size: 0.9rem;
+    background: none;
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-primary);
+}
+
+.viewer-roster-back i {
+    margin-right: 4px;
+}
+
+.sync-status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, var(--surface-subtle) 0%, var(--surface-hover) 100%);
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    padding: 10px 15px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.sync-status-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.sync-status-icon {
+    font-size: 1.2rem;
+}
+
+.sync-status-text {
+    font-weight: 500;
+    color: var(--ink-700);
+}
+
+.pending-badge {
+    background: linear-gradient(135deg, var(--orange-vivid) 0%, var(--orange-vivid-deep) 100%);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    animation: pendingPulse 2s infinite;
+}
+
+@keyframes pendingPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.synced-badge {
+    background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.sync-status-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.sync-btn {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-active) 100%);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s ease;
+    margin: 0;
+}
+
+.sync-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--color-primary-active) 0%, var(--color-primary-deep) 100%);
+    transform: translateY(-1px);
+}
+
+.sync-btn:disabled {
+    background: var(--color-secondary);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.sync-btn i {
+    font-size: 0.9rem;
+}
+
+/* Sign out button - distinct styling */
+.sync-btn.sign-out-btn {
+    background: linear-gradient(135deg, var(--color-secondary) 0%, var(--ink-700) 100%);
+    margin-left: 8px;
+}
+
+.sync-btn.sign-out-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--color-secondary-hover) 0%, var(--ink-800) 100%);
+}
+
+.fa-spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Subtle single-rotation spin for auto-refresh (not infinite) */
+.refresh-spin {
+    animation: refresh-spin-once 0.6s ease-in-out;
+}
+
+@keyframes refresh-spin-once {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Local-only entity indicator */
+.local-only-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--color-warning-surface);
+    color: var(--color-warning-text);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+.local-only-indicator::before {
+    content: '⏳';
+}
+
+/* Player ID display in edit dialog */
+.edit-player-id-field {
+    background: var(--surface-subtle);
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+}
+
+.player-id-code {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--surface-hover);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    color: var(--ink-700);
+    user-select: all;
+}
+/* =============================================================================
+   Team Settings Screen
+   ============================================================================= */
+
+#teamSettingsScreen {
+    padding: 10px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+
+.back-button {
+    background: var(--color-secondary);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+}
+
+.back-button:hover {
+    background: var(--color-secondary-hover);
+}
+
+.settings-content {
+    text-align: left;
+}
+
+.settings-section {
+    background: white;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.settings-section h3 {
+    margin: 0 0 12px 0;
+    padding: 0;
+    font-size: 1rem;
+    color: var(--text-primary);
+    text-align: left;
+    border-bottom: 1px solid var(--border-lighter);
+    padding-bottom: 8px;
+}
+
+/* Team Name Edit */
+.team-name-edit {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.team-name-edit span {
+    font-size: 1.25rem;
+    font-weight: 600;
+    flex: 1;
+}
+
+/* Members List */
+.members-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.member-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    background: var(--surface-subtle);
+    border-radius: 8px;
+}
+
+.member-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.member-icon {
+    font-size: 1.25rem;
+}
+
+.member-details {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.member-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.member-email {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.member-role {
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.member-role.role-coach {
+    background: var(--color-success);
+    color: white;
+}
+
+.member-role.role-viewer {
+    background: var(--color-info);
+    color: white;
+}
+
+.remove-member-btn {
+    background: none;
+    border: none;
+    color: var(--color-danger);
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 4px;
+}
+
+.remove-member-btn:hover {
+    background: var(--color-danger-surface);
+}
+
+/* Invites List */
+.invites-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.invite-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    background: var(--surface-subtle);
+    border-radius: 8px;
+}
+
+.invite-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.invite-role-icon {
+    font-size: 1.25rem;
+}
+
+.invite-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.invite-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.invite-meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.invite-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.invite-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.invite-btn {
+    flex: 1;
+    min-width: 130px;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.invite-btn.coach-invite {
+    background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%);
+    color: white;
+}
+
+.invite-btn.coach-invite:hover {
+    background: linear-gradient(135deg, var(--color-success-hover) 0%, var(--color-success-active) 100%);
+}
+
+.invite-btn.viewer-invite {
+    background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info-hover) 100%);
+    color: white;
+}
+
+.invite-btn.viewer-invite:hover {
+    background: linear-gradient(135deg, var(--color-info-hover) 0%, var(--color-info-active) 100%);
+}
+
+/* Join Team Form */
+.join-team-form {
+    display: flex;
+    gap: 10px;
+}
+
+.join-code-input {
+    flex: 1;
+    padding: 10px 15px;
+    font-size: 1.1rem;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    text-align: center;
+    letter-spacing: 3px;
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+}
+
+.join-code-input:focus {
+    border-color: var(--color-primary);
+    outline: none;
+}
+
+.join-btn {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-active) 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.join-btn:hover {
+    background: linear-gradient(135deg, var(--color-primary-active) 0%, var(--color-primary-deep) 100%);
+}
+
+/* Team Identity Section */
+.section-description {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin: -8px 0 15px 0;
+}
+
+.identity-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.identity-form .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.identity-form .form-group label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+/* Override auth.css form-group input styles for identity form */
+.identity-form .form-group input,
+.identity-form .form-group input[type="text"],
+.identity-form .form-group input[type="url"] {
+    background: var(--white) !important;
+    color: var(--text-primary) !important;
+    border: 2px solid var(--border-light) !important;
+}
+
+.identity-form .form-group input:focus {
+    border-color: var(--brand-orange) !important;
+    outline: none;
+    box-shadow: none !important;
+}
+
+.identity-form .form-group input::placeholder {
+    color: var(--text-placeholder) !important;
+}
+
+.symbol-input {
+    padding: 10px 15px;
+    font-size: 1.1rem;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    text-align: center;
+    letter-spacing: 2px;
+    border-radius: 8px;
+    width: 100px;
+}
+
+.icon-url-row {
+    display: flex;
+    gap: 8px;
+}
+
+.url-input {
+    flex: 1;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    border-radius: 8px;
+}
+
+.fetch-icon-btn {
+    padding: 10px 15px;
+    background: linear-gradient(135deg, var(--color-secondary) 0%, var(--ink-700) 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.fetch-icon-btn:hover {
+    background: linear-gradient(135deg, var(--color-secondary-hover) 0%, var(--ink-800) 100%);
+}
+
+.fetch-icon-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.icon-preview-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background: var(--surface-subtle);
+    border-radius: 8px;
+    margin-top: 8px;
+}
+
+.icon-preview {
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    object-fit: contain;
+    background: white;
+    border: 1px solid var(--border-light);
+}
+
+.clear-icon-btn {
+    padding: 6px 10px;
+    background: var(--color-danger);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.clear-icon-btn:hover {
+    background: var(--color-danger-hover);
+}
+
+.icon-status {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 4px 0 0 0;
+}
+
+.icon-status.success {
+    color: var(--color-success);
+}
+
+.icon-status.error {
+    color: var(--color-danger);
+}
+
+.save-identity-btn {
+    padding: 12px 20px;
+    background: linear-gradient(135deg, var(--brand-orange) 0%, var(--brand-orange-deep) 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.save-identity-btn:hover {
+    background: linear-gradient(135deg, var(--brand-orange-deep) 0%, var(--brand-orange-deeper) 100%);
+}
+
+.save-identity-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Loading/Info/Error messages */
+.loading-message,
+.info-message,
+.error-message {
+    padding: 15px;
+    text-align: center;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.error-message {
+    color: var(--color-danger);
+}
+
+/* Invite Created Modal */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 16px;
+    padding: 25px;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+
+.modal-content h3 {
+    margin: 0 0 15px 0;
+    color: var(--text-primary);
+}
+
+.invite-modal {
+    text-align: center;
+}
+
+.invite-code-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: var(--surface-subtle);
+    padding: 15px 20px;
+    border-radius: 12px;
+    margin: 15px 0;
+}
+
+.invite-code-display span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: 5px;
+    color: var(--text-primary);
+}
+
+.invite-link-text {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin: 10px 0 5px;
+}
+
+.invite-link-display {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 15px;
+}
+
+.invite-link-display input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* Copy button styling in invite modals */
+.invite-code-display .icon-button,
+.invite-link-display .icon-button {
+    color: var(--text-primary);
+    background: var(--surface-hover);
+    border-radius: 6px;
+    padding: 8px 12px;
+    transition: all 0.2s ease;
+}
+
+.invite-code-display .icon-button:hover,
+.invite-link-display .icon-button:hover {
+    background: var(--border-soft);
+    color: var(--black);
+}
+
+.invite-expiry {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 15px;
+}
+
+.primary-btn {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-active) 100%);
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.primary-btn:hover {
+    background: linear-gradient(135deg, var(--color-primary-active) 0%, var(--color-primary-deep) 100%);
+}
+
+.secondary-btn {
+    background: var(--color-secondary);
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.secondary-btn:hover {
+    background: var(--color-secondary-hover);
+}
+
+/* Join Team Modal */
+.join-modal {
+    text-align: center;
+}
+
+.join-team-preview {
+    background: var(--surface-subtle);
+    padding: 20px;
+    border-radius: 12px;
+    margin: 15px 0;
+}
+
+.join-team-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.join-team-role {
+    font-size: 1rem;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+}
+
+.join-team-inviter {
+    font-size: 0.9rem;
+    color: var(--text-faint);
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 15px;
+}
+
+/* =============================================================================
+   PWA Install Prompt Modal
+   ============================================================================= */
+
+.pwa-install-modal {
+    text-align: center;
+    max-width: 380px;
+}
+
+.pwa-install-icon {
+    font-size: 3rem;
+    margin-bottom: 10px;
+}
+
+.pwa-install-modal h3 {
+    margin: 0 0 15px 0;
+    color: var(--text-primary);
+    font-size: 1.3rem;
+}
+
+.pwa-install-message {
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 20px;
+}
+
+.pwa-install-message p {
+    margin: 0 0 10px 0;
+}
+
+.pwa-install-message p:last-child {
+    margin-bottom: 0;
+}
+
+.pwa-install-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+
+.pwa-install-actions .primary-btn,
+.pwa-install-actions .btn-secondary,
+.pwa-install-actions .secondary-btn {
+    min-width: 200px;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    text-decoration: none;
+    text-align: center;
+}
+
+.pwa-install-actions .primary-btn {
+    background: linear-gradient(135deg, var(--orange-cta) 0%, var(--orange-cta-deep) 100%);
+    color: white;
+    border: none;
+    font-weight: 600;
+}
+
+.pwa-install-actions .primary-btn:hover {
+    background: linear-gradient(135deg, var(--orange-cta-deep) 0%, var(--orange-cta-deeper) 100%);
+}
+
+.pwa-install-actions .btn-secondary {
+    background: var(--surface-light);
+    color: var(--text-primary);
+    border: 1px solid var(--border-light);
+}
+
+.pwa-install-actions .btn-secondary:hover {
+    background: var(--surface-dim);
+}
+
+.pwa-install-actions .secondary-btn {
+    background: transparent;
+    color: var(--text-muted);
+    border: none;
+    font-size: 0.9rem;
+}
+
+.pwa-install-actions .secondary-btn:hover {
+    color: var(--text-primary);
+    text-decoration: underline;
+}
+

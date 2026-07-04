@@ -46,7 +46,7 @@
  *   │                            # - Module coordination
  *   │
  *   ├── index.html              # Main HTML with module script tags
- *   ├── main.css                # Application styles
+ *   ├── css/*.css              # Application styles (tokens + per-concern files)
  *   ├── manifest.json           # PWA manifest
  *   └── service-worker.js       # Service worker for offline functionality
  *
