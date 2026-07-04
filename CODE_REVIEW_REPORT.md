@@ -650,21 +650,28 @@ to main. Four audit agents re-verified every Section-5 finding against the curre
 Supabase RLS item the audit flagged as "open" was already resolved by Dave (decision 12 — no
 public tables, default-RLS trigger installed).
 
-### F1 · Backend closeout (the last real 🔴s + small 🟡s)
+### F1 · Backend closeout (the last real 🔴s + small 🟡s) — ✅ DONE (branch `backend-closeout`)
 
-- 🔴 `routers/events.py:36,46-54,105-113` — event read/list endpoints still require only
-  authentication (not team access), and write checks are still inline `if auth_required():`
-  instead of the shared `require_*` dependencies.
-- 🔴 `auth/dependencies.py:204-205` — `require_game_team_coach` still reads the request body
-  in a dependency and trusts body `teamId` verbatim for new games.
-- 🔴 `routers/games.py:227-243` — `restore_version` re-merges `pendingNextLine` and always
-  runs authoritative, so a restore is not a faithful rollback. **Needs Dave's call:** faithful
-  rollback, or current merge-on-restore behavior kept and documented?
-- 🟡 `routers/games.py:64-66` — print + broad `except` in `sync_game`; no logging module
-  anywhere in the backend. 🟡 `storage/game_storage.py:427` `any` → `typing.Any`.
-  🟡 `auth/jwt_validation.py:32-37` — no JWT-secret fail-fast at boot when auth required.
-  (Accepted/deferred: `entity_store.save()` caller-dict mutation now documented as
+- ✅ Event endpoints now run through shared dependencies: reads/list via new
+  `require_event_team_access` / existing `require_team_access("team_id")`, writes via new
+  `require_event_team_coach` (existing events) and `require_body_team_coach` (create). No
+  inline `if auth_required():` checks remain in `routers/events.py`.
+- ✅ `require_game_team_coach` no longer reads the request body — it authorizes solely against
+  the stored game (404 on missing game) and serves all existing-game writes (delete, phase,
+  restore, controller, shares). Sync uses new `require_game_sync_coach`: the body is parsed
+  once via a shared `get_json_body` dependency (FastAPI dependency cache) and handed to both
+  the authz check and the handler, so the checked teamId and the stored content can't diverge;
+  a body teamId that mismatches an existing game's stored teamId is rejected (403, non-admin).
+- ✅ `restore_version` is now a faithful rollback: `save_game_version(...,
+  merge_pending_lines=False)` writes the snapshot verbatim (no pendingNextLine re-merge). The
+  restore itself is still versioned, so it can be undone. Coach-gated as before.
+- ✅ Small items: `print`/broad-except in `sync_game` → `logging` (minimal `basicConfig` added
+  in `main.py`); `any` → `typing.Any` in `game_storage.list_all_games`; startup fail-fast via
+  app lifespan (`assert_auth_configured`) when auth is required but `SUPABASE_JWT_SECRET` is
+  unset. (Accepted/deferred: `entity_store.save()` caller-dict mutation documented as
   intentional; `list_events()` unbounded scan noted for later.)
+- Tests: `test_backend_closeout.py` (23 tests — event authz, sync teamId consistency,
+  faithful restore, fail-fast).
 
 ### F2 · Finish the stats name→ID migration (PARTIAL)
 
