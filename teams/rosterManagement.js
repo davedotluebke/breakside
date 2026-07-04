@@ -10,10 +10,9 @@ import {
     currentGame, formatPlayerName, formatPlayTime, extractPlayerName,
     isPointInProgress,
 } from '../utils/helpers.js';
-import { calculatePlayerStatsFromEvents } from '../utils/statistics.js';
 import {
     getGamePlayerStats, getEventPlayerStats, getTeamPlayerStats,
-    getEventRecord, accumulateGameStats, getGameTeamStats,
+    accumulateGameStats, getGameTeamStats,
 } from '../utils/eventStats.js';
 import {
     createPlayerOffline, syncPlayerToCloud, syncTeamToCloud, syncEventToCloud,
@@ -396,134 +395,20 @@ function updateRosterScopeToggleUI(effectiveScope) {
     });
 }
 
-function updateGameSummaryRosterDisplay() {
-    const rosterElement = document.getElementById('gameSummaryRosterList');
-    if (!rosterElement) {
-        console.warn('Game summary roster list not found.');
-        return;
-    }
-    rosterElement.innerHTML = '';
-
-    const eventStats = currentGame() ? calculatePlayerStatsFromEvents(currentGame()) : {};
-    
-    // Phase 4: Use rosterSnapshot if available for historical accuracy
-    const game = currentGame();
-    let playersToDisplay = currentTeam.teamRoster;
-    
-    if (game && game.rosterSnapshot && game.rosterSnapshot.players
-            && game.rosterSnapshot.players.length > 0) {
-        // Use snapshot players but merge with current roster for full Player objects
-        // This preserves historical data (names/numbers at game time)
-        playersToDisplay = game.rosterSnapshot.players.map(snapshotPlayer => {
-            // Find the current player by ID to get accumulated stats
-            const currentPlayer = currentTeam.teamRoster.find(p => p.id === snapshotPlayer.id);
-            return currentPlayer || snapshotPlayer;
-        });
-        console.log('📸 Using roster snapshot for game summary display');
-    }
-
-    const headerRow = document.createElement('tr');
-    ['Name', 'Pts', 'Time', 'Goals', 'Assists', 'Comp%', 'Huck%', 'Ds', 'TOs', '+/-', '..per pt'].forEach(headerText => {
-        const headerCell = document.createElement('th');
-        headerCell.textContent = headerText;
-        headerCell.classList.add('roster-header');
-        headerRow.appendChild(headerCell);
-    });
-    rosterElement.appendChild(headerRow);
-
-    playersToDisplay.forEach(player => {
-        const nameClasses = ['roster-name-column'];
-        if (player.gender === Gender.FMP) {
-            nameClasses.push('player-fmp');
-        } else if (player.gender === Gender.MMP) {
-            nameClasses.push('player-mmp');
-        }
-
-        const playerStats = eventStats[player.name] || {};
-        const plusMinus = (player.pointsWon || 0) - (player.pointsLost || 0);
-        // Zero-points case renders the literal "0.0" (not "0.00") — preserved as-is.
-        const plusMinusPerPoint = player.totalPointsPlayed > 0
-            ? formatSignedFixed(plusMinus / player.totalPointsPlayed, 2)
-            : '0.0';
-
-        const playerRow = buildRosterRow([
-            { value: formatPlayerName(player), className: nameClasses },
-            { value: player.totalPointsPlayed, className: 'roster-points-column' },
-            { value: formatPlayTime(player.totalTimePlayed), className: 'roster-time-column' },
-            { value: player.goals || 0, className: 'roster-goals-column' },
-            { value: player.assists || 0, className: 'roster-assists-column' },
-            { value: formatPercentOrDash(playerStats.completions, playerStats.totalThrows), className: 'roster-comppct-column' },
-            { value: formatPercentOrDash(playerStats.huckCompletions, playerStats.totalHucks), className: 'roster-huckpct-column' },
-            { value: playerStats.dPlays || 0, className: 'roster-dplays-column' },
-            { value: playerStats.turnovers || 0, className: 'roster-turnovers-column' },
-            { value: formatSigned(plusMinus), className: 'roster-plusminus-column' },
-            { value: plusMinusPerPoint, className: 'roster-plusminus-per-point-column' }
-        ]);
-
-        rosterElement.appendChild(playerRow);
-    });
-
-    // If game is part of an event, add Event Totals section
-    if (game && game.eventId && typeof getEventPlayerStats === 'function') {
-        appendEventTotalsToSummary(game, rosterElement);
-    }
-}
+// The game-summary roster table is rendered by teams/gameSummary.js
+// (renderGameSummaryStatsTable, id-keyed via getGamePlayerStats). The old
+// name-keyed updateGameSummaryRosterDisplay that lived here — the last
+// consumer of utils/statistics.js — was dead code and has been removed.
 
 /**
- * Add event totals section to post-game summary
+ * Case- and whitespace-insensitive name equality, used by the duplicate-name
+ * guards when adding/editing players. Only the *comparison* is normalized —
+ * stored names keep the user's original casing/spacing. Without this,
+ * "alice" / "Alice " slipped past the exact-match guard and produced two
+ * roster entries that render identically but track stats separately.
  */
-function appendEventTotalsToSummary(game, containerEl) {
-    const eventStats = getEventPlayerStats(game.eventId);
-    if (!eventStats || Object.keys(eventStats).length === 0) return;
-
-    const record = typeof getEventRecord === 'function'
-        ? getEventRecord(game.eventId)
-        : { wins: 0, losses: 0 };
-
-    // Separator row
-    const sepRow = document.createElement('tr');
-    const sepCell = document.createElement('td');
-    sepCell.colSpan = 11;
-    sepCell.innerHTML = `<hr><strong>Event Totals</strong> (${record.wins}W-${record.losses}L)`;
-    sepCell.style.textAlign = 'center';
-    sepRow.appendChild(sepCell);
-    containerEl.appendChild(sepRow);
-
-    // Header row for event stats
-    const headerRow = document.createElement('tr');
-    ['Name', 'Pts', 'Time', 'Goals', 'Assists', '', '', '', 'TOs', '+/-', ''].forEach(headerText => {
-        const th = document.createElement('th');
-        th.textContent = headerText;
-        th.classList.add('roster-header');
-        headerRow.appendChild(th);
-    });
-    containerEl.appendChild(headerRow);
-
-    // Sort players by points played descending
-    const sorted = Object.entries(eventStats).sort((a, b) => b[1].pointsPlayed - a[1].pointsPlayed);
-    sorted.forEach(([playerName, stats]) => {
-        const row = document.createElement('tr');
-        row.style.background = '#f0f4ff';
-
-        const cells = [
-            playerName,
-            stats.pointsPlayed,
-            typeof formatPlayTime === 'function' ? formatPlayTime(stats.timePlayed) : '0:00',
-            stats.goals,
-            stats.assists,
-            '', '', '',
-            stats.turnovers,
-            stats.plusMinus > 0 ? `+${stats.plusMinus}` : stats.plusMinus,
-            ''
-        ];
-
-        cells.forEach(val => {
-            const td = document.createElement('td');
-            td.textContent = val;
-            row.appendChild(td);
-        });
-        containerEl.appendChild(row);
-    });
+function playerNamesMatch(a, b) {
+    return String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
 }
 
 /**
@@ -569,7 +454,11 @@ function validateJerseyNumber(input) {
         const playerName = playerNameInput ? playerNameInput.value.trim() : '';
         const playerNumber = playerNumberInput ? (playerNumberInput.value.trim() || null) : null;
         
-        if (playerName && !currentTeam.teamRoster.some(player => player.name === playerName)) {
+        if (playerName && currentTeam.teamRoster.some(player => playerNamesMatch(player.name, playerName))) {
+            alert('A player with this name already exists');
+            return;
+        }
+        if (playerName) {
             const numberValue = validateJerseyNumber(playerNumber);
             // If validation was cancelled (returned null when input was provided), don't add player
             if (playerNumber && numberValue === null) {
@@ -1240,9 +1129,11 @@ function saveEditedPlayer() {
         return;
     }
 
-    // Check if name already exists (excluding current player)
+    // Check if name already exists (excluding current player).
+    // Normalized comparison: trim + case-fold, so "alice " no longer slips
+    // past the guard as distinct from "Alice".
     const nameExists = currentTeam.teamRoster.some(p =>
-        p.id !== editPlayerDialogPlayerId && p.name === newName
+        p.id !== editPlayerDialogPlayerId && playerNamesMatch(p.name, newName)
     );
     if (nameExists) {
         alert('A player with this name already exists');

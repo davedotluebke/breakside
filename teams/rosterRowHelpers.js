@@ -1,14 +1,14 @@
 /*
  * Shared roster-stat-table row/cell building helpers.
  *
- * Used by rosterManagement.js (renderRosterTable, updateGameSummaryRosterDisplay)
- * and eventRoster.js (createEventRosterPlayerRow) — three renderers that build
- * near-identical Name/Pts/Time/Goals/Assists/Comp%/Ds/TOs/+/- rows with subtly
- * different formatting per caller (dash vs em-dash for "no data", "0.0" vs
- * "0.00" for zero-points +/-per-point, etc). This module extracts only the
- * parts that were genuinely identical across all three; the per-caller
- * formatting quirks are preserved as-is at each call site rather than
- * unified, to avoid changing what's displayed.
+ * Used by rosterManagement.js (renderRosterTable) and eventRoster.js
+ * (createEventRosterPlayerRow) — renderers that build near-identical
+ * Name/Pts/Time/Goals/Assists/Comp%/Ds/TOs/+/- rows with subtly different
+ * formatting per caller (dash vs em-dash for "no data", "0.0" vs "0.00" for
+ * zero-points +/-per-point, etc). This module extracts only the parts that
+ * were genuinely identical across the callers; the per-caller formatting
+ * quirks are preserved as-is at each call site rather than unified, to avoid
+ * changing what's displayed.
  */
 
 /**

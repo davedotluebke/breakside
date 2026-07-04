@@ -33,7 +33,7 @@ function showGameSummaryFromList(game) {
 
 /**
  * Show game summary after finishing a game (existing post-game flow).
- * Called instead of the old updateGameSummaryRosterDisplay.
+ * (Replaced the old name-keyed updateGameSummaryRosterDisplay, since removed.)
  */
 function showGameSummaryPostGame() {
     gameSummaryOrigin = 'teamRosterScreen';
