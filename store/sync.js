@@ -19,6 +19,7 @@ import { currentGame } from '../utils/helpers.js';
 // here) — safe: both sides export hoisted function declarations used only at
 // call time, and neither top level calls into the other at eval time.
 import { showControllerToast } from '../game/controllerState.js';
+import { mergePendingNextLine } from './pendingLineLogic.js';
 import { log } from '../utils/logger.js';
 
 // =============================================================================
@@ -1116,70 +1117,8 @@ async function loadGameFromCloud(gameId) {
  * @param {string} gameId - Game ID to refresh
  * @returns {Promise<object|null>} Updated pendingNextLine or null if failed
  */
-/**
- * Normalize a timestamp to epoch milliseconds for comparison. Accepts epoch-ms
- * numbers (e.g. lineupReadyAt, documented as epoch ms), ISO-8601 strings, or
- * Date objects; returns 0 for null/undefined/unparseable values so a missing
- * timestamp always loses the "newer wins" comparison. Using this everywhere
- * keeps the pendingNextLine merge from mixing raw `>` (epoch ms) with
- * `new Date(...).getTime()` (ISO) and silently mis-ordering if a writer drifts.
- */
-function toMs(v) {
-    if (v == null) return 0;
-    if (typeof v === 'number') return v;
-    const t = new Date(v).getTime();
-    return Number.isNaN(t) ? 0 : t;
-}
-
-/**
- * Merge a server pendingNextLine into the local one, last-writer-wins per
- * field group on that group's own timestamp. Shared by
- * refreshPendingLineFromCloud and refreshGameStateFromCloud so the two
- * polling paths can't diverge on which fields they merge.
- *
- * Field groups:
- * - Each line type (oLine/dLine/odLine/odOnDeckLine) on its *ModifiedAt.
- * - "Lineup Ready" multi-coach signal: the Line Coach is the sole writer;
- *   Active Coach reads. Fire-and-forget — the AC's polling shows a toast on
- *   advance; no persistent latch.
- * - LC-viewing signal (only the LC writes this) — the AC reads it to render
- *   the "Line Coach: viewing the X line" sub-header.
- * - Combined/Separate planning mode (either coach may flip it).
- *
- * Note: activeType is intentionally NOT synced — it's local UI state; each
- * user independently chooses which line type to view/edit.
- *
- * Mutates and returns localPending.
- */
-function mergePendingNextLine(serverPending, localPending) {
-    // Check each line type and use whichever is newer
-    ['oLine', 'dLine', 'odLine', 'odOnDeckLine'].forEach(lineKey => {
-        const modKey = lineKey.replace('Line', 'LineModifiedAt');
-        if (toMs(serverPending[modKey]) > toMs(localPending[modKey])) {
-            // Server has newer data for this line type
-            localPending[lineKey] = serverPending[lineKey] || [];
-            localPending[modKey] = serverPending[modKey];
-        }
-    });
-
-    if (toMs(serverPending.lineupReadyAt) > toMs(localPending.lineupReadyAt)) {
-        localPending.lineupReadyAt = serverPending.lineupReadyAt;
-        localPending.lineupReadyBy = serverPending.lineupReadyBy || null;
-    }
-
-    if (toMs(serverPending.lineCoachViewingAt) > toMs(localPending.lineCoachViewingAt)) {
-        localPending.lineCoachViewing = serverPending.lineCoachViewing || null;
-        localPending.lineCoachViewingAt = serverPending.lineCoachViewingAt;
-    }
-
-    if (toMs(serverPending.useSeparateLinesAt) > toMs(localPending.useSeparateLinesAt)) {
-        localPending.useSeparateLines = !!serverPending.useSeparateLines;
-        localPending.useSeparateLinesAt = serverPending.useSeparateLinesAt;
-    }
-
-    return localPending;
-}
-
+// mergePendingNextLine (and its toMs helper) moved to ./pendingLineLogic.js
+// (pure, unit-tested) in the F3 sweep — imported at the top of this file.
 async function refreshPendingLineFromCloud(gameId) {
     if (!isOnline || !gameId) {
         return null;
@@ -1872,7 +1811,7 @@ export {
     syncEventToCloud, createEventOnCloud, updateEventOnCloud,
     deleteEventFromCloud, listTeamEvents, updateGamePhase,
     generateGameId, createGameOffline, prepareGameForSync, syncGameToCloud,
-    listServerGames, loadGameFromCloud, mergePendingNextLine,
+    listServerGames, loadGameFromCloud,
     refreshPendingLineFromCloud, refreshGameStateFromCloud, deleteGameFromCloud,
     syncUserTeams, checkForUpdates, startAutoSync, stopAutoSync,
     syncAllData, pullFromCloud, getSyncStatus, checkIsOnline, clearSyncData,

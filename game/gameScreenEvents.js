@@ -12,6 +12,7 @@ import {
     determineStartingPosition, formatPlayerName,
 } from '../utils/helpers.js';
 import { refreshPendingLineFromCloud } from '../store/sync.js';
+import { resetPendingLinesAtPointEnd } from '../store/pendingLineLogic.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import {
     hideGameScreen, setPanelVisible, switchTab, getActiveTab,
@@ -1108,70 +1109,13 @@ function transitionToBetweenPoints() {
         const themScore = game.scores ? game.scores[Role.OPPONENT] : 0;
         updateGameScreenScore(usScore, themScore);
         
-        // Default next-line selection to the 7 who finished the point (reflects any mid-point subs).
-        // O/D line: overwrite only if NOT modified during the just-finished point (compare to point start).
-        // O and D lines: overwrite only if they have NEVER been modified this game (separate O/D pools).
-        const lastPoint = game.points.length > 0 ? game.points[game.points.length - 1] : null;
-        if (lastPoint && lastPoint.players && lastPoint.players.length > 0 && game.pendingNextLine) {
-            // Reliable "this point started" reference for the OD-line "modified
-            // during this point?" check. We can't use lastPoint.startTimestamp
-            // because the score handlers (Simple-mode and Full-mode score taps,
-            // and opponent-score) null it to stop the timer, and updateScore
-            // then re-sets it to `new Date()` — making it equal to score-time
-            // rather than actual point-start. That breaks the original check:
-            // any odLine edit made during the point ends up older than the
-            // (artificial) "point start" and the line gets clobbered.
-            //
-            // Use the *previous* point's endTimestamp instead — it's never
-            // mutated, and "after the previous point ended" naturally covers
-            // both the between-points window AND the current live point, which
-            // is what "modified for this upcoming next-point" should mean.
-            // For the first point, fall back to gameStartTimestamp.
-            const previousPoint = game.points.length > 1
-                ? game.points[game.points.length - 2]
-                : null;
-            const pointStartTime = previousPoint && previousPoint.endTimestamp
-                ? new Date(previousPoint.endTimestamp).getTime()
-                : (game.gameStartTimestamp
-                    ? new Date(game.gameStartTimestamp).getTime()
-                    : 0);
-            const endingLine = [...lastPoint.players];
-            // O/D line: reset to ending 7 unless user explicitly changed mode
-            // (wholesale/auto) or modified at any time during this point's
-            // window. ALSO reset if the line is currently empty — a
-            // *ModifiedAt timestamp doesn't mean the line is useful; an LC
-            // who cleared all checkboxes (or any path that left it empty)
-            // shouldn't poison every subsequent point with an unstartable
-            // empty lineup.
-            const odLineCur = game.pendingNextLine.odLine || [];
-            const odModTime = game.pendingNextLine.odLineModifiedAt
-                ? new Date(game.pendingNextLine.odLineModifiedAt).getTime()
-                : 0;
-            if (odModTime <= pointStartTime || odLineCur.length === 0) {
-                game.pendingNextLine.odLine = endingLine;
-            }
-            // O and D lines: reset if never modified this game OR currently
-            // empty (same empty-line reasoning as above). Without the
-            // empty-fallback, an emptied O/D line stays empty across points
-            // and — combined with fix8's same-side-only invariant — leaves
-            // the AC's Start Point button greyed forever after the line is
-            // ever cleared.
-            const gameStartTime = game.gameStartTimestamp
-                ? new Date(game.gameStartTimestamp).getTime()
-                : 0;
-            ['o', 'd'].forEach(type => {
-                const lineKey = type + 'Line';
-                const modKey = lineKey + 'ModifiedAt';
-                const lineCur = game.pendingNextLine[lineKey] || [];
-                const modTime = game.pendingNextLine[modKey]
-                    ? new Date(game.pendingNextLine[modKey]).getTime()
-                    : 0;
-                if (modTime <= gameStartTime || lineCur.length === 0) {
-                    game.pendingNextLine[lineKey] = endingLine;
-                }
-            });
-        }
-        
+        // Default next-line selection to the 7 who finished the point
+        // (reflects any mid-point subs) — pure logic extracted to
+        // store/pendingLineLogic.js (see its doc for the point-start
+        // timestamp subtleties and the empty-line fallbacks; unit-tested
+        // in tests/unit/pendingLineLogic.test.mjs).
+        resetPendingLinesAtPointEnd(game);
+
         // Refresh pending line selections from cloud (for multi-device sync)
         // This ensures Active Coach sees Line Coach's selections after point ends
         if (game.id && typeof refreshPendingLineFromCloud === 'function') {

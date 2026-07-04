@@ -14,6 +14,7 @@ import {
 import { getEventPlayerStats } from '../utils/eventStats.js';
 import { clearNextLineSelections, getRunningScores } from '../ui/activePlayersDisplay.js';
 import { setPanelSubtitle, setPanelTitle, isGameScreenVisible } from '../ui/panelSystem.js';
+import { resolveEffectiveLine } from '../store/pendingLineLogic.js';
 import { getControllerState, showControllerToast, canEditPlayByPlay } from './controllerState.js';
 import { startNextPoint } from './pointManagement.js';
 import { WHOLESALE_ICON_SVG, noteLineCoachViewing } from './gameScreenPanels.js';
@@ -1284,112 +1285,21 @@ function updatePanelGenderRatioDisplay() {
  * Determine which line will be used for the next point.
  *
  * CRITICAL INVARIANT: the returned `source` is always side-consistent
- * with `determineStartingPosition()` — either `typeKey` (the determined
- * side) or `'od'` (the combined line). It is NEVER the opposite side.
- * The side is fixed by who scored; this function only chooses WHICH line
- * to use on that side. (Downstream, applyStartPointButtonState reads
- * source 'o'→offense / 'd'→defense, so a side-flipped source would
- * mislabel the button and field the wrong unit.)
+ * with `determineStartingPosition()` — either the determined side or
+ * `'od'` (the combined line), NEVER the opposite side.
  *
- * Priority order:
- *
- *   1. LC view preference. If `lineCoachViewing` is set and its
- *      timestamp is newer than every relevant *ModifiedAt, honor the
- *      LC's current view — but only as combined-OD vs side-specific:
- *      'od' → odLine; anything else → the determined side's line. The
- *      LC's view never flips the side.
- *
- *   2. Per-axis most-recent edit. For an upcoming O point compare oLine
- *      vs odLine timestamps; for a D point, dLine vs odLine. Newer
- *      non-empty side wins.
- *
- *   3. Same-side fallback. If the winner was empty, fall through to the
- *      other same-side option (this-side typed ↔ odLine) — never the
- *      opposite side.
- *
- *   4. lastPoint safety net. If all same-side options are still empty
- *      (cross-device sync lag, edge case), surface the just-played
- *      lineup so the AC's Start Point button stays actionable.
+ * Thin wrapper: derives the side (O vs D) from determineStartingPosition()
+ * and delegates to the pure resolveEffectiveLine in
+ * store/pendingLineLogic.js (see its doc for the full priority order;
+ * unit-tested in tests/unit/pendingLineLogic.test.mjs).
  *
  * Returns `{ source, line }` where `source` is `'o' | 'd' | 'od'`.
  */
 function getEffectiveLineForNextPoint(game) {
-    if (!game || !game.pendingNextLine) return { source: 'od', line: [] };
-
     const isOffense = (typeof determineStartingPosition === 'function')
         ? determineStartingPosition() === 'offense'
         : true;
-    const typeKey  = isOffense ? 'o' : 'd';
-
-    const p = game.pendingNextLine;
-    const typedLine = p[typeKey  + 'Line'] || [];
-    const odLine    = p.odLine             || [];
-    const typedTime = p[typeKey + 'LineModifiedAt']
-        ? new Date(p[typeKey + 'LineModifiedAt']).getTime() : 0;
-    const odTime    = p.odLineModifiedAt
-        ? new Date(p.odLineModifiedAt).getTime() : 0;
-
-    // ── Priority 1: LC view preference ────────────────────────────────
-    // The LC's current view (synced via lineCoachViewing) is a soft
-    // tiebreaker. If it's newer than every relevant *ModifiedAt, treat
-    // it as "this is what they're planning around" — 'od' means combined
-    // OD line, anything else means use the determined side's line. The
-    // side itself is fixed by who scored; the view never flips it.
-    // 'odOnDeck' is NOT a Next-line view — it's the point-after-next. Treat it
-    // as "no Next-line view preference" here, else Priority 1 would resolve an
-    // On Deck view into a Next bucket (it falls through to typeKey).
-    const lcView   = (p.lineCoachViewing === 'odOnDeck') ? null : p.lineCoachViewing;
-    const lcViewAt = p.lineCoachViewingAt
-        ? new Date(p.lineCoachViewingAt).getTime() : 0;
-    if (lcView && lcViewAt > typedTime && lcViewAt > odTime) {
-        const viewSource = (lcView === 'od') ? 'od' : typeKey;
-        const viewLine = p[viewSource + 'Line'] || [];
-        if (viewLine.length > 0) {
-            return { source: viewSource, line: viewLine };
-        }
-        // View points at an empty line — fall through.
-    }
-
-    // ── Priority 2: per-axis most-recent edit ─────────────────────────
-    // For an upcoming O point compare oLine vs odLine timestamps; for D
-    // compare dLine vs odLine. Newer non-empty side wins. Per-axis (not
-    // global) so that prepping a D line for the next defense point
-    // doesn't surface an empty O line if the team scores instead.
-    const typedNewer = typedTime > odTime;
-    if (typedNewer && typedLine.length > 0) {
-        return { source: typeKey, line: typedLine };
-    }
-    if (!typedNewer && odLine.length > 0) {
-        return { source: 'od', line: odLine };
-    }
-
-    // ── Priority 3: empty-axis fallback ───────────────────────────────
-    // The most-recent-edit winner was empty. Surface the OTHER same-side
-    // option (this-side typed ↔ odLine) rather than a blank lineup — but
-    // NEVER the opposite side's line. Falling back to the opposite side
-    // would flip O↔D, contradicting who scored (this was the bug behind
-    // "Start Point (O-line)" showing up right after we scored).
-    if (typedLine.length > 0) {
-        return { source: typeKey, line: typedLine };
-    }
-    if (odLine.length > 0) {
-        return { source: 'od', line: odLine };
-    }
-
-    // ── Priority 4: last-point safety net ─────────────────────────────
-    // Both same-side options are empty. transitionToBetweenPoints normally
-    // pre-fills these from the just-played lineup, but defend against
-    // cross-device sync lag (the AC may see this function run before the
-    // LC's edits or the reset has reached this client). Surfacing the
-    // most recent lineup keeps the Start Point button actionable — better
-    // than a permanently greyed button stuck with no players. Tagged as
-    // the determined side so the label matches reality.
-    const lastPoint = game.points && game.points[game.points.length - 1];
-    const lastPlayers = (lastPoint && lastPoint.players) || [];
-    if (lastPlayers.length > 0) {
-        return { source: typeKey, line: [...lastPlayers] };
-    }
-    return { source: typeKey, line: [] };
+    return resolveEffectiveLine(game, isOffense);
 }
 
 /**
