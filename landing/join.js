@@ -147,7 +147,17 @@ function getInviteCodeFromURL() {
 
 async function fetchInviteInfo(code) {
     try {
-        const response = await fetch(`${API_BASE}/api/invites/${code}/info`);
+        // Send auth when a session exists so the server can answer 409
+        // (already a member) for the preview; anonymous works fine too.
+        const headers = {};
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session?.access_token) {
+                headers['Authorization'] = `Bearer ${session.access_token}`;
+            }
+        } catch (_) { /* treat as anonymous */ }
+
+        const response = await fetch(`${API_BASE}/api/invites/${code}/info`, { headers });
 
         if (!response.ok) {
             // Tag the error with the HTTP status so callers classify on status,
