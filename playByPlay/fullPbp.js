@@ -34,7 +34,7 @@
  */
 import { UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
-import { getLatestPoint, getPlayerFromName, isPointInProgress } from '../utils/helpers.js';
+import { currentGame, getLatestPoint, getPlayerFromName, isPointInProgress } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { undoEvent } from '../game/gameLogic.js';
 import { startNextPoint } from '../game/pointManagement.js';
@@ -61,14 +61,23 @@ const fullPbp = (function() {
      * the previous receiver), the user should Undo and re-tap.
      */
     let manualHolder = null;
-    // Tracks the Point object reference last seen by reconstructState so we
-    // can detect crossing a point boundary and clear stale manualHolder.
-    // Without this, a user-tapped holder from the previous point survives
-    // into a new point (especially when the point ends via a path that
-    // doesn't pass through createThrow / createTurnover / createDefense —
-    // e.g. Simple-mode "They Score" or narration) and prevents tapping
-    // someone else to indicate the pull catcher on the new O point.
-    let _lastSeenPointRef = null;
+    // Tracks the point last seen by reconstructState so we can detect
+    // crossing a point boundary and clear stale manualHolder. Without this,
+    // a user-tapped holder from the previous point survives into a new point
+    // (especially when the point ends via a path that doesn't pass through
+    // createThrow / createTurnover / createDefense — e.g. Simple-mode "They
+    // Score" or narration) and prevents tapping someone else to indicate the
+    // pull catcher on the new O point. Keyed by game id + point index, NOT
+    // object identity: cloud sync (refreshGameStateFromCloud — the 3s poll
+    // for non-Active-Coach sessions, wake recovery for everyone) REPLACES
+    // game.points with fresh objects, and that must not wipe the coach's
+    // holder selection mid-point.
+    let _lastSeenPointKey = null;
+    function stablePointKey(point) {
+        const game = (typeof currentGame === 'function') ? currentGame() : null;
+        if (!game || !point || !game.points) return null;
+        return `${game.id}#${game.points.indexOf(point)}`;
+    }
 
     /**
      * Whether the next Throw will have its break_flag set. Toggled by the
@@ -99,14 +108,15 @@ const fullPbp = (function() {
     function reconstructState() {
         const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
 
-        // Point-boundary detection: when getLatestPoint() returns a different
-        // Point instance than last time, we've crossed a boundary — drop any
-        // stale manualHolder from the previous point. Done before delegating so
+        // Point-boundary detection: when the stable key (game id + point
+        // index) changes, we've crossed a boundary — drop any stale
+        // manualHolder from the previous point. Done before delegating so
         // it also covers point-end paths that bypass our event handlers
         // (Simple-mode "They Score", narration). (main fix 1e995c5)
-        if (point !== _lastSeenPointRef) {
+        const key = stablePointKey(point);
+        if (key !== _lastSeenPointKey) {
             manualHolder = null;
-            _lastSeenPointRef = point;
+            _lastSeenPointKey = key;
         }
 
         // Delegate to the shared possession core (playByPlay/pbpPossession.js)
