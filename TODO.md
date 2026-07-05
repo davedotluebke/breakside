@@ -229,6 +229,9 @@ lineupReadyMode:      'o' | 'd' | 'od' | null             // alongside existing 
 
 Improvements deferred from the initial implementation (see Active section above for the architecture summary).
 
+### ⚠️ Known issue — narration reported broken on staging (2026-07-04)
+- [ ] **Deep dive needed.** User report from staging testing on 2026-07-04: "Audio narration seems broken, at least on staging" — symptoms not yet characterized (no transcript? no events applied? session fails to open?). Deliberately documented-only for now; deserves its own focused session. Starting points when investigating: reproduce on staging with devtools open (mic button → console + network for the `/v1/realtime/client_secrets` mint and the WebSocket), check whether the recent switch to the dedicated transcription session (`?intent=transcription`) is involved, and remember staging talks to the production API — server-side narration env/config (`ultistats_server/narration.py`, OpenAI key) applies. The Advanced Settings knobs (model, VAD, noise reduction) are available for isolating variables.
+
 ### Quality / accuracy
 - [x] **Remove vocabulary-mapping dead code from slow-pass prompt.** A/B test across the test corpus (commit `e24098e`) showed `NARRATION_VOCAB_GUIDANCE=off` (no explicit jargon→flag map) outperformed `=on` by +0.082 mean F1 with no regressions. Deleted the `vocab_section` branch in `_build_finalize_prompt`, the `NARRATION_VOCAB_GUIDANCE` env var, and the structurally-identical "Event-to-function mapping" block in the dead `buildInstructions()` in `narration/narrationEngine.js`.
 - [ ] **Improve transcription accuracy**
