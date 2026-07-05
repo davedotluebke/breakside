@@ -318,12 +318,13 @@ const fieldPbp = (function() {
      * the current possession (solid), [prevStart, curStart) are the previous
      * possession (fading), and < prevStart are older (dropped).
      *
-     * The current segment is the trailing run of same-side events — UNLESS the
-     * last event flipped possession (its side differs from the reconstructed
-     * mode, e.g. a "they turnover" Defense while we're now on offense with no
-     * O event yet). In that case the current segment is empty and the trailing
-     * run becomes the (fading) previous one, so the pull/D markers fade as soon
-     * as possession flips rather than lingering until the first O throw.
+     * The current segment is the trailing run of same-side events. When the
+     * last event itself flipped possession (its side differs from the
+     * reconstructed mode — e.g. a block while we're now on offense with no O
+     * event yet), that flip-causing event STAYS solid as the current segment:
+     * the most recent icon is the coach's freshest landmark and must not fade
+     * until the next icon lands (it joins its run's fade then). Older icons of
+     * its run fade now; anything before drops.
      */
     function computeSegments(flat, mode) {
         let k = flat.length - 1;
@@ -346,8 +347,9 @@ const fieldPbp = (function() {
             const prevStart = (cs - 1 >= 0) ? runStart(cs - 1) : -1;
             return { curStart: cs, prevStart };
         }
-        // Possession just flipped; current segment is empty.
-        return { curStart: flat.length, prevStart: cs };
+        // Possession just flipped: the flip-causing event (index k) is the
+        // whole current segment; the rest of its run fades.
+        return { curStart: k, prevStart: (cs < k) ? cs : -1 };
     }
     function lastLocatedEvent(point) {
         const evs = pointEvents(point);
