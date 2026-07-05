@@ -665,6 +665,30 @@
     cursor: pointer;
 }
 
+/* Optional hang-time stopwatch — same amber chip look as Field mode's
+   pull-hang button (fieldPbp.css .fp-ebtn.pullhang), on warning-family
+   tokens. Monospace keeps the ticking digits from jittering the width. */
+.pull-hang-row {
+    display: flex;
+    justify-content: center;
+    margin: 0.5rem 0;
+}
+
+.pull-hang-btn {
+    margin: 0;
+    padding: 0.5rem 1.2rem;
+    border: 1px solid var(--color-warning);
+    border-radius: 0.5rem;
+    background: var(--color-warning-surface);
+    color: var(--color-warning-text);
+    font: 700 13px 'JetBrains Mono', monospace;
+    cursor: pointer;
+}
+
+.pull-hang-btn.running {
+    background: var(--color-warning);
+}
+
 .pull-dialog-buttons {
     display: flex;
     justify-content: center;

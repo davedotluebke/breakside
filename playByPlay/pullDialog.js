@@ -15,6 +15,49 @@ let pullSelectedPlayer = undefined; // undefined = no selection yet, null = Unkn
 let pullSelectedQuality = null;
 let pullSelectedGender = null;
 
+// Optional hang-time stopwatch (mirrors Field mode's pull-hang button):
+// tap on release, tap again on landing; Proceed while running also stops
+// the clock. Never required — no interaction, no hang recorded.
+let pullHangStart = 0;     // performance.now() at start
+let pullHangMs = null;     // captured hang in ms | null
+let pullHangRunning = false;
+let pullHangTimer = null;  // 100ms label updater while running
+
+function pullHangLabel() {
+    if (pullHangRunning) return '⏱ ' + ((performance.now() - pullHangStart) / 1000).toFixed(1) + 's — tap on landing';
+    if (pullHangMs) return '⏱ ' + (pullHangMs / 1000).toFixed(1) + 's hang';
+    return '⏱ Tap on release';
+}
+
+function refreshPullHangBtn() {
+    const btn = document.getElementById('pullHangBtn');
+    if (!btn) return;
+    btn.textContent = pullHangLabel();
+    btn.classList.toggle('running', pullHangRunning);
+}
+
+function togglePullHang() {
+    if (pullHangRunning) {
+        pullHangRunning = false;
+        pullHangMs = performance.now() - pullHangStart;
+        if (pullHangTimer) { clearInterval(pullHangTimer); pullHangTimer = null; }
+    } else {
+        pullHangRunning = true;
+        pullHangStart = performance.now();
+        pullHangMs = null;
+        if (pullHangTimer) clearInterval(pullHangTimer);
+        pullHangTimer = setInterval(refreshPullHangBtn, 100);
+    }
+    refreshPullHangBtn();
+}
+
+function resetPullHang() {
+    pullHangRunning = false;
+    pullHangMs = null;
+    if (pullHangTimer) { clearInterval(pullHangTimer); pullHangTimer = null; }
+    refreshPullHangBtn();
+}
+
 /**
  * Initialize pull dialog event handlers
  * Should be called after DOM is ready
@@ -45,6 +88,12 @@ function initializePullDialog() {
         pullProceedBtn.addEventListener('click', function() {
             createPullEvent();
         });
+    }
+
+    // Hang-time stopwatch toggle
+    const pullHangBtn = document.getElementById('pullHangBtn');
+    if (pullHangBtn) {
+        pullHangBtn.addEventListener('click', togglePullHang);
     }
 
     // Handle gender radio buttons
@@ -156,6 +205,9 @@ function showPullDialog() {
     document.getElementById('pullRoller').checked = false;
     document.getElementById('pullIO').checked = false;
     document.getElementById('pullOI').checked = false;
+
+    // Reset the hang stopwatch
+    resetPullHang();
 
     // Update dialog state (will disable proceed button since no player selected yet)
     updatePullDialogState();
@@ -395,6 +447,10 @@ function createPullEvent() {
         pullerGender = pullSelectedPlayer.gender;
     }
 
+    // Proceed while the hang clock is still running = the landing tap
+    // (same as Field mode, where placing the landing stops the clock).
+    if (pullHangRunning) togglePullHang();
+
     // Create pull event
     const pullEvent = new Pull({
         puller: pullSelectedPlayer,
@@ -403,7 +459,8 @@ function createPullEvent() {
         flick: document.getElementById('pullFlick').checked,
         roller: document.getElementById('pullRoller').checked,
         io: document.getElementById('pullIO').checked,
-        oi: document.getElementById('pullOI').checked
+        oi: document.getElementById('pullOI').checked,
+        hang: (typeof pullHangMs === 'number' && pullHangMs > 0) ? pullHangMs : null
     });
 
     // Add to first possession (create if needed)
@@ -438,7 +495,11 @@ function createPullEvent() {
 function closePullDialog() {
     console.log('closePullDialog() called');
     document.getElementById('pullDialog').style.display = 'none';
-    
+
+    // Discard any running/captured hang time (cancel path; committed pulls
+    // have already read pullHangMs in createPullEvent).
+    resetPullHang();
+
     // Panel UI stays on game screen — no legacy screen navigation needed
 }
 
