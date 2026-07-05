@@ -388,6 +388,10 @@ function summarizeGame() {
 // logEvent is now in ui/eventLogDisplay.js
 
 let undoPastStartTimestamp = null;
+// Separate double-tap window for backing out a freshly-started point (zero
+// possessions). Can't share undoPastStartTimestamp: that one is reset at the
+// top of every undoEvent() call that finds points to undo.
+let undoEmptyPointTimestamp = null;
 
 /**
  * Revert the score and player stats set by updateScore() for a point.
@@ -622,6 +626,31 @@ function undoEvent() {
                     currentPossession = getActivePossession(point);
                     currentPossession.endTimestamp = null;
                     // Panel UI auto-updates — no legacy screen navigation needed
+                }
+            }
+        } else {
+            // Point started (Start Point tapped) but nothing recorded yet —
+            // possessions is empty, so the pop-an-event paths above have
+            // nothing to work on; this used to fall through silently. Back
+            // out the point start itself, double-tap guarded (like the
+            // delete-game path) so a stray Undo can't quietly kill the point.
+            // point.winner is never set here: winner-without-score-event
+            // returned in the revert branch above, and a winner WITH a score
+            // event implies a possession exists.
+            const now = Date.now();
+            if (undoEmptyPointTimestamp && (now - undoEmptyPointTimestamp) < 4000) {
+                undoEmptyPointTimestamp = null;
+                currentGame().points.pop();
+                logEvent('Undo: point start reverted');
+                // Back to the between-points state (panels, countdown, line select)
+                moveToNextPoint();
+                if (typeof showControllerToast === 'function') {
+                    showControllerToast('Point start undone', 'info');
+                }
+            } else {
+                undoEmptyPointTimestamp = now;
+                if (typeof showControllerToast === 'function') {
+                    showControllerToast('Nothing recorded yet — tap Undo again to back out of this point', 'warning');
                 }
             }
         }
