@@ -515,6 +515,10 @@ class Pull extends Event {
         if (pullType.length > 0) {
             summary += ` - ${pullType.join(', ')}`;
         }
+        // Hang time (ms, recorded by Field mode's stopwatch) in parentheses
+        if (typeof this.hang === 'number' && this.hang > 0) {
+            summary += ` (${(this.hang / 1000).toFixed(1)}s hang)`;
+        }
         return summary;
     }
 }
