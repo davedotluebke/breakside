@@ -352,13 +352,23 @@ function renderGameSummaryEventLog(game) {
             summary += `\n${teamName} pulls to ${opponent}.`;
         }
 
+        // Events recorded AFTER the point ended (between-points timeouts,
+        // switch sides) are deferred past the score lines below so the log
+        // reads in real-world order (matches summarizeGame).
+        const afterPointLines = [];
         (point.possessions || []).forEach(possession => {
             (possession.events || []).forEach(event => {
-                if (typeof event.summarize === 'function') {
-                    summary += `\n${event.summarize()}`;
-                }
                 if (event.type === 'Other' && event.switchsides_flag) {
                     switchsides = true;
+                }
+                if (event.type === 'Other' && event.betweenPoints) {
+                    if (typeof event.summarize === 'function') {
+                        afterPointLines.push(event.summarize());
+                    }
+                    return;
+                }
+                if (typeof event.summarize === 'function') {
+                    summary += `\n${event.summarize()}`;
                 }
             });
         });
@@ -377,6 +387,7 @@ function renderGameSummaryEventLog(game) {
         if (point.winner) {
             summary += `\nCurrent score: ${teamName} ${runningScoreUs}, ${opponent} ${runningScoreThem}`;
         }
+        afterPointLines.forEach(line => summary += `\n${line}`);
         if (switchsides) {
             summary += `\nO and D switching sides for next point. `;
             if (point.winner === 'team') {

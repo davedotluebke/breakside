@@ -1495,7 +1495,12 @@ function recordTimeout(calledBy) {
     const calledByName = calledBy === 'us' ? (game.team || null)
         : calledBy === 'them' ? (game.opponent || null)
         : null;
-    const timeoutEvent = new Other({ timeout: true, calledBy, calledByName });
+    // A timeout recorded after the point ended is flagged so the log
+    // renderers print it after the "scores!" lines (real-world order).
+    const timeoutEvent = new Other({
+        timeout: true, calledBy, calledByName,
+        betweenPoints: point.winner ? true : null,
+    });
     poss.events.push(timeoutEvent);
 
     const summary = timeoutEvent.summarize().trim();
@@ -1558,7 +1563,9 @@ function applySwitchSides() {
         lastPoint.possessions = lastPoint.possessions || [];
         let poss = lastPoint.possessions[lastPoint.possessions.length - 1];
         if (!poss) { poss = new Possession(true); lastPoint.possessions.push(poss); }
-        poss.events.push(new Other({ switchsides: true }));
+        // Switch sides always happens between points (guarded above) — flag
+        // it so log renderers print it after this point's score lines.
+        poss.events.push(new Other({ switchsides: true, betweenPoints: true }));
     } else {
         // No points yet — switching before the first pull just flips the
         // chosen starting position.
