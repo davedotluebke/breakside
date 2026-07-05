@@ -184,13 +184,17 @@ const fieldPbp = (function() {
     };
     let pullTimer = null;
 
-    // Possession-change fade: the previous possession's markers fade out over
-    // FADE_MS then drop. Implemented as a one-shot CSS animation (resumed via
-    // negative animation-delay so re-renders don't restart it) plus a single
-    // delayed re-render to drop them — no continuous animation loop.
+    // Possession-change fade: markers demoted from the current segment fade
+    // out over FADE_MS then drop — each demotion batch ("cohort") on its own
+    // clock, so an icon fades exactly once and a finished fade never pops
+    // back to full opacity when a later event moves the segment boundary
+    // again. Implemented as a one-shot CSS animation (resumed via negative
+    // animation-delay so re-renders don't restart it) plus a single delayed
+    // re-render to drop finished cohorts — no continuous animation loop.
     const FADE_MS = 5000;
     let segCurStart = null;   // global event index where the current segment begins
-    let segFadeStart = 0;     // performance.now() when the previous segment began fading
+    let segPointRef = null;   // the Point the indices above refer to (reset on point change)
+    let fadeCohorts = [];     // [{start, end, fadeStart}] — index ranges currently fading
     let fadeTimer = null;     // one-shot cleanup re-render at fade end
 
     function nowMs() {
@@ -459,18 +463,41 @@ const fieldPbp = (function() {
         });
 
         // Located events, possession-aware (see computeSegments / the fade
-        // module vars). Current segment solid; previous segment fades over
-        // FADE_MS then drops; older segments gone.
+        // module vars). Current segment solid; icons demoted from it fade in
+        // per-demotion cohorts over FADE_MS then drop for good.
         const flat = pointEvents(state.point);
         const seg = computeSegments(flat, state.mode);
-        if (seg.curStart !== segCurStart) { segCurStart = seg.curStart; segFadeStart = nowMs(); }
-        const fadeElapsed = nowMs() - segFadeStart;
-        const prevVisible = seg.prevStart >= 0 && fadeElapsed < FADE_MS;
-        const depthOf = gi => (gi >= seg.curStart) ? 0 : (seg.prevStart >= 0 && gi >= seg.prevStart) ? 1 : 2;
-        // Negative animation-delay resumes the one-shot fade at the right point
-        // across re-renders (no continuous loop).
-        const fadeAnim = `;animation:fpFadeOut ${FADE_MS}ms linear ${(-fadeElapsed) | 0}ms forwards`;
-        const shown = gi => { const d = depthOf(gi); return d === 0 || (d === 1 && prevVisible); };
+        const segNow = nowMs();
+        if (segPointRef !== state.point) {
+            // New point (or first render): indices refer to a different event
+            // list — reset, showing the current segment solid with no ghosts.
+            segPointRef = state.point;
+            segCurStart = seg.curStart;
+            fadeCohorts = [];
+        } else if (seg.curStart !== segCurStart) {
+            if (seg.curStart > segCurStart) {
+                // Icons demoted from the current segment start their one and
+                // only fade now. Earlier cohorts keep their original clocks,
+                // so a half- or fully-faded icon never resurrects when the
+                // next event moves the boundary again.
+                fadeCohorts.push({ start: segCurStart, end: seg.curStart, fadeStart: segNow });
+            } else {
+                // Boundary moved backwards (undo): whatever is current again
+                // must render solid — drop cohorts that overlap it.
+                fadeCohorts = fadeCohorts.filter(c => c.end <= seg.curStart);
+            }
+            segCurStart = seg.curStart;
+        }
+        fadeCohorts = fadeCohorts.filter(c => segNow - c.fadeStart < FADE_MS);
+        const cohortOf = gi => fadeCohorts.find(c => gi >= c.start && gi < c.end) || null;
+        const shown = gi => gi >= seg.curStart || !!cohortOf(gi);
+        // Negative animation-delay resumes each cohort's one-shot fade at the
+        // right point across re-renders (no continuous loop).
+        const fadeAnimFor = gi => {
+            if (gi >= seg.curStart) return '';
+            const c = cohortOf(gi);
+            return c ? `;animation:fpFadeOut ${FADE_MS}ms linear ${(-(segNow - c.fadeStart)) | 0}ms forwards` : '';
+        };
 
         let svg = `<svg class="fp-arrows" viewBox="0 0 100 100" preserveAspectRatio="none"><defs>`
             + `<marker id="fpah" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">`
@@ -480,7 +507,8 @@ const fieldPbp = (function() {
             const ef = fromNorm(e.from), et = fromNorm(e.to);
             const a = pct(ef.l, ef.w), b = pct(et.l, et.w);
             const dash = e.type === 'Pull' ? 'stroke-dasharray="3 2"' : '';
-            const style = depthOf(gi) === 1 ? ` style="${fadeAnim.slice(1)}"` : '';
+            const anim = fadeAnimFor(gi);
+            const style = anim ? ` style="${anim.slice(1)}"` : '';
             svg += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${arrowColor(e)}" stroke-width="0.8" marker-end="url(#fpah)" ${dash} vector-effect="non-scaling-stroke"${style}/>`;
         });
         svg += `</svg>`;
@@ -491,9 +519,9 @@ const fieldPbp = (function() {
             const et = fromNorm(e.to);
             const p = pct(et.l, et.w);
             const m = markerStyle(e, gi);
-            // All shown markers (current + fading-previous) are draggable so a
+            // All shown markers (current + fading) are draggable so a
             // previous location can be adjusted during the fade window.
-            const fade = depthOf(gi) === 1 ? fadeAnim : '';
+            const fade = fadeAnimFor(gi);
             h += `<div class="fp-marker ${m.cls}" data-mkidx="${gi}" style="left:${p.x}%;top:${p.y}%${fade}">${m.glyph}</div>`;
         });
 
@@ -511,8 +539,8 @@ const fieldPbp = (function() {
             h += `<div class="fp-disc" style="left:${d.x}%;top:${d.y}%"></div>`;
         }
 
-        // One delayed re-render to drop the previous segment when its fade ends.
-        scheduleFadeCleanup(prevVisible ? (FADE_MS - fadeElapsed) : 0);
+        // One delayed re-render to drop fading icons when the last cohort ends.
+        scheduleFadeCleanup(fadeCohorts.reduce((m, c) => Math.max(m, FADE_MS - (segNow - c.fadeStart)), 0));
 
         return h;
     }
