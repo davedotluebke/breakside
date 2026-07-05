@@ -1378,10 +1378,10 @@ body.game-screen-active header {
     gap: 6px;
     margin: 0;
     padding: 8px 14px;
-    border: 1px solid #bbb;
+    border: 1px solid var(--border-strong);
     border-radius: 8px;
-    background: #fff;
-    color: #333;
+    background: var(--white);
+    color: var(--text-primary);
     font-weight: 600;
     font-size: 0.9rem;
     cursor: pointer;
@@ -1528,29 +1528,29 @@ body.game-screen-active header {
 
 /* Us - blue (matches the Timeout button) */
 .ge-btn-who-us {
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-active) 100%);
 }
 
 .ge-btn-who-us:hover:not(:disabled) {
-    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+    background: linear-gradient(135deg, var(--color-primary-active) 0%, var(--color-primary-deep) 100%);
 }
 
 /* Them - red (opponent) */
 .ge-btn-who-them {
-    background: linear-gradient(135deg, #dc3545 0%, #b02a37 100%);
+    background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-active) 100%);
 }
 
 .ge-btn-who-them:hover:not(:disabled) {
-    background: linear-gradient(135deg, #b02a37 0%, #921925 100%);
+    background: linear-gradient(135deg, var(--color-danger-active) 0%, var(--color-danger-deep) 100%);
 }
 
 /* Neither - gray (untracked / technical stoppage) */
 .ge-btn-who-neither {
-    background: linear-gradient(135deg, #6c757d 0%, #545b62 100%);
+    background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-secondary-active) 100%);
 }
 
 .ge-btn-who-neither:hover:not(:disabled) {
-    background: linear-gradient(135deg, #545b62 0%, #43484d 100%);
+    background: linear-gradient(135deg, var(--color-secondary-active) 0%, var(--color-secondary-deep) 100%);
 }
 
 /* =============================================================================

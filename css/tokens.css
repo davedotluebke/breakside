@@ -38,6 +38,8 @@
     /* Danger */
     --color-danger: #dc3545;
     --color-danger-hover: #c82333;
+    --color-danger-active: #b02a37;
+    --color-danger-deep: #921925;
     --color-danger-surface: #f8d7da;
     --color-danger-surface-deep: #f5c6cb;
     --color-danger-text: #721c24;
@@ -57,6 +59,8 @@
     /* Secondary (muted gray-blue buttons) */
     --color-secondary: #6c757d;
     --color-secondary-hover: #5a6268;
+    --color-secondary-active: #545b62;
+    --color-secondary-deep: #43484d;
 
     /* Gender color coding (FMP purple / MMP green) */
     --gender-fmp: #7d3c98;
