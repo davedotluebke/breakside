@@ -576,6 +576,7 @@ class Point {
         this.totalPointTime = 0;  // Accumulated time tracking
         this.lastPauseTime = null;  // Track when the point was last paused
         this.substitutedOutPlayers = [];  // Players who were subbed out mid-point (for injury/fatigue)
+        this.substitutedInPlayers = [];   // Players who came in mid-point (partial point, like subbed-out)
         // Distinct PBP modes recorded during this point — derived from its
         // possessions (see getModes). Kept as a field for convenient in-memory
         // reads; serialization writes the freshly-derived value.

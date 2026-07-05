@@ -994,6 +994,17 @@ function confirmSubstitution() {
             point.substitutedOutPlayers.push(p);
         }
     });
+
+    // Track substituted-in players too — they also played only part of the
+    // point, so the line table italicizes them the same as subbed-out.
+    if (!point.substitutedInPlayers) {
+        point.substitutedInPlayers = [];
+    }
+    playersIn.forEach(p => {
+        if (!point.substitutedInPlayers.includes(p)) {
+            point.substitutedInPlayers.push(p);
+        }
+    });
     
     // Update current point players
     point.players = newPlayers;
