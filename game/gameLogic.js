@@ -339,6 +339,10 @@ function summarizeGame() {
         // very next possession's delimiter, gives a correct boundary
         // either way (Turnover-then-Defense or Turnover-only-so-far).
         let suppressNextPossessionDelimiter = false;
+        // Events recorded AFTER the point ended (between-points timeouts,
+        // switch sides) are deferred past the score lines below so the log
+        // reads in real-world order.
+        const afterPointLines = [];
         point.possessions.forEach(possession => {
             if (!suppressNextPossessionDelimiter) {
                 const role = possession.offensive ? 'offense' : 'defense';
@@ -346,10 +350,14 @@ function summarizeGame() {
             }
             suppressNextPossessionDelimiter = false;
             possession.events.forEach(event => {
-                summary += `\n${event.summarize()}`;
                 if (event.type === 'Other' && event.switchsides_flag) {
                     switchsides = true;
                 }
+                if (event.type === 'Other' && event.betweenPoints) {
+                    afterPointLines.push(event.summarize());
+                    return;
+                }
+                summary += `\n${event.summarize()}`;
                 if (event.type === 'Turnover') {
                     // Possession just ended — emit the boundary so the log
                     // shows it even when no Defense event has yet been
@@ -372,6 +380,7 @@ function summarizeGame() {
         if (point.winner) {
             summary += `\nCurrent score: ${currentGame().team} ${runningScoreUs}, ${currentGame().opponent} ${runningScoreThem}`;
         }
+        afterPointLines.forEach(line => summary += `\n${line}`);
         if (switchsides) {
             summary += `\nO and D switching sides for next point. `;
             if (point.winner === 'team') {

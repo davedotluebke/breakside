@@ -451,7 +451,7 @@ class Defense extends Event {
 
 // Other event class
 class Other extends Event {
-    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null, description = null, calledBy = null, calledByName = null}) {
+    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null, description = null, calledBy = null, calledByName = null, betweenPoints = null}) {
         super('Other');
         this.timeout_flag = timeout;
         this.injury_flag = injury;
@@ -461,6 +461,10 @@ class Other extends Event {
         this.description = description; // Generic description for custom events (e.g., substitutions)
         this.calledBy = calledBy; // Timeout attribution: 'us' | 'them' | 'neither' | null (legacy/unknown)
         this.calledByName = calledByName; // Display name for calledBy, resolved at creation (team/opponent name)
+        // True when recorded after the point ended (event lives on the
+        // completed point, but log renderers print it after the score lines
+        // so the stream reads in real-world order).
+        this.betweenPoints = betweenPoints;
     }
 
     // Override summarize for Other events
