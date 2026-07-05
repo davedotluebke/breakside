@@ -193,7 +193,7 @@ const fieldPbp = (function() {
     // re-render to drop finished cohorts — no continuous animation loop.
     const FADE_MS = 5000;
     let segCurStart = null;   // global event index where the current segment begins
-    let segPointRef = null;   // the Point the indices above refer to (reset on point change)
+    let segPointKey = null;   // stablePointKey of the point the indices refer to (reset on point change)
     let fadeCohorts = [];     // [{start, end, fadeStart}] — index ranges currently fading
     let fadeTimer = null;     // one-shot cleanup re-render at fade end
 
@@ -273,20 +273,34 @@ const fieldPbp = (function() {
     // -----------------------------------------------------------------
     // State derivation (shared possession core).
     // -----------------------------------------------------------------
-    // Tracks the Point object reference last seen by reconstructState so we can
-    // detect crossing a point boundary and drop stale pickup state. Mirrors the
-    // _lastSeenPointRef guard in fullPbp.js: without it, a manual holder /
-    // pickup spot tapped in a prior point can survive into a new point when the
-    // point ends via a path that doesn't run Field's own handlers (Simple-mode
-    // "They Score", narration), so the next point would start with a phantom
-    // holder/disc.
-    let _lastSeenPointRef = null;
+    // Identity-stable key for a point. Cloud sync REPLACES game.points with
+    // freshly deserialized objects (refreshGameStateFromCloud: the 3s poll for
+    // non-Active-Coach sessions, and wake recovery for everyone), so object
+    // identity can't distinguish "a different point" from "the same point,
+    // new objects" — key on game id + point index instead. Null when there's
+    // no game/point yet.
+    function stablePointKey(point) {
+        const game = (typeof currentGame === 'function') ? currentGame() : null;
+        if (!game || !point || !game.points) return null;
+        return `${game.id}#${game.points.indexOf(point)}`;
+    }
+
+    // Tracks the point last seen by reconstructState so we can detect
+    // crossing a point boundary and drop stale pickup state. Mirrors the
+    // guard in fullPbp.js: without it, a manual holder / pickup spot tapped
+    // in a prior point can survive into a new point when the point ends via
+    // a path that doesn't run Field's own handlers (Simple-mode "They
+    // Score", narration), so the next point would start with a phantom
+    // holder/disc. Keyed by stablePointKey, NOT object identity — a sync
+    // refresh mid-point must not wipe the coach's pickup selection.
+    let _lastSeenPointKey = null;
     function reconstructState() {
         const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
-        if (point !== _lastSeenPointRef) {
+        const key = stablePointKey(point);
+        if (key !== _lastSeenPointKey) {
             S.manualHolder = null;
             S.pickupLoc = null;
-            _lastSeenPointRef = point;
+            _lastSeenPointKey = key;
         }
         if (window.pbpPossession && typeof window.pbpPossession.reconstructState === 'function') {
             return window.pbpPossession.reconstructState();
@@ -468,10 +482,13 @@ const fieldPbp = (function() {
         const flat = pointEvents(state.point);
         const seg = computeSegments(flat, state.mode);
         const segNow = nowMs();
-        if (segPointRef !== state.point) {
+        // Keyed by stablePointKey, NOT object identity — sync refreshes
+        // replace the Point objects and must not kill an in-flight fade.
+        const segKey = stablePointKey(state.point);
+        if (segPointKey !== segKey) {
             // New point (or first render): indices refer to a different event
             // list — reset, showing the current segment solid with no ghosts.
-            segPointRef = state.point;
+            segPointKey = segKey;
             segCurStart = seg.curStart;
             fadeCohorts = [];
         } else if (seg.curStart !== segCurStart) {
