@@ -595,12 +595,16 @@ function wirePlayByPlayEvents() {
         undoBtn.addEventListener('click', handlePbpUndo);
     }
 
-    // Line tab's Undo button — same handler as the PBP row's Undo (role
-    // check + undoEvent). Visibility is managed by updateLineTabStartPointBtn
-    // (shown only while the Line tab is the active tab).
+    // Line tab's Undo + Events buttons — same handlers as the PBP row's
+    // (role checks included). Visibility is managed by
+    // updateLineTabStartPointBtn (shown only while the Line tab is active).
     const lineTabUndoBtn = document.getElementById('lineTabUndoBtn');
     if (lineTabUndoBtn) {
         lineTabUndoBtn.addEventListener('click', handlePbpUndo);
+    }
+    const lineTabGameEventsBtn = document.getElementById('lineTabGameEventsBtn');
+    if (lineTabGameEventsBtn) {
+        lineTabGameEventsBtn.addEventListener('click', handlePbpGameEvents);
     }
     
     // Sub Players button
@@ -1735,12 +1739,16 @@ function updateLineTabStartPointBtn() {
 
     const onLineTab = (typeof getActiveTab === 'function') && getActiveTab() === 'line';
 
-    // Undo sibling shares the same visibility lifecycle: Line tab only.
-    // Left clickable regardless of role — handlePbpUndo surfaces the
+    // Undo + Events siblings share the same visibility lifecycle: Line tab
+    // only. Left clickable regardless of role — their handlers surface the
     // role toast, matching the Start Point convention below.
     const undoBtn = document.getElementById('lineTabUndoBtn');
     if (undoBtn) {
         undoBtn.style.display = onLineTab ? 'inline-flex' : 'none';
+    }
+    const eventsBtn = document.getElementById('lineTabGameEventsBtn');
+    if (eventsBtn) {
+        eventsBtn.style.display = onLineTab ? 'inline-flex' : 'none';
     }
 
     // Always show on the Line tab. applyStartPointButtonState handles the

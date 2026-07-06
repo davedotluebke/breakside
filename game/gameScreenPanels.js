@@ -403,6 +403,9 @@ function createSelectLineContent() {
             <button id="lineTabLineupReadyBtn" class="pbp-start-point-btn line-tab-lineup-ready-btn" style="display: none;">
                 Lineup Ready
             </button>
+            <button id="lineTabGameEventsBtn" class="line-tab-undo-btn line-tab-events-btn" style="display: none;" title="Timeout, injury sub, halftime, switch sides, end game">
+                <i class="fas fa-cog"></i><span>Events</span>
+            </button>
             <button id="lineTabUndoBtn" class="line-tab-undo-btn" style="display: none;" title="Undo last event">
                 <i class="fas fa-undo"></i><span>Undo</span>
             </button>
