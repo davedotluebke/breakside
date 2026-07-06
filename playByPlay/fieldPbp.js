@@ -192,7 +192,7 @@ const fieldPbp = (function() {
     // animation-delay so re-renders don't restart it) plus a single delayed
     // re-render to drop finished cohorts — no continuous animation loop.
     const FADE_MS = 5000;
-    const KEEP_SOLID = 3;     // newest located icons kept solid within the current possession
+    const KEEP_SOLID = 4;     // newest located icons kept solid within the current possession
     let segCurStart = null;   // global event index where the solid window begins
     let segPointKey = null;   // stablePointKey of the point the indices refer to (reset on point change)
     let fadeCohorts = [];     // [{start, end, fadeStart}] — index ranges currently fading
@@ -530,15 +530,27 @@ const fieldPbp = (function() {
             return c ? `;animation:fpFadeOut ${FADE_MS}ms linear ${(-(segNow - c.fadeStart)) | 0}ms forwards` : '';
         };
 
+        // An arrow's tail sits on the previous located event's catch spot.
+        // When that marker fades/drops, the arrow must go with it — otherwise
+        // a "throw from nowhere" lingers, anchored to an empty spot. Each
+        // arrow therefore inherits the faster of its own and its
+        // predecessor's fade state.
+        const prevLocated = [];
+        {
+            let lastLoc = -1;
+            flat.forEach((e, gi) => { prevLocated[gi] = lastLoc; if (e && e.to) lastLoc = gi; });
+        }
         let svg = `<svg class="fp-arrows" viewBox="0 0 100 100" preserveAspectRatio="none"><defs>`
             + `<marker id="fpah" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">`
             + `<path d="M0,0 L5,2.5 L0,5 z" fill="#fff"/></marker></defs>`;
         flat.forEach((e, gi) => {
             if (!shown(gi) || !e.from || !e.to) return;
+            const pgi = prevLocated[gi];
+            if (pgi >= 0 && !shown(pgi)) return;   // tail anchor gone — drop the arrow
             const ef = fromNorm(e.from), et = fromNorm(e.to);
             const a = pct(ef.l, ef.w), b = pct(et.l, et.w);
             const dash = e.type === 'Pull' ? 'stroke-dasharray="3 2"' : '';
-            const anim = fadeAnimFor(gi);
+            const anim = fadeAnimFor(gi) || (pgi >= 0 ? fadeAnimFor(pgi) : '');
             const style = anim ? ` style="${anim.slice(1)}"` : '';
             svg += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${arrowColor(e)}" stroke-width="0.8" marker-end="url(#fpah)" ${dash} vector-effect="non-scaling-stroke"${style}/>`;
         });
@@ -1598,11 +1610,29 @@ const fieldPbp = (function() {
         render();
     }
 
+    /**
+     * Re-derive the geometry-based modifier flags (huck / reset / swing) for
+     * a Throw whose endpoints changed (marker drag). Overwrites exactly those
+     * three flags from the new geometry — same rule as at commit time; other
+     * flags (break, hammer, sky, layout) are untouched.
+     */
+    function reclassifyThrow(ev) {
+        if (!ev || ev.type !== 'Throw' || !ev.from || !ev.to) return;
+        const c = classifyThrow(ev.from, ev.to);
+        ev.huck_flag = !!c.huck;
+        ev.dump_flag = !!c.dump;
+        ev.swing_flag = !!c.swing;
+    }
+
     function finishMarkerDrag(idx) {
         const state = reconstructState();
         const evs = pointEvents(state.point);
         const ev = evs[idx];
         if (!ev) return;
+        // Geometry changed — refresh the auto-classified flags for the
+        // dragged throw AND the next event (its `from` moved with this catch).
+        reclassifyThrow(ev);
+        reclassifyThrow(evs[idx + 1]);
         if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
         if (window.narrationEventBus) {
             window.narrationEventBus.publish('eventAmended', {
