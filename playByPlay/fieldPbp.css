@@ -314,6 +314,7 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
     /* basis = content so labels show in full; grow to share the row. nowrap
        keeps them on one line; they size to their text and fit the row. */
     flex: 1 1 auto; min-width: 0;
+    margin: 0;   /* override global button { margin: 10px } — 4 buttons × 20px was starving the row and overflowing "Throwaway" */
     border: 1px solid #c8c8c8; border-radius: 6px; background: #f7f7f7;
     padding: 8px 7px; font-size: 14px; line-height: 1.2; font-weight: 600; color: #333;
     cursor: pointer; text-align: center; white-space: nowrap;
@@ -321,11 +322,15 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 }
 /* Portrait: full-height (44px+) tap targets — these live at the bottom of
    the screen where short buttons get mistaken for the iOS home gesture.
-   Landscape keeps the compact ~35px height so the field stays roomy. */
+   Horizontal padding is trimmed to 4px so the longest label ("Throwaway")
+   fits its border on narrow phones. Landscape keeps the compact ~35px
+   height so the field stays roomy. */
 .field-pbp-content[data-o="portrait"] .fp-ebtn {
     min-height: 44px;
-    padding-top: 12px;
-    padding-bottom: 12px;
+    padding: 12px 4px;
+}
+.field-pbp-content[data-o="portrait"] .fp-events {
+    gap: 4px;
 }
 .fp-ebtn.pullhang { flex: 3 1 0; background: #fff7e6; border-color: var(--fp-hold); color: #92600b; font: 700 13px 'JetBrains Mono', monospace; }
 .fp-ebtn.pullbrick { flex: 1 1 0; background: #fff; border-color: var(--fp-hold); color: #92600b; }
