@@ -1540,10 +1540,11 @@ function handleGameEventHalfTime() {
  *
  * Two effects, kept separate:
  *  1. O/D logic — record an Other{switchsides} event on the last completed
- *     point. determineStartingPosition() already inverts the next point's
- *     starting position when it sees this flag, so who starts on O vs D for the
- *     halftime restart flips (or not, depending on the score so far). Before
- *     any point exists, just flip the game's initial startingPosition instead.
+ *     point. determineStartingPosition() treats the flag as a period break:
+ *     the next point opens with roles swapped from how the previous period
+ *     opened (the team that pulled to start the game receives after halftime),
+ *     regardless of who won the point before the break. Before any point
+ *     exists, just flip the game's initial startingPosition instead.
  *  2. Field display — flip the attack direction so the drawn field matches the
  *     physical end swap for the rest of the game (the per-point auto-flip then
  *     continues on top of the new base).
