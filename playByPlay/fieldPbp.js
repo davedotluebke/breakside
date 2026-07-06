@@ -192,7 +192,8 @@ const fieldPbp = (function() {
     // animation-delay so re-renders don't restart it) plus a single delayed
     // re-render to drop finished cohorts — no continuous animation loop.
     const FADE_MS = 5000;
-    let segCurStart = null;   // global event index where the current segment begins
+    const KEEP_SOLID = 3;     // newest located icons kept solid within the current possession
+    let segCurStart = null;   // global event index where the solid window begins
     let segPointKey = null;   // stablePointKey of the point the indices refer to (reset on point change)
     let fadeCohorts = [];     // [{start, end, fadeStart}] — index ranges currently fading
     let fadeTimer = null;     // one-shot cleanup re-render at fade end
@@ -478,41 +479,53 @@ const fieldPbp = (function() {
         });
 
         // Located events, possession-aware (see computeSegments / the fade
-        // module vars). Current segment solid; icons demoted from it fade in
-        // per-demotion cohorts over FADE_MS then drop for good.
+        // module vars). The newest icons stay solid; everything demoted fades
+        // in per-demotion cohorts over FADE_MS then drops for good. Within
+        // the current possession only the last KEEP_SOLID located icons stay
+        // solid — as new throws land, older ones demote — so a long
+        // possession never accumulates a wall of arrows.
         const flat = pointEvents(state.point);
         const seg = computeSegments(flat, state.mode);
         const segNow = nowMs();
+        // Solid window start: the KEEP_SOLIDth-newest located event in the
+        // current segment (events without a location draw nothing and don't
+        // consume slots). Short possessions show everything (floor = segment
+        // start).
+        let solidStart = seg.curStart;
+        for (let gi = flat.length - 1, kept = 0; gi >= seg.curStart; gi--) {
+            if (!flat[gi] || !flat[gi].to) continue;
+            if (++kept === KEEP_SOLID) { solidStart = gi; break; }
+        }
         // Keyed by stablePointKey, NOT object identity — sync refreshes
         // replace the Point objects and must not kill an in-flight fade.
         const segKey = stablePointKey(state.point);
         if (segPointKey !== segKey) {
             // New point (or first render): indices refer to a different event
-            // list — reset, showing the current segment solid with no ghosts.
+            // list — reset, showing the solid window with no ghosts.
             segPointKey = segKey;
-            segCurStart = seg.curStart;
+            segCurStart = solidStart;
             fadeCohorts = [];
-        } else if (seg.curStart !== segCurStart) {
-            if (seg.curStart > segCurStart) {
-                // Icons demoted from the current segment start their one and
+        } else if (solidStart !== segCurStart) {
+            if (solidStart > segCurStart) {
+                // Icons demoted from the solid window start their one and
                 // only fade now. Earlier cohorts keep their original clocks,
                 // so a half- or fully-faded icon never resurrects when the
                 // next event moves the boundary again.
-                fadeCohorts.push({ start: segCurStart, end: seg.curStart, fadeStart: segNow });
+                fadeCohorts.push({ start: segCurStart, end: solidStart, fadeStart: segNow });
             } else {
-                // Boundary moved backwards (undo): whatever is current again
-                // must render solid — drop cohorts that overlap it.
-                fadeCohorts = fadeCohorts.filter(c => c.end <= seg.curStart);
+                // Boundary moved backwards (undo): whatever is solid again
+                // must render fully — drop cohorts that overlap it.
+                fadeCohorts = fadeCohorts.filter(c => c.end <= solidStart);
             }
-            segCurStart = seg.curStart;
+            segCurStart = solidStart;
         }
         fadeCohorts = fadeCohorts.filter(c => segNow - c.fadeStart < FADE_MS);
         const cohortOf = gi => fadeCohorts.find(c => gi >= c.start && gi < c.end) || null;
-        const shown = gi => gi >= seg.curStart || !!cohortOf(gi);
+        const shown = gi => gi >= solidStart || !!cohortOf(gi);
         // Negative animation-delay resumes each cohort's one-shot fade at the
         // right point across re-renders (no continuous loop).
         const fadeAnimFor = gi => {
-            if (gi >= seg.curStart) return '';
+            if (gi >= solidStart) return '';
             const c = cohortOf(gi);
             return c ? `;animation:fpFadeOut ${FADE_MS}ms linear ${(-(segNow - c.fadeStart)) | 0}ms forwards` : '';
         };
