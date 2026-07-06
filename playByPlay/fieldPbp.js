@@ -221,6 +221,7 @@ const fieldPbp = (function() {
             { label: 'Break', flag: 'break_flag' },
             { label: 'Huck', flag: 'huck_flag' },
             { label: 'Reset', flag: 'dump_flag' },
+            { label: 'Swing', flag: 'swing_flag' },
             { label: 'Hammer', flag: 'hammer_flag' },
             { label: 'Sky', flag: 'sky_flag' },
             { label: 'Layout', flag: 'layout_flag' }
@@ -1128,6 +1129,36 @@ const fieldPbp = (function() {
         commitThrow(holder, receiver, from, to);
     }
 
+    /**
+     * Auto-classification of a throw from its geometry (stored normalized
+     * coords: x = progress toward the attacking endzone as a fraction of the
+     * playing field, y = across the width). Returns modifier flags that are
+     * pre-set on the committed Throw — the coach can always override them via
+     * the "Last throw was a:" chips (or the score dialog's flag buttons):
+     *   - huck:  forward progress ≥ the settable fraction (Advanced Settings
+     *            → Field → Huck threshold, default 50% of the playing field)
+     *   - reset (dump_flag): meaningfully backwards (beyond a small tolerance
+     *            so flat lateral passes don't count)
+     *   - swing: crosses a lateral field third, unless it's a huck (a deep
+     *            cross-field shot reads as a huck, not a swing)
+     */
+    const RESET_TOLERANCE = 0.025;   // ~1.75 yd backwards on a 70 yd playing field
+    function classifyThrow(from, to) {
+        if (!from || !to || typeof from.x !== 'number' || typeof to.x !== 'number') return {};
+        const dx = to.x - from.x;
+        let huckFrac = 0.5;
+        if (window.advancedSettings && typeof window.advancedSettings.get === 'function') {
+            const v = parseFloat(window.advancedSettings.get('field.huckFraction'));
+            if (Number.isFinite(v) && v > 0) huckFrac = v;
+        }
+        const huck = dx >= huckFrac;
+        const dump = dx <= -RESET_TOLERANCE;
+        const third = y => y < 1 / 3 ? 0 : (y <= 2 / 3 ? 1 : 2);
+        const swing = !huck && typeof from.y === 'number' && typeof to.y === 'number'
+            && third(from.y) !== third(to.y);
+        return { huck, dump, swing };
+    }
+
     function commitThrow(thrower, receiver, from, to) {
         const isScore = S.pending === 'score' || inAttackEZ(to);
         clearEntryState();
@@ -1138,11 +1169,13 @@ const fieldPbp = (function() {
             // spatial marker survives. The dialog's Score button commits a goal,
             // "continue possession" downgrades to a plain completion, and its
             // modifier flags (huck/break/sky/layout/hammer) apply either way.
+            // A geometry-detected huck pre-checks the dialog's Huck flag.
             openScoreDialog(thrower, receiver, from, to);
             render();
             return;
         }
-        window.pbpPossession.createThrow(thrower, receiver, { score: false, from, to });
+        window.pbpPossession.createThrow(thrower, receiver,
+            { score: false, from, to, ...classifyThrow(from, to) });
         render();
     }
 
@@ -1164,10 +1197,14 @@ const fieldPbp = (function() {
         if (typeof ensureDialogVisible === 'function') ensureDialogVisible('scoreAttributionDialog');
 
         if (typeof showScoreAttributionDialog === 'function') {
-            showScoreAttributionDialog({ thrower, receiver, from, to });
+            showScoreAttributionDialog({
+                thrower, receiver, from, to,
+                huckArmed: !!classifyThrow(from, to).huck,
+            });
         } else {
             console.warn('[fieldPbp] showScoreAttributionDialog unavailable; falling back to direct createThrow');
-            window.pbpPossession.createThrow(thrower, receiver, { score: true, from, to });
+            window.pbpPossession.createThrow(thrower, receiver,
+                { score: true, from, to, ...classifyThrow(from, to) });
         }
     }
 

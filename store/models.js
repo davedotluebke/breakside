@@ -306,13 +306,14 @@ class Event {
 
 // Throw event class
 class Throw extends Event {
-    constructor({thrower = "voidthrower", receiver = "voidreceiver", huck = false, breakmark = false, dump = false, hammer = false, sky = false, layout = false, score = false, from = null, to = null, assist = null}) {
+    constructor({thrower = "voidthrower", receiver = "voidreceiver", huck = false, breakmark = false, dump = false, swing = false, hammer = false, sky = false, layout = false, score = false, from = null, to = null, assist = null}) {
         super('Throw');
         this.thrower = thrower;
         this.receiver = receiver;
         this.huck_flag = huck;
         this.break_flag = breakmark;
         this.dump_flag = dump;
+        this.swing_flag = swing;   // lateral field-third-crossing throw (auto-set by Field mode, editable)
         this.hammer_flag = hammer;
         this.sky_flag = sky;
         this.layout_flag = layout;
@@ -337,6 +338,7 @@ class Throw extends Event {
         if (this.break_flag)        { throwType += 'break '; }
         if (this.hammer_flag)       { throwType += 'hammer '; }
         if (this.dump_flag)         { throwType += 'dump '; }
+        if (this.swing_flag)        { throwType += 'swing '; }
         if (throwType)              { summary += `a ${throwType}`; }
         if (receiver)               { summary += `to ${this.receiver.name} `; }
         if (this.sky_flag || this.layout_flag) {

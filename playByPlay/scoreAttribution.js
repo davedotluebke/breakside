@@ -197,8 +197,10 @@ function showScoreAttributionDialog(opts) {
     pendingFrom = opts.from || null;
     pendingTo = opts.to || null;
 
-    // Reset modifier toggles
-    setFlag('huckFlag', false);
+    // Reset modifier toggles. huckArmed = geometry-detected huck from the
+    // Field tab (throw ≥ the huck-threshold fraction of the field) — pre-
+    // checked but freely un-toggleable before committing.
+    setFlag('huckFlag', !!opts.huckArmed);
     setFlag('breakFlag', !!opts.breakArmed);
     setFlag('skyFlag', false);
     setFlag('layoutFlag', false);

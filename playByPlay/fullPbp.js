@@ -451,6 +451,7 @@ const fullPbp = (function() {
         { label: 'break',        prop: 'break_flag'  },
         { label: 'huck',         prop: 'huck_flag'   },
         { label: 'reset',        prop: 'dump_flag'   },  // displayed as "reset", flag stays dump_flag
+        { label: 'swing',        prop: 'swing_flag'  },  // auto-set by Field mode geometry; editable anywhere
         { label: 'hammer',       prop: 'hammer_flag' },
         { label: 'sky catch',    prop: 'sky_flag'    },
         { label: 'layout catch', prop: 'layout_flag' }
