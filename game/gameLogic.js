@@ -318,8 +318,13 @@ function summarizeGame() {
     let numPoints = 0;
     let runningScoreUs = 0;
     let runningScoreThem = 0;
+    // How the current period opened — flips at each period break (halftime /
+    // switch sides), driving the "who pulls next" note below. Mirrors
+    // determineStartingPosition().
+    let periodOpening = currentGame().startingPosition;
     currentGame().points.forEach(point => {
         let switchsides = false;
+        let forceswap = false;
         numPoints += 1;
         summary += `\nPoint ${numPoints} roster:`;
         point.players.forEach(player => summary += ` ${player}`);
@@ -339,6 +344,10 @@ function summarizeGame() {
         // very next possession's delimiter, gives a correct boundary
         // either way (Turnover-then-Defense or Turnover-only-so-far).
         let suppressNextPossessionDelimiter = false;
+        // Events recorded AFTER the point ended (between-points timeouts,
+        // switch sides) are deferred past the score lines below so the log
+        // reads in real-world order.
+        const afterPointLines = [];
         point.possessions.forEach(possession => {
             if (!suppressNextPossessionDelimiter) {
                 const role = possession.offensive ? 'offense' : 'defense';
@@ -346,10 +355,19 @@ function summarizeGame() {
             }
             suppressNextPossessionDelimiter = false;
             possession.events.forEach(event => {
-                summary += `\n${event.summarize()}`;
-                if (event.type === 'Other' && event.switchsides_flag) {
-                    switchsides = true;
+                // Halftime implies the side switch; two breaks on the same
+                // point cancel (accidental tap + correction), so toggle.
+                if (event.type === 'Other' && (event.switchsides_flag || event.halftime_flag)) {
+                    switchsides = !switchsides;
                 }
+                if (event.type === 'Other' && event.forceswap_flag) {
+                    forceswap = !forceswap;
+                }
+                if (event.type === 'Other' && event.betweenPoints) {
+                    afterPointLines.push(event.summarize());
+                    return;
+                }
+                summary += `\n${event.summarize()}`;
                 if (event.type === 'Turnover') {
                     // Possession just ended — emit the boundary so the log
                     // shows it even when no Defense event has yet been
@@ -372,10 +390,20 @@ function summarizeGame() {
         if (point.winner) {
             summary += `\nCurrent score: ${currentGame().team} ${runningScoreUs}, ${currentGame().opponent} ${runningScoreThem}`;
         }
+        afterPointLines.forEach(line => summary += `\n${line}`);
+        // Manual Swap O & D corrections flip the period bookkeeping too
+        // (matches determineStartingPosition), so the note below and any
+        // later halftime read from the corrected orientation.
+        if (forceswap) {
+            periodOpening = (periodOpening === 'offense') ? 'defense' : 'offense';
+        }
         if (switchsides) {
-            summary += `\nO and D switching sides for next point. `;
-            if (point.winner === 'team') {
-                summary += `\n${currentGame().team} will receive pull and play O. `;
+            // Period break: the next point opens with the period-opening
+            // roles swapped — the team that pulled to open the previous
+            // period receives — regardless of who won this point.
+            periodOpening = (periodOpening === 'offense') ? 'defense' : 'offense';
+            if (periodOpening === 'offense') {
+                summary += `\n${currentGame().team} will receive the pull and play O. `;
             } else {
                 summary += `\n${currentGame().team} will pull to ${currentGame().opponent} and play D. `;
             }
