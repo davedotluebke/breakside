@@ -57,6 +57,7 @@ const advancedSettings = (function() {
         'sync.refreshIntervalSec': 10,                   // cloud auto-refresh cadence (applies after reload)
         // --- Field ---
         'field.endzoneYards': 20,                         // endzone depth drawn on the Field tab (20 = USAU, 25 = some leagues)
+        'field.huckFraction': 0.5,                        // auto-classify a throw as a huck at ≥ this fraction of the playing field
         'field.flipHA': false,                            // swap which sideline is Home (Field tab display)
         'field.flipAD': false,                            // base attack direction (auto-alternates each point on top of this)
         // --- Hints ---
@@ -266,6 +267,16 @@ const advancedSettings = (function() {
                     options: [
                         ['20', '20 yards (USAU)'],
                         ['25', '25 yards']
+                    ]
+                },
+                {
+                    key: 'field.huckFraction', label: 'Huck threshold',
+                    help: 'A Field-mode throw traveling at least this far downfield is auto-tagged as a huck (always overridable via the throw’s modifier chips).',
+                    type: 'select',
+                    options: [
+                        ['0.4', '40% of the field'],
+                        ['0.5', '50% of the field'],
+                        ['0.6', '60% of the field']
                     ]
                 }
             ]

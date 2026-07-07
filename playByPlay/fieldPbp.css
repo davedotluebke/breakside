@@ -98,7 +98,8 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 }
 .fp-modepill.offense { background: var(--fp-blue); }
 .fp-modepill.defense { background: var(--fp-red); }
-.fp-undo {
+.fp-undo,
+.fp-gameevents {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 7px 13px;
     border: 1px solid #bbb; border-radius: 7px;
@@ -180,7 +181,9 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 .field-pbp-content[data-mode="pull"] .fp-chip { touch-action: pan-y; }
 .fp-chip .fp-num { font: 700 11px 'JetBrains Mono', monospace; color: #888; }
 .fp-chip .fp-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.fp-chip.holder { background: var(--fp-holdbg); border-color: var(--fp-hold); box-shadow: 0 0 0 2px rgba(224, 166, 75, .3); }
+/* The holder chip is inert on offense (no drag / no tap — can't pass to
+   yourself), so it shouldn't advertise interactivity. */
+.fp-chip.holder { background: var(--fp-holdbg); border-color: var(--fp-hold); box-shadow: 0 0 0 2px rgba(224, 166, 75, .3); cursor: default; }
 .fp-chip.unknown { background: #f3f4f6; border: 1px dashed #b9bdc4; color: #6b7280; font-style: italic; }
 .fp-chip .fp-umark { font: 700 12px 'JetBrains Mono', monospace; color: #9aa0a6; }
 
@@ -254,6 +257,14 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
     padding: 8px 72px 8px 8px;   /* right pad keeps clear of the mic FAB */
     display: flex; flex-wrap: nowrap; gap: 6px; min-height: 8px;
 }
+/* Portrait: this row sits at the very bottom of the screen, in reach of
+   iOS's swipe-up home gesture / Siri edge. Extra bottom clearance (plus the
+   safe-area inset when the app runs with one) keeps taps on the buttons
+   instead of the system edge. Landscape keeps the tight spacing — the row
+   isn't at the screen edge there and field space is scarcer. */
+.field-pbp-content[data-o="portrait"] .fp-events {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
 
 /* Armed chip (puller picked; later: armed player awaiting placement). */
 .fp-chip.armed { background: var(--fp-blue); border-color: var(--fp-blue); color: #fff; }
@@ -301,14 +312,25 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 /* Events bar buttons (pull hangtime + brick; offense/defense buttons later). */
 .fp-ebtn {
     /* basis = content so labels show in full; grow to share the row. nowrap
-       keeps them on one line; they size to their text and fit the row.
-       Reduced vertical padding lets the font grow to 14px without the button
-       getting any taller (~35px) — keeping the field surface roomy. */
+       keeps them on one line; they size to their text and fit the row. */
     flex: 1 1 auto; min-width: 0;
+    margin: 0;   /* override global button { margin: 10px } — 4 buttons × 20px was starving the row and overflowing "Throwaway" */
     border: 1px solid #c8c8c8; border-radius: 6px; background: #f7f7f7;
     padding: 8px 7px; font-size: 14px; line-height: 1.2; font-weight: 600; color: #333;
     cursor: pointer; text-align: center; white-space: nowrap;
     -webkit-tap-highlight-color: transparent;
+}
+/* Portrait: full-height (44px+) tap targets — these live at the bottom of
+   the screen where short buttons get mistaken for the iOS home gesture.
+   Horizontal padding is trimmed to 4px so the longest label ("Throwaway")
+   fits its border on narrow phones. Landscape keeps the compact ~35px
+   height so the field stays roomy. */
+.field-pbp-content[data-o="portrait"] .fp-ebtn {
+    min-height: 44px;
+    padding: 12px 4px;
+}
+.field-pbp-content[data-o="portrait"] .fp-events {
+    gap: 4px;
 }
 .fp-ebtn.pullhang { flex: 3 1 0; background: #fff7e6; border-color: var(--fp-hold); color: #92600b; font: 700 13px 'JetBrains Mono', monospace; }
 .fp-ebtn.pullbrick { flex: 1 1 0; background: #fff; border-color: var(--fp-hold); color: #92600b; }

@@ -306,13 +306,14 @@ class Event {
 
 // Throw event class
 class Throw extends Event {
-    constructor({thrower = "voidthrower", receiver = "voidreceiver", huck = false, breakmark = false, dump = false, hammer = false, sky = false, layout = false, score = false, from = null, to = null, assist = null}) {
+    constructor({thrower = "voidthrower", receiver = "voidreceiver", huck = false, breakmark = false, dump = false, swing = false, hammer = false, sky = false, layout = false, score = false, from = null, to = null, assist = null}) {
         super('Throw');
         this.thrower = thrower;
         this.receiver = receiver;
         this.huck_flag = huck;
         this.break_flag = breakmark;
         this.dump_flag = dump;
+        this.swing_flag = swing;   // lateral field-third-crossing throw (auto-set by Field mode, editable)
         this.hammer_flag = hammer;
         this.sky_flag = sky;
         this.layout_flag = layout;
@@ -337,6 +338,7 @@ class Throw extends Event {
         if (this.break_flag)        { throwType += 'break '; }
         if (this.hammer_flag)       { throwType += 'hammer '; }
         if (this.dump_flag)         { throwType += 'dump '; }
+        if (this.swing_flag)        { throwType += 'swing '; }
         if (throwType)              { summary += `a ${throwType}`; }
         if (receiver)               { summary += `to ${this.receiver.name} `; }
         if (this.sky_flag || this.layout_flag) {
@@ -451,25 +453,42 @@ class Defense extends Event {
 
 // Other event class
 class Other extends Event {
-    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null, description = null}) {
+    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null, forceswap = null, description = null, calledBy = null, calledByName = null, betweenPoints = null}) {
         super('Other');
         this.timeout_flag = timeout;
         this.injury_flag = injury;
         this.timecap_flag = timecap;
         this.switchsides_flag = switchsides;
         this.halftime_flag = halftime;
+        // Manual correction: invert which team pulls the next point (stats
+        // started mid-game, or O/D was entered backwards). Unlike halftime /
+        // switchsides this is NOT a period break — it flips whatever the
+        // normal rules would compute, and doesn't touch the field display.
+        this.forceswap_flag = forceswap;
         this.description = description; // Generic description for custom events (e.g., substitutions)
+        this.calledBy = calledBy; // Timeout attribution: 'us' | 'them' | 'neither' | null (legacy/unknown)
+        this.calledByName = calledByName; // Display name for calledBy, resolved at creation (team/opponent name)
+        // True when recorded after the point ended (event lives on the
+        // completed point, but log renderers print it after the score lines
+        // so the stream reads in real-world order).
+        this.betweenPoints = betweenPoints;
     }
-    
+
     // Override summarize for Other events
     summarize() {
         let summary = '';
         if (this.description)       { summary += this.description + ' '; }
-        if (this.timeout_flag)      { summary += 'Timeout called. '; }
+        if (this.timeout_flag) {
+            if (this.calledByName)             { summary += `Timeout called by ${this.calledByName}. `; }
+            else if (this.calledBy === 'us')   { summary += 'Timeout called by us. '; }
+            else if (this.calledBy === 'them') { summary += 'Timeout called by them. '; }
+            else                               { summary += 'Timeout called. '; }
+        }
         if (this.injury_flag)       { summary += 'Injury sub called '; }
         if (this.timecap_flag)      { summary += 'Hard cap called; game over '; }
         if (this.switchsides_flag)  { summary += 'O and D switch sides '; }
-        if (this.halftime_flag)     { summary += 'Halftime '; }
+        if (this.halftime_flag)     { summary += 'Halftime — teams switch ends. '; }
+        if (this.forceswap_flag)    { summary += 'Swapped O & D — pulling team corrected. '; }
         return summary;
     }
 }
@@ -507,6 +526,10 @@ class Pull extends Event {
         if (this.oi_flag) pullType.push('OI');
         if (pullType.length > 0) {
             summary += ` - ${pullType.join(', ')}`;
+        }
+        // Hang time (ms, recorded by Field mode's stopwatch) in parentheses
+        if (typeof this.hang === 'number' && this.hang > 0) {
+            summary += ` (${(this.hang / 1000).toFixed(1)}s hang)`;
         }
         return summary;
     }
@@ -569,6 +592,7 @@ class Point {
         this.totalPointTime = 0;  // Accumulated time tracking
         this.lastPauseTime = null;  // Track when the point was last paused
         this.substitutedOutPlayers = [];  // Players who were subbed out mid-point (for injury/fatigue)
+        this.substitutedInPlayers = [];   // Players who came in mid-point (partial point, like subbed-out)
         // Distinct PBP modes recorded during this point — derived from its
         // possessions (see getModes). Kept as a field for convenient in-memory
         // reads; serialization writes the freshly-derived value.

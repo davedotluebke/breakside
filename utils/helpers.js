@@ -210,23 +210,56 @@ function formatPlayTime(totalTimePlayed) {
 /**
  * Determine whether the next point starts on offense or defense.
  * Pure game logic: inspects completed points, switchsides events, and point winners.
+ *
+ * Normal rule: the scoring team pulls the next point (we scored → we start
+ * on defense). A "switch sides" (halftime) on a point overrides that for
+ * the FOLLOWING point: each period opens with roles swapped from how the
+ * previous period opened — the team that pulled to start the game receives
+ * to start the second half, from the other end — regardless of who won the
+ * point before the break. (Two switchsides on the same point cancel: an
+ * accidental tap plus its correction.)
  */
 function determineStartingPosition() {
     if (!currentGame()) { console.log("Warning: No current game"); return 'offense'; }
+    const flip = pos => (pos === 'offense') ? 'defense' : 'offense';
     let startPointOn = currentGame().startingPosition;
+    // How the current period opened; the first period opens on the game's
+    // startingPosition, and each halftime flips it.
+    let periodOpening = currentGame().startingPosition;
     currentGame().points.forEach(point => {
         let switchsides = false;
+        let forceswap = false;
         point.possessions.forEach(possession => {
             possession.events.forEach(event => {
-                if (event.type === 'Other' && event.switchsides_flag) {
+                if (event.type !== 'Other') return;
+                // Halftime IS a period break (it implies the side switch);
+                // a bare switchsides event counts the same.
+                if (event.switchsides_flag || event.halftime_flag) {
                     switchsides = !switchsides;
+                }
+                // Manual "Swap O & D" correction — applied on top of
+                // whatever the rules below compute.
+                if (event.forceswap_flag) {
+                    forceswap = !forceswap;
                 }
             });
         });
-        if (point.winner === 'team') {
-            startPointOn = switchsides ? 'offense' : 'defense';
+        if (switchsides) {
+            // Halftime after this point: next point restarts play with the
+            // period-opening roles swapped, ignoring this point's winner.
+            periodOpening = flip(periodOpening);
+            startPointOn = periodOpening;
+        } else if (point.winner === 'team') {
+            startPointOn = 'defense';   // we scored → we pull
         } else {
-            startPointOn = switchsides ? 'defense' : 'offense';
+            startPointOn = 'offense';   // they scored → they pull to us
+        }
+        if (forceswap) {
+            // Coach says the computed orientation is backwards from here on:
+            // invert the next start AND the period bookkeeping, so a later
+            // halftime flips from the corrected orientation.
+            startPointOn = flip(startPointOn);
+            periodOpening = flip(periodOpening);
         }
     });
     return startPointOn;

@@ -133,7 +133,7 @@ const pbpPossession = (function() {
 
     /**
      * @param thrower Player, @param receiver Player
-     * @param opts {score, breakmark, huck, dump, hammer, sky, layout,
+     * @param opts {score, breakmark, huck, dump, swing, hammer, sky, layout,
      *              from, to, assist}
      */
     function createThrow(thrower, receiver, opts) {
@@ -146,6 +146,7 @@ const pbpPossession = (function() {
             huck: !!opts.huck,
             breakmark: !!opts.breakmark,
             dump: !!opts.dump,
+            swing: !!opts.swing,
             hammer: !!opts.hammer,
             sky: !!opts.sky,
             layout: !!opts.layout,

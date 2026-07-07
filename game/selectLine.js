@@ -1722,12 +1722,14 @@ function updateSelectLineTable() {
             // Include players who were substituted out mid-point (show both subbed-in and subbed-out)
             const playedFullPoint = point.players.includes(player.name);
             const subbedOutMidPoint = point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name);
+            const subbedInMidPoint = point.substitutedInPlayers && point.substitutedInPlayers.includes(player.name);
             const playedPoint = playedFullPoint || subbedOutMidPoint;
             if (playedPoint) {
                 runningPointTotal++;
                 pointCell.textContent = `${runningPointTotal}`;
-                // Italic for subbed-out (did not complete the point)
-                if (subbedOutMidPoint && !playedFullPoint) {
+                // Italic for a partial point: subbed out (didn't finish it)
+                // or subbed in (joined it late).
+                if (subbedOutMidPoint || subbedInMidPoint) {
                     pointCell.classList.add('point-cell-subbed-out');
                 }
             } else {
