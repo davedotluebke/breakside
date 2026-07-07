@@ -345,6 +345,7 @@ function renderGameSummaryEventLog(game) {
 
     (game.points || []).forEach(point => {
         let switchsides = false;
+        let forceswap = false;
         numPoints++;
         summary += `\nPoint ${numPoints} roster:`;
         (point.players || []).forEach(player => summary += ` ${player}`);
@@ -365,6 +366,9 @@ function renderGameSummaryEventLog(game) {
                 // point cancel (accidental tap + correction), so toggle.
                 if (event.type === 'Other' && (event.switchsides_flag || event.halftime_flag)) {
                     switchsides = !switchsides;
+                }
+                if (event.type === 'Other' && event.forceswap_flag) {
+                    forceswap = !forceswap;
                 }
                 if (event.type === 'Other' && event.betweenPoints) {
                     if (typeof event.summarize === 'function') {
@@ -393,6 +397,11 @@ function renderGameSummaryEventLog(game) {
             summary += `\nCurrent score: ${teamName} ${runningScoreUs}, ${opponent} ${runningScoreThem}`;
         }
         afterPointLines.forEach(line => summary += `\n${line}`);
+        // Manual Swap O & D corrections flip the period bookkeeping too
+        // (matches determineStartingPosition / summarizeGame).
+        if (forceswap) {
+            periodOpening = (periodOpening === 'offense') ? 'defense' : 'offense';
+        }
         if (switchsides) {
             // Period break: next point opens with the period-opening roles
             // swapped, regardless of who won this point (matches

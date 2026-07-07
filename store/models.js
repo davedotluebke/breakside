@@ -453,13 +453,18 @@ class Defense extends Event {
 
 // Other event class
 class Other extends Event {
-    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null, description = null, calledBy = null, calledByName = null, betweenPoints = null}) {
+    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null, forceswap = null, description = null, calledBy = null, calledByName = null, betweenPoints = null}) {
         super('Other');
         this.timeout_flag = timeout;
         this.injury_flag = injury;
         this.timecap_flag = timecap;
         this.switchsides_flag = switchsides;
         this.halftime_flag = halftime;
+        // Manual correction: invert which team pulls the next point (stats
+        // started mid-game, or O/D was entered backwards). Unlike halftime /
+        // switchsides this is NOT a period break — it flips whatever the
+        // normal rules would compute, and doesn't touch the field display.
+        this.forceswap_flag = forceswap;
         this.description = description; // Generic description for custom events (e.g., substitutions)
         this.calledBy = calledBy; // Timeout attribution: 'us' | 'them' | 'neither' | null (legacy/unknown)
         this.calledByName = calledByName; // Display name for calledBy, resolved at creation (team/opponent name)
@@ -483,6 +488,7 @@ class Other extends Event {
         if (this.timecap_flag)      { summary += 'Hard cap called; game over '; }
         if (this.switchsides_flag)  { summary += 'O and D switch sides '; }
         if (this.halftime_flag)     { summary += 'Halftime — teams switch ends. '; }
+        if (this.forceswap_flag)    { summary += 'Swapped O & D — pulling team corrected. '; }
         return summary;
     }
 }
