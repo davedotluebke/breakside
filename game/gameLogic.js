@@ -318,6 +318,10 @@ function summarizeGame() {
     let numPoints = 0;
     let runningScoreUs = 0;
     let runningScoreThem = 0;
+    // How the current period opened — flips at each period break (halftime /
+    // switch sides), driving the "who pulls next" note below. Mirrors
+    // determineStartingPosition().
+    let periodOpening = currentGame().startingPosition;
     currentGame().points.forEach(point => {
         let switchsides = false;
         numPoints += 1;
@@ -350,8 +354,10 @@ function summarizeGame() {
             }
             suppressNextPossessionDelimiter = false;
             possession.events.forEach(event => {
-                if (event.type === 'Other' && event.switchsides_flag) {
-                    switchsides = true;
+                // Halftime implies the side switch; two breaks on the same
+                // point cancel (accidental tap + correction), so toggle.
+                if (event.type === 'Other' && (event.switchsides_flag || event.halftime_flag)) {
+                    switchsides = !switchsides;
                 }
                 if (event.type === 'Other' && event.betweenPoints) {
                     afterPointLines.push(event.summarize());
@@ -382,9 +388,12 @@ function summarizeGame() {
         }
         afterPointLines.forEach(line => summary += `\n${line}`);
         if (switchsides) {
-            summary += `\nO and D switching sides for next point. `;
-            if (point.winner === 'team') {
-                summary += `\n${currentGame().team} will receive pull and play O. `;
+            // Period break: the next point opens with the period-opening
+            // roles swapped — the team that pulled to open the previous
+            // period receives — regardless of who won this point.
+            periodOpening = (periodOpening === 'offense') ? 'defense' : 'offense';
+            if (periodOpening === 'offense') {
+                summary += `\n${currentGame().team} will receive the pull and play O. `;
             } else {
                 summary += `\n${currentGame().team} will pull to ${currentGame().opponent} and play D. `;
             }

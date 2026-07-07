@@ -482,7 +482,7 @@ class Other extends Event {
         if (this.injury_flag)       { summary += 'Injury sub called '; }
         if (this.timecap_flag)      { summary += 'Hard cap called; game over '; }
         if (this.switchsides_flag)  { summary += 'O and D switch sides '; }
-        if (this.halftime_flag)     { summary += 'Halftime '; }
+        if (this.halftime_flag)     { summary += 'Halftime — teams switch ends. '; }
         return summary;
     }
 }

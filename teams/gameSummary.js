@@ -339,6 +339,9 @@ function renderGameSummaryEventLog(game) {
     let numPoints = 0;
     let runningScoreUs = 0;
     let runningScoreThem = 0;
+    // How the current period opened — flips at each period break (halftime /
+    // switch sides); drives the "who pulls next" note. Mirrors summarizeGame.
+    let periodOpening = game.startingPosition;
 
     (game.points || []).forEach(point => {
         let switchsides = false;
@@ -358,8 +361,10 @@ function renderGameSummaryEventLog(game) {
         const afterPointLines = [];
         (point.possessions || []).forEach(possession => {
             (possession.events || []).forEach(event => {
-                if (event.type === 'Other' && event.switchsides_flag) {
-                    switchsides = true;
+                // Halftime implies the side switch; two breaks on the same
+                // point cancel (accidental tap + correction), so toggle.
+                if (event.type === 'Other' && (event.switchsides_flag || event.halftime_flag)) {
+                    switchsides = !switchsides;
                 }
                 if (event.type === 'Other' && event.betweenPoints) {
                     if (typeof event.summarize === 'function') {
@@ -389,9 +394,12 @@ function renderGameSummaryEventLog(game) {
         }
         afterPointLines.forEach(line => summary += `\n${line}`);
         if (switchsides) {
-            summary += `\nO and D switching sides for next point. `;
-            if (point.winner === 'team') {
-                summary += `\n${teamName} will receive pull and play O. `;
+            // Period break: next point opens with the period-opening roles
+            // swapped, regardless of who won this point (matches
+            // determineStartingPosition).
+            periodOpening = (periodOpening === 'offense') ? 'defense' : 'offense';
+            if (periodOpening === 'offense') {
+                summary += `\n${teamName} will receive the pull and play O. `;
             } else {
                 summary += `\n${teamName} will pull to ${opponent} and play D. `;
             }

@@ -229,7 +229,9 @@ function determineStartingPosition() {
         let switchsides = false;
         point.possessions.forEach(possession => {
             possession.events.forEach(event => {
-                if (event.type === 'Other' && event.switchsides_flag) {
+                // Halftime IS a period break (it implies the side switch);
+                // a bare switchsides event counts the same.
+                if (event.type === 'Other' && (event.switchsides_flag || event.halftime_flag)) {
                     switchsides = !switchsides;
                 }
             });
