@@ -177,7 +177,8 @@ function wireGameScreenEvents() {
     if (switchSidesBtn2) {
         switchSidesBtn2.addEventListener('click', () => {
             closeGameMenu();
-            applyPeriodBreak('switchsides');
+            // Same confirm flow as the Events modal's Swap O & D button.
+            showSwapODModal();
         });
     }
 
@@ -1289,9 +1290,9 @@ function createGameEventsModal() {
                     <i class="fas fa-pause-circle"></i>
                     <span>Half Time</span>
                 </button>
-                <button id="geSwitchSidesBtn" class="ge-btn ge-btn-switch">
-                    <i class="fas fa-exchange-alt"></i>
-                    <span>Switch Sides</span>
+                <button id="geSwitchSidesBtn" class="ge-btn ge-btn-switch" title="Force-swap which team pulls next (manual correction — not halftime)">
+                    <i class="fas fa-random"></i>
+                    <span>Swap O &amp; D</span>
                 </button>
                 <button id="geEndGameBtn" class="ge-btn ge-btn-endgame">
                     <i class="fas fa-flag-checkered"></i>
@@ -1602,11 +1603,136 @@ function applyPeriodBreak(kind) {
 }
 
 /**
- * Handle Switch Sides game event (from the Game Events modal).
+ * Handle "Swap O & D" (from the Game Events modal, replacing the old Switch
+ * Sides button): open a confirm dialog before force-swapping which team
+ * pulls next. Offers "Call halftime instead" since a coach reaching for
+ * this at the half actually wants the halftime event.
  */
 function handleGameEventSwitchSides() {
     hideGameEventsModal();
-    applyPeriodBreak('switchsides');
+    showSwapODModal();
+}
+
+/**
+ * Show the "Force-swap which team pulls next?" confirm dialog (created
+ * lazily, like the Game Events modal itself).
+ */
+function showSwapODModal() {
+    let modal = document.getElementById('swapODModal');
+    if (!modal) {
+        modal = createSwapODModal();
+        document.body.appendChild(modal);
+    }
+    modal.style.display = 'flex';
+}
+
+function hideSwapODModal() {
+    const modal = document.getElementById('swapODModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Create the Swap O & D confirm dialog
+ * @returns {HTMLElement}
+ */
+function createSwapODModal() {
+    const modal = document.createElement('div');
+    modal.id = 'swapODModal';
+    modal.className = 'modal game-events-modal';
+
+    modal.innerHTML = `
+        <div class="modal-content game-events-modal-content">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Force-swap which team pulls next?</h2>
+                <span class="close" id="swapODModalClose">&times;</span>
+            </div>
+            <p class="text-hint">For corrections — e.g. stats started mid-game, or the game
+            was entered starting on O when it should have been D. Flips who pulls the next
+            point (and stays flipped); does not change the field display. At the half, use
+            halftime instead.</p>
+            <div class="game-events-buttons swap-od-buttons">
+                <button id="swapODConfirmBtn" class="ge-btn ge-btn-who-us">
+                    <i class="fas fa-random"></i>
+                    <span>Confirm swap</span>
+                </button>
+                <button id="swapODHalftimeBtn" class="ge-btn ge-btn-halftime">
+                    <i class="fas fa-pause-circle"></i>
+                    <span>Call halftime instead</span>
+                </button>
+                <button id="swapODCancelBtn" class="ge-btn ge-btn-who-neither">
+                    <i class="fas fa-times"></i>
+                    <span>Cancel</span>
+                </button>
+            </div>
+        </div>
+    `;
+
+    // X / backdrop tap = cancel, same as the Cancel button.
+    const closeBtn = modal.querySelector('#swapODModalClose');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', hideSwapODModal);
+    }
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            hideSwapODModal();
+        }
+    });
+    modal.querySelector('#swapODCancelBtn').addEventListener('click', hideSwapODModal);
+    modal.querySelector('#swapODConfirmBtn').addEventListener('click', () => {
+        hideSwapODModal();
+        applyForceSwap();
+    });
+    modal.querySelector('#swapODHalftimeBtn').addEventListener('click', () => {
+        hideSwapODModal();
+        applyPeriodBreak('halftime');
+    });
+
+    return modal;
+}
+
+/**
+ * Force-swap which team pulls the next point. A manual correction, NOT a
+ * period break: records an Other{forceswap} event that inverts whatever
+ * determineStartingPosition would otherwise compute from here on (and keeps
+ * later halftime bookkeeping consistent). Deliberately does NOT touch the
+ * Field tab's rendered ends — the physical sides didn't change, the data
+ * was just entered backwards.
+ */
+function applyForceSwap() {
+    const inPoint = (typeof isPointInProgress === 'function') && isPointInProgress();
+    if (inPoint) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('Swap O & D between points', 'warning');
+        }
+        return;
+    }
+
+    const game = (typeof currentGame === 'function') ? currentGame() : null;
+    if (!game) return;
+
+    if (game.points && game.points.length) {
+        const lastPoint = game.points[game.points.length - 1];
+        lastPoint.possessions = lastPoint.possessions || [];
+        let poss = lastPoint.possessions[lastPoint.possessions.length - 1];
+        if (!poss) { poss = new Possession(true); lastPoint.possessions.push(poss); }
+        poss.events.push(new Other({ forceswap: true, betweenPoints: true }));
+    } else {
+        // No points yet — just flip the chosen starting position.
+        game.startingPosition = (game.startingPosition === 'offense') ? 'defense' : 'offense';
+    }
+
+    if (typeof logEvent === 'function') logEvent('Swapped O & D — pulling team corrected');
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    if (typeof updateGameLogEvents === 'function') updateGameLogEvents();
+    // Nudge any subscribed views (Start Point label now reflects new O/D).
+    if (window.narrationEventBus && typeof window.narrationEventBus.publish === 'function') {
+        window.narrationEventBus.publish('pointChanged', {});
+    }
+    if (typeof showControllerToast === 'function') {
+        showControllerToast('Pulling team swapped', 'info');
+    }
 }
 
 /**
