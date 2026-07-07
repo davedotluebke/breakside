@@ -54,12 +54,14 @@ migration surfaced but deliberately did not do (behavior-preserving rule):
       `game/gameScreenEvents.js` `endGameConfirm` references (function defined
       nowhere), `ui/activePlayersDisplay.js` guarded calls to
       `updateGenderRatioDisplay`/`checkPlayerCount` (defined nowhere).
-- [ ] **Countdown timer display**: `game/pointManagement.js`'s
+- [x] **Countdown timer display**: `game/pointManagement.js`'s
       `updateTimerDisplay(seconds)` (targeting `#timerDisplay`) had been
       shadowed by `game/gameTimer.js`'s zero-arg version since gameTimer was
-      introduced — its countdown ticks never updated `#timerDisplay`. The
-      migration preserved that (deleted the shadowed copy). Decide whether the
-      `#countdownTimer` UI is dead and remove it, or fix it to render again.
+      introduced — its countdown ticks never updated `#timerDisplay`.
+      *(Fixed on `game-events`, 2026-07-04: the countdown owns its own
+      renderer now — MM:SS with the timer-normal/warning/danger colors,
+      holds 00:00 in red at expiry, anchored below `#panel-header` so it
+      doesn't cover the point chip, hidden when the setting is 0.)*
 
 ### Backend test suite: fix or retire the stale test_api/test_auth failures
 
