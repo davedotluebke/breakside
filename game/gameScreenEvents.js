@@ -177,7 +177,7 @@ function wireGameScreenEvents() {
     if (switchSidesBtn2) {
         switchSidesBtn2.addEventListener('click', () => {
             closeGameMenu();
-            applySwitchSides();
+            applyPeriodBreak('switchsides');
         });
     }
 
@@ -1521,41 +1521,41 @@ function recordTimeout(calledBy) {
 }
 
 /**
- * Handle Half Time game event
+ * Handle Half Time game event: a period break. Records an Other{halftime}
+ * event and applies the full side-switch semantics — at halftime teams
+ * always swap ends, and the team that pulled to start the game receives
+ * to start the second half (see applyPeriodBreak / determineStartingPosition).
  */
 function handleGameEventHalfTime() {
-    if (typeof showControllerToast === 'function') {
-        showControllerToast('Half Time', 'info');
-    }
-    
-    // Log the event
-    console.log('Game Event: Half Time');
-    
     hideGameEventsModal();
+    applyPeriodBreak('halftime');
 }
 
 /**
- * Apply a halftime "Switch Sides": teams swap ends, so the side that pulled
- * from one endzone now receives from the other.
+ * Apply a period break — Halftime, or a bare "Switch Sides": teams swap
+ * ends, so the side that pulled from one endzone now receives from the other.
  *
  * Two effects, kept separate:
- *  1. O/D logic — record an Other{switchsides} event on the last completed
- *     point. determineStartingPosition() treats the flag as a period break:
- *     the next point opens with roles swapped from how the previous period
- *     opened (the team that pulled to start the game receives after halftime),
- *     regardless of who won the point before the break. Before any point
- *     exists, just flip the game's initial startingPosition instead.
+ *  1. O/D logic — record an Other{halftime} / Other{switchsides} event on the
+ *     last completed point. determineStartingPosition() treats either flag as
+ *     a period break: the next point opens with roles swapped from how the
+ *     previous period opened (the team that pulled to start the game receives
+ *     after halftime), regardless of who won the point before the break.
+ *     Before any point exists, just flip the game's initial startingPosition.
  *  2. Field display — flip the attack direction so the drawn field matches the
  *     physical end swap for the rest of the game (the per-point auto-flip then
  *     continues on top of the new base).
  *
- * Halftime happens between points; guarded to not fire mid-point.
+ * Period breaks happen between points; guarded to not fire mid-point.
+ * @param {'halftime'|'switchsides'} kind
  */
-function applySwitchSides() {
+function applyPeriodBreak(kind) {
     const inPoint = (typeof isPointInProgress === 'function') && isPointInProgress();
     if (inPoint) {
         if (typeof showControllerToast === 'function') {
-            showControllerToast('Switch sides between points (at halftime)', 'warning');
+            showControllerToast(kind === 'halftime'
+                ? 'Halftime can only be called between points'
+                : 'Switch sides between points (at halftime)', 'warning');
         }
         return;
     }
@@ -1563,21 +1563,28 @@ function applySwitchSides() {
     const game = (typeof currentGame === 'function') ? currentGame() : null;
     if (!game) return;
 
+    const isHalftime = kind === 'halftime';
+    const breakEvent = new Other(isHalftime
+        ? { halftime: true, betweenPoints: true }
+        : { switchsides: true, betweenPoints: true });
+
     if (game.points && game.points.length) {
         const lastPoint = game.points[game.points.length - 1];
         lastPoint.possessions = lastPoint.possessions || [];
         let poss = lastPoint.possessions[lastPoint.possessions.length - 1];
         if (!poss) { poss = new Possession(true); lastPoint.possessions.push(poss); }
-        // Switch sides always happens between points (guarded above) — flag
-        // it so log renderers print it after this point's score lines.
-        poss.events.push(new Other({ switchsides: true, betweenPoints: true }));
+        // Period breaks always happen between points (guarded above) — flag
+        // the event so log renderers print it after this point's score lines.
+        poss.events.push(breakEvent);
     } else {
         // No points yet — switching before the first pull just flips the
-        // chosen starting position.
+        // chosen starting position (no event to record on a point).
         game.startingPosition = (game.startingPosition === 'offense') ? 'defense' : 'offense';
     }
 
-    if (typeof logEvent === 'function') logEvent('O and D switch sides');
+    if (typeof logEvent === 'function') {
+        logEvent(isHalftime ? 'Halftime — teams switch ends' : 'O and D switch sides');
+    }
     if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
     if (typeof updateGameLogEvents === 'function') updateGameLogEvents();
 
@@ -1589,7 +1596,9 @@ function applySwitchSides() {
     if (window.narrationEventBus && typeof window.narrationEventBus.publish === 'function') {
         window.narrationEventBus.publish('pointChanged', {});
     }
-    if (typeof showControllerToast === 'function') showControllerToast('Switched sides', 'info');
+    if (typeof showControllerToast === 'function') {
+        showControllerToast(isHalftime ? 'Halftime — sides switched' : 'Switched sides', 'info');
+    }
 }
 
 /**
@@ -1597,7 +1606,7 @@ function applySwitchSides() {
  */
 function handleGameEventSwitchSides() {
     hideGameEventsModal();
-    applySwitchSides();
+    applyPeriodBreak('switchsides');
 }
 
 /**
@@ -2119,6 +2128,6 @@ window.updatePlayByPlayLayout = updatePlayByPlayLayout;
 // window survivor: late-bound back-edge hook (called by ui/panelSystem.js)
 window.updateLineTabStartPointBtn = updateLineTabStartPointBtn;
 // Dropped shims (zero external references found): showGameEventsModal,
-// hideGameEventsModal, applySwitchSides, wireTabControlEvents.
+// hideGameEventsModal, applyPeriodBreak, wireTabControlEvents.
 
 
