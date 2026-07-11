@@ -1,13 +1,16 @@
 /**
  * Breakside Landing — Hero Carousel
  *
- * Data-driven feature carousel for the hero. Each slide is a screenshot today,
- * but the machinery also renders short looping videos (set media.type:'video')
- * so individual features can graduate to motion clips without code changes.
+ * Data-driven feature carousel for the hero. Slides are screenshots or muted
+ * video clips (set media.type:'video'); a video slide plays from the start
+ * when it becomes active and holds the carousel until the clip ends.
  *
- * Behaviour: auto-advances every SLIDE_MS, pauses on hover/focus, supports
- * click-a-pill and swipe (touch + mouse drag). Respects prefers-reduced-motion
- * (no autoplay). See landing/screens/README.md for how to swap in real assets.
+ * Behaviour: image slides auto-advance every SLIDE_MS, video slides advance
+ * on 'ended'; pauses on hover/focus (a video that ends while hovered replays
+ * instead of advancing), supports click-a-pill and swipe (touch + mouse
+ * drag). Respects prefers-reduced-motion (no auto-advance; a video still
+ * plays when the user explicitly selects its slide, and stops on its last
+ * frame). See landing/screens/README.md for how to swap in real assets.
  */
 
 (function () {
@@ -64,9 +67,24 @@
             title: 'All in one',
             tag: 'Stats, lines, and log on a single screen',
         },
+        {
+            id: 'field-demo',
+            media: {
+                type: 'video',
+                src: 'screens/field-mode-demo.mp4',
+                poster: 'screens/field-mode-demo-poster.png',
+            },
+            orientation: 'portrait',
+            title: 'Field mode in action',
+            tag: 'A full point: swings, a reset, a huck, the goal',
+        },
     ];
 
     const SLIDE_MS = 4500;
+    // Video slides advance when the clip ends; this is the safety net in case
+    // playback never starts (autoplay blocked, slow network) so the carousel
+    // can't stall on a frozen slide.
+    const VIDEO_MAX_MS = 45000;
 
     const stage = document.getElementById('carouselStage');
     const pillsEl = document.getElementById('carouselPills');
@@ -102,10 +120,22 @@
             media.src = slide.media.src;
             if (slide.media.poster) media.poster = slide.media.poster;
             media.muted = true;
-            media.loop = true;
+            media.setAttribute('muted', '');
             media.playsInline = true;
             media.setAttribute('playsinline', '');
             media.preload = i === 0 ? 'auto' : 'none';
+            // A finished clip advances the carousel — unless the user is
+            // watching (hover/focus pause), then it replays, or motion is
+            // reduced, then it rests on its last frame.
+            media.addEventListener('ended', () => {
+                if (i !== current) return;
+                if (paused) {
+                    media.currentTime = 0;
+                    media.play().catch(() => {});
+                } else if (!reduceMotion) {
+                    next();
+                }
+            });
         } else {
             media = document.createElement('img');
             media.src = slide.media.src;
@@ -125,12 +155,14 @@
         pill.type = 'button';
         pill.setAttribute('role', 'tab');
         pill.setAttribute('aria-label', slide.title);
-        pill.addEventListener('click', () => { goTo(i); restart(); });
+        pill.addEventListener('click', () => goTo(i));
         pillsEl.appendChild(pill);
         pillEls.push(pill);
     });
 
     // --- Navigation ----------------------------------------------------------
+    let paused = false;
+
     function goTo(index) {
         current = (index + HERO_SLIDES.length) % HERO_SLIDES.length;
         slideEls.forEach((el, i) => {
@@ -138,7 +170,7 @@
             el.classList.toggle('active', active);
             const vid = el.querySelector('video');
             if (vid) {
-                if (active) { vid.play().catch(() => {}); }
+                if (active) { vid.currentTime = 0; vid.play().catch(() => {}); }
                 else { vid.pause(); }
             }
         });
@@ -150,25 +182,32 @@
         const slide = HERO_SLIDES[current];
         if (titleEl) titleEl.textContent = slide.title;
         if (tagEl) tagEl.textContent = slide.tag;
+        schedule();
     }
 
     function next() { goTo(current + 1); }
 
-    function start() {
-        if (reduceMotion || timer) return;
-        timer = window.setInterval(next, SLIDE_MS);
+    // Image slides hold for SLIDE_MS; video slides advance on 'ended', with
+    // VIDEO_MAX_MS as the stall-proof upper bound.
+    function schedule() {
+        stop();
+        if (reduceMotion || paused) return;
+        const isVideo = !!slideEls[current].querySelector('video');
+        timer = window.setTimeout(next, isVideo ? VIDEO_MAX_MS : SLIDE_MS);
     }
+
+    function start() { paused = false; schedule(); }
     function stop() {
-        if (timer) { window.clearInterval(timer); timer = null; }
+        if (timer) { window.clearTimeout(timer); timer = null; }
     }
-    function restart() { stop(); start(); }
+    function pause() { paused = true; stop(); }
 
     // Pause auto-advance while the user is looking/interacting.
     const root = document.getElementById('heroCarousel');
     if (root) {
-        root.addEventListener('mouseenter', stop);
+        root.addEventListener('mouseenter', pause);
         root.addEventListener('mouseleave', start);
-        root.addEventListener('focusin', stop);
+        root.addEventListener('focusin', pause);
         root.addEventListener('focusout', start);
     }
 
@@ -181,7 +220,6 @@
         startX = null;
         if (Math.abs(dx) < 40) return;
         goTo(current + (dx < 0 ? 1 : -1));
-        restart();
     }
     stage.addEventListener('touchstart', (e) => onDown(e.touches[0].clientX), { passive: true });
     stage.addEventListener('touchend', (e) => onUp(e.changedTouches[0].clientX), { passive: true });
@@ -190,10 +228,9 @@
 
     // Pause when the tab is hidden; resume when visible.
     document.addEventListener('visibilitychange', () => {
-        if (document.hidden) stop(); else start();
+        if (document.hidden) pause(); else start();
     });
 
     // --- Go --------------------------------------------------------------
     goTo(0);
-    start();
 })();

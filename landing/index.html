@@ -80,6 +80,7 @@
                     <div class="feature-icon">🥏</div>
                     <h3>Field Mode</h3>
                     <p>Tap a drawn field to place every throw, catch, drop, and D exactly where it happened. Rotate to landscape for a full-screen field.</p>
+                    <button type="button" class="feature-link" id="fieldDemoLink">▶ Watch a point unfold</button>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">🎙️</div>
@@ -175,6 +176,18 @@
             </div>
         </div>
     </section>
+
+    <!-- Field Mode demo video modal (fullscreen is requested on open; this
+         lightbox is the chrome around the player and the fallback when the
+         Fullscreen API is unavailable) -->
+    <div id="videoModal" class="modal video-modal">
+        <div class="video-modal-content">
+            <button class="modal-close" id="closeVideoModal">&times;</button>
+            <video id="fieldDemoVideo" src="screens/field-mode-demo.mp4"
+                   poster="screens/field-mode-demo-poster.png"
+                   controls playsinline preload="none"></video>
+        </div>
+    </div>
 
     <!-- Auth Modal -->
     <div id="authModal" class="modal">
