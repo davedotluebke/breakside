@@ -1164,23 +1164,26 @@ const fieldPbp = (function() {
      *            → Field → Huck threshold, default 50% of the playing field)
      *   - reset (dump_flag): meaningfully backwards (beyond a small tolerance
      *            so flat lateral passes don't count)
-     *   - swing: crosses a lateral field third, unless it's a huck (a deep
-     *            cross-field shot reads as a huck, not a swing)
+     *   - swing: lateral travel ≥ the settable fraction of the field width
+     *            (Advanced Settings → Field → Swing threshold, default 25%),
+     *            unless it's a huck (a deep cross-field shot reads as a huck,
+     *            not a swing)
      */
     const RESET_TOLERANCE = 0.025;   // ~1.75 yd backwards on a 70 yd playing field
+    function settingFraction(key, dflt) {
+        if (window.advancedSettings && typeof window.advancedSettings.get === 'function') {
+            const v = parseFloat(window.advancedSettings.get(key));
+            if (Number.isFinite(v) && v > 0) return v;
+        }
+        return dflt;
+    }
     function classifyThrow(from, to) {
         if (!from || !to || typeof from.x !== 'number' || typeof to.x !== 'number') return {};
         const dx = to.x - from.x;
-        let huckFrac = 0.5;
-        if (window.advancedSettings && typeof window.advancedSettings.get === 'function') {
-            const v = parseFloat(window.advancedSettings.get('field.huckFraction'));
-            if (Number.isFinite(v) && v > 0) huckFrac = v;
-        }
-        const huck = dx >= huckFrac;
+        const huck = dx >= settingFraction('field.huckFraction', 0.5);
         const dump = dx <= -RESET_TOLERANCE;
-        const third = y => y < 1 / 3 ? 0 : (y <= 2 / 3 ? 1 : 2);
         const swing = !huck && typeof from.y === 'number' && typeof to.y === 'number'
-            && third(from.y) !== third(to.y);
+            && Math.abs(to.y - from.y) >= settingFraction('field.swingFraction', 0.25);
         return { huck, dump, swing };
     }
 

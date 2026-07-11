@@ -58,6 +58,7 @@ const advancedSettings = (function() {
         // --- Field ---
         'field.endzoneYards': 20,                         // endzone depth drawn on the Field tab (20 = USAU, 25 = some leagues)
         'field.huckFraction': 0.5,                        // auto-classify a throw as a huck at ≥ this fraction of the playing field
+        'field.swingFraction': 0.25,                      // auto-classify a throw as a swing at ≥ this lateral fraction of the field width
         'field.flipHA': false,                            // swap which sideline is Home (Field tab display)
         'field.flipAD': false,                            // base attack direction (auto-alternates each point on top of this)
         // --- Hints ---
@@ -277,6 +278,16 @@ const advancedSettings = (function() {
                         ['0.4', '40% of the field'],
                         ['0.5', '50% of the field'],
                         ['0.6', '60% of the field']
+                    ]
+                },
+                {
+                    key: 'field.swingFraction', label: 'Swing threshold',
+                    help: 'A Field-mode throw traveling at least this far across the field width is auto-tagged as a swing (always overridable via the throw’s modifier chips).',
+                    type: 'select',
+                    options: [
+                        ['0.15', '15% of the field width'],
+                        ['0.25', '25% of the field width'],
+                        ['0.35', '35% of the field width']
                     ]
                 }
             ]
