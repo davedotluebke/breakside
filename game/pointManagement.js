@@ -224,16 +224,20 @@ function startCountdown() {
     // No between-points time configured — leave the box hidden.
     if (!countdownSeconds || countdownSeconds <= 0) return;
 
-    // The box is position:fixed at the right edge; anchor it just below the
-    // game screen's top bar (#panel-header: logo / score / point chip / tabs)
-    // so it doesn't cover the point-timer chip in the top-right corner. The
-    // top-level <header> element belongs to the non-game screens and is
-    // hidden in-game, hence the fallback order.
-    const topBar = document.getElementById('panel-header') || document.querySelector('header');
-    if (topBar) {
-        const rect = topBar.getBoundingClientRect();
+    // The box is position:fixed; overlay it on the point/game timer chip in
+    // the header's top-right corner. Between points that chip is frozen (the
+    // point clock only runs during play), so covering it costs nothing —
+    // whereas anchoring below the top bar covered the Undo button on the
+    // Line/Field/Full tabs. Falls back to the CSS default (top/right 10px,
+    // still the top-right corner) when the chip isn't rendered.
+    timer.style.top = '';
+    timer.style.right = '';
+    const chip = document.getElementById('gameTimerContainer');
+    if (chip) {
+        const rect = chip.getBoundingClientRect();
         if (rect.height > 0) {
-            timer.style.top = Math.round(rect.bottom + 8) + 'px';
+            timer.style.top = Math.round(rect.top) + 'px';
+            timer.style.right = Math.round(window.innerWidth - rect.right) + 'px';
         }
     }
 
