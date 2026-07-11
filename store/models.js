@@ -313,7 +313,7 @@ class Throw extends Event {
         this.huck_flag = huck;
         this.break_flag = breakmark;
         this.dump_flag = dump;
-        this.swing_flag = swing;   // lateral field-third-crossing throw (auto-set by Field mode, editable)
+        this.swing_flag = swing;   // significant lateral (cross-field) throw (auto-set by Field mode, editable)
         this.hammer_flag = hammer;
         this.sky_flag = sky;
         this.layout_flag = layout;
