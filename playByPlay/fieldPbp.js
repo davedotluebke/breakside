@@ -44,7 +44,7 @@ import { UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
 import {
     currentGame, getLatestPoint, getPlayerFromName, isPointInProgress,
-    determineStartingPosition,
+    determineStartingPosition, showPlayerNumbers,
 } from '../utils/helpers.js';
 import { undoEvent } from '../game/gameLogic.js';
 import { startNextPoint } from '../game/pointManagement.js';
@@ -657,7 +657,7 @@ const fieldPbp = (function() {
         if (opts.armed) cls.push('armed');
         const lead = opts.unknown
             ? `<span class="fp-umark">?</span>`
-            : (player.number != null ? `<span class="fp-num">${player.number}</span>` : '');
+            : (player.number != null && showPlayerNumbers() ? `<span class="fp-num">${player.number}</span>` : '');
         const label = opts.unknown ? 'Unknown' : player.name;
         return `<div class="${cls.join(' ')}" data-pname="${player.name}">${lead}<span class="fp-nm">${label}</span></div>`;
     }
@@ -1349,7 +1349,7 @@ const fieldPbp = (function() {
         names.forEach(name => {
             if (excludeName && name === excludeName) return;
             const p = playerByName(name); if (!p) return;
-            const lead = (p.number != null) ? `<span class="fp-num">${p.number}</span>` : '';
+            const lead = (p.number != null && showPlayerNumbers()) ? `<span class="fp-num">${p.number}</span>` : '';
             html += `<div class="fp-chip" data-pname="${name}">${lead}<span class="fp-nm">${name}</span></div>`;
         });
         html += `<div class="fp-chip unknown" data-pname="${UNKNOWN_PLAYER}"><span class="fp-umark">?</span><span class="fp-nm">Unknown</span></div>`;

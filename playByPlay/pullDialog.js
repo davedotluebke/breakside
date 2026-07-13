@@ -6,6 +6,7 @@ import { Gender, Pull, Possession, UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
 import {
     currentGame, getLatestPoint, getPlayerFromName, getGenderRatioForPoint,
+    formatPlayerName,
 } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { getCurrentMode } from '../ui/panelSystem.js';
@@ -243,7 +244,7 @@ function createPullPlayerButtons(expectedGender, alternatePulls) {
         point.players.forEach(playerName => {
             const player = getPlayerFromName(playerName);
             const playerButton = document.createElement('button');
-            playerButton.textContent = playerName;
+            playerButton.textContent = player ? formatPlayerName(player) : playerName;
             playerButton.classList.add('player-button');
             
             // Check if player is eligible based on gender

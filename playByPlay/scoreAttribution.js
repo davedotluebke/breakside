@@ -5,7 +5,7 @@
  */
 import { Throw, Possession, Role, UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
-import { getLatestPoint, getPlayerFromName } from '../utils/helpers.js';
+import { getLatestPoint, getPlayerFromName, formatPlayerName } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { updateScore } from '../game/gameLogic.js';
 import { moveToNextPoint } from '../game/pointManagement.js';
@@ -329,7 +329,10 @@ function createPlayerButton(playerName) {
             '<span class="upl-mid">Unknown</span>' +
             '<span class="upl-min">?</span>';
     } else {
-        button.textContent = playerName;
+        // Label may include the jersey number; matching stays on the
+        // canonical name stored in dataset.playerName above.
+        const player = getPlayerFromName(playerName);
+        button.textContent = player ? formatPlayerName(player) : playerName;
     }
     button.addEventListener('click', function() {
         handleScoreAttribution(playerName, this.parentElement.id === 'throwerButtons', this);
