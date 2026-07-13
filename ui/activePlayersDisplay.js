@@ -6,7 +6,7 @@ import { Gender } from '../store/models.js';
 import { currentTeam } from '../store/storage.js';
 import {
     currentGame, getPlayerFromName, getPlayerGameTime, formatPlayTime,
-    formatPlayerName, getGenderRatioForPoint
+    formatPlayerName, getGenderRatioForPoint, buildPointMembership
 } from '../utils/helpers.js';
 
 let showingTotalStats = false;
@@ -114,17 +114,20 @@ function setPlayerCheckboxes() {
  * Create player rows with checkboxes and basic info
  */
 function createPlayerRows() {
-    // Determine players from the last point using utility function
-    const lastPointPlayers = getLastPointPlayers();
-
-    console.log('Last point players: ', lastPointPlayers);
+    const game = currentGame();
+    const lastPoint = game.points.length > 0
+        ? game.points[game.points.length - 1]
+        : null;
+    // Id-based membership so a mid-game rename doesn't orphan a player's
+    // points history (point.players holds strings frozen at play time).
+    const membership = buildPointMembership(game);
 
     // Sort roster into 3 alphabetical lists: played the last point, played any points, played no points
     currentTeam.teamRoster.sort((a, b) => {
-        const aLastPoint = lastPointPlayers.includes(a.name);
-        const bLastPoint = lastPointPlayers.includes(b.name);
-        const aPlayedAny = hasPlayedAnyPoints(a.name);
-        const bPlayedAny = hasPlayedAnyPoints(b.name);
+        const aLastPoint = membership.onLine(lastPoint, a);
+        const bLastPoint = membership.onLine(lastPoint, b);
+        const aPlayedAny = game.points.some(p => membership.played(p, a));
+        const bPlayedAny = game.points.some(p => membership.played(p, b));
 
         if (aLastPoint && !bLastPoint) return -1;
         if (!aLastPoint && bLastPoint) return 1;
@@ -198,11 +201,13 @@ function setCheckboxStates() {
     const playersToCheck = getPlayersToCheck();
     console.log('setCheckboxStates() using players:', playersToCheck);
 
-    // Set checkbox states
+    // Set checkbox states. Id-aware matching: playersToCheck may hold names
+    // frozen before a mid-game rename.
+    const membership = buildPointMembership(currentGame());
     const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
     checkboxes.forEach((checkbox, index) => {
         const player = currentTeam.teamRoster[index];
-        if (player && playersToCheck.includes(player.name)) {
+        if (player && membership.onList(playersToCheck, player)) {
             console.log('Checking checkbox for player:', player.name);
             checkbox.checked = true;
         } else {
@@ -243,6 +248,9 @@ function populatePlayerStats() {
     const tableBody = tblEl.querySelector('tbody');
     const rows = tableBody.querySelectorAll('tr');
 
+    // Id-based membership so a mid-game rename doesn't zero the table.
+    const membership = buildPointMembership(currentGame());
+
     rows.forEach((row, rowIndex) => {
         const player = currentTeam.teamRoster[rowIndex];
         if (!player) return;
@@ -255,10 +263,7 @@ function populatePlayerStats() {
         pointCells.forEach((pointCell, pointIndex) => {
             const point = currentGame().points[pointIndex];
             // Include players who were substituted out mid-point
-            const playedPoint = point && (
-                point.players.includes(player.name) ||
-                (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name))
-            );
+            const playedPoint = membership.played(point, player);
             if (playedPoint) {
                 runningPointTotal++;
                 pointCell.textContent = `${runningPointTotal}`;
@@ -276,17 +281,6 @@ function getLastPointPlayers() {
     return currentGame().points.length > 0
         ? currentGame().points[currentGame().points.length - 1].players
         : [];
-}
-
-/**
- * Check if a player has played any points in the current game
- * Includes players who were substituted out mid-point
- */
-function hasPlayedAnyPoints(playerName) {
-    return currentGame().points.some(point => 
-        point.players.includes(playerName) ||
-        (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(playerName))
-    );
 }
 
 /**
