@@ -3,7 +3,7 @@
  * Handles the key play dialog for logging throws, turnovers, and defense events
  */
 import { Possession, UNKNOWN_PLAYER } from '../store/models.js';
-import { getLatestPoint, getPlayerFromName, getActivePossession } from '../utils/helpers.js';
+import { getLatestPoint, getPlayerFromName, getActivePossession, formatPlayerName } from '../utils/helpers.js';
 
 // Track Key Play dialog state
 let keyPlaySelectedSubButtons = [];
@@ -163,8 +163,9 @@ function createKeyPlayPlayerButtons() {
     const point = getLatestPoint();
     if (point && point.players) {
         point.players.forEach(playerName => {
+            const player = getPlayerFromName(playerName);
             const playerButton = document.createElement('button');
-            playerButton.textContent = playerName;
+            playerButton.textContent = player ? formatPlayerName(player) : playerName;
             playerButton.classList.add('player-button', 'inactive');
             playerButton.addEventListener('click', function() {
                 handleKeyPlayPlayerSelection(playerName, this);

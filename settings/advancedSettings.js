@@ -55,6 +55,8 @@ const advancedSettings = (function() {
         'narration.autoGainControl': false,
         // --- Sync ---
         'sync.refreshIntervalSec': 10,                   // cloud auto-refresh cadence (applies after reload)
+        // --- Display ---
+        'display.showPlayerNumbers': true,               // jersey numbers alongside names everywhere
         // --- Field ---
         'field.endzoneYards': 20,                         // endzone depth drawn on the Field tab (20 = USAU, 25 = some leagues)
         'field.huckFraction': 0.5,                        // auto-classify a throw as a huck at ≥ this fraction of the playing field
@@ -254,6 +256,16 @@ const advancedSettings = (function() {
                         ['30', 'Every 30 seconds'],
                         ['60', 'Every 60 seconds']
                     ]
+                }
+            ]
+        },
+        {
+            group: 'Display',
+            fields: [
+                {
+                    key: 'display.showPlayerNumbers', label: 'Show player numbers',
+                    help: 'Show jersey numbers alongside player names (roster, lines, play-by-play, dialogs). Turn off for a cleaner display when you know your players by name.',
+                    type: 'toggle'
                 }
             ]
         },

@@ -34,7 +34,7 @@
  */
 import { UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
-import { currentGame, getLatestPoint, getPlayerFromName, isPointInProgress } from '../utils/helpers.js';
+import { currentGame, getLatestPoint, getPlayerFromName, isPointInProgress, formatPlayerName } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { undoEvent } from '../game/gameLogic.js';
 import { startNextPoint } from '../game/pointManagement.js';
@@ -563,7 +563,7 @@ const fullPbp = (function() {
         const nameBtn = document.createElement('button');
         nameBtn.type = 'button';
         nameBtn.className = 'full-pbp-name-btn';
-        nameBtn.textContent = isUnknown ? 'Unknown' : player.name;
+        nameBtn.textContent = isUnknown ? 'Unknown' : formatPlayerName(player);
         nameBtn.addEventListener('click', () => handlePlayerNameTap(player));
         row.appendChild(nameBtn);
 

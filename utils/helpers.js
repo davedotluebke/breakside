@@ -273,12 +273,27 @@ function capitalize(word) {
 }
 
 /**
+ * Whether jersey numbers should be shown alongside player names.
+ * Per-device display preference; defaults to true. Read late-bound via
+ * window.advancedSettings because the settings module sits above this
+ * layer (window survivor: settings/advancedSettings.js).
+ */
+function showPlayerNumbers() {
+    const adv = (typeof window !== 'undefined') ? window.advancedSettings : null;
+    if (adv && typeof adv.get === 'function') {
+        return adv.get('display.showPlayerNumbers') !== false;
+    }
+    return true;
+}
+
+/**
  * Format player name with jersey number for display
- * Returns "Name (#)" if number exists, otherwise just "Name"
+ * Returns "Name (#)" if number exists and the "show player numbers"
+ * setting is on, otherwise just "Name"
  */
 function formatPlayerName(player) {
     if (!player) return '';
-    if (player.number !== null && player.number !== undefined) {
+    if (player.number !== null && player.number !== undefined && showPlayerNumbers()) {
         return `${player.name} (${player.number})`;
     }
     return player.name;
@@ -344,6 +359,7 @@ export {
     getLatestEvent, getPossessionOf, getPointOf, isPointInProgress,
     getActivePossession, getPlayerGameTime, formatPlayTime,
     determineStartingPosition, capitalize, formatPlayerName, extractPlayerName,
+    showPlayerNumbers,
     getGenderRatioForPoint, getExpectedGenderRatio, getExpectedGenderCounts,
 };
 
