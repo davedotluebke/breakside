@@ -153,17 +153,129 @@ function getActivePossession(activePoint) {
 }
 
 /**
+ * Build a name/id → id resolver scoped to one game.
+ *
+ * `point.players` stores bare strings with no {name, id} structure — and
+ * across data eras those strings are sometimes player NAMES (older games,
+ * pre-line-sync flows) and sometimes player IDS (games whose lines came
+ * through pendingNextLine, e.g. the Nov-2025 CUDO Mixed tournament). Events
+ * carry resolved {name, id} refs, but point.players needs this resolver.
+ * Sources for the mapping, most historically-accurate first:
+ *   1. `game.rosterSnapshot` — the roster as it stood when the game was
+ *      played; the correct source for a renamed/since-removed player.
+ *   2. ids already embedded on this game's own events (thrower/receiver/
+ *      puller/defender/assist carry both name and id once resolved — see
+ *      store/storage.js resolvePlayerReference).
+ *   3. the current team roster, as a last resort (logged — a player renamed
+ *      since this game was played could resolve to the wrong id here).
+ * A string that is already a known player id resolves to itself. A name that
+ * maps to more than one distinct id across these sources is ambiguous and is
+ * NOT guessed at; it gets its own per-name bucket so stats don't silently
+ * merge into the wrong player.
+ * @param {object} game - Deserialized Game object
+ * @param {object} [opts] - { quiet: true } suppresses per-name warnings for
+ *   callers that resolve in a tight loop (e.g. the 1 Hz Lines-tab updater)
+ * @returns {function(string): string} resolve(nameOrId) → a stable stats key;
+ *   also exposes resolve.nameOf(id) → display name when one is known
+ */
+function buildPlayerNameResolver(game, { quiet = false } = {}) {
+    const byName = {};
+    const nameById = {};
+    function add(name, id) {
+        if (!name || !id) return;
+        if (!nameById[id]) nameById[id] = name;
+        if (byName[name] && byName[name] !== id) {
+            byName[name] = 'AMBIGUOUS';
+        } else if (!byName[name]) {
+            byName[name] = id;
+        }
+    }
+
+    (game?.rosterSnapshot?.players || []).forEach(p => add(p.name, p.id));
+
+    (game?.points || []).forEach(point => {
+        (point.possessions || []).forEach(poss => {
+            (poss.events || []).forEach(event => {
+                ['thrower', 'receiver', 'puller', 'defender', 'assist'].forEach(role => {
+                    const ref = event[role];
+                    if (ref && typeof ref === 'object') add(ref.name, ref.id);
+                });
+            });
+        });
+    });
+
+    if (typeof currentTeam !== 'undefined' && currentTeam?.teamRoster) {
+        currentTeam.teamRoster.forEach(p => add(p.name, p.id));
+    }
+
+    function resolve(name) {
+        // Already a known id (id-era point.players): key by it directly.
+        if (nameById[name]) return name;
+        const id = byName[name];
+        if (!id) {
+            if (!quiet) console.warn('[eventStats] Could not resolve player name to id — stats will be keyed by name as a fallback:', name);
+            return `unresolved:${name}`;
+        }
+        if (id === 'AMBIGUOUS') {
+            if (!quiet) console.warn('[eventStats] Ambiguous player name (matches multiple ids) — keeping separate to avoid merging stats:', name);
+            return `ambiguous:${name}`;
+        }
+        return id;
+    }
+    resolve.nameOf = id => nameById[id] || null;
+    return resolve;
+}
+
+/**
+ * Rename-proof point-membership tests for one game.
+ *
+ * point.players / substitutedOutPlayers / substitutedInPlayers hold bare
+ * name-or-id strings frozen when the point was played; comparing them to a
+ * player's CURRENT name breaks the moment a player is renamed mid-game (the
+ * Lines tab once forgot a whole roster's history this way). These tests
+ * match on the stable player id via buildPlayerNameResolver, keeping direct
+ * name/id string equality as the fast path.
+ */
+function buildPointMembership(game) {
+    const resolve = buildPlayerNameResolver(game, { quiet: true });
+    const has = (list, player) => !!player && (list || []).some(entry =>
+        entry === player.name || entry === player.id || resolve(entry) === player.id);
+    return {
+        onLine: (point, player) => !!point && has(point.players, player),
+        subbedOut: (point, player) => !!point && has(point.substitutedOutPlayers, player),
+        subbedIn: (point, player) => !!point && has(point.substitutedInPlayers, player),
+        // Same matching against an arbitrary name-or-id string list (e.g. a
+        // stored next-line selection).
+        onList: (list, player) => has(list, player),
+        // "played" = counted for points/PT: on the line at any moment,
+        // including players substituted out mid-point.
+        played: (point, player) => !!point && (has(point.players, player) ||
+            has(point.substitutedOutPlayers, player)),
+    };
+}
+
+/**
  * Helper function to calculate player's time in current game
+ * Accepts a Player object (preferred — survives mid-game renames) or a
+ * player name string.
  * Note: This function references isPaused which is defined in main.js
  */
-function getPlayerGameTime(playerName) {
+function getPlayerGameTime(playerOrName) {
     let totalTime = 0;
     const game = currentGame();
     if (game) {
+        const player = (playerOrName && typeof playerOrName === 'object')
+            ? playerOrName
+            : getPlayerFromName(playerOrName);
+        const membership = buildPointMembership(game);
         game.points.forEach(point => {
-            // Include players who were substituted out mid-point
-            const playedPoint = point.players.includes(playerName) ||
-                (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(playerName));
+            // Include players who were substituted out mid-point. Id-based
+            // matching where possible; raw-string fallback when the name no
+            // longer maps to a roster player.
+            const playedPoint = player
+                ? membership.played(point, player)
+                : (point.players.includes(playerOrName) ||
+                    (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(playerOrName)));
             if (playedPoint) {
                 if (point.endTimestamp) {
                     // For completed points, just use the totalPointTime
@@ -358,6 +470,7 @@ export {
     getPlayerFromName, currentGame, getLatestPoint, getLatestPossession,
     getLatestEvent, getPossessionOf, getPointOf, isPointInProgress,
     getActivePossession, getPlayerGameTime, formatPlayTime,
+    buildPlayerNameResolver, buildPointMembership,
     determineStartingPosition, capitalize, formatPlayerName, extractPlayerName,
     showPlayerNumbers,
     getGenderRatioForPoint, getExpectedGenderRatio, getExpectedGenderCounts,

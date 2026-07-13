@@ -6,8 +6,8 @@
  */
 
 import { Role } from '../store/models.js';
-import { currentTeam } from '../store/storage.js';
 import { loadGameFromCloud, listServerGames } from '../store/sync.js';
+import { buildPlayerNameResolver } from './helpers.js';
 
 /**
  * Load all games for an event from cloud storage.
@@ -35,77 +35,8 @@ async function loadEventGames(event) {
     return games;
 }
 
-/**
- * Build a name/id → id resolver scoped to one game.
- *
- * `point.players` stores bare strings with no {name, id} structure — and
- * across data eras those strings are sometimes player NAMES (older games,
- * pre-line-sync flows) and sometimes player IDS (games whose lines came
- * through pendingNextLine, e.g. the Nov-2025 CUDO Mixed tournament). Events
- * carry resolved {name, id} refs, but point.players needs this resolver.
- * Sources for the mapping, most historically-accurate first:
- *   1. `game.rosterSnapshot` — the roster as it stood when the game was
- *      played; the correct source for a renamed/since-removed player.
- *   2. ids already embedded on this game's own events (thrower/receiver/
- *      puller/defender/assist carry both name and id once resolved — see
- *      store/storage.js resolvePlayerReference).
- *   3. the current team roster, as a last resort (logged — a player renamed
- *      since this game was played could resolve to the wrong id here).
- * A string that is already a known player id resolves to itself. A name that
- * maps to more than one distinct id across these sources is ambiguous and is
- * NOT guessed at; it gets its own per-name bucket so stats don't silently
- * merge into the wrong player.
- * @param {object} game - Deserialized Game object
- * @returns {function(string): string} resolve(nameOrId) → a stable stats key;
- *   also exposes resolve.nameOf(id) → display name when one is known
- */
-function buildPlayerNameResolver(game) {
-    const byName = {};
-    const nameById = {};
-    function add(name, id) {
-        if (!name || !id) return;
-        if (!nameById[id]) nameById[id] = name;
-        if (byName[name] && byName[name] !== id) {
-            byName[name] = 'AMBIGUOUS';
-        } else if (!byName[name]) {
-            byName[name] = id;
-        }
-    }
-
-    (game?.rosterSnapshot?.players || []).forEach(p => add(p.name, p.id));
-
-    (game?.points || []).forEach(point => {
-        (point.possessions || []).forEach(poss => {
-            (poss.events || []).forEach(event => {
-                ['thrower', 'receiver', 'puller', 'defender', 'assist'].forEach(role => {
-                    const ref = event[role];
-                    if (ref && typeof ref === 'object') add(ref.name, ref.id);
-                });
-            });
-        });
-    });
-
-    if (typeof currentTeam !== 'undefined' && currentTeam?.teamRoster) {
-        currentTeam.teamRoster.forEach(p => add(p.name, p.id));
-    }
-
-    function resolve(name) {
-        // Already a known id (id-era point.players): key by it directly.
-        if (nameById[name]) return name;
-        const id = byName[name];
-        if (!id) {
-            console.warn('[eventStats] Could not resolve player name to id — stats will be keyed by name as a fallback:', name);
-            return `unresolved:${name}`;
-        }
-        if (id === 'AMBIGUOUS') {
-            console.warn('[eventStats] Ambiguous player name (matches multiple ids) — keeping separate to avoid merging stats:', name);
-            return `ambiguous:${name}`;
-        }
-        return id;
-    }
-    resolve.nameOf = id => nameById[id] || null;
-    return resolve;
-}
+// buildPlayerNameResolver moved to utils/helpers.js so point-membership
+// checks (Lines tab, playing time) can share it without an import cycle.
 
 /**
  * Accumulate stats from a single game into an existing stats map.
