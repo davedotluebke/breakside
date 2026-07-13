@@ -1512,6 +1512,16 @@ body.game-screen-active header {
     background: linear-gradient(135deg, #138496 0%, #117a8b 100%);
 }
 
+/* Correct Lineup - green (mid-point fix-it, pairs with amber Injury Sub) */
+.ge-btn-correctlineup {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+/* .disabled excluded too: class-only disabling, same as Injury Sub. */
+.ge-btn-correctlineup:hover:not(:disabled):not(.disabled) {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
 /* End Game - dark/warning */
 .ge-btn-endgame {
     background: linear-gradient(135deg, #343a40 0%, #212529 100%);
@@ -1529,6 +1539,36 @@ body.game-screen-active header {
 /* "Swap O & D" confirm dialog: long labels — stack them full-width */
 .swap-od-buttons {
     grid-template-columns: 1fr;
+}
+
+/* Correct Lineup dialog: two player columns (entered by mistake → actually
+   played). Columns scroll together when the roster is long. */
+.correct-lineup-modal-content {
+    max-width: 440px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.correct-lineup-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 10px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+
+.correct-lineup-column {
+    min-width: 0;
+}
+
+.correct-lineup-column h3 {
+    font-size: 0.9rem;
+    margin: 0 0 6px;
+    text-align: center;
+    color: var(--text-muted);
 }
 
 /* Us - blue (matches the Timeout button) */
