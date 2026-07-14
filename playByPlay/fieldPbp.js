@@ -45,6 +45,7 @@ import { saveAllTeamsData } from '../store/storage.js';
 import {
     currentGame, getLatestPoint, getPlayerFromName, isPointInProgress,
     determineStartingPosition, showPlayerNumbers,
+    buildPointPlayerLookup, playerStub,
 } from '../utils/helpers.js';
 import { undoEvent } from '../game/gameLogic.js';
 import { startNextPoint } from '../game/pointManagement.js';
@@ -637,12 +638,15 @@ const fieldPbp = (function() {
         const holder = effectiveHolder(state);
         const armedName = S.pulling ? (S.puller && S.puller.name)
             : (S.armed && S.armed.name);
-        let html = lead + point.players.map(name => {
-            const player = (typeof getPlayerFromName === 'function') ? getPlayerFromName(name) : null;
-            if (!player) return '';
+        // point.players entries may be current names, player ids (id-era
+        // games), or stale names — resolve through the game-scoped lookup so
+        // no chip silently vanishes from the rail.
+        const lookup = buildPointPlayerLookup(currentGame());
+        let html = lead + point.players.map(entry => {
+            const { name, obj } = lookup(entry);
             const isHolder = !!(holder && holder.name === name);
             const isArmed = !!(armedName && armedName === name);
-            return chipHTML(player, { holder: isHolder, armed: isArmed });
+            return chipHTML(obj, { holder: isHolder, armed: isArmed });
         }).join('');
         const unknown = (typeof getPlayerFromName === 'function') ? getPlayerFromName(UNKNOWN_PLAYER) : null;
         if (unknown) html += chipHTML(unknown, { unknown: true, armed: armedName === UNKNOWN_PLAYER });
@@ -1022,7 +1026,10 @@ const fieldPbp = (function() {
     }
 
     function playerByName(name) {
-        return (typeof getPlayerFromName === 'function') ? getPlayerFromName(name) : null;
+        // Fall back to a minimal stub so a chip whose player no longer
+        // resolves on the current roster still records events by name.
+        const player = (typeof getPlayerFromName === 'function') ? getPlayerFromName(name) : null;
+        return player || playerStub(name);
     }
 
     function handleChipTap(name) {
@@ -1346,10 +1353,13 @@ const fieldPbp = (function() {
             : S.dPlacing ? `Who got the ${S.dPlacing}?`
             : S.pending === 'drop' ? 'Who dropped it?' : 'Who caught it?');
         let html = `<div class="fp-picker-ttl">${ttl}</div>`;
-        names.forEach(name => {
+        // Entries may be ids or stale names — resolve to the canonical
+        // current name (also what excludeName, a live player's .name, expects).
+        const lookup = buildPointPlayerLookup(currentGame());
+        names.forEach(entry => {
+            const { name, obj } = lookup(entry);
             if (excludeName && name === excludeName) return;
-            const p = playerByName(name); if (!p) return;
-            const lead = (p.number != null && showPlayerNumbers()) ? `<span class="fp-num">${p.number}</span>` : '';
+            const lead = (obj.number != null && showPlayerNumbers()) ? `<span class="fp-num">${obj.number}</span>` : '';
             html += `<div class="fp-chip" data-pname="${name}">${lead}<span class="fp-nm">${name}</span></div>`;
         });
         html += `<div class="fp-chip unknown" data-pname="${UNKNOWN_PLAYER}"><span class="fp-umark">?</span><span class="fp-nm">Unknown</span></div>`;

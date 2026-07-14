@@ -34,7 +34,10 @@
  */
 import { UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
-import { currentGame, getLatestPoint, getPlayerFromName, isPointInProgress, formatPlayerName } from '../utils/helpers.js';
+import {
+    currentGame, getLatestPoint, getPlayerFromName, isPointInProgress,
+    formatPlayerName, buildPointPlayerLookup,
+} from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { undoEvent } from '../game/gameLogic.js';
 import { startNextPoint } from '../game/pointManagement.js';
@@ -278,15 +281,17 @@ const fullPbp = (function() {
             } else {
                 const holder = inPoint ? effectiveHolder(state) : null;
                 const isOffense = state.mode === 'offense';
-                const names = [UNKNOWN_PLAYER, ...state.point.players];
+                const entries = [UNKNOWN_PLAYER, ...state.point.players];
 
+                // point.players entries may be current names, player ids
+                // (id-era games), or stale names — resolve through the
+                // game-scoped lookup so no roster row silently vanishes.
+                const lookup = buildPointPlayerLookup(currentGame());
                 rows.innerHTML = '';
-                names.forEach(name => {
-                    const player = (typeof getPlayerFromName === 'function') ? getPlayerFromName(name) : null;
-                    if (!player) return;
-
+                entries.forEach(entry => {
+                    const { name, obj } = lookup(entry);
                     const isHolder = !!(holder && holder.name === name);
-                    const row = renderPlayerRow(player, isHolder, isOffense);
+                    const row = renderPlayerRow(obj, isHolder, isOffense);
                     if (!inPoint) row.classList.add('between-points');
                     rows.appendChild(row);
                 });
