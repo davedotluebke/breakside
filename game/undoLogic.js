@@ -11,7 +11,7 @@
  *   - revertPointScore(point): undo updateScore()'s effects for a scored
  *     point (game score, per-player point stats, point winner/timestamps)
  */
-import { Role, Throw, Defense } from '../store/models.js';
+import { Role, Throw, Defense, Other } from '../store/models.js';
 
 /** A Throw with score_flag or a Defense with Callahan_flag scored a point. */
 function isScoreEvent(evt) {
@@ -98,6 +98,17 @@ function applyUndoToGame(game, deps) {
             if (undoneEvent.Callahan_flag) {
                 decrementStat(undoneEvent.defender, 'goals');
             }
+        } else if (undoneEvent instanceof Other && undoneEvent.injury_flag) {
+            // Injury sub: restore the pre-sub roster from the snapshots the
+            // event carries (absent on legacy events recorded before the
+            // snapshots existed — leave the roster alone then; the sub was
+            // irreversible under the old code anyway).
+            if (Array.isArray(undoneEvent.playersBefore)) {
+                point.players = [...undoneEvent.playersBefore];
+            }
+            if (Array.isArray(undoneEvent.subbedOutBefore)) {
+                point.substitutedOutPlayers = [...undoneEvent.subbedOutBefore];
+            }
         }
         // If the undone event was a score, revert updateScore() changes
         if (point.winner && isScoreEvent(undoneEvent)) {
@@ -110,12 +121,20 @@ function applyUndoToGame(game, deps) {
         if (currentPossession.events.length === 0) {
             point.possessions.pop();
             if (point.possessions.length === 0) {
-                // No possessions left — remove the point and go to
-                // between-points. Don't decrement player point stats:
-                // updateScore() was either never called (unscored point) or
-                // already reverted by revertPointScore().
-                game.points.pop();
-                result.pointRemoved = true;
+                if (undoneEvent instanceof Other && undoneEvent.injury_flag) {
+                    // The possession existed only to host the sub event
+                    // (confirmSubstitution creates one when a Simple-mode
+                    // offense point has none yet). A mid-point with zero
+                    // possessions is the normal freshly-started-offense-point
+                    // state — do NOT remove the live point.
+                } else {
+                    // No possessions left — remove the point and go to
+                    // between-points. Don't decrement player point stats:
+                    // updateScore() was either never called (unscored point)
+                    // or already reverted by revertPointScore().
+                    game.points.pop();
+                    result.pointRemoved = true;
+                }
             } else {
                 // Go back to previous possession
                 currentPossession = getActivePossession(point);
