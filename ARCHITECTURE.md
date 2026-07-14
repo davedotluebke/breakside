@@ -680,6 +680,33 @@ function generateShortId(name) {
 - Example: `Alice-7f3a` collides → try `Alice-7f3a2b`
 - Extremely rare with 4-char hash (1 in 1.6M chance per name)
 
+### point.players entries: names OR ids (data eras)
+
+`point.players` (and `substitutedOutPlayers` / `substitutedInPlayers`) store
+bare strings with no `{name, id}` structure, and what those strings *are*
+varies by data era:
+
+- **names** — older games and locally-picked lines (checkbox flows)
+- **player ids** — games whose lines came through `pendingNextLine` sync
+  (e.g. the Nov-2025 CUDO Mixed tournament)
+- **stale names** — a player renamed or removed mid-game leaves the old
+  name frozen in earlier points
+
+**Never resolve these entries with a raw `getPlayerFromName()`** — an id-era
+or stale entry comes back `undefined`, which has variously meant dead
+Proceed buttons (pull/score dialogs) and player rows silently vanishing
+(Full PBP, Field rail). Route through the helpers in `utils/helpers.js`:
+
+- `buildPointPlayerLookup(game)` — entry → `{player, name, obj}` for UI that
+  renders player buttons/chips from `point.players` (`obj` is always safe to
+  render or record an event against; it falls back to `playerStub(name)`)
+- `buildPointMembership(game)` — rename-proof onLine/subbedOut/played tests
+- `buildPlayerNameResolver(game)` — entry → stable stats key (stats layer)
+
+Related: button labels may carry jersey-number suffixes
+(`formatPlayerName`), so match buttons on `dataset.playerName` (canonical
+current name), never on `textContent`.
+
 ### Server-Side Index
 
 Cross-entity index for efficient queries:

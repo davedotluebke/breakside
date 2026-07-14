@@ -5,7 +5,10 @@
  */
 import { Throw, Possession, Role, UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
-import { getLatestPoint, getPlayerFromName } from '../utils/helpers.js';
+import {
+    currentGame, getLatestPoint, getPlayerFromName, formatPlayerName,
+    buildPointPlayerLookup, playerStub,
+} from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { updateScore } from '../game/gameLogic.js';
 import { moveToNextPoint } from '../game/pointManagement.js';
@@ -216,11 +219,15 @@ function showScoreAttributionDialog(opts) {
     throwerButtons.appendChild(unknownThrowerBtn);
     receiverButtons.appendChild(unknownReceiverBtn);
 
-    // Add player buttons
+    // Add player buttons. point.players entries may be current names, player
+    // ids (id-era games), or stale names — resolve each to the canonical
+    // current name so cross-column matching and opts pre-selection line up.
     const point = getLatestPoint();
-    point.players.forEach(playerName => {
-        const throwerBtn = createPlayerButton(playerName);
-        const receiverBtn = createPlayerButton(playerName);
+    const lookup = buildPointPlayerLookup(currentGame());
+    point.players.forEach(entry => {
+        const { player, name } = lookup(entry);
+        const throwerBtn = createPlayerButton(name, player);
+        const receiverBtn = createPlayerButton(name, player);
         throwerButtons.appendChild(throwerBtn);
         receiverButtons.appendChild(receiverBtn);
     });
@@ -314,7 +321,7 @@ function fitScoreButtons() {
     // Still overflowing after all stages → the rows scroll horizontally.
 }
 
-function createPlayerButton(playerName) {
+function createPlayerButton(playerName, resolvedPlayer = undefined) {
     const button = document.createElement('button');
     button.classList.add('player-button');
     // Store the canonical name for matching — the visible label may differ
@@ -329,7 +336,10 @@ function createPlayerButton(playerName) {
             '<span class="upl-mid">Unknown</span>' +
             '<span class="upl-min">?</span>';
     } else {
-        button.textContent = playerName;
+        // Label may include the jersey number; matching stays on the
+        // canonical name stored in dataset.playerName above.
+        const player = resolvedPlayer ?? getPlayerFromName(playerName);
+        button.textContent = player ? formatPlayerName(player) : playerName;
     }
     button.addEventListener('click', function() {
         handleScoreAttribution(playerName, this.parentElement.id === 'throwerButtons', this);
@@ -485,7 +495,7 @@ function continuePossessionAttribution() {
 }
 
 function handleScoreAttribution(playerName, isThrower, buttonElement) {
-    const player = getPlayerFromName(playerName);
+    const player = getPlayerFromName(playerName) || playerStub(playerName);
 
     // Check if this button is already selected
     if (buttonElement.classList.contains('selected')) {

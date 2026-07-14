@@ -10,6 +10,7 @@ import { teams, currentTeam, saveAllTeamsData } from '../store/storage.js';
 import {
     currentGame, getLatestPoint, isPointInProgress,
     determineStartingPosition, formatPlayerName,
+    buildPlayerNameResolver, buildPointMembership,
 } from '../utils/helpers.js';
 import { refreshPendingLineFromCloud } from '../store/sync.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
@@ -1286,6 +1287,10 @@ function createGameEventsModal() {
                     <i class="fas fa-exchange-alt"></i>
                     <span>Injury Sub</span>
                 </button>
+                <button id="geCorrectLineupBtn" class="ge-btn ge-btn-correctlineup" title="Swap a mistakenly-entered player for the right one — reassigns this point's stats">
+                    <i class="fas fa-user-edit"></i>
+                    <span>Correct Lineup</span>
+                </button>
                 <button id="geHalfTimeBtn" class="ge-btn ge-btn-halftime">
                     <i class="fas fa-pause-circle"></i>
                     <span>Half Time</span>
@@ -1327,6 +1332,12 @@ function createGameEventsModal() {
     const injurySubBtn = modal.querySelector('#geInjurySubBtn');
     if (injurySubBtn) {
         injurySubBtn.addEventListener('click', handleGameEventInjurySub);
+    }
+
+    // Correct Lineup button — fix a wrong player entered on the line
+    const correctLineupBtn = modal.querySelector('#geCorrectLineupBtn');
+    if (correctLineupBtn) {
+        correctLineupBtn.addEventListener('click', handleGameEventCorrectLineup);
     }
 
     // Half Time button
@@ -1380,6 +1391,279 @@ function handleGameEventInjurySub() {
     hideGameEventsModal();
     if (typeof handlePbpSubPlayers === 'function') {
         handlePbpSubPlayers();
+    }
+}
+
+// =============================================================================
+// Correct Lineup (fix a wrong player entered on the current point's line)
+// =============================================================================
+
+// Selected players for the Correct Lineup dialog (Player objects or null).
+let correctLineupMistaken = null;
+let correctLineupCorrect = null;
+
+/**
+ * Handle Correct Lineup from the Game Events modal. Mid-point only: the
+ * correction rewrites the current point's membership and events, which only
+ * makes sense while that point is still the latest thing being recorded.
+ * Between points the button renders disabled (class-only) — explain why.
+ */
+function handleGameEventCorrectLineup() {
+    if (typeof isPointInProgress === 'function' && !isPointInProgress()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('No point in progress — Correct Lineup fixes the current point', 'info');
+        }
+        return;
+    }
+    if (!canEditPlayByPlayPanel()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('You need Play-by-Play control to correct the lineup', 'warning');
+        }
+        return;
+    }
+    hideGameEventsModal();
+    showCorrectLineupModal();
+}
+
+/**
+ * Create the Correct Lineup modal if it doesn't exist. Two columns:
+ * the mistaken player (currently on the line, comes off) and the correct
+ * player (from the bench, goes on). Unlike the score dialog's cross-column
+ * disabling, the same player structurally can't appear in both columns —
+ * one lists only on-line players, the other only bench players.
+ */
+function createCorrectLineupModal() {
+    if (document.getElementById('correctLineupModal')) {
+        return document.getElementById('correctLineupModal');
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'correctLineupModal';
+    modal.className = 'modal game-events-modal';
+
+    modal.innerHTML = `
+        <div class="modal-content game-events-modal-content correct-lineup-modal-content">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Correct Lineup</h2>
+                <span class="close" id="correctLineupModalClose">&times;</span>
+            </div>
+            <p class="text-hint">Put the wrong player on the line? Pick the player entered
+            by mistake and the player actually on the field. Everything recorded this
+            point — throws, defense, playing time — moves to the correct player.
+            (For a real player change, use Injury Sub instead.)</p>
+            <div class="correct-lineup-columns">
+                <div class="correct-lineup-column">
+                    <h3>Entered by mistake</h3>
+                    <div class="player-buttons" id="clMistakenButtons"></div>
+                </div>
+                <div class="correct-lineup-column">
+                    <h3>Actually played</h3>
+                    <div class="player-buttons" id="clCorrectButtons"></div>
+                </div>
+            </div>
+            <div class="sub-players-buttons">
+                <button id="correctLineupCancelBtn" class="ge-btn">Cancel</button>
+                <button id="correctLineupConfirmBtn" class="ge-btn ge-btn-confirm" disabled>Confirm</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    document.getElementById('correctLineupModalClose').addEventListener('click', hideCorrectLineupModal);
+    document.getElementById('correctLineupCancelBtn').addEventListener('click', hideCorrectLineupModal);
+    document.getElementById('correctLineupConfirmBtn').addEventListener('click', confirmCorrectLineup);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            hideCorrectLineupModal();
+        }
+    });
+
+    return modal;
+}
+
+function showCorrectLineupModal() {
+    const modal = createCorrectLineupModal();
+    populateCorrectLineupColumns();
+    modal.style.display = 'flex';
+}
+
+function hideCorrectLineupModal() {
+    const modal = document.getElementById('correctLineupModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Fill the two columns from the roster: on-line players (id-aware — see
+ * buildPointMembership) go in the "mistaken" column, everyone else in the
+ * "correct" column. Selections reset on every open.
+ */
+function populateCorrectLineupColumns() {
+    const mistakenCol = document.getElementById('clMistakenButtons');
+    const correctCol = document.getElementById('clCorrectButtons');
+    if (!mistakenCol || !correctCol) return;
+    mistakenCol.innerHTML = '';
+    correctCol.innerHTML = '';
+    correctLineupMistaken = null;
+    correctLineupCorrect = null;
+    updateCorrectLineupConfirmState();
+
+    const game = (typeof currentGame === 'function') ? currentGame() : null;
+    const point = getLatestPoint();
+    if (!game || !point || !currentTeam || !currentTeam.teamRoster) return;
+
+    const membership = buildPointMembership(game);
+    const sortedRoster = [...currentTeam.teamRoster].sort((a, b) => a.name.localeCompare(b.name));
+    sortedRoster.forEach(player => {
+        const onLine = membership.onLine(point, player);
+        const btn = document.createElement('button');
+        btn.classList.add('player-button');
+        btn.textContent = typeof formatPlayerName === 'function'
+            ? formatPlayerName(player)
+            : player.name;
+        if (player.gender === Gender.FMP) btn.classList.add('player-fmp');
+        else if (player.gender === Gender.MMP) btn.classList.add('player-mmp');
+        btn.addEventListener('click', () => handleCorrectLineupSelect(player, onLine, btn));
+        (onLine ? mistakenCol : correctCol).appendChild(btn);
+    });
+}
+
+/**
+ * Single-select within a column; tapping the selected button deselects it.
+ */
+function handleCorrectLineupSelect(player, isMistakenColumn, btn) {
+    const wasSelected = btn.classList.contains('selected');
+    btn.parentElement.querySelectorAll('.player-button').forEach(b => b.classList.remove('selected'));
+    if (!wasSelected) btn.classList.add('selected');
+    const chosen = wasSelected ? null : player;
+    if (isMistakenColumn) {
+        correctLineupMistaken = chosen;
+    } else {
+        correctLineupCorrect = chosen;
+    }
+    updateCorrectLineupConfirmState();
+}
+
+function updateCorrectLineupConfirmState() {
+    const confirmBtn = document.getElementById('correctLineupConfirmBtn');
+    if (confirmBtn) {
+        confirmBtn.disabled = !(correctLineupMistaken && correctLineupCorrect);
+    }
+}
+
+function confirmCorrectLineup() {
+    if (!correctLineupMistaken || !correctLineupCorrect) return;
+    if (!canEditPlayByPlayPanel()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('You need Play-by-Play control to correct the lineup', 'warning');
+        }
+        return;
+    }
+    hideCorrectLineupModal();
+    applyLineupCorrection(correctLineupMistaken, correctLineupCorrect);
+}
+
+/**
+ * Apply a lineup correction to the CURRENT point: the mistaken player was
+ * never on the field, the correct player was. Rewrites the point's
+ * membership lists and every event recorded this point so the accumulated
+ * stats — throws, defense plays, points played, playing time — belong to
+ * the correct player, then records an Other{lineupCorrection} event.
+ *
+ * Points played and playing time need no explicit transfer: both derive
+ * from point membership (see buildPointMembership / getPlayerGameTime), so
+ * replacing the names in point.players moves them. Live per-player counters
+ * credited at event creation (completedPasses, and goals/assists on scores
+ * — see pbpPossession.createThrow) ARE transferred alongside each rewritten
+ * event.
+ * @param {object} mistakenPlayer - Player entered by mistake (comes off)
+ * @param {object} correctPlayer - Player who actually played (goes on)
+ */
+function applyLineupCorrection(mistakenPlayer, correctPlayer) {
+    const game = (typeof currentGame === 'function') ? currentGame() : null;
+    const point = getLatestPoint();
+    if (!game || !point || !mistakenPlayer || !correctPlayer) return;
+
+    const resolve = buildPlayerNameResolver(game, { quiet: true });
+    const matchesMistaken = entry =>
+        entry === mistakenPlayer.name ||
+        entry === mistakenPlayer.id ||
+        resolve(entry) === mistakenPlayer.id;
+    // Membership lists hold name-or-id strings depending on data era —
+    // keep each replaced entry in the same form it had.
+    const replaceIn = list => {
+        if (!list) return;
+        for (let i = 0; i < list.length; i++) {
+            if (matchesMistaken(list[i])) {
+                list[i] = (list[i] === mistakenPlayer.id) ? correctPlayer.id : correctPlayer.name;
+            }
+        }
+    };
+    replaceIn(point.players);
+    replaceIn(point.substitutedOutPlayers);
+    replaceIn(point.substitutedInPlayers);
+
+    // Reassign this point's events and mirror the live stat counters that
+    // were credited when each event was created.
+    const transfer = stat => {
+        mistakenPlayer[stat] = Math.max(0, (mistakenPlayer[stat] || 0) - 1);
+        correctPlayer[stat] = (correctPlayer[stat] || 0) + 1;
+    };
+    let reassigned = 0;
+    (point.possessions || []).forEach(poss => {
+        (poss.events || []).forEach(evt => {
+            ['thrower', 'receiver', 'assist', 'defender', 'puller'].forEach(role => {
+                const ref = evt[role];
+                if (!ref || typeof ref !== 'object') return;
+                if (ref !== mistakenPlayer && ref.id !== mistakenPlayer.id) return;
+                evt[role] = correctPlayer;
+                reassigned++;
+                if (evt.type === 'Throw' && role === 'thrower') {
+                    transfer('completedPasses');
+                    // A score's assist defaults to the thrower when no
+                    // explicit assist holder was set.
+                    if (evt.score_flag && !evt.assist) transfer('assists');
+                }
+                if (evt.type === 'Throw' && evt.score_flag && role === 'receiver') {
+                    transfer('goals');
+                }
+                if (evt.type === 'Throw' && evt.score_flag && role === 'assist') {
+                    transfer('assists');
+                }
+                if (evt.type === 'Defense' && evt.Callahan_flag && role === 'defender') {
+                    transfer('goals');
+                }
+                if (evt.type === 'Pull' && role === 'puller') {
+                    evt.pullerGender = correctPlayer.gender;
+                }
+            });
+        });
+    });
+
+    // Record the correction on the current possession (like Injury Sub —
+    // skip the event, but not the correction, in the no-possession edge
+    // case; injecting a new possession mid-point would corrupt the O/D
+    // inference that counts possessions).
+    const description = `Corrected lineup: ${correctPlayer.name} in for ${mistakenPlayer.name}` +
+        (reassigned ? ` (${reassigned} event${reassigned === 1 ? '' : 's'} reassigned)` : '');
+    const currentPossession = point.possessions.length > 0
+        ? point.possessions[point.possessions.length - 1]
+        : null;
+    if (currentPossession) {
+        currentPossession.events.push(new Other({ lineupCorrection: true, description }));
+    }
+
+    if (typeof logEvent === 'function') logEvent(description);
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    if (typeof updateGameLogEvents === 'function') updateGameLogEvents();
+    // Re-render the PBP surfaces — player rows/chips come from point.players.
+    if (window.narrationEventBus && typeof window.narrationEventBus.publish === 'function') {
+        window.narrationEventBus.publish('pointChanged', {});
+    }
+    if (typeof showControllerToast === 'function') {
+        showControllerToast(description, 'success');
     }
 }
 
@@ -2116,6 +2400,7 @@ function applyStartPointButtonState(btn, showPointInProgress = true) {
  * both the Active Coach role and point status:
  * - Timeout: enabled anytime (during or between points), Active Coach only
  * - Injury Sub: enabled only DURING a point (mid-point sub mechanism)
+ * - Correct Lineup: enabled only DURING a point (rewrites the current point)
  * - Halftime, Switch Sides, End Game: enabled BETWEEN points only
  */
 function updateGameEventsModalState() {
@@ -2143,6 +2428,16 @@ function updateGameEventsModalState() {
         injurySubBtn.disabled = false;
         injurySubBtn.classList.toggle('disabled', !injuryEnabled);
         injurySubBtn.setAttribute('aria-disabled', String(!injuryEnabled));
+    }
+
+    // Correct Lineup - only DURING a point, same class-only disabling as
+    // Injury Sub so the tap can explain itself with a toast.
+    const correctLineupBtn = modal.querySelector('#geCorrectLineupBtn');
+    if (correctLineupBtn) {
+        const correctEnabled = hasActiveCoachRole && pointInProgress;
+        correctLineupBtn.disabled = false;
+        correctLineupBtn.classList.toggle('disabled', !correctEnabled);
+        correctLineupBtn.setAttribute('aria-disabled', String(!correctEnabled));
     }
 
     // Halftime, Switch Sides, End Game - enabled BETWEEN points only
