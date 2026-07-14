@@ -742,8 +742,111 @@ consolidated (flagged in the merge commits). Verified pixel-identical via a comp
 diff of old vs new CSS across teams/roster/game screens, all in-game tabs, dialogs, and
 mobile viewport — only the flagged consolidations differ.
 
-### F5 · Repo hygiene
+### F5 · Repo hygiene — ✅ DONE
 
-Worktree count grew to **53** (was 38) — prune clean worktrees whose branches are merged
-(branches stay, per CLAUDE.md). Update `.claude/launch.json` entries pointing at removed
-worktrees.
+Pruned 52 stale worktrees (53 → 1 + main; all branches kept per CLAUDE.md) and pruned the
+dangling `.claude/launch.json` entries. (Count has since grown back to 6 with new in-flight
+feature worktrees — that's normal working state, not debt.)
+
+---
+
+## 8. Program closeout — outstanding work (2026-07-11)
+
+**Final state of the program:** A1, B1–B5, C1, D1–D4, E1 (ES-modules), E2 (deploy-time
+versioning), F1, F2, F4, F5 are all **merged and verified**. Every 🔴 correctness bug from the
+original review is fixed. **F3 is the one planned task never completed** — it is now in flight
+on the unmerged `cleanup-sweep` worktree.
+
+This section is the **handoff punch list for future sessions**: work that is either still open
+from the program, or was *newly created by* the program. Verified against `main` @ 2026-07-11
+by three audit agents plus a live test run.
+
+### G1 · F3 frontend cleanup sweep — **41 items, all still OPEN** ⬅ biggest artifact
+In flight on the `cleanup-sweep` worktree (unmerged). The itemized checklist is § 7 F3 above;
+an audit re-verified all 41 against current `main` and **none were incidentally fixed**. Line
+numbers in § 7 are stale (files moved in the splits) — locate by symbol. Current refs for the
+few that matter most:
+- 🔴-ish **document-listener leak**: two swipe-to-dismiss copies leak `mousemove`/`mouseup` on
+  `document` per toast (`game/controllerState.js:888`, `:1215`).
+- **Dead 409 branch**: `landing/join.js:497` handles already-member, but the backend
+  invite-info endpoint only ever raises 404/410 — needs the backend to return 409.
+- **`undoEvent`** still one long decision tree (`game/gameLogic.js:470-690`), stale `XXX` at
+  `:510`/`:686`, unconditional `logEvent("Undo button pressed!")` at `:687`. Untested.
+- **6 caller-less deprecated shims** still exported (`teams/teamList.js:495/764/785/807`,
+  `teams/syncStatusUI.js:161/162`).
+- **`console.*` sweep**: 372 calls, no logger wrapper in `utils/`.
+- Partial movement only: `ui/panelSystem.js` duplicate `contentPanels` is down to one site
+  (`:1198`), but the five parallel panel arrays remain (`:35/39/43/49`).
+
+### G2 · Backend hardening from the real staging incident (NEW — created by this program)
+Both root-caused during the E1 shakedown; the client-side mitigation shipped, the server-side
+fixes did not. Currently recorded only in TODO.md's *Quick Reference* section, where they will
+be missed:
+- **Unhandled 500s carry no CORS headers** → browser reports a network `TypeError` → the sync
+  layer misclassifies it as *offline*. This was the poison-pill root cause. Add an exception
+  handler that attaches CORS headers to error responses.
+- **A version-backup write failure 500s the entire sync.** Prod hit this via root-owned
+  `versions/` dirs. Backup failure should degrade, not fail the sync; add a startup
+  writability check on the data dir. (Ops rule, worth documenting: never run servers/scripts
+  touching `/var/lib/breakside/data` as root.)
+
+### G3 · Backend test suite is NOT green — **40 failed / 227 passed / 5 skipped** (verified)
+Confirmed by running `pytest ultistats_server/` on `main` this session. Three known causes:
+`test_api.py` path drift (unprefixed `/api` paths after the router split), `test_auth.py`
+collection-time config interference, and flaky live-LLM narration scenarios. A red suite means
+the safety net for all future cleanup is not trustworthy — **fix this before G1.**
+
+### G4 · `authFetch` consolidation — the ESM migration shipped the *weaker* variant (NEW)
+`auth/auth.js:429` documents it: two `authFetch` implementations existed; the local
+**401-retry** variant was deleted as shadowed-dead, so the surviving one has **no 401 retry**.
+Behavior was preserved at the time, but the token-refresh resilience that B2 added is now
+partly gone. Consolidate onto the retry variant.
+
+### G5 · Audio narration reported broken on staging (2026-07-04) — uncharacterized (NEW)
+Logged during the program, symptoms never captured. Needs a repro/deep dive.
+
+### G6 · Duplicated game-log renderers — actively drifting (NEW)
+Three copies; the `betweenPoints` countdown fix already had to be written twice. Merge them.
+
+### G7 · e2e suite: flaky specs never root-caused + port singleton
+Multi-coach and sleep/wake specs were accepted as a known-flaky baseline across ~10 commits —
+and they cover precisely the area where this review found the most bugs. Also the suite
+hardcodes ports 3099/8100, so parallel worktrees silently test each other's code.
+
+### G8 · Verification gaps (cheap to close, worth closing)
+- Was `scripts/migrate_stats_id_keying.py` ever run against **production** data? F2's real-data
+  verification covered 7 local games only.
+- F2's prod spot-check of **CUDO Spring 26 / Flickers / Mumbo Sauce** is still pending (was
+  blocked on a prod data read).
+- Before the shared exclude-list landed, prod S3 syncs may have published `.claude/`/`.vscode/`
+  files. `aws s3 sync --delete` will not remove them — confirm the bucket is clean.
+
+### G9 · Point-lifecycle refactor — consciously declined, now backlogged
+Judged days of work with core-flow regression risk; the shipped between-points behavior is a
+display-level fix. Revisit deliberately, not opportunistically.
+
+### G10 · TODO.md hygiene
+TODO.md has **no** review/cleanup follow-up section and never references this report or F1–F5;
+cleanup items are scattered across Near Term / Backlog / Infrastructure / Quick Reference.
+Recommend a single "Code-review follow-ups" section pointing here. Stale entries to drop:
+`updateGameSummaryRosterDisplay` (deleted by F2); `removeGameStatsFromRoster` path is
+`teams/teamList.js:785`; the `field-app` launch entry is gone; F5's "53 worktrees" is obsolete;
+ARCHITECTURE.md:348 still calls the Full PBP density toggle "a TODO" though it shipped.
+
+### Accepted debt (decided — do NOT re-report as findings)
+Game-sync last-write-wins (AC authoritative); `ScriptProcessorNode` → AudioWorklet;
+`entity_store.save()` caller-dict mutation (documented intentional); `list_events()` unbounded
+scan; fieldPbp/fullPbp holder-state wrapper duplication (core already shared via
+`pbpPossession`).
+
+### Being fixed elsewhere (do NOT re-report)
+A parallel session on `pull-dialog-resolver` is fixing: the pull dialog's `undefined` selection
+sentinel; raw name-string lookups of `point.players` across the PBP dialogs; gender gating in
+`updatePullDialogState`; and unstable random player ids causing roster duplication in the
+sync merge-by-id (`store/sync.js:1473`). Also open in TODO.md: **`point.startTimestamp` is null
+at score time** (a real correctness bug that already forced a workaround).
+
+### Suggested order for future sessions
+**G3** (green the tests — the safety net) → **G2** (backend hardening; real user-facing
+incident) → **G1** (land `cleanup-sweep`) → **G4** → **G6** → **G8** (cheap verifications) →
+**G10** (TODO hygiene) → G5/G7/G9 as capacity allows.
