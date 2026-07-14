@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { applyUndoToGame } from '../../game/undoLogic.js';
-import { Role, Throw, Defense } from '../../store/models.js';
+import { Role, Throw, Defense, Other } from '../../store/models.js';
 
 // ── helpers ─────────────────────────────────────────────────────────────
 
@@ -186,6 +186,84 @@ test('pop a Callahan → defender goals decremented and score reverted', () => {
     assert.equal(dana.goals, 1);
     assert.equal(calls.revertPointScore.length, 1);
     assert.equal(result.pointRemoved, true);  // lone possession emptied
+});
+
+// ── branch 2: injury-sub events ─────────────────────────────────────────
+
+function makeInjurySub({ playersBefore, subbedOutBefore } = {}) {
+    return new Other({
+        injury: true, description: 'Sub: Henry in for Alice',
+        playersBefore, subbedOutBefore,
+    });
+}
+
+test('pop an injury sub → roster restored from the event snapshots', () => {
+    const { deps } = makeDeps();
+    const pull = new Throw({ thrower: makePlayer('X'), receiver: makePlayer('Y') });
+    const sub = makeInjurySub({ playersBefore: ['Alice', 'Bob'], subbedOutBefore: [] });
+    const point = makePoint({ possessions: [makePossession([pull, sub])], players: ['Bob', 'Henry'] });
+    point.substitutedOutPlayers = ['Alice'];
+    const game = makeGame({ points: [point] });
+
+    const result = applyUndoToGame(game, deps);
+
+    assert.equal(result.outcome, 'event-undone');
+    assert.equal(result.pointRemoved, false);
+    assert.deepEqual(point.players, ['Alice', 'Bob']);
+    assert.deepEqual(point.substitutedOutPlayers, []);
+    assert.equal(point.possessions[0].events.length, 1);   // pull remains
+});
+
+test('injury sub as the point\'s only event → possession removed, point KEPT', () => {
+    // confirmSubstitution creates a possession just to host the sub on a
+    // Simple-mode offense point; undoing it must not remove the live point
+    // (a mid-point with zero possessions is the normal fresh-offense state).
+    const { deps } = makeDeps();
+    const sub = makeInjurySub({ playersBefore: ['Alice', 'Bob'], subbedOutBefore: [] });
+    const point = makePoint({ possessions: [makePossession([sub])], players: ['Bob', 'Henry'] });
+    point.substitutedOutPlayers = ['Alice'];
+    const game = makeGame({ points: [point] });
+
+    const result = applyUndoToGame(game, deps);
+
+    assert.equal(result.outcome, 'event-undone');
+    assert.equal(result.pointRemoved, false);
+    assert.equal(game.points.length, 1);
+    assert.deepEqual(point.possessions, []);
+    assert.deepEqual(point.players, ['Alice', 'Bob']);
+});
+
+test('second sub then undo → restores to the FIRST sub\'s roster (chained snapshots)', () => {
+    const { deps } = makeDeps();
+    const sub1 = makeInjurySub({ playersBefore: ['Alice', 'Bob'], subbedOutBefore: [] });
+    const sub2 = makeInjurySub({ playersBefore: ['Bob', 'Henry'], subbedOutBefore: ['Alice'] });
+    sub2.description = 'Sub: Grace in for Bob';
+    const point = makePoint({ possessions: [makePossession([sub1, sub2])], players: ['Henry', 'Grace'] });
+    point.substitutedOutPlayers = ['Alice', 'Bob'];
+    const game = makeGame({ points: [point] });
+
+    applyUndoToGame(game, deps);
+    assert.deepEqual(point.players, ['Bob', 'Henry']);
+    assert.deepEqual(point.substitutedOutPlayers, ['Alice']);
+
+    applyUndoToGame(game, deps);
+    assert.deepEqual(point.players, ['Alice', 'Bob']);
+    assert.deepEqual(point.substitutedOutPlayers, []);
+});
+
+test('legacy injury sub without snapshots → event popped, roster left alone', () => {
+    const { deps } = makeDeps();
+    const legacy = new Other({ injury: true, description: 'Sub: Henry in for Alice' });
+    const pull = new Throw({ thrower: makePlayer('X'), receiver: makePlayer('Y') });
+    const point = makePoint({ possessions: [makePossession([pull, legacy])], players: ['Bob', 'Henry'] });
+    point.substitutedOutPlayers = ['Alice'];
+    const game = makeGame({ points: [point] });
+
+    const result = applyUndoToGame(game, deps);
+
+    assert.equal(result.outcome, 'event-undone');
+    assert.deepEqual(point.players, ['Bob', 'Henry']);          // unchanged
+    assert.deepEqual(point.substitutedOutPlayers, ['Alice']);   // unchanged
 });
 
 // ── branch 3: possession-popped ─────────────────────────────────────────

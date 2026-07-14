@@ -451,7 +451,7 @@ class Defense extends Event {
 
 // Other event class
 class Other extends Event {
-    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null, description = null}) {
+    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null, description = null, playersBefore = null, subbedOutBefore = null}) {
         super('Other');
         this.timeout_flag = timeout;
         this.injury_flag = injury;
@@ -459,6 +459,14 @@ class Other extends Event {
         this.switchsides_flag = switchsides;
         this.halftime_flag = halftime;
         this.description = description; // Generic description for custom events (e.g., substitutions)
+        // Injury-sub restoration snapshots (name arrays), taken just before
+        // the sub was applied. undoEvent uses them to restore point.players /
+        // point.substitutedOutPlayers when the sub event is undone — without
+        // them a sub was irreversible (the event popped but the roster change
+        // survived). null on non-sub events and on legacy pre-fix sub events
+        // (undo skips restoration when absent).
+        this.playersBefore = playersBefore;
+        this.subbedOutBefore = subbedOutBefore;
     }
     
     // Override summarize for Other events

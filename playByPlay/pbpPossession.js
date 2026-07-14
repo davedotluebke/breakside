@@ -49,14 +49,22 @@ const pbpPossession = (function() {
         let mode = (point.startingPosition === 'defense') ? 'defense' : 'offense';
         let holder = null;
 
+        // Scan backward for the last MODE-BEARING event, skipping annotation
+        // events (Other: injury sub / timeout / switch sides, Violation) —
+        // they carry no possession semantics. Stopping at the raw last event
+        // used to reset mode to the point's startingPosition whenever an
+        // injury sub was the most recent thing recorded, flipping the
+        // Full/Field O&D surface mid-point.
         let lastEvent = null;
-        if (point.possessions) {
-            for (let i = point.possessions.length - 1; i >= 0; i--) {
-                const events = point.possessions[i].events;
-                if (events && events.length) {
-                    lastEvent = events[events.length - 1];
-                    break;
-                }
+        outer:
+        for (let i = (point.possessions || []).length - 1; i >= 0; i--) {
+            const events = point.possessions[i].events;
+            if (!events) continue;
+            for (let j = events.length - 1; j >= 0; j--) {
+                const e = events[j];
+                if (e.type === 'Other' || e.type === 'Violation') continue;
+                lastEvent = e;
+                break outer;
             }
         }
 
@@ -82,7 +90,7 @@ const pbpPossession = (function() {
                 mode = 'defense';
                 holder = null;
             }
-            // Violation / Other don't change mode or holder.
+            // (Violation / Other never reach here — the scan above skips them.)
         }
 
         return { mode, holder, point };

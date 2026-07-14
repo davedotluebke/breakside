@@ -976,13 +976,18 @@ function confirmSubstitution() {
     const previousPlayers = point.players || [];
     const playersOut = previousPlayers.filter(p => !newPlayers.includes(p));
     const playersIn = newPlayers.filter(p => !previousPlayers.includes(p));
-    
+
     // Nothing changed
     if (playersOut.length === 0 && playersIn.length === 0) {
         hideSubPlayersModal();
         return;
     }
-    
+
+    // Snapshot the pre-sub state BEFORE applying the sub — the Other event
+    // below carries these so undoEvent can restore the roster exactly.
+    const playersBefore = [...previousPlayers];
+    const subbedOutBefore = [...(point.substitutedOutPlayers || [])];
+
     // Track substituted-out players for points-played counting
     if (!point.substitutedOutPlayers) {
         point.substitutedOutPlayers = [];
@@ -992,16 +997,25 @@ function confirmSubstitution() {
             point.substitutedOutPlayers.push(p);
         }
     });
-    
+
     // Update current point players
     point.players = newPlayers;
-    
+
     // Log substitution event(s)
-    // Get the current possession to add the event to
-    const currentPossession = point.possessions.length > 0
+    // Get the current possession to add the event to. If none exists yet
+    // (a Simple-mode offense point has no possessions until a score or key
+    // play), CREATE one matching the point's starting side rather than
+    // silently dropping the event — an unrecorded sub is invisible to undo
+    // and to the game log. (With no events yet, the current mode IS the
+    // starting side, so the created possession's type is accurate.)
+    let currentPossession = point.possessions.length > 0
         ? point.possessions[point.possessions.length - 1]
         : null;
-    
+    if (!currentPossession) {
+        currentPossession = new Possession(point.startingPosition !== 'defense');
+        point.possessions.push(currentPossession);
+    }
+
     // Create description for the substitution
     let subDescription = '';
     if (playersIn.length > 0 && playersOut.length > 0) {
@@ -1017,17 +1031,18 @@ function confirmSubstitution() {
         subDescription = `Sub: ${outNames} removed`;
     }
     
-    // Create an Other event with the injury flag and description
+    // Create an Other event with the injury flag, description, and the
+    // pre-sub roster snapshots undoEvent needs to reverse the sub.
     const subEvent = new Other({
         injury: true,
-        description: subDescription
+        description: subDescription,
+        playersBefore: playersBefore,
+        subbedOutBefore: subbedOutBefore,
     });
-    
-    // Add to current possession if it exists
-    if (currentPossession) {
-        currentPossession.events.push(subEvent);
-    }
-    
+
+    currentPossession.events.push(subEvent);
+
+
     // Log to event log
     if (typeof logEvent === 'function') {
         logEvent(subDescription);
