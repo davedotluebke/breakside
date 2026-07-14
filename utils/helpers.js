@@ -2,7 +2,7 @@
  * Utility Functions
  * Pure utility functions and data accessors
  */
-import { UNKNOWN_PLAYER } from '../store/models.js';
+import { Gender, UNKNOWN_PLAYER } from '../store/models.js';
 import { UNKNOWN_PLAYER_OBJ, currentTeam } from '../store/storage.js';
 
 /**
@@ -255,6 +255,50 @@ function buildPointMembership(game) {
 }
 
 /**
+ * Minimal player-shaped stand-in for an entry that no longer resolves to a
+ * current-roster Player (removed player, unmigrated legacy data, cross-device
+ * roster gap). Shape matches store/storage.js resolvePlayerReference's
+ * fallback, so events recorded against it still serialize the name.
+ */
+function playerStub(name) {
+    return { name, id: null, gender: Gender.UNKNOWN };
+}
+
+/**
+ * Game-scoped lookup for `point.players` entries → current Player objects.
+ *
+ * The entries are bare strings that may be a current roster name, a player id
+ * (id-era games), or a stale name (player renamed/removed since the point was
+ * played) — see buildPlayerNameResolver. UI that builds player buttons/chips
+ * from point.players must resolve through this rather than getPlayerFromName,
+ * otherwise id-era and renamed entries come back undefined (which has
+ * variously meant dead Proceed buttons and silently missing player rows).
+ *
+ * Returns lookup(entry) → { player, name, obj }:
+ *   player — the current-roster Player, or null when nobody matches
+ *   name   — best display name: the player's current name, else the
+ *            historical name recorded for a known id, else the raw entry
+ *   obj    — `player` when resolved, else playerStub(name): always safe to
+ *            render or record an event against
+ */
+function buildPointPlayerLookup(game) {
+    const resolve = buildPlayerNameResolver(game, { quiet: true });
+    return function lookup(entry) {
+        if (entry === UNKNOWN_PLAYER) {
+            return { player: UNKNOWN_PLAYER_OBJ, name: UNKNOWN_PLAYER, obj: UNKNOWN_PLAYER_OBJ };
+        }
+        const roster = currentTeam?.teamRoster || [];
+        let player = roster.find(p => p.name === entry) || roster.find(p => p.id === entry);
+        if (!player) {
+            const id = resolve(entry);  // stable id, or an unresolved:/ambiguous: bucket
+            player = roster.find(p => p.id === id) || null;
+        }
+        const name = player ? player.name : (resolve.nameOf(entry) || entry);
+        return { player, name, obj: player || playerStub(name) };
+    };
+}
+
+/**
  * Helper function to calculate player's time in current game
  * Accepts a Player object (preferred — survives mid-game renames) or a
  * player name string.
@@ -470,7 +514,7 @@ export {
     getPlayerFromName, currentGame, getLatestPoint, getLatestPossession,
     getLatestEvent, getPossessionOf, getPointOf, isPointInProgress,
     getActivePossession, getPlayerGameTime, formatPlayTime,
-    buildPlayerNameResolver, buildPointMembership,
+    buildPlayerNameResolver, buildPointMembership, buildPointPlayerLookup, playerStub,
     determineStartingPosition, capitalize, formatPlayerName, extractPlayerName,
     showPlayerNumbers,
     getGenderRatioForPoint, getExpectedGenderRatio, getExpectedGenderCounts,
