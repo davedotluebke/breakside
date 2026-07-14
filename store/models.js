@@ -453,7 +453,7 @@ class Defense extends Event {
 
 // Other event class
 class Other extends Event {
-    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null, forceswap = null, description = null, calledBy = null, calledByName = null, betweenPoints = null}) {
+    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null, forceswap = null, lineupCorrection = null, description = null, calledBy = null, calledByName = null, betweenPoints = null}) {
         super('Other');
         this.timeout_flag = timeout;
         this.injury_flag = injury;
@@ -465,6 +465,11 @@ class Other extends Event {
         // switchsides this is NOT a period break — it flips whatever the
         // normal rules would compute, and doesn't touch the field display.
         this.forceswap_flag = forceswap;
+        // Manual correction: a player was entered on the line by mistake and
+        // this point's events/membership were reassigned to the right player
+        // (see gameScreenEvents.js applyLineupCorrection). Unlike injury_flag
+        // this is NOT a substitution — the mistaken player never played.
+        this.lineupCorrection_flag = lineupCorrection;
         this.description = description; // Generic description for custom events (e.g., substitutions)
         this.calledBy = calledBy; // Timeout attribution: 'us' | 'them' | 'neither' | null (legacy/unknown)
         this.calledByName = calledByName; // Display name for calledBy, resolved at creation (team/opponent name)
@@ -489,6 +494,9 @@ class Other extends Event {
         if (this.switchsides_flag)  { summary += 'O and D switch sides '; }
         if (this.halftime_flag)     { summary += 'Halftime — teams switch ends. '; }
         if (this.forceswap_flag)    { summary += 'Swapped O & D — pulling team corrected. '; }
+        // description (set at creation) carries the in/out names for a
+        // lineup correction; this fallback covers a flag with no description.
+        if (this.lineupCorrection_flag && !this.description) { summary += 'Lineup corrected '; }
         return summary;
     }
 }

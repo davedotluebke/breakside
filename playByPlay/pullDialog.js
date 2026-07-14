@@ -6,12 +6,13 @@ import { Gender, Pull, Possession, UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
 import {
     currentGame, getLatestPoint, getPlayerFromName, getGenderRatioForPoint,
+    formatPlayerName, buildPointPlayerLookup,
 } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { getCurrentMode } from '../ui/panelSystem.js';
 
 // Track Pull dialog state
-let pullSelectedPlayer = undefined; // undefined = no selection yet, null = Unknown Player selected, Player object = specific player selected
+let pullSelectedPlayer = undefined; // undefined = no selection yet, null = Unknown Player selected, player object (roster Player or stub) = specific player selected
 let pullSelectedQuality = null;
 let pullSelectedGender = null;
 
@@ -237,24 +238,31 @@ function createPullPlayerButtons(expectedGender, alternatePulls) {
     });
     playerButtonsContainer.appendChild(unknownButton);
     
-    // Add player buttons for all active players
+    // Add player buttons for all active players. point.players entries may be
+    // current names, player ids (id-era games), or stale names (renamed since
+    // the point started) — resolve each through the game-scoped lookup so
+    // every button carries a selectable player object.
     const point = getLatestPoint();
     if (point && point.players) {
-        point.players.forEach(playerName => {
-            const player = getPlayerFromName(playerName);
+        const lookup = buildPointPlayerLookup(currentGame());
+        point.players.forEach(entry => {
+            const { player, name, obj } = lookup(entry);
             const playerButton = document.createElement('button');
-            playerButton.textContent = playerName;
+            playerButton.textContent = player ? formatPlayerName(player) : name;
+            // Canonical current name for style refresh — the visible label
+            // may include a jersey number.
+            playerButton.dataset.playerName = name;
             playerButton.classList.add('player-button');
-            
+
             // Check if player is eligible based on gender
-            if (alternatePulls && expectedGender && player && player.gender !== Gender.UNKNOWN) {
-                if (player.gender !== expectedGender) {
+            if (alternatePulls && expectedGender && obj.gender !== Gender.UNKNOWN) {
+                if (obj.gender !== expectedGender) {
                     playerButton.classList.add('ineligible-puller');
                 }
             }
-            
+
             playerButton.addEventListener('click', function() {
-                handlePullPlayerSelection(player, this);
+                handlePullPlayerSelection(obj, this);
             });
             playerButtonsContainer.appendChild(playerButton);
         });
@@ -298,9 +306,10 @@ function refreshPullPlayerButtonStyles() {
             return;
         }
         
-        const playerName = button.textContent;
-        const player = getPlayerFromName(playerName);
-        
+        // dataset.playerName holds the canonical current name; textContent
+        // may carry a jersey-number suffix and must not be used for lookup.
+        const player = getPlayerFromName(button.dataset.playerName);
+
         // Remove ineligible class first
         button.classList.remove('ineligible-puller');
         
@@ -330,7 +339,7 @@ function handlePullPlayerSelection(player, buttonElement) {
     
     // Select the clicked button
     buttonElement.classList.add('selected');
-    pullSelectedPlayer = player; // null for Unknown Player, Player object otherwise
+    pullSelectedPlayer = player; // null for Unknown Player, player object (roster Player or stub) otherwise
     
     const game = currentGame();
     const playerGender = player ? player.gender : Gender.UNKNOWN;
@@ -377,19 +386,20 @@ function updatePullDialogState() {
     
     if (!proceedBtn) return;
     
-    // Check if gender selection is required (only when alternate pulling is enabled)
+    // Gender selection is required only on the first defensive point of an
+    // alternate-gender-pulls game (later points either pre-select the expected
+    // gender or genuinely can't determine one, e.g. after an unknown-gender
+    // pull — the dialog must not block on it then).
     let genderRequired = false;
     let genderSelected = true; // Default to true when alternate pulling is not enabled
     if (game && game.alternateGenderPulls) {
-        // Only require gender selection if alternate pulling is enabled
         genderRequired = isFirstDefensivePointForTeam(game);
         genderSelected = pullSelectedGender !== null;
     }
-    // When alternate pulling is NOT enabled, genderSelected stays true (not required)
-    
+
     // Check if we have required selections
     // Player selection is required (pullSelectedPlayer is set when any button is clicked, including Unknown Player which sets it to null)
-    // Note: pullSelectedPlayer will be undefined initially, null when Unknown Player is selected, or a Player object when a player is selected
+    // Note: pullSelectedPlayer is undefined initially, null when Unknown Player is selected, or a player object (roster Player or stub) once a button is clicked
     const hasPlayer = pullSelectedPlayer !== undefined; // A player button has been clicked (including Unknown Player)
     
     // Quality selection is NOT required - proceed button should enable when any player is selected
@@ -409,8 +419,8 @@ function updatePullDialogState() {
         // Gender selection required but not selected (only when alternate pulling enabled and first defensive point)
         proceedBtn.disabled = true;
         proceedBtn.classList.remove('warning');
-    } else if (hasPlayer && genderSelected) {
-        // Player selected (and gender if required) - enable proceed button
+    } else if (hasPlayer) {
+        // Player selected (and gender if it was required) - enable proceed button
         proceedBtn.disabled = false;
         if (ineligibleSelected) {
             proceedBtn.classList.add('warning');
