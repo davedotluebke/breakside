@@ -980,6 +980,18 @@ Audio-driven regression suite in `ultistats_server/tests/narration/`. Each scena
 
 Test deps (`websockets`, `soundfile`) are listed in `requirements.txt` under a "Test-only deps" comment.
 
+### Lineup Narration (Lines tab)
+
+A second, independent narration layer lets a coach *speak the next line* instead of tapping checkboxes: a small round mic button in the Select Line toolbar (next to Auto). It reuses the transcription plumbing but nothing of the in-point event pipeline — separate button, separate state machine, separate endpoint — so the two features can evolve without touching each other. Only one can record at a time (they share the realtime-session singleton; each refuses to start while the other is active).
+
+- **Capture**: `narration/lineupNarration.js` opens the same transcription-only Realtime session, but vocabulary-biases the recognizer toward the **full active roster** rather than the on-field seven — calling a line is precisely about naming bench players.
+- **Extraction**: on stop, the transcript is POSTed to **`POST /api/narration/lineup`** (`ultistats_server/narration_lineup.py`) along with the full roster (names, nicknames, jersey numbers), the **expected player count**, the **previous point's lineup**, and the current on-screen selection. Claude returns `{players, unmatched, note}` — the final set of roster names.
+- **Prompt semantics** (see `_build_lineup_prompt`): players can be referenced by first name, full name, nickname, or jersey number; the coach can recite a full line *or* speak in changes against the previous lineup ("Cyrus goes in for Nate", "same line", "Max is coming off"); later statements override earlier ones ("is that Leif? No, it's Everett" → Everett); asides are ignored; the expected count is interpretive context only — the model never pads or trims to reach it, it just flags mismatches in `note`.
+- **Apply**: returned names are re-validated against the roster (`narration/lineupResolve.js`, unit-tested under `tests/unit/`) and applied through selectLine's `applyLineSelection('main', …)` — the same path as the Wholesale/Auto buttons, so pendingNextLine writes, checkbox sync, subtitle, and cloud sync all behave identically. Error or empty results **never** clear the existing selection; the result toast reports `applied/expected` plus any unmatched references.
+- **Permissions**: gated on `canEditSelectLinePanel()` (Line Coach rule), checked both at record start and again at apply time.
+- **No graceful no-LLM fallback**: unlike `/finalize`, `/lineup` 503s without `ANTHROPIC_API_KEY` — there is nothing sensible to return without a model. The model defaults to the finalize pass's (`NARRATION_LINEUP_MODEL` overrides, else `NARRATION_SLOW_MODEL`).
+- **Debug seam**: `window.lineupNarration._applyResult({...})` drives the apply path from the console/Playwright without mic hardware or an API key.
+
 ---
 
 ## Users and Authentication
