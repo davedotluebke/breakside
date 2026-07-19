@@ -40,12 +40,16 @@ MVP shipped. Coach speaks naturally; the system extracts structured game events.
 The frontend is now native ES modules (branch `es-modules`). Cleanups the
 migration surfaced but deliberately did not do (behavior-preserving rule):
 
-- [ ] **Consolidate authFetch onto the 401-retry variant.** auth/auth.js's
+- [x] **Consolidate authFetch onto the 401-retry variant.** auth/auth.js's
       401-refresh-retry `authFetch` had been dead code since store/sync.js's
       simpler same-named global overwrote it at load time; the migration
       deleted the dead copy to preserve runtime behavior. The retry logic was
       the better implementation (B2 work) — port it into `store/sync.js`'s
       `authFetch` deliberately, with the test-mode guard intact.
+      *Done (G4, branch `g4-authfetch-retry`): retry ported into
+      `store/sync.js` via new pure `store/authFetchLogic.js` (single-flight
+      refresh, retry-once, test-mode untouched; 14 unit tests). Also fixed
+      `teamSettings.js` proxy-image raw fetch that sent no auth.*
 - [ ] **Delete dead code found during conversion** (zero consumers, kept
       unexported): `teams/teamList.js` `selectTeam`/`populateCloudGames`/
       `deleteCloudGame`/`importCloudGame`/`triggerManualSync`/`pullDataFromCloud`/
