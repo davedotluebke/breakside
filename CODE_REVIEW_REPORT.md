@@ -881,6 +881,23 @@ Recommend a single "Code-review follow-ups" section pointing here. Stale entries
 `teams/teamList.js:785`; the `field-app` launch entry is gone; F5's "53 worktrees" is obsolete;
 ARCHITECTURE.md:348 still calls the Full PBP density toggle "a TODO" though it shipped.
 
+### G11 · F3 post-merge testing flags (from the F3 session's handoff, in risk order)
+F3 verified solo-coach flows live; these paths were NOT covered and should be exercised before
+being trusted:
+1. **Multi-coach on two real devices** — `canEditPlayByPlay` unification, `installPingInterval`,
+   wake recovery, and swipe/handoff toasts all touch role plumbing (overlaps G7's flaky-e2e
+   area).
+2. **Injury-sub undo on real id-era games** (Nov-2025+ rosters) + interaction with Correct
+   Lineup — snapshots copy `point.players` verbatim; no prod-data test run.
+3. **Narration on real hardware** — FAST_PASS removal + transcript-merge change verified at
+   module level only.
+4. **Line-tab Undo button** (main `e880668`) — calls `undoEvent` from a surface not driven.
+5. **Real invite join on production** — the 409 preview is live but only curl/unit-tested.
+   Also: **`/join/{code}` has never resolved on staging — no CloudFront rewrite there**
+   (pre-existing infra gap, recorded nowhere else).
+6. Cosmetic: main's newer code (pre-logger) still has raw `console.log` calls — small
+   follow-up sweep to restore prod-console quiet.
+
 ### Accepted debt (decided — do NOT re-report as findings)
 Game-sync last-write-wins (AC authoritative); `ScriptProcessorNode` → AudioWorklet;
 `entity_store.save()` caller-dict mutation (documented intentional); `list_events()` unbounded
@@ -896,6 +913,7 @@ workaround).
 
 ### Suggested order for future sessions
 **G3** (green the tests — the safety net) → **G2** (backend hardening; real user-facing
-incident) → **G4** (authFetch 401-retry) → **G6** (game-log renderers) → **G8** (cheap
-verifications) → **G10** (TODO hygiene) → **G1** (small F3 leftovers, opportunistic) →
-G5/G7/G9 as capacity allows.
+incident) → **G11.1–.2** (exercise the untested multi-coach + id-era undo paths) → **G4**
+(authFetch 401-retry) → **G6** (game-log renderers) → **G8 + G11.5** (cheap verifications,
+incl. the staging `/join/{code}` CF rewrite) → **G10** (TODO hygiene) → **G1** (small F3
+leftovers, opportunistic) → G5/G7/G9/G11.3–.6 as capacity allows.
