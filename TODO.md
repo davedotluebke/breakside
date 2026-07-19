@@ -24,8 +24,9 @@ while building the **Field tab** (`field-position` branch). Low risk (auth is a 
 
 - [ ] `ssh ec2-user@3.212.138.180`; edit `/etc/breakside/env`, drop the `http://localhost:*`
       origin(s) from `ULTISTATS_ALLOWED_ORIGINS`; `sudo systemctl restart breakside`
-- [ ] Also revert the `field-tab-phase0` staging deploy when done (redeploy whatever should
-      live on staging), and remove the `field-app` entry from `.claude/launch.json`
+- [x] ~~Revert the `field-tab-phase0` staging deploy / remove the `field-app` launch entry~~
+      *(done — the `field-app` entry is gone from `.claude/launch.json` and staging has been
+      redeployed many times since)*
 
 ### AI Narration
 
@@ -34,6 +35,31 @@ MVP shipped. Coach speaks naturally; the system extracts structured game events.
 ---
 
 ## Near Term
+
+### Code-review follow-ups (see CODE_REVIEW_REPORT.md §8)
+
+The 2026-06/07 whole-codebase review program (A1…F5) is **complete**; everything still
+open from it lives in **[CODE_REVIEW_REPORT.md](CODE_REVIEW_REPORT.md) §8** (the G1–G11
+punch list) — that section is the single source of truth for review follow-up work, so
+cleanup items are no longer scattered across this file's sections. Status snapshot
+(2026-07-19 session):
+
+- **G3** backend-test-suite green, **G2** CORS-on-500 + backup-degrade hardening,
+  **G4** authFetch 401-retry, **G6** game-log renderer dedup — in flight this session
+  (see the sections below / Quick Reference for the original item text).
+- **Needs Dave — staging `/join/{code}` fix (G11.5).** Root cause found 2026-07-19: it's
+  the **S3 website config**, not CloudFront — prod's bucket has
+  `ErrorDocument: index.html` (SPA fallback), staging's lacks it, so `/join/<code>` returns
+  a raw S3 `NoSuchKey` page on staging. One-liner fix (needs creds beyond the
+  `github_actions` IAM user):
+  `aws s3api put-bucket-website --bucket staging.breakside.pro --website-configuration '{"IndexDocument":{"Suffix":"index.html"},"ErrorDocument":{"Key":"index.html"}}'`
+  then invalidate `/join/*` on distribution `E12N2STN9MM8FA`.
+- **Needs Dave — prod stats spot-check (G8).** Verifying CUDO Spring 26 / Flickers /
+  Mumbo Sauce survived the name→ID stats migration needs a prod data read (SSH key auth);
+  blocked for agents. Run the F2-style old-vs-new replay against
+  `/var/lib/breakside/data`, or pull a copy locally and point an agent at it.
+- **Verified clean (G8):** prod + staging S3 buckets contain no stray `.claude/` /
+  `.vscode/` / `.worktrees/` objects (checked 2026-07-19).
 
 ### ES-module migration follow-ups (from task E1, 2026-07-03)
 
@@ -46,14 +72,12 @@ migration surfaced but deliberately did not do (behavior-preserving rule):
       deleted the dead copy to preserve runtime behavior. The retry logic was
       the better implementation (B2 work) — port it into `store/sync.js`'s
       `authFetch` deliberately, with the test-mode guard intact.
-- [ ] **Delete dead code found during conversion** (zero consumers, kept
-      unexported): `teams/teamList.js` `selectTeam`/`populateCloudGames`/
-      `deleteCloudGame`/`importCloudGame`/`triggerManualSync`/`pullDataFromCloud`/
-      `showSetServerDialog`, `teams/rosterManagement.js`
-      `updateGameSummaryRosterDisplay`/`removeGameStatsFromRoster`,
-      `game/gameScreenEvents.js` `endGameConfirm` references (function defined
-      nowhere), `ui/activePlayersDisplay.js` guarded calls to
-      `updateGenderRatioDisplay`/`checkPlayerCount` (defined nowhere).
+- [x] **Delete dead code found during conversion** *(done — F2 deleted
+      `updateGameSummaryRosterDisplay` + `utils/statistics.js`; the F3 cleanup
+      sweep (merged 2026-07-19) deleted the remaining caller-less shims:
+      `selectTeam`, `populateCloudGames`, `deleteCloudGame`, `importCloudGame`,
+      `triggerManualSync`, `pullDataFromCloud`, `removeGameStatsFromRoster`,
+      etc. — only historical comments reference them now)*.
 - [x] **Countdown timer display**: `game/pointManagement.js`'s
       `updateTimerDisplay(seconds)` (targeting `#timerDisplay`) had been
       shadowed by `game/gameTimer.js`'s zero-arg version since gameTimer was
@@ -507,11 +531,16 @@ Higher-leverage interventions, in roughly priority order:
 ### Testing Auth Locally
 
 ```bash
-# Start server with auth disabled (default)
-cd ultistats_server && python3 main.py
+# Auth is REQUIRED by default (since the review program's F1 hardening).
+# For local dev with auth disabled, either use the helper (recommended —
+# isolated data copy + free port + CORS *):
+./scripts/dev-backend.sh
+
+# ...or disable auth explicitly:
+cd ultistats_server && ULTISTATS_AUTH_REQUIRED=false python3 main.py
 
 # Test with auth enabled
-AUTH_REQUIRED=true SUPABASE_JWT_SECRET=your-secret python3 main.py
+ULTISTATS_AUTH_REQUIRED=true SUPABASE_JWT_SECRET=your-secret python3 main.py
 
 # Run auth tests
 pytest test_auth.py -v
