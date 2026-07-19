@@ -483,6 +483,12 @@ def list_all_games() -> List[Dict[str, Any]]:
         List of dictionaries with game_id and metadata
     """
     games = []
+    # Guard like entity_store.list() / index_storage: the dir doesn't exist
+    # until the first game is saved (fresh ULTISTATS_DATA_DIR, or the e2e
+    # suite wiping tests/test-data-dir), and iterdir() on a missing dir made
+    # GET /api/games 500 with FileNotFoundError.
+    if not GAMES_DIR.exists():
+        return games
     for game_dir in GAMES_DIR.iterdir():
         if not game_dir.is_dir():
             continue

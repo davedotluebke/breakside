@@ -52,6 +52,13 @@ cleanup items are no longer scattered across this file's sections. Status snapsh
   as the point start). ⚠️ **G2/G3 are backend changes — EC2 needs
   `git pull && systemctl restart breakside` to take effect** (safe to defer; old server
   keeps running old code).
+- **G7 MERGED 2026-07-19** (branch `g7-e2e-ports`): e2e ports derive per worktree (no more
+  3099/8100 singleton), and the multi-coach/sleep-wake flake was root-caused — specs raced
+  the offline-first first game sync (controller endpoints 404 until it lands) and slept fixed
+  margins against server-side staleness; both fixed test-side (`tests/helpers/controllerApi.ts`).
+  Measured: 4/64 failures before → 0/64 after (retries=0, repeat-each=8). The suite's
+  `retries: 2` can likely drop after a burn-in period. Known coverage gap: the
+  `visibilitychange` wake handler is still not exercised (see 04's header; overlaps G11.1).
 - **Needs Dave — staging `/join/{code}` fix (G11.5).** Root cause found 2026-07-19: it's
   the **S3 website config**, not CloudFront — prod's bucket has
   `ErrorDocument: index.html` (SPA fallback), staging's lacks it, so `/join/<code>` returns
@@ -472,7 +479,7 @@ Bigger asks, deferred until current themes settle.
 - [ ] Rate limiting and abuse prevention
 - [ ] "Publish" games to make them searchable/discoverable
 - [ ] Git-based backup and version history
-- [ ] **e2e tests: stop hardcoding ports 3099/8100.** `tests/playwright.config.ts` pins the frontend/backend ports, and with Playwright's `reuseExistingServer` two worktrees (or parallel sessions) running the suite at once will reuse each other's leftover dev servers — so tests silently hit another branch's code (this masked, then unmasked, the `cachedEventStats` fix during investigation). Derive the ports per worktree (e.g. hash the repo path, or read an env var the dev-server script also honors) so concurrent runs are isolated. Same shared-port issue applies to `scripts/dev-server.sh`.
+- [x] **e2e tests: stop hardcoding ports 3099/8100.** Done (G7): `tests/helpers/constants.ts` now derives per-worktree ports from a hash of the repo root path (frontend 3100–3899, backend 8200–8999, same slot), overridable via `BREAKSIDE_E2E_FRONTEND_PORT`/`BREAKSIDE_E2E_BACKEND_PORT`; the config, helpers, and specs all import from it, and global-setup logs the derived ports each run. `scripts/dev-server.sh` now honors `$BREAKSIDE_PORT` (CLI arg still wins; bare invocation still defaults to 3000).
 
 ### Battery
 

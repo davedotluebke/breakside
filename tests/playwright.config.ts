@@ -1,8 +1,10 @@
 import { defineConfig } from '@playwright/test';
 import path from 'path';
+// Ports are derived per worktree (hash of repo root path) so concurrent
+// worktrees can't reuse each other's servers; see helpers/constants.ts.
+// Override with BREAKSIDE_E2E_FRONTEND_PORT / BREAKSIDE_E2E_BACKEND_PORT.
+import { FRONTEND_PORT, BACKEND_PORT } from './helpers/constants';
 
-const FRONTEND_PORT = 3099;
-const BACKEND_PORT = 8100;
 const ROOT = path.resolve(__dirname, '..');
 
 export default defineConfig({
