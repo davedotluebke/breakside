@@ -461,7 +461,7 @@ Bigger asks, deferred until current themes settle.
 - [ ] Rate limiting and abuse prevention
 - [ ] "Publish" games to make them searchable/discoverable
 - [ ] Git-based backup and version history
-- [ ] **e2e tests: stop hardcoding ports 3099/8100.** `tests/playwright.config.ts` pins the frontend/backend ports, and with Playwright's `reuseExistingServer` two worktrees (or parallel sessions) running the suite at once will reuse each other's leftover dev servers — so tests silently hit another branch's code (this masked, then unmasked, the `cachedEventStats` fix during investigation). Derive the ports per worktree (e.g. hash the repo path, or read an env var the dev-server script also honors) so concurrent runs are isolated. Same shared-port issue applies to `scripts/dev-server.sh`.
+- [x] **e2e tests: stop hardcoding ports 3099/8100.** Done (G7): `tests/helpers/constants.ts` now derives per-worktree ports from a hash of the repo root path (frontend 3100–3899, backend 8200–8999, same slot), overridable via `BREAKSIDE_E2E_FRONTEND_PORT`/`BREAKSIDE_E2E_BACKEND_PORT`; the config, helpers, and specs all import from it, and global-setup logs the derived ports each run. `scripts/dev-server.sh` now honors `$BREAKSIDE_PORT` (CLI arg still wins; bare invocation still defaults to 3000).
 
 ### Battery
 
