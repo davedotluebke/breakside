@@ -115,6 +115,7 @@ import './narration/realtimeSession.js';
 import { narrationEngine } from './narration/narrationEngine.js';
 import './narration/transcriptDisplay.js';
 import './narration/micButton.js';
+import './narration/lineupNarration.js';
 
 // Skip the service worker during local development (localhost / 127.0.0.1).
 // Its offline precache otherwise serves stale JS/CSS across edits, so source

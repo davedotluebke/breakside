@@ -1981,6 +1981,9 @@ function setLastConflictToastPointIndex(v) { lastConflictToastPointIndex = v; }
 export {
     wireSelectLineEvents,
     clearLineSelection, autoFillLineSelection,
+    // Shared apply/permission surface for voice line-setting
+    // (narration/lineupNarration.js) — same path as Wholesale/Auto.
+    applyLineSelection, canEditSelectLinePanel,
     computeAutoLine, buildAutoLineStats,
     handlePanelStartPoint, checkPanelGenderRatio,
     getSelectedPlayersFromPanel, getEffectiveLineForNextPoint,

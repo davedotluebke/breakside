@@ -415,6 +415,9 @@ function createSelectLineContent() {
             <button class="select-line-action-btn select-line-action-btn--auto" id="panelAutoBtn" title="Auto-fill empty slots to complete the line">
                 ${AUTO_ICON_SVG}<span class="select-line-action-label">Auto</span>
             </button>
+            <button class="lineup-mic-btn mic-idle" id="lineupMicBtn" title="Narrate the next line — tap, speak names or subs, tap again" aria-label="Narrate lineup">
+                <i class="fas fa-microphone"></i>
+            </button>
             <button class="select-line-lines-btn" id="panelLinesBtn">Lines...</button>
             <button class="select-line-mode-btn" id="panelLineModeBtn" title="Choose line-planning mode">Mode: O/D</button>
             <button class="select-line-od-toggle" id="panelODToggle" title="Toggle line type">O/D</button>
