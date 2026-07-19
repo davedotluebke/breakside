@@ -9,9 +9,8 @@
  */
 import { test, expect, Page, APIRequestContext } from '@playwright/test';
 import { BACKEND_URL, TEST_PARAMS } from '../helpers/constants';
-import {
-  goToApp, setupTeamWithPlayers, startGame, selectAllPlayers,
-} from '../helpers/app';
+import { setupTeamWithPlayers, startGame } from '../helpers/app';
+import { waitForGameOnServer } from '../helpers/controllerApi';
 
 // ─── API helpers for Coach B ────────────────────────────────────────────────
 
@@ -81,6 +80,10 @@ test.describe('multi-coach roles', () => {
     const gameId = await getGameId(page);
     expect(gameId).toBeTruthy();
 
+    // Game creation is offline-first: the server 404s controller calls until
+    // the app's queued first sync lands (can lag the UI by ~5s).
+    await waitForGameOnServer(request, gameId, COACH_A);
+
     // Coach A pings — should auto-assign both roles
     const pingResp = await pingAsCoach(request, gameId, COACH_A);
     expect(pingResp.ok()).toBeTruthy();
@@ -100,9 +103,11 @@ test.describe('multi-coach roles', () => {
     await startGame(page, 'offense');
 
     const gameId = await getGameId(page);
+    await waitForGameOnServer(request, gameId, COACH_A);
 
     // Coach A pings → gets both roles
-    await pingAsCoach(request, gameId, COACH_A);
+    const pingResp = await pingAsCoach(request, gameId, COACH_A);
+    expect(pingResp.ok()).toBeTruthy();
 
     // Coach A releases Line Coach role
     const releaseResp = await request.post(`${BACKEND_URL}/api/games/${gameId}/release`, {
@@ -131,7 +136,9 @@ test.describe('multi-coach roles', () => {
     await startGame(page, 'offense');
 
     const gameId = await getGameId(page);
-    await pingAsCoach(request, gameId, COACH_A);
+    await waitForGameOnServer(request, gameId, COACH_A);
+    const pingResp = await pingAsCoach(request, gameId, COACH_A);
+    expect(pingResp.ok()).toBeTruthy();
 
     // Coach B tries to claim Active Coach (held by Coach A)
     const claimResp = await claimRole(request, gameId, COACH_B, 'active');
@@ -155,10 +162,15 @@ test.describe('multi-coach roles', () => {
     await startGame(page, 'offense');
 
     const gameId = await getGameId(page);
-    await pingAsCoach(request, gameId, COACH_A);
+    await waitForGameOnServer(request, gameId, COACH_A);
+    const pingResp = await pingAsCoach(request, gameId, COACH_A);
+    expect(pingResp.ok()).toBeTruthy();
 
-    // Coach B requests Active Coach
-    await claimRole(request, gameId, COACH_B, 'active');
+    // Coach B requests Active Coach — must land as a handoff request
+    // (fail fast here rather than at the downstream state assertions)
+    const claimResp = await claimRole(request, gameId, COACH_B, 'active');
+    expect(claimResp.ok()).toBeTruthy();
+    expect((await claimResp.json()).status).toBe('handoff_requested');
 
     // Coach A accepts the handoff
     const acceptResp = await respondHandoff(request, gameId, COACH_A, true);
@@ -179,10 +191,15 @@ test.describe('multi-coach roles', () => {
     await startGame(page, 'offense');
 
     const gameId = await getGameId(page);
-    await pingAsCoach(request, gameId, COACH_A);
+    await waitForGameOnServer(request, gameId, COACH_A);
+    const pingResp = await pingAsCoach(request, gameId, COACH_A);
+    expect(pingResp.ok()).toBeTruthy();
 
-    // Coach B requests Active Coach
-    await claimRole(request, gameId, COACH_B, 'active');
+    // Coach B requests Active Coach — must land as a handoff request
+    // (fail fast here rather than at the downstream state assertions)
+    const claimResp = await claimRole(request, gameId, COACH_B, 'active');
+    expect(claimResp.ok()).toBeTruthy();
+    expect((await claimResp.json()).status).toBe('handoff_requested');
 
     // Coach A denies the handoff
     const denyResp = await respondHandoff(request, gameId, COACH_A, false);
