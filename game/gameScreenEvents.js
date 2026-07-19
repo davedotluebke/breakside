@@ -10,7 +10,7 @@ import { teams, currentTeam, saveAllTeamsData } from '../store/storage.js';
 import {
     currentGame, getLatestPoint, isPointInProgress,
     determineStartingPosition, formatPlayerName,
-    buildPlayerNameResolver, buildPointMembership,
+    buildPlayerNameResolver, buildPointMembership, buildPointPlayerLookup,
 } from '../utils/helpers.js';
 import { refreshPendingLineFromCloud } from '../store/sync.js';
 import { resetPendingLinesAtPointEnd } from '../store/pendingLineLogic.js';
@@ -906,11 +906,16 @@ function populateSubPlayersTable() {
     
     // Get current point players
     const currentPlayers = point.players || [];
-    
+
+    // Id-aware matching: point.players holds names OR player ids depending
+    // on data era (see buildPlayerNameResolver) — raw name comparison left
+    // every box unchecked on id-era games.
+    const membership = buildPointMembership(currentGame());
+
     // Sort roster: current players first, then alphabetical
     const sortedRoster = [...currentTeam.teamRoster].sort((a, b) => {
-        const aInPoint = currentPlayers.includes(a.name);
-        const bInPoint = currentPlayers.includes(b.name);
+        const aInPoint = membership.onList(currentPlayers, a);
+        const bInPoint = membership.onList(currentPlayers, b);
         if (aInPoint && !bInPoint) return -1;
         if (!aInPoint && bInPoint) return 1;
         return a.name.localeCompare(b.name);
@@ -924,7 +929,7 @@ function populateSubPlayersTable() {
         checkboxCell.style.width = '40px';
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        checkbox.checked = currentPlayers.includes(player.name);
+        checkbox.checked = membership.onList(currentPlayers, player);
         checkbox.dataset.playerName = player.name;
         checkbox.addEventListener('change', updateSubPlayersCount);
         checkboxCell.appendChild(checkbox);
@@ -978,18 +983,37 @@ function confirmSubstitution() {
     }
     
     const checkboxes = document.querySelectorAll('#subPlayersTable input[type="checkbox"]');
-    const newPlayers = [];
-    
+    const checkedNames = [];
+
     checkboxes.forEach(cb => {
         if (cb.checked) {
-            newPlayers.push(cb.dataset.playerName);
+            checkedNames.push(cb.dataset.playerName);
         }
     });
-    
-    // Determine who came in and who went out
+
+    // Determine who came in and who went out. point.players entries may be
+    // names OR player ids depending on data era (see buildPlayerNameResolver)
+    // while the checkboxes always carry current roster names — diff on the
+    // resolved stable key, never on raw strings (a raw diff on an id-era
+    // point counted the whole line as "everyone out, everyone in"). Entries
+    // that stay keep their original stored form (same era-preserving
+    // convention as applyLineupCorrection); incoming players are recorded by
+    // name, today's write format.
     const previousPlayers = point.players || [];
-    const playersOut = previousPlayers.filter(p => !newPlayers.includes(p));
-    const playersIn = newPlayers.filter(p => !previousPlayers.includes(p));
+    const resolve = buildPlayerNameResolver(currentGame(), { quiet: true });
+    const prevByKey = new Map();
+    previousPlayers.forEach(entry => {
+        const key = resolve(entry);
+        if (!prevByKey.has(key)) prevByKey.set(key, entry);
+    });
+    const checkedKeys = new Set(checkedNames.map(name => resolve(name)));
+
+    const newPlayers = checkedNames.map(name => {
+        const prev = prevByKey.get(resolve(name));
+        return prev !== undefined ? prev : name;
+    });
+    const playersOut = previousPlayers.filter(entry => !checkedKeys.has(resolve(entry)));
+    const playersIn = checkedNames.filter(name => !prevByKey.has(resolve(name)));
 
     // Nothing changed
     if (playersOut.length === 0 && playersIn.length === 0) {
@@ -1042,18 +1066,21 @@ function confirmSubstitution() {
         point.possessions.push(currentPossession);
     }
 
-    // Create description for the substitution
+    // Create description for the substitution. playersOut may hold id-era
+    // entries — resolve to display names so the toast/log never shows raw ids.
+    const lookup = buildPointPlayerLookup(currentGame());
+    const firstNameOf = entry => lookup(entry).name.split(' ')[0];
     let subDescription = '';
     if (playersIn.length > 0 && playersOut.length > 0) {
         // Format: "Sub: Alice, Bob in for Charlie, Dave"
-        const inNames = playersIn.map(name => name.split(' ')[0]).join(', ');
-        const outNames = playersOut.map(name => name.split(' ')[0]).join(', ');
+        const inNames = playersIn.map(firstNameOf).join(', ');
+        const outNames = playersOut.map(firstNameOf).join(', ');
         subDescription = `Sub: ${inNames} in for ${outNames}`;
     } else if (playersIn.length > 0) {
-        const inNames = playersIn.map(name => name.split(' ')[0]).join(', ');
+        const inNames = playersIn.map(firstNameOf).join(', ');
         subDescription = `Sub: ${inNames} added`;
     } else if (playersOut.length > 0) {
-        const outNames = playersOut.map(name => name.split(' ')[0]).join(', ');
+        const outNames = playersOut.map(firstNameOf).join(', ');
         subDescription = `Sub: ${outNames} removed`;
     }
     

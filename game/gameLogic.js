@@ -7,7 +7,10 @@
 import { Role, Game, createRosterSnapshot, isTestGame } from '../store/models.js';
 import { currentTeam, currentEvent, saveAllTeamsData, serializeTeam } from '../store/storage.js';
 import { syncGameToCloud, deleteGameFromCloud } from '../store/sync.js';
-import { currentGame, getLatestPoint, getActivePossession, getPlayerFromName } from '../utils/helpers.js';
+import {
+    currentGame, getLatestPoint, getActivePossession, getPlayerFromName,
+    buildPointPlayerLookup,
+} from '../utils/helpers.js';
 import { buildGameLogText } from '../utils/gameLogRenderer.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { updatePanelsForGameState } from '../ui/panelSystem.js';
@@ -325,11 +328,15 @@ function summarizeGame() {
         versionInfo = `App Version: ${appVersion.version} (Build ${appVersion.build})\n`;
     }
     const game = currentGame();
+    // "Point N roster:" entries may be player ids (id-era games) — resolve to
+    // display names; event lines already carry resolved {name, id} refs.
+    const lookup = buildPointPlayerLookup(game);
     const summary = buildGameLogText(game, {
         teamName: game.team,
         opponentName: game.opponent,
         versionInfo,
         rosterNames: currentTeam.teamRoster.map(player => player.name),
+        resolvePlayerName: entry => lookup(entry).name,
     });
     log(summary);
     return summary;

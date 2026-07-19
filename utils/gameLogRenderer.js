@@ -42,6 +42,13 @@
  * @param {(point: object) => string|null} [options.scoreBadge] - returns a
  *   classification label ("break", "clean hold", …) to append to that point's
  *   "scores!" line as "  [label]", or null for none. Post-game summary surface.
+ * @param {(entry: string) => string} [options.resolvePlayerName] - maps a raw
+ *   point.players entry to a display name for the "Point N roster:" lines.
+ *   The entries are bare strings that are player NAMES in some data eras and
+ *   player IDS in others (see utils/helpers.js buildPlayerNameResolver);
+ *   callers pass buildPointPlayerLookup-based resolution so id-era rosters
+ *   don't print raw ids. Default null = print entries as stored (keeps this
+ *   module a pure leaf with no resolver dependency).
  * @returns {string}
  */
 function buildGameLogText(game, {
@@ -50,6 +57,7 @@ function buildGameLogText(game, {
     versionInfo = '',
     rosterNames = null,
     scoreBadge = null,
+    resolvePlayerName = null,
 } = {}) {
     let summary = versionInfo + `Game Summary: ${teamName} vs. ${opponentName}.\n`;
     if (rosterNames) {
@@ -68,7 +76,8 @@ function buildGameLogText(game, {
         let forceswap = false;
         numPoints += 1;
         summary += `\nPoint ${numPoints} roster:`;
-        (point.players || []).forEach(player => summary += ` ${player}`);
+        (point.players || []).forEach(player =>
+            summary += ` ${resolvePlayerName ? resolvePlayerName(player) : player}`);
         // indicate which team pulls and which receives (thus starting on offense)
         if (point.startingPosition === 'offense') {
             summary += `\n${opponentName} pulls to ${teamName}.`;

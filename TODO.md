@@ -89,16 +89,28 @@ cleanup items are no longer scattered across this file's sections. Status snapsh
      preserved — most plausibly a silent deny path). This is the § Game-core
      handoff-toast race; fix wants the durable per-request-id rework, holder-prompt path
      first (`game/controllerState.js` `updateLocalControllerState`).
-  2. 🔴 **Id-era `pendingNextLine` soft-locks Start Point.** On the real SWW-2 game the
-     stored line holds player IDs; the Line panel matches checkboxes by NAME → nothing
-     renders checked, the Next Line header shows raw ids ("Avery-mixr, …"), and
-     `getSelectedPlayersFromPanel` collects 0 players → "Please select players" on every
-     Start Point tap. Workaround: manually re-select the line. Fix: resolve line entries
-     through `buildPlayerNameResolver` (F2's era-resolver) at panel render + header +
-     collection. (G7's spec-07 flake — "a name where an id was expected" — is the same
-     era-resolution seam.)
-  3. 🟠 **Id-era display gaps:** game-log "Point N roster:" lines and the Next Line
-     header print raw ids for id-era games (names render fine in event lines).
+  2. ✅ **FIXED 2026-07-19** (branch `claude/clever-lewin-617873`) — **Id-era
+     `pendingNextLine` soft-locked Start Point.** Every place that compared stored
+     line/point entries to roster names now routes through F2's era resolver:
+     Line-panel checkbox render + On Deck projection (`membership.onList`), the
+     Next Line header, `checkPanelGenderRatio`, the injury-sub modal render AND
+     `confirmSubstitution`'s in/out diff (a raw diff on an id-era point counted the
+     whole line as everyone-out/everyone-in; staying entries now keep their stored
+     form, per the applyLineupCorrection convention). Re-verified live on the real
+     SWW-2 game via dev backend: boxes render checked, header shows names, Start
+     Point starts point 14 with id-era players preserved, sub in/out diff exact,
+     sub-undo still restores `point.players` verbatim, O/D toggle no longer wipes
+     the line. e2e spec 07 green (20/20 suite, retries as configured).
+  3. ✅ **FIXED 2026-07-19** (same branch) — **Id-era display gaps:** game-log
+     "Point N roster:" lines resolve to names via a new `resolvePlayerName` option
+     on `buildGameLogText` (renderer stays a pure leaf; summarizeGame +
+     renderGameSummaryEventLog pass `buildPointPlayerLookup` resolution — unit
+     tests pin it), and the Next Line header resolves via the same lookup.
+     Related seam left as-is deliberately: `updateScore`/`revertPointScore` still
+     match `point.players` by raw name for the legacy live counters
+     (totalPointsPlayed etc.) — symmetric no-ops on id-era games, and fixing one
+     side alone would corrupt (decrement stats never incremented); event-derived
+     stats already resolve correctly. Needs its own paired-migration session.
   4. 🟠 **Zombie point in real data:** SWW-2's stored point 13 has `winner` set +
      `startTimestamp` still running since Nov 2025 + 0 possessions → player Game-time
      shows ~352,7xx minutes (elapsed-since-November). The updateScore fix stops NEW
