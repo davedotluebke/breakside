@@ -282,8 +282,17 @@ const narrationRealtimeSession = (function() {
         }
         logPhase('session.update sent');
 
-        // 4. Open the microphone and start streaming
-        await startAudioCapture();
+        // 4. Open the microphone and start streaming. If capture fails
+        // (permission denied, no device), close the socket we just opened —
+        // otherwise it lingers listener-attached until OpenAI idle-times it
+        // out, and a quick retry can find stale state.
+        try {
+            await startAudioCapture();
+        } catch (err) {
+            try { if (ws) ws.close(); } catch (_) {}
+            ws = null;
+            throw err;
+        }
         logPhase('audio capture started');
 
         // The socket can die while getUserMedia is up — on iOS the permission
