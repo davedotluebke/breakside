@@ -9,6 +9,7 @@ import { currentGame, formatPlayerName, formatPlayTime } from '../utils/helpers.
 import {
     getGamePlayerStats, getGameTeamStats, formatTeamStatsLine, classifyPoint,
 } from '../utils/eventStats.js';
+import { buildGameLogText, renderGameLogHTML } from '../utils/gameLogRenderer.js';
 import { createTableSortController } from '../utils/tableSort.js';
 import { attachStatsColumnHelp } from '../utils/statsHelp.js';
 import {
@@ -325,7 +326,9 @@ function pointClassificationLabel(kind) {
 
 /**
  * Render the game event log below the stats table.
- * Uses the same line-formatting logic as the in-game Game Log panel.
+ * Same shared renderer as the in-game Game Log panel
+ * (utils/gameLogRenderer.js, G6 merge); this surface adds per-point
+ * classification badges and omits the version/roster header lines.
  */
 function renderGameSummaryEventLog(game) {
     const logEl = document.getElementById('gameSummaryEventLog');
@@ -334,121 +337,13 @@ function renderGameSummaryEventLog(game) {
     const teamName = game.team || 'My Team';
     const opponent = game.opponent || 'Opponent';
 
-    // Build summary text (same logic as summarizeGame but parameterized)
-    let summary = `Game Summary: ${teamName} vs. ${opponent}.\n`;
-    let numPoints = 0;
-    let runningScoreUs = 0;
-    let runningScoreThem = 0;
-    // How the current period opened — flips at each period break (halftime /
-    // switch sides); drives the "who pulls next" note. Mirrors summarizeGame.
-    let periodOpening = game.startingPosition;
-
-    (game.points || []).forEach(point => {
-        let switchsides = false;
-        let forceswap = false;
-        numPoints++;
-        summary += `\nPoint ${numPoints} roster:`;
-        (point.players || []).forEach(player => summary += ` ${player}`);
-
-        if (point.startingPosition === 'offense') {
-            summary += `\n${opponent} pulls to ${teamName}.`;
-        } else {
-            summary += `\n${teamName} pulls to ${opponent}.`;
-        }
-
-        // Events recorded AFTER the point ended (between-points timeouts,
-        // switch sides) are deferred past the score lines below so the log
-        // reads in real-world order (matches summarizeGame).
-        const afterPointLines = [];
-        (point.possessions || []).forEach(possession => {
-            (possession.events || []).forEach(event => {
-                // Halftime implies the side switch; two breaks on the same
-                // point cancel (accidental tap + correction), so toggle.
-                if (event.type === 'Other' && (event.switchsides_flag || event.halftime_flag)) {
-                    switchsides = !switchsides;
-                }
-                if (event.type === 'Other' && event.forceswap_flag) {
-                    forceswap = !forceswap;
-                }
-                if (event.type === 'Other' && event.betweenPoints) {
-                    if (typeof event.summarize === 'function') {
-                        afterPointLines.push(event.summarize());
-                    }
-                    return;
-                }
-                if (typeof event.summarize === 'function') {
-                    summary += `\n${event.summarize()}`;
-                }
-            });
-        });
-
-        const kindLabel = typeof classifyPoint === 'function'
-            ? pointClassificationLabel(classifyPoint(point)) : null;
-        const badgeSuffix = kindLabel ? `  [${kindLabel}]` : '';
-        if (point.winner === 'team') {
-            summary += `\n${teamName} scores!${badgeSuffix} `;
-            runningScoreUs++;
-        }
-        if (point.winner === 'opponent') {
-            summary += `\n${opponent} scores!${badgeSuffix} `;
-            runningScoreThem++;
-        }
-        if (point.winner) {
-            summary += `\nCurrent score: ${teamName} ${runningScoreUs}, ${opponent} ${runningScoreThem}`;
-        }
-        afterPointLines.forEach(line => summary += `\n${line}`);
-        // Manual Swap O & D corrections flip the period bookkeeping too
-        // (matches determineStartingPosition / summarizeGame).
-        if (forceswap) {
-            periodOpening = (periodOpening === 'offense') ? 'defense' : 'offense';
-        }
-        if (switchsides) {
-            // Period break: next point opens with the period-opening roles
-            // swapped, regardless of who won this point (matches
-            // determineStartingPosition).
-            periodOpening = (periodOpening === 'offense') ? 'defense' : 'offense';
-            if (periodOpening === 'offense') {
-                summary += `\n${teamName} will receive the pull and play O. `;
-            } else {
-                summary += `\n${teamName} will pull to ${opponent} and play D. `;
-            }
-        }
+    const summary = buildGameLogText(game, {
+        teamName,
+        opponentName: opponent,
+        scoreBadge: (point) => pointClassificationLabel(classifyPoint(point)),
     });
 
-    // Format lines with CSS classes (same pattern as updateGameLogEvents)
-    const lines = summary.split('\n');
-    let html = '';
-    for (const line of lines) {
-        if (!line.trim()) continue;
-
-        let lineClass = 'game-log-line';
-        if (line.includes(' scores!')) {
-            lineClass += ' game-log-score-event';
-            if (line.includes(teamName)) {
-                lineClass += ' game-log-us-scores';
-            } else {
-                lineClass += ' game-log-them-scores';
-            }
-        } else if (line.startsWith('Point ') && line.includes('roster:')) {
-            lineClass += ' game-log-point-header';
-        } else if (line.includes('Current score:')) {
-            lineClass += ' game-log-current-score';
-        } else if (line.includes('pulls to')) {
-            lineClass += ' game-log-pull';
-        } else if (line.startsWith('Game Summary:')) {
-            lineClass += ' game-log-header';
-        } else if (line.includes('roster:')) {
-            lineClass += ' game-log-roster';
-        }
-
-        // late-bound back-edge (escapeHtml's owner game/gameScreenSync.js lives
-        // "above" this layer — importing it would create a cycle via
-        // gameScreenEvents→gameSummary); the owner keeps its window shim.
-        const escaped = window.escapeHtml(line);
-        html += `<div class="${lineClass}">${escaped}</div>`;
-    }
-
-    logEl.innerHTML = html;
+    logEl.innerHTML = renderGameLogHTML(summary, teamName);
 }
 
 /**

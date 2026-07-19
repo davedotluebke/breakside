@@ -3,6 +3,7 @@
  * tables to surface a short explanation of the metric. Mouse-and-touch
  * friendly (works on desktop press-and-hold and phone long-press).
  */
+import { escapeHtml } from './gameLogRenderer.js';
 
 const STATS_COLUMN_HELP = {
     'Name':     { name: 'Player Name',
@@ -100,16 +101,13 @@ function showStatsHelpModal(help) {
     modal.id = 'statsHelpModal';
     modal.className = 'modal';
     modal.style.display = 'flex';
-    // late-bound back-edge (escapeHtml's owner game/gameScreenSync.js lives
-    // "above" this layer); see ARCHITECTURE.md § ES modules — the window shim
-    // at the owner is kept deliberately.
     modal.innerHTML = `
         <div class="modal-content stats-help-modal-content">
             <div class="dialog-header prominent-dialog-header">
-                <h2>${window.escapeHtml(help.name)}</h2>
+                <h2>${escapeHtml(help.name)}</h2>
                 <span class="close">&times;</span>
             </div>
-            <div class="stats-help-body">${window.escapeHtml(help.desc)}</div>
+            <div class="stats-help-body">${escapeHtml(help.desc)}</div>
         </div>
     `;
     document.body.appendChild(modal);
