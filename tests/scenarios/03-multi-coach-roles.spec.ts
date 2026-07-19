@@ -183,6 +183,63 @@ test.describe('multi-coach roles', () => {
     expect(state.myRole).toBe('activeCoach');
   });
 
+  test('holder page prompts on handoff; re-prompts after deny; silent takeover toasts', async ({ page, request }) => {
+    // Pins the three G11.1 handoff-toast fixes (branch fix-handoff-toast):
+    //  1. the holder's page shows the accept/deny prompt at all;
+    //  2. a second request after a deny prompts again (the old boolean
+    //     `handoffResolved` latch could suppress it entirely);
+    //  3. losing a role WITHOUT having asked (external takeover — what a
+    //     stale-expiry grab looks like to the holder's client) shows a
+    //     "took over" toast instead of silently greying out.
+    await page.goto(`/?${TEST_PARAMS}&testUserId=${COACH_A}`);
+    await expect(page.locator('#selectTeamScreen')).toBeVisible({ timeout: 10_000 });
+    await setupTeamWithPlayers(page, 'Handoff Prompt Team');
+    await startGame(page, 'offense');
+
+    const gameId = await getGameId(page);
+    await waitForGameOnServer(request, gameId, COACH_A);
+    expect((await pingAsCoach(request, gameId, COACH_A)).ok()).toBeTruthy();
+
+    // ── 1. Holder prompt appears ──
+    const claim1 = await claimRole(request, gameId, COACH_B, 'active');
+    expect((await claim1.json()).status).toBe('handoff_requested');
+    const toast = page.locator('#handoffToast');
+    await expect(toast).toBeVisible({ timeout: 6_000 }); // holder pings every 2s
+    await expect(toast).toContainText('wants to take over');
+
+    // Deny via the UI; server keeps the role with A and clears the handoff.
+    await toast.locator('.deny-btn').click();
+    await expect(toast).toBeHidden({ timeout: 3_000 });
+    const afterDeny = await getControllerState(request, gameId, COACH_A);
+    expect(afterDeny.state.activeCoach.userId).toBe(COACH_A);
+    expect(afterDeny.state.pendingHandoff).toBeNull();
+
+    // ── 2. A second request must prompt again (latch-deadlock regression) ──
+    const claim2 = await claimRole(request, gameId, COACH_B, 'active');
+    expect((await claim2.json()).status).toBe('handoff_requested');
+    await expect(toast).toBeVisible({ timeout: 6_000 });
+    // Accept this one via the UI: role transfers, and the DELIBERATE loss
+    // must NOT fire the "took over" toast (suppression check below).
+    await toast.locator('.accept-btn').click();
+    await expect(toast).toBeHidden({ timeout: 3_000 });
+    const afterAccept = await getControllerState(request, gameId, COACH_B);
+    expect(afterAccept.state.activeCoach.userId).toBe(COACH_B);
+    await page.waitForTimeout(2_500); // window in which a wrong loss toast would appear
+    await expect(page.locator('.toast', { hasText: 'took over' })).toHaveCount(0);
+
+    // ── 3. External takeover of A's remaining role (line) toasts the loss ──
+    // Release-as-A + claim-as-B via API: A's client never initiated anything,
+    // which is exactly how a stale-expiry takeover presents to it.
+    const rel = await request.post(`${BACKEND_URL}/api/games/${gameId}/release`, {
+      headers: coachHeaders(COACH_A),
+      data: { role: 'lineCoach' },
+    });
+    expect(rel.ok()).toBeTruthy();
+    expect((await claimRole(request, gameId, COACH_B, 'line')).ok()).toBeTruthy();
+    await expect(page.locator('.toast', { hasText: 'took over Next Line' }))
+      .toBeVisible({ timeout: 8_000 });
+  });
+
   test('handoff deny keeps role with original holder', async ({ page, request }) => {
     // Coach A creates game and holds both roles
     await page.goto(`/?${TEST_PARAMS}&testUserId=${COACH_A}`);

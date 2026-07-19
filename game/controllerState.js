@@ -176,9 +176,13 @@ async function releaseControllerRole(gameId, role) {
         
         if (response.ok) {
             const roleLabel = role === 'activeCoach' ? 'Active Coach' : 'Line Coach';
+            // Deliberate release — don't also fire the role-loss toast.
+            if (role === 'activeCoach' || role === 'lineCoach') {
+                suppressRoleLossToast[role] = true;
+            }
             showControllerToast(`Released ${roleLabel} role`, 'info');
-            updateLocalControllerState({ 
-                state: data.state, 
+            updateLocalControllerState({
+                state: data.state,
                 hasPendingHandoffForMe: false
             });
             return { success: true, ...data };
@@ -204,24 +208,37 @@ async function respondToHandoff(gameId, accept) {
             body: JSON.stringify({ accept })
         });
         const data = await response.json();
-        
+
         if (response.ok) {
             if (accept) {
+                // Deliberate transfer — don't also fire the role-loss toast.
+                const handedRole = controllerState.pendingHandoff?.role;
+                if (handedRole) {
+                    suppressRoleLossToast[handedRole] = true;
+                }
                 showControllerToast('Handoff accepted - role transferred', 'info');
-                updateLocalControllerState({ 
-                    state: data.state, 
+                updateLocalControllerState({
+                    state: data.state,
                     hasPendingHandoffForMe: false
                 });
             } else {
                 showControllerToast('Handoff denied', 'info');
-                updateLocalControllerState({ 
-                    state: data.state, 
+                updateLocalControllerState({
+                    state: data.state,
                     hasPendingHandoffForMe: false
                 });
             }
             hideHandoffRequestUI();
             return { success: true, ...data };
         } else {
+            // 400 with a reason (no_pending_handoff / not_holder): the server
+            // already resolved this handoff some other way (auto-approve,
+            // requester gone). Say so instead of failing silently — the
+            // outcome itself arrives via the next poll (role-loss toast or
+            // unchanged state).
+            log(`🎮 Handoff response rejected: ${data.detail || 'unknown reason'}`);
+            showControllerToast('Handoff was already resolved', 'info');
+            hideHandoffRequestUI();
             return { success: false, error: data.detail };
         }
     } catch (error) {
@@ -331,18 +348,23 @@ function updateLocalControllerState(data) {
         }
     }
     
+    // Surface role losses the user would otherwise never learn about
+    // (stale-expiry takeover, handoff auto-approve while this tab slept, …).
+    notifyRoleTransitions(previousState, controllerState, myUserId);
+
     // Trigger UI update (module-local function — the old typeof guard is moot)
     updateControllerUI(controllerState, previousState);
-    
+
     // Handle handoff UI based on server state
     if (controllerState.hasPendingHandoffForMe && controllerState.pendingHandoff) {
         // Server says there's a pending handoff for us
         showHandoffRequestUI(controllerState.pendingHandoff);
     } else {
-        // Server says no pending handoff - clear resolved flag and hide any toast
-        if (handoffResolved) {
-            log('🎮 Server confirmed handoff resolved, clearing flag');
-            handoffResolved = false;
+        // Server says no pending handoff - clear the resolved-key memory and
+        // hide any toast
+        if (lastResolvedHandoffKey) {
+            log('🎮 Server confirmed handoff resolved, clearing resolved key');
+            lastResolvedHandoffKey = null;
         }
         // Hide any lingering handoff toast
         if (handoffToastElement) {
@@ -353,6 +375,45 @@ function updateLocalControllerState(data) {
     // Adjust polling interval based on role
     if (currentGameIdForPolling) {
         adjustPollingInterval();
+    }
+}
+
+/**
+ * Toast when this user LOSES a role without having asked to (stale-expiry
+ * takeover, handoff auto-approve while the tab was throttled, any server-side
+ * transfer). Level-based: compares held-flags between consecutive local
+ * states, so a missed poll can't drop the notification — whichever update
+ * first observes the loss fires it. Deliberate losses (release, accepting a
+ * handoff) set suppressRoleLossToast first and stay silent. Gains already
+ * toast at their sources (claim/auto-assign/resolution paths).
+ */
+function notifyRoleTransitions(prev, next, myUserId) {
+    for (const role of ['activeCoach', 'lineCoach']) {
+        const had = role === 'activeCoach' ? prev.isActiveCoach : prev.isLineCoach;
+        const have = role === 'activeCoach' ? next.isActiveCoach : next.isLineCoach;
+        if (!had || have) continue;
+
+        if (suppressRoleLossToast[role]) {
+            suppressRoleLossToast[role] = false;
+            continue;
+        }
+
+        const holder = next[role];
+        const roleName = role === 'activeCoach' ? 'Play-by-Play' : 'Next Line';
+        // Dedupe on the specific takeover (role + new holder + their claim
+        // time) so racing fetch/ping updates toast at most once.
+        const key = `${role}|${holder?.userId || 'vacant'}|${holder?.claimedAt || ''}`;
+        if (key === lastRoleLossToastKey) continue;
+        lastRoleLossToastKey = key;
+
+        const takenByOther = holder && holder.userId !== myUserId;
+        const message = takenByOther
+            ? `${holder.displayName || 'Another coach'} took over ${roleName}`
+            : `You no longer hold ${roleName}`;
+        showControllerToast(message, 'warning', 6000);
+        if (typeof logEvent === 'function') {
+            logEvent(`🎮 ${message}`);
+        }
     }
 }
 
@@ -434,6 +495,22 @@ function stopControllerPolling() {
     // Drop any outstanding handoff request so its resolution toast can't leak
     // into a later game session.
     myOutstandingHandoff = null;
+    // Reset held-role flags and toast memories so the first poll of a LATER
+    // game can't read this game's roles as "just lost" (false loss toast) or
+    // suppress/dedupe against this game's handoffs.
+    controllerState = {
+        activeCoach: null,
+        lineCoach: null,
+        pendingHandoff: null,
+        isActiveCoach: false,
+        isLineCoach: false,
+        hasPendingHandoffForMe: false,
+        connectedCoaches: [],
+        lastUpdate: null
+    };
+    lastResolvedHandoffKey = null;
+    lastRoleLossToastKey = null;
+    suppressRoleLossToast = { activeCoach: false, lineCoach: false };
     log('🎮 Controller polling stopped');
 }
 
@@ -745,8 +822,22 @@ function getControllerState() {
 let handoffCountdownInterval = null;
 let handoffToastElement = null;
 let currentHandoffId = null; // Track which handoff we're showing to avoid duplicates
-let handoffResolved = false; // Prevent new toasts after accept/deny until server confirms
+// Key of the one handoff this client already resolved (accept/deny/expiry),
+// kept only until the server confirms no handoff is pending. Keyed — NOT a
+// boolean — so a *new* request (different key) always gets its prompt. The old
+// `handoffResolved` boolean deadlocked here: if it was ever left true when the
+// next request arrived, that request's prompt was suppressed for its entire
+// lifetime, because the reset only runs in the no-pending branch (G11.1 bug).
+let lastResolvedHandoffKey = null;
 let handoffRequestSentToast = null; // Track "handoff request sent" toast for auto-dismiss
+
+// Role-loss notification state. Losing a role is detected as a *level*
+// transition (held in previousState → not held now) rather than an inferred
+// event, so it survives missed polls; the dedupe key prevents re-toasting the
+// same takeover when several updates race. Deliberate hand-offs (release,
+// accept) suppress the next loss toast for that role.
+let suppressRoleLossToast = { activeCoach: false, lineCoach: false };
+let lastRoleLossToastKey = null;
 
 // Handoff timeout - fetched from server, fallback to 10s
 let handoffTimeoutSeconds = 10;
@@ -1083,14 +1174,17 @@ function showHandoffRequestUI(handoff) {
         return;
     }
     
-    // Don't create new toasts if we just resolved a handoff (wait for server to confirm)
-    if (handoffResolved) {
-        log('🎮 Handoff already resolved, waiting for server confirmation');
-        return;
-    }
-    
     // Create unique ID for this handoff to avoid duplicates from polling
     const handoffId = `${handoff.requesterId}-${handoff.role}-${handoff.requestedAt}`;
+
+    // Skip only the SPECIFIC handoff we already resolved locally (waiting for
+    // the server to confirm). A different key is a new request and must always
+    // prompt — the old boolean version of this guard could suppress a fresh
+    // request entirely (G11.1 latch deadlock).
+    if (handoffId === lastResolvedHandoffKey) {
+        log('🎮 Handoff already resolved locally, waiting for server confirmation');
+        return;
+    }
     
     // If we're already showing this exact handoff, don't recreate
     if (currentHandoffId === handoffId && handoffToastElement && handoffToastElement.parentElement) {
@@ -1134,7 +1228,9 @@ function showHandoffRequestUI(handoff) {
     const denyBtn = toast.querySelector('.deny-btn');
     const countdownOverlay = toast.querySelector('.countdown-overlay');
     
-    // Cleanup function - marks handoff as resolved to prevent recreation
+    // Cleanup function - remembers THIS handoff as resolved to prevent
+    // recreation until the server confirms it's gone (keyed, so a new
+    // request still prompts)
     const cleanup = () => {
         log('🎮 Cleaning up handoff toast');
         clearInterval(handoffCountdownInterval);
@@ -1143,8 +1239,8 @@ function showHandoffRequestUI(handoff) {
             toast.remove();
         }
         handoffToastElement = null;
+        lastResolvedHandoffKey = currentHandoffId;
         currentHandoffId = null;
-        handoffResolved = true; // Prevent recreation until server confirms no pending handoff
     };
     
     // Accept handler
@@ -1193,10 +1289,22 @@ function showHandoffRequestUI(handoff) {
         countdownOverlay.style.background = `linear-gradient(to bottom, var(--color-success) 0%, var(--color-success) ${fillPercent}%, transparent ${fillPercent}%, transparent 100%)`;
         
         if (remaining <= 0) {
-            // Auto-accept: show click animation then accept
-            log('🎮 Countdown complete, auto-accepting');
             clearInterval(handoffCountdownInterval);
             handoffCountdownInterval = null;
+            // Throttled-tab guard: this timer can fire long after expiry (a
+            // hidden tab's timers are coalesced/paused, then flushed on
+            // re-front). By then the server has already auto-approved and
+            // moved on — POSTing an accept for a gone handoff just 400s, and
+            // a toast about it would be noise. Only auto-accept if our local
+            // state still shows this exact handoff pending.
+            const stillCurrent = getHandoffKey(controllerState.pendingHandoff) === currentHandoffId;
+            if (!stillCurrent) {
+                log('🎮 Countdown expired for an already-resolved handoff — cleaning up silently');
+                cleanup();
+                return;
+            }
+            // Auto-accept: show click animation then accept
+            log('🎮 Countdown complete, auto-accepting');
             acceptBtn.classList.add('auto-clicked');
             setTimeout(() => {
                 handleAcceptLocal();
