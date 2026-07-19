@@ -20,6 +20,7 @@ import { currentGame } from '../utils/helpers.js';
 // call time, and neither top level calls into the other at eval time.
 import { showControllerToast } from '../game/controllerState.js';
 import { mergePendingNextLine } from './pendingLineLogic.js';
+import { makeAuthFetch } from './authFetchLogic.js';
 import { log } from '../utils/logger.js';
 
 // =============================================================================
@@ -76,36 +77,42 @@ function getApiBaseUrl() {
 const API_BASE_URL = getApiBaseUrl();
 log(`📡 Sync API URL: ${API_BASE_URL}`);
 
+// The fetch/auth/retry mechanics live in store/authFetchLogic.js (pure,
+// unit-tested). The deps below are all late-bound: window.breakside.auth is
+// the documented upward-call surface into the auth layer, read at request
+// time, so eval order doesn't matter. In test mode getAccessToken() yields
+// null (no supabaseClient) and forceRefreshSession() refuses to run, so
+// test-mode requests go out exactly as before — no bearer, no retry.
+const authFetchCore = makeAuthFetch({
+    fetchFn: (url, init) => fetch(url, init),
+    getToken: async () => {
+        try {
+            return (await window.breakside?.auth?.getAccessToken?.()) ?? null;
+        } catch (e) {
+            // Auth not available, continue without
+            log('Auth not available for request');
+            return null;
+        }
+    },
+    forceRefreshToken: async () => {
+        const session = await window.breakside?.auth?.forceRefreshSession?.();
+        return session?.access_token || null;
+    },
+    warn: (...args) => console.warn(...args),
+});
+
 /**
- * Make an authenticated fetch request if auth is available
- * Falls back to regular fetch if not authenticated
+ * Make an authenticated fetch request if auth is available.
+ * Falls back to regular fetch if not authenticated.
+ * On a 401 with a bearer attached, forces one session refresh and retries the
+ * request once (concurrent 401s share a single refresh) — the pre-C8 401-retry
+ * variant's semantics, restored here by G4; see store/authFetchLogic.js.
  * @param {string} url - Request URL
  * @param {object} options - Fetch options
  * @returns {Promise<Response>}
  */
 async function authFetch(url, options = {}) {
-    const headers = {
-        ...options.headers,
-        'Content-Type': 'application/json',
-    };
-    
-    // Add auth header if available
-    if (window.breakside?.auth?.getAccessToken) {
-        try {
-            const token = await window.breakside.auth.getAccessToken();
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            }
-        } catch (e) {
-            // Auth not available, continue without
-            log('Auth not available for request');
-        }
-    }
-    
-    const response = await fetch(url, {
-        ...options,
-        headers
-    });
+    const response = await authFetchCore(url, options);
 
     // Self-heal a stale offline flag. isOnline can be set false by a single
     // transient fetch failure in the sync queue (or a missed browser 'online'
