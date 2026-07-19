@@ -17,6 +17,7 @@ import {
 } from './models.js';
 import { getPlayerFromName, currentGame } from '../utils/helpers.js';
 import { log } from '../utils/logger.js';
+import { normalizePointTimers } from './pointTimerNormalizer.js';
 
 /**
  * Serialize an event to JSON
@@ -408,7 +409,7 @@ function normalizeAlternateGenderRatio(value) {
  * @returns {Array} Array of Point instances
  */
 function deserializePointsFromServer(pointsData) {
-    return (pointsData || []).map(pointData => {
+    const points = (pointsData || []).map(pointData => {
         const point = new Point(pointData.players || [], pointData.startingPosition);
         point.startTimestamp = pointData.startTimestamp ? new Date(pointData.startTimestamp) : null;
         point.endTimestamp = pointData.endTimestamp ? new Date(pointData.endTimestamp) : null;
@@ -431,6 +432,14 @@ function deserializePointsFromServer(pointsData) {
         point.modes = point.getModes();  // derive from restored possessions (empty for legacy data)
         return point;
     });
+    // Repair zombie running timers left by pre-2026-07 score-path bugs (why
+    // + rules: store/pointTimerNormalizer.js). Every load path funnels
+    // through here, and the repaired state persists on the next save/sync.
+    const repaired = normalizePointTimers(points);
+    if (repaired > 0) {
+        log(`Normalized ${repaired} stale running point timer(s) on load`);
+    }
+    return points;
 }
 
 /**
