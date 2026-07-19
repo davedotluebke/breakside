@@ -59,13 +59,14 @@ cleanup items are no longer scattered across this file's sections. Status snapsh
   Measured: 4/64 failures before → 0/64 after (retries=0, repeat-each=8). The suite's
   `retries: 2` can likely drop after a burn-in period. Known coverage gap: the
   `visibilitychange` wake handler is still not exercised (see 04's header; overlaps G11.1).
-- **Needs Dave — staging `/join/{code}` fix (G11.5).** Root cause found 2026-07-19: it's
-  the **S3 website config**, not CloudFront — prod's bucket has
-  `ErrorDocument: index.html` (SPA fallback), staging's lacks it, so `/join/<code>` returns
-  a raw S3 `NoSuchKey` page on staging. One-liner fix (needs creds beyond the
-  `github_actions` IAM user):
-  `aws s3api put-bucket-website --bucket staging.breakside.pro --website-configuration '{"IndexDocument":{"Suffix":"index.html"},"ErrorDocument":{"Key":"index.html"}}'`
-  then invalidate `/join/*` on distribution `E12N2STN9MM8FA`.
+- **FIXED 2026-07-19 — staging `/join/{code}` (G11.5).** Root cause was the **S3 website
+  config**, not CloudFront: prod's bucket had `ErrorDocument: index.html` (SPA fallback),
+  staging's lacked it. Dave applied `put-bucket-website` on `staging.breakside.pro`
+  (IndexDocument + ErrorDocument both `index.html`) and invalidated `/join/*` on
+  distribution `E12N2STN9MM8FA`. Verified: `get-bucket-website` shows the config, and
+  `staging.breakside.pro/join/<code>` now serves the app's `index.html` byte-identical to
+  prod (both via S3's ErrorDocument mechanism, which returns HTTP 404 with the SPA body —
+  prod has always worked this way).
 - **Needs Dave — prod stats spot-check (G8).** Verifying CUDO Spring 26 / Flickers /
   Mumbo Sauce survived the name→ID stats migration needs a prod data read (SSH key auth);
   blocked for agents. Run the F2-style old-vs-new replay against
