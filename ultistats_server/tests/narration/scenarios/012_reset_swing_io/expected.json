@@ -3,12 +3,13 @@
     "kind": "throw",
     "thrower": "Alice",
     "receiver": "Bob",
-    "dump": true
+    "reset": true
   },
   {
     "kind": "throw",
     "thrower": "Bob",
-    "receiver": "Carla"
+    "receiver": "Carla",
+    "swing": true
   },
   {
     "kind": "throw",

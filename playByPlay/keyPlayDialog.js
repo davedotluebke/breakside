@@ -72,7 +72,7 @@ function createKeyPlayPanels() {
         { text: 'huck', fullWidth: false },
         { text: 'break', fullWidth: false },
         { text: 'hammer', fullWidth: false },
-        { text: 'dump', fullWidth: false },
+        { text: 'reset', fullWidth: false },
         { text: 'layout', fullWidth: false },
         { text: 'sky', fullWidth: false },
         { text: 'score', fullWidth: true }
@@ -657,7 +657,7 @@ function createKeyPlayThrowEvent() {
         {
             huck: throwSubButtons.includes('throw-huck'),
             breakmark: throwSubButtons.includes('throw-break'),
-            dump: throwSubButtons.includes('throw-dump'),
+            reset: throwSubButtons.includes('throw-reset'),
             hammer: throwSubButtons.includes('throw-hammer'),
             sky: throwSubButtons.includes('throw-sky'),
             layout: throwSubButtons.includes('throw-layout'),

@@ -934,14 +934,16 @@ The ADD `event` object has shape:
 {
   "kind": "throw" | "turnover" | "defense" | "opponent_score",
   "thrower": "Alice", "receiver": "Bob",
-  "huck": true, "break_throw": false, "dump": false, "hammer": false,
-  "sky": false, "layout": false, "score": true,
+  "huck": true, "break_throw": false, "reset": false, "swing": false,
+  "hammer": false, "sky": false, "layout": false, "score": true,
   // turnover-specific:  "throwaway", "drop", "good_defense", "stall"
   // defense-specific:   "defender", "interception", "callahan"
 }
 ```
 
 Player names must match roster entries exactly. The slow-pass prompt explicitly tells Claude to emit bare names (not `"Alice #7"`) — this was a real bug caught by the test harness on its first run.
+
+Terminology: **"reset" is the canonical name** for the short backward pass (2026-07-19 design call) — in the schema, the `Throw.reset_flag` field, log lines, chips, and stats alike. Coaches saying "dump" set the same `reset` field (the prompt says so explicitly), and games stored before the rename carry `dump_flag`, which `deserializeEvent` aliases onto `reset_flag` (the public viewer, which renders raw server JSON, checks both).
 
 The fast-pass `AMEND` operation is intentionally not emitted by the prompt; corrections are always expressed as `RETRACT` + `ADD` pairs for auditability. The frontend keeps a defensive `AMEND` handler (treats it as retract) in case Claude ignores instructions.
 
