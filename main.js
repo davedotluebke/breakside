@@ -65,6 +65,7 @@ import './auth/loginScreen.js';
 import './store/models.js';
 import './store/pendingLineLogic.js';
 import './store/authFetchLogic.js';
+import './store/pointTimerNormalizer.js';
 import './utils/helpers.js';
 import { currentTeam } from './store/storage.js';
 import './store/sync.js';
