@@ -1,60 +1,72 @@
 """
 Integration tests for API endpoints.
 
+All data-plane routes live under the /api/ prefix (see routers/) — the
+tests hit those exact paths. Only /health and the /api info endpoint are
+unprefixed specials.
+
 Run with: cd ultistats_server && python -m pytest test_api.py -v
 """
 import pytest
 import json
-import tempfile
-import shutil
-from pathlib import Path
 from fastapi.testclient import TestClient
-
-# Create test data directory
-_test_data_dir = None
-
-
-@pytest.fixture(scope="module")
-def test_data_dir():
-    """Create a temporary data directory for tests."""
-    global _test_data_dir
-    _test_data_dir = tempfile.mkdtemp(prefix="ultistats_api_test_")
-    yield Path(_test_data_dir)
-    
-    # Cleanup
-    if _test_data_dir and Path(_test_data_dir).exists():
-        shutil.rmtree(_test_data_dir)
-
 
 MOCK_USER = {"id": "test-admin-user", "email": "admin@test.com", "role": "authenticated"}
 
 
 @pytest.fixture(scope="module")
-def client(test_data_dir):
-    """Create a test client with patched data directory and mock auth."""
-    # Patch config before importing app
-    import config
-    config.DATA_DIR = test_data_dir
-    config.GAMES_DIR = test_data_dir / "games"
-    config.TEAMS_DIR = test_data_dir / "teams"
-    config.PLAYERS_DIR = test_data_dir / "players"
-    config.USERS_DIR = test_data_dir / "users"
-    config.MEMBERSHIPS_DIR = test_data_dir / "memberships"
-    config.SHARES_DIR = test_data_dir / "shares"
-    config.INVITES_DIR = test_data_dir / "invites"
-    config.INDEX_FILE = test_data_dir / "index.json"
+def client(tmp_path_factory):
+    """TestClient against an isolated temp data dir, with mock admin auth.
 
-    # Create directories
-    config.GAMES_DIR.mkdir(parents=True, exist_ok=True)
-    config.TEAMS_DIR.mkdir(parents=True, exist_ok=True)
-    config.PLAYERS_DIR.mkdir(parents=True, exist_ok=True)
-    config.USERS_DIR.mkdir(parents=True, exist_ok=True)
-    config.MEMBERSHIPS_DIR.mkdir(parents=True, exist_ok=True)
-    config.SHARES_DIR.mkdir(parents=True, exist_ok=True)
-    config.INVITES_DIR.mkdir(parents=True, exist_ok=True)
+    Storage modules capture their dir constants at import time
+    (``GAMES_DIR = config.GAMES_DIR`` — see storage/_config.py), so patching
+    ``config.*`` alone does nothing once they're loaded: writes would land in
+    the repo's real ``data/`` directory. Patch both config and each storage
+    module's captured global, and restore everything (including
+    ``app.dependency_overrides``) on teardown so later test modules see
+    pristine state.
+    """
+    data_dir = tmp_path_factory.mktemp("api_test_data")
+
+    import config
+    from storage import (
+        game_storage, team_storage, player_storage, user_storage,
+        membership_storage, share_storage, invite_storage, index_storage,
+    )
+
+    patches = [
+        (config, "DATA_DIR", data_dir),
+        (config, "GAMES_DIR", data_dir / "games"),
+        (config, "TEAMS_DIR", data_dir / "teams"),
+        (config, "PLAYERS_DIR", data_dir / "players"),
+        (config, "USERS_DIR", data_dir / "users"),
+        (config, "MEMBERSHIPS_DIR", data_dir / "memberships"),
+        (config, "SHARES_DIR", data_dir / "shares"),
+        (config, "INVITES_DIR", data_dir / "invites"),
+        (config, "INDEX_FILE", data_dir / "index.json"),
+        (game_storage, "GAMES_DIR", data_dir / "games"),
+        (team_storage, "TEAMS_DIR", data_dir / "teams"),
+        (player_storage, "PLAYERS_DIR", data_dir / "players"),
+        (user_storage, "USERS_DIR", data_dir / "users"),
+        (membership_storage, "MEMBERSHIPS_DIR", data_dir / "memberships"),
+        (membership_storage, "INDEX_FILE", data_dir / "memberships" / "_index.json"),
+        (share_storage, "SHARES_DIR", data_dir / "shares"),
+        (share_storage, "INDEX_FILE", data_dir / "shares" / "_index.json"),
+        (invite_storage, "INVITES_DIR", data_dir / "invites"),
+        (invite_storage, "INDEX_FILE", data_dir / "invites" / "_index.json"),
+        (index_storage, "INDEX_FILE", data_dir / "index.json"),
+        (index_storage, "GAMES_DIR", data_dir / "games"),
+        (index_storage, "TEAMS_DIR", data_dir / "teams"),
+        (index_storage, "PLAYERS_DIR", data_dir / "players"),
+    ]
+    saved = [(mod, name, getattr(mod, name)) for mod, name, _ in patches]
+    for mod, name, value in patches:
+        if name.endswith("_DIR"):
+            value.mkdir(parents=True, exist_ok=True)
+        setattr(mod, name, value)
 
     # Create admin user in storage so is_admin() returns True
-    user_file = config.USERS_DIR / f"{MOCK_USER['id']}.json"
+    user_file = data_dir / "users" / f"{MOCK_USER['id']}.json"
     with open(user_file, 'w') as f:
         json.dump({"id": MOCK_USER["id"], "email": MOCK_USER["email"], "isAdmin": True}, f)
 
@@ -65,7 +77,11 @@ def client(test_data_dir):
     app.dependency_overrides[get_current_user] = lambda: MOCK_USER
     app.dependency_overrides[get_optional_user] = lambda: MOCK_USER
 
-    return TestClient(app)
+    yield TestClient(app)
+
+    app.dependency_overrides.clear()
+    for mod, name, original in saved:
+        setattr(mod, name, original)
 
 
 # =============================================================================
@@ -98,7 +114,7 @@ class TestPlayerAPI:
     """Tests for player API endpoints."""
     
     def test_create_player(self, client):
-        """Test POST /players creates a new player."""
+        """Test POST /api/players creates a new player."""
         response = client.post("/api/players", json={
             "name": "TestPlayer",
             "gender": "MMP",
@@ -133,7 +149,7 @@ class TestPlayerAPI:
         assert "name" in response.json()["detail"].lower()
     
     def test_get_player(self, client):
-        """Test GET /players/{player_id} returns player data."""
+        """Test GET /api/players/{player_id} returns player data."""
         # First create a player
         create_response = client.post("/api/players", json={
             "name": "GetTestPlayer",
@@ -142,7 +158,7 @@ class TestPlayerAPI:
         player_id = create_response.json()["player_id"]
         
         # Then get it
-        response = client.get(f"/players/{player_id}")
+        response = client.get(f"/api/players/{player_id}")
         
         assert response.status_code == 200
         assert response.json()["name"] == "GetTestPlayer"
@@ -150,12 +166,12 @@ class TestPlayerAPI:
     
     def test_get_player_not_found(self, client):
         """Test that getting a non-existent player returns 404."""
-        response = client.get("/players/NonExistent-9999")
+        response = client.get("/api/players/NonExistent-9999")
         
         assert response.status_code == 404
     
     def test_list_players(self, client):
-        """Test GET /players returns list of players."""
+        """Test GET /api/players returns list of players."""
         # Create a few players
         client.post("/api/players", json={"name": "ListPlayer1"})
         client.post("/api/players", json={"name": "ListPlayer2"})
@@ -169,13 +185,13 @@ class TestPlayerAPI:
         assert data["count"] >= 2
     
     def test_update_player(self, client):
-        """Test PUT /players/{player_id} updates player data."""
+        """Test PUT /api/players/{player_id} updates player data."""
         # Create player
         create_response = client.post("/api/players", json={"name": "UpdateMe"})
         player_id = create_response.json()["player_id"]
         
         # Update
-        response = client.put(f"/players/{player_id}", json={
+        response = client.put(f"/api/players/{player_id}", json={
             "name": "Updated",
             "number": "42"
         })
@@ -185,23 +201,23 @@ class TestPlayerAPI:
         assert response.json()["player"]["number"] == "42"
     
     def test_delete_player(self, client):
-        """Test DELETE /players/{player_id} removes player."""
+        """Test DELETE /api/players/{player_id} removes player."""
         # Create player
         create_response = client.post("/api/players", json={"name": "DeleteMe"})
         player_id = create_response.json()["player_id"]
         
         # Delete
-        response = client.delete(f"/players/{player_id}")
+        response = client.delete(f"/api/players/{player_id}")
         
         assert response.status_code == 200
         assert response.json()["status"] == "deleted"
         
         # Verify it's gone
-        get_response = client.get(f"/players/{player_id}")
+        get_response = client.get(f"/api/players/{player_id}")
         assert get_response.status_code == 404
     
     def test_get_player_games(self, client):
-        """Test GET /players/{player_id}/games returns player's games."""
+        """Test GET /api/players/{player_id}/games returns player's games."""
         # Create player
         create_response = client.post("/api/players", json={
             "id": "GamePlayer-test",
@@ -210,7 +226,7 @@ class TestPlayerAPI:
         player_id = create_response.json()["player_id"]
         
         # Create a game with this player
-        client.post("/games/test-player-game/sync", json={
+        client.post("/api/games/test-player-game/sync", json={
             "team": "TestTeam",
             "opponent": "Opponent",
             "teamId": "TestTeam-1234",
@@ -221,10 +237,10 @@ class TestPlayerAPI:
         })
         
         # Rebuild index
-        client.post("/index/rebuild")
+        client.post("/api/index/rebuild")
         
         # Get player's games
-        response = client.get(f"/players/{player_id}/games")
+        response = client.get(f"/api/players/{player_id}/games")
         
         assert response.status_code == 200
         data = response.json()
@@ -240,7 +256,7 @@ class TestTeamAPI:
     """Tests for team API endpoints."""
     
     def test_create_team(self, client):
-        """Test POST /teams creates a new team."""
+        """Test POST /api/teams creates a new team."""
         response = client.post("/api/teams", json={
             "name": "TestTeam",
             "playerIds": []
@@ -273,23 +289,23 @@ class TestTeamAPI:
         assert "name" in response.json()["detail"].lower()
     
     def test_get_team(self, client):
-        """Test GET /teams/{team_id} returns team data."""
+        """Test GET /api/teams/{team_id} returns team data."""
         create_response = client.post("/api/teams", json={"name": "GetTestTeam"})
         team_id = create_response.json()["team_id"]
         
-        response = client.get(f"/teams/{team_id}")
+        response = client.get(f"/api/teams/{team_id}")
         
         assert response.status_code == 200
         assert response.json()["name"] == "GetTestTeam"
     
     def test_get_team_not_found(self, client):
         """Test that getting a non-existent team returns 404."""
-        response = client.get("/teams/NonExistent-9999")
+        response = client.get("/api/teams/NonExistent-9999")
         
         assert response.status_code == 404
     
     def test_list_teams(self, client):
-        """Test GET /teams returns list of teams."""
+        """Test GET /api/teams returns list of teams."""
         client.post("/api/teams", json={"name": "ListTeam1"})
         client.post("/api/teams", json={"name": "ListTeam2"})
         
@@ -302,11 +318,11 @@ class TestTeamAPI:
         assert data["count"] >= 2
     
     def test_update_team(self, client):
-        """Test PUT /teams/{team_id} updates team data."""
+        """Test PUT /api/teams/{team_id} updates team data."""
         create_response = client.post("/api/teams", json={"name": "UpdateTeam"})
         team_id = create_response.json()["team_id"]
         
-        response = client.put(f"/teams/{team_id}", json={
+        response = client.put(f"/api/teams/{team_id}", json={
             "name": "UpdatedTeam",
             "playerIds": ["Player-1234"]
         })
@@ -316,20 +332,20 @@ class TestTeamAPI:
         assert response.json()["team"]["playerIds"] == ["Player-1234"]
     
     def test_delete_team(self, client):
-        """Test DELETE /teams/{team_id} removes team."""
+        """Test DELETE /api/teams/{team_id} removes team."""
         create_response = client.post("/api/teams", json={"name": "DeleteTeam"})
         team_id = create_response.json()["team_id"]
         
-        response = client.delete(f"/teams/{team_id}")
+        response = client.delete(f"/api/teams/{team_id}")
         
         assert response.status_code == 200
         assert response.json()["status"] == "deleted"
         
-        get_response = client.get(f"/teams/{team_id}")
+        get_response = client.get(f"/api/teams/{team_id}")
         assert get_response.status_code == 404
     
     def test_get_team_players(self, client):
-        """Test GET /teams/{team_id}/players returns resolved players."""
+        """Test GET /api/teams/{team_id}/players returns resolved players."""
         # Create players first
         p1 = client.post("/api/players", json={"id": "TeamP1-test", "name": "Player1"})
         p2 = client.post("/api/players", json={"id": "TeamP2-test", "name": "Player2"})
@@ -342,7 +358,7 @@ class TestTeamAPI:
         team_id = team_response.json()["team_id"]
         
         # Get team players
-        response = client.get(f"/teams/{team_id}/players")
+        response = client.get(f"/api/teams/{team_id}/players")
         
         assert response.status_code == 200
         data = response.json()
@@ -352,7 +368,7 @@ class TestTeamAPI:
         assert "Player2" in names
     
     def test_get_team_active_game_no_games(self, client):
-        """Test GET /teams/{team_id}/active-game returns 404 when no games exist."""
+        """Test GET /api/teams/{team_id}/active-game returns 404 when no games exist."""
         team_response = client.post("/api/teams", json={
             "id": "NoGames-Team",
             "name": "NoGamesTeam"
@@ -364,7 +380,7 @@ class TestTeamAPI:
         assert response.status_code == 404
 
     def test_get_team_active_game_ended_game(self, client):
-        """Test GET /teams/{team_id}/active-game returns 404 when game has ended."""
+        """Test GET /api/teams/{team_id}/active-game returns 404 when game has ended."""
         from datetime import datetime
         team_response = client.post("/api/teams", json={
             "id": "EndedGame-Team",
@@ -387,7 +403,7 @@ class TestTeamAPI:
         assert response.status_code == 404
 
     def test_get_team_active_game_success(self, client):
-        """Test GET /teams/{team_id}/active-game returns active game."""
+        """Test GET /api/teams/{team_id}/active-game returns active game."""
         from datetime import datetime
         team_response = client.post("/api/teams", json={
             "id": "ActiveGame-Team",
@@ -417,7 +433,7 @@ class TestTeamAPI:
         assert "lastActivity" in data
 
     def test_get_team_active_game_old_game(self, client):
-        """Test GET /teams/{team_id}/active-game returns 404 for game older than 6 hours."""
+        """Test GET /api/teams/{team_id}/active-game returns 404 for game older than 6 hours."""
         team_response = client.post("/api/teams", json={
             "id": "OldGame-Team",
             "name": "OldGameTeam"
@@ -438,7 +454,7 @@ class TestTeamAPI:
         assert response.status_code == 404
 
     def test_get_team_active_game_no_points(self, client):
-        """Test GET /teams/{team_id}/active-game returns 404 when game has no points."""
+        """Test GET /api/teams/{team_id}/active-game returns 404 when game has no points."""
         from datetime import datetime
         team_response = client.post("/api/teams", json={
             "id": "NoPoints-Team",
@@ -460,12 +476,12 @@ class TestTeamAPI:
         assert response.status_code == 404
 
     def test_get_team_active_game_team_not_found(self, client):
-        """Test GET /teams/{team_id}/active-game returns 404 for nonexistent team."""
+        """Test GET /api/teams/{team_id}/active-game returns 404 for nonexistent team."""
         response = client.get("/api/teams/nonexistent-team-xyz/active-game")
         assert response.status_code == 404
 
     def test_get_team_games(self, client):
-        """Test GET /teams/{team_id}/games returns team's games."""
+        """Test GET /api/teams/{team_id}/games returns team's games."""
         # Create team
         team_response = client.post("/api/teams", json={
             "id": "GamesTeam-test",
@@ -474,7 +490,7 @@ class TestTeamAPI:
         team_id = team_response.json()["team_id"]
         
         # Create game for this team
-        client.post("/games/team-test-game/sync", json={
+        client.post("/api/games/team-test-game/sync", json={
             "team": "GamesTeam",
             "opponent": "Opponent",
             "teamId": team_id,
@@ -482,10 +498,10 @@ class TestTeamAPI:
         })
         
         # Rebuild index
-        client.post("/index/rebuild")
+        client.post("/api/index/rebuild")
         
         # Get team's games
-        response = client.get(f"/teams/{team_id}/games")
+        response = client.get(f"/api/teams/{team_id}/games")
         
         assert response.status_code == 200
         assert "team-test-game" in response.json()["game_ids"]
@@ -499,9 +515,10 @@ class TestGameAPI:
     """Tests for game API endpoints."""
     
     def test_sync_game(self, client):
-        """Test POST /games/{game_id}/sync creates/updates game."""
-        response = client.post("/games/api-test-game/sync", json={
+        """Test POST /api/games/{game_id}/sync creates/updates game."""
+        response = client.post("/api/games/api-test-game/sync", json={
             "team": "TestTeam",
+            "teamId": "SyncTeam-0001",
             "opponent": "Opponent",
             "scores": {"team": 0, "opponent": 0},
             "points": []
@@ -514,23 +531,24 @@ class TestGameAPI:
         assert "version" in data
     
     def test_sync_game_without_team_fails(self, client):
-        """Test that syncing without team returns 400."""
-        response = client.post("/games/invalid-game/sync", json={
+        """Test that syncing without team/teamId returns 400."""
+        response = client.post("/api/games/invalid-game/sync", json={
             "opponent": "Opponent"
         })
         
         assert response.status_code == 400
     
     def test_get_game(self, client):
-        """Test GET /games/{game_id} returns game data."""
+        """Test GET /api/games/{game_id} returns game data."""
         # Create game first
-        client.post("/games/get-test-game/sync", json={
+        client.post("/api/games/get-test-game/sync", json={
             "team": "GetTeam",
+            "teamId": "GetTeam-0001",
             "opponent": "GetOpponent",
             "points": []
         })
         
-        response = client.get("/games/get-test-game")
+        response = client.get("/api/games/get-test-game")
         
         assert response.status_code == 200
         assert response.json()["team"] == "GetTeam"
@@ -538,14 +556,15 @@ class TestGameAPI:
     
     def test_get_game_not_found(self, client):
         """Test that getting a non-existent game returns 404."""
-        response = client.get("/games/nonexistent-game")
+        response = client.get("/api/games/nonexistent-game")
         
         assert response.status_code == 404
     
     def test_list_games(self, client):
-        """Test GET /games returns list of games."""
-        client.post("/games/list-game-1/sync", json={
+        """Test GET /api/games returns list of games."""
+        client.post("/api/games/list-game-1/sync", json={
             "team": "ListTeam",
+            "teamId": "ListTeam-0001",
             "opponent": "Opp1",
             "points": []
         })
@@ -558,30 +577,32 @@ class TestGameAPI:
         assert len(data["games"]) >= 1
     
     def test_delete_game(self, client):
-        """Test DELETE /games/{game_id} removes game."""
-        client.post("/games/delete-test-game/sync", json={
+        """Test DELETE /api/games/{game_id} removes game."""
+        client.post("/api/games/delete-test-game/sync", json={
             "team": "DeleteTeam",
+            "teamId": "DeleteTeam-0001",
             "opponent": "Opponent",
             "points": []
         })
         
-        response = client.delete("/games/delete-test-game")
+        response = client.delete("/api/games/delete-test-game")
         
         assert response.status_code == 200
         assert response.json()["status"] == "deleted"
         
-        get_response = client.get("/games/delete-test-game")
+        get_response = client.get("/api/games/delete-test-game")
         assert get_response.status_code == 404
     
     def test_list_game_versions(self, client):
-        """Test GET /games/{game_id}/versions returns version list."""
-        client.post("/games/version-test-game/sync", json={
+        """Test GET /api/games/{game_id}/versions returns version list."""
+        client.post("/api/games/version-test-game/sync", json={
             "team": "VersionTeam",
+            "teamId": "VersionTeam-0001",
             "opponent": "Opponent",
             "points": []
         })
         
-        response = client.get("/games/version-test-game/versions")
+        response = client.get("/api/games/version-test-game/versions")
         
         assert response.status_code == 200
         data = response.json()
@@ -589,20 +610,21 @@ class TestGameAPI:
         assert len(data["versions"]) >= 1
     
     def test_get_specific_version(self, client):
-        """Test GET /games/{game_id}/versions/{timestamp} returns specific version."""
+        """Test GET /api/games/{game_id}/versions/{timestamp} returns specific version."""
         # Create game
-        client.post("/games/specific-version-game/sync", json={
+        client.post("/api/games/specific-version-game/sync", json={
             "team": "VersionTeam",
+            "teamId": "VersionTeam-0001",
             "opponent": "Opponent",
             "version": 1
         })
         
         # Get version list
-        versions_response = client.get("/games/specific-version-game/versions")
+        versions_response = client.get("/api/games/specific-version-game/versions")
         timestamp = versions_response.json()["versions"][0]
         
         # Get specific version
-        response = client.get(f"/games/specific-version-game/versions/{timestamp}")
+        response = client.get(f"/api/games/specific-version-game/versions/{timestamp}")
         
         assert response.status_code == 200
         assert response.json()["version"] == 1
@@ -616,8 +638,8 @@ class TestIndexAPI:
     """Tests for index API endpoints."""
     
     def test_rebuild_index(self, client):
-        """Test POST /index/rebuild rebuilds the index."""
-        response = client.post("/index/rebuild")
+        """Test POST /api/index/rebuild rebuilds the index."""
+        response = client.post("/api/index/rebuild")
         
         assert response.status_code == 200
         data = response.json()
@@ -625,11 +647,11 @@ class TestIndexAPI:
         assert "lastRebuilt" in data
     
     def test_get_index_status(self, client):
-        """Test GET /index/status returns index stats."""
+        """Test GET /api/index/status returns index stats."""
         # First rebuild to ensure index exists
-        client.post("/index/rebuild")
+        client.post("/api/index/rebuild")
         
-        response = client.get("/index/status")
+        response = client.get("/api/index/status")
         
         assert response.status_code == 200
         data = response.json()
@@ -669,7 +691,7 @@ class TestAPIWorkflows:
         }).json()
         
         # 3. Create game for the team
-        game = client.post("/games/workflow-game/sync", json={
+        game = client.post("/api/games/workflow-game/sync", json={
             "team": "WorkflowTeam",
             "opponent": "WorkflowOpponent",
             "teamId": team["team_id"],
@@ -688,23 +710,23 @@ class TestAPIWorkflows:
         }).json()
         
         # 4. Rebuild index
-        client.post("/index/rebuild")
+        client.post("/api/index/rebuild")
         
         # 5. Verify queries work
         # Player games
-        p1_games = client.get(f"/players/{p1['player_id']}/games").json()
+        p1_games = client.get(f"/api/players/{p1['player_id']}/games").json()
         assert "workflow-game" in p1_games["game_ids"]
         
         # Team games
-        team_games = client.get(f"/teams/{team['team_id']}/games").json()
+        team_games = client.get(f"/api/teams/{team['team_id']}/games").json()
         assert "workflow-game" in team_games["game_ids"]
         
         # Team players
-        team_players = client.get(f"/teams/{team['team_id']}/players").json()
+        team_players = client.get(f"/api/teams/{team['team_id']}/players").json()
         assert team_players["count"] == 2
         
         # Get game
-        game_data = client.get("/games/workflow-game").json()
+        game_data = client.get("/api/games/workflow-game").json()
         assert game_data["teamId"] == team["team_id"]
     
     def test_offline_creation_sync(self, client):
@@ -734,10 +756,10 @@ class TestAPIWorkflows:
         assert team["status"] == "created"
         
         # Verify data persisted correctly
-        player_data = client.get(f"/players/{offline_player_id}").json()
+        player_data = client.get(f"/api/players/{offline_player_id}").json()
         assert player_data["name"] == "OfflineCreatedPlayer"
         
-        team_data = client.get(f"/teams/{offline_team_id}").json()
+        team_data = client.get(f"/api/teams/{offline_team_id}").json()
         assert team_data["name"] == "OfflineCreatedTeam"
         assert offline_player_id in team_data["playerIds"]
     
@@ -758,7 +780,7 @@ class TestAPIWorkflows:
         assert response.json()["status"] == "updated"
         
         # Verify update
-        player = client.get("/players/Update-Via-Create").json()
+        player = client.get("/api/players/Update-Via-Create").json()
         assert player["name"] == "Updated"
 
 

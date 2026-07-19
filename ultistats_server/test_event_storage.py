@@ -33,6 +33,11 @@ def isolate_test_data(tmp_path):
     else:
         os.environ.pop("ULTISTATS_DATA_DIR", None)
 
+    # Reload again so config/event_storage module state points back at the
+    # default data dir instead of this test's (soon to be pruned) tmp_path.
+    importlib.reload(config)
+    importlib.reload(event_storage)
+
 
 class TestEventStorage:
 

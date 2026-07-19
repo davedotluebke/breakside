@@ -2,8 +2,26 @@
 Basic test script to verify JSON backend storage works.
 """
 import json
+import pytest
 from pathlib import Path
 from storage import game_storage
+
+
+@pytest.fixture(autouse=True)
+def isolated_games_dir(tmp_path, monkeypatch):
+    """Point game storage at a temp dir so this never writes to real data/.
+
+    save_game_version also updates the search index, so the index file must
+    be redirected too.
+    """
+    games_dir = tmp_path / "games"
+    games_dir.mkdir()
+    import config
+    from storage import index_storage
+    monkeypatch.setattr(config, "GAMES_DIR", games_dir)
+    monkeypatch.setattr(config, "INDEX_FILE", tmp_path / "index.json")
+    monkeypatch.setattr(game_storage, "GAMES_DIR", games_dir)
+    monkeypatch.setattr(index_storage, "INDEX_FILE", tmp_path / "index.json")
 
 # Sample game data
 sample_game = {

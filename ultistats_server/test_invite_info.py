@@ -38,6 +38,7 @@ def seeded(tmp_path_factory):
         (membership_storage, "MEMBERSHIPS_DIR", data_dir / "memberships"),
         (membership_storage, "INDEX_FILE", data_dir / "memberships" / "_index.json"),
         (invite_storage, "INVITES_DIR", data_dir / "invites"),
+        (invite_storage, "INDEX_FILE", data_dir / "invites" / "_index.json"),
         (index_storage, "INDEX_FILE", data_dir / "index.json"),
         (index_storage, "TEAMS_DIR", data_dir / "teams"),
         (index_storage, "PLAYERS_DIR", data_dir / "players"),

@@ -69,11 +69,13 @@ python -m ultistats_server.tests.narration.runner \
 
 Prints WER, precision/recall/F1, the full expected and actual transcripts, and any missing or extra events.
 
-### Run via pytest (CI-friendly)
+### Run via pytest
 
 ```bash
-pytest ultistats_server/tests/narration/ -s
+NARRATION_LIVE_TESTS=1 pytest ultistats_server/tests/narration/ -s
 ```
+
+These scenarios hit live paid APIs and are non-deterministic, so they're **opt-in**: without `NARRATION_LIVE_TESTS=1` they all skip (they also carry a `live_llm` pytest marker). That keeps the default `pytest ultistats_server/` run fast and deterministic even on machines with API keys exported.
 
 Pass threshold is F1 ≥ 0.6 by default (override with `NARRATION_MIN_F1=0.8`). Scenarios with no audio file are skipped, not failed — lets you commit a transcript + expected pair before generating audio.
 

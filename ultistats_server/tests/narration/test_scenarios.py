@@ -7,16 +7,25 @@ test case. The test passes if F1 over event matching is at or above
 MIN_F1, and (separately) reports WER as a soft warning if it's high.
 
 Skipping behavior:
-  - The whole module is skipped if OPENAI_API_KEY is not set, since the
-    runner needs to actually hit the Realtime API.
+  - These scenarios stream audio through the OpenAI Realtime API and run
+    the Anthropic slow pass: slow (minutes), non-deterministic, and they
+    cost real money. They are OPT-IN: the whole module is skipped unless
+    NARRATION_LIVE_TESTS=1 is set, so the default
+    ``pytest ultistats_server/`` run stays fast and deterministic even on
+    machines where the API keys happen to be exported.
+  - With the opt-in set, the module is still skipped if OPENAI_API_KEY or
+    ANTHROPIC_API_KEY is not set, since the runner needs both.
   - Individual scenarios are skipped if their audio file is missing
     (lets you commit transcript.txt + expected.json before generating
     audio).
+  - All tests carry the ``live_llm`` marker (registered in
+    ultistats_server/conftest.py), so ``-m "not live_llm"`` /
+    ``-m live_llm`` can also deselect/select them.
 
 Run with:
-  pytest ultistats_server/tests/narration/                     # all scenarios
-  pytest ultistats_server/tests/narration/ -k single_throw     # one scenario
-  pytest ultistats_server/tests/narration/ -s                  # show metrics
+  NARRATION_LIVE_TESTS=1 pytest ultistats_server/tests/narration/            # all scenarios
+  NARRATION_LIVE_TESTS=1 pytest ultistats_server/tests/narration/ -k single_throw  # one
+  NARRATION_LIVE_TESTS=1 pytest ultistats_server/tests/narration/ -s         # show metrics
 """
 from __future__ import annotations
 
@@ -44,14 +53,23 @@ MIN_F1 = float(os.getenv("NARRATION_MIN_F1", "0.6"))
 WER_WARNING_THRESHOLD = float(os.getenv("NARRATION_WER_WARNING", "0.25"))
 
 
-# Skip the entire module if API keys are missing.
+# Live-LLM scenarios are opt-in (see module docstring): skip unless
+# explicitly enabled, and even then skip if API keys are missing.
 _skip_reason = None
-if not os.getenv("OPENAI_API_KEY"):
+if os.getenv("NARRATION_LIVE_TESTS", "").lower() not in ("1", "true", "yes"):
+    _skip_reason = (
+        "live-LLM narration scenarios are opt-in: set NARRATION_LIVE_TESTS=1 "
+        "(slow, non-deterministic, calls paid OpenAI/Anthropic APIs)"
+    )
+elif not os.getenv("OPENAI_API_KEY"):
     _skip_reason = "OPENAI_API_KEY not set"
 elif not os.getenv("ANTHROPIC_API_KEY"):
     _skip_reason = "ANTHROPIC_API_KEY not set"
 
-pytestmark = pytest.mark.skipif(_skip_reason is not None, reason=_skip_reason or "")
+pytestmark = [
+    pytest.mark.live_llm,
+    pytest.mark.skipif(_skip_reason is not None, reason=_skip_reason or ""),
+]
 
 
 def _scenario_id(p: Path) -> str:
