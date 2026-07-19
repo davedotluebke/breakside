@@ -5,18 +5,25 @@
  * and then wakes up:
  *   - Roles expire on the server after STALE_TIMEOUT (5s in test config)
  *   - Another coach can claim the expired roles
- *   - On wake, the original coach detects lost roles and re-claims
+ *   - On wake, the original coach re-claims via ping auto-assign
  *
  * Note: We can't truly stop browser timers in Playwright, so we simulate
- * the server-side expiry by stopping Coach A's pings (via JS override)
- * and waiting for the stale timeout. The visibilitychange handler is
- * then triggered manually to test the wake recovery path.
+ * the server-side expiry by stopping Coach A's pings (via JS override).
+ * Expiry is then OBSERVED (polling the controller endpoint until the server
+ * reports the roles vacant) rather than assumed after a fixed sleep —
+ * staleness is judged by server-side timestamps at request-processing time,
+ * and fixed client-side sleeps raced them under load.
+ *
+ * COVERAGE GAP (deliberate): the app's `visibilitychange` wake handler in
+ * game/controllerState.js is NOT exercised here — the "wake" below is
+ * simulated by pinging the API directly, which reproduces the handler's
+ * auto-assign effect but not its refresh/re-claim logic. Driving the real
+ * handler needs module-scoped state manipulation that proved too brittle.
  */
 import { test, expect, Page, APIRequestContext } from '@playwright/test';
 import { BACKEND_URL, TEST_PARAMS } from '../helpers/constants';
-import {
-  goToApp, setupTeamWithPlayers, startGame,
-} from '../helpers/app';
+import { setupTeamWithPlayers, startGame } from '../helpers/app';
+import { waitForGameOnServer, waitForRolesVacant } from '../helpers/controllerApi';
 
 // ─── API helpers ────────────────────────────────────────────────────────────
 
@@ -66,42 +73,17 @@ async function simulateSleep(page: Page) {
   });
 }
 
-/**
- * Simulate device wake: restore real ping function, re-set the game ID
- * for polling, and trigger the visibilitychange event.
- */
-async function simulateWake(page: Page, gameId: string) {
-  await page.evaluate((gid) => {
-    const w = window as any;
-    // Restore real ping function
-    if (w._realPingController) {
-      w.pingController = w._realPingController;
-      delete w._realPingController;
-    }
-    // Re-start polling (sets currentGameIdForPolling + starts interval)
-    w.startControllerPolling(gid);
-  }, gameId);
-  // Give the initial ping from startControllerPolling time to complete,
-  // then trigger the wake handler which does its own re-claim logic
-  await page.waitForTimeout(1000);
-  await page.evaluate(() => {
-    Object.defineProperty(document, 'visibilityState', {
-      get: () => 'visible',
-      configurable: true,
-    });
-    const evt = document.createEvent('Event');
-    evt.initEvent('visibilitychange', true, true);
-    document.dispatchEvent(evt);
-  });
-}
+// (A simulateWake helper that restored pings and dispatched a synthetic
+// visibilitychange event used to live here, but no test ever called it —
+// see the COVERAGE GAP note in the header.)
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 const COACH_A = 'coach-a';
 const COACH_B = 'coach-b';
 
-// Backend stale timeout is set to 5s in playwright.config.ts
-const STALE_TIMEOUT_MS = 5_000;
+// Backend stale timeout is 5s in playwright.config.ts (BREAKSIDE_STALE_TIMEOUT).
+// Expiry is observed via waitForRolesVacant rather than slept for.
 
 test.describe('sleep/wake recovery', () => {
   test('roles expire on server after stale timeout', async ({ page, request }) => {
@@ -112,7 +94,9 @@ test.describe('sleep/wake recovery', () => {
     await startGame(page, 'offense');
 
     const gameId = await getGameId(page);
-    await pingAsCoach(request, gameId, COACH_A);
+    await waitForGameOnServer(request, gameId, COACH_A);
+    const pingResp = await pingAsCoach(request, gameId, COACH_A);
+    expect(pingResp.ok()).toBeTruthy();
 
     // Verify Coach A holds both roles
     let state = await getControllerState(request, gameId, COACH_A);
@@ -121,8 +105,8 @@ test.describe('sleep/wake recovery', () => {
     // Simulate sleep: stop all pings from Coach A
     await simulateSleep(page);
 
-    // Wait for stale timeout + buffer
-    await page.waitForTimeout(STALE_TIMEOUT_MS + 1500);
+    // Observe the server dropping A's stale roles (no fixed sleep)
+    await waitForRolesVacant(request, gameId, COACH_B);
 
     // Coach B pings — should get auto-assigned both roles (since A's expired)
     await pingAsCoach(request, gameId, COACH_B);
@@ -139,15 +123,17 @@ test.describe('sleep/wake recovery', () => {
     await startGame(page, 'offense');
 
     const gameId = await getGameId(page);
-    await pingAsCoach(request, gameId, COACH_A);
+    await waitForGameOnServer(request, gameId, COACH_A);
+    const pingResp = await pingAsCoach(request, gameId, COACH_A);
+    expect(pingResp.ok()).toBeTruthy();
 
     // Verify Coach A has roles
     let state = await getControllerState(request, gameId, COACH_A);
     expect(state.state.activeCoach.userId).toBe(COACH_A);
 
-    // Simulate sleep
+    // Simulate sleep, then observe the server dropping A's stale roles
     await simulateSleep(page);
-    await page.waitForTimeout(STALE_TIMEOUT_MS + 1500);
+    await waitForRolesVacant(request, gameId, COACH_A);
 
     // Instead of relying on the visibilitychange handler (which has complex
     // interactions with module-scoped state), directly ping as Coach A via API
@@ -168,19 +154,21 @@ test.describe('sleep/wake recovery', () => {
     await startGame(page, 'offense');
 
     const gameId = await getGameId(page);
-    await pingAsCoach(request, gameId, COACH_A);
+    await waitForGameOnServer(request, gameId, COACH_A);
+    const pingResp = await pingAsCoach(request, gameId, COACH_A);
+    expect(pingResp.ok()).toBeTruthy();
 
-    // Simulate sleep
+    // Simulate sleep, then observe the server dropping A's stale roles
     await simulateSleep(page);
-    await page.waitForTimeout(STALE_TIMEOUT_MS + 1500);
+    await waitForRolesVacant(request, gameId, COACH_B);
 
     // Coach B claims both roles while Coach A is asleep
     await pingAsCoach(request, gameId, COACH_B);
     let state = await getControllerState(request, gameId, COACH_B);
     expect(state.state.activeCoach.userId).toBe(COACH_B);
 
-    // Wait for Coach B's single ping to also go stale
-    await page.waitForTimeout(STALE_TIMEOUT_MS + 1500);
+    // Wait until Coach B's single ping has also gone stale server-side
+    await waitForRolesVacant(request, gameId, COACH_A);
 
     // Coach A wakes up and pings — should reclaim since Coach B's roles
     // are also stale now (Coach B only pinged once, no ongoing pings)
