@@ -431,6 +431,11 @@ _EVENT_KEY_FIELDS = (
     "defender",
     "huck",
     "break_throw",
+    "reset",
+    "swing",
+    # "dump" is retired (renamed to reset, 2026-07-19) but stays a key field:
+    # if the model ever emits it despite the schema, it should surface as a
+    # visible mismatch, not be silently dropped from the signature.
     "dump",
     "hammer",
     "sky",

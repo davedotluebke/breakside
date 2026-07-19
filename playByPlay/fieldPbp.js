@@ -222,7 +222,7 @@ const fieldPbp = (function() {
         Throw: [
             { label: 'Break', flag: 'break_flag' },
             { label: 'Huck', flag: 'huck_flag' },
-            { label: 'Reset', flag: 'dump_flag' },
+            { label: 'Reset', flag: 'reset_flag' },
             { label: 'Swing', flag: 'swing_flag' },
             { label: 'Hammer', flag: 'hammer_flag' },
             { label: 'Sky', flag: 'sky_flag' },
@@ -1167,7 +1167,7 @@ const fieldPbp = (function() {
      * the "Last throw was a:" chips (or the score dialog's flag buttons):
      *   - huck:  forward progress ≥ the settable fraction (Advanced Settings
      *            → Field → Huck threshold, default 50% of the playing field)
-     *   - reset (dump_flag): meaningfully backwards (beyond a small tolerance
+     *   - reset (reset_flag): meaningfully backwards (beyond a small tolerance
      *            so flat lateral passes don't count)
      *   - swing: lateral travel ≥ the settable fraction of the field width
      *            (Advanced Settings → Field → Swing threshold, default 25%),
@@ -1186,10 +1186,12 @@ const fieldPbp = (function() {
         if (!from || !to || typeof from.x !== 'number' || typeof to.x !== 'number') return {};
         const dx = to.x - from.x;
         const huck = dx >= settingFraction('field.huckFraction', 0.5);
-        const dump = dx <= -RESET_TOLERANCE;
+        const reset = dx <= -RESET_TOLERANCE;
         const swing = !huck && typeof from.y === 'number' && typeof to.y === 'number'
             && Math.abs(to.y - from.y) >= settingFraction('field.swingFraction', 0.25);
-        return { huck, dump, swing };
+        // Key names feed createThrow's opts verbatim via commitThrow's spread —
+        // they must match the constructor params (reset, not the old dump).
+        return { huck, reset, swing };
     }
 
     function commitThrow(thrower, receiver, from, to) {
@@ -1626,7 +1628,7 @@ const fieldPbp = (function() {
         if (!ev || ev.type !== 'Throw' || !ev.from || !ev.to) return;
         const c = classifyThrow(ev.from, ev.to);
         ev.huck_flag = !!c.huck;
-        ev.dump_flag = !!c.dump;
+        ev.reset_flag = !!c.reset;
         ev.swing_flag = !!c.swing;
     }
 

@@ -54,7 +54,7 @@ async function lastThrow(page: Page) {
     const t = throws[throws.length - 1];
     return t ? {
       from: t.from, to: t.to,
-      huck: !!t.huck_flag, reset: !!t.dump_flag, swing: !!t.swing_flag,
+      huck: !!t.huck_flag, reset: !!t.reset_flag, swing: !!t.swing_flag,
     } : null;
   });
 }

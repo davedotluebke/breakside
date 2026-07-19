@@ -455,7 +455,7 @@ const fullPbp = (function() {
     const THROW_MODIFIERS = [
         { label: 'break',        prop: 'break_flag'  },
         { label: 'huck',         prop: 'huck_flag'   },
-        { label: 'reset',        prop: 'dump_flag'   },  // displayed as "reset", flag stays dump_flag
+        { label: 'reset',        prop: 'reset_flag'  },  // legacy stored dump_flag is aliased at deserialize
         { label: 'swing',        prop: 'swing_flag'  },  // auto-set by Field mode geometry; editable anywhere
         { label: 'hammer',       prop: 'hammer_flag' },
         { label: 'sky catch',    prop: 'sky_flag'    },
