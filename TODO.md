@@ -80,15 +80,23 @@ cleanup items are no longer scattered across this file's sections. Status snapsh
   does a clean score-revert + empty-point back-out; role gating/View Only for the roleless
   coach; roles-expire takeover; the startTimestamp fix live on real data. **Bugs found —
   each deserves a focused session:**
-  1. 🔴 **Handoff-request toast never shows for the role holder.** Reproduced
-     deterministically: holder fronted + polling through the whole 10s handoff window →
-     zero toasts → role silently auto-transfers on expiry (`handoffTimeoutSeconds=10`).
-     Sideline effect: a coach loses Active Coach with no prompt or explanation. Related:
-     the requester saw a **false "You are now Active Coach"** double-toast in a run where
-     the role verifiably ended up back with the original holder (original `claimedAt`
-     preserved — most plausibly a silent deny path). This is the § Game-core
-     handoff-toast race; fix wants the durable per-request-id rework, holder-prompt path
-     first (`game/controllerState.js` `updateLocalControllerState`).
+  1. ✅ **FIXED 2026-07-19 (branch `fix-handoff-toast`) — handoff toasts + the real root
+     cause.** Deep-dive rewrote the original diagnosis: `authFetch` never sent
+     `X-Test-User-Id` (bearer-only, and the bearer is null in test mode), so EVERY
+     test-mode page's requests were attributed to the backend's DEFAULT test user —
+     `?testUserId=<other>` pages silently acted as the wrong user. The "false 'You are
+     now Active Coach'" was a self-claim by the holder's own identity (role never moved,
+     original `claimedAt` — there was never a reversal), and the e2e holder page pinged
+     as the wrong user so `hasPendingHandoffForMe` stayed false (no prompt). Shipped:
+     (a) `authFetchLogic` `getExtraHeaders` dep forwards the test header (test-mode only,
+     prod rejects it); (b) the `handoffResolved` boolean latch → keyed
+     `lastResolvedHandoffKey` (a new request always prompts — the old latch could
+     suppress it for its whole lifetime); (c) **role-loss toasts**: losing a role you
+     didn't give away now shows "<coach> took over <role>" (level-based transition
+     detection, deduped; release/accept suppress their own); (d) throttled-tab expiry
+     guard (no late auto-accept POST for an already-resolved handoff, honest "already
+     resolved" toast on a 400). Pinned by a new e2e test (scenarios/03: prompt → deny →
+     re-prompt → accept → external-takeover toast); suites 21/21 e2e, 74/74 unit.
   2. ✅ **FIXED 2026-07-19** (branch `claude/clever-lewin-617873`) — **Id-era
      `pendingNextLine` soft-locked Start Point.** Every place that compared stored
      line/point entries to roster names now routes through F2's era resolver:
