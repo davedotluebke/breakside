@@ -184,32 +184,40 @@ MOCK_OUTSIDER = {"id": "outsider", "email": "out@test", "role": "authenticated"}
 
 @pytest.fixture(scope="module")
 def seeded(tmp_path_factory):
-    """Temp data dir with a team, a player on it, and a coach membership."""
+    """Temp data dir with a team, a player on it, and a coach membership.
+    Restores the patched config/storage dirs on teardown."""
     data_dir = tmp_path_factory.mktemp("sec_data")
 
     import config
-    for name, sub in [
-        ("GAMES_DIR", "games"), ("TEAMS_DIR", "teams"), ("PLAYERS_DIR", "players"),
-        ("USERS_DIR", "users"), ("MEMBERSHIPS_DIR", "memberships"),
-        ("SHARES_DIR", "shares"), ("INVITES_DIR", "invites"), ("EVENTS_DIR", "events"),
-    ]:
-        p = data_dir / sub
-        p.mkdir(parents=True, exist_ok=True)
-        setattr(config, name, p)
-    config.INDEX_FILE = data_dir / "index.json"
-
-    # Patch the dir constants the already-imported storage modules captured.
     from storage import (
         team_storage, player_storage, membership_storage, index_storage,
     )
-    team_storage.TEAMS_DIR = config.TEAMS_DIR
-    player_storage.PLAYERS_DIR = config.PLAYERS_DIR
-    membership_storage.MEMBERSHIPS_DIR = config.MEMBERSHIPS_DIR
-    membership_storage.INDEX_FILE = config.MEMBERSHIPS_DIR / "_index.json"
-    index_storage.INDEX_FILE = config.INDEX_FILE
-    index_storage.TEAMS_DIR = config.TEAMS_DIR
-    index_storage.PLAYERS_DIR = config.PLAYERS_DIR
-    index_storage.GAMES_DIR = config.GAMES_DIR
+
+    patches = [
+        (config, "GAMES_DIR", data_dir / "games"),
+        (config, "TEAMS_DIR", data_dir / "teams"),
+        (config, "PLAYERS_DIR", data_dir / "players"),
+        (config, "USERS_DIR", data_dir / "users"),
+        (config, "MEMBERSHIPS_DIR", data_dir / "memberships"),
+        (config, "SHARES_DIR", data_dir / "shares"),
+        (config, "INVITES_DIR", data_dir / "invites"),
+        (config, "EVENTS_DIR", data_dir / "events"),
+        (config, "INDEX_FILE", data_dir / "index.json"),
+        # Dir constants the already-imported storage modules captured.
+        (team_storage, "TEAMS_DIR", data_dir / "teams"),
+        (player_storage, "PLAYERS_DIR", data_dir / "players"),
+        (membership_storage, "MEMBERSHIPS_DIR", data_dir / "memberships"),
+        (membership_storage, "INDEX_FILE", data_dir / "memberships" / "_index.json"),
+        (index_storage, "INDEX_FILE", data_dir / "index.json"),
+        (index_storage, "TEAMS_DIR", data_dir / "teams"),
+        (index_storage, "PLAYERS_DIR", data_dir / "players"),
+        (index_storage, "GAMES_DIR", data_dir / "games"),
+    ]
+    saved = [(mod, name, getattr(mod, name)) for mod, name, _ in patches]
+    for mod, name, value in patches:
+        if name.endswith("_DIR"):
+            value.mkdir(parents=True, exist_ok=True)
+        setattr(mod, name, value)
 
     # Seed: player on a team, coach membership for coach-a.
     pid = player_storage.save_player({"name": "Rostered Player"})
@@ -220,7 +228,10 @@ def seeded(tmp_path_factory):
     # A second player with no team (orphan).
     orphan = player_storage.save_player({"name": "Orphan Player"})
 
-    return {"data_dir": data_dir, "team_id": tid, "player_id": pid, "orphan_id": orphan}
+    yield {"data_dir": data_dir, "team_id": tid, "player_id": pid, "orphan_id": orphan}
+
+    for mod, name, original in saved:
+        setattr(mod, name, original)
 
 
 @pytest.fixture

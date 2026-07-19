@@ -37,12 +37,22 @@ def isolate_test_data(tmp_path):
     importlib.reload(index_storage)
     
     yield test_data_dir
-    
+
     # Restore original env
     if _original_env:
         os.environ["ULTISTATS_DATA_DIR"] = _original_env
     else:
         os.environ.pop("ULTISTATS_DATA_DIR", None)
+
+    # Reload again so config/storage module state points back at the default
+    # data dir instead of this test's (soon to be pruned) tmp_path. Without
+    # this, module globals stay aimed at a dead directory for every test
+    # module that runs after this one.
+    importlib.reload(config)
+    importlib.reload(player_storage)
+    importlib.reload(team_storage)
+    importlib.reload(game_storage)
+    importlib.reload(index_storage)
 
 
 # =============================================================================
