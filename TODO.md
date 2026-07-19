@@ -114,11 +114,17 @@ cleanup items are no longer scattered across this file's sections. Status snapsh
      on `buildGameLogText` (renderer stays a pure leaf; summarizeGame +
      renderGameSummaryEventLog pass `buildPointPlayerLookup` resolution — unit
      tests pin it), and the Next Line header resolves via the same lookup.
-     Related seam left as-is deliberately: `updateScore`/`revertPointScore` still
-     match `point.players` by raw name for the legacy live counters
-     (totalPointsPlayed etc.) — symmetric no-ops on id-era games, and fixing one
-     side alone would corrupt (decrement stats never incremented); event-derived
-     stats already resolve correctly. Needs its own paired-migration session.
+     The related `updateScore`/`revertPointScore` seam (raw-name matching for
+     the legacy live counters — symmetric no-ops on id-era games) got its
+     paired-migration session 2026-07-19 (branch `claude/reverent-hellman-c773a7`):
+     both sides now match via `buildPointMembership` (extracted to pure
+     `game/pointStats.js`, unit-tested), and each newly-scored point is stamped
+     `playerStatsCounted` (serialized) so undo picks the matching that did the
+     incrementing — unmarked pre-fix points revert by raw name, keeping undo on
+     reopened id-era games a harmless no-op no matter how far back it chains.
+     Historical id-era points keep their gap in the legacy counters by design
+     (no backfill): event-derived stats (utils/eventStats.js) are the accurate
+     path and already resolve ids.
   4. 🟠 **Zombie point in real data:** SWW-2's stored point 13 has `winner` set +
      `startTimestamp` still running since Nov 2025 + 0 possessions → player Game-time
      shows ~352,7xx minutes (elapsed-since-November). The updateScore fix stops NEW

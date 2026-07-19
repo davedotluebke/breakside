@@ -89,6 +89,7 @@ import { showTeamSettingsScreen } from './teams/teamSettings.js';
 import './teams/eventRoster.js';
 import { getGameSummaryBackTarget } from './teams/gameSummary.js';
 import './game/genderRatioDropdown.js';
+import './game/pointStats.js';
 import './game/undoLogic.js';
 import './game/pointManagement.js';
 import { appVersion } from './game/gameLogic.js';
