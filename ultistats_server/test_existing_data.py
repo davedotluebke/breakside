@@ -6,10 +6,28 @@ Run with: cd ultistats_server && python -m pytest test_existing_data.py -v
 
 Note: These tests use actual data in data/ directory and should be run
 with caution (they don't modify data, only read and verify).
+
+The data/ subdirectories (data/games/, data/teams/, ...) are gitignored:
+fresh clones and feature worktrees have no production data, only whatever
+empty dirs config.py mkdir'd at import. The known CUDO-Mixed team file
+doubles as the "real dataset is present" marker — without it the whole
+module skips rather than asserting against an empty or test-polluted dir.
 """
 import pytest
 import json
 from pathlib import Path
+
+_DATA_DIR = Path(__file__).parent.parent / "data"
+_REAL_DATA_MARKER = _DATA_DIR / "teams" / "CUDO-Mixed-8kr5.json"
+
+pytestmark = pytest.mark.skipif(
+    not _REAL_DATA_MARKER.exists(),
+    reason=(
+        "local production data not present (data/ subdirs are gitignored; "
+        "these read-only integrity tests only run where real data exists, "
+        "e.g. the main worktree)"
+    ),
+)
 
 
 # =============================================================================

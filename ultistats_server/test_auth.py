@@ -10,9 +10,6 @@ from fastapi.testclient import TestClient
 from unittest.mock import patch
 import jwt
 from datetime import datetime, timezone, timedelta
-import json
-import shutil
-from pathlib import Path
 
 # Import the app
 from main import app
@@ -22,8 +19,73 @@ client = TestClient(app)
 # Test secret for JWT signing
 TEST_SECRET = "test-secret-key-for-testing"
 
-# Test data directory
-TEST_DATA_DIR = Path(__file__).parent.parent / "data"
+
+@pytest.fixture(scope="module", autouse=True)
+def isolated_data_dir(tmp_path_factory):
+    """Point config AND the already-imported storage modules at a temp dir.
+
+    These tests exercise the real JWT flow but create users/teams/games/
+    memberships on disk — without this fixture those writes (and the admin
+    index rebuild) land in the repo's real ``data/`` directory. Storage
+    modules capture their dir constants at import time, so both config and
+    each module's captured global must be patched; everything is restored
+    on teardown. Auth is forced on so a dev shell with
+    ULTISTATS_AUTH_REQUIRED=false can't flip the 401/403 expectations, and
+    any dependency overrides leaked by a previously-run module are cleared
+    (this module needs the real auth dependencies).
+    """
+    data_dir = tmp_path_factory.mktemp("auth_test_data")
+
+    import config
+    from storage import (
+        game_storage, team_storage, player_storage, user_storage,
+        membership_storage, share_storage, invite_storage, index_storage,
+    )
+
+    patches = [
+        (config, "DATA_DIR", data_dir),
+        (config, "GAMES_DIR", data_dir / "games"),
+        (config, "TEAMS_DIR", data_dir / "teams"),
+        (config, "PLAYERS_DIR", data_dir / "players"),
+        (config, "USERS_DIR", data_dir / "users"),
+        (config, "MEMBERSHIPS_DIR", data_dir / "memberships"),
+        (config, "SHARES_DIR", data_dir / "shares"),
+        (config, "INVITES_DIR", data_dir / "invites"),
+        (config, "INDEX_FILE", data_dir / "index.json"),
+        (game_storage, "GAMES_DIR", data_dir / "games"),
+        (team_storage, "TEAMS_DIR", data_dir / "teams"),
+        (player_storage, "PLAYERS_DIR", data_dir / "players"),
+        (user_storage, "USERS_DIR", data_dir / "users"),
+        (membership_storage, "MEMBERSHIPS_DIR", data_dir / "memberships"),
+        (membership_storage, "INDEX_FILE", data_dir / "memberships" / "_index.json"),
+        (share_storage, "SHARES_DIR", data_dir / "shares"),
+        (share_storage, "INDEX_FILE", data_dir / "shares" / "_index.json"),
+        (invite_storage, "INVITES_DIR", data_dir / "invites"),
+        (invite_storage, "INDEX_FILE", data_dir / "invites" / "_index.json"),
+        (index_storage, "INDEX_FILE", data_dir / "index.json"),
+        (index_storage, "GAMES_DIR", data_dir / "games"),
+        (index_storage, "TEAMS_DIR", data_dir / "teams"),
+        (index_storage, "PLAYERS_DIR", data_dir / "players"),
+    ]
+    saved = [(mod, name, getattr(mod, name)) for mod, name, _ in patches]
+    for mod, name, value in patches:
+        if name.endswith("_DIR"):
+            value.mkdir(parents=True, exist_ok=True)
+        setattr(mod, name, value)
+
+    app.dependency_overrides.clear()
+
+    saved_auth_env = os.environ.get("ULTISTATS_AUTH_REQUIRED")
+    os.environ["ULTISTATS_AUTH_REQUIRED"] = "true"
+
+    yield data_dir
+
+    if saved_auth_env is None:
+        os.environ.pop("ULTISTATS_AUTH_REQUIRED", None)
+    else:
+        os.environ["ULTISTATS_AUTH_REQUIRED"] = saved_auth_env
+    for mod, name, original in saved:
+        setattr(mod, name, original)
 
 
 def create_test_token(
