@@ -198,13 +198,16 @@ function updateScore(winner) {
         throw new Error("No current point");
     }
 
-    if (point.startTimestamp === null) {
-        console.warn("Warning: point.startTimestamp is null; setting to now");
-        point.startTimestamp = new Date();
+    // `startTimestamp` doubles as the running-timer segment marker: the score
+    // handlers (stopPointTimeAccrual and the Full/Field inline copies) fold the
+    // elapsed segment into totalPointTime and null it BEFORE this runs. A null
+    // here therefore means "already accounted for" — don't fabricate a start
+    // time (the old fallback stamped score time as the point's start, which is
+    // why pendingLineLogic can't trust startTimestamp for point-start).
+    if (point.startTimestamp !== null) {
+        point.totalPointTime += (new Date() - point.startTimestamp);
+        point.startTimestamp = null;
     }
-
-    // Add any remaining time to totalPointTime before ending
-    point.totalPointTime += (new Date() - point.startTimestamp);
     point.endTimestamp = new Date();
     point.winner = winner; // Setting the winning team for the current point
     currentGame().scores[winner]++;
