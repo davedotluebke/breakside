@@ -5,7 +5,9 @@
  */
 import { Gender, Role } from '../store/models.js';
 import { currentTeam } from '../store/storage.js';
-import { currentGame, formatPlayerName, formatPlayTime } from '../utils/helpers.js';
+import {
+    currentGame, formatPlayerName, formatPlayTime, buildPointPlayerLookup,
+} from '../utils/helpers.js';
 import {
     getGamePlayerStats, getGameTeamStats, formatTeamStatsLine, classifyPoint,
 } from '../utils/eventStats.js';
@@ -337,10 +339,14 @@ function renderGameSummaryEventLog(game) {
     const teamName = game.team || 'My Team';
     const opponent = game.opponent || 'Opponent';
 
+    // "Point N roster:" entries may be player ids (id-era games) — resolve to
+    // display names; event lines already carry resolved {name, id} refs.
+    const lookup = buildPointPlayerLookup(game);
     const summary = buildGameLogText(game, {
         teamName,
         opponentName: opponent,
         scoreBadge: (point) => pointClassificationLabel(classifyPoint(point)),
+        resolvePlayerName: entry => lookup(entry).name,
     });
 
     logEl.innerHTML = renderGameLogHTML(summary, teamName);
