@@ -34,10 +34,16 @@
  *   forceRefreshToken() → Promise<string|null> — force-refreshed access
  *       token, or null when refresh is unavailable/failed (signed out, test
  *       mode, Supabase down). Rejections are caught and treated as null.
+ *   getExtraHeaders() → Promise<object> — identity headers that are not the
+ *       bearer (today: X-Test-User-Id in test mode). Without this, test-mode
+ *       pages send NO identity at all and an auth-disabled backend maps every
+ *       request to its default test user — which silently broke per-page
+ *       identities (?testUserId=...) for multi-coach testing. Resolved once
+ *       per call and reused for the retry. Rejections are treated as {}.
  *   warn(...args) — non-fatal diagnostics sink (console.warn in the app).
  */
 
-export function makeAuthFetch({ fetchFn, getToken, forceRefreshToken, warn = () => {} }) {
+export function makeAuthFetch({ fetchFn, getToken, forceRefreshToken, getExtraHeaders = async () => ({}), warn = () => {} }) {
     // Single-flight refresh guard: when several in-flight requests all 401
     // (typical after sleep/wake with an expired token), they share one
     // refresh promise instead of each calling refreshSession() concurrently.
@@ -57,8 +63,16 @@ export function makeAuthFetch({ fetchFn, getToken, forceRefreshToken, warn = () 
     }
 
     return async function authFetchCore(url, options = {}) {
+        let extraHeaders = {};
+        try {
+            extraHeaders = (await getExtraHeaders()) || {};
+        } catch (e) {
+            warn('authFetch: getExtraHeaders failed, continuing without:', e);
+        }
+
         const buildInit = (token) => {
             const headers = {
+                ...extraHeaders,
                 ...options.headers,
                 'Content-Type': 'application/json',
             };

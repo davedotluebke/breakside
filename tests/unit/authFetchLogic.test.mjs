@@ -237,3 +237,44 @@ test('sequential 401s (after the shared refresh settled) each get their own refr
     assert.equal(calls.refreshes, 2);
     assert.equal(calls.fetches.length, 4);
 });
+
+// ── extra identity headers (test-mode X-Test-User-Id pass-through) ──────
+
+test('getExtraHeaders: attached to the request and preserved on the 401 retry', async () => {
+    const { authFetch, calls } = harness({
+        statusByToken: { T1: 401, T2: 200 },
+        getExtraHeaders: async () => ({ 'X-Test-User-Id': 'coach-a' }),
+    });
+    const response = await authFetch('/api/x', { method: 'POST', body: '{}' });
+    assert.equal(response.status, 200);
+    assert.equal(calls.fetches.length, 2);
+    for (const f of calls.fetches) {
+        assert.equal(f.init.headers['X-Test-User-Id'], 'coach-a');
+    }
+});
+
+test('getExtraHeaders: caller headers and Content-Type win over extras', async () => {
+    const { authFetch, calls } = harness({
+        getExtraHeaders: async () => ({ 'Content-Type': 'text/evil', 'X-Custom': 'extra' }),
+    });
+    await authFetch('/api/x', { headers: { 'X-Custom': 'caller' } });
+    const sent = calls.fetches[0].init.headers;
+    assert.equal(sent['Content-Type'], 'application/json');
+    assert.equal(sent['X-Custom'], 'caller');
+});
+
+test('getExtraHeaders: rejection is non-fatal — request proceeds without extras', async () => {
+    const { authFetch, calls } = harness({
+        getExtraHeaders: async () => { throw new Error('no auth module'); },
+    });
+    const response = await authFetch('/api/x', {});
+    assert.equal(response.status, 200);
+    assert.equal(calls.fetches[0].init.headers['X-Test-User-Id'], undefined);
+    assert.equal(calls.warns.length, 1);
+});
+
+test('getExtraHeaders: omitted dep behaves as before (no extra headers)', async () => {
+    const { authFetch, calls } = harness();
+    await authFetch('/api/x', {});
+    assert.equal(calls.fetches[0].init.headers['X-Test-User-Id'], undefined);
+});
