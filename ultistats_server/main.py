@@ -23,12 +23,14 @@ try:
     from auth.jwt_validation import assert_auth_configured
     from storage.file_utils import assert_data_dir_writable
     from narration import router as narration_router
+    from narration_lineup import router as narration_lineup_router
     import routers
 except ImportError:
     from ultistats_server.config import HOST, PORT, DEBUG, ALLOWED_ORIGINS
     from ultistats_server.auth.jwt_validation import assert_auth_configured
     from ultistats_server.storage.file_utils import assert_data_dir_writable
     from ultistats_server.narration import router as narration_router
+    from ultistats_server.narration_lineup import router as narration_lineup_router
     from ultistats_server import routers
 
 # Minimal app-wide logging setup. Uvicorn configures its own access/error
@@ -143,6 +145,9 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 # Mount AI narration router (speech-to-events)
 app.include_router(narration_router)
+# Mount lineup narration router (speech-to-lineup for the Lines tab —
+# separate layer from in-point narration; see narration_lineup.py)
+app.include_router(narration_lineup_router)
 
 # Mount static files (viewer, etc.) - html=True enables serving index.html for directories
 static_dir = Path(__file__).parent / "static"
