@@ -117,11 +117,15 @@ class TestGameVersioning:
     @pytest.fixture
     def games_dir(self, tmp_path, monkeypatch):
         import config
-        from storage import game_storage
+        from storage import game_storage, index_storage
         d = tmp_path / "games"
         d.mkdir()
         monkeypatch.setattr(config, "GAMES_DIR", d)
         monkeypatch.setattr(game_storage, "GAMES_DIR", d)
+        # save_game_version also updates the search index — keep that in
+        # the tmp dir instead of the real data/index.json.
+        monkeypatch.setattr(config, "INDEX_FILE", tmp_path / "index.json")
+        monkeypatch.setattr(index_storage, "INDEX_FILE", tmp_path / "index.json")
         return d
 
     def test_rapid_saves_do_not_collide(self, games_dir):
