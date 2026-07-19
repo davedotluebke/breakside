@@ -201,7 +201,9 @@ const narrationMicButton = (function() {
                 console.error('[micButton] startRecording failed:', err);
                 refreshButtonState();
                 if (typeof showControllerToast === 'function') {
-                    showControllerToast('Microphone unavailable: ' + (err.message || err), 'error');
+                    // Not always a mic problem — the realtime socket can die
+                    // during setup too (G5). Keep the message cause-neutral.
+                    showControllerToast('Narration failed to start: ' + (err.message || err), 'error');
                 }
             });
     }
