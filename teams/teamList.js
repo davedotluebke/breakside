@@ -208,7 +208,7 @@ async function populateCloudTeamsAndGames() {
         if (userTeams.length === 0) {
             listElement.innerHTML = `
                 <p>No teams yet. Create your first team to get started!</p>
-                <p style="font-size: 0.9em; color: #666;">
+                <p class="text-hint">
                     Teams and games are stored in the cloud for multi-device access and coach collaboration.
                 </p>
             `;
@@ -314,7 +314,7 @@ async function populateCloudTeamsAndGames() {
                 topRight.appendChild(settingsBtn);
 
                 const deleteTeamBtn = document.createElement('button');
-                deleteTeamBtn.innerHTML = '<i class="fas fa-trash" style="color: #dc3545;"></i>';
+                deleteTeamBtn.innerHTML = '<i class="fas fa-trash icon-danger"></i>';
                 deleteTeamBtn.classList.add('icon-button');
                 deleteTeamBtn.title = 'Delete Team';
                 deleteTeamBtn.onclick = (e) => {
@@ -1244,7 +1244,7 @@ function renderGameItem(game, team, role, parentEvent) {
 
     if (role === 'coach') {
         const deleteBtn = document.createElement('button');
-        deleteBtn.innerHTML = '<i class="fas fa-trash" style="color: #dc3545;"></i>';
+        deleteBtn.innerHTML = '<i class="fas fa-trash icon-danger"></i>';
         deleteBtn.classList.add('icon-button');
         deleteBtn.title = 'Delete Game';
         deleteBtn.onclick = (e) => {
@@ -1302,7 +1302,7 @@ function renderEventContainer(event, games, team, role) {
         headerBtns.className = 'event-header-btns';
 
         // Roster label collapses "Event roster" → "Roster" → icon-only;
-        // the settings label drops out first. See @container rules in main.css.
+        // the settings label drops out first. See @container rules in css/teams.css.
         const rosterBtn = document.createElement('button');
         rosterBtn.innerHTML = '<i class="fas fa-users"></i>' +
             '<span class="ev-btn-label ev-roster-full">Event roster</span>' +

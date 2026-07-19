@@ -34,7 +34,10 @@
  */
 import { UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
-import { getLatestPoint, getPlayerFromName, isPointInProgress } from '../utils/helpers.js';
+import {
+    currentGame, getLatestPoint, getPlayerFromName, isPointInProgress,
+    formatPlayerName, buildPointPlayerLookup,
+} from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { undoEvent } from '../game/gameLogic.js';
 import { startNextPoint } from '../game/pointManagement.js';
@@ -61,14 +64,23 @@ const fullPbp = (function() {
      * the previous receiver), the user should Undo and re-tap.
      */
     let manualHolder = null;
-    // Tracks the Point object reference last seen by reconstructState so we
-    // can detect crossing a point boundary and clear stale manualHolder.
-    // Without this, a user-tapped holder from the previous point survives
-    // into a new point (especially when the point ends via a path that
-    // doesn't pass through createThrow / createTurnover / createDefense —
-    // e.g. Simple-mode "They Score" or narration) and prevents tapping
-    // someone else to indicate the pull catcher on the new O point.
-    let _lastSeenPointRef = null;
+    // Tracks the point last seen by reconstructState so we can detect
+    // crossing a point boundary and clear stale manualHolder. Without this,
+    // a user-tapped holder from the previous point survives into a new point
+    // (especially when the point ends via a path that doesn't pass through
+    // createThrow / createTurnover / createDefense — e.g. Simple-mode "They
+    // Score" or narration) and prevents tapping someone else to indicate the
+    // pull catcher on the new O point. Keyed by game id + point index, NOT
+    // object identity: cloud sync (refreshGameStateFromCloud — the 3s poll
+    // for non-Active-Coach sessions, wake recovery for everyone) REPLACES
+    // game.points with fresh objects, and that must not wipe the coach's
+    // holder selection mid-point.
+    let _lastSeenPointKey = null;
+    function stablePointKey(point) {
+        const game = (typeof currentGame === 'function') ? currentGame() : null;
+        if (!game || !point || !game.points) return null;
+        return `${game.id}#${game.points.indexOf(point)}`;
+    }
 
     /**
      * Whether the next Throw will have its break_flag set. Toggled by the
@@ -99,14 +111,15 @@ const fullPbp = (function() {
     function reconstructState() {
         const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
 
-        // Point-boundary detection: when getLatestPoint() returns a different
-        // Point instance than last time, we've crossed a boundary — drop any
-        // stale manualHolder from the previous point. Done before delegating so
+        // Point-boundary detection: when the stable key (game id + point
+        // index) changes, we've crossed a boundary — drop any stale
+        // manualHolder from the previous point. Done before delegating so
         // it also covers point-end paths that bypass our event handlers
         // (Simple-mode "They Score", narration). (main fix 1e995c5)
-        if (point !== _lastSeenPointRef) {
+        const key = stablePointKey(point);
+        if (key !== _lastSeenPointKey) {
             manualHolder = null;
-            _lastSeenPointRef = point;
+            _lastSeenPointKey = key;
         }
 
         // Delegate to the shared possession core (playByPlay/pbpPossession.js)
@@ -268,15 +281,17 @@ const fullPbp = (function() {
             } else {
                 const holder = inPoint ? effectiveHolder(state) : null;
                 const isOffense = state.mode === 'offense';
-                const names = [UNKNOWN_PLAYER, ...state.point.players];
+                const entries = [UNKNOWN_PLAYER, ...state.point.players];
 
+                // point.players entries may be current names, player ids
+                // (id-era games), or stale names — resolve through the
+                // game-scoped lookup so no roster row silently vanishes.
+                const lookup = buildPointPlayerLookup(currentGame());
                 rows.innerHTML = '';
-                names.forEach(name => {
-                    const player = (typeof getPlayerFromName === 'function') ? getPlayerFromName(name) : null;
-                    if (!player) return;
-
+                entries.forEach(entry => {
+                    const { name, obj } = lookup(entry);
                     const isHolder = !!(holder && holder.name === name);
-                    const row = renderPlayerRow(player, isHolder, isOffense);
+                    const row = renderPlayerRow(obj, isHolder, isOffense);
                     if (!inPoint) row.classList.add('between-points');
                     rows.appendChild(row);
                 });
@@ -357,30 +372,32 @@ const fullPbp = (function() {
     /**
      * Bottom action row — full-width strip below the modifier row.
      *
-     *   D-mode: [They turnover] [⚙ Events] [They score]
-     *   O-mode: [               ⚙ Events               ]
+     *   D-mode:         [They turnover] [⚙ Events] [They score]
+     *   O-mode:         [               ⚙ Events               ]
+     *   Between points: [               ⚙ Events               ]
      *
      * "Events" opens the existing Game Events modal (Timeout / Injury
      * Sub / Halftime / Switch Sides / End Game) — same modal Simple
      * mode uses. Routes through handlePbpGameEvents so role/permission
-     * checks stay consistent.
+     * checks stay consistent. The bar stays visible between points so
+     * timeouts / halftime / switch sides / end game (which mostly
+     * happen between points) remain reachable from Full mode; the
+     * modal itself disables Injury Sub then (updateGameEventsModalState
+     * in gameScreenEvents.js). The point-scoped They-turnover/They-score
+     * buttons only render mid-point.
      */
     function renderBottomActions(state, inPoint) {
         const bar = document.getElementById('fullPbpBottomActions');
         if (!bar) return;
 
-        if (!inPoint) {
-            bar.style.display = 'none';
-            bar.innerHTML = '';
-            return;
-        }
+        const dMode = inPoint && state.mode === 'defense';
 
         bar.style.display = '';
         bar.innerHTML = '';
-        bar.classList.toggle('mode-defense', state.mode === 'defense');
-        bar.classList.toggle('mode-offense', state.mode === 'offense');
+        bar.classList.toggle('mode-defense', dMode);
+        bar.classList.toggle('mode-offense', !dMode);
 
-        if (state.mode === 'defense') {
+        if (dMode) {
             const tt = document.createElement('button');
             tt.id = 'fullPbpTheyTurnoverBtn';
             tt.className = 'full-pbp-they-turnover-btn';
@@ -398,7 +415,7 @@ const fullPbp = (function() {
         ev.addEventListener('click', handleGameEventsTap);
         bar.appendChild(ev);
 
-        if (state.mode === 'defense') {
+        if (dMode) {
             const ts = document.createElement('button');
             ts.id = 'fullPbpTheyScoreBtn';
             ts.className = 'full-pbp-they-score-btn';
@@ -439,6 +456,7 @@ const fullPbp = (function() {
         { label: 'break',        prop: 'break_flag'  },
         { label: 'huck',         prop: 'huck_flag'   },
         { label: 'reset',        prop: 'dump_flag'   },  // displayed as "reset", flag stays dump_flag
+        { label: 'swing',        prop: 'swing_flag'  },  // auto-set by Field mode geometry; editable anywhere
         { label: 'hammer',       prop: 'hammer_flag' },
         { label: 'sky catch',    prop: 'sky_flag'    },
         { label: 'layout catch', prop: 'layout_flag' }
@@ -550,7 +568,7 @@ const fullPbp = (function() {
         const nameBtn = document.createElement('button');
         nameBtn.type = 'button';
         nameBtn.className = 'full-pbp-name-btn';
-        nameBtn.textContent = isUnknown ? 'Unknown' : player.name;
+        nameBtn.textContent = isUnknown ? 'Unknown' : formatPlayerName(player);
         nameBtn.addEventListener('click', () => handlePlayerNameTap(player));
         row.appendChild(nameBtn);
 

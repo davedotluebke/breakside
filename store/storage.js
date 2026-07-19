@@ -167,6 +167,7 @@ function serializeGame(game) {
             totalPointTime: point.totalPointTime,
             lastPauseTime: point.lastPauseTime ? (typeof point.lastPauseTime === 'string' ? point.lastPauseTime : point.lastPauseTime.toISOString()) : null,
             substitutedOutPlayers: point.substitutedOutPlayers || [],  // Players subbed out mid-point
+            substitutedInPlayers: point.substitutedInPlayers || [],    // Players subbed in mid-point
             modes: point.getModes(),  // PBP modes recorded during this point (union of possessions)
             possessions: point.possessions.map(possession => ({
                 offensive: possession.offensive,
@@ -414,6 +415,7 @@ function deserializePointsFromServer(pointsData) {
         point.totalPointTime = pointData.totalPointTime || 0;
         point.lastPauseTime = pointData.lastPauseTime ? new Date(pointData.lastPauseTime) : null;
         point.substitutedOutPlayers = pointData.substitutedOutPlayers || [];  // Players subbed out mid-point
+        point.substitutedInPlayers = pointData.substitutedInPlayers || [];    // Players subbed in mid-point
         if (pointData.possessions && Array.isArray(pointData.possessions)) {
             point.possessions = pointData.possessions.map(possessionData => {
                 const possession = new Possession(possessionData.offensive);

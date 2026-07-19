@@ -109,6 +109,9 @@ function applyUndoToGame(game, deps) {
             if (Array.isArray(undoneEvent.subbedOutBefore)) {
                 point.substitutedOutPlayers = [...undoneEvent.subbedOutBefore];
             }
+            if (Array.isArray(undoneEvent.subbedInBefore)) {
+                point.substitutedInPlayers = [...undoneEvent.subbedInBefore];
+            }
         }
         // If the undone event was a score, revert updateScore() changes
         if (point.winner && isScoreEvent(undoneEvent)) {

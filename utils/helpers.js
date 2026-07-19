@@ -2,7 +2,7 @@
  * Utility Functions
  * Pure utility functions and data accessors
  */
-import { UNKNOWN_PLAYER } from '../store/models.js';
+import { Gender, UNKNOWN_PLAYER } from '../store/models.js';
 import { UNKNOWN_PLAYER_OBJ, currentTeam } from '../store/storage.js';
 import { log } from './logger.js';
 
@@ -154,17 +154,173 @@ function getActivePossession(activePoint) {
 }
 
 /**
+ * Build a name/id → id resolver scoped to one game.
+ *
+ * `point.players` stores bare strings with no {name, id} structure — and
+ * across data eras those strings are sometimes player NAMES (older games,
+ * pre-line-sync flows) and sometimes player IDS (games whose lines came
+ * through pendingNextLine, e.g. the Nov-2025 CUDO Mixed tournament). Events
+ * carry resolved {name, id} refs, but point.players needs this resolver.
+ * Sources for the mapping, most historically-accurate first:
+ *   1. `game.rosterSnapshot` — the roster as it stood when the game was
+ *      played; the correct source for a renamed/since-removed player.
+ *   2. ids already embedded on this game's own events (thrower/receiver/
+ *      puller/defender/assist carry both name and id once resolved — see
+ *      store/storage.js resolvePlayerReference).
+ *   3. the current team roster, as a last resort (logged — a player renamed
+ *      since this game was played could resolve to the wrong id here).
+ * A string that is already a known player id resolves to itself. A name that
+ * maps to more than one distinct id across these sources is ambiguous and is
+ * NOT guessed at; it gets its own per-name bucket so stats don't silently
+ * merge into the wrong player.
+ * @param {object} game - Deserialized Game object
+ * @param {object} [opts] - { quiet: true } suppresses per-name warnings for
+ *   callers that resolve in a tight loop (e.g. the 1 Hz Lines-tab updater)
+ * @returns {function(string): string} resolve(nameOrId) → a stable stats key;
+ *   also exposes resolve.nameOf(id) → display name when one is known
+ */
+function buildPlayerNameResolver(game, { quiet = false } = {}) {
+    const byName = {};
+    const nameById = {};
+    function add(name, id) {
+        if (!name || !id) return;
+        if (!nameById[id]) nameById[id] = name;
+        if (byName[name] && byName[name] !== id) {
+            byName[name] = 'AMBIGUOUS';
+        } else if (!byName[name]) {
+            byName[name] = id;
+        }
+    }
+
+    (game?.rosterSnapshot?.players || []).forEach(p => add(p.name, p.id));
+
+    (game?.points || []).forEach(point => {
+        (point.possessions || []).forEach(poss => {
+            (poss.events || []).forEach(event => {
+                ['thrower', 'receiver', 'puller', 'defender', 'assist'].forEach(role => {
+                    const ref = event[role];
+                    if (ref && typeof ref === 'object') add(ref.name, ref.id);
+                });
+            });
+        });
+    });
+
+    if (typeof currentTeam !== 'undefined' && currentTeam?.teamRoster) {
+        currentTeam.teamRoster.forEach(p => add(p.name, p.id));
+    }
+
+    function resolve(name) {
+        // Already a known id (id-era point.players): key by it directly.
+        if (nameById[name]) return name;
+        const id = byName[name];
+        if (!id) {
+            if (!quiet) console.warn('[eventStats] Could not resolve player name to id — stats will be keyed by name as a fallback:', name);
+            return `unresolved:${name}`;
+        }
+        if (id === 'AMBIGUOUS') {
+            if (!quiet) console.warn('[eventStats] Ambiguous player name (matches multiple ids) — keeping separate to avoid merging stats:', name);
+            return `ambiguous:${name}`;
+        }
+        return id;
+    }
+    resolve.nameOf = id => nameById[id] || null;
+    return resolve;
+}
+
+/**
+ * Rename-proof point-membership tests for one game.
+ *
+ * point.players / substitutedOutPlayers / substitutedInPlayers hold bare
+ * name-or-id strings frozen when the point was played; comparing them to a
+ * player's CURRENT name breaks the moment a player is renamed mid-game (the
+ * Lines tab once forgot a whole roster's history this way). These tests
+ * match on the stable player id via buildPlayerNameResolver, keeping direct
+ * name/id string equality as the fast path.
+ */
+function buildPointMembership(game) {
+    const resolve = buildPlayerNameResolver(game, { quiet: true });
+    const has = (list, player) => !!player && (list || []).some(entry =>
+        entry === player.name || entry === player.id || resolve(entry) === player.id);
+    return {
+        onLine: (point, player) => !!point && has(point.players, player),
+        subbedOut: (point, player) => !!point && has(point.substitutedOutPlayers, player),
+        subbedIn: (point, player) => !!point && has(point.substitutedInPlayers, player),
+        // Same matching against an arbitrary name-or-id string list (e.g. a
+        // stored next-line selection).
+        onList: (list, player) => has(list, player),
+        // "played" = counted for points/PT: on the line at any moment,
+        // including players substituted out mid-point.
+        played: (point, player) => !!point && (has(point.players, player) ||
+            has(point.substitutedOutPlayers, player)),
+    };
+}
+
+/**
+ * Minimal player-shaped stand-in for an entry that no longer resolves to a
+ * current-roster Player (removed player, unmigrated legacy data, cross-device
+ * roster gap). Shape matches store/storage.js resolvePlayerReference's
+ * fallback, so events recorded against it still serialize the name.
+ */
+function playerStub(name) {
+    return { name, id: null, gender: Gender.UNKNOWN };
+}
+
+/**
+ * Game-scoped lookup for `point.players` entries → current Player objects.
+ *
+ * The entries are bare strings that may be a current roster name, a player id
+ * (id-era games), or a stale name (player renamed/removed since the point was
+ * played) — see buildPlayerNameResolver. UI that builds player buttons/chips
+ * from point.players must resolve through this rather than getPlayerFromName,
+ * otherwise id-era and renamed entries come back undefined (which has
+ * variously meant dead Proceed buttons and silently missing player rows).
+ *
+ * Returns lookup(entry) → { player, name, obj }:
+ *   player — the current-roster Player, or null when nobody matches
+ *   name   — best display name: the player's current name, else the
+ *            historical name recorded for a known id, else the raw entry
+ *   obj    — `player` when resolved, else playerStub(name): always safe to
+ *            render or record an event against
+ */
+function buildPointPlayerLookup(game) {
+    const resolve = buildPlayerNameResolver(game, { quiet: true });
+    return function lookup(entry) {
+        if (entry === UNKNOWN_PLAYER) {
+            return { player: UNKNOWN_PLAYER_OBJ, name: UNKNOWN_PLAYER, obj: UNKNOWN_PLAYER_OBJ };
+        }
+        const roster = currentTeam?.teamRoster || [];
+        let player = roster.find(p => p.name === entry) || roster.find(p => p.id === entry);
+        if (!player) {
+            const id = resolve(entry);  // stable id, or an unresolved:/ambiguous: bucket
+            player = roster.find(p => p.id === id) || null;
+        }
+        const name = player ? player.name : (resolve.nameOf(entry) || entry);
+        return { player, name, obj: player || playerStub(name) };
+    };
+}
+
+/**
  * Helper function to calculate player's time in current game
+ * Accepts a Player object (preferred — survives mid-game renames) or a
+ * player name string.
  * Note: This function references isPaused which is defined in main.js
  */
-function getPlayerGameTime(playerName) {
+function getPlayerGameTime(playerOrName) {
     let totalTime = 0;
     const game = currentGame();
     if (game) {
+        const player = (playerOrName && typeof playerOrName === 'object')
+            ? playerOrName
+            : getPlayerFromName(playerOrName);
+        const membership = buildPointMembership(game);
         game.points.forEach(point => {
-            // Include players who were substituted out mid-point
-            const playedPoint = point.players.includes(playerName) ||
-                (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(playerName));
+            // Include players who were substituted out mid-point. Id-based
+            // matching where possible; raw-string fallback when the name no
+            // longer maps to a roster player.
+            const playedPoint = player
+                ? membership.played(point, player)
+                : (point.players.includes(playerOrName) ||
+                    (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(playerOrName)));
             if (playedPoint) {
                 if (point.endTimestamp) {
                     // For completed points, just use the totalPointTime
@@ -211,23 +367,56 @@ function formatPlayTime(totalTimePlayed) {
 /**
  * Determine whether the next point starts on offense or defense.
  * Pure game logic: inspects completed points, switchsides events, and point winners.
+ *
+ * Normal rule: the scoring team pulls the next point (we scored → we start
+ * on defense). A "switch sides" (halftime) on a point overrides that for
+ * the FOLLOWING point: each period opens with roles swapped from how the
+ * previous period opened — the team that pulled to start the game receives
+ * to start the second half, from the other end — regardless of who won the
+ * point before the break. (Two switchsides on the same point cancel: an
+ * accidental tap plus its correction.)
  */
 function determineStartingPosition() {
     if (!currentGame()) { log("Warning: No current game"); return 'offense'; }
+    const flip = pos => (pos === 'offense') ? 'defense' : 'offense';
     let startPointOn = currentGame().startingPosition;
+    // How the current period opened; the first period opens on the game's
+    // startingPosition, and each halftime flips it.
+    let periodOpening = currentGame().startingPosition;
     currentGame().points.forEach(point => {
         let switchsides = false;
+        let forceswap = false;
         point.possessions.forEach(possession => {
             possession.events.forEach(event => {
-                if (event.type === 'Other' && event.switchsides_flag) {
+                if (event.type !== 'Other') return;
+                // Halftime IS a period break (it implies the side switch);
+                // a bare switchsides event counts the same.
+                if (event.switchsides_flag || event.halftime_flag) {
                     switchsides = !switchsides;
+                }
+                // Manual "Swap O & D" correction — applied on top of
+                // whatever the rules below compute.
+                if (event.forceswap_flag) {
+                    forceswap = !forceswap;
                 }
             });
         });
-        if (point.winner === 'team') {
-            startPointOn = switchsides ? 'offense' : 'defense';
+        if (switchsides) {
+            // Halftime after this point: next point restarts play with the
+            // period-opening roles swapped, ignoring this point's winner.
+            periodOpening = flip(periodOpening);
+            startPointOn = periodOpening;
+        } else if (point.winner === 'team') {
+            startPointOn = 'defense';   // we scored → we pull
         } else {
-            startPointOn = switchsides ? 'defense' : 'offense';
+            startPointOn = 'offense';   // they scored → they pull to us
+        }
+        if (forceswap) {
+            // Coach says the computed orientation is backwards from here on:
+            // invert the next start AND the period bookkeeping, so a later
+            // halftime flips from the corrected orientation.
+            startPointOn = flip(startPointOn);
+            periodOpening = flip(periodOpening);
         }
     });
     return startPointOn;
@@ -241,12 +430,27 @@ function capitalize(word) {
 }
 
 /**
+ * Whether jersey numbers should be shown alongside player names.
+ * Per-device display preference; defaults to true. Read late-bound via
+ * window.advancedSettings because the settings module sits above this
+ * layer (window survivor: settings/advancedSettings.js).
+ */
+function showPlayerNumbers() {
+    const adv = (typeof window !== 'undefined') ? window.advancedSettings : null;
+    if (adv && typeof adv.get === 'function') {
+        return adv.get('display.showPlayerNumbers') !== false;
+    }
+    return true;
+}
+
+/**
  * Format player name with jersey number for display
- * Returns "Name (#)" if number exists, otherwise just "Name"
+ * Returns "Name (#)" if number exists and the "show player numbers"
+ * setting is on, otherwise just "Name"
  */
 function formatPlayerName(player) {
     if (!player) return '';
-    if (player.number !== null && player.number !== undefined) {
+    if (player.number !== null && player.number !== undefined && showPlayerNumbers()) {
         return `${player.name} (${player.number})`;
     }
     return player.name;
@@ -311,7 +515,9 @@ export {
     getPlayerFromName, currentGame, getLatestPoint, getLatestPossession,
     getLatestEvent, getPossessionOf, getPointOf, isPointInProgress,
     getActivePossession, getPlayerGameTime, formatPlayTime,
+    buildPlayerNameResolver, buildPointMembership, buildPointPlayerLookup, playerStub,
     determineStartingPosition, capitalize, formatPlayerName, extractPlayerName,
+    showPlayerNumbers,
     getGenderRatioForPoint, getExpectedGenderRatio, getExpectedGenderCounts,
 };
 

@@ -66,7 +66,7 @@ The frontend is a vanilla JavaScript Progressive Web App with no framework depen
 ultistats/
 ├── index.html              # Main HTML entry point
 ├── main.js                 # Application bootstrap (~436 lines)
-├── main.css                # Application styles
+├── css/                    # Application styles: tokens.css (color palette) + per-concern files split from the old main.css (load order preserved in index.html)
 ├── manifest.json           # PWA manifest
 ├── service-worker.js       # Service worker for offline functionality
 ├── version.json            # Version tracking
@@ -190,13 +190,13 @@ ships to S3 as-is and runs directly in the browser.
 
 A handful of non-obvious cascade and box-model details have bitten layout work in this codebase. Check this list before chasing a "why is the button the wrong size" rabbit hole.
 
-- **Global `button { padding: 10px 15px; margin: 10px; }`** lives in [main.css](main.css). Every panel button inherits both. When a custom button looks too tall, too narrow, or has unexpected gaps, it's almost always the inherited `margin: 10px` (not just padding). Override **both** in the panel/component scope: e.g. `.panel-playByPlayFull button { margin: 0; }`. Forgetting this was the root cause of the Full PBP row-height debugging episode.
+- **Global `button { padding: 10px 15px; margin: 10px; }`** lives in [css/base.css](css/base.css). Every panel button inherits both. When a custom button looks too tall, too narrow, or has unexpected gaps, it's almost always the inherited `margin: 10px` (not just padding). Override **both** in the panel/component scope: e.g. `.panel-playByPlayFull button { margin: 0; }`. Forgetting this was the root cause of the Full PBP row-height debugging episode.
   - **Recurring symptom: `<button>`s and `<div>`s in the same flex container space differently.** A flex/grid layout that mixes the two — e.g. a column of `<div>` chips followed by `<button>` modifiers, or a button row relying on `gap` — will look unevenly spaced and overflow, because only the buttons carry the inherited `margin: 10px` (flex margins are *not* collapsed, and they stack on top of `gap`). The buttons appear "spaced more widely" than the divs, and a `gap`-based row wraps sooner than its measured widths predict. Both the Field-tab pull modifier overflow and the score-dialog action row wrapping to extra rows were this. Fix: `margin: 0` on the button elements in that scope and let `gap` (or the chips' own spacing) do the work.
 - **Reusable button presets carry their own size.** `.pbp-start-point-btn` (in [ui/panelSystem.css](ui/panelSystem.css)) is a "loud CTA" preset (16px/20px padding, 1.2rem font, 12px radius) designed for the PBP panel where it's the only thing competing for space. Reusing it in denser contexts requires slimming via a sibling class — see `.line-tab-start-point-btn`. Setting only `display` is not enough.
 - **`width: 100%` on flex/grid children resolves against the *containing block including its padding*.** When a 100%-width child overflows on the right, the fix is usually to drop `width: 100%`, use `align-self: stretch`, and add `box-sizing: border-box`. The "They turnover / They score" buttons in Full PBP hit this.
 - **Flex/grid children with their own min-content won't shrink below it** unless you give them `min-width: 0` (flex) or `minmax(0, …fr)` (grid columns). If a 60/40 split is rendering more like 75/25, this is why. Full PBP migrated from flex to grid for exactly this reason.
 - **Service worker caching makes CSS look "stuck."** The PWA serves the cached `service-worker.js` until its `cacheName` constant changes. If a CSS edit isn't visible after deploy, bump `cacheName` in [service-worker.js](service-worker.js) and double-reload. Always verify against build number in version.json before assuming the change didn't deploy.
-- **`position: sticky` table cells need `border-collapse: separate`.** The stats tables (game summary, event/team roster) use sticky header rows and sticky leftmost columns. With the default `border-collapse: collapse`, sticky cell backgrounds render transparent and other rows bleed through on scroll. The fix (in [main.css](main.css)) is `border-collapse: separate; border-spacing: 0;` plus an opaque `background-color` on every `th`/`td`, and a raised `z-index` on the header-row corner cells so they outrank both the sticky row and sticky column. Sticky also silently no-ops unless the scroll container (`.roster-table-container`) is the actual `overflow: auto` ancestor.
+- **`position: sticky` table cells need `border-collapse: separate`.** The stats tables (game summary, event/team roster) use sticky header rows and sticky leftmost columns. With the default `border-collapse: collapse`, sticky cell backgrounds render transparent and other rows bleed through on scroll. The fix (in [css/tables.css](css/tables.css)) is `border-collapse: separate; border-spacing: 0;` plus an opaque `background-color` on every `th`/`td`, and a raised `z-index` on the header-row corner cells so they outrank both the sticky row and sticky column. Sticky also silently no-ops unless the scroll container (`.roster-table-container`) is the actual `overflow: auto` ancestor.
 
 When CLAUDE finds a *new* gotcha worth remembering across sessions, add it here rather than to CLAUDE.md.
 
@@ -679,6 +679,33 @@ function generateShortId(name) {
 - On sync, if ID exists with different data, append 2 more chars
 - Example: `Alice-7f3a` collides → try `Alice-7f3a2b`
 - Extremely rare with 4-char hash (1 in 1.6M chance per name)
+
+### point.players entries: names OR ids (data eras)
+
+`point.players` (and `substitutedOutPlayers` / `substitutedInPlayers`) store
+bare strings with no `{name, id}` structure, and what those strings *are*
+varies by data era:
+
+- **names** — older games and locally-picked lines (checkbox flows)
+- **player ids** — games whose lines came through `pendingNextLine` sync
+  (e.g. the Nov-2025 CUDO Mixed tournament)
+- **stale names** — a player renamed or removed mid-game leaves the old
+  name frozen in earlier points
+
+**Never resolve these entries with a raw `getPlayerFromName()`** — an id-era
+or stale entry comes back `undefined`, which has variously meant dead
+Proceed buttons (pull/score dialogs) and player rows silently vanishing
+(Full PBP, Field rail). Route through the helpers in `utils/helpers.js`:
+
+- `buildPointPlayerLookup(game)` — entry → `{player, name, obj}` for UI that
+  renders player buttons/chips from `point.players` (`obj` is always safe to
+  render or record an event against; it falls back to `playerStub(name)`)
+- `buildPointMembership(game)` — rename-proof onLine/subbedOut/played tests
+- `buildPlayerNameResolver(game)` — entry → stable stats key (stats layer)
+
+Related: button labels may carry jersey-number suffixes
+(`formatPlayerName`), so match buttons on `dataset.playerName` (canonical
+current name), never on `textContent`.
 
 ### Server-Side Index
 

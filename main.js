@@ -46,7 +46,7 @@
  *   │                            # - Module coordination
  *   │
  *   ├── index.html              # Main HTML with module script tags
- *   ├── main.css                # Application styles
+ *   ├── css/*.css              # Application styles (tokens + per-concern files)
  *   ├── manifest.json           # PWA manifest
  *   └── service-worker.js       # Service worker for offline functionality
  *
@@ -444,7 +444,7 @@ function showPwaInstallPrompt() {
             } else {
                 installBtn.style.display = 'none';
                 messageEl.innerHTML += `
-                    <p style="font-size: 0.9em; color: #666;">Tap your browser's menu (⋮) and select "Add to Home Screen" or "Install App".</p>
+                    <p class="text-hint">Tap your browser's menu (⋮) and select "Add to Home Screen" or "Install App".</p>
                 `;
             }
             instructionsLink.style.display = 'none';

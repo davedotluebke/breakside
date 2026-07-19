@@ -10,6 +10,7 @@ import { teams, currentTeam, saveAllTeamsData } from '../store/storage.js';
 import {
     currentGame, getLatestPoint, isPointInProgress,
     determineStartingPosition, formatPlayerName,
+    buildPlayerNameResolver, buildPointMembership,
 } from '../utils/helpers.js';
 import { refreshPendingLineFromCloud } from '../store/sync.js';
 import { resetPendingLinesAtPointEnd } from '../store/pendingLineLogic.js';
@@ -179,7 +180,8 @@ function wireGameScreenEvents() {
     if (switchSidesBtn2) {
         switchSidesBtn2.addEventListener('click', () => {
             closeGameMenu();
-            applySwitchSides();
+            // Same confirm flow as the Events modal's Swap O & D button.
+            showSwapODModal();
         });
     }
 
@@ -597,6 +599,18 @@ function wirePlayByPlayEvents() {
     if (undoBtn) {
         undoBtn.addEventListener('click', handlePbpUndo);
     }
+
+    // Line tab's Undo + Events buttons — same handlers as the PBP row's
+    // (role checks included). Visibility is managed by
+    // updateLineTabStartPointBtn (shown only while the Line tab is active).
+    const lineTabUndoBtn = document.getElementById('lineTabUndoBtn');
+    if (lineTabUndoBtn) {
+        lineTabUndoBtn.addEventListener('click', handlePbpUndo);
+    }
+    const lineTabGameEventsBtn = document.getElementById('lineTabGameEventsBtn');
+    if (lineTabGameEventsBtn) {
+        lineTabGameEventsBtn.addEventListener('click', handlePbpGameEvents);
+    }
     
     // Sub Players button
     const subPlayersBtn = document.getElementById('pbpSubPlayersBtn');
@@ -987,6 +1001,7 @@ function confirmSubstitution() {
     // below carries these so undoEvent can restore the roster exactly.
     const playersBefore = [...previousPlayers];
     const subbedOutBefore = [...(point.substitutedOutPlayers || [])];
+    const subbedInBefore = [...(point.substitutedInPlayers || [])];
 
     // Track substituted-out players for points-played counting
     if (!point.substitutedOutPlayers) {
@@ -998,6 +1013,17 @@ function confirmSubstitution() {
         }
     });
 
+    // Track substituted-in players too — they also played only part of the
+    // point, so the line table italicizes them the same as subbed-out.
+    if (!point.substitutedInPlayers) {
+        point.substitutedInPlayers = [];
+    }
+    playersIn.forEach(p => {
+        if (!point.substitutedInPlayers.includes(p)) {
+            point.substitutedInPlayers.push(p);
+        }
+    });
+    
     // Update current point players
     point.players = newPlayers;
 
@@ -1038,6 +1064,7 @@ function confirmSubstitution() {
         description: subDescription,
         playersBefore: playersBefore,
         subbedOutBefore: subbedOutBefore,
+        subbedInBefore: subbedInBefore,
     });
 
     currentPossession.events.push(subEvent);
@@ -1174,11 +1201,10 @@ function showGameEventsModal() {
         document.body.appendChild(modal);
     }
     
-    // Show the modal BEFORE refreshing button states —
-    // updateGameEventsModalState early-returns while display is 'none', so
-    // the old order (update, then show) left every reopen with the button
-    // states from the previous open (e.g. End Game stuck disabled between
-    // points after the modal had been opened mid-point).
+    // Show modal FIRST — updateGameEventsModalState early-returns while the
+    // modal is display:none, so updating before showing left stale states on
+    // every reopen (e.g. mid-point Injury-Sub-enabled states surviving into
+    // a between-points open).
     modal.style.display = 'flex';
 
     // Update button states based on game state
@@ -1209,13 +1235,17 @@ function createGameEventsModal() {
                     <i class="fas fa-exchange-alt"></i>
                     <span>Injury Sub</span>
                 </button>
+                <button id="geCorrectLineupBtn" class="ge-btn ge-btn-correctlineup" title="Swap a mistakenly-entered player for the right one — reassigns this point's stats">
+                    <i class="fas fa-user-edit"></i>
+                    <span>Correct Lineup</span>
+                </button>
                 <button id="geHalfTimeBtn" class="ge-btn ge-btn-halftime">
                     <i class="fas fa-pause-circle"></i>
                     <span>Half Time</span>
                 </button>
-                <button id="geSwitchSidesBtn" class="ge-btn ge-btn-switch">
-                    <i class="fas fa-exchange-alt"></i>
-                    <span>Switch Sides</span>
+                <button id="geSwitchSidesBtn" class="ge-btn ge-btn-switch" title="Force-swap which team pulls next (manual correction — not halftime)">
+                    <i class="fas fa-random"></i>
+                    <span>Swap O &amp; D</span>
                 </button>
                 <button id="geEndGameBtn" class="ge-btn ge-btn-endgame">
                     <i class="fas fa-flag-checkered"></i>
@@ -1250,6 +1280,12 @@ function createGameEventsModal() {
     const injurySubBtn = modal.querySelector('#geInjurySubBtn');
     if (injurySubBtn) {
         injurySubBtn.addEventListener('click', handleGameEventInjurySub);
+    }
+
+    // Correct Lineup button — fix a wrong player entered on the line
+    const correctLineupBtn = modal.querySelector('#geCorrectLineupBtn');
+    if (correctLineupBtn) {
+        correctLineupBtn.addEventListener('click', handleGameEventCorrectLineup);
     }
 
     // Half Time button
@@ -1291,61 +1327,618 @@ function hideGameEventsModal() {
  * UI cleanly.
  */
 function handleGameEventInjurySub() {
+    // Between points the button renders disabled (class-only, so this
+    // handler still runs) — surface the same toast as the dedicated Sub
+    // button rather than doing nothing, and keep the Events modal open.
+    if (typeof isPointInProgress === 'function' && !isPointInProgress()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('No point in progress - use Select Next Line instead', 'info');
+        }
+        return;
+    }
     hideGameEventsModal();
     if (typeof handlePbpSubPlayers === 'function') {
         handlePbpSubPlayers();
     }
 }
 
+// =============================================================================
+// Correct Lineup (fix a wrong player entered on the current point's line)
+// =============================================================================
+
+// Selected players for the Correct Lineup dialog (Player objects or null).
+let correctLineupMistaken = null;
+let correctLineupCorrect = null;
+
 /**
- * Handle Timeout game event
+ * Handle Correct Lineup from the Game Events modal. Mid-point only: the
+ * correction rewrites the current point's membership and events, which only
+ * makes sense while that point is still the latest thing being recorded.
+ * Between points the button renders disabled (class-only) — explain why.
+ */
+function handleGameEventCorrectLineup() {
+    if (typeof isPointInProgress === 'function' && !isPointInProgress()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('No point in progress — Correct Lineup fixes the current point', 'info');
+        }
+        return;
+    }
+    if (!canEditPlayByPlay()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('You need Play-by-Play control to correct the lineup', 'warning');
+        }
+        return;
+    }
+    hideGameEventsModal();
+    showCorrectLineupModal();
+}
+
+/**
+ * Create the Correct Lineup modal if it doesn't exist. Two columns:
+ * the mistaken player (currently on the line, comes off) and the correct
+ * player (from the bench, goes on). Unlike the score dialog's cross-column
+ * disabling, the same player structurally can't appear in both columns —
+ * one lists only on-line players, the other only bench players.
+ */
+function createCorrectLineupModal() {
+    if (document.getElementById('correctLineupModal')) {
+        return document.getElementById('correctLineupModal');
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'correctLineupModal';
+    modal.className = 'modal game-events-modal';
+
+    modal.innerHTML = `
+        <div class="modal-content game-events-modal-content correct-lineup-modal-content">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Correct Lineup</h2>
+                <span class="close" id="correctLineupModalClose">&times;</span>
+            </div>
+            <p class="text-hint">Put the wrong player on the line? Pick the player entered
+            by mistake and the player actually on the field. Everything recorded this
+            point — throws, defense, playing time — moves to the correct player.
+            (For a real player change, use Injury Sub instead.)</p>
+            <div class="correct-lineup-columns">
+                <div class="correct-lineup-column">
+                    <h3>Entered by mistake</h3>
+                    <div class="player-buttons" id="clMistakenButtons"></div>
+                </div>
+                <div class="correct-lineup-column">
+                    <h3>Actually played</h3>
+                    <div class="player-buttons" id="clCorrectButtons"></div>
+                </div>
+            </div>
+            <div class="sub-players-buttons">
+                <button id="correctLineupCancelBtn" class="ge-btn">Cancel</button>
+                <button id="correctLineupConfirmBtn" class="ge-btn ge-btn-confirm" disabled>Confirm</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    document.getElementById('correctLineupModalClose').addEventListener('click', hideCorrectLineupModal);
+    document.getElementById('correctLineupCancelBtn').addEventListener('click', hideCorrectLineupModal);
+    document.getElementById('correctLineupConfirmBtn').addEventListener('click', confirmCorrectLineup);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            hideCorrectLineupModal();
+        }
+    });
+
+    return modal;
+}
+
+function showCorrectLineupModal() {
+    const modal = createCorrectLineupModal();
+    populateCorrectLineupColumns();
+    modal.style.display = 'flex';
+}
+
+function hideCorrectLineupModal() {
+    const modal = document.getElementById('correctLineupModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Fill the two columns from the roster: on-line players (id-aware — see
+ * buildPointMembership) go in the "mistaken" column, everyone else in the
+ * "correct" column. Selections reset on every open.
+ */
+function populateCorrectLineupColumns() {
+    const mistakenCol = document.getElementById('clMistakenButtons');
+    const correctCol = document.getElementById('clCorrectButtons');
+    if (!mistakenCol || !correctCol) return;
+    mistakenCol.innerHTML = '';
+    correctCol.innerHTML = '';
+    correctLineupMistaken = null;
+    correctLineupCorrect = null;
+    updateCorrectLineupConfirmState();
+
+    const game = (typeof currentGame === 'function') ? currentGame() : null;
+    const point = getLatestPoint();
+    if (!game || !point || !currentTeam || !currentTeam.teamRoster) return;
+
+    const membership = buildPointMembership(game);
+    const sortedRoster = [...currentTeam.teamRoster].sort((a, b) => a.name.localeCompare(b.name));
+    sortedRoster.forEach(player => {
+        const onLine = membership.onLine(point, player);
+        const btn = document.createElement('button');
+        btn.classList.add('player-button');
+        btn.textContent = typeof formatPlayerName === 'function'
+            ? formatPlayerName(player)
+            : player.name;
+        if (player.gender === Gender.FMP) btn.classList.add('player-fmp');
+        else if (player.gender === Gender.MMP) btn.classList.add('player-mmp');
+        btn.addEventListener('click', () => handleCorrectLineupSelect(player, onLine, btn));
+        (onLine ? mistakenCol : correctCol).appendChild(btn);
+    });
+}
+
+/**
+ * Single-select within a column; tapping the selected button deselects it.
+ */
+function handleCorrectLineupSelect(player, isMistakenColumn, btn) {
+    const wasSelected = btn.classList.contains('selected');
+    btn.parentElement.querySelectorAll('.player-button').forEach(b => b.classList.remove('selected'));
+    if (!wasSelected) btn.classList.add('selected');
+    const chosen = wasSelected ? null : player;
+    if (isMistakenColumn) {
+        correctLineupMistaken = chosen;
+    } else {
+        correctLineupCorrect = chosen;
+    }
+    updateCorrectLineupConfirmState();
+}
+
+function updateCorrectLineupConfirmState() {
+    const confirmBtn = document.getElementById('correctLineupConfirmBtn');
+    if (confirmBtn) {
+        confirmBtn.disabled = !(correctLineupMistaken && correctLineupCorrect);
+    }
+}
+
+function confirmCorrectLineup() {
+    if (!correctLineupMistaken || !correctLineupCorrect) return;
+    if (!canEditPlayByPlay()) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('You need Play-by-Play control to correct the lineup', 'warning');
+        }
+        return;
+    }
+    hideCorrectLineupModal();
+    applyLineupCorrection(correctLineupMistaken, correctLineupCorrect);
+}
+
+/**
+ * Apply a lineup correction to the CURRENT point: the mistaken player was
+ * never on the field, the correct player was. Rewrites the point's
+ * membership lists and every event recorded this point so the accumulated
+ * stats — throws, defense plays, points played, playing time — belong to
+ * the correct player, then records an Other{lineupCorrection} event.
+ *
+ * Points played and playing time need no explicit transfer: both derive
+ * from point membership (see buildPointMembership / getPlayerGameTime), so
+ * replacing the names in point.players moves them. Live per-player counters
+ * credited at event creation (completedPasses, and goals/assists on scores
+ * — see pbpPossession.createThrow) ARE transferred alongside each rewritten
+ * event.
+ * @param {object} mistakenPlayer - Player entered by mistake (comes off)
+ * @param {object} correctPlayer - Player who actually played (goes on)
+ */
+function applyLineupCorrection(mistakenPlayer, correctPlayer) {
+    const game = (typeof currentGame === 'function') ? currentGame() : null;
+    const point = getLatestPoint();
+    if (!game || !point || !mistakenPlayer || !correctPlayer) return;
+
+    const resolve = buildPlayerNameResolver(game, { quiet: true });
+    const matchesMistaken = entry =>
+        entry === mistakenPlayer.name ||
+        entry === mistakenPlayer.id ||
+        resolve(entry) === mistakenPlayer.id;
+    // Membership lists hold name-or-id strings depending on data era —
+    // keep each replaced entry in the same form it had.
+    const replaceIn = list => {
+        if (!list) return;
+        for (let i = 0; i < list.length; i++) {
+            if (matchesMistaken(list[i])) {
+                list[i] = (list[i] === mistakenPlayer.id) ? correctPlayer.id : correctPlayer.name;
+            }
+        }
+    };
+    replaceIn(point.players);
+    replaceIn(point.substitutedOutPlayers);
+    replaceIn(point.substitutedInPlayers);
+
+    // Reassign this point's events and mirror the live stat counters that
+    // were credited when each event was created.
+    const transfer = stat => {
+        mistakenPlayer[stat] = Math.max(0, (mistakenPlayer[stat] || 0) - 1);
+        correctPlayer[stat] = (correctPlayer[stat] || 0) + 1;
+    };
+    let reassigned = 0;
+    (point.possessions || []).forEach(poss => {
+        (poss.events || []).forEach(evt => {
+            ['thrower', 'receiver', 'assist', 'defender', 'puller'].forEach(role => {
+                const ref = evt[role];
+                if (!ref || typeof ref !== 'object') return;
+                if (ref !== mistakenPlayer && ref.id !== mistakenPlayer.id) return;
+                evt[role] = correctPlayer;
+                reassigned++;
+                if (evt.type === 'Throw' && role === 'thrower') {
+                    transfer('completedPasses');
+                    // A score's assist defaults to the thrower when no
+                    // explicit assist holder was set.
+                    if (evt.score_flag && !evt.assist) transfer('assists');
+                }
+                if (evt.type === 'Throw' && evt.score_flag && role === 'receiver') {
+                    transfer('goals');
+                }
+                if (evt.type === 'Throw' && evt.score_flag && role === 'assist') {
+                    transfer('assists');
+                }
+                if (evt.type === 'Defense' && evt.Callahan_flag && role === 'defender') {
+                    transfer('goals');
+                }
+                if (evt.type === 'Pull' && role === 'puller') {
+                    evt.pullerGender = correctPlayer.gender;
+                }
+            });
+        });
+    });
+
+    // Record the correction on the current possession (like Injury Sub —
+    // skip the event, but not the correction, in the no-possession edge
+    // case; injecting a new possession mid-point would corrupt the O/D
+    // inference that counts possessions).
+    const description = `Corrected lineup: ${correctPlayer.name} in for ${mistakenPlayer.name}` +
+        (reassigned ? ` (${reassigned} event${reassigned === 1 ? '' : 's'} reassigned)` : '');
+    const currentPossession = point.possessions.length > 0
+        ? point.possessions[point.possessions.length - 1]
+        : null;
+    if (currentPossession) {
+        currentPossession.events.push(new Other({ lineupCorrection: true, description }));
+    }
+
+    if (typeof logEvent === 'function') logEvent(description);
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    if (typeof updateGameLogEvents === 'function') updateGameLogEvents();
+    // Re-render the PBP surfaces — player rows/chips come from point.players.
+    if (window.narrationEventBus && typeof window.narrationEventBus.publish === 'function') {
+        window.narrationEventBus.publish('pointChanged', {});
+    }
+    if (typeof showControllerToast === 'function') {
+        showControllerToast(description, 'success');
+    }
+}
+
+/**
+ * Handle Timeout game event — ask who called it before recording anything.
+ * The Other{timeout} event is only created once Us/Them/Neither is chosen
+ * in the follow-up dialog; closing it (X or backdrop tap) cancels with no
+ * event recorded.
  */
 function handleGameEventTimeout() {
-    if (typeof showControllerToast === 'function') {
-        showControllerToast('Timeout called', 'info');
-    }
-    
-    // Log the event (future: add to game log)
-    log('Game Event: Timeout');
-    
+
     hideGameEventsModal();
+
+    const game = (typeof currentGame === 'function') ? currentGame() : null;
+    if (!game || !game.points || !game.points.length) {
+        // Nowhere to attach the event yet (game not started / no first point).
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('No point recorded yet — timeout not saved', 'warning');
+        }
+        return;
+    }
+
+    showTimeoutWhoModal();
 }
 
 /**
- * Handle Half Time game event
+ * Show the "Who called timeout?" modal (created lazily, like the Game
+ * Events modal itself).
+ */
+function showTimeoutWhoModal() {
+    let modal = document.getElementById('timeoutWhoModal');
+    if (!modal) {
+        modal = createTimeoutWhoModal();
+        document.body.appendChild(modal);
+    }
+    modal.style.display = 'flex';
+}
+
+/**
+ * Hide the "Who called timeout?" modal
+ */
+function hideTimeoutWhoModal() {
+    const modal = document.getElementById('timeoutWhoModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Create the "Who called timeout?" modal
+ * @returns {HTMLElement}
+ */
+function createTimeoutWhoModal() {
+    const modal = document.createElement('div');
+    modal.id = 'timeoutWhoModal';
+    modal.className = 'modal game-events-modal';
+
+    modal.innerHTML = `
+        <div class="modal-content game-events-modal-content">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Who called timeout?</h2>
+                <span class="close" id="timeoutWhoModalClose">&times;</span>
+            </div>
+            <div class="game-events-buttons timeout-who-buttons">
+                <button id="toWhoUsBtn" class="ge-btn ge-btn-who-us">
+                    <i class="fas fa-users"></i>
+                    <span>Us</span>
+                </button>
+                <button id="toWhoThemBtn" class="ge-btn ge-btn-who-them">
+                    <i class="fas fa-user-friends"></i>
+                    <span>Them</span>
+                </button>
+                <button id="toWhoNeitherBtn" class="ge-btn ge-btn-who-neither">
+                    <i class="fas fa-minus-circle"></i>
+                    <span>Neither</span>
+                </button>
+            </div>
+        </div>
+    `;
+
+    // X / backdrop tap = cancel: no timeout event is created.
+    const closeBtn = modal.querySelector('#timeoutWhoModalClose');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', hideTimeoutWhoModal);
+    }
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            hideTimeoutWhoModal();
+        }
+    });
+
+    modal.querySelector('#toWhoUsBtn').addEventListener('click', () => recordTimeout('us'));
+    modal.querySelector('#toWhoThemBtn').addEventListener('click', () => recordTimeout('them'));
+    modal.querySelector('#toWhoNeitherBtn').addEventListener('click', () => recordTimeout('neither'));
+
+    return modal;
+}
+
+/**
+ * Record a timeout as an Other{timeout} event on the latest point's last
+ * possession. Works mid-point and between points — like Switch Sides, a
+ * between-points timeout attaches to the just-finished point.
+ * @param {'us'|'them'|'neither'} calledBy
+ */
+function recordTimeout(calledBy) {
+    hideTimeoutWhoModal();
+
+    const game = (typeof currentGame === 'function') ? currentGame() : null;
+    if (!game || !game.points || !game.points.length) return;
+
+    const point = game.points[game.points.length - 1];
+    point.possessions = point.possessions || [];
+    let poss = point.possessions[point.possessions.length - 1];
+    if (!poss) { poss = new Possession(true); point.possessions.push(poss); }
+
+    // Resolve the display name now — the log reads "Timeout called by
+    // Rivals", not "by them" (summarize falls back to us/them for events
+    // recorded before calledByName existed).
+    const calledByName = calledBy === 'us' ? (game.team || null)
+        : calledBy === 'them' ? (game.opponent || null)
+        : null;
+    // A timeout recorded after the point ended is flagged so the log
+    // renderers print it after the "scores!" lines (real-world order).
+    const timeoutEvent = new Other({
+        timeout: true, calledBy, calledByName,
+        betweenPoints: point.winner ? true : null,
+    });
+    poss.events.push(timeoutEvent);
+
+    const summary = timeoutEvent.summarize().trim();
+    if (typeof logEvent === 'function') logEvent(summary);
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    if (typeof updateGameLogEvents === 'function') updateGameLogEvents();
+    // Publish so subscribed PBP tabs (Full/Field logs) repaint.
+    if (window.narrationEventBus && typeof window.narrationEventBus.publish === 'function') {
+        window.narrationEventBus.publish('eventAdded', { event: timeoutEvent });
+    }
+    if (typeof showControllerToast === 'function') {
+        showControllerToast(summary, 'success');
+    }
+}
+
+/**
+ * Handle Half Time game event: a period break. Records an Other{halftime}
+ * event and applies the full side-switch semantics — at halftime teams
+ * always swap ends, and the team that pulled to start the game receives
+ * to start the second half (see applyPeriodBreak / determineStartingPosition).
  */
 function handleGameEventHalfTime() {
-    if (typeof showControllerToast === 'function') {
-        showControllerToast('Half Time', 'info');
-    }
-    
-    // Log the event
-    log('Game Event: Half Time');
-    
+
     hideGameEventsModal();
+    applyPeriodBreak('halftime');
 }
 
 /**
- * Apply a halftime "Switch Sides": teams swap ends, so the side that pulled
- * from one endzone now receives from the other.
+ * Apply a period break — Halftime, or a bare "Switch Sides": teams swap
+ * ends, so the side that pulled from one endzone now receives from the other.
  *
  * Two effects, kept separate:
- *  1. O/D logic — record an Other{switchsides} event on the last completed
- *     point. determineStartingPosition() already inverts the next point's
- *     starting position when it sees this flag, so who starts on O vs D for the
- *     halftime restart flips (or not, depending on the score so far). Before
- *     any point exists, just flip the game's initial startingPosition instead.
+ *  1. O/D logic — record an Other{halftime} / Other{switchsides} event on the
+ *     last completed point. determineStartingPosition() treats either flag as
+ *     a period break: the next point opens with roles swapped from how the
+ *     previous period opened (the team that pulled to start the game receives
+ *     after halftime), regardless of who won the point before the break.
+ *     Before any point exists, just flip the game's initial startingPosition.
  *  2. Field display — flip the attack direction so the drawn field matches the
  *     physical end swap for the rest of the game (the per-point auto-flip then
  *     continues on top of the new base).
  *
- * Halftime happens between points; guarded to not fire mid-point.
+ * Period breaks happen between points; guarded to not fire mid-point.
+ * @param {'halftime'|'switchsides'} kind
  */
-function applySwitchSides() {
+function applyPeriodBreak(kind) {
     const inPoint = (typeof isPointInProgress === 'function') && isPointInProgress();
     if (inPoint) {
         if (typeof showControllerToast === 'function') {
-            showControllerToast('Switch sides between points (at halftime)', 'warning');
+            showControllerToast(kind === 'halftime'
+                ? 'Halftime can only be called between points'
+                : 'Switch sides between points (at halftime)', 'warning');
+        }
+        return;
+    }
+
+    const game = (typeof currentGame === 'function') ? currentGame() : null;
+    if (!game) return;
+
+    const isHalftime = kind === 'halftime';
+    const breakEvent = new Other(isHalftime
+        ? { halftime: true, betweenPoints: true }
+        : { switchsides: true, betweenPoints: true });
+
+    if (game.points && game.points.length) {
+        const lastPoint = game.points[game.points.length - 1];
+        lastPoint.possessions = lastPoint.possessions || [];
+        let poss = lastPoint.possessions[lastPoint.possessions.length - 1];
+        if (!poss) { poss = new Possession(true); lastPoint.possessions.push(poss); }
+        // Period breaks always happen between points (guarded above) — flag
+        // the event so log renderers print it after this point's score lines.
+        poss.events.push(breakEvent);
+    } else {
+        // No points yet — switching before the first pull just flips the
+        // chosen starting position (no event to record on a point).
+        game.startingPosition = (game.startingPosition === 'offense') ? 'defense' : 'offense';
+    }
+
+    if (typeof logEvent === 'function') {
+        logEvent(isHalftime ? 'Halftime — teams switch ends' : 'O and D switch sides');
+    }
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    if (typeof updateGameLogEvents === 'function') updateGameLogEvents();
+
+    // Flip the Field-tab display ends to match (persists + re-renders).
+    if (window.fieldPbp && typeof window.fieldPbp.swapAttackDefend === 'function') {
+        window.fieldPbp.swapAttackDefend();
+    }
+    // Nudge any subscribed views (Start Point label now reflects new O/D).
+    if (window.narrationEventBus && typeof window.narrationEventBus.publish === 'function') {
+        window.narrationEventBus.publish('pointChanged', {});
+    }
+    if (typeof showControllerToast === 'function') {
+        showControllerToast(isHalftime ? 'Halftime — sides switched' : 'Switched sides', 'info');
+    }
+}
+
+/**
+ * Handle "Swap O & D" (from the Game Events modal, replacing the old Switch
+ * Sides button): open a confirm dialog before force-swapping which team
+ * pulls next. Offers "Call halftime instead" since a coach reaching for
+ * this at the half actually wants the halftime event.
+ */
+function handleGameEventSwitchSides() {
+    hideGameEventsModal();
+    showSwapODModal();
+}
+
+/**
+ * Show the "Force-swap which team pulls next?" confirm dialog (created
+ * lazily, like the Game Events modal itself).
+ */
+function showSwapODModal() {
+    let modal = document.getElementById('swapODModal');
+    if (!modal) {
+        modal = createSwapODModal();
+        document.body.appendChild(modal);
+    }
+    modal.style.display = 'flex';
+}
+
+function hideSwapODModal() {
+    const modal = document.getElementById('swapODModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Create the Swap O & D confirm dialog
+ * @returns {HTMLElement}
+ */
+function createSwapODModal() {
+    const modal = document.createElement('div');
+    modal.id = 'swapODModal';
+    modal.className = 'modal game-events-modal';
+
+    modal.innerHTML = `
+        <div class="modal-content game-events-modal-content">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Force-swap which team pulls next?</h2>
+                <span class="close" id="swapODModalClose">&times;</span>
+            </div>
+            <p class="text-hint">For corrections — e.g. stats started mid-game, or the game
+            was entered starting on O when it should have been D. Flips who pulls the next
+            point (and stays flipped); does not change the field display. At the half, use
+            halftime instead.</p>
+            <div class="game-events-buttons swap-od-buttons">
+                <button id="swapODConfirmBtn" class="ge-btn ge-btn-who-us">
+                    <i class="fas fa-random"></i>
+                    <span>Confirm swap</span>
+                </button>
+                <button id="swapODHalftimeBtn" class="ge-btn ge-btn-halftime">
+                    <i class="fas fa-pause-circle"></i>
+                    <span>Call halftime instead</span>
+                </button>
+                <button id="swapODCancelBtn" class="ge-btn ge-btn-who-neither">
+                    <i class="fas fa-times"></i>
+                    <span>Cancel</span>
+                </button>
+            </div>
+        </div>
+    `;
+
+    // X / backdrop tap = cancel, same as the Cancel button.
+    const closeBtn = modal.querySelector('#swapODModalClose');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', hideSwapODModal);
+    }
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            hideSwapODModal();
+        }
+    });
+    modal.querySelector('#swapODCancelBtn').addEventListener('click', hideSwapODModal);
+    modal.querySelector('#swapODConfirmBtn').addEventListener('click', () => {
+        hideSwapODModal();
+        applyForceSwap();
+    });
+    modal.querySelector('#swapODHalftimeBtn').addEventListener('click', () => {
+        hideSwapODModal();
+        applyPeriodBreak('halftime');
+    });
+
+    return modal;
+}
+
+/**
+ * Force-swap which team pulls the next point. A manual correction, NOT a
+ * period break: records an Other{forceswap} event that inverts whatever
+ * determineStartingPosition would otherwise compute from here on (and keeps
+ * later halftime bookkeeping consistent). Deliberately does NOT touch the
+ * Field tab's rendered ends — the physical sides didn't change, the data
+ * was just entered backwards.
+ */
+function applyForceSwap() {
+    const inPoint = (typeof isPointInProgress === 'function') && isPointInProgress();
+    if (inPoint) {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('Swap O & D between points', 'warning');
         }
         return;
     }
@@ -1358,34 +1951,22 @@ function applySwitchSides() {
         lastPoint.possessions = lastPoint.possessions || [];
         let poss = lastPoint.possessions[lastPoint.possessions.length - 1];
         if (!poss) { poss = new Possession(true); lastPoint.possessions.push(poss); }
-        poss.events.push(new Other({ switchsides: true }));
+        poss.events.push(new Other({ forceswap: true, betweenPoints: true }));
     } else {
-        // No points yet — switching before the first pull just flips the
-        // chosen starting position.
+        // No points yet — just flip the chosen starting position.
         game.startingPosition = (game.startingPosition === 'offense') ? 'defense' : 'offense';
     }
 
-    if (typeof logEvent === 'function') logEvent('O and D switch sides');
+    if (typeof logEvent === 'function') logEvent('Swapped O & D — pulling team corrected');
     if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
     if (typeof updateGameLogEvents === 'function') updateGameLogEvents();
-
-    // Flip the Field-tab display ends to match (persists + re-renders).
-    if (window.fieldPbp && typeof window.fieldPbp.swapAttackDefend === 'function') {
-        window.fieldPbp.swapAttackDefend();
-    }
     // Nudge any subscribed views (Start Point label now reflects new O/D).
     if (window.narrationEventBus && typeof window.narrationEventBus.publish === 'function') {
         window.narrationEventBus.publish('pointChanged', {});
     }
-    if (typeof showControllerToast === 'function') showControllerToast('Switched sides', 'info');
-}
-
-/**
- * Handle Switch Sides game event (from the Game Events modal).
- */
-function handleGameEventSwitchSides() {
-    hideGameEventsModal();
-    applySwitchSides();
+    if (typeof showControllerToast === 'function') {
+        showControllerToast('Pulling team swapped', 'info');
+    }
 }
 
 /**
@@ -1490,6 +2071,18 @@ function updateLineTabStartPointBtn() {
     if (!btn) return;
 
     const onLineTab = (typeof getActiveTab === 'function') && getActiveTab() === 'line';
+
+    // Undo + Events siblings share the same visibility lifecycle: Line tab
+    // only. Left clickable regardless of role — their handlers surface the
+    // role toast, matching the Start Point convention below.
+    const undoBtn = document.getElementById('lineTabUndoBtn');
+    if (undoBtn) {
+        undoBtn.style.display = onLineTab ? 'inline-flex' : 'none';
+    }
+    const eventsBtn = document.getElementById('lineTabGameEventsBtn');
+    if (eventsBtn) {
+        eventsBtn.style.display = onLineTab ? 'inline-flex' : 'none';
+    }
 
     // Always show on the Line tab. applyStartPointButtonState handles the
     // not-Active-Coach case with grey/inactive styling and leaves the
@@ -1719,6 +2312,7 @@ function applyStartPointButtonState(btn, showPointInProgress = true) {
  * both the Active Coach role and point status:
  * - Timeout: enabled anytime (during or between points), Active Coach only
  * - Injury Sub: enabled only DURING a point (mid-point sub mechanism)
+ * - Correct Lineup: enabled only DURING a point (rewrites the current point)
  * - Halftime, Switch Sides, End Game: enabled BETWEEN points only
  */
 function updateGameEventsModalState() {
@@ -1735,12 +2329,27 @@ function updateGameEventsModalState() {
         timeoutBtn.classList.toggle('disabled', !hasActiveCoachRole);
     }
 
-    // Injury Sub - only DURING a point (mid-point sub mechanism)
+    // Injury Sub - only DURING a point (mid-point sub mechanism).
+    // Class-only disabling (no disabled attribute): the tap must still reach
+    // handleGameEventInjurySub so it can explain WHY with the same
+    // "No point in progress" toast the dedicated Sub button shows, instead
+    // of dying silently on a disabled attribute.
     const injurySubBtn = modal.querySelector('#geInjurySubBtn');
     if (injurySubBtn) {
         const injuryEnabled = hasActiveCoachRole && pointInProgress;
-        injurySubBtn.disabled = !injuryEnabled;
+        injurySubBtn.disabled = false;
         injurySubBtn.classList.toggle('disabled', !injuryEnabled);
+        injurySubBtn.setAttribute('aria-disabled', String(!injuryEnabled));
+    }
+
+    // Correct Lineup - only DURING a point, same class-only disabling as
+    // Injury Sub so the tap can explain itself with a toast.
+    const correctLineupBtn = modal.querySelector('#geCorrectLineupBtn');
+    if (correctLineupBtn) {
+        const correctEnabled = hasActiveCoachRole && pointInProgress;
+        correctLineupBtn.disabled = false;
+        correctLineupBtn.classList.toggle('disabled', !correctEnabled);
+        correctLineupBtn.setAttribute('aria-disabled', String(!correctEnabled));
     }
 
     // Halftime, Switch Sides, End Game - enabled BETWEEN points only
@@ -1852,6 +2461,6 @@ window.updatePlayByPlayLayout = updatePlayByPlayLayout;
 // window survivor: late-bound back-edge hook (called by ui/panelSystem.js)
 window.updateLineTabStartPointBtn = updateLineTabStartPointBtn;
 // Dropped shims (zero external references found): showGameEventsModal,
-// hideGameEventsModal, applySwitchSides, wireTabControlEvents.
+// hideGameEventsModal, applyPeriodBreak, wireTabControlEvents.
 
 

@@ -1368,6 +1368,25 @@ body.game-screen-active header {
     min-width: 0;
 }
 
+/* Compact Undo at the row's right edge — same quiet look as Field mode's
+ * action-row Undo, deliberately smaller than Start Point / Lineup Ready
+ * so it can't be fat-fingered when hustling to start the next point. */
+.line-tab-undo-btn {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding: 8px 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: var(--white);
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
 /* Lineup Ready: blue idle, green when sent, desaturated blue when
  * disabled. The generic .pbp-start-point-btn.inactive rule above sets a
  * grey gradient, but the more specific blue rule for this variant wins
@@ -1469,7 +1488,9 @@ body.game-screen-active header {
     background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
 }
 
-.ge-btn-injurysub:hover:not(:disabled) {
+/* .disabled excluded too: Injury Sub uses class-only disabling (stays
+   clickable so the tap can toast an explanation) and shouldn't light up. */
+.ge-btn-injurysub:hover:not(:disabled):not(.disabled) {
     background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
 }
 
@@ -1491,6 +1512,16 @@ body.game-screen-active header {
     background: linear-gradient(135deg, #138496 0%, #117a8b 100%);
 }
 
+/* Correct Lineup - green (mid-point fix-it, pairs with amber Injury Sub) */
+.ge-btn-correctlineup {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+/* .disabled excluded too: class-only disabling, same as Injury Sub. */
+.ge-btn-correctlineup:hover:not(:disabled):not(.disabled) {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
 /* End Game - dark/warning */
 .ge-btn-endgame {
     background: linear-gradient(135deg, #343a40 0%, #212529 100%);
@@ -1498,6 +1529,73 @@ body.game-screen-active header {
 
 .ge-btn-endgame:hover:not(:disabled) {
     background: linear-gradient(135deg, #212529 0%, #1a1d20 100%);
+}
+
+/* "Who called timeout?" follow-up modal: three choices in one row */
+.timeout-who-buttons {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+/* "Swap O & D" confirm dialog: long labels — stack them full-width */
+.swap-od-buttons {
+    grid-template-columns: 1fr;
+}
+
+/* Correct Lineup dialog: two player columns (entered by mistake → actually
+   played). Columns scroll together when the roster is long. */
+.correct-lineup-modal-content {
+    max-width: 440px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.correct-lineup-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 10px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+
+.correct-lineup-column {
+    min-width: 0;
+}
+
+.correct-lineup-column h3 {
+    font-size: 0.9rem;
+    margin: 0 0 6px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+/* Us - blue (matches the Timeout button) */
+.ge-btn-who-us {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-active) 100%);
+}
+
+.ge-btn-who-us:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--color-primary-active) 0%, var(--color-primary-deep) 100%);
+}
+
+/* Them - red (opponent) */
+.ge-btn-who-them {
+    background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-active) 100%);
+}
+
+.ge-btn-who-them:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--color-danger-active) 0%, var(--color-danger-deep) 100%);
+}
+
+/* Neither - gray (untracked / technical stoppage) */
+.ge-btn-who-neither {
+    background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-secondary-active) 100%);
+}
+
+.ge-btn-who-neither:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--color-secondary-active) 0%, var(--color-secondary-deep) 100%);
 }
 
 /* =============================================================================

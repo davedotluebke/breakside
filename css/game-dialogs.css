@@ -1,0 +1,370 @@
+/* ==========================================================================
+   game-dialogs.css — Line dialogs (delete line, line selection), management container,
+   gender buttons, games-list icon buttons.
+   Split from main.css (F4); rule order preserved — these files load in
+   sequence (see index.html) and must stay in that order.
+   Colors come from the token palette in css/tokens.css.
+   ========================================================================== */
+
+/* Delete Line Dialog Styles */
+.delete-line-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.delete-line-dialog {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    max-width: 500px;
+    width: 90%;
+}
+
+.delete-line-dialog h3 {
+    margin-top: 0;
+}
+
+.delete-line-radio-container {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+}
+
+.delete-line-radio-option {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: flex-start;
+}
+
+.delete-line-radio-option input {
+    margin-right: 10px;
+    margin-top: 3px;
+}
+
+.delete-line-radio-option label {
+    text-align: left;
+    flex: 1;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+}
+
+.line-name {
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.line-players {
+    color: var(--text-muted);
+}
+
+.delete-line-button.delete:disabled {
+    background-color: var(--border-default);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.delete-line-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.delete-line-button {
+    padding: 8px 16px;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.delete-line-button.delete {
+    background-color: var(--color-danger);
+}
+
+.delete-line-button.cancel {
+    background-color: var(--color-secondary);
+}
+
+/* Line Selection Dialog Styles */
+.select-line-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.select-line-dialog {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    max-width: 500px;
+    width: 90%;
+}
+
+.select-line-dialog h3 {
+    margin-top: 0;
+}
+
+.clear-selections-checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 15px;
+    padding: 8px;
+    background-color: var(--surface-subtle);
+    border-radius: 4px;
+    border: 1px solid var(--border-soft);
+}
+
+.clear-selections-checkbox-container input[type="checkbox"] {
+    margin: 0;
+}
+
+.clear-selections-checkbox-container label {
+    margin: 0;
+    font-size: 0.9em;
+    color: var(--ink-700);
+    cursor: pointer;
+}
+
+.select-line-radio-container {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+}
+
+.select-line-radio-option {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: flex-start;
+}
+
+.select-line-radio-option input {
+    margin-right: 10px;
+    margin-top: 3px;
+}
+
+.select-line-radio-option label {
+    text-align: left;
+    flex: 1;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+}
+
+.select-line-radio-option.last-used {
+    background-color: var(--surface-subtle);
+    border-left: 4px solid var(--color-primary);
+    padding-left: 6px;
+}
+
+.select-line-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.select-line-button {
+    padding: 8px 16px;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.select-line-button.select {
+    background-color: var(--color-success);
+}
+
+.select-line-button.cancel {
+    background-color: var(--color-secondary);
+}
+
+.select-line-button.select:disabled {
+    background-color: var(--border-default);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* Management Container Styles */
+.management-row {
+    display: flex;
+    gap: 8px;
+    margin: 8px 0;
+    padding: 0 4px;
+    max-width: 100%;
+}
+
+.management-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--surface-subtle);
+    border: 2px solid var(--border-light);
+    border-radius: 4px;
+    padding: 4px;
+    min-width: 0;
+}
+
+.management-container.full-width {
+    flex: 1 1 100%;
+    width: 100%;
+}
+
+.management-label {
+    font-weight: bold;
+    margin-bottom: 4px;
+    text-align: left;
+    font-size: 0.9em;
+}
+
+.management-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.management-controls input[type="text"] {
+    flex: 1;
+    padding: 4px;
+    border: 1px solid var(--border-default);
+    border-radius: 3px;
+    font-size: 0.9em;
+    min-width: 0;
+}
+
+.management-controls input[type="number"].player-number-input {
+    width: 50px;
+    flex: 0 0 50px;
+    padding: 4px;
+    border: 1px solid var(--border-default);
+    border-radius: 3px;
+    font-size: 0.9em;
+    text-align: center;
+}
+
+.management-icons {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+/* Management icon button styles */
+.management-icons .icon-button {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--border-default);
+    border-radius: 3px;
+    background-color: var(--surface-light);
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+    flex-shrink: 0;
+}
+
+.management-icons .icon-button i {
+    font-size: 12px;
+}
+
+/* Gender button styles - bigger with gender colors */
+.management-icons .gender-button {
+    width: 60px;
+    height: 36px;
+    padding: 4px 8px;
+    font-size: 0.95em;
+    font-weight: bold;
+    border: 2px solid;
+    transition: all 0.2s;
+}
+
+.management-icons .gender-button.fmp-button {
+    background-color: var(--gender-fmp-surface); /* Light purple background */
+    color: var(--gender-fmp); /* Darker purple text - matches FMP player color */
+    border-color: var(--gender-fmp);
+}
+
+.management-icons .gender-button.fmp-button:hover {
+    background-color: var(--gender-fmp-surface-hover);
+}
+
+.management-icons .gender-button.mmp-button {
+    background-color: var(--gender-mmp-surface); /* Light green background */
+    color: var(--gender-mmp); /* Darker green text - matches MMP player color */
+    border-color: var(--gender-mmp);
+}
+
+.management-icons .gender-button.mmp-button:hover {
+    background-color: var(--gender-mmp-surface-hover);
+}
+
+/* Specific management icon button styles - gender buttons use .gender-button classes above */
+
+.management-icons .add-line-button {
+    color: var(--color-success);
+}
+
+/* Delete Line Dialog Button Styles */
+.delete-line-button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    color: white;
+}
+
+.delete-line-button.delete {
+    background-color: var(--color-danger);
+}
+
+.delete-line-button.delete:disabled {
+    background-color: var(--border-default);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.delete-line-button.cancel {
+    background-color: var(--color-secondary);
+}
+
+/* Games list icon button styles */
+.games-list .icon-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.2em 0.4em;
+    font-size: 1em;
+}
+
+.top-buttons {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 20px;
+    margin-bottom: 20px;
+}
+
+.top-buttons button {
+    padding: 10px 20px;
+}
+
