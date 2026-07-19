@@ -10,7 +10,7 @@ import {
     currentGame, isPointInProgress, determineStartingPosition,
     getPlayerGameTime, formatPlayTime, formatPlayerName,
     getGenderRatioForPoint, getExpectedGenderRatio, getExpectedGenderCounts,
-    buildPointMembership,
+    buildPointMembership, buildPointPlayerLookup,
 } from '../utils/helpers.js';
 import { getEventPlayerStats } from '../utils/eventStats.js';
 import { clearNextLineSelections, getRunningScores } from '../ui/activePlayersDisplay.js';
@@ -1142,7 +1142,8 @@ function savePanelSelectionsToPendingNextLine(updateTimestamp = true) {
 /**
  * Check gender ratio for panel-selected players
  * Returns true if ratio is correct, false if wrong
- * @param {string[]} selectedPlayerNames - Array of selected player names
+ * @param {string[]} selectedPlayerNames - Selected line entries: player names
+ *   or player ids (id-era games)
  * @param {number} expectedCount - Expected player count
  */
 function checkPanelGenderRatio(selectedPlayerNames, expectedCount) {
@@ -1158,8 +1159,11 @@ function checkPanelGenderRatio(selectedPlayerNames, expectedCount) {
     // Get player objects and count genders
     let fmpCount = 0;
     let mmpCount = 0;
-    selectedPlayerNames.forEach(name => {
-        const player = currentTeam?.teamRoster?.find(p => p.name === name);
+    // Entries may be names or player ids (getStartPointButtonState passes the
+    // raw effective line) — resolve each to a roster player before counting.
+    const lookup = buildPointPlayerLookup(game);
+    selectedPlayerNames.forEach(entry => {
+        const player = lookup(entry).player;
         if (player) {
             if (player.gender === Gender.FMP) fmpCount++;
             else if (player.gender === Gender.MMP) mmpCount++;
@@ -1542,6 +1546,10 @@ function updateSelectLineTable() {
 
     // Id-based membership so a mid-game rename doesn't orphan a player's
     // points history in this table (point.players holds frozen strings).
+    // Also used to match the pendingNextLine selections below: id-era games
+    // store player IDS in the line arrays (see buildPlayerNameResolver), so
+    // a raw includes(player.name) renders every checkbox unchecked — which
+    // then soft-locked Start Point ("Please select players" on every tap).
     const membership = buildPointMembership(game);
     const lastPoint = game.points.length > 0
         ? game.points[game.points.length - 1]
@@ -1572,7 +1580,7 @@ function updateSelectLineTable() {
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.classList.add('active-checkbox');
-        checkbox.checked = selectedPlayers.includes(player.name);
+        checkbox.checked = membership.onList(selectedPlayers, player);
         checkbox.dataset.playerName = player.name;
         checkboxCell.appendChild(checkbox);
         row.appendChild(checkboxCell);
@@ -1655,7 +1663,7 @@ function updateSelectLineTable() {
             // Like every other point column: show the (incremented) running
             // total only for players slated for the immediate next point; a
             // dash for those sitting it out, matching the table's "-" idiom.
-            if (tentativeNextSet.includes(player.name)) {
+            if (membership.onList(tentativeNextSet, player)) {
                 projCell.textContent = `${runningPointTotal + 1}`;
             } else {
                 projCell.textContent = '-';
@@ -1832,9 +1840,12 @@ function updateSelectLineSubtitle() {
         setPanelSubtitle('selectLine', '(no players selected)');
         return;
     }
-    
-    // Get first names only for compactness
-    const firstNames = selectedNames.map(name => name.split(' ')[0]);
+
+    // Get first names only for compactness. Line entries may be player ids
+    // (id-era games) or stale names — resolve to display names first so the
+    // header never shows raw ids like "Avery-mixr".
+    const lookup = buildPointPlayerLookup(game);
+    const firstNames = selectedNames.map(entry => lookup(entry).name.split(' ')[0]);
     
     // Join with commas - CSS text-overflow: ellipsis handles truncation based on actual width
     const playerList = firstNames.join(', ');
