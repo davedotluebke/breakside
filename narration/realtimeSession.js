@@ -382,7 +382,7 @@ const narrationRealtimeSession = (function() {
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
         // Log outbound except the avalanche of input_audio_buffer.append chunks.
         if (window.NARRATION_VERBOSE !== false && obj.type !== 'input_audio_buffer.append') {
-            console.log(`[rt] => ${obj.type}`, obj);
+            log(`[rt] => ${obj.type}`, obj);
         }
         ws.send(JSON.stringify(obj));
     }
@@ -398,10 +398,11 @@ const narrationRealtimeSession = (function() {
             return;
         }
 
-        // Verbose diagnostic — logs every event type we receive from OpenAI.
-        // Filter on "[rt]" in console to see the full event sequence.
+        // Verbose diagnostic — logs every event type we receive from OpenAI
+        // (needs debug logging on, e.g. ?debug=1; NARRATION_VERBOSE=false
+        // force-disables). Filter on "[rt]" in console for the full sequence.
         if (window.NARRATION_VERBOSE !== false) {
-            console.log(`[rt] <= ${msg.type}`, msg);
+            log(`[rt] <= ${msg.type}`, msg);
         }
 
         switch (msg.type) {
