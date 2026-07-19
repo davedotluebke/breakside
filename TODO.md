@@ -583,7 +583,12 @@ cd /opt/breakside && sudo git pull && sudo systemctl restart breakside
 
 ### Backend: CORS headers on unhandled 500s (from staging shakedown, 2026-07-03)
 
-- [ ] An unhandled exception in FastAPI returns a bare 500 **without CORS
+Both shipped as G2 (branch `g2-backend-hardening`; tests in
+`ultistats_server/test_error_handling.py`; ops rule documented in
+ARCHITECTURE.md § Data Directory Structure). Requires the usual EC2 backend
+restart to take effect after merge.
+
+- [x] An unhandled exception in FastAPI returns a bare 500 **without CORS
       headers** (Starlette's ServerErrorMiddleware sits outside CORSMiddleware),
       so browsers block the response and fetch rejects with a TypeError
       ("Load failed" on Safari) — the client can't tell a server bug from a
@@ -591,9 +596,14 @@ cd /opt/breakside && sudo git pull && sudo systemctl restart breakside
       error responses carry CORS headers. Confirmed in the wild 2026-07-03:
       a PermissionError 500 on game sync surfaced in Safari as "Load failed"
       with no status code, costing three diagnosis round-trips.
-- [ ] **Version-backup write failure shouldn't 500 the whole sync.** The
+      → Done: `Exception` handler in `main.py` returns 500 JSON with CORS
+      headers mirroring the middleware config (origin allowlist + credentials).
+- [x] **Version-backup write failure shouldn't 500 the whole sync.** The
       2026-07-03 staging incident was a root-owned `versions/` dir under one
       old game in `/var/lib/breakside/data/games/` (PermissionError in
       `atomic_write_json`) failing every sync of that game. Consider: log
       loudly + still accept the game state (or return a structured error),
       and add a startup ownership/writability check over the data tree.
+      → Done: backup write degrades (loud `VERSION BACKUP FAILED` log, sync
+      still succeeds); `assert_data_dir_writable()` runs at startup (fail-fast
+      on the data dir, prominent ERROR for unwritable nested dirs).
