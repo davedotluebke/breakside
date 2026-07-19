@@ -693,7 +693,52 @@ public tables, default-RLS trigger installed).
   Prod teams (CUDO Spring 26 / Flickers / Mumbo Sauce) still to be spot-checked — needs a
   prod data read (blocked on approval).
 
-### F3 · Frontend cleanup sweep (the 🟡/🟠 tail — one task, everything else is quiet)
+### F3 · Frontend cleanup sweep — ✅ DONE (branch `cleanup-sweep`, merged as f557b34)
+
+Everything in the guidance list landed; itemized outcome below. Extractions:
+`game/undoLogic.js` (undo decision tree, 12 unit tests) and
+`store/pendingLineLogic.js` (merge / effective-line / point-end reset, 18 unit
+tests) — run `node --test tests/unit/*.test.mjs`. New `utils/logger.js` (debug
+flag: `?debug=1`, localhost default-on) with all 183 module `console.log` sites
+converted; warn/error untouched. Dead code deleted (shims, phase-5/7 stubs +
+their no-op buttons, FAST_PASS path, dead params/wrappers);
+`canEditPlayByPlay` unified; mechanical dedups (endGameFlow,
+stopPointTimeAccrual, installPingInterval, unified swipe-dismiss **with the
+document-listener leak fixed**, `landing/supabaseInit.js`,
+mergeCompletedUtterance); small refactors (panelSystem `PANELS` descriptor
+table, `kp-unfurled` class state, timer-band constants, uniform
+refreshGameStateFromCloud return, `data.session` signup checks, join-button
+`finally`, Callahan XOR). Backend: invite-info returns **409 for
+already-member** (optional auth; `test_invite_info.py`, EC2 restarted);
+join.js sends auth on the info fetch.
+
+Bug fixes riding the branch (all pre-existing, surfaced by staging testing):
+injury subs are now **undoable** (event always recorded via
+ensurePossessionExists; carries playersBefore/subbedOutBefore/subbedInBefore
+snapshots that undo restores), `reconstructState` skips non-mode-bearing
+events (Other/Violation) so **injury subs and timeouts no longer flip the
+O&D surface** — important interaction: main's later timeout-as-real-event
+change would have made that flip worse — plus the Game Events modal
+stale-on-reopen fix (independently also fixed on main).
+
+Merged with ~50 commits of parallel main work (id-era point.players, real
+Timeout/Half-Time events, Correct Lineup, empty-point undo back-out — the
+last ported into the undoLogic caller). Verified post-merge: 51-module
+import cross-check, 34 unit + 77 backend tests, live drive of
+sub/timeout/undo/back-out flows.
+
+Deliberately NOT done (still open, unchanged assessments): pullDialog
+clone-node workaround + getExpectedPullGender nesting + createPull unshift
+bypass; Key Play auto-commit; `fullyPhysicalPanelDragging` (kept — it's a
+documented console/debug seam, not dead); micButton/transcriptDisplay
+lifetime intervals; the whole Store/Teams long tail (serial fetches,
+stat-preservation allowlist, queued-vs-direct event paths, generateGameId,
+serializeEvent default-diff, score-recalc heuristic, saveAllTeamsData hidden
+sync, createSampleTeam, voidthrower sentinels, inferred_flag, eventStats
+serial loads, `Role.TEAM || 'team'`, stats-shape triplication, xlsx column
+letters, header-click toggle); ScriptProcessorNode → AudioWorklet.
+
+<details><summary>Original F3 item list (for reference)</summary>
 
 Game: undoEvent decision tree (`gameLogic.js:438-632`); pendingNextLine machine untested
 (`selectLine.js:1315` +2 files); endGameFlow copy-paste (`gameScreenEvents.js:492/1444`);
@@ -728,6 +773,8 @@ manageControllerButtons dead param (`navigation.js:73-81`); lifetime intervals
 (`narrationEngine.js:56` — flag-name concern verified a NON-bug). Deferred/known debt:
 ScriptProcessorNode → AudioWorklet.
 Plus: the `console.*` sweep (~378 calls) — introduce a tiny logger/debug-flag wrapper.
+
+</details>
 
 ### F4 · CSS modernization — ✅ DONE (branch `css-tokens`)
 
