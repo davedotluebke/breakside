@@ -9,8 +9,9 @@ import { currentTeam, currentEvent, saveAllTeamsData, serializeTeam } from '../s
 import { syncGameToCloud, deleteGameFromCloud } from '../store/sync.js';
 import {
     currentGame, getLatestPoint, getActivePossession, getPlayerFromName,
-    buildPointPlayerLookup,
+    buildPointPlayerLookup, buildPointMembership,
 } from '../utils/helpers.js';
+import { applyPointPlayerStats, revertPointPlayerStats } from './pointStats.js';
 import { buildGameLogText } from '../utils/gameLogRenderer.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { updatePanelsForGameState } from '../ui/panelSystem.js';
@@ -219,24 +220,11 @@ function updateScore(winner) {
     // Update event log
     logEvent(`${point.winner} scores!`);
 
-    // Update player stats for those who played this point
-    // Include players who were substituted out mid-point (they still "played" the point)
-    currentTeam.teamRoster.forEach(player => {
-        const playedPoint = point.players.includes(player.name) ||
-            (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name));
-        if (playedPoint) { // the player played this point
-            player.totalPointsPlayed++;
-            player.consecutivePointsPlayed++;
-            player.totalTimePlayed += point.totalPointTime;
-            if (winner === Role.TEAM) {
-                player.pointsWon++;
-            } else {
-                player.pointsLost++;
-            }
-        } else {                                    // the player did not play this point
-            player.consecutivePointsPlayed = 0;
-        }
-    });
+    // Update player stats for those who played this point (including players
+    // substituted out mid-point). Membership-based: point.players holds names
+    // or ids depending on era. Stamps point.playerStatsCounted so undo can
+    // decrement symmetrically (see game/pointStats.js).
+    applyPointPlayerStats(point, currentTeam.teamRoster, buildPointMembership(currentGame()));
 
     // Phase 6b: Update game screen score display
     // late-bound back-edge (gameScreenSync lives "above" this layer); see
@@ -357,23 +345,11 @@ let undoEmptyPointTimestamp = null;
 function revertPointScore(point) {
     currentGame().scores[point.winner]--;
 
-    currentTeam.teamRoster.forEach(player => {
-        const playedPoint = point.players.includes(player.name) ||
-            (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name));
-        if (playedPoint) {
-            player.totalPointsPlayed--;
-            player.consecutivePointsPlayed--;
-            player.totalTimePlayed -= point.totalPointTime;
-            if (player.totalTimePlayed < 0) player.totalTimePlayed = 0;
-            if (point.winner === Role.TEAM) {
-                player.pointsWon--;
-                if (player.pointsWon < 0) player.pointsWon = 0;
-            } else {
-                player.pointsLost--;
-                if (player.pointsLost < 0) player.pointsLost = 0;
-            }
-        }
-    });
+    // Decrement the per-player counters updateScore applied. Era-paired: the
+    // point's playerStatsCounted marker picks membership vs legacy raw-name
+    // matching so undo never decrements counters that were never incremented
+    // (see game/pointStats.js).
+    revertPointPlayerStats(point, currentTeam.teamRoster, buildPointMembership(currentGame()));
 
     point.winner = "";
     point.endTimestamp = null;

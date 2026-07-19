@@ -611,6 +611,10 @@ class Point {
         this.lastPauseTime = null;  // Track when the point was last paused
         this.substitutedOutPlayers = [];  // Players who were subbed out mid-point (for injury/fatigue)
         this.substitutedInPlayers = [];   // Players who came in mid-point (partial point, like subbed-out)
+        // True once updateScore applied per-player live counters via id-aware
+        // membership matching — revert keys off it (see game/pointStats.js).
+        // Absent/false on points scored before that fix.
+        this.playerStatsCounted = false;
         // Distinct PBP modes recorded during this point — derived from its
         // possessions (see getModes). Kept as a field for convenient in-memory
         // reads; serialization writes the freshly-derived value.
