@@ -201,10 +201,17 @@ Remaining:
       leaves zero files in `data/`. Hazard: worktrees on pre-G3 commits still
       write fixtures into the real `data/` if backend pytest runs there —
       rebase such worktrees onto main before running backend tests.)*
-- [ ] Two narration scenarios (`013_hammer_sky_combo`, `019_nickname_recognition`)
-      scored **F1 0.0** in the last live run — real narration-quality regression now
-      hidden behind the opt-in gate; deserves a look (possibly related to the staging
-      narration report above).
+- [x] Two narration scenarios (`013_hammer_sky_combo`, `019_nickname_recognition`)
+      scored **F1 0.0** in the last live run *(root-caused + fixed 2026-07-19 on
+      `g5-narration-fix` — unrelated to the G5 socket outage: 013 failed
+      deterministically because the slow pass split "…to Ella, Ella skies…for the
+      score" into two throws (the real one + a bogus Ella→Ella self-throw carrying
+      sky+score); 019 ("Acer hits Hammer…") failed stochastically on the
+      nickname-vs-jargon collision. Two targeted prompt rules added in
+      `ultistats_server/narration.py`: catch clauses modify the SAME throw / never
+      thrower==receiver, and words in player positions are player references. 013+019
+      pass twice consecutively; full-corpus regression run green 2026-07-19 — 20
+      passed / 0 failed / 5 skipped (the audio-less hand-record scenarios).)*
 
 ### Multi-user rollout — final items
 
@@ -355,8 +362,35 @@ lineupReadyMode:      'o' | 'd' | 'od' | null             // alongside existing 
 
 Improvements deferred from the initial implementation (see Active section above for the architecture summary).
 
-### ⚠️ Known issue — narration reported broken on staging (2026-07-04)
-- [ ] **Deep dive needed.** User report from staging testing on 2026-07-04: "Audio narration seems broken, at least on staging" — symptoms not yet characterized (no transcript? no events applied? session fails to open?). Deliberately documented-only for now; deserves its own focused session. Starting points when investigating: reproduce on staging with devtools open (mic button → console + network for the `/v1/realtime/client_secrets` mint and the WebSocket), check whether the recent switch to the dedicated transcription session (`?intent=transcription`) is involved, and remember staging talks to the production API — server-side narration env/config (`ultistats_server/narration.py`, OpenAI key) applies. The Advanced Settings knobs (model, VAD, noise reduction) are available for isolating variables.
+### ✅ FIXED — narration broken everywhere since OpenAI's GA cutover (G5; root-caused + fixed 2026-07-19, branch `g5-narration-fix`)
+- [x] **Root cause (proven by a three-variant live WS experiment):** the browser still
+      offered the retired `openai-beta.realtime-v1` WebSocket **subprotocol**; since the
+      GA cutover OpenAI accepts the handshake and then kills the session (error + close
+      4000 `beta_api_shape_disabled`) before any audio flows. Narration died in the field
+      (~early July) with **no client deploy involved** — the 6/27–28 GA migration cleaned
+      the URL/payload shapes but left this vestigial third subprotocol, and the Python
+      test runner (header auth, no subprotocols) couldn't catch it. The client then
+      masked the death: the fatal close lands during the (multi-second on iOS)
+      getUserMedia permission prompt, `handleSocketClose` ignores closes while
+      `!sessionActive`, `send()` silently drops frames on a closed socket, and
+      `startRecording()`'s continuation stomps the error-reset — hence Dave's exact
+      symptom: green mic button, mic permission granted, empty transcript forever, and
+      **zero `/api/narration/finalize` POSTs in the EC2 logs** (7/04 shows 5 successful
+      token mints, no finalize, matching "it's broken, try again").
+- [x] Shipped on `g5-narration-fix` (client + server): subprotocol removed (pinned by
+      `tests/unit/narrationRealtimeSocket.test.mjs` source tripwires); socket death
+      during mic setup now fails loudly (and capture failure closes the socket instead
+      of leaking it); **id-era roster fix** — `getOnFieldPlayers` now era-resolves via
+      `buildPointPlayerLookup` (narration was missed by G11.1's resolver sweep, so on
+      id-era games the slow pass got an empty roster and silently dropped every event;
+      verified live on the real SWW-2 game: old resolution `[]`, new resolution all 7);
+      and **every silent failure path now toasts** (finalize non-200, finalize
+      200-with-`error` — previously never read — dropped-event counts, no-speech,
+      live-session death, plus a positive "N events added" ack).
+- [ ] **Field-verify on staging with a real mic (Dave)** — everything up to the
+      microphone is verified (live WS experiment + in-app browser probe + finalize
+      round-trip); the mic leg needs a human. Then merge + EC2 restart (the
+      `narration.py` prompt fix is server-side).
 
 ### Quality / accuracy
 - [x] **Remove vocabulary-mapping dead code from slow-pass prompt.** A/B test across the test corpus (commit `e24098e`) showed `NARRATION_VOCAB_GUIDANCE=off` (no explicit jargon→flag map) outperformed `=on` by +0.082 mean F1 with no regressions. Deleted the `vocab_section` branch in `_build_finalize_prompt`, the `NARRATION_VOCAB_GUIDANCE` env var, and the structurally-identical "Event-to-function mapping" block in the dead `buildInstructions()` in `narration/narrationEngine.js`.

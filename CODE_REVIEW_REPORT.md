@@ -861,8 +861,22 @@ GET stays deliberately anonymous (bearer ⇒ 409-at-info-time, flow handles 409 
 is now commented as such. `landing/join.js` keeps its own header logic by design (separate
 classic-script page, fresh post-login token, can't import the app module graph).
 
-### G5 · Audio narration reported broken on staging (2026-07-04) — uncharacterized (NEW)
-Logged during the program, symptoms never captured. Needs a repro/deep dive.
+### G5 · Audio narration reported broken on staging (2026-07-04) — ✅ ROOT-CAUSED + FIXED (2026-07-19, branch `g5-narration-fix`)
+Not a regression from the review program — an **OpenAI-side change**: since the GA
+cutover, offering the retired `openai-beta.realtime-v1` WebSocket subprotocol makes the
+server accept the handshake then kill the session (error + close 4000
+`beta_api_shape_disabled`). The 6/27–28 GA migration left that vestigial subprotocol in
+the browser's offer; the Python runner (header auth) couldn't catch it. Client state
+machine masked the death (close swallowed while `!sessionActive` during the iOS mic
+prompt; `send()` drops frames on a closed socket) → green button, empty transcript, no
+finalize POST ever (EC2 log signature). Proven by a three-variant live WS experiment
+(browser-exact dies 4000; identical-minus-beta transcribes perfectly). Also fixed while
+in there: the id-era roster hole in `getOnFieldPlayers` (narration missed G11.1's
+resolver sweep — empty roster on id-era games silently dropped every event), silent
+failure paths now toast, capture-failure socket leak closed, and the two F1-0.0 corpus
+scenarios (013/019 — clause-split self-throws + nickname-vs-jargon collision) fixed via
+targeted slow-pass prompt rules. Pinned by `tests/unit/narrationRealtimeSocket.test.mjs`.
+Full detail in TODO.md § AI Narration.
 
 ### G6 · Duplicated game-log renderers — actively drifting (NEW)
 Three copies; the `betweenPoints` countdown fix already had to be written twice. Merge them.
