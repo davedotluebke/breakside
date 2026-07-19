@@ -409,6 +409,16 @@ Improvements deferred from the initial implementation (see Active section above 
   - May need prompt strengthening or a more structured event-stream format to track team-side flips
 
 ### Coverage
+- [ ] **Add `swing` to the slow-pass throw schema** (field report 2026-07-19: "Dave
+      throws a swing to Ian" recorded the throw but dropped the modifier). The model
+      layer is already done — `Throw` takes `swing` and stores `swing_flag` (Field-tab
+      auto-modifiers set/edit it; `summarize()` prints it). Missing legs: add `swing`
+      to the throw-flags line of the event schema in `ultistats_server/narration.py`'s
+      `_build_finalize_prompt`, and forward `swing: !!args.swing` in
+      `narration/narrationEngine.js` `applyThrow`. While there, decide how spoken
+      "reset" should map (`dump` flag vs Field's Reset chip semantics) and consider a
+      corpus scenario for swing/reset phrasing so the mapping is pinned. (Server-side
+      prompt change → needs the EC2 restart to go live.)
 - [ ] **Add `record_pull` to the slow-pass schema**
   - Currently if a coach narrates a pull (e.g. "Alice flicks an OI pull, brick"), it's ignored
   - Easy add: extend the event schema in `ultistats_server/narration.py` and add an applier in `narration/narrationEngine.js`
