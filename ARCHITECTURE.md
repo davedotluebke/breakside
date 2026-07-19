@@ -590,6 +590,21 @@ ultistats_server/
 └── index.json                # Cross-entity index
 ```
 
+**Ops rule: never run servers or scripts that touch `/var/lib/breakside/data`
+as root.** The API runs as the `breakside` service user; anything created by
+root (a dir, a `versions/` folder, an index file) is root-owned and the
+service user can no longer write inside it. This caused a real incident
+(2026-07-03): one root-owned `versions/` dir made every sync of that game 500
+with `PermissionError`. Always run one-off scripts/servers as the service
+user (`sudo -u breakside ...`), and fix damage with
+`chown -R breakside:breakside /var/lib/breakside/data`. Two server-side
+guards now exist, but prevention still beats them: at startup the app probes
+the data dir and refuses to boot if it isn't writable (unwritable *nested*
+dirs are logged as prominent ERRORs without blocking startup — see
+`storage/file_utils.assert_data_dir_writable`, called from the lifespan in
+`main.py`), and a failed version-backup write no longer fails the sync (see
+below).
+
 ### API Endpoints
 
 #### Games
@@ -836,6 +851,16 @@ Every sync creates a timestamped version file:
 1. Save to `versions/{timestamp}.json`
 2. Copy to `current.json`
 3. (Optional) Git commit for full history
+
+The version backup is **best-effort**: if step 1 fails (e.g. an unwritable /
+root-owned `versions/` dir — see the ops rule under Data Directory
+Structure), the failure is logged loudly (`VERSION BACKUP FAILED`) but the
+sync still succeeds — `current.json` is written and the client gets a normal
+200. Only the restore point for that sync is lost. A failure writing
+`current.json` itself still fails the sync (that would be real data loss),
+and since the app now attaches CORS headers to unhandled 500s (exception
+handler in `main.py`), the browser sees a real 500 instead of an opaque
+network `TypeError` the sync layer would misread as "offline".
 
 ### Offline Support
 

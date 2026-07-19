@@ -2,6 +2,7 @@
 Game storage using JSON files with versioning support.
 """
 import json
+import logging
 import os
 import subprocess
 import threading
@@ -13,6 +14,8 @@ import shutil
 from ._config import config
 from .file_utils import atomic_write_json
 from .index_storage import update_index_for_game
+
+logger = logging.getLogger(__name__)
 
 GAMES_DIR = config.GAMES_DIR
 ENABLE_GIT_VERSIONING = config.ENABLE_GIT_VERSIONING
@@ -147,12 +150,22 @@ def save_game_version(game_id: str, game_data: dict,
             (False = write game_data verbatim; implies authoritative)
 
     Returns:
-        Path to the version file that was created
+        Path to the version file that was created. Best-effort: if the
+        backup write failed (unwritable versions dir), the path's file does
+        not exist but the save of current.json still succeeded — see
+        _write_game_version.
     """
     game_dir = _safe_game_dir(game_id)
     game_dir.mkdir(parents=True, exist_ok=True)
     versions_dir = game_dir / "versions"
-    versions_dir.mkdir(exist_ok=True)
+    try:
+        versions_dir.mkdir(exist_ok=True)
+    except OSError:
+        # Unwritable game dir (e.g. root-owned). Don't fail the sync here:
+        # the version-backup write below degrades gracefully, and if the
+        # game dir truly can't be written the current.json write will raise
+        # the real error.
+        pass
     current_file = game_dir / "current.json"
 
     with _SAVE_LOCK:
@@ -236,18 +249,48 @@ def _unique_version_file(versions_dir: Path) -> str:
 
 def _write_game_version(game_dir: Path, versions_dir: Path, current_file: Path,
                         game_id: str, game_data: dict) -> str:
-    """Persist game_data as a new timestamped version + current.json."""
+    """Persist game_data as a new timestamped version + current.json.
+
+    The version backup is best-effort: a failed backup write (e.g. a
+    root-owned ``versions/`` dir — the real 2026-07-03 staging incident) is
+    logged loudly but does NOT fail the save. current.json — the state the
+    sync exists to persist — is still written; only the restore point for
+    this particular sync is lost. A current.json failure still raises.
+
+    Returns:
+        Path of the version file (as str). If the backup write failed, the
+        file at that path does not exist — the stem still serves as the
+        sync's timestamp label.
+    """
     # Create timestamped, collision-free version
     timestamp = _unique_version_file(versions_dir)
     version_file = versions_dir / f"{timestamp}.json"
 
     # Write version file and current.json atomically (temp file + os.replace)
     # so a crash/concurrent read never sees a torn JSON file.
-    atomic_write_json(version_file, game_data)
+    backup_ok = True
+    try:
+        atomic_write_json(version_file, game_data)
+    except OSError:
+        # Filesystem-level failure only (OSError): permissions/ownership,
+        # missing dir, disk full. Anything else (e.g. unserializable data)
+        # would fail the current.json write too and should surface there.
+        backup_ok = False
+        logger.error(
+            "VERSION BACKUP FAILED for game %s: could not write %s. "
+            "The sync continues (current.json is still updated) but NO "
+            "restore point was created for this sync. Check ownership/"
+            "permissions on %s — a root-owned dir breaks the service "
+            "user's writes; never run servers/scripts touching the data "
+            "dir as root.",
+            game_id, version_file, versions_dir, exc_info=True,
+        )
     atomic_write_json(current_file, game_data)
 
-    # Prune old version backups to bound disk growth.
-    _prune_versions(versions_dir)
+    # Prune old version backups to bound disk growth. Pointless (and
+    # noisy) against a versions dir we just failed to write into.
+    if backup_ok:
+        _prune_versions(versions_dir)
 
     # Optional: Git commit
     if ENABLE_GIT_VERSIONING:
