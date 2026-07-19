@@ -379,6 +379,15 @@ Event schema for ADD ops — the "event" object must have:
     caught the throw cleanly. Both can carry layout/sky modifiers.
   - For kind=opponent_score: no additional fields
 
+One completed pass = ONE throw event:
+  - A follow-on clause describing the receiver's catch ("...to Ella,
+    Ella skies her defender for the score") supplies modifiers (sky,
+    layout, score) for that SAME throw — never emit a separate event
+    for the catch.
+  - Never emit a throw whose thrower and receiver are the same player;
+    if a clause seems to say that, it is describing the catch of the
+    previous throw.
+
 Player names in ADD events:
   - Use ONLY the player's name itself, e.g. "Alice", NOT the full roster line.
   - The roster lines above include nickname (in quotes) and jersey number (#N) as
@@ -389,6 +398,11 @@ Player names in ADD events:
     roster line (e.g. roster line "- Alice "Ace" #7" → emit `"Alice"`).
   - If a transcribed name is misspelled but clearly corresponds to a roster
     player (e.g. "Sirius" → "Cyrus"), use the corrected roster spelling.
+  - Some rosters contain names or nicknames that collide with ultimate jargon
+    (e.g. a player named or nicknamed "Sky", "Hammer", or "Huck"). A word in a
+    thrower/receiver/defender position refers to that player; jargon flags
+    apply only when the word describes the throw or catch itself ("throws a
+    hammer", "skies her defender").
 
 Output ONLY a JSON object of the form:
 {{

@@ -23,8 +23,9 @@
 import { Throw, Turnover, Defense, Role } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
 import { authFetch, API_BASE_URL } from '../store/sync.js';
-import { currentGame, getPlayerFromName } from '../utils/helpers.js';
+import { buildPointPlayerLookup, currentGame, getPlayerFromName } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
+import { showControllerToast } from '../game/controllerState.js';
 import { updateScore } from '../game/gameLogic.js';
 import { moveToNextPoint } from '../game/pointManagement.js';
 import { ensurePossessionExists } from '../playByPlay/keyPlayDialog.js';
@@ -63,6 +64,20 @@ const narrationEngine = (function() {
     let provisionalEvents = [];  // { id, event, possession, pointIndex }
     let accumulatedTranscript = '';
     let provisionalIdCounter = 0;
+
+    /**
+     * User-visible narration feedback. Narration failures were historically
+     * console-only, which is how G5 shipped broken for two weeks — a dead
+     * session looked identical to a quiet one. Route through the shared toast
+     * system; falls back to console when the toast container isn't mounted.
+     */
+    function toast(message, type = 'info') {
+        if (typeof showControllerToast === 'function') {
+            showControllerToast(message, type);
+        } else {
+            console.warn(`[narrationEngine] (no toast container) ${type}: ${message}`);
+        }
+    }
 
     function setPhase(p) {
         phase = p;
@@ -153,8 +168,12 @@ Just listen. Transcription happens automatically.`;
 
     /**
      * Get the on-field Player objects for the current point. Returns [] if no
-     * active point. Looks up from the latest point's players array (names) and
-     * resolves each to a Player object via getPlayerFromName.
+     * active point. `point.players` entries may be roster names OR player ids
+     * (id-era games), so resolution goes through the era-aware
+     * buildPointPlayerLookup — NOT getPlayerFromName — per the convention
+     * documented at that helper. With name-only lookup an id-era point
+     * resolved to zero players, so the slow pass got an empty roster and
+     * every extracted event was silently dropped.
      */
     function getOnFieldPlayers() {
         if (typeof currentGame !== 'function') return [];
@@ -162,8 +181,12 @@ Just listen. Transcription happens automatically.`;
         if (!game || !game.points || !game.points.length) return [];
         const pt = game.points[game.points.length - 1];
         if (!pt || !pt.players) return [];
+        // .player (real roster Player, or null) rather than .obj: narration
+        // increments stats on these objects, which a display stub would
+        // swallow. An entry nobody on the roster matches just doesn't narrate.
+        const lookup = buildPointPlayerLookup(game);
         return pt.players
-            .map(name => typeof getPlayerFromName === 'function' ? getPlayerFromName(name) : null)
+            .map(entry => lookup(entry).player)
             .filter(p => !!p);
     }
 
@@ -308,6 +331,10 @@ Just listen. Transcription happens automatically.`;
     async function runSlowPass() {
         if (!accumulatedTranscript.trim()) {
             // Nothing was transcribed — clear provisionals and move on.
+            // Say so: an empty transcript is also the signature of a dead
+            // audio/socket path (the G5 failure mode), and silence here left
+            // that indistinguishable from a working no-op.
+            toast('Narration: no speech was captured', 'warning');
             provisionalEvents.forEach(p => markProvisionalStatus(p.id, 'confirmed'));
             if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
             return;
@@ -354,14 +381,30 @@ Just listen. Transcription happens automatically.`;
             });
             if (!resp.ok) {
                 console.warn('[narrationEngine] Finalize failed:', resp.status);
+                toast(`Narration processing failed (${resp.status}) — no events added`, 'error');
                 // Leave provisionals as-is; user can undo if needed.
                 provisionalEvents.forEach(p => markProvisionalStatus(p.id, 'confirmed'));
             } else {
                 const data = await resp.json();
-                applySlowPassOperations(data.operations || []);
+                if (data.error) {
+                    // The server degraded gracefully (Claude call failed) and
+                    // returned confirm-all — which in transcription-only mode
+                    // means zero events. Surface it instead of looking done.
+                    console.warn('[narrationEngine] Finalize degraded:', data.error);
+                    toast('Narration processing failed on the server — no events added', 'error');
+                }
+                const { added, dropped } = applySlowPassOperations(data.operations || []);
+                if (dropped > 0) {
+                    toast(`Narration: ${added} event${added === 1 ? '' : 's'} added, ${dropped} couldn't be matched to on-field players`, 'warning');
+                } else if (added > 0) {
+                    toast(`Narration: ${added} event${added === 1 ? '' : 's'} added`, 'success');
+                } else if (!data.error) {
+                    toast('Narration: no game events found in the transcript', 'info');
+                }
             }
         } catch (err) {
             console.error('[narrationEngine] Slow pass error:', err);
+            toast('Narration processing failed (network) — no events added', 'error');
             // Best-effort: confirm what we have.
             provisionalEvents.forEach(p => markProvisionalStatus(p.id, 'confirmed'));
         }
@@ -379,6 +422,8 @@ Just listen. Transcription happens automatically.`;
      */
     function applySlowPassOperations(operations) {
         const onField = getOnFieldPlayers();
+        let added = 0;
+        let dropped = 0;
         for (const op of operations) {
             switch (op.op) {
                 case 'CONFIRM':
@@ -388,7 +433,15 @@ Just listen. Transcription happens automatically.`;
                     retractProvisional(op.provisional_id);
                     break;
                 case 'ADD':
-                    applySlowPassAdd(op.event, onField);
+                    // Appliers return the created event, or null when the
+                    // event couldn't be applied (usually: a player name that
+                    // matched nobody on field). Count both so the caller can
+                    // tell the coach instead of dropping events silently.
+                    if (applySlowPassAdd(op.event, onField)) {
+                        added += 1;
+                    } else {
+                        dropped += 1;
+                    }
                     break;
                 case 'AMEND':
                     // Defensive: prompt says don't emit this. Treat as retract
@@ -404,6 +457,7 @@ Just listen. Transcription happens automatically.`;
         provisionalEvents.forEach(p => {
             if (!p._finalized) markProvisionalStatus(p.id, 'confirmed');
         });
+        return { added, dropped };
     }
 
     /**
@@ -415,29 +469,28 @@ Just listen. Transcription happens automatically.`;
      * so that event creation, possession handling, stats, logging, and bus
      * publishing all stay consistent.
      */
+    /** @returns {object|boolean|null} The applied event (truthy) or null when dropped. */
     function applySlowPassAdd(eventSpec, onField) {
         if (!eventSpec || !eventSpec.kind) {
             console.warn('[narrationEngine] Slow pass ADD missing kind:', eventSpec);
-            return;
+            return null;
         }
         // Translate the backend's snake_case field names to the shape our
         // fast-pass appliers already expect (they mirror the Realtime tool
         // schema). Keys are identical by design — forward as-is.
         switch (eventSpec.kind) {
             case 'throw':
-                applyThrow(eventSpec, onField);
-                break;
+                return applyThrow(eventSpec, onField);
             case 'turnover':
-                applyTurnover(eventSpec, onField);
-                break;
+                return applyTurnover(eventSpec, onField);
             case 'defense':
-                applyDefense(eventSpec, onField);
-                break;
+                return applyDefense(eventSpec, onField);
             case 'opponent_score':
                 applyOpponentScore();
-                break;
+                return true;
             default:
                 console.warn('[narrationEngine] Slow pass ADD unknown kind:', eventSpec.kind);
+                return null;
         }
     }
 
@@ -572,8 +625,15 @@ Just listen. Transcription happens automatically.`;
                     // Abnormal socket close / fatal session error while we were
                     // recording or connecting: reconcile our state so the UI
                     // doesn't latch in "recording". (During 'finalizing' the stop
-                    // path owns the phase, so leave it alone.)
-                    if (phase === 'recording' || phase === 'connecting') {
+                    // path owns the phase, so leave it alone.) A live-recording
+                    // death gets a toast here; a connect-phase failure surfaces
+                    // through startRecording()'s throw → micButton's toast, so
+                    // it stays silent here to avoid double-toasting.
+                    if (phase === 'recording') {
+                        recording = false;
+                        setPhase('idle');
+                        toast('Narration stopped: ' + (err && err.message ? err.message : 'connection lost'), 'error');
+                    } else if (phase === 'connecting') {
                         recording = false;
                         setPhase('idle');
                     }
@@ -649,7 +709,10 @@ Just listen. Transcription happens automatically.`;
         //   narrationEngine.getProvisionals() // events from fast pass
         getTranscript: () => accumulatedTranscript,
         getProvisionals: () => provisionalEvents.slice(),
-        _resolvePlayerName: resolvePlayerName
+        _resolvePlayerName: resolvePlayerName,
+        // Debug seam: inspect the era-resolved on-field roster the way the
+        // slow pass will see it (empty here = events would be dropped).
+        _getOnFieldPlayers: getOnFieldPlayers
     };
 })();
 

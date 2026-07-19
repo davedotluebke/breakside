@@ -159,8 +159,15 @@ const narrationRealtimeSession = (function() {
                 'realtime',
                 // The ephemeral client_secret is passed as a subprotocol.
                 // Using the documented subprotocol naming:
-                `openai-insecure-api-key.${token}`,
-                'openai-beta.realtime-v1'
+                `openai-insecure-api-key.${token}`
+                // Do NOT add the retired beta-era subprotocol here (the old
+                // third entry). Since the GA cutover, OpenAI accepts the
+                // handshake and then kills the session (error + close 4000
+                // beta_api_shape_disabled) if that subprotocol appears in the
+                // offer at all — that server-side change is what silently
+                // broke narration in the field (G5, 2026-07-04) with no
+                // client deploy involved. Pinned by
+                // tests/unit/narrationRealtimeSocket.test.mjs.
             ]
         );
 
@@ -275,9 +282,32 @@ const narrationRealtimeSession = (function() {
         }
         logPhase('session.update sent');
 
-        // 4. Open the microphone and start streaming
-        await startAudioCapture();
+        // 4. Open the microphone and start streaming. If capture fails
+        // (permission denied, no device), close the socket we just opened —
+        // otherwise it lingers listener-attached until OpenAI idle-times it
+        // out, and a quick retry can find stale state.
+        try {
+            await startAudioCapture();
+        } catch (err) {
+            try { if (ws) ws.close(); } catch (_) {}
+            ws = null;
+            throw err;
+        }
         logPhase('audio capture started');
+
+        // The socket can die while getUserMedia is up — on iOS the permission
+        // prompt holds this await open for seconds, ample time for a fatal
+        // server error (e.g. the beta_api_shape_disabled close that caused
+        // G5) to land. Without this check that death was invisible:
+        // handleSocketClose ignores closes while !sessionActive, send()
+        // silently drops frames on a closed socket, and the UI latched into a
+        // green "recording" state streaming into the void. Fail loudly
+        // instead so the engine resets and the mic button surfaces an error.
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            stopAudioCapture();
+            ws = null;
+            throw new Error('Connection closed during microphone setup');
+        }
 
         sessionActive = true;
     }
