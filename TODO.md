@@ -172,11 +172,14 @@ zero files in `data/`. `test_existing_data.py` auto-skips where real data is abs
 marker `live_llm`) so the default run is deterministic: **fresh worktree = 231 passed /
 49 skipped in ~5s**.
 
-Remaining, needs Dave (chip spawned by the G3 session):
-- [ ] **Main-worktree `data/` cleanup**: 4 existing-data integrity tests fail on main
-      *correctly* — past unisolated runs left 7 junk test-game dirs + stale index
-      entries in the real `data/`. Recipe = delete those game dirs + one index rebuild
-      (verified on a copy). Until then, expect exactly those 4 failures on main only.
+Remaining:
+- [x] **Main-worktree `data/` cleanup** *(done 2026-07-19: purged the 7 junk
+      test-game dirs plus 142 fixture teams, 118 fixture players, 134 test
+      memberships, 1 share, 2 expired invites; all four indexes rebuilt.
+      `test_existing_data.py` 24/24 on main and the full backend suite now
+      leaves zero files in `data/`. Hazard: worktrees on pre-G3 commits still
+      write fixtures into the real `data/` if backend pytest runs there —
+      rebase such worktrees onto main before running backend tests.)*
 - [ ] Two narration scenarios (`013_hammer_sky_combo`, `019_nickname_recognition`)
       scored **F1 0.0** in the last live run — real narration-quality regression now
       hidden behind the opt-in gate; deserves a look (possibly related to the staging
