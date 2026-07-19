@@ -953,9 +953,17 @@ The fast-pass `AMEND` operation is intentionally not emitted by the prompt; corr
 
 ### Cost characteristics
 
-- Fast pass (Realtime API audio in + text out): ~$0.06 per minute of audio
-- Slow pass (Claude Sonnet, ~1-3K tokens per possession): $0.01-0.03 per call
-- A typical full game (~25 possessions, sporadic narration): roughly $2-4 total
+- Fast pass (Realtime API, transcription-intent session): billed by audio
+  duration at transcription-model rates — `gpt-4o-mini-transcribe` ~$0.003/min,
+  `gpt-4o-transcribe` ~$0.006/min (OpenAI pricing page, verified 2026-07-19; an
+  earlier ~$0.06/min figure here was ~20x too high). Worth confirming once
+  against the OpenAI usage dashboard.
+- Slow pass (Claude Sonnet, ~1-3K tokens per possession): $0.01-0.03 per call —
+  now the *majority* of narration spend
+- A typical full game (~25 possessions, sporadic narration): roughly $0.35-1 total
+
+See `docs/narration-stt-research-2026-07.md` for the July 2026 STT landscape
+research (pricing, latency, on-device options) behind these numbers.
 
 ### Test harness
 

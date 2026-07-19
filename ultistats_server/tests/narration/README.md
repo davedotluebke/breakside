@@ -119,9 +119,11 @@ These are good follow-ups; see `TODO.md` under "Audio-Driven Test Suite".
 
 ## Cost per run
 
-Roughly $0.05–0.10 per scenario:
+Dominated by the slow pass — roughly $0.01–0.04 per scenario:
 
-- **Realtime API** (audio in → text out): ~$0.06 per minute of audio
+- **Realtime API** (transcription session, audio in → text out): ~$0.003 per
+  minute of audio for `gpt-4o-mini-transcribe` (an earlier ~$0.06/min figure
+  here was ~20x too high — see `docs/narration-stt-research-2026-07.md`)
 - **Claude Sonnet** (slow pass): ~$0.01–0.03 per scenario depending on transcript length
 
-A full suite of 10 scenarios runs in under a dollar.
+A full suite of 10 scenarios runs for well under a dollar.
