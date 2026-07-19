@@ -44,9 +44,14 @@ punch list) — that section is the single source of truth for review follow-up 
 cleanup items are no longer scattered across this file's sections. Status snapshot
 (2026-07-19 session):
 
-- **G3** backend-test-suite green, **G2** CORS-on-500 + backup-degrade hardening,
-  **G4** authFetch 401-retry, **G6** game-log renderer dedup — in flight this session
-  (see the sections below / Quick Reference for the original item text).
+- **MERGED 2026-07-19:** **G3** backend suite green (231/0 fresh-worktree, deterministic),
+  **G2** CORS-on-500s + version-backup degrade + startup writability check, **G4**
+  authFetch 401-retry (+ proxy-image auth fix), **G6** game-log renderers unified
+  (`utils/gameLogRenderer.js`), **G11.6** console sweep, and the
+  **`point.startTimestamp`-at-score-time fix** (updateScore no longer stamps score time
+  as the point start). ⚠️ **G2/G3 are backend changes — EC2 needs
+  `git pull && systemctl restart breakside` to take effect** (safe to defer; old server
+  keeps running old code).
 - **Needs Dave — staging `/join/{code}` fix (G11.5).** Root cause found 2026-07-19: it's
   the **S3 website config**, not CloudFront — prod's bucket has
   `ErrorDocument: index.html` (SPA fallback), staging's lacks it, so `/join/<code>` returns
@@ -91,24 +96,26 @@ migration surfaced but deliberately did not do (behavior-preserving rule):
       holds 00:00 in red at expiry, anchored below `#panel-header` so it
       doesn't cover the point chip, hidden when the setting is 0.)*
 
-### Backend test suite: fix or retire the stale test_api/test_auth failures
+### Backend test suite — ✅ GREEN (G3, merged 2026-07-19)
 
-`pytest ultistats_server/` is not green and hasn't been for a while — ~48 pre-existing
-failures, none caught by the D3 refactor (failure set is identical before/after; verified
-against a recorded baseline). Two distinct problems:
+Fixed on branch `g3-green-tests`: test paths updated to `/api/...`; the real bug was
+test_api's fixture writing to the repo's **real `data/` dir** and leaking
+`dependency_overrides` into later modules (that's what broke test_auth in full runs) —
+all modules now use isolated tmp data dirs and restore what they patch; the suite leaves
+zero files in `data/`. `test_existing_data.py` auto-skips where real data is absent
+(worktrees). Narration live-LLM scenarios are **opt-in** (`NARRATION_LIVE_TESTS=1`,
+marker `live_llm`) so the default run is deterministic: **fresh worktree = 231 passed /
+49 skipped in ~5s**.
 
-- [ ] `test_api.py` (~20 failures even standalone): tests still call **unprefixed paths**
-      (`/players/{id}`, `/teams/{id}`, …) from before the `/api/` prefix; those now fall
-      through to the PWA static catch-all and 404. Either update the paths to `/api/...`
-      and re-assert, or delete the cases that `test_security.py` already covers better.
-- [ ] `test_auth.py` + `test_existing_data.py` (fail only in the full-suite run, pass
-      standalone): cross-test interference — module-level `from main import app` snapshots
-      config/data dirs at collection time, so whichever test file patches `config` first
-      wins. Isolate with per-module fixtures (like `test_security.py` does) or run against
-      a tmp data dir via `ULTISTATS_DATA_DIR`.
-- [ ] `tests/narration/test_scenarios.py`: live-LLM calls, inherently flaky (1–2 scenarios
-      flip per run). Consider marking them `@pytest.mark.narration` and excluding from the
-      default run so "pytest green" is meaningful again.
+Remaining, needs Dave (chip spawned by the G3 session):
+- [ ] **Main-worktree `data/` cleanup**: 4 existing-data integrity tests fail on main
+      *correctly* — past unisolated runs left 7 junk test-game dirs + stale index
+      entries in the real `data/`. Recipe = delete those game dirs + one index rebuild
+      (verified on a copy). Until then, expect exactly those 4 failures on main only.
+- [ ] Two narration scenarios (`013_hammer_sky_combo`, `019_nickname_recognition`)
+      scored **F1 0.0** in the last live run — real narration-quality regression now
+      hidden behind the opt-in gate; deserves a look (possibly related to the staging
+      narration report above).
 
 ### Multi-user rollout — final items
 
