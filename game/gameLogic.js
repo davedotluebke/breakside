@@ -8,6 +8,7 @@ import { Role, Game, createRosterSnapshot, isTestGame } from '../store/models.js
 import { currentTeam, currentEvent, saveAllTeamsData, serializeTeam } from '../store/storage.js';
 import { syncGameToCloud, deleteGameFromCloud } from '../store/sync.js';
 import { currentGame, getLatestPoint, getActivePossession, getPlayerFromName } from '../utils/helpers.js';
+import { buildGameLogText } from '../utils/gameLogRenderer.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { updatePanelsForGameState } from '../ui/panelSystem.js';
 import { clearNextLineSelections } from '../ui/activePlayersDisplay.js';
@@ -312,107 +313,23 @@ function downloadJSON(jsonData, filename) {
     URL.revokeObjectURL(url);
 }
 
+/**
+ * Build the full game-log text for the current game (Copy Summary clipboard;
+ * also feeds the in-game Log tab via gameScreenSync.updateGameLogEvents).
+ * The line format itself lives in utils/gameLogRenderer.js — shared with the
+ * post-game summary renderer (G6 merge); make format changes there.
+ */
 function summarizeGame() {
     let versionInfo = '';
     if (appVersion) {
         versionInfo = `App Version: ${appVersion.version} (Build ${appVersion.build})\n`;
     }
-    let summary = versionInfo + `Game Summary: ${currentGame().team} vs. ${currentGame().opponent}.\n`;
-    summary += `${currentGame().team} roster:`;
-    currentTeam.teamRoster.forEach(player => summary += ` ${player.name}`);
-    let numPoints = 0;
-    let runningScoreUs = 0;
-    let runningScoreThem = 0;
-    // How the current period opened — flips at each period break (halftime /
-    // switch sides), driving the "who pulls next" note below. Mirrors
-    // determineStartingPosition().
-    let periodOpening = currentGame().startingPosition;
-    currentGame().points.forEach(point => {
-        let switchsides = false;
-        let forceswap = false;
-        numPoints += 1;
-        summary += `\nPoint ${numPoints} roster:`;
-        point.players.forEach(player => summary += ` ${player}`);
-        // indicate which team pulls and which receives (thus starting on offense)
-        if (point.startingPosition === 'offense') {
-            summary += `\n${currentGame().opponent} pulls to ${currentGame().team}.`;
-        } else {
-            summary += `\n${currentGame().team} pulls to ${currentGame().opponent}.`;
-        }
-        // O/D delimiter is emitted per logical possession boundary, not per
-        // Possession object — a Turnover event lives inside the offensive
-        // Possession that just ended (since ensurePossessionExists(true) is
-        // called for it everywhere), so without an inline emission a
-        // possession turned over by Turnover-only events (no following
-        // Defense event yet) wouldn't show the boundary at all. Inline
-        // emission after each Turnover, paired with suppression of the
-        // very next possession's delimiter, gives a correct boundary
-        // either way (Turnover-then-Defense or Turnover-only-so-far).
-        let suppressNextPossessionDelimiter = false;
-        // Events recorded AFTER the point ended (between-points timeouts,
-        // switch sides) are deferred past the score lines below so the log
-        // reads in real-world order.
-        const afterPointLines = [];
-        point.possessions.forEach(possession => {
-            if (!suppressNextPossessionDelimiter) {
-                const role = possession.offensive ? 'offense' : 'defense';
-                summary += `\n— ${currentGame().team} on ${role} —`;
-            }
-            suppressNextPossessionDelimiter = false;
-            possession.events.forEach(event => {
-                // Halftime implies the side switch; two breaks on the same
-                // point cancel (accidental tap + correction), so toggle.
-                if (event.type === 'Other' && (event.switchsides_flag || event.halftime_flag)) {
-                    switchsides = !switchsides;
-                }
-                if (event.type === 'Other' && event.forceswap_flag) {
-                    forceswap = !forceswap;
-                }
-                if (event.type === 'Other' && event.betweenPoints) {
-                    afterPointLines.push(event.summarize());
-                    return;
-                }
-                summary += `\n${event.summarize()}`;
-                if (event.type === 'Turnover') {
-                    // Possession just ended — emit the boundary so the log
-                    // shows it even when no Defense event has yet been
-                    // recorded (e.g. inferred Turnover from the pill,
-                    // or a Turnover before the user logs any D events).
-                    summary += `\n— ${currentGame().team} on defense —`;
-                    suppressNextPossessionDelimiter = true;
-                }
-            });
-        });
-        // if most recent event is a score, indicate which team scored
-        if (point.winner === 'team') {
-            summary += `\n${currentGame().team} scores! `;
-            runningScoreUs++;
-        }
-        if (point.winner === 'opponent') {
-            summary += `\n${currentGame().opponent} scores! `;
-            runningScoreThem++;
-        }
-        if (point.winner) {
-            summary += `\nCurrent score: ${currentGame().team} ${runningScoreUs}, ${currentGame().opponent} ${runningScoreThem}`;
-        }
-        afterPointLines.forEach(line => summary += `\n${line}`);
-        // Manual Swap O & D corrections flip the period bookkeeping too
-        // (matches determineStartingPosition), so the note below and any
-        // later halftime read from the corrected orientation.
-        if (forceswap) {
-            periodOpening = (periodOpening === 'offense') ? 'defense' : 'offense';
-        }
-        if (switchsides) {
-            // Period break: the next point opens with the period-opening
-            // roles swapped — the team that pulled to open the previous
-            // period receives — regardless of who won this point.
-            periodOpening = (periodOpening === 'offense') ? 'defense' : 'offense';
-            if (periodOpening === 'offense') {
-                summary += `\n${currentGame().team} will receive the pull and play O. `;
-            } else {
-                summary += `\n${currentGame().team} will pull to ${currentGame().opponent} and play D. `;
-            }
-        }
+    const game = currentGame();
+    const summary = buildGameLogText(game, {
+        teamName: game.team,
+        opponentName: game.opponent,
+        versionInfo,
+        rosterNames: currentTeam.teamRoster.map(player => player.name),
     });
     log(summary);
     return summary;
