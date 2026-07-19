@@ -844,11 +844,22 @@ flaky live-LLM narration scenarios. (F3's targeted subsets — 77 backend tests 
 failures are pre-existing suite rot.) A red suite means the safety net for all future cleanup
 is not trustworthy — **do this first.**
 
-### G4 · `authFetch` consolidation — the ESM migration shipped the *weaker* variant (NEW)
-`auth/auth.js:429` documents it: two `authFetch` implementations existed; the local
-**401-retry** variant was deleted as shadowed-dead, so the surviving one has **no 401 retry**.
-Behavior was preserved at the time, but the token-refresh resilience that B2 added is now
-partly gone. Consolidate onto the retry variant.
+### G4 · `authFetch` consolidation — ✅ DONE (branch `g4-authfetch-retry`)
+`auth/auth.js:429` documented it: two `authFetch` implementations existed; the local
+**401-retry** variant was deleted as shadowed-dead, so the surviving one had **no 401 retry**.
+Resolution: the pre-C8 retry semantics were ported into the one surviving implementation —
+`store/sync.js authFetch`, core extracted to **`store/authFetchLogic.js`** (pure factory,
+pendingLineLogic pattern) with 14 unit tests (`tests/unit/authFetchLogic.test.mjs`; suite
+48/48). On a 401 with a bearer: one forced refresh (new `forceRefreshSession()` in
+auth/auth.js, on the `window.breakside.auth` namespace) + exactly one retry; concurrent 401s
+share a single refresh (no stampede); anonymous requests / failed refreshes / ReadableStream
+bodies never retry; a throwing retry returns the original 401. Test-mode guard intact (no
+bearer attached, `forceRefreshSession` refuses under test mode). Bonus: `teamSettings.js`'s
+`POST /api/proxy-image` raw fetch sent **no auth** against an auth-required endpoint (team
+icon fetch 401'd whenever auth was enforced) — now unified onto `authFetch`; the invite-info
+GET stays deliberately anonymous (bearer ⇒ 409-at-info-time, flow handles 409 at redeem) and
+is now commented as such. `landing/join.js` keeps its own header logic by design (separate
+classic-script page, fresh post-login token, can't import the app module graph).
 
 ### G5 · Audio narration reported broken on staging (2026-07-04) — uncharacterized (NEW)
 Logged during the program, symptoms never captured. Needs a repro/deep dive.

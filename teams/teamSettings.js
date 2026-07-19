@@ -555,7 +555,10 @@ async function handleJoinCodeEntry() {
     }
     
     try {
-        // Fetch invite info first
+        // Fetch invite info first. Deliberately a raw anonymous fetch, not
+        // authFetch: with a bearer attached the server answers 409 for
+        // already-members at info time (routers/invites.py), which this flow
+        // handles at redeem time instead (confirmJoinTeam below).
         const response = await fetch(`${getApiBaseUrl()}/api/invites/${code}/info`);
         
         if (response.status === 404) {
@@ -838,12 +841,11 @@ async function fetchAndCacheIcon() {
     }
     
     try {
-        // Use server-side proxy to fetch and resize image
-        const response = await fetch(`${getApiBaseUrl()}/api/proxy-image`, {
+        // Use server-side proxy to fetch and resize image. Must go through
+        // authFetch: the endpoint requires auth (see routers/misc.py), and a
+        // raw fetch here sent no bearer at all — G4 unified it.
+        const response = await authFetch(`${getApiBaseUrl()}/api/proxy-image`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
             body: JSON.stringify({ url })
         });
         

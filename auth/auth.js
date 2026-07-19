@@ -286,6 +286,38 @@ async function getFreshSession() {
 }
 
 /**
+ * Force an immediate session refresh, regardless of how close to expiry the
+ * cached token looks. Used by store/sync.js's authFetch when the server
+ * rejects a bearer with a 401: the expiry-margin check above can miss a token
+ * the server considers stale (clock skew, revocation), so the 401 itself is
+ * the ground truth. Updates the in-memory session/user on success.
+ *
+ * Refuses to run in test mode (the fake token isn't a real JWT — nothing to
+ * refresh) and when Supabase is unavailable. Callers treat null as "no fresh
+ * token; don't retry".
+ *
+ * @returns {Promise<object|null>} The refreshed session, or null.
+ */
+async function forceRefreshSession() {
+    if (_testModeUserId) return null;
+    if (!supabaseClient) return null;
+
+    try {
+        const { data, error } = await supabaseClient.auth.refreshSession();
+        if (!error && data && data.session) {
+            currentSession = data.session;
+            currentUser = data.session.user || null;
+            return data.session;
+        }
+        console.warn('Forced session refresh failed:', error?.message || 'no session returned');
+        return null;
+    } catch (e) {
+        console.warn('Forced session refresh threw:', e);
+        return null;
+    }
+}
+
+/**
  * Get authorization headers for API calls.
  * Returns headers with Bearer token if authenticated, empty object otherwise.
  *
@@ -427,7 +459,10 @@ function handleLoginRedirect() {
 // authFetch: this file's local 401-retry variant was DELETED at C8 — it had been
 // shadowed dead code since pre-migration (store/sync.js's classic-script authFetch
 // overwrote the global, so every runtime call already got sync's version; see the
-// C1 commit). Consolidating onto the 401-retry variant is a flagged follow-up.
+// C1 commit). G4 closed the follow-up: the 401-retry semantics were ported into
+// the one surviving implementation (store/sync.js authFetch, core logic in
+// store/authFetchLogic.js), which calls back into forceRefreshSession() above
+// via the window.breakside.auth namespace.
 
 /**
  * Sync current user to our backend.
@@ -600,7 +635,8 @@ async function signInWithGoogle() {
 // teams/syncStatusUI.js, and teams/teamSettings.js — all reach it via
 // window.breakside.auth at call time; auth/loginScreen.js also merges its own
 // namespace into window.breakside. Note: authFetch here is store/sync.js's
-// version (imported above) — the runtime winner since pre-migration.
+// version (imported above) — the runtime winner since pre-migration, and since
+// G4 it carries the restored 401-retry.
 // window.BreaksideAuth (a legacy duplicate of this object) was dropped at C8:
 // grep found zero references anywhere (code, tests, landing/, HTML).
 const breaksideAuth = {
@@ -621,6 +657,7 @@ const breaksideAuth = {
     // Token management
     getAuthHeaders,
     getAccessToken,
+    forceRefreshSession,  // used by store/sync.js authFetch's 401-retry
 
     // Sign in/up/out
     signIn,
