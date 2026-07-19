@@ -125,11 +125,24 @@ cleanup items are no longer scattered across this file's sections. Status snapsh
      Historical id-era points keep their gap in the legacy counters by design
      (no backfill): event-derived stats (utils/eventStats.js) are the accurate
      path and already resolve ids.
-  4. 🟠 **Zombie point in real data:** SWW-2's stored point 13 has `winner` set +
-     `startTimestamp` still running since Nov 2025 + 0 possessions → player Game-time
-     shows ~352,7xx minutes (elapsed-since-November). The updateScore fix stops NEW
-     corruption; consider a load-time normalizer (null a stale running `startTimestamp`
-     on ended/old points) to repair existing data displays.
+  4. ✅ **FIXED 2026-07-19** (branch `worktree-zombie-point-normalizer`) —
+     **Zombie point in real data.** Ground truth differed from the original
+     note: the live zombie was SWW-2's **point 1** (winner `""`,
+     `startTimestamp` running since Nov 2025, totalPointTime 0) — point 13
+     only carries a *static* 45-min banked `totalPointTime` (start==end
+     score-time stamps, the old updateScore bug). All four Nov-2025 games
+     had zombie markers (13/8/15/14 repaired). `deserializePointsFromServer`
+     now runs `normalizePointTimers` (`store/pointTimerNormalizer.js`, pure
+     leaf, unit-tested): a running `startTimestamp` is nulled when the point
+     is concluded (winner/endTimestamp), a later point exists, or the marker
+     is >12h from now in either direction; a genuinely live last point
+     survives mid-game reloads and cloud refreshes untouched. Stale segments
+     are dropped, never banked. Verified live on the real SWW-2 game via dev
+     backend: Game-time column shows banked minutes (not ~352,7xx), and the
+     repaired state syncs back to the store (self-healing). Legacy *static*
+     `totalPointTime` inflation (that 45-min point 13) is left as-is by
+     design — the true duration is unknowable. Unit 95/95, e2e 20/21+flaky
+     pass (flaky spec clean in isolation).
 
 ### ES-module migration follow-ups (from task E1, 2026-07-03)
 
