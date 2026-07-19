@@ -717,6 +717,20 @@ function createPointElement(point, pointNumber, teamName, opponentName) {
     return div;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// KEEP IN SYNC with the PWA's shared game-log renderer:
+//   utils/gameLogRenderer.js (buildGameLogText / renderGameLogHTML)
+// That module is the single source of truth for the PWA's linear game log
+// (in-game Log tab, Copy Summary text, post-game summary). This viewer is a
+// separate origin/app (served by the API, classic script, no ES modules), so
+// it CANNOT import PWA modules and keeps its own per-point CARD layout —
+// structurally different on purpose (point result lives in the card header,
+// so e.g. betweenPoints re-ordering doesn't apply here). But renderPossessions
+// / renderEvent below re-implement the same event walking and phrasing as
+// Event.summarize() in store/models.js — when event phrasing, flags, or
+// possession-boundary semantics change there or in gameLogRenderer, mirror
+// the change here by hand.
+// ─────────────────────────────────────────────────────────────────────────────
 function renderPossessions(possessions) {
     if (!possessions || possessions.length === 0) return '<div class="possession">No possessions yet</div>';
     

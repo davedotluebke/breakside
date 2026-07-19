@@ -70,6 +70,7 @@ import { currentTeam } from './store/storage.js';
 import './store/sync.js';
 import './settings/advancedSettings.js';
 import './utils/eventStats.js';
+import './utils/gameLogRenderer.js';
 import './utils/tableSort.js';
 import './utils/statsHelp.js';
 import './utils/xlsxExport.js';
