@@ -1,0 +1,360 @@
+/* ==========================================================================
+   shell.css — App chrome: compact header, staging pill, version overlay, panel
+   title bars, start-game subscreen, timers, point clock, next-line.
+   Split from main.css (F4); rule order preserved — these files load in
+   sequence (see index.html) and must stay in that order.
+   Colors come from the token palette in css/tokens.css.
+   ========================================================================== */
+
+/* Header styles — compact unified header with hamburger menu */
+header {
+    background-color: var(--white);
+    color: var(--text-primary);
+    border-bottom: 3px solid var(--brand-orange); /* brand orange accent (replaces full-orange fill) */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    /* Break out of the body's 5px padding so the white header reaches the
+       top/side edges, and fill the iOS safe area (notch/dynamic island) white */
+    margin: -5px -5px 0;
+    padding-top: env(safe-area-inset-top, 0);
+    position: relative;
+}
+
+header .header-content-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr; /* menu | centered logo | pill */
+    align-items: center;
+    padding: 5px 12px 4px; /* 5 top, 4 bottom (compact) */
+    gap: 10px;
+}
+
+header .header-menu-container {
+    justify-self: start;
+}
+
+header .header-staging-pill {
+    justify-self: end;
+}
+
+header .header-logo-container {
+    position: relative;
+    flex-shrink: 0;
+}
+
+header .header-logo-container img {
+    height: 55px;
+    width: auto;
+    display: block;
+    cursor: pointer;
+}
+
+/* Staging-only badge — purple pill distinguishes staging from production */
+.header-staging-pill {
+    display: none;
+    flex-shrink: 0;
+    background: var(--brand-purple);
+    color: var(--white);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+
+body.staging .header-staging-pill {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* Version overlay - shown when tapping logo */
+.version-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--brand-orange);
+    color: var(--white);
+    font-size: 0.7rem;
+    font-weight: 500;
+    border-radius: 4px;
+    z-index: 10;
+    white-space: nowrap;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+}
+
+/* Panel title bars in non-game screens */
+section > .panel-title-bar {
+    cursor: default;
+    margin: 0 -5px; /* Extend to edges (counters body padding) */
+}
+
+.title-bar-back-btn {
+    background: none;
+    border: none;
+    color: var(--white);
+    font-size: 1rem;
+    padding: 4px 8px;
+    margin: 0 4px 0 0;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.title-bar-back-btn:hover {
+    background: rgba(255,255,255,0.15);
+}
+
+/* Roster navigation button on Start Game subscreen */
+.roster-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    margin: 0 0 10px 0;
+    padding: 10px;
+    background: var(--slate);
+    color: var(--white);
+    border: none;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.roster-nav-btn:hover {
+    background: var(--slate-hover);
+}
+
+/* Subscreen content padding */
+.subscreen-content {
+    padding: 10px;
+}
+
+/* Start Game settings layout */
+.start-game-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.start-game-field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.start-game-field-row label {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.start-game-field-row select {
+    flex: 1;
+    min-width: 0;
+}
+
+.start-game-buttons {
+    margin-top: 8px;
+}
+
+/* Make sure the timer text itself uses JetBrains Mono */
+#pointTimer {
+    font-family: 'JetBrains Mono', monospace; /* id selector beats the global * { font-family } */
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+/* Add back specific button styles */
+.special-action-btn {
+    background-color: var(--orange-vivid);
+    color: white;
+}
+
+
+.special-action-btn.inactive,
+.special-action-btn:disabled {
+    background-color: var(--border-default);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.secondary-action-btn {
+    background-color: var(--blue-action);
+    color: white;
+}
+
+/* Primary commit action in the Score Attribution dialog. Used when the
+ * dialog is opened with both thrower and receiver pre-selected (the
+ * Full-PBP Score-button path), where the existing auto-fire-on-both-
+ * selected behavior is suppressed and the user needs an explicit
+ * "commit" tap so they have time to toggle modifier flags first. In
+ * Simple mode the auto-fire still fires before the user could reach
+ * this button — it just sits as a visible affordance. */
+.primary-action-btn {
+    background-color: var(--green-deep);
+    color: white;
+}
+.primary-action-btn.inactive,
+.primary-action-btn:disabled {
+    background-color: var(--border-default);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+
+/* Point clock container styles */
+.point-clock-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 80%;
+    max-width: 400px;
+    background-color: var(--surface-row-hover);
+    border: 2px solid var(--border-light);
+    border-radius: 1rem;
+    padding: 1rem;
+    margin: 2rem auto;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.point-clock {
+    flex: 1;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--text-primary);
+    padding: 0.5rem 1rem;
+    background-color: white;
+    border: 1px solid var(--border-default);
+    border-radius: 0.5rem;
+    margin-right: 1rem;
+    min-width: 100px;
+    width: 100px;
+    display: inline-block;
+    letter-spacing: -0.5px;
+}
+
+.pause-resume-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--blue-action);
+    border: none;
+    cursor: pointer;
+    padding: 1rem;
+    color: white;
+    border-radius: 0.5rem;
+    min-width: 100px;
+    transition: background-color 0.2s;
+}
+
+
+.pause-resume-btn i {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.pause-resume-text {
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+/* Update simple mode container spacing */
+.simple-mode-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem;
+}
+
+
+/* Next Line Selection Mode Styles */
+.next-line-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: var(--brand-orange-soft);
+    color: white;
+    z-index: 100;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    transition: transform 0.3s ease;
+}
+
+.next-line-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 10px 5px;
+    gap: 10px;
+}
+
+.mini-action-btn {
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    border-radius: 4px;
+    background-color: var(--gray-dark);
+    color: white;
+    border: none;
+    margin: 0;
+}
+
+#weScoreBtnMini {
+    background-color: var(--green-bright);
+}
+
+#theyScoreBtnMini {
+    background-color: var(--red-bright);
+}
+
+.mini-point-clock {
+    background-color: var(--surface-row-hover);
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: var(--text-primary);
+    min-width: 70px;
+    text-align: center;
+}
+
+.swipe-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-bottom: 5px;
+}
+
+.swipe-line {
+    width: 40px;
+    height: 3px;
+    background-color: rgba(255, 255, 255, 0.5);
+    border-radius: 2px;
+    margin: 2px 0;
+}
+
+/* Choose next line button styling */
+#chooseNextLineBtn {
+    width: 80%;
+    max-width: 400px;
+    margin-top: 10px;
+    background-color: var(--blue-action);
+    color: white;
+}
+
+

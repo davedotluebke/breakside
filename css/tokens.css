@@ -1,0 +1,132 @@
+/* ============================================================================
+   Design tokens — single source of truth for every color in the app CSS.
+   Loaded first (see index.html) so every stylesheet can reference these.
+
+   Naming tiers:
+     --brand-*     Breakside brand colors (orange accent, staging purple)
+     --color-*     semantic states (primary/success/danger/warning/info/secondary)
+     --surface-*   backgrounds, lightest to darkest
+     --border-*    border grays
+     --text-*      text grays, darkest (strong) to lightest (disabled)
+     --gender-*    FMP purple / MMP green player color coding
+   One-off component colors keep descriptive names (--blue-scope, --slate, …).
+   ============================================================================ */
+
+:root {
+    /* Brand */
+    --brand-orange: #eb8232;         /* header accent, focus rings, CTAs */
+    --brand-orange-soft: #e19049;    /* dialog headers */
+    --brand-orange-deep: #d06e1f;    /* orange CTA hover */
+    --brand-orange-deeper: #b85a10;  /* orange CTA hover gradient end */
+    --brand-purple: #7b68ae;         /* staging pill */
+
+    /* Primary (Bootstrap blue family) */
+    --color-primary: #007bff;
+    --color-primary-hover: #0069d9;
+    --color-primary-active: #0056b3;
+    --color-primary-deep: #004085;
+    --color-primary-glow: rgba(0, 123, 255, 0.4);
+
+    /* Success */
+    --color-success: #28a745;
+    --color-success-hover: #218838;
+    --color-success-active: #1e7e34;
+    --color-success-surface: #d4edda;
+    --color-success-text: #155724;
+    --color-success-tint: rgba(40, 167, 69, 0.2);
+
+    /* Danger */
+    --color-danger: #dc3545;
+    --color-danger-hover: #c82333;
+    --color-danger-active: #b02a37;
+    --color-danger-deep: #921925;
+    --color-danger-surface: #f8d7da;
+    --color-danger-surface-deep: #f5c6cb;
+    --color-danger-text: #721c24;
+    --color-danger-glow: rgba(220, 53, 69, 0.4);
+
+    /* Warning */
+    --color-warning: #ffc107;
+    --color-warning-hover: #e0a800;
+    --color-warning-surface: #fff3cd;
+    --color-warning-text: #856404;
+
+    /* Info */
+    --color-info: #17a2b8;
+    --color-info-hover: #138496;
+    --color-info-active: #117a8b;
+
+    /* Secondary (muted gray-blue buttons) */
+    --color-secondary: #6c757d;
+    --color-secondary-hover: #5a6268;
+    --color-secondary-active: #545b62;
+    --color-secondary-deep: #43484d;
+
+    /* Gender color coding (FMP purple / MMP green) */
+    --gender-fmp: #7d3c98;
+    --gender-fmp-surface: #e8d5f2;
+    --gender-fmp-surface-hover: #d4b5e5;
+    --gender-fmp-tint: rgba(125, 60, 152, 0.2);
+    --gender-mmp: #2d8659;
+    --gender-mmp-surface: #d4e8dd;
+    --gender-mmp-surface-hover: #b8dcc8;
+    --gender-mmp-tint: rgba(45, 134, 89, 0.2);
+
+    /* Surfaces, lightest to darkest */
+    --white: #fff;
+    --surface-sticky: #fafafa;       /* opaque bg for sticky table cells */
+    --surface-subtle: #f8f9fa;
+    --surface-row-hover: #f5f5f5;
+    --surface-page: #f4f4f4;         /* body background */
+    --surface-header-cell: #f2f2f2;  /* table th */
+    --surface-light: #f0f0f0;
+    --surface-hover: #e9ecef;
+    --surface-raised: #e8e8e8;
+    --surface-mid: #e5e5e5;
+    --surface-dim: #e0e0e0;
+    --surface-sorted: #e3ecfb;       /* sorted-column highlight */
+    --surface-game-active: #e8f5e9;
+    --surface-game-active-hover: #c8e6c9;
+
+    /* Borders */
+    --border-lighter: #eee;
+    --border-soft: #dee2e6;
+    --border-light: #ddd;
+    --border-muted: #d0d0d0;
+    --border-default: #ccc;
+    --border-strong: #bbb;
+
+    /* Text tiers + neutrals */
+    --black: #000;
+    --text-strong: #222;
+    --text-primary: #333;
+    --gray-dark: #444;               /* default <button> background */
+    --text-secondary: #555;
+    --text-muted: #666;
+    --text-faint: #888;
+    --text-placeholder: #999;
+    --text-disabled: #aaa;
+    --gray-chrome: #c0c0c0;          /* legacy footer band */
+    --ink-700: #495057;
+    --ink-800: #343a40;
+
+    /* One-off component colors */
+    --blue-action: #0066cc;          /* key-play/pull selected, pause btn */
+    --blue-scope: #2d6cdf;           /* roster scope toggle active */
+    --blue-sub-selected: #2669b5;    /* sub-action selected */
+    --green-bright: #4caf50;         /* We Score buttons */
+    --green-deep: #16a34a;           /* Full PBP primary action */
+    --green-phase: #4a8;             /* event phase add btn */
+    --red-bright: #f44336;           /* They Score buttons */
+    --orange-vivid: #ff9800;         /* special action btn, pending badge */
+    --orange-vivid-deep: #f57c00;
+    --orange-alert: #ff8800;         /* ineligible-puller warning */
+    --orange-alert-hover: #ff7700;
+    --orange-cta: #e87722;           /* PWA install gradient trio */
+    --orange-cta-deep: #d35400;
+    --orange-cta-deeper: #c0392b;
+    --accent-purple: #6c5ce7;        /* New Event button */
+    --accent-purple-hover: #5b4bd5;
+    --slate: #5a6f8a;                /* roster nav btn */
+    --slate-hover: #475a72;
+}

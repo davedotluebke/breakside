@@ -10,6 +10,7 @@ import {
     currentGame, isPointInProgress, determineStartingPosition,
     getPlayerGameTime, formatPlayTime, formatPlayerName,
     getGenderRatioForPoint, getExpectedGenderRatio, getExpectedGenderCounts,
+    buildPointMembership,
 } from '../utils/helpers.js';
 import { getEventPlayerStats } from '../utils/eventStats.js';
 import { clearNextLineSelections, getRunningScores } from '../ui/activePlayersDisplay.js';
@@ -213,26 +214,26 @@ function getContextTableId(context) {
 function buildAutoLineStats(game, roster) {
     const points = (game && game.points) || [];
     const lastPoint = points.length ? points[points.length - 1] : null;
-    const lastPointPlayers = lastPoint ? lastPoint.players : [];
 
-    const playedIn = (point, name) =>
-        point.players.includes(name) ||
-        (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(name));
+    // Id-based membership so a mid-game player rename doesn't erase their
+    // points/time history (point.players holds strings frozen at play time).
+    const membership = buildPointMembership(game);
+    const playedIn = (point, p) => membership.played(point, p);
 
     const stats = {};
     roster.forEach(p => {
         let pointsPlayed = 0;
-        points.forEach(pt => { if (playedIn(pt, p.name)) pointsPlayed++; });
+        points.forEach(pt => { if (playedIn(pt, p)) pointsPlayed++; });
         // Consecutive points sat out, walking back from the most recent point.
         let outStreak = 0;
         for (let i = points.length - 1; i >= 0; i--) {
-            if (playedIn(points[i], p.name)) break;
+            if (playedIn(points[i], p)) break;
             outStreak++;
         }
         stats[p.name] = {
             pointsPlayed,
-            timePlayed: typeof getPlayerGameTime === 'function' ? getPlayerGameTime(p.name) : 0,
-            inLastPoint: lastPointPlayers.includes(p.name),
+            timePlayed: typeof getPlayerGameTime === 'function' ? getPlayerGameTime(p) : 0,
+            inLastPoint: membership.onLine(lastPoint, p),
             outStreak,
             quintile: 0,
         };
@@ -1539,24 +1540,20 @@ function updateSelectLineTable() {
 
     tableHead.appendChild(controlsRow);
 
-    // Get last point players for sorting
-    const lastPointPlayers = game.points.length > 0
-        ? game.points[game.points.length - 1].players
-        : [];
-    
+    // Id-based membership so a mid-game rename doesn't orphan a player's
+    // points history in this table (point.players holds frozen strings).
+    const membership = buildPointMembership(game);
+    const lastPoint = game.points.length > 0
+        ? game.points[game.points.length - 1]
+        : null;
+
     // Sort roster (played last point, played any points, not played)
     const sortedRoster = [...activeRoster].sort((a, b) => {
-        const aLastPoint = lastPointPlayers.includes(a.name);
-        const bLastPoint = lastPointPlayers.includes(b.name);
+        const aLastPoint = membership.onLine(lastPoint, a);
+        const bLastPoint = membership.onLine(lastPoint, b);
         // Include players who were substituted out mid-point
-        const aPlayedAny = game.points.some(p => 
-            p.players.includes(a.name) || 
-            (p.substitutedOutPlayers && p.substitutedOutPlayers.includes(a.name))
-        );
-        const bPlayedAny = game.points.some(p => 
-            p.players.includes(b.name) || 
-            (p.substitutedOutPlayers && p.substitutedOutPlayers.includes(b.name))
-        );
+        const aPlayedAny = game.points.some(p => membership.played(p, a));
+        const bPlayedAny = game.points.some(p => membership.played(p, b));
         
         if (aLastPoint && !bLastPoint) return -1;
         if (!aLastPoint && bLastPoint) return 1;
@@ -1600,7 +1597,7 @@ function updateSelectLineTable() {
         const timeCell = document.createElement('td');
         timeCell.classList.add('active-time-column');
         const gameTime = typeof getPlayerGameTime === 'function'
-            ? getPlayerGameTime(player.name)
+            ? getPlayerGameTime(player)
             : 0;
         if (panelStatsMode === 'event' && game.eventId) {
             const ps = (cachedPanelEventStats && cachedPanelEventStats[player.id]) || {};
@@ -1631,14 +1628,16 @@ function updateSelectLineTable() {
             const pointCell = document.createElement('td');
             pointCell.classList.add('active-points-columns');
             // Include players who were substituted out mid-point (show both subbed-in and subbed-out)
-            const playedFullPoint = point.players.includes(player.name);
-            const subbedOutMidPoint = point.substitutedOutPlayers && point.substitutedOutPlayers.includes(player.name);
+            const playedFullPoint = membership.onLine(point, player);
+            const subbedOutMidPoint = membership.subbedOut(point, player);
+            const subbedInMidPoint = membership.subbedIn(point, player);
             const playedPoint = playedFullPoint || subbedOutMidPoint;
             if (playedPoint) {
                 runningPointTotal++;
                 pointCell.textContent = `${runningPointTotal}`;
-                // Italic for subbed-out (did not complete the point)
-                if (subbedOutMidPoint && !playedFullPoint) {
+                // Italic for a partial point: subbed out (didn't finish it)
+                // or subbed in (joined it late).
+                if (subbedOutMidPoint || subbedInMidPoint) {
                     pointCell.classList.add('point-cell-subbed-out');
                 }
             } else {
@@ -1704,7 +1703,7 @@ function updateSelectLineTimeCells() {
         if (!player) return;
 
         const gameTime = typeof getPlayerGameTime === 'function'
-            ? getPlayerGameTime(playerName)
+            ? getPlayerGameTime(player)
             : 0;
 
         // Calculate time based on current display mode

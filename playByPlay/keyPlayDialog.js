@@ -3,7 +3,10 @@
  * Handles the key play dialog for logging throws, turnovers, and defense events
  */
 import { Possession, UNKNOWN_PLAYER } from '../store/models.js';
-import { getLatestPoint, getPlayerFromName, getActivePossession } from '../utils/helpers.js';
+import {
+    currentGame, getLatestPoint, getPlayerFromName, getActivePossession,
+    formatPlayerName, buildPointPlayerLookup, playerStub,
+} from '../utils/helpers.js';
 import { log } from '../utils/logger.js';
 
 // Track Key Play dialog state
@@ -154,21 +157,29 @@ function createKeyPlayPlayerButtons() {
     // Add Unknown Player button first
     const unknownButton = document.createElement('button');
     unknownButton.textContent = UNKNOWN_PLAYER;
+    unknownButton.dataset.playerName = UNKNOWN_PLAYER;
     unknownButton.classList.add('player-button', 'unknown-player', 'inactive');
     unknownButton.addEventListener('click', function() {
         handleKeyPlayPlayerSelection(UNKNOWN_PLAYER, this);
     });
     playerButtonsContainer.appendChild(unknownButton);
-    
-    // Add player buttons for all active players
+
+    // Add player buttons for all active players. point.players entries may be
+    // current names, player ids (id-era games), or stale names — resolve each
+    // through the game-scoped lookup and key everything downstream on the
+    // canonical name in dataset.playerName (the label may carry a jersey
+    // number).
     const point = getLatestPoint();
     if (point && point.players) {
-        point.players.forEach(playerName => {
+        const lookup = buildPointPlayerLookup(currentGame());
+        point.players.forEach(entry => {
+            const { player, name } = lookup(entry);
             const playerButton = document.createElement('button');
-            playerButton.textContent = playerName;
+            playerButton.textContent = player ? formatPlayerName(player) : name;
+            playerButton.dataset.playerName = name;
             playerButton.classList.add('player-button', 'inactive');
             playerButton.addEventListener('click', function() {
-                handleKeyPlayPlayerSelection(playerName, this);
+                handleKeyPlayPlayerSelection(name, this);
             });
             playerButtonsContainer.appendChild(playerButton);
         });
@@ -483,7 +494,7 @@ function handleDefenseSubButton(subButtonType, buttonElement) {
 }
 
 function handleDefensePlayerSelection(playerName, buttonElement) {
-    const player = getPlayerFromName(playerName);
+    const player = getPlayerFromName(playerName) || playerStub(playerName);
     
     // Update button states
     document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
@@ -541,7 +552,7 @@ function handleKeyPlayPlayerSelection(playerName, buttonElement) {
 }
 
 function handleThrowPlayerSelection(playerName, buttonElement) {
-    const player = getPlayerFromName(playerName);
+    const player = getPlayerFromName(playerName) || playerStub(playerName);
     
     if (keyPlayCurrentRole === 'thrower') {
         // Selecting thrower
@@ -551,7 +562,7 @@ function handleThrowPlayerSelection(playerName, buttonElement) {
             buttonElement.classList.remove('selected');
             // Re-enable this player's button in receiver column
             document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
-                if (btn.textContent === playerName) {
+                if (btn.dataset.playerName === playerName) {
                     btn.disabled = false;
                     btn.classList.remove('inactive');
                 }
@@ -568,7 +579,7 @@ function handleThrowPlayerSelection(playerName, buttonElement) {
             
             // Disable this player's button for receiver selection
             document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
-                if (btn.textContent === playerName) {
+                if (btn.dataset.playerName === playerName) {
                     btn.disabled = true;
                     btn.classList.add('inactive');
                 }
@@ -692,13 +703,13 @@ function updateKeyPlayPlayerButtonStates() {
     // Re-apply current selections based on role
     if (keyPlayCurrentRole === 'thrower' && keyPlaySelectedThrower) {
         document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
-            if (btn.textContent === keyPlaySelectedThrower.name) {
+            if (btn.dataset.playerName === keyPlaySelectedThrower.name) {
                 btn.classList.add('selected');
             }
         });
     } else if (keyPlayCurrentRole === 'receiver' && keyPlaySelectedReceiver) {
         document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
-            if (btn.textContent === keyPlaySelectedReceiver.name) {
+            if (btn.dataset.playerName === keyPlaySelectedReceiver.name) {
                 btn.classList.add('selected');
             }
         });
@@ -707,7 +718,7 @@ function updateKeyPlayPlayerButtonStates() {
     // Disable thrower's button when selecting receiver
     if (keyPlayCurrentRole === 'receiver' && keyPlaySelectedThrower) {
         document.querySelectorAll('#keyPlayPlayerButtons .player-button').forEach(btn => {
-            if (btn.textContent === keyPlaySelectedThrower.name) {
+            if (btn.dataset.playerName === keyPlaySelectedThrower.name) {
                 btn.disabled = true;
                 btn.classList.add('inactive');
             }
@@ -716,7 +727,7 @@ function updateKeyPlayPlayerButtonStates() {
 }
 
 function handleTurnoverPlayerSelection(playerName, buttonElement) {
-    const player = getPlayerFromName(playerName);
+    const player = getPlayerFromName(playerName) || playerStub(playerName);
     
     // For turnover events, just select the player and create the event immediately
     // Update button states

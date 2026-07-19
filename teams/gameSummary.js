@@ -339,9 +339,13 @@ function renderGameSummaryEventLog(game) {
     let numPoints = 0;
     let runningScoreUs = 0;
     let runningScoreThem = 0;
+    // How the current period opened — flips at each period break (halftime /
+    // switch sides); drives the "who pulls next" note. Mirrors summarizeGame.
+    let periodOpening = game.startingPosition;
 
     (game.points || []).forEach(point => {
         let switchsides = false;
+        let forceswap = false;
         numPoints++;
         summary += `\nPoint ${numPoints} roster:`;
         (point.players || []).forEach(player => summary += ` ${player}`);
@@ -352,13 +356,28 @@ function renderGameSummaryEventLog(game) {
             summary += `\n${teamName} pulls to ${opponent}.`;
         }
 
+        // Events recorded AFTER the point ended (between-points timeouts,
+        // switch sides) are deferred past the score lines below so the log
+        // reads in real-world order (matches summarizeGame).
+        const afterPointLines = [];
         (point.possessions || []).forEach(possession => {
             (possession.events || []).forEach(event => {
+                // Halftime implies the side switch; two breaks on the same
+                // point cancel (accidental tap + correction), so toggle.
+                if (event.type === 'Other' && (event.switchsides_flag || event.halftime_flag)) {
+                    switchsides = !switchsides;
+                }
+                if (event.type === 'Other' && event.forceswap_flag) {
+                    forceswap = !forceswap;
+                }
+                if (event.type === 'Other' && event.betweenPoints) {
+                    if (typeof event.summarize === 'function') {
+                        afterPointLines.push(event.summarize());
+                    }
+                    return;
+                }
                 if (typeof event.summarize === 'function') {
                     summary += `\n${event.summarize()}`;
-                }
-                if (event.type === 'Other' && event.switchsides_flag) {
-                    switchsides = true;
                 }
             });
         });
@@ -377,10 +396,19 @@ function renderGameSummaryEventLog(game) {
         if (point.winner) {
             summary += `\nCurrent score: ${teamName} ${runningScoreUs}, ${opponent} ${runningScoreThem}`;
         }
+        afterPointLines.forEach(line => summary += `\n${line}`);
+        // Manual Swap O & D corrections flip the period bookkeeping too
+        // (matches determineStartingPosition / summarizeGame).
+        if (forceswap) {
+            periodOpening = (periodOpening === 'offense') ? 'defense' : 'offense';
+        }
         if (switchsides) {
-            summary += `\nO and D switching sides for next point. `;
-            if (point.winner === 'team') {
-                summary += `\n${teamName} will receive pull and play O. `;
+            // Period break: next point opens with the period-opening roles
+            // swapped, regardless of who won this point (matches
+            // determineStartingPosition).
+            periodOpening = (periodOpening === 'offense') ? 'defense' : 'offense';
+            if (periodOpening === 'offense') {
+                summary += `\n${teamName} will receive the pull and play O. `;
             } else {
                 summary += `\n${teamName} will pull to ${opponent} and play D. `;
             }

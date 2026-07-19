@@ -1254,7 +1254,7 @@ function saveEditedPlayer() {
  */
 // Sticky positioning, colors, borders, and z-index for the checkbox/name
 // columns live in CSS (see .roster-sticky-checkbox / .roster-sticky-name /
-// .roster-checkbox-header / .roster-name-header in main.css). This only
+// .roster-checkbox-header / .roster-name-header in css/tables.css). This only
 // width-syncs the checkbox column and offsets the name column's `left` to
 // sit right after it — the one part CSS can't do on its own, since the
 // checkbox column's rendered width isn't a fixed constant across

@@ -1412,11 +1412,32 @@ async function syncUserTeams() {
                         
                         if (serverPlayers.length > 0) {
                             let teamPlayersUpdated = 0;
-                            
+                            const serverIds = new Set(serverPlayers.map(p => p.id));
+
                             // Merge players - add new ones, update existing ones
                             for (const serverPlayer of serverPlayers) {
-                                const existingIndex = localTeam.teamRoster.findIndex(p => p.id === serverPlayer.id);
-                                
+                                let existingIndex = localTeam.teamRoster.findIndex(p => p.id === serverPlayer.id);
+
+                                if (existingIndex === -1) {
+                                    // Unstable-id fallback: legacy rosters stored
+                                    // without player ids mint a fresh RANDOM id on
+                                    // every deserialize, so the same player can
+                                    // carry different ids locally vs. on the
+                                    // server — matching strictly by id would
+                                    // append a duplicate. Match by name when
+                                    // unambiguous (exactly one local candidate
+                                    // whose own id the server doesn't know) and
+                                    // adopt the server id as canonical.
+                                    const candidates = localTeam.teamRoster.filter(p =>
+                                        p.name === serverPlayer.name && !serverIds.has(p.id));
+                                    if (candidates.length === 1) {
+                                        existingIndex = localTeam.teamRoster.indexOf(candidates[0]);
+                                        console.log(`🪪 Adopting server id for ${serverPlayer.name}: ${candidates[0].id} → ${serverPlayer.id}`);
+                                        candidates[0].id = serverPlayer.id;
+                                        teamPlayersUpdated++;
+                                    }
+                                }
+
                                 if (existingIndex === -1) {
                                     // New player - add to roster
                                     const player = deserializePlayer(serverPlayer);

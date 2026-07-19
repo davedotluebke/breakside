@@ -44,12 +44,13 @@ import { UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
 import {
     currentGame, getLatestPoint, getPlayerFromName, isPointInProgress,
-    determineStartingPosition,
+    determineStartingPosition, showPlayerNumbers,
+    buildPointPlayerLookup, playerStub,
 } from '../utils/helpers.js';
 import { undoEvent } from '../game/gameLogic.js';
 import { startNextPoint } from '../game/pointManagement.js';
 import { showControllerToast } from '../game/controllerState.js';
-import { ensureDialogVisible, handlePbpTheyScore } from '../game/gameScreenEvents.js';
+import { ensureDialogVisible, handlePbpTheyScore, handlePbpGameEvents } from '../game/gameScreenEvents.js';
 import { handlePanelStartPoint } from '../game/selectLine.js';
 import { showScoreAttributionDialog } from './scoreAttribution.js';
 
@@ -184,13 +185,18 @@ const fieldPbp = (function() {
     };
     let pullTimer = null;
 
-    // Possession-change fade: the previous possession's markers fade out over
-    // FADE_MS then drop. Implemented as a one-shot CSS animation (resumed via
-    // negative animation-delay so re-renders don't restart it) plus a single
-    // delayed re-render to drop them — no continuous animation loop.
+    // Possession-change fade: markers demoted from the current segment fade
+    // out over FADE_MS then drop — each demotion batch ("cohort") on its own
+    // clock, so an icon fades exactly once and a finished fade never pops
+    // back to full opacity when a later event moves the segment boundary
+    // again. Implemented as a one-shot CSS animation (resumed via negative
+    // animation-delay so re-renders don't restart it) plus a single delayed
+    // re-render to drop finished cohorts — no continuous animation loop.
     const FADE_MS = 5000;
-    let segCurStart = null;   // global event index where the current segment begins
-    let segFadeStart = 0;     // performance.now() when the previous segment began fading
+    const KEEP_SOLID = 4;     // newest located icons kept solid within the current possession
+    let segCurStart = null;   // global event index where the solid window begins
+    let segPointKey = null;   // stablePointKey of the point the indices refer to (reset on point change)
+    let fadeCohorts = [];     // [{start, end, fadeStart}] — index ranges currently fading
     let fadeTimer = null;     // one-shot cleanup re-render at fade end
 
     function nowMs() {
@@ -217,6 +223,7 @@ const fieldPbp = (function() {
             { label: 'Break', flag: 'break_flag' },
             { label: 'Huck', flag: 'huck_flag' },
             { label: 'Reset', flag: 'dump_flag' },
+            { label: 'Swing', flag: 'swing_flag' },
             { label: 'Hammer', flag: 'hammer_flag' },
             { label: 'Sky', flag: 'sky_flag' },
             { label: 'Layout', flag: 'layout_flag' }
@@ -269,20 +276,34 @@ const fieldPbp = (function() {
     // -----------------------------------------------------------------
     // State derivation (shared possession core).
     // -----------------------------------------------------------------
-    // Tracks the Point object reference last seen by reconstructState so we can
-    // detect crossing a point boundary and drop stale pickup state. Mirrors the
-    // _lastSeenPointRef guard in fullPbp.js: without it, a manual holder /
-    // pickup spot tapped in a prior point can survive into a new point when the
-    // point ends via a path that doesn't run Field's own handlers (Simple-mode
-    // "They Score", narration), so the next point would start with a phantom
-    // holder/disc.
-    let _lastSeenPointRef = null;
+    // Identity-stable key for a point. Cloud sync REPLACES game.points with
+    // freshly deserialized objects (refreshGameStateFromCloud: the 3s poll for
+    // non-Active-Coach sessions, and wake recovery for everyone), so object
+    // identity can't distinguish "a different point" from "the same point,
+    // new objects" — key on game id + point index instead. Null when there's
+    // no game/point yet.
+    function stablePointKey(point) {
+        const game = (typeof currentGame === 'function') ? currentGame() : null;
+        if (!game || !point || !game.points) return null;
+        return `${game.id}#${game.points.indexOf(point)}`;
+    }
+
+    // Tracks the point last seen by reconstructState so we can detect
+    // crossing a point boundary and drop stale pickup state. Mirrors the
+    // guard in fullPbp.js: without it, a manual holder / pickup spot tapped
+    // in a prior point can survive into a new point when the point ends via
+    // a path that doesn't run Field's own handlers (Simple-mode "They
+    // Score", narration), so the next point would start with a phantom
+    // holder/disc. Keyed by stablePointKey, NOT object identity — a sync
+    // refresh mid-point must not wipe the coach's pickup selection.
+    let _lastSeenPointKey = null;
     function reconstructState() {
         const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
-        if (point !== _lastSeenPointRef) {
+        const key = stablePointKey(point);
+        if (key !== _lastSeenPointKey) {
             S.manualHolder = null;
             S.pickupLoc = null;
-            _lastSeenPointRef = point;
+            _lastSeenPointKey = key;
         }
         if (window.pbpPossession && typeof window.pbpPossession.reconstructState === 'function') {
             return window.pbpPossession.reconstructState();
@@ -318,12 +339,13 @@ const fieldPbp = (function() {
      * the current possession (solid), [prevStart, curStart) are the previous
      * possession (fading), and < prevStart are older (dropped).
      *
-     * The current segment is the trailing run of same-side events — UNLESS the
-     * last event flipped possession (its side differs from the reconstructed
-     * mode, e.g. a "they turnover" Defense while we're now on offense with no
-     * O event yet). In that case the current segment is empty and the trailing
-     * run becomes the (fading) previous one, so the pull/D markers fade as soon
-     * as possession flips rather than lingering until the first O throw.
+     * The current segment is the trailing run of same-side events. When the
+     * last event itself flipped possession (its side differs from the
+     * reconstructed mode — e.g. a block while we're now on offense with no O
+     * event yet), that flip-causing event STAYS solid as the current segment:
+     * the most recent icon is the coach's freshest landmark and must not fade
+     * until the next icon lands (it joins its run's fade then). Older icons of
+     * its run fade now; anything before drops.
      */
     function computeSegments(flat, mode) {
         let k = flat.length - 1;
@@ -346,8 +368,9 @@ const fieldPbp = (function() {
             const prevStart = (cs - 1 >= 0) ? runStart(cs - 1) : -1;
             return { curStart: cs, prevStart };
         }
-        // Possession just flipped; current segment is empty.
-        return { curStart: flat.length, prevStart: cs };
+        // Possession just flipped: the flip-causing event (index k) is the
+        // whole current segment; the rest of its run fades.
+        return { curStart: k, prevStart: (cs < k) ? cs : -1 };
     }
     function lastLocatedEvent(point) {
         const evs = pointEvents(point);
@@ -457,28 +480,79 @@ const fieldPbp = (function() {
         });
 
         // Located events, possession-aware (see computeSegments / the fade
-        // module vars). Current segment solid; previous segment fades over
-        // FADE_MS then drops; older segments gone.
+        // module vars). The newest icons stay solid; everything demoted fades
+        // in per-demotion cohorts over FADE_MS then drops for good. Within
+        // the current possession only the last KEEP_SOLID located icons stay
+        // solid — as new throws land, older ones demote — so a long
+        // possession never accumulates a wall of arrows.
         const flat = pointEvents(state.point);
         const seg = computeSegments(flat, state.mode);
-        if (seg.curStart !== segCurStart) { segCurStart = seg.curStart; segFadeStart = nowMs(); }
-        const fadeElapsed = nowMs() - segFadeStart;
-        const prevVisible = seg.prevStart >= 0 && fadeElapsed < FADE_MS;
-        const depthOf = gi => (gi >= seg.curStart) ? 0 : (seg.prevStart >= 0 && gi >= seg.prevStart) ? 1 : 2;
-        // Negative animation-delay resumes the one-shot fade at the right point
-        // across re-renders (no continuous loop).
-        const fadeAnim = `;animation:fpFadeOut ${FADE_MS}ms linear ${(-fadeElapsed) | 0}ms forwards`;
-        const shown = gi => { const d = depthOf(gi); return d === 0 || (d === 1 && prevVisible); };
+        const segNow = nowMs();
+        // Solid window start: the KEEP_SOLIDth-newest located event in the
+        // current segment (events without a location draw nothing and don't
+        // consume slots). Short possessions show everything (floor = segment
+        // start).
+        let solidStart = seg.curStart;
+        for (let gi = flat.length - 1, kept = 0; gi >= seg.curStart; gi--) {
+            if (!flat[gi] || !flat[gi].to) continue;
+            if (++kept === KEEP_SOLID) { solidStart = gi; break; }
+        }
+        // Keyed by stablePointKey, NOT object identity — sync refreshes
+        // replace the Point objects and must not kill an in-flight fade.
+        const segKey = stablePointKey(state.point);
+        if (segPointKey !== segKey) {
+            // New point (or first render): indices refer to a different event
+            // list — reset, showing the solid window with no ghosts.
+            segPointKey = segKey;
+            segCurStart = solidStart;
+            fadeCohorts = [];
+        } else if (solidStart !== segCurStart) {
+            if (solidStart > segCurStart) {
+                // Icons demoted from the solid window start their one and
+                // only fade now. Earlier cohorts keep their original clocks,
+                // so a half- or fully-faded icon never resurrects when the
+                // next event moves the boundary again.
+                fadeCohorts.push({ start: segCurStart, end: solidStart, fadeStart: segNow });
+            } else {
+                // Boundary moved backwards (undo): whatever is solid again
+                // must render fully — drop cohorts that overlap it.
+                fadeCohorts = fadeCohorts.filter(c => c.end <= solidStart);
+            }
+            segCurStart = solidStart;
+        }
+        fadeCohorts = fadeCohorts.filter(c => segNow - c.fadeStart < FADE_MS);
+        const cohortOf = gi => fadeCohorts.find(c => gi >= c.start && gi < c.end) || null;
+        const shown = gi => gi >= solidStart || !!cohortOf(gi);
+        // Negative animation-delay resumes each cohort's one-shot fade at the
+        // right point across re-renders (no continuous loop).
+        const fadeAnimFor = gi => {
+            if (gi >= solidStart) return '';
+            const c = cohortOf(gi);
+            return c ? `;animation:fpFadeOut ${FADE_MS}ms linear ${(-(segNow - c.fadeStart)) | 0}ms forwards` : '';
+        };
 
+        // An arrow's tail sits on the previous located event's catch spot.
+        // When that marker fades/drops, the arrow must go with it — otherwise
+        // a "throw from nowhere" lingers, anchored to an empty spot. Each
+        // arrow therefore inherits the faster of its own and its
+        // predecessor's fade state.
+        const prevLocated = [];
+        {
+            let lastLoc = -1;
+            flat.forEach((e, gi) => { prevLocated[gi] = lastLoc; if (e && e.to) lastLoc = gi; });
+        }
         let svg = `<svg class="fp-arrows" viewBox="0 0 100 100" preserveAspectRatio="none"><defs>`
             + `<marker id="fpah" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">`
             + `<path d="M0,0 L5,2.5 L0,5 z" fill="#fff"/></marker></defs>`;
         flat.forEach((e, gi) => {
             if (!shown(gi) || !e.from || !e.to) return;
+            const pgi = prevLocated[gi];
+            if (pgi >= 0 && !shown(pgi)) return;   // tail anchor gone — drop the arrow
             const ef = fromNorm(e.from), et = fromNorm(e.to);
             const a = pct(ef.l, ef.w), b = pct(et.l, et.w);
             const dash = e.type === 'Pull' ? 'stroke-dasharray="3 2"' : '';
-            const style = depthOf(gi) === 1 ? ` style="${fadeAnim.slice(1)}"` : '';
+            const anim = fadeAnimFor(gi) || (pgi >= 0 ? fadeAnimFor(pgi) : '');
+            const style = anim ? ` style="${anim.slice(1)}"` : '';
             svg += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${arrowColor(e)}" stroke-width="0.8" marker-end="url(#fpah)" ${dash} vector-effect="non-scaling-stroke"${style}/>`;
         });
         svg += `</svg>`;
@@ -489,9 +563,9 @@ const fieldPbp = (function() {
             const et = fromNorm(e.to);
             const p = pct(et.l, et.w);
             const m = markerStyle(e, gi);
-            // All shown markers (current + fading-previous) are draggable so a
+            // All shown markers (current + fading) are draggable so a
             // previous location can be adjusted during the fade window.
-            const fade = depthOf(gi) === 1 ? fadeAnim : '';
+            const fade = fadeAnimFor(gi);
             h += `<div class="fp-marker ${m.cls}" data-mkidx="${gi}" style="left:${p.x}%;top:${p.y}%${fade}">${m.glyph}</div>`;
         });
 
@@ -509,8 +583,8 @@ const fieldPbp = (function() {
             h += `<div class="fp-disc" style="left:${d.x}%;top:${d.y}%"></div>`;
         }
 
-        // One delayed re-render to drop the previous segment when its fade ends.
-        scheduleFadeCleanup(prevVisible ? (FADE_MS - fadeElapsed) : 0);
+        // One delayed re-render to drop fading icons when the last cohort ends.
+        scheduleFadeCleanup(fadeCohorts.reduce((m, c) => Math.max(m, FADE_MS - (segNow - c.fadeStart)), 0));
 
         return h;
     }
@@ -564,12 +638,15 @@ const fieldPbp = (function() {
         const holder = effectiveHolder(state);
         const armedName = S.pulling ? (S.puller && S.puller.name)
             : (S.armed && S.armed.name);
-        let html = lead + point.players.map(name => {
-            const player = (typeof getPlayerFromName === 'function') ? getPlayerFromName(name) : null;
-            if (!player) return '';
+        // point.players entries may be current names, player ids (id-era
+        // games), or stale names — resolve through the game-scoped lookup so
+        // no chip silently vanishes from the rail.
+        const lookup = buildPointPlayerLookup(currentGame());
+        let html = lead + point.players.map(entry => {
+            const { name, obj } = lookup(entry);
             const isHolder = !!(holder && holder.name === name);
             const isArmed = !!(armedName && armedName === name);
-            return chipHTML(player, { holder: isHolder, armed: isArmed });
+            return chipHTML(obj, { holder: isHolder, armed: isArmed });
         }).join('');
         const unknown = (typeof getPlayerFromName === 'function') ? getPlayerFromName(UNKNOWN_PLAYER) : null;
         if (unknown) html += chipHTML(unknown, { unknown: true, armed: armedName === UNKNOWN_PLAYER });
@@ -584,7 +661,7 @@ const fieldPbp = (function() {
         if (opts.armed) cls.push('armed');
         const lead = opts.unknown
             ? `<span class="fp-umark">?</span>`
-            : (player.number != null ? `<span class="fp-num">${player.number}</span>` : '');
+            : (player.number != null && showPlayerNumbers() ? `<span class="fp-num">${player.number}</span>` : '');
         const label = opts.unknown ? 'Unknown' : player.name;
         return `<div class="${cls.join(' ')}" data-pname="${player.name}">${lead}<span class="fp-nm">${label}</span></div>`;
     }
@@ -762,6 +839,7 @@ const fieldPbp = (function() {
                 ${leftSlot}
                 <span class="fp-actionrow-spacer"></span>
                 <span class="fp-status-inline">${statusText(state, inPoint)}</span>
+                <button class="fp-gameevents" id="fpGameEventsBtn" title="Timeout, injury sub, halftime, switch sides, end game"><i class="fas fa-cog"></i><span>Events</span></button>
                 <button class="fp-undo" id="fpUndoBtn" title="Undo last event"><i class="fas fa-undo"></i><span>Undo</span></button>
             </div>
             <div class="fp-play${inPoint ? '' : ' fp-between-points'}">
@@ -946,7 +1024,10 @@ const fieldPbp = (function() {
     }
 
     function playerByName(name) {
-        return (typeof getPlayerFromName === 'function') ? getPlayerFromName(name) : null;
+        // Fall back to a minimal stub so a chip whose player no longer
+        // resolves on the current roster still records events by name.
+        const player = (typeof getPlayerFromName === 'function') ? getPlayerFromName(name) : null;
+        return player || playerStub(name);
     }
 
     function handleChipTap(name) {
@@ -978,8 +1059,10 @@ const fieldPbp = (function() {
             render();
             return;
         }
-        if (holder && holder.name === name && !S.pending) {
-            // Tapping the holder is a no-op (nothing to throw to themselves).
+        if (holder && holder.name === name && holder.name !== UNKNOWN_PLAYER) {
+            // Tapping the holder is a no-op — they can't receive (or drop)
+            // their own throw. Unknown is exempt: unknown → unknown throws
+            // are legal (same convention as the score dialog).
             return;
         }
         // Arm/disarm as the receiver (or dropper, if a drop is pending).
@@ -1020,7 +1103,10 @@ const fieldPbp = (function() {
             return;
         }
         // Nothing armed — field-first popover picks the receiver (or dropper).
-        popPicker(cx, cy, player => { S.armed = player; placeOffense(player, loc); });
+        // The holder is excluded: they can't catch (or drop) their own throw.
+        const holder = effectiveHolder(state);
+        const excludeSelf = (holder && holder.name !== UNKNOWN_PLAYER) ? holder.name : null;
+        popPicker(cx, cy, player => { S.armed = player; placeOffense(player, loc); }, null, excludeSelf);
     }
 
     // ---- Offense placement ----
@@ -1034,6 +1120,19 @@ const fieldPbp = (function() {
         if (!requireActiveCoach()) return;
         const state = reconstructState();
         const holder = effectiveHolder(state);
+
+        // Self-pass guard (defense in depth behind the inert holder chip and
+        // the popover exclusion): the holder can't be their own receiver or
+        // dropper. Unknown → Unknown stays legal.
+        if (holder && receiver && holder.name === receiver.name
+            && holder.name !== UNKNOWN_PLAYER) {
+            if (typeof showControllerToast === 'function') {
+                showControllerToast(`${holder.name} already has the disc`, 'warning', 2000);
+            }
+            S.armed = null;
+            render();
+            return;
+        }
         // `from` is the disc's current spot (already a stored, normalized coord);
         // `to` is the tap, converted from yards to the normalized stored frame.
         const from = discLoc(state);
@@ -1060,6 +1159,39 @@ const fieldPbp = (function() {
         commitThrow(holder, receiver, from, to);
     }
 
+    /**
+     * Auto-classification of a throw from its geometry (stored normalized
+     * coords: x = progress toward the attacking endzone as a fraction of the
+     * playing field, y = across the width). Returns modifier flags that are
+     * pre-set on the committed Throw — the coach can always override them via
+     * the "Last throw was a:" chips (or the score dialog's flag buttons):
+     *   - huck:  forward progress ≥ the settable fraction (Advanced Settings
+     *            → Field → Huck threshold, default 50% of the playing field)
+     *   - reset (dump_flag): meaningfully backwards (beyond a small tolerance
+     *            so flat lateral passes don't count)
+     *   - swing: lateral travel ≥ the settable fraction of the field width
+     *            (Advanced Settings → Field → Swing threshold, default 25%),
+     *            unless it's a huck (a deep cross-field shot reads as a huck,
+     *            not a swing)
+     */
+    const RESET_TOLERANCE = 0.025;   // ~1.75 yd backwards on a 70 yd playing field
+    function settingFraction(key, dflt) {
+        if (window.advancedSettings && typeof window.advancedSettings.get === 'function') {
+            const v = parseFloat(window.advancedSettings.get(key));
+            if (Number.isFinite(v) && v > 0) return v;
+        }
+        return dflt;
+    }
+    function classifyThrow(from, to) {
+        if (!from || !to || typeof from.x !== 'number' || typeof to.x !== 'number') return {};
+        const dx = to.x - from.x;
+        const huck = dx >= settingFraction('field.huckFraction', 0.5);
+        const dump = dx <= -RESET_TOLERANCE;
+        const swing = !huck && typeof from.y === 'number' && typeof to.y === 'number'
+            && Math.abs(to.y - from.y) >= settingFraction('field.swingFraction', 0.25);
+        return { huck, dump, swing };
+    }
+
     function commitThrow(thrower, receiver, from, to) {
         const isScore = S.pending === 'score' || inAttackEZ(to);
         clearEntryState();
@@ -1070,11 +1202,13 @@ const fieldPbp = (function() {
             // spatial marker survives. The dialog's Score button commits a goal,
             // "continue possession" downgrades to a plain completion, and its
             // modifier flags (huck/break/sky/layout/hammer) apply either way.
+            // A geometry-detected huck pre-checks the dialog's Huck flag.
             openScoreDialog(thrower, receiver, from, to);
             render();
             return;
         }
-        window.pbpPossession.createThrow(thrower, receiver, { score: false, from, to });
+        window.pbpPossession.createThrow(thrower, receiver,
+            { score: false, from, to, ...classifyThrow(from, to) });
         render();
     }
 
@@ -1096,10 +1230,14 @@ const fieldPbp = (function() {
         if (typeof ensureDialogVisible === 'function') ensureDialogVisible('scoreAttributionDialog');
 
         if (typeof showScoreAttributionDialog === 'function') {
-            showScoreAttributionDialog({ thrower, receiver, from, to });
+            showScoreAttributionDialog({
+                thrower, receiver, from, to,
+                huckArmed: !!classifyThrow(from, to).huck,
+            });
         } else {
             console.warn('[fieldPbp] showScoreAttributionDialog unavailable; falling back to direct createThrow');
-            window.pbpPossession.createThrow(thrower, receiver, { score: true, from, to });
+            window.pbpPossession.createThrow(thrower, receiver,
+                { score: true, from, to, ...classifyThrow(from, to) });
         }
     }
 
@@ -1196,7 +1334,9 @@ const fieldPbp = (function() {
         render();
     }
     // Field-side popover to pick a player when none is armed yet.
-    function popPicker(cx, cy, cb, title) {
+    // `excludeName` omits one roster player — used to keep the disc-holder
+    // out of receiver/dropper picks (no self-passes). Unknown always shows.
+    function popPicker(cx, cy, cb, title, excludeName) {
         document.querySelectorAll('.fp-picker').forEach(n => n.remove());
         const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
         const names = (point && point.players) ? point.players.slice() : [];
@@ -1206,9 +1346,13 @@ const fieldPbp = (function() {
             : S.dPlacing ? `Who got the ${S.dPlacing}?`
             : S.pending === 'drop' ? 'Who dropped it?' : 'Who caught it?');
         let html = `<div class="fp-picker-ttl">${ttl}</div>`;
-        names.forEach(name => {
-            const p = playerByName(name); if (!p) return;
-            const lead = (p.number != null) ? `<span class="fp-num">${p.number}</span>` : '';
+        // Entries may be ids or stale names — resolve to the canonical
+        // current name (also what excludeName, a live player's .name, expects).
+        const lookup = buildPointPlayerLookup(currentGame());
+        names.forEach(entry => {
+            const { name, obj } = lookup(entry);
+            if (excludeName && name === excludeName) return;
+            const lead = (obj.number != null && showPlayerNumbers()) ? `<span class="fp-num">${obj.number}</span>` : '';
             html += `<div class="fp-chip" data-pname="${name}">${lead}<span class="fp-nm">${name}</span></div>`;
         });
         html += `<div class="fp-chip unknown" data-pname="${UNKNOWN_PLAYER}"><span class="fp-umark">?</span><span class="fp-nm">Unknown</span></div>`;
@@ -1350,6 +1494,16 @@ const fieldPbp = (function() {
             // pointer layer so the rail scrolls natively; the tap itself is
             // handled by the chip's click handler wired in wireDynamic.
             if (S.pulling) return;
+            // On offense the disc-holder's chip is inert — no drag (a player
+            // can't pass to themselves) and the tap is a no-op anyway.
+            // Unknown is exempt (unknown → unknown throws are legal).
+            if (!S.dPlacing) {
+                const st = reconstructState();
+                const holder = effectiveHolder(st);
+                if (st.mode === 'offense' && holder
+                    && holder.name === chip.dataset.pname
+                    && holder.name !== UNKNOWN_PLAYER) return;
+            }
             startDrag({ kind: 'chip', name: chip.dataset.pname }, e);
             return;
         }
@@ -1462,11 +1616,29 @@ const fieldPbp = (function() {
         render();
     }
 
+    /**
+     * Re-derive the geometry-based modifier flags (huck / reset / swing) for
+     * a Throw whose endpoints changed (marker drag). Overwrites exactly those
+     * three flags from the new geometry — same rule as at commit time; other
+     * flags (break, hammer, sky, layout) are untouched.
+     */
+    function reclassifyThrow(ev) {
+        if (!ev || ev.type !== 'Throw' || !ev.from || !ev.to) return;
+        const c = classifyThrow(ev.from, ev.to);
+        ev.huck_flag = !!c.huck;
+        ev.dump_flag = !!c.dump;
+        ev.swing_flag = !!c.swing;
+    }
+
     function finishMarkerDrag(idx) {
         const state = reconstructState();
         const evs = pointEvents(state.point);
         const ev = evs[idx];
         if (!ev) return;
+        // Geometry changed — refresh the auto-classified flags for the
+        // dragged throw AND the next event (its `from` moved with this catch).
+        reclassifyThrow(ev);
+        reclassifyThrow(evs[idx + 1]);
         if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
         if (window.narrationEventBus) {
             window.narrationEventBus.publish('eventAmended', {
@@ -1555,6 +1727,15 @@ const fieldPbp = (function() {
 
         const undoBtn = root.querySelector('#fpUndoBtn');
         if (undoBtn) undoBtn.onclick = handleUndo;
+
+        // Game Events (timeout / injury sub / halftime / switch sides / end
+        // game) — same modal as Simple/Full, routed through
+        // handlePbpGameEvents so role checks stay consistent. Lives in the
+        // action row (outside .fp-play's between-points greyout) so game
+        // events stay reachable between points; the modal itself
+        // enables/disables per point state (updateGameEventsModalState).
+        const geBtn = root.querySelector('#fpGameEventsBtn');
+        if (geBtn) geBtn.onclick = handlePbpGameEvents;
 
         const startBtn = root.querySelector('#fpStartPointBtn');
         if (startBtn) startBtn.onclick = handleStartPoint;

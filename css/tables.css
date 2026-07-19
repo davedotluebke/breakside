@@ -1,0 +1,734 @@
+/* ==========================================================================
+   tables.css — Stats & roster tables: game summary, event roster, sortable/sticky
+   headers and columns, gender color coding, score cells, point columns.
+   Also carries historical neighbors kept for cascade-order safety:
+   play-container button sizing, input field styling, base modal styles.
+   Split from main.css (F4); rule order preserved — these files load in
+   sequence (see index.html) and must stay in that order.
+   Colors come from the token palette in css/tokens.css.
+   ========================================================================== */
+
+/* Styling for header rows */
+th {
+    background-color: var(--surface-header-cell);
+}
+
+/* Game summary event log */
+.game-summary-event-log {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 8px;
+    font-size: 0.85rem;
+    background: var(--surface-sticky);
+    border: 1px solid var(--surface-dim);
+    border-radius: 4px;
+}
+
+#gameSummaryEventLogSection {
+    margin: 0 10px 10px;
+}
+
+#gameSummaryEventLogSection h3 {
+    margin: 16px 0 8px;
+}
+
+/* Styling for team aggregate row in game summary */
+.team-aggregate-row {
+    border-top: 2px solid var(--text-primary);
+    font-weight: 600;
+}
+
+.team-total-cell {
+    background-color: var(--surface-raised);
+    font-weight: 600;
+}
+
+/* Stats column-help modal (triggered by long-pressing a header cell) */
+.stats-help-modal-content {
+    max-width: 90vw;
+    width: 360px;
+}
+
+.stats-help-body {
+    padding: 16px 20px;
+    font-size: 1em;
+    line-height: 1.4;
+    color: var(--text-primary);
+}
+
+/* Team-level breaks / holds summary line under the player stats table */
+.team-stats-line {
+    margin: 8px 10px 0;
+    padding: 6px 10px;
+    font-size: 0.9em;
+    color: var(--text-primary);
+    background-color: var(--surface-page);
+    border-left: 3px solid var(--text-faint);
+    border-radius: 2px;
+    /* Preserve newlines from formatTeamStatsLine() so each stat stays on its own line */
+    white-space: pre-line;
+}
+
+/* Phase filter row above the event roster stats table */
+.event-roster-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 10px;
+    font-size: 0.95em;
+}
+
+.event-roster-filter-row label {
+    font-weight: 600;
+    color: var(--gray-dark);
+}
+
+/* Phase grouping in the event games list */
+.event-phase-header {
+    padding: 6px 10px 2px;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.event-phase-header.event-phase-unassigned {
+    color: var(--text-placeholder);
+}
+
+/* Per-game phase picker on event game items — lives inline next to
+   Review/trash in .game-line2, so just needs to size sensibly. */
+.game-phase-select {
+    padding: 4px 6px;
+    margin: 0 8px;
+    font-size: 0.9em;
+    max-width: 50%;
+}
+
+/* Phases editor inside the event settings dialog */
+.event-phases-section {
+    margin: 12px 0;
+    padding: 8px 0;
+    border-top: 1px solid var(--border-lighter);
+}
+
+.event-phases-label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text-primary);
+}
+
+.event-phases-list {
+    list-style: none;
+    margin: 0 0 8px;
+    padding: 0;
+}
+
+.event-phases-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+}
+
+.event-phases-item-label {
+    flex: 1;
+}
+
+.event-phases-add-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.event-phases-add-row .event-dialog-input {
+    flex: 1;
+}
+
+.event-phase-add-btn {
+    padding: 6px 12px;
+    background: var(--green-phase);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.event-phase-auto-btn {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: var(--surface-light);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.95em;
+}
+
+.event-phase-auto-btn:hover:not(:disabled) {
+    background: var(--surface-mid);
+}
+
+.event-phase-auto-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+/* Sortable table headers */
+.sortable-header {
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    white-space: nowrap;
+}
+
+.sortable-header:active {
+    background-color: rgba(0, 0, 0, 0.08);
+}
+
+.sortable-header::after {
+    font-size: 0.65em;
+    vertical-align: middle;
+    margin-left: 2px;
+}
+
+.sortable-header.sorted-asc::after {
+    content: ' \25B2';
+}
+
+.sortable-header.sorted-desc::after {
+    content: ' \25BC';
+}
+
+/* Make sure the play container fits within the viewport width */
+.play-container {
+    display: flex;
+    width: 100%; /* Ensures it doesn't overflow the screen */
+    flex-wrap: wrap; /* Allows items to wrap onto the next line if needed */
+}
+
+/* If you have issues with the play container size, you can remove the justify-content property or set it to 'flex-start' */
+.play-container {
+    justify-content: flex-start; 
+}
+
+.sub-action-btn.inactive {
+    background-color: var(--text-faint); /* Or any other style to indicate selection */
+}
+
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+/* Ensure that the player buttons and action buttons are not too wide */
+.player-buttons, .action-buttons {
+    flex-basis: 45%; /* Adjust this percentage so that both columns together don't exceed 100% */
+    margin-right: 5%; /* Adds space between the two columns */
+}
+
+/* Adjust the width of the main action buttons to prevent overflow */
+.main-action-btn {
+    width: auto; /* Or specify a fixed width if preferred */
+    margin-bottom: 5px;
+}
+
+.action-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Creates two columns */
+    grid-gap: 2px; /* Smaller gap between grid items */
+    padding: 5px; /* Smaller padding for the panel */
+    border: 1px solid var(--border-default);
+    margin-bottom: 5px;
+    background-color: var(--surface-subtle);
+}
+
+.sub-action-btn.selected {
+    background-color: var(--blue-sub-selected); /* Or any other style to indicate selection */
+}
+
+/* Optional: You might want to adjust the font-size for smaller buttons */
+.sub-action-btn {
+    padding: 2px 5px; /* Smaller padding */
+    margin: 2px; /* Smaller margin between buttons */
+    font-size: 0.8rem; /* You can adjust the font size as needed */
+    background-color: var(--text-muted);
+    /* Other styles as needed */
+}
+
+/* Additional media query for very small screens, if necessary */
+@media (max-width: 320px) {
+    .sub-action-btn {
+        font-size: 0.7rem; /* Even smaller font size for very small screens */
+    }
+
+    /* You can also adjust padding and margins for small screens */
+}
+
+
+#undoBtn {
+    padding: 10px 15px;
+    margin-right: 10px;
+}
+
+
+#toggleEventLogBtn {
+    padding: 5px 15px;
+    white-space: nowrap;
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
+#toggleEventLogBtn.selected {
+    background-color: var(--color-primary);
+    color: var(--white);
+}
+
+#eventLog {
+    display: none;
+    width: 100%;
+    height: 100px;
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    padding: 5px;
+    box-sizing: border-box;
+    border: 1px solid var(--border-default);
+    background-color: white;
+    resize: none;
+    overflow-y: auto;
+}
+
+/* Input field styling */
+input[type="text"], input[type="number"], select {
+    padding: 8px;
+    margin: 10px;
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+}
+
+/* Fixed width for gender ratio dropdown to prevent layout shifts */
+#enforceGenderRatioSelect {
+    width: 280px; /* Width to accommodate "Alternating (4:3 / 3:4)" plus padding */
+    min-width: 280px;
+    max-width: 50%; /* Max width 50% of container for iPhone */
+    border-radius: 4px;
+}
+
+ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+/* Scrollable container for table */
+#tableContainer {
+    overflow-x: auto;
+}
+
+#activePlayersTable {
+    border-collapse: collapse;
+    width: max-content;
+}
+
+/* Roster table scrollable container — scrolls both axes so sticky header
+   and sticky left columns work in the same container. max-height keeps
+   the table from pushing other UI off-screen on tall pages. */
+.roster-table-container {
+    overflow: auto;
+    max-height: 70vh;
+    width: 100%;
+    margin: 0 20px;
+    box-sizing: border-box;
+}
+
+#rosterTable, #eventRosterTable, #gameSummaryTable {
+    border-collapse: separate;  /* collapse breaks sticky cell backgrounds */
+    border-spacing: 0;
+    width: max-content;
+    min-width: 100%;
+}
+
+#rosterTable th, #rosterTable td,
+#eventRosterTable th, #eventRosterTable td,
+#gameSummaryTable th, #gameSummaryTable td {
+    border: 1px solid grey;
+    padding: 5px;
+    white-space: nowrap;
+    background-color: white;  /* opaque so sticky cells don't bleed-through */
+}
+
+/* Roster stats scope toggle (All-time / Event / Game) */
+.roster-scope-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 6px 20px 10px;
+    flex-wrap: wrap;
+}
+.roster-scope-label {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+.roster-scope-btn {
+    margin: 0;  /* override global button margin */
+    padding: 4px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    background: var(--surface-light);
+    color: var(--text-primary);
+    font-size: 0.85em;
+    cursor: pointer;
+}
+.roster-scope-btn.active {
+    background: var(--blue-scope);
+    border-color: var(--blue-scope);
+    color: var(--white);
+    font-weight: bold;
+}
+
+/* Sortable roster headers */
+.roster-sortable {
+    cursor: pointer;
+    user-select: none;
+}
+.roster-sortable:hover {
+    background-color: var(--border-lighter);
+}
+.roster-sorted {
+    background-color: var(--surface-sorted);
+}
+.roster-gender-column {
+    text-align: center;
+}
+
+/* Sticky header row on stats tables */
+#eventRosterTable tr:first-child th,
+#gameSummaryTable tr:first-child th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: var(--surface-page);
+}
+
+/* Sticky left columns: checkbox + name on event roster, name only on game summary */
+#eventRosterTable tr td:nth-child(1),
+#eventRosterTable tr th:nth-child(1) {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+}
+#eventRosterTable tr td:nth-child(2),
+#eventRosterTable tr th:nth-child(2) {
+    position: sticky;
+    left: 40px;  /* width of checkbox column (30px + padding) */
+    z-index: 1;
+    box-shadow: 2px 0 0 -1px var(--border-default);  /* subtle divider */
+}
+#eventRosterTable tr:first-child th:nth-child(1),
+#eventRosterTable tr:first-child th:nth-child(2) {
+    z-index: 3;  /* header-row corner cells must outrank both axes */
+}
+
+#gameSummaryTable tr td:nth-child(1),
+#gameSummaryTable tr th:nth-child(1) {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    box-shadow: 2px 0 0 -1px var(--border-default);
+}
+#gameSummaryTable tr:first-child th:nth-child(1) {
+    z-index: 3;
+}
+
+/* Team aggregate cells need to stay opaque when sticky-overlapped */
+#eventRosterTable .team-aggregate-row td,
+#gameSummaryTable .team-aggregate-row td {
+    background-color: var(--surface-raised);
+}
+
+#activePlayersTable th, #activePlayersTable td {
+    border: 1px solid grey;
+    padding: 1vw 1vw;
+}
+
+/* Sticky columns (active players table): position/color/border/z-index are
+   static CSS below; only the checkbox column's width and the name/time
+   columns' `left` offsets are width-synced from JS in makeColumnsSticky()
+   (ui/activePlayersDisplay.js), since those depend on measured column
+   widths that vary with content and can't be known statically. */
+.active-checkbox-column {
+    text-align: center;
+    padding: 5px !important;  /* !important is load-bearing: #subPlayersTable cells share this class and .sub-players-table-container td (later, higher specificity) sets 10px 15px */
+    box-sizing: border-box;  /* Include padding in width calculation */
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    background-color: var(--surface-sticky);
+    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: none;
+}
+
+.active-name-column {
+    position: sticky;
+    left: 30px; /* overwritten dynamically to the measured checkbox column width */
+    z-index: 3;
+    background-color: var(--surface-sticky);
+    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 0 -1px 0 0 grey;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: none;
+}
+
+/* Header cell for merged sticky columns */
+.active-header-teams {
+    background-color: var(--surface-sticky);
+    box-sizing: border-box;
+    position: sticky;
+    left: 0;
+    z-index: 5;
+    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: none;
+}
+
+/* Gender-based color coding for player names */
+.player-fmp,
+td.player-fmp,
+.active-name-column.player-fmp,
+.roster-name-column.player-fmp {
+    color: var(--gender-fmp) !important; /* kept: applies across 4 tables incl. id-scoped sticky cells in ui/panelSystem.css */
+    font-weight: bold;
+}
+
+.player-mmp,
+td.player-mmp,
+.active-name-column.player-mmp,
+.roster-name-column.player-mmp {
+    color: var(--gender-mmp) !important; /* kept: same reason as .player-fmp above */
+    font-weight: bold;
+}
+
+/* Gender ratio warning styling - matches player colors */
+#genderRatioText.gender-ratio-fmp-warning {
+    color: var(--gender-fmp); /* Darker purple - matches FMP player color */
+    font-weight: bold;
+}
+
+#genderRatioText.gender-ratio-mmp-warning {
+    color: var(--gender-mmp); /* Darker green - matches MMP player color */
+    font-weight: bold;
+}
+
+/* Make gender ratio text look clickable when editable */
+#genderRatioText.gender-ratio-editable {
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    cursor: pointer;
+}
+
+/* Score cell coloring for alternating gender ratio games */
+.score-cell-fmp {
+    background-color: var(--gender-fmp-tint); /* Light darker purple background */
+    color: var(--black); /* Black text for better contrast */
+    font-weight: bold;
+}
+
+.score-cell-mmp {
+    background-color: var(--gender-mmp-tint); /* Light darker green background */
+    color: var(--black); /* Black text for better contrast */
+    font-weight: bold;
+}
+
+/* Starting Gender Ratio Selection - Prominent styling for first point */
+#startingGenderRatioSelection {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--color-danger); /* Bright warning red */
+    text-align: center;
+}
+
+#startingGenderRatioSelection > label:first-of-type {
+    font-weight: bold;
+    color: var(--color-danger); /* Bright warning red */
+    font-size: 1.2rem;
+    margin-right: 0.75rem;
+}
+
+#startingGenderRatioSelection label[for="startingRatioFMP"],
+#startingGenderRatioSelection label[for="startingRatioMMP"] {
+    font-weight: bold;
+    color: var(--color-danger); /* Bright warning red */
+    font-size: 1.2rem;
+    margin: 0 0.5rem;
+    cursor: pointer;
+}
+
+#startingGenderRatioSelection input[type="radio"] {
+    width: 1.2em;
+    height: 1.2em;
+    margin-right: 0.5rem;
+    cursor: pointer;
+    accent-color: var(--color-danger); /* Bright warning red for radio button */
+}
+
+.active-time-column {
+    position: sticky;
+    left: 140px; /* this will be overwritten dynamically to width of left 2 columns */
+    font-style: italic;
+    z-index: 3;
+    background-color: var(--surface-sticky);
+    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 0 -1px 0 0 grey;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: none;
+}
+
+/* fix width of point columns */
+.active-points-columns {
+    width: 3vw;        /* Or you can adjust this value as per your needs */
+    overflow: hidden;
+    text-align: left;
+    background-color: var(--surface-sticky);
+
+    border: 1px solid grey;
+}
+
+/* styles for the names, time, and points-played columns */
+.roster-name-column {
+    text-align: left;
+    /* border: 1px solid grey; */
+    border-right: none;
+}
+
+/* Sticky checkbox + name columns (team roster table only — game summary and
+   event roster tables don't have sticky columns). Position/color/border/
+   z-index are static CSS; only the name column's `left` offset is
+   width-synced from JS in makeRosterColumnsSticky() (rosterManagement.js),
+   since it depends on the measured checkbox column width.
+   Scoped with #rosterTable so these beat the "#rosterTable th, td {
+   background-color: white }" rule above on specificity — a bare class
+   selector there would lose to that id+element rule and the sticky cells
+   would render white instead of #fafafa. */
+#rosterTable .roster-sticky-checkbox,
+#rosterTable .roster-checkbox-header {
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    background-color: var(--surface-sticky);
+    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: none;
+}
+#rosterTable .roster-checkbox-header {
+    z-index: 5;
+}
+#rosterTable .roster-sticky-name,
+#rosterTable .roster-name-header {
+    position: sticky;
+    left: 30px; /* overwritten dynamically to the measured checkbox column width */
+    z-index: 3;
+    background-color: var(--surface-sticky);
+    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 0 -1px 0 0 grey;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: none;
+}
+#rosterTable .roster-name-header {
+    z-index: 4;
+}
+
+.roster-points-column,
+.roster-time-column,
+.roster-goals-column,
+.roster-assists-column,
+.roster-plusminus-column,
+.roster-plusminus-per-point-column {
+    text-align: center;
+    padding: 5px;
+}
+
+.roster-time-column {
+    font-style: italic;
+}
+
+.roster-plusminus-column,
+.roster-plusminus-per-point-column {
+    font-family: monospace;
+    text-align: right;
+}
+
+/* Responsive button sizes */
+@media (max-width: 600px) {
+    button {
+        padding: 12px 18px;
+        font-size: 1.2rem;
+    }
+
+    input[type="text"], input[type="number"] {
+        padding: 10px;
+        font-size: 1rem;
+    }
+}
+
+/* Modal styles */
+.modal {
+    display: none; /* Hidden by default */
+    position: fixed; /* Stay in place */
+    z-index: 1000; /* Sit on top of everything */
+    left: 0;
+    top: 0;
+    width: 100%; /* Full width */
+    height: 100%; /* Full height */
+    overflow: auto; /* Enable scroll if needed */
+    background-color: rgb(0,0,0); /* Fallback color */
+    background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+}
+
+.modal-content {
+    background-color: var(--white);
+    margin: 15% auto; /* 15% from the top and centered */
+    padding: 20px;
+    border: 1px solid var(--text-faint);
+    width: 80%; /* Could be more or less, depending on screen size */
+}
+
+.close {
+    color: var(--text-disabled);
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+
+/* Legacy team selection table styles (kept for backwards compatibility) */
+.team-selection-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1em;
+}
+
+.team-row {
+    border-bottom: 1px solid var(--border-light);
+}
+
+.team-name {
+    font-weight: bold;
+    padding: 1em;
+    cursor: pointer;
+}
+

@@ -196,14 +196,49 @@ if (startPointBtn) {
     startPointBtn.addEventListener('click', startNextPoint);
 }
 
-// This file's local updateTimerDisplay(seconds) was DELETED here: it had been
-// shadowed dead code since game/gameTimer.js was introduced (its zero-arg
-// global overwrote this one at load time, so every runtime call already ran
-// gameTimer's version — including this file's own calls below).
+// Render the between-points countdown into #countdownTimer's #timerDisplay
+// span. This file used to delegate to a global updateTimerDisplay(seconds),
+// but that had been shadowed since game/gameTimer.js introduced its zero-arg
+// global (which renders the header point/game chip and ignores arguments) —
+// so the countdown box showed but never ticked. The countdown owns its own
+// renderer now. Color thresholds use the .timer-* classes in main.css.
+function renderCountdownDisplay(seconds) {
+    const display = document.getElementById('timerDisplay');
+    if (!display) return;
+    const s = Math.max(0, seconds);
+    const mm = String(Math.floor(s / 60)).padStart(2, '0');
+    const ss = String(s % 60).padStart(2, '0');
+    display.textContent = `${mm}:${ss}`;
+    display.classList.remove('timer-normal', 'timer-warning', 'timer-danger');
+    display.classList.add(s <= 10 ? 'timer-danger' : s <= 20 ? 'timer-warning' : 'timer-normal');
+}
 
 function startCountdown() {
+    const timer = document.getElementById('countdownTimer');
+    if (!timer) return;
+
+    // No between-points time configured — leave the box hidden.
+    if (!countdownSeconds || countdownSeconds <= 0) return;
+
+    // The box is position:fixed; overlay it on the point/game timer chip in
+    // the header's top-right corner. Between points that chip is frozen (the
+    // point clock only runs during play), so covering it costs nothing —
+    // whereas anchoring below the top bar covered the Undo button on the
+    // Line/Field/Full tabs. Falls back to the CSS default (top/right 10px,
+    // still the top-right corner) when the chip isn't rendered.
+    timer.style.top = '';
+    timer.style.right = '';
+    const chip = document.getElementById('gameTimerContainer');
+    if (chip) {
+        const rect = chip.getBoundingClientRect();
+        if (rect.height > 0) {
+            timer.style.top = Math.round(rect.top) + 'px';
+            timer.style.right = Math.round(window.innerWidth - rect.right) + 'px';
+        }
+    }
+
     // Show the timer when starting countdown
-    document.getElementById('countdownTimer').style.display = 'flex';
+    timer.style.display = 'flex';
 
     // Clear any existing interval
     if (countdownInterval) {
@@ -212,15 +247,17 @@ function startCountdown() {
 
     let timeRemaining = countdownSeconds;
     isCountdownRunning = true;
-
-    // late-bound back-edge (updateTimerDisplay's owner game/gameTimer.js lives
-    // "above" this layer); see ARCHITECTURE.md § ES modules — the window shim
-    // at the owner is kept deliberately.
-    window.updateTimerDisplay(timeRemaining);
+    renderCountdownDisplay(timeRemaining);
 
     countdownInterval = setInterval(() => {
         timeRemaining--;
-        window.updateTimerDisplay(timeRemaining); // late-bound back-edge (see above)
+        renderCountdownDisplay(timeRemaining);
+        if (timeRemaining <= 0) {
+            // Hold at 00:00 in red until the next point starts
+            // (stopCountdown hides the box).
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+        }
     }, 1000);
 }
 
