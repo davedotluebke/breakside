@@ -867,10 +867,19 @@ Logged during the program, symptoms never captured. Needs a repro/deep dive.
 ### G6 · Duplicated game-log renderers — actively drifting (NEW)
 Three copies; the `betweenPoints` countdown fix already had to be written twice. Merge them.
 
-### G7 · e2e suite: flaky specs never root-caused + port singleton
+### G7 · e2e suite: flaky specs never root-caused + port singleton — DONE (2026-07-19, branch `g7-e2e-ports`)
 Multi-coach and sleep/wake specs were accepted as a known-flaky baseline across ~10 commits —
 and they cover precisely the area where this review found the most bugs. Also the suite
 hardcodes ports 3099/8100, so parallel worktrees silently test each other's code.
+**Resolution:** ports now derive per worktree from a repo-path hash (env-overridable;
+`tests/helpers/constants.ts`). Flake root-caused to specs racing the offline-first *first
+game sync* (controller endpoints 404 via `game_exists()` until it lands — all 4 baseline
+failures) plus fixed sleeps racing server-side staleness timestamps; fixed test-side with
+`waitForGameOnServer`/`waitForRolesVacant` (`tests/helpers/controllerApi.ts`). 4/64 → 0/64
+failures at retries=0 × repeat-each=8. Residual: the app's `visibilitychange` wake handler
+is still unexercised (04's dead `simulateWake` removed, gap documented — overlaps G11.1);
+two app-side observations written up in the G7 session report (sync-queue 5s first-sync
+lag; ping interval re-installed every poll response).
 
 ### G8 · Verification gaps (cheap to close, worth closing)
 - Was `scripts/migrate_stats_id_keying.py` ever run against **production** data? F2's real-data

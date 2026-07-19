@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { FRONTEND_PORT, BACKEND_PORT, REPO_ROOT } from './helpers/constants';
 
 /**
  * Reset the file-based backend data dir before each test run.
@@ -14,6 +15,11 @@ import path from 'path';
  * isolated and the directory small. (test-data-dir is gitignored.)
  */
 async function globalSetup() {
+  // Make the per-worktree port derivation visible in every run's output, so a
+  // human can tell at a glance which servers this run is (or was) talking to.
+  console.log(`[e2e] repo root: ${REPO_ROOT}`);
+  console.log(`[e2e] derived ports — frontend: ${FRONTEND_PORT}, backend: ${BACKEND_PORT}`);
+
   const dir = path.join(__dirname, 'test-data-dir');
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
