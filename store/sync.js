@@ -1432,7 +1432,7 @@ async function syncUserTeams() {
                                         p.name === serverPlayer.name && !serverIds.has(p.id));
                                     if (candidates.length === 1) {
                                         existingIndex = localTeam.teamRoster.indexOf(candidates[0]);
-                                        console.log(`🪪 Adopting server id for ${serverPlayer.name}: ${candidates[0].id} → ${serverPlayer.id}`);
+                                        log(`🪪 Adopting server id for ${serverPlayer.name}: ${candidates[0].id} → ${serverPlayer.id}`);
                                         candidates[0].id = serverPlayer.id;
                                         teamPlayersUpdated++;
                                     }
