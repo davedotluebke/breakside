@@ -371,7 +371,8 @@ Event schema for ADD ops — the "event" object must have:
     and any of huck, break_throw, reset, swing, hammer, sky, layout, score
     (booleans). reset = a short backward pass to a handler — coaches say
     "reset" or "dump", and BOTH words mean reset=true (there is no dump
-    field). swing = a lateral cross-field pass.
+    field). swing = a lateral cross-field pass; whenever the coach explicitly
+    says "swing"/"swings it", set swing=true on that throw.
   - For kind=turnover: thrower, receiver (optional), and any of
     throwaway, drop, huck, good_defense, stall (booleans)
   - For kind=defense: defender (player name), and any of
