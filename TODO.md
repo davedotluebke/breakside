@@ -47,6 +47,13 @@ cleanup items are no longer scattered across this file's sections. Status snapsh
 - **G3** backend-test-suite green, **G2** CORS-on-500 + backup-degrade hardening,
   **G4** authFetch 401-retry, **G6** game-log renderer dedup — in flight this session
   (see the sections below / Quick Reference for the original item text).
+- **G7 done** (branch `g7-e2e-ports`): e2e ports derive per worktree (no more 3099/8100
+  singleton), and the multi-coach/sleep-wake flake was root-caused — specs raced the
+  offline-first first game sync (controller endpoints 404 until it lands) and slept fixed
+  margins against server-side staleness; both fixed test-side (`tests/helpers/controllerApi.ts`).
+  Measured: 4/64 failures before → 0/64 after (retries=0, repeat-each=8). The suite's
+  `retries: 2` can likely drop after a burn-in period. Known coverage gap: the
+  `visibilitychange` wake handler is still not exercised (see 04's header; overlaps G11.1).
 - **Needs Dave — staging `/join/{code}` fix (G11.5).** Root cause found 2026-07-19: it's
   the **S3 website config**, not CloudFront — prod's bucket has
   `ErrorDocument: index.html` (SPA fallback), staging's lacks it, so `/join/<code>` returns
