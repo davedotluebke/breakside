@@ -26,6 +26,7 @@ import {
     stopControllerPolling, showControllerToast, dismissToast,
 } from './controllerState.js';
 import { summarizeGame } from './gameLogic.js';
+import { renderGameLogHTML, escapeHtml } from '../utils/gameLogRenderer.js';
 import {
     initGameScreen, gameScreenInitialized, updateHeaderTeamIdentities,
 } from './gameScreenPanels.js';
@@ -136,47 +137,10 @@ function updateGameLogEvents() {
         return;
     }
     
-    // Format the summary for display
-    // Split into lines and wrap each in a div for styling
-    const lines = summary.split('\n');
-    let html = '';
-    
-    for (const line of lines) {
-        if (!line.trim()) continue;
-        
-        // Add CSS class based on line content
-        let lineClass = 'game-log-line';
-        
-        if (line.includes(' scores!')) {
-            lineClass += ' game-log-score-event';
-            if (line.includes(getTeamName())) {
-                lineClass += ' game-log-us-scores';
-            } else {
-                lineClass += ' game-log-them-scores';
-            }
-        } else if (line.startsWith('Point ') && line.includes('roster:')) {
-            lineClass += ' game-log-point-header';
-        } else if (line.includes('Current score:')) {
-            lineClass += ' game-log-current-score';
-        } else if (line.includes('pulls to')) {
-            lineClass += ' game-log-pull';
-        } else if (line.startsWith('— ') && / on (offense|defense) —$/.test(line)) {
-            // Possession delimiter line, e.g. "— Breakside on offense —"
-            lineClass += ' game-log-possession-header';
-            if (line.endsWith('on offense —')) {
-                lineClass += ' game-log-possession-offense';
-            } else {
-                lineClass += ' game-log-possession-defense';
-            }
-        } else if (line.startsWith('App Version:') || line.startsWith('Game Summary:')) {
-            lineClass += ' game-log-header';
-        } else if (line.includes('roster:')) {
-            lineClass += ' game-log-roster';
-        }
-        
-        html += `<div class="${lineClass}">${escapeHtml(line)}</div>`;
-    }
-    
+    // Format the summary for display — line classification + escaping live in
+    // the shared renderer (utils/gameLogRenderer.js, G6 merge).
+    const html = renderGameLogHTML(summary, getTeamName());
+
     // Only update DOM and auto-scroll if content actually changed
     if (eventsEl.innerHTML !== html) {
         eventsEl.innerHTML = html;
@@ -197,17 +161,6 @@ function getTeamName() {
         game = currentGame;
     }
     return game?.team || 'Us';
-}
-
-/**
- * Escape HTML entities to prevent XSS
- * @param {string} text - Text to escape
- * @returns {string}
- */
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 /**
@@ -692,7 +645,6 @@ export {
     enterGameScreen, exitGameScreen,
     updateGameScreenScore, updateGameLogEvents,
     startGameStateRefresh, stopGameStateRefresh,
-    escapeHtml,
 };
 // window survivor: late-bound back-edge hook (called by game/gameLogic.js,
 // game/pointManagement.js, screens/navigation.js, teams/rosterManagement.js,
@@ -711,9 +663,7 @@ window.startGameStateRefresh = startGameStateRefresh;
 // window survivor: late-bound back-edge hook (called window-qualified by
 // game/controllerState.js)
 window.stopGameStateRefresh = stopGameStateRefresh;
-// window survivor: late-bound back-edge hook (called by utils/statsHelp.js and
-// teams/gameSummary.js — importing there would create a teams/gameSummary ↔
-// game-screen import cycle via gameScreenEvents→gameSummary)
-window.escapeHtml = escapeHtml;
 // Dropped shims (zero external references found): updateGameScreenRoleButtons,
-// updateGameLogPanel, updateGameLogStatus.
+// updateGameLogPanel, updateGameLogStatus. window.escapeHtml dropped with the
+// G6 renderer merge: escapeHtml now lives in utils/gameLogRenderer.js, which
+// every former window-consumer can import downward.

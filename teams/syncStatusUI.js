@@ -9,6 +9,7 @@ import {
 } from '../store/sync.js';
 import { populateCloudTeamsAndGames } from './teamList.js';
 import { showControllerToast } from '../game/controllerState.js';
+import { escapeHtml } from '../utils/gameLogRenderer.js';
 import { log } from '../utils/logger.js';
 
 function showSetServerDialog() {
@@ -273,10 +274,9 @@ function showPendingSyncDialog() {
                 : '';
             // Surface the most recent failure so a stuck item is diagnosable
             // from the UI (offline-classified failures retry forever and would
-            // otherwise show no reason at all). escapeHtml is late-bound via
-            // window (owned by game/gameScreenSync.js, a later layer).
+            // otherwise show no reason at all).
             const errNote = item.lastError
-                ? `<div class="pending-sync-error">last error: ${(window.escapeHtml ? window.escapeHtml(item.lastError) : '').slice(0, 300)}</div>`
+                ? `<div class="pending-sync-error">last error: ${escapeHtml(item.lastError).slice(0, 300)}</div>`
                 : '';
             return `<div class="pending-sync-item">
                 <span class="pending-sync-action">${item.action}</span> ${label}${retryNote}
