@@ -881,13 +881,27 @@ is still unexercised (04's dead `simulateWake` removed, gap documented — overl
 two app-side observations written up in the G7 session report (sync-queue 5s first-sync
 lag; ping interval re-installed every poll response).
 
-### G8 · Verification gaps (cheap to close, worth closing)
-- Was `scripts/migrate_stats_id_keying.py` ever run against **production** data? F2's real-data
-  verification covered 7 local games only.
-- F2's prod spot-check of **CUDO Spring 26 / Flickers / Mumbo Sauce** is still pending (was
-  blocked on a prod data read).
-- Before the shared exclude-list landed, prod S3 syncs may have published `.claude/`/`.vscode/`
-  files. `aws s3 sync --delete` will not remove them — confirm the bucket is clean.
+### G8 · Verification gaps — ✅ closed 2026-07-19 (prod snapshot at `.dev-data/prod-snapshot/`, local-only)
+- `scripts/migrate_stats_id_keying.py` was **never run against production** — no prod game
+  carries `playerIds` on any point. That's fine: the F2 frontend resolves ids at runtime
+  (rosterSnapshot → event-embedded ids → current roster), so the write-migration is
+  optional, not owed.
+- Prod spot-check of **CUDO Spring 26 / Flickers / Mumbo Sauce**: done via the script's
+  verify replay. Spring 26 and Flickers match old-vs-new **exactly** (0 per-player diffs,
+  0 unresolved, no ambiguity warnings). Mumbo Sauce: team totals match but 23/24 players
+  differ — **every diff a gain**, root-caused to a mid-tournament mass rename on
+  2026-07-12 (jersey-number prefixes added between games 1 and 2: "Cyrus" → "0 Cyrus").
+  Name-keyed stats split each player across the rename; id-keying reunites them via each
+  game's own rosterSnapshot. The mismatch list is the heal, not a regression.
+- **Caveats for any future write-run of the migration script** (surfaced by a bonus CUDO
+  Mixed replay): (a) its strict old==new verifier "fails" on healed renames like Mumbo's —
+  expected; needs a rename-aware allowance before trusting a red result; (b) the script
+  predates the id era and leaves id-form `point.players` entries (Nov-2025+ games)
+  unresolved — 358 warnings and small event-stat undercounts in its own new-side replay
+  on CUDO Mixed. The frontend-side era resolvers (F2/G11.1) are the stats source of
+  truth, not this script.
+- S3 buckets: verified clean 2026-07-19 (no stray `.claude/`/`.vscode/`/`.worktrees/`
+  objects) — recorded in TODO.md at the time.
 
 ### G9 · Point-lifecycle refactor — consciously declined, now backlogged
 Judged days of work with core-flow regression risk; the shipped between-points behavior is a

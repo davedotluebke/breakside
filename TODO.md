@@ -15,15 +15,19 @@ Sections, in roughly priority order:
 
 ## Active
 
-### ⚠️ Temp ops cleanup — remove localhost from prod CORS
+### ✅ Temp ops cleanup — remove localhost from prod CORS (resolved 2026-07-19)
 
 Added `http://localhost:3002` (and possibly `:3001`/`:3000`) to `ULTISTATS_ALLOWED_ORIGINS`
 in `/etc/breakside/env` on EC2 so the localhost-only Claude preview could hit the prod API
 while building the **Field tab** (`field-position` branch). Low risk (auth is a Bearer JWT in
 `localStorage`, not reachable cross-origin), but remove it once Field-tab dev wraps up:
 
-- [ ] `ssh ec2-user@3.212.138.180`; edit `/etc/breakside/env`, drop the `http://localhost:*`
+- [x] `ssh ec2-user@3.212.138.180`; edit `/etc/breakside/env`, drop the `http://localhost:*`
       origin(s) from `ULTISTATS_ALLOWED_ORIGINS`; `sudo systemctl restart breakside`
+      *(done 2026-07-19 — inspection found **no** localhost entries anywhere in the env
+      file (never persisted or already removed). Restarted anyway to pick up G2/G3;
+      curl-verified: preflight from `http://localhost:3002` rejected, prod origin 200
+      with allow-origin header.)*
 - [x] ~~Revert the `field-tab-phase0` staging deploy / remove the `field-app` launch entry~~
       *(done — the `field-app` entry is gone from `.claude/launch.json` and staging has been
       redeployed many times since)*
@@ -49,9 +53,8 @@ cleanup items are no longer scattered across this file's sections. Status snapsh
   authFetch 401-retry (+ proxy-image auth fix), **G6** game-log renderers unified
   (`utils/gameLogRenderer.js`), **G11.6** console sweep, and the
   **`point.startTimestamp`-at-score-time fix** (updateScore no longer stamps score time
-  as the point start). ⚠️ **G2/G3 are backend changes — EC2 needs
-  `git pull && systemctl restart breakside` to take effect** (safe to defer; old server
-  keeps running old code).
+  as the point start). **G2/G3 went live on EC2 2026-07-19** — `git pull` + restart done,
+  service healthy, startup writability probe logged no unwritable-dir errors.
 - **G7 MERGED 2026-07-19** (branch `g7-e2e-ports`): e2e ports derive per worktree (no more
   3099/8100 singleton), and the multi-coach/sleep-wake flake was root-caused — specs raced
   the offline-first first game sync (controller endpoints 404 until it lands) and slept fixed
@@ -67,10 +70,15 @@ cleanup items are no longer scattered across this file's sections. Status snapsh
   `staging.breakside.pro/join/<code>` now serves the app's `index.html` byte-identical to
   prod (both via S3's ErrorDocument mechanism, which returns HTTP 404 with the SPA body —
   prod has always worked this way).
-- **Needs Dave — prod stats spot-check (G8).** Verifying CUDO Spring 26 / Flickers /
-  Mumbo Sauce survived the name→ID stats migration needs a prod data read (SSH key auth);
-  blocked for agents. Run the F2-style old-vs-new replay against
-  `/var/lib/breakside/data`, or pull a copy locally and point an agent at it.
+- **✅ DONE 2026-07-19 — prod stats spot-check (G8).** Dave pulled a prod snapshot to
+  `.dev-data/prod-snapshot/` (gitignored; keep local) and the old-vs-new replay ran
+  against all three teams: **CUDO Spring 26 and Flickers match exactly** (0 per-player
+  diffs, 0 unresolved); **Mumbo Sauce's 23/24 per-player diffs are the id-keying fix
+  working** — a mid-tournament mass rename on 2026-07-12 (jersey-number prefixes) split
+  every player across two name buckets; id-keying reunites them, all diffs gains, team
+  totals identical. Also answered: the write-migration was never run on prod (no
+  `playerIds` anywhere) and isn't needed — frontend era resolvers are the stats path.
+  Full findings + script caveats in CODE_REVIEW_REPORT.md §G8.
 - **Verified clean (G8):** prod + staging S3 buckets contain no stray `.claude/` /
   `.vscode/` / `.worktrees/` objects (checked 2026-07-19).
 - **G11.1–.2 exercised locally 2026-07-19** (two-tab multi-coach via
