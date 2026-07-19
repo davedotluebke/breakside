@@ -98,6 +98,21 @@ const authFetchCore = makeAuthFetch({
         const session = await window.breakside?.auth?.forceRefreshSession?.();
         return session?.access_token || null;
     },
+    // Test-mode identity: getAuthHeaders() returns {X-Test-User-Id} when a
+    // fake session is active (localhost only; prod servers reject the header
+    // when auth is on). Without forwarding it, every test-mode request is
+    // anonymous and an auth-disabled dev backend attributes it to its DEFAULT
+    // test user — so ?testUserId=<other> pages silently acted as the wrong
+    // user in multi-coach testing (G11.1 follow-up). Bearer auth is handled
+    // by getToken above; only the test header passes through here.
+    getExtraHeaders: async () => {
+        try {
+            const h = (await window.breakside?.auth?.getAuthHeaders?.()) || {};
+            return h['X-Test-User-Id'] ? { 'X-Test-User-Id': h['X-Test-User-Id'] } : {};
+        } catch (e) {
+            return {};
+        }
+    },
     warn: (...args) => console.warn(...args),
 });
 
