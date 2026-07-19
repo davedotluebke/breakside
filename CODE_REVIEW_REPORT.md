@@ -797,33 +797,32 @@ feature worktrees — that's normal working state, not debt.)
 
 ---
 
-## 8. Program closeout — outstanding work (2026-07-11)
+## 8. Program closeout — outstanding work (2026-07-11; updated 2026-07-19 post-F3)
 
-**Final state of the program:** A1, B1–B5, C1, D1–D4, E1 (ES-modules), E2 (deploy-time
-versioning), F1, F2, F4, F5 are all **merged and verified**. Every 🔴 correctness bug from the
-original review is fixed. **F3 is the one planned task never completed** — it is now in flight
-on the unmerged `cleanup-sweep` worktree.
+**Final state of the program: COMPLETE.** A1, B1–B5, C1, D1–D4, E1 (ES-modules), E2
+(deploy-time versioning), and F1–F5 are all **merged and verified** (F3 landed 2026-07-19 as
+`f557b34`). Every 🔴 correctness bug from the original review is fixed. The
+`pull-dialog-resolver` parallel work has also merged (`03112fe`, `90d722f`).
 
-This section is the **handoff punch list for future sessions**: work that is either still open
-from the program, or was *newly created by* the program. Verified against `main` @ 2026-07-11
-by three audit agents plus a live test run.
+This section is the **handoff punch list for future sessions**: work still open from the
+program or newly created by it. Verified against `main` by three audit agents plus live test
+runs (last re-run 2026-07-19).
 
-### G1 · F3 frontend cleanup sweep — **41 items, all still OPEN** ⬅ biggest artifact
-In flight on the `cleanup-sweep` worktree (unmerged). The itemized checklist is § 7 F3 above;
-an audit re-verified all 41 against current `main` and **none were incidentally fixed**. Line
-numbers in § 7 are stale (files moved in the splits) — locate by symbol. Current refs for the
-few that matter most:
-- 🔴-ish **document-listener leak**: two swipe-to-dismiss copies leak `mousemove`/`mouseup` on
-  `document` per toast (`game/controllerState.js:888`, `:1215`).
-- **Dead 409 branch**: `landing/join.js:497` handles already-member, but the backend
-  invite-info endpoint only ever raises 404/410 — needs the backend to return 409.
-- **`undoEvent`** still one long decision tree (`game/gameLogic.js:470-690`), stale `XXX` at
-  `:510`/`:686`, unconditional `logEvent("Undo button pressed!")` at `:687`. Untested.
-- **6 caller-less deprecated shims** still exported (`teams/teamList.js:495/764/785/807`,
-  `teams/syncStatusUI.js:161/162`).
-- **`console.*` sweep**: 372 calls, no logger wrapper in `utils/`.
-- Partial movement only: `ui/panelSystem.js` duplicate `contentPanels` is down to one site
-  (`:1198`), but the five parallel panel arrays remain (`:35/39/43/49`).
+### G1 · F3 leftovers — the deliberately-not-done tail (small, assessments unchanged)
+F3 closed ~30 of its 41 items including everything that mattered most (undo/pendingNextLine
+extracted + unit-tested, logger.js + 183 console.log conversions, swipe-dismiss leak FIXED,
+invite-info 409 + join auth, dead code deleted, panelSystem descriptor table). What it
+consciously left open (see § 7 F3 for detail):
+- pullDialog clone-node workaround; `getExpectedPullGender` nesting; pull modal's `unshift`
+  bypass of `createPull`; Key Play auto-commit on both-selected.
+- micButton/transcriptDisplay lifetime intervals.
+- The Store/Teams long tail: serial per-team player fetches, stat-preservation allowlist,
+  queued-vs-direct event paths, generateGameId divergence, serializeEvent default-diff,
+  score-recalc heuristic, saveAllTeamsData hidden sync, createSampleTeam dup, voidthrower
+  sentinels, inferred_flag dup, eventStats serial cloud loads, `Role.TEAM || 'team'`,
+  stats-shape triplication, xlsx column letters, header-click expand toggle.
+- (`fullyPhysicalPanelDragging` was KEPT deliberately — documented console/debug seam, not
+  dead; removed from this list.)
 
 ### G2 · Backend hardening from the real staging incident (NEW — created by this program)
 Both root-caused during the E1 shakedown; the client-side mitigation shipped, the server-side
@@ -837,11 +836,13 @@ be missed:
   writability check on the data dir. (Ops rule, worth documenting: never run servers/scripts
   touching `/var/lib/breakside/data` as root.)
 
-### G3 · Backend test suite is NOT green — **40 failed / 227 passed / 5 skipped** (verified)
-Confirmed by running `pytest ultistats_server/` on `main` this session. Three known causes:
+### G3 · Backend test suite is NOT green — **41 failed / 234 passed / 5 skipped** (re-verified 2026-07-19)
+Confirmed by running `pytest ultistats_server/` on `main` post-F3. Known causes:
 `test_api.py` path drift (unprefixed `/api` paths after the router split), `test_auth.py`
-collection-time config interference, and flaky live-LLM narration scenarios. A red suite means
-the safety net for all future cleanup is not trustworthy — **fix this before G1.**
+collection-time config interference, `test_existing_data.py` assumptions about local data, and
+flaky live-LLM narration scenarios. (F3's targeted subsets — 77 backend tests — pass; the
+failures are pre-existing suite rot.) A red suite means the safety net for all future cleanup
+is not trustworthy — **do this first.**
 
 ### G4 · `authFetch` consolidation — the ESM migration shipped the *weaker* variant (NEW)
 `auth/auth.js:429` documents it: two `authFetch` implementations existed; the local
@@ -886,14 +887,15 @@ Game-sync last-write-wins (AC authoritative); `ScriptProcessorNode` → AudioWor
 scan; fieldPbp/fullPbp holder-state wrapper duplication (core already shared via
 `pbpPossession`).
 
-### Being fixed elsewhere (do NOT re-report)
-A parallel session on `pull-dialog-resolver` is fixing: the pull dialog's `undefined` selection
-sentinel; raw name-string lookups of `point.players` across the PBP dialogs; gender gating in
-`updatePullDialogState`; and unstable random player ids causing roster duplication in the
-sync merge-by-id (`store/sync.js:1473`). Also open in TODO.md: **`point.startTimestamp` is null
-at score time** (a real correctness bug that already forced a workaround).
+### Landed elsewhere since 2026-07-11 (do NOT re-report)
+The `pull-dialog-resolver` work **merged** (`03112fe` era resolution across PBP dialogs;
+`90d722f` roster-duplication fix + legacy-id backfill), and F3's branch carried bonus fixes
+(undoable injury subs, O&D-surface flip, Game Events modal staleness). Still open in TODO.md:
+**`point.startTimestamp` is null at score time** (a real correctness bug that already forced a
+workaround).
 
 ### Suggested order for future sessions
 **G3** (green the tests — the safety net) → **G2** (backend hardening; real user-facing
-incident) → **G1** (land `cleanup-sweep`) → **G4** → **G6** → **G8** (cheap verifications) →
-**G10** (TODO hygiene) → G5/G7/G9 as capacity allows.
+incident) → **G4** (authFetch 401-retry) → **G6** (game-log renderers) → **G8** (cheap
+verifications) → **G10** (TODO hygiene) → **G1** (small F3 leftovers, opportunistic) →
+G5/G7/G9 as capacity allows.
