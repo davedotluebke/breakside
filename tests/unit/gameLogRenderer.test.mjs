@@ -240,6 +240,56 @@ test('scoreBadge callback labels scored points; null label leaves line unchanged
     assert.match(text, /\nThem scores! \n/);
 });
 
+// ── id-era roster resolution (resolvePlayerName option) ─────────────────
+// point.players entries are player IDS for id-era games (e.g. the Nov-2025
+// CUDO Mixed tournament — lines that arrived through pendingNextLine sync).
+// Callers pass an era resolver so "Point N roster:" shows names, not ids.
+
+test('resolvePlayerName maps id-era point.players entries in roster lines', () => {
+    const game = makeGame({
+        points: [makePoint({ players: ['Avery-mixr', 'Blake-9k2f'], winner: 'team' })],
+    });
+    const names = { 'Avery-mixr': 'Avery', 'Blake-9k2f': 'Blake' };
+    const text = buildGameLogText(game, {
+        ...OPTS,
+        resolvePlayerName: entry => names[entry] || entry,
+    });
+    assert.match(text, /\nPoint 1 roster: Avery Blake\n/);
+    assert.ok(!text.includes('Avery-mixr'));
+});
+
+test('resolvePlayerName passes name-era entries through untouched (identity resolver)', () => {
+    const game = makeGame({
+        points: [makePoint({ players: ['Alice', 'Bob'] })],
+    });
+    const text = buildGameLogText(game, {
+        ...OPTS,
+        resolvePlayerName: entry => entry,
+    });
+    assert.match(text, /\nPoint 1 roster: Alice Bob\n?/);
+});
+
+test('without resolvePlayerName, roster entries print as stored (pure-leaf default)', () => {
+    const game = makeGame({
+        points: [makePoint({ players: ['Avery-mixr'] })],
+    });
+    const text = buildGameLogText(game, OPTS);
+    assert.match(text, /\nPoint 1 roster: Avery-mixr\n?/);
+});
+
+test('resolvePlayerName only touches point rosters — not the team roster header', () => {
+    const game = makeGame({
+        points: [makePoint({ players: ['Avery-mixr'] })],
+    });
+    const text = buildGameLogText(game, {
+        ...OPTS,
+        rosterNames: ['Avery'],
+        resolvePlayerName: () => 'RESOLVED',
+    });
+    assert.match(text, /Us roster: Avery\n?/);
+    assert.match(text, /\nPoint 1 roster: RESOLVED\n?/);
+});
+
 // ── line classification ─────────────────────────────────────────────────
 
 test('classifyGameLogLine covers every branch', () => {
