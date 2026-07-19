@@ -409,16 +409,21 @@ Improvements deferred from the initial implementation (see Active section above 
   - May need prompt strengthening or a more structured event-stream format to track team-side flips
 
 ### Coverage
-- [ ] **Add `swing` to the slow-pass throw schema** (field report 2026-07-19: "Dave
-      throws a swing to Ian" recorded the throw but dropped the modifier). The model
-      layer is already done — `Throw` takes `swing` and stores `swing_flag` (Field-tab
-      auto-modifiers set/edit it; `summarize()` prints it). Missing legs: add `swing`
-      to the throw-flags line of the event schema in `ultistats_server/narration.py`'s
-      `_build_finalize_prompt`, and forward `swing: !!args.swing` in
-      `narration/narrationEngine.js` `applyThrow`. While there, decide how spoken
-      "reset" should map (`dump` flag vs Field's Reset chip semantics) and consider a
-      corpus scenario for swing/reset phrasing so the mapping is pinned. (Server-side
-      prompt change → needs the EC2 restart to go live.)
+- [x] **Add `swing` to the slow-pass throw schema** *(done 2026-07-19, branch
+      `narration-swing-reset` — swing in the schema + `applyThrow`, with an explicit
+      rule that the spoken verb "swing"/"swings it" always sets the flag. Rode along:
+      the **dump→reset rename** per Dave's design call — "reset" is canonical in code,
+      logs, and stats: `Throw.reset_flag` (constructor param `reset`), summarize/log
+      "reset", Key Play button relabeled, Full/Field chip props, Field
+      `classifyThrow` return keys, viewer (prints reset+swing, reads
+      `reset_flag||dump_flag`). Legacy stored `dump_flag` aliases to `reset_flag` at
+      `deserializeEvent` (single chokepoint; verified live) and re-saves emit the
+      clean key. Narration prompt: spoken "dump" and "reset" BOTH set `reset`. Corpus
+      012/015/015b/020 expectations updated; runner key fields gain reset+swing (dump
+      kept so strays surface). Full corpus 20/0 twice (one unreproduced stochastic
+      single-scenario flip across four runs — inherent LLM variance at the F1
+      threshold, see test_scenarios.py docstring). ARCHITECTURE.md § AI Narration
+      documents the terminology.)*
 - [ ] **Add `record_pull` to the slow-pass schema**
   - Currently if a coach narrates a pull (e.g. "Alice flicks an OI pull, brick"), it's ignored
   - Easy add: extend the event schema in `ultistats_server/narration.py` and add an applier in `narration/narrationEngine.js`
