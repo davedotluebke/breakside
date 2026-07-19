@@ -72,6 +72,37 @@ cleanup items are no longer scattered across this file's sections. Status snapsh
   `/var/lib/breakside/data`, or pull a copy locally and point an agent at it.
 - **Verified clean (G8):** prod + staging S3 buckets contain no stray `.claude/` /
   `.vscode/` / `.worktrees/` objects (checked 2026-07-19).
+- **G11.1–.2 exercised locally 2026-07-19** (two-tab multi-coach via
+  `?testMode=true&testUserId=<id>` against a dev backend seeded with the real Nov-2025
+  CUDO Mixed vs SWW 2 game). **Verified good:** injury-sub undo restores `point.players`
+  verbatim + removes the sub event + no O/D surface flip (real id-era game); Line-tab Undo
+  does a clean score-revert + empty-point back-out; role gating/View Only for the roleless
+  coach; roles-expire takeover; the startTimestamp fix live on real data. **Bugs found —
+  each deserves a focused session:**
+  1. 🔴 **Handoff-request toast never shows for the role holder.** Reproduced
+     deterministically: holder fronted + polling through the whole 10s handoff window →
+     zero toasts → role silently auto-transfers on expiry (`handoffTimeoutSeconds=10`).
+     Sideline effect: a coach loses Active Coach with no prompt or explanation. Related:
+     the requester saw a **false "You are now Active Coach"** double-toast in a run where
+     the role verifiably ended up back with the original holder (original `claimedAt`
+     preserved — most plausibly a silent deny path). This is the § Game-core
+     handoff-toast race; fix wants the durable per-request-id rework, holder-prompt path
+     first (`game/controllerState.js` `updateLocalControllerState`).
+  2. 🔴 **Id-era `pendingNextLine` soft-locks Start Point.** On the real SWW-2 game the
+     stored line holds player IDs; the Line panel matches checkboxes by NAME → nothing
+     renders checked, the Next Line header shows raw ids ("Avery-mixr, …"), and
+     `getSelectedPlayersFromPanel` collects 0 players → "Please select players" on every
+     Start Point tap. Workaround: manually re-select the line. Fix: resolve line entries
+     through `buildPlayerNameResolver` (F2's era-resolver) at panel render + header +
+     collection. (G7's spec-07 flake — "a name where an id was expected" — is the same
+     era-resolution seam.)
+  3. 🟠 **Id-era display gaps:** game-log "Point N roster:" lines and the Next Line
+     header print raw ids for id-era games (names render fine in event lines).
+  4. 🟠 **Zombie point in real data:** SWW-2's stored point 13 has `winner` set +
+     `startTimestamp` still running since Nov 2025 + 0 possessions → player Game-time
+     shows ~352,7xx minutes (elapsed-since-November). The updateScore fix stops NEW
+     corruption; consider a load-time normalizer (null a stale running `startTimestamp`
+     on ended/old points) to repair existing data displays.
 
 ### ES-module migration follow-ups (from task E1, 2026-07-03)
 
