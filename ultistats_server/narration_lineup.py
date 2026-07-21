@@ -39,6 +39,11 @@ try:
 except ImportError:
     from ultistats_server.auth import get_current_user  # type: ignore
 
+try:
+    from narration import _last_json_object  # type: ignore
+except ImportError:
+    from ultistats_server.narration import _last_json_object  # type: ignore
+
 
 router = APIRouter(prefix="/api/narration", tags=["narration-lineup"])
 
@@ -245,12 +250,8 @@ async def _call_claude_lineup(api_key: str, prompt: str) -> Dict[str, Any]:
 
 
 def _parse_lineup_json(text: str) -> Dict[str, Any]:
-    """Parse the model's reply, tolerating stray markdown fences."""
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.lower().startswith("json"):
-            text = text[4:].strip()
-    parsed = json.loads(text)
-    if not isinstance(parsed, dict) or not isinstance(parsed.get("players"), list):
+    """Parse the model's reply, tolerating fences, prose, and self-corrections."""
+    parsed = _last_json_object(text, "players")
+    if not isinstance(parsed.get("players"), list):
         raise RuntimeError("Claude lineup response missing 'players' list")
     return parsed
