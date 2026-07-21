@@ -111,6 +111,7 @@ import './playByPlay/fieldPbp.js';
 // evaluating it here — earlier than its old tag position after the pbp files —
 // is harmless: its top level only builds the namespace object.
 import './narration/eventBus.js';
+import './narration/micStream.js';
 import './narration/realtimeSession.js';
 import { narrationEngine } from './narration/narrationEngine.js';
 import './narration/transcriptDisplay.js';

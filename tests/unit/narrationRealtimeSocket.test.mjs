@@ -38,6 +38,19 @@ test('realtimeSession still authenticates via the ephemeral-token subprotocol', 
     );
 });
 
+test('audio capture goes through the micStream cache, not raw getUserMedia', () => {
+    assert.ok(
+        src.includes('micStream.acquire'),
+        'realtimeSession must acquire the mic via narration/micStream.js.'
+    );
+    assert.ok(
+        !src.includes('navigator.mediaDevices.getUserMedia('),
+        'Found a direct getUserMedia call in realtimeSession.js — bypassing ' +
+        'the micStream warm cache resurrects the per-recording iOS ' +
+        'permission prompt the cache exists to prevent.'
+    );
+});
+
 test('start() fails loudly when the socket dies during microphone setup', () => {
     assert.ok(
         src.includes('Connection closed during microphone setup'),

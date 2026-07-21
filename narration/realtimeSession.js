@@ -9,15 +9,18 @@
  *   2. We fetch an ephemeral token from our backend (/api/narration/token)
  *   3. Open WebSocket to OpenAI Realtime API using the ephemeral token
  *   4. Send session.update with instructions, tools, audio format
- *   5. Open the microphone (getUserMedia), run audio through an AudioContext
- *      that resamples to 24kHz PCM16, base64-encoded chunks streamed via
- *      input_audio_buffer.append messages
+ *   5. Open the microphone (via micStream, which reuses a warm cached stream
+ *      when one is held — see narration/micStream.js), run audio through an
+ *      AudioContext that resamples to 24kHz PCM16, base64-encoded chunks
+ *      streamed via input_audio_buffer.append messages
  *   6. Listen for events:
  *        - conversation.item.input_audio_transcription.delta/completed
  *          (accumulated transcript)
  *        - response.function_call_arguments.done
  *          (a provisional event — callback invoked)
- *   7. Caller invokes stop() to close mic + socket cleanly
+ *   7. Caller invokes stop() to close the socket cleanly; the mic stream is
+ *      idled back to micStream (kept warm briefly so the next recording
+ *      doesn't re-trigger the iOS permission prompt)
  *
  * Ephemeral tokens mean the OpenAI API key never touches the client.
  *
@@ -29,6 +32,8 @@
  */
 import { authFetch, API_BASE_URL } from '../store/sync.js';
 import { log } from '../utils/logger.js';
+import { advancedSettings } from '../settings/advancedSettings.js';
+import { micStream } from './micStream.js';
 
 /**
  * Merge a completed-utterance transcript into an accumulated transcript.
@@ -289,6 +294,11 @@ const narrationRealtimeSession = (function() {
         try {
             await startAudioCapture();
         } catch (err) {
+            // Unwind any partial capture state (e.g. stream acquired but
+            // AudioContext construction failed) so the mic isn't stranded
+            // in-use — stopAudioCapture is a safe no-op for the parts that
+            // never came up.
+            stopAudioCapture();
             try { if (ws) ws.close(); } catch (_) {}
             ws = null;
             throw err;
@@ -581,9 +591,7 @@ const narrationRealtimeSession = (function() {
             autoGainControl: true,
             channelCount: 1
         };
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-            audio: audioConstraints
-        });
+        mediaStream = await micStream.acquire(audioConstraints);
 
         // Create AudioContext at the target sample rate (24kHz). Most browsers
         // will resample the mic input to match this context rate for us.
@@ -615,9 +623,10 @@ const narrationRealtimeSession = (function() {
         try { if (processorNode) processorNode.disconnect(); } catch (_) {}
         try { if (sourceNode) sourceNode.disconnect(); } catch (_) {}
         try { if (audioContext) audioContext.close(); } catch (_) {}
-        if (mediaStream) {
-            mediaStream.getTracks().forEach(t => t.stop());
-        }
+        // Don't stop the tracks — idle the stream back to micStream, which
+        // keeps it warm so the next recording doesn't re-trigger the iOS
+        // permission prompt, and self-releases after the configured hold.
+        micStream.idle(advancedSettings.getNarrationMicHoldMs());
         processorNode = null;
         sourceNode = null;
         audioContext = null;

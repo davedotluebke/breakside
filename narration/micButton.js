@@ -18,6 +18,7 @@
 import { isGameScreenVisible } from '../ui/panelSystem.js';
 import { showControllerToast } from '../game/controllerState.js';
 import { narrationEngine } from './narrationEngine.js';
+import { micStream } from './micStream.js';
 
 const narrationMicButton = (function() {
     const BTN_ID = 'narrationMicBtn';
@@ -30,6 +31,7 @@ const narrationMicButton = (function() {
     let pressTimerId = null;
     let pressWasLongPress = false;
     let isPressed = false;
+    let wasVisible = false;  // previous poll's visibility, to detect game exit
 
     /**
      * Current recording state, queried from the narration engine.
@@ -110,8 +112,17 @@ const narrationMicButton = (function() {
      */
     function refreshVisibility() {
         if (!btn) return;
-        const visible = typeof isGameScreenVisible === 'function' && isGameScreenVisible();
-        btn.classList.toggle('visible', !!visible);
+        const visible = !!(typeof isGameScreenVisible === 'function' && isGameScreenVisible());
+        btn.classList.toggle('visible', visible);
+        // Leaving the game screen releases the warm mic stream (held between
+        // recordings to dodge iOS permission re-prompts) so the OS mic
+        // indicator never outlives the game. releaseIfIdle is a no-op while
+        // any session (engine or lineup narration) is actively capturing;
+        // the idle timeout in micStream collects those later.
+        if (wasVisible && !visible) {
+            micStream.releaseIfIdle();
+        }
+        wasVisible = visible;
     }
 
     // ---------------------------------------------------------------------

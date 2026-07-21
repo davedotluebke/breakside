@@ -53,6 +53,11 @@ const advancedSettings = (function() {
         // amplifies wind/crowd noise, which hurts transcription far more than
         // it helps with a phone held near the coach's mouth.
         'narration.autoGainControl': false,
+        // How long (seconds) to keep the mic stream warm after a recording
+        // stops. iOS re-prompts for permission whenever the stream is fully
+        // released; holding it warm makes consecutive narrations promptless.
+        // 0 = release immediately (prompt every time, mic indicator off).
+        'narration.micHoldSeconds': 180,
         // --- Sync ---
         'sync.refreshIntervalSec': 10,                   // cloud auto-refresh cadence (applies after reload)
         // --- Display ---
@@ -144,6 +149,18 @@ const advancedSettings = (function() {
         // If the template doesn't contain {names}, the user has chosen to
         // skip auto-roster injection — respect that and pass through verbatim.
         return template.replace(/\{names\}/g, names);
+    }
+
+    /**
+     * How long to keep the mic stream warm after a recording stops (ms).
+     * 0 = release immediately. Clamped so a bad stored value can't pin the
+     * mic open indefinitely. Consumed by narration/realtimeSession.js.
+     */
+    function getNarrationMicHoldMs() {
+        let sec = parseInt(get('narration.micHoldSeconds'), 10);
+        if (!Number.isFinite(sec)) sec = DEFAULTS['narration.micHoldSeconds'];
+        sec = Math.max(0, Math.min(900, sec));
+        return sec * 1000;
     }
 
     function getDefault(key) { return DEFAULTS[key]; }
@@ -239,6 +256,18 @@ const advancedSettings = (function() {
                     key: 'narration.echoCancellation', label: 'Echo cancellation',
                     help: 'The browser’s echo canceller. Rarely needs changing for sideline use.',
                     type: 'toggle'
+                },
+                {
+                    key: 'narration.micHoldSeconds', label: 'Keep mic ready',
+                    help: 'After a recording stops, hold the microphone open (idle — nothing is recorded or sent) so the next tap doesn’t re-trigger iOS’s permission pop-up. The mic indicator stays on while held; the mic is released when you leave the game or after this long idle.',
+                    type: 'select',
+                    options: [
+                        ['0', 'Off (ask every time)'],
+                        ['60', '1 minute'],
+                        ['180', '3 minutes (recommended)'],
+                        ['300', '5 minutes'],
+                        ['900', '15 minutes']
+                    ]
                 }
             ]
         },
@@ -475,6 +504,7 @@ const advancedSettings = (function() {
         set,
         getRefreshIntervalMs,
         getNarrationAudioConstraints,
+        getNarrationMicHoldMs,
         buildNarrationVocabularyPrompt,
         getNarrationSessionOptions,
         getEndzoneYards,
