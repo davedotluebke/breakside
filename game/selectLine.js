@@ -4,8 +4,11 @@
  * and the effective-line resolution for the next point.
  * Split from the former monolithic gameScreen.js (refactor, no behavior change).
  */
-import { Gender } from '../store/models.js';
-import { currentTeam, currentEvent, getActiveRoster, saveAllTeamsData } from '../store/storage.js';
+import { Gender, PlayerPosition, DefaultLine } from '../store/models.js';
+import {
+    currentTeam, currentEvent, getActiveRoster, saveAllTeamsData,
+    getEffectivePosition, getEffectiveDefaultLine,
+} from '../store/storage.js';
 import {
     currentGame, isPointInProgress, determineStartingPosition,
     getPlayerGameTime, formatPlayTime, formatPlayerName,
@@ -257,16 +260,57 @@ function buildAutoLineStats(game, roster) {
     return stats;
 }
 
+// --- Position helpers (effective = per-event override, else main, else hybrid).
+// Hybrids (and unlabeled players, which resolve to hybrid) can fill EITHER slot.
+function autoLinePosition(p) {
+    return typeof getEffectivePosition === 'function' ? getEffectivePosition(p) : PlayerPosition.HYBRID;
+}
+const isHandlerCapable = (p) => autoLinePosition(p) !== PlayerPosition.CUTTER;  // handler | hybrid
+const isCutterCapable = (p) => autoLinePosition(p) !== PlayerPosition.HANDLER;  // cutter | hybrid
+
+/**
+ * Which side (offense/defense) the line we're picking is for, or null when
+ * genuinely unknown — in which case the O/D-preference rule is skipped. Known
+ * when a side-specific line (o/d) is active, or in combined mode BETWEEN points
+ * (determineStartingPosition resolves the side). Unknown in combined ('od')
+ * mode while a point is in progress, and for the On Deck (point-after-next) view.
+ * @param {object} game
+ * @returns {('offense'|'defense'|null)}
+ */
+function getAutoLineSide(game) {
+    const activeType = (game && game.pendingNextLine && game.pendingNextLine.activeType) || 'od';
+    if (activeType === 'o') return 'offense';
+    if (activeType === 'd') return 'defense';
+    if (activeType === 'odOnDeck') return null;
+    if (typeof isPointInProgress === 'function' && isPointInProgress()) return null;
+    if (typeof determineStartingPosition === 'function') return determineStartingPosition();
+    return null;
+}
+
 /**
  * Compute a complete line by filling the empty slots around an existing
  * selection. Already-selected players are kept; only the remaining slots (up to
  * the field count) are filled. Candidates are chosen in this strict order of
  * priority (decreasing):
- *   1. Gender ratio — satisfy the active ratio's per-gender targets first
- *   2. Rest — players NOT on the last point come before those who just played
- *   3. Less time played — by time quintile (least-played quintile first)
- *   4. (tiebreak within a quintile) fewer points played
- *   5. (tiebreak) longest current bench streak (out the most points in a row)
+ *   1. Gender ratio  — satisfy the active ratio's per-gender targets first
+ *                      (the ONLY rule that will pull in a just-played player)
+ *   2. Rest          — players NOT on the last point beat those who just played.
+ *                      Auto only fills empty boxes, so an unchecked last-point
+ *                      player was deliberately rested by the coach; we re-add
+ *                      them only when a gender target leaves no choice.
+ *   3. Position       — aim for >= floor(n/2) handler-capable and >= ceil(n/2)
+ *                      cutter-capable (hybrids/unlabeled count for both). Soft:
+ *                      prefer candidates that still advance an unmet minimum.
+ *   4. O/D preference — prefer players whose default line matches the point side
+ *                      (crossover always matches; rule skipped when side unknown)
+ *   5. PT quintile    — least time played first (see buildAutoLineStats)
+ *   6. fewer points played
+ *   7. longest current bench streak (out the most points in a row)
+ *   8. name (stable final tiebreak)
+ *
+ * Rules 2–8 are applied by a need-aware greedy pick (one player at a time), so
+ * the position minimums shrink as players are added. Gender is enforced by
+ * filling each gender's deficit from that gender's pool, then topping up.
  * @param {string[]} alreadySelected - player names the coach has already picked
  * @returns {string[]} The full line (alreadySelected + auto-filled additions)
  */
@@ -283,32 +327,74 @@ function computeAutoLine(alreadySelected = []) {
     if (result.length >= expectedCount) return result;
 
     const stats = buildAutoLineStats(game, roster);
+    const byName = {};
+    roster.forEach(p => { byName[p.name] = p; });
 
-    // Strict lexicographic priority: rest > time quintile > fewer points >
-    // longer bench streak > name (stable final tiebreak).
-    const cmp = (a, b) => {
-        const sa = stats[a.name], sb = stats[b.name];
-        if (sa.inLastPoint !== sb.inLastPoint) return sa.inLastPoint ? 1 : -1;
-        if (sa.quintile !== sb.quintile) return sa.quintile - sb.quintile;
-        if (sa.pointsPlayed !== sb.pointsPlayed) return sa.pointsPlayed - sb.pointsPlayed;
-        if (sa.outStreak !== sb.outStreak) return sb.outStreak - sa.outStreak;
+    // Position composition target (soft): hybrids/unlabeled satisfy either.
+    const handlerTarget = Math.floor(expectedCount / 2);
+    const cutterTarget = Math.ceil(expectedCount / 2);
+    let haveHandler = 0, haveCutter = 0;
+    alreadySelected.forEach(nm => {
+        const p = byName[nm]; if (!p) return;
+        if (isHandlerCapable(p)) haveHandler++;
+        if (isCutterCapable(p)) haveCutter++;
+    });
+
+    // O/D preference context. null side => rule inactive (everyone "matches").
+    const side = getAutoLineSide(game);
+    const matchesSide = (p) => {
+        if (!side) return true;
+        const line = typeof getEffectiveDefaultLine === 'function'
+            ? getEffectiveDefaultLine(p) : DefaultLine.CROSSOVER;
+        if (line === DefaultLine.CROSSOVER) return true;
+        return side === 'offense' ? line === DefaultLine.O : line === DefaultLine.D;
+    };
+
+    // Compare two candidates under the current position-need state (lower is
+    // better). Recomputed per greedy pick because needs shrink as we add.
+    const better = (a, b) => {
+        const sa = stats[a.name] || {}, sb = stats[b.name] || {};
+        // 1. rest
+        const restA = sa.inLastPoint ? 1 : 0, restB = sb.inLastPoint ? 1 : 0;
+        if (restA !== restB) return restA - restB;
+        // 2. position — advancing more still-unmet minimums is better
+        const hNeed = haveHandler < handlerTarget, cNeed = haveCutter < cutterTarget;
+        const helpA = (hNeed && isHandlerCapable(a) ? 1 : 0) + (cNeed && isCutterCapable(a) ? 1 : 0);
+        const helpB = (hNeed && isHandlerCapable(b) ? 1 : 0) + (cNeed && isCutterCapable(b) ? 1 : 0);
+        if (helpA !== helpB) return helpB - helpA;
+        // 3. O/D preference
+        const odA = matchesSide(a) ? 0 : 1, odB = matchesSide(b) ? 0 : 1;
+        if (odA !== odB) return odA - odB;
+        // 4. PT quintile
+        if ((sa.quintile || 0) !== (sb.quintile || 0)) return (sa.quintile || 0) - (sb.quintile || 0);
+        // 5. fewer points played
+        if ((sa.pointsPlayed || 0) !== (sb.pointsPlayed || 0)) return (sa.pointsPlayed || 0) - (sb.pointsPlayed || 0);
+        // 6. longest bench streak
+        if ((sa.outStreak || 0) !== (sb.outStreak || 0)) return (sb.outStreak || 0) - (sa.outStreak || 0);
+        // 7. name
         return a.name.localeCompare(b.name);
     };
 
-    // Append up to `n` unselected candidates (already filtered + sorted) to result.
-    const addFrom = (candidates, n) => {
-        for (let i = 0; i < candidates.length && n > 0; i++) {
-            if (!selectedSet.has(candidates[i].name)) {
-                result.push(candidates[i].name);
-                selectedSet.add(candidates[i].name);
-                n--;
+    // Greedy: pick the single best unselected candidate from `pool`, `count`
+    // times, updating the position tallies after each pick.
+    const greedyFill = (pool, count) => {
+        for (let picks = 0; picks < count; picks++) {
+            let best = null;
+            for (const p of pool) {
+                if (selectedSet.has(p.name)) continue;
+                if (!best || better(p, best) < 0) best = p;
             }
+            if (!best) break;
+            result.push(best.name);
+            selectedSet.add(best.name);
+            if (isHandlerCapable(best)) haveHandler++;
+            if (isCutterCapable(best)) haveCutter++;
         }
     };
 
-    // Check if gender ratio is active
+    // Gender ratio is the top priority: fill each gender's deficit from that
+    // gender's pool (greedy handles rules 2–8), then top up from anyone.
     const hasRatio = game.alternateGenderRatio && game.alternateGenderRatio !== 'No';
-
     if (hasRatio && typeof getExpectedGenderCounts === 'function') {
         let expectedRatio;
         if (game.alternateGenderRatio === 'Alternating' && typeof getExpectedGenderRatio === 'function') {
@@ -323,29 +409,52 @@ function computeAutoLine(alreadySelected = []) {
 
         if (expectedRatio) {
             const counts = getExpectedGenderCounts(expectedCount, expectedRatio);
-            // How many of each gender are already on the line — fill only the deficit.
             let haveFmp = 0, haveMmp = 0;
-            roster.forEach(p => {
-                if (!selectedSet.has(p.name)) return;
+            alreadySelected.forEach(nm => {
+                const p = byName[nm]; if (!p) return;
                 if (p.gender === Gender.FMP) haveFmp++;
                 else if (p.gender === Gender.MMP) haveMmp++;
             });
-            const fmpPlayers = roster.filter(p => p.gender === Gender.FMP).sort(cmp);
-            const mmpPlayers = roster.filter(p => p.gender === Gender.MMP).sort(cmp);
-            addFrom(fmpPlayers, Math.max(0, counts.fmp - haveFmp));
-            addFrom(mmpPlayers, Math.max(0, counts.mmp - haveMmp));
-
+            const fmpPool = roster.filter(p => p.gender === Gender.FMP);
+            const mmpPool = roster.filter(p => p.gender === Gender.MMP);
+            greedyFill(fmpPool, Math.max(0, counts.fmp - haveFmp));
+            greedyFill(mmpPool, Math.max(0, counts.mmp - haveMmp));
             // Fallback: short a gender (or over on one) — top up from whoever's left.
             if (result.length < expectedCount) {
-                addFrom([...roster].sort(cmp), expectedCount - result.length);
+                greedyFill(roster, expectedCount - result.length);
             }
             return result;
         }
     }
 
-    // No ratio: fill remaining slots by the priority comparator
-    addFrom([...roster].sort(cmp), expectedCount - result.length);
+    // No ratio: greedy-fill remaining slots from the whole roster.
+    greedyFill(roster, expectedCount - result.length);
     return result;
+}
+
+/**
+ * Evaluate whether a computed line meets the handler/cutter minimums, for the
+ * post-Auto warning toast. Targets scale to the line's actual length so a short
+ * bench doesn't spuriously warn. Returns per-role shortfall booleans. When
+ * players are unlabeled (all resolve to hybrid) neither can be short, so casual
+ * teams never see the warning.
+ * @param {string[]} lineNames
+ * @returns {{handlers:boolean, cutters:boolean}}
+ */
+function autoLinePositionShortfall(lineNames) {
+    const roster = typeof getActiveRoster === 'function' ? getActiveRoster() : [];
+    const byName = {};
+    roster.forEach(p => { byName[p.name] = p; });
+    const n = lineNames.length;
+    const handlerTarget = Math.floor(n / 2);
+    const cutterTarget = Math.ceil(n / 2);
+    let handlerCap = 0, cutterCap = 0;
+    lineNames.forEach(nm => {
+        const p = byName[nm]; if (!p) return;
+        if (isHandlerCapable(p)) handlerCap++;
+        if (isCutterCapable(p)) cutterCap++;
+    });
+    return { handlers: handlerCap < handlerTarget, cutters: cutterCap < cutterTarget };
 }
 
 /**
@@ -446,7 +555,19 @@ function autoFillLineSelection(context) {
         return;
     }
 
-    applyLineSelection(context, computeAutoLine(current));
+    const line = computeAutoLine(current);
+    applyLineSelection(context, line);
+
+    // Warn if Auto couldn't meet the handler/cutter minimums — e.g. the coach
+    // wholesaled out all their handlers and the bench can't cover. Silent when
+    // players are unlabeled (all hybrid → never short).
+    const short = autoLinePositionShortfall(line);
+    if ((short.handlers || short.cutters) && typeof showControllerToast === 'function') {
+        const missing = [];
+        if (short.handlers) missing.push('handlers');
+        if (short.cutters) missing.push('cutters');
+        showControllerToast(`Warning: Auto line may have too few ${missing.join(' and ')}`, 'warning');
+    }
 }
 
 // Observer that keeps the line toolbar fitting its width.
