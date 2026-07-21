@@ -10,7 +10,7 @@
 // both sides only reference the other's hoisted function declarations at
 // call time (never during module evaluation).
 import {
-    Role, Gender, UNKNOWN_PLAYER,
+    Role, Gender, PlayerPosition, DefaultLine, UNKNOWN_PLAYER,
     Player, Game, Team, TournamentEvent,
     Throw, Turnover, Violation, Defense, Other, Pull,
     Possession, Point,
@@ -94,6 +94,8 @@ function serializePlayer(player) {
         nickname: player.nickname,
         gender: player.gender,
         number: player.number,
+        position: player.position,
+        defaultLine: player.defaultLine,
         createdAt: player.createdAt,
         updatedAt: player.updatedAt,
         // Legacy stats (kept for backward compatibility)
@@ -709,13 +711,50 @@ function getActiveRoster() {
         const eventPlayerIds = currentEvent.roster.playerIds || [];
         const teamPlayers = currentTeam.teamRoster.filter(p => eventPlayerIds.includes(p.id));
         const pickups = (currentEvent.roster.pickupPlayers || []).map(p => {
-            // Create Player-like objects for pickups
+            // Create Player-like objects for pickups. Pickup position/line live
+            // in the pickup dict (they have no team-Player to inherit from), so
+            // carry them onto the reconstructed object.
             const player = new Player(p.name, '', p.gender || Gender.UNKNOWN, p.number || null, p.id);
+            player.position = p.position || null;
+            player.defaultLine = p.defaultLine || null;
             return player;
         });
         return [...teamPlayers, ...pickups];
     }
     return currentTeam ? currentTeam.teamRoster : [];
+}
+
+/**
+ * Resolve a player's EFFECTIVE Auto-line position for the current context.
+ * A per-event override (currentEvent.roster.overrides[id].position) wins over
+ * the player's own position; anything unset/malformed resolves to HYBRID.
+ * Team players are live roster refs (their own position); pickups carry their
+ * position on the reconstructed object — the override map only holds team-player
+ * overrides, so a single lookup covers both.
+ * @param {object} player
+ * @returns {string} PlayerPosition value (never null)
+ */
+function getEffectivePosition(player) {
+    if (!player) return PlayerPosition.HYBRID;
+    const ov = currentEvent && currentEvent.roster && currentEvent.roster.overrides
+        ? currentEvent.roster.overrides[player.id] : null;
+    const pos = (ov && ov.position) || player.position;
+    return (pos === PlayerPosition.HANDLER || pos === PlayerPosition.CUTTER)
+        ? pos : PlayerPosition.HYBRID;
+}
+
+/**
+ * Resolve a player's EFFECTIVE default-line preference for the current context.
+ * Per-event override wins; anything unset/malformed resolves to CROSSOVER.
+ * @param {object} player
+ * @returns {string} DefaultLine value (never null)
+ */
+function getEffectiveDefaultLine(player) {
+    if (!player) return DefaultLine.CROSSOVER;
+    const ov = currentEvent && currentEvent.roster && currentEvent.roster.overrides
+        ? currentEvent.roster.overrides[player.id] : null;
+    const line = (ov && ov.defaultLine) || player.defaultLine;
+    return (line === DefaultLine.O || line === DefaultLine.D) ? line : DefaultLine.CROSSOVER;
 }
 
 function getCurrentTeamRole() { return currentTeamRole; }
@@ -744,6 +783,7 @@ export {
     deserializeGame, deserializeTeams, loadTeams, initializeTeams,
     clearAllTeamsData,
     serializeTournamentEvent, deserializeTournamentEvent, getActiveRoster,
+    getEffectivePosition, getEffectiveDefaultLine,
     getCurrentTeamRole, setCurrentTeamRole, isViewer, createSampleTeam,
 };
 

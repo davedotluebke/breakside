@@ -19,6 +19,25 @@ const Gender = {
     UNKNOWN: "Unknown"
 };
 
+// Player position constants. A player with no (or a malformed) position is
+// treated as HYBRID — i.e. eligible to fill either a handler or a cutter slot.
+// Used by the Auto line-selection heuristics (game/selectLine.js).
+const PlayerPosition = {
+    HANDLER: "handler",
+    CUTTER: "cutter",
+    HYBRID: "hybrid"
+};
+
+// Default-line preference constants. Independent of the coach-managed O/D lines
+// in the Select-Line panel — this is the player's own preference for which
+// point type they'd rather play. CROSSOVER (or no/malformed value) = either is
+// fine. Used by the Auto line-selection heuristics.
+const DefaultLine = {
+    O: "O",
+    D: "D",
+    CROSSOVER: "Crossover"
+};
+
 // =============================================================================
 // Short ID Generation (matches server-side logic)
 // =============================================================================
@@ -79,6 +98,11 @@ function Player(name, nickname = "", gender = Gender.UNKNOWN, number = null, id 
     this.nickname = nickname;
     this.gender = gender;
     this.number = number; // Jersey number
+    // Auto line-selection attributes (see PlayerPosition / DefaultLine enums).
+    // null = unset; the Auto heuristics treat unset position as HYBRID and
+    // unset line as CROSSOVER. Per-event overrides live in the event roster.
+    this.position = null;   // PlayerPosition value or null
+    this.defaultLine = null; // DefaultLine value or null
     this.createdAt = new Date().toISOString();
     this.updatedAt = new Date().toISOString();
     
@@ -208,28 +232,39 @@ function createRosterSnapshot(team, event) {
     if (event && event.roster) {
         // Build from event roster: team players filtered by event playerIds + pickups
         const eventPlayerIds = event.roster.playerIds || [];
+        const overrides = event.roster.overrides || {};
         const teamPlayers = team.teamRoster.filter(p => eventPlayerIds.includes(p.id));
         const pickups = (event.roster.pickupPlayers || []).map(p => ({
             id: p.id,
             name: p.name,
             nickname: '',
             number: p.number || null,
-            gender: p.gender || Gender.UNKNOWN
+            gender: p.gender || Gender.UNKNOWN,
+            position: p.position || null,
+            defaultLine: p.defaultLine || null
         }));
-        players = teamPlayers.map(player => ({
-            id: player.id,
-            name: player.name,
-            nickname: player.nickname || '',
-            number: player.number || null,
-            gender: player.gender || Gender.UNKNOWN
-        })).concat(pickups);
+        players = teamPlayers.map(player => {
+            // Snapshot the EFFECTIVE position/line (per-event override wins).
+            const ov = overrides[player.id] || {};
+            return {
+                id: player.id,
+                name: player.name,
+                nickname: player.nickname || '',
+                number: player.number || null,
+                gender: player.gender || Gender.UNKNOWN,
+                position: ov.position || player.position || null,
+                defaultLine: ov.defaultLine || player.defaultLine || null
+            };
+        }).concat(pickups);
     } else {
         players = team.teamRoster.map(player => ({
             id: player.id,
             name: player.name,
             nickname: player.nickname || '',
             number: player.number || null,
-            gender: player.gender || Gender.UNKNOWN
+            gender: player.gender || Gender.UNKNOWN,
+            position: player.position || null,
+            defaultLine: player.defaultLine || null
         }));
     }
 
@@ -729,7 +764,7 @@ function isTestGame(game) {
 // --- ES-module exports. `Event` is deliberately NOT exported under that name
 // --- onto window anywhere — it would clobber the DOM Event constructor.
 export {
-    Role, Gender, UNKNOWN_PLAYER,
+    Role, Gender, PlayerPosition, DefaultLine, UNKNOWN_PLAYER,
     Player, Game, Team, TournamentEvent,
     Event, Throw, Turnover, Violation, Defense, Other, Pull,
     Possession, Point,

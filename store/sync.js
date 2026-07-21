@@ -568,6 +568,8 @@ function createPlayerOffline(playerData) {
         nickname: playerData.nickname || '',
         gender: playerData.gender || Gender.UNKNOWN,
         number: playerData.number || null,
+        position: playerData.position || null,
+        defaultLine: playerData.defaultLine || null,
         createdAt: playerData.createdAt || now,
         updatedAt: now,
         _localOnly: true  // Mark as offline-created
@@ -612,6 +614,8 @@ async function syncPlayerToCloud(player) {
         nickname: player.nickname || '',
         gender: player.gender || Gender.UNKNOWN,
         number: player.number || null,
+        position: player.position || null,
+        defaultLine: player.defaultLine || null,
         createdAt: player.createdAt,
         updatedAt: updatedAt
     };
