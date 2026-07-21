@@ -903,6 +903,8 @@ narration/
 ├── micButton.css          # Button + transcript panel styles (also provisional event styles)
 ├── eventBus.js            # ~30-LOC pub/sub. Channels: eventAdded, eventAmended,
 │                          # eventRetracted, transcriptUpdated, scoreChanged, etc.
+├── micStream.js           # Warm mic-stream cache (see below). Leaf module,
+│                          # unit-tested under node (tests/unit/micStream.test.mjs).
 ├── realtimeSession.js     # OpenAI Realtime WebSocket client. PCM16 capture via
 │                          # MediaStream + AudioContext + ScriptProcessorNode.
 ├── narrationEngine.js     # Orchestrator. Builds the system prompt, opens the
@@ -912,6 +914,40 @@ narration/
 └── transcriptDisplay.js   # Floating panel that shows the live transcript
                            # (subscribes to transcriptUpdated channel).
 ```
+
+### Mic stream caching (iOS permission prompts)
+
+iOS/WebKit does not persist `getUserMedia` grants: once every track of a
+capture stream is stopped, the next `getUserMedia` re-prompts unless it lands
+in WebKit's short just-released grace window. The original stop-and-reacquire
+flow therefore showed the permission modal before nearly every utterance on
+iPhone (only rapid back-to-back recordings escaped it). No web API can make
+the grant durable — Safari's per-site "Allow" doesn't reliably carry into the
+installed home-screen app; only a native wrapper (e.g. Capacitor) gets a real,
+persisted OS permission.
+
+Mitigation: `narration/micStream.js` owns THE microphone stream. Sessions
+`acquire()` it and `idle()` it back instead of stopping tracks, so the stream
+stays live ("warm") between recordings — nothing consumes audio while idle
+(no source node attached), but iOS keeps the grant and the OS mic indicator
+stays on. The stream is released (next acquire re-prompts once) when:
+
+- the idle hold elapses — Advanced Settings "Keep mic ready"
+  (`narration.micHoldSeconds`, default 180, 0 = release-immediately);
+- the coach leaves the game screen — micButton's visibility poll calls
+  `releaseIfIdle()`, which never yanks a live recording;
+- iOS kills a track (long background, mic taken by a phone call) — the
+  `onended` handler drops the cache so a dead stream is never reused;
+- Advanced Settings audio constraints changed — `acquire()` re-requests so
+  new constraints actually apply.
+
+Brief app switches and screen lock *mute* (not end) live tracks and revive
+them on return, so a warm stream survives the common sideline interruptions
+without re-prompting. Page eviction (iOS jetsams a backgrounded PWA and
+silently reloads it) still costs one prompt on the next tap — unavoidable
+from web code. `realtimeSession.js` must route all capture through micStream;
+a source-text tripwire in `tests/unit/narrationRealtimeSocket.test.mjs`
+fails if a direct `getUserMedia` call reappears.
 
 ### Backend endpoints
 
