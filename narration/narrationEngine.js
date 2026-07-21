@@ -226,7 +226,10 @@ Just listen. Transcription happens automatically.`;
             receiver: receiver,
             huck: !!args.huck,
             breakmark: !!args.break_throw,
-            dump: !!args.dump,
+            // "reset" is canonical; accept "dump" defensively in case the
+            // model echoes the coach's word despite the schema.
+            reset: !!(args.reset || args.dump),
+            swing: !!args.swing,
             hammer: !!args.hammer,
             sky: !!args.sky,
             layout: !!args.layout,

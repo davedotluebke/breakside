@@ -756,7 +756,10 @@ function renderEvent(event) {
         let throwType = '';
         if (event.break_flag) throwType += 'break ';
         if (event.hammer_flag) throwType += 'hammer ';
-        if (event.dump_flag) throwType += 'dump ';
+        // reset_flag is canonical; dump_flag appears in games stored before
+        // the rename (the viewer renders server JSON as-is, no deserializer).
+        if (event.reset_flag || event.dump_flag) throwType += 'reset ';
+        if (event.swing_flag) throwType += 'swing ';
         if (throwType) desc += `a ${throwType}`;
         if (event.receiver) desc += `to ${event.receiver} `;
         if (event.sky_flag || event.layout_flag) {
