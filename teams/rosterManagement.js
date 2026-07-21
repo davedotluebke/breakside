@@ -32,7 +32,7 @@ function setEditPlayerToggleValue(attrGroup, value) {
 }
 import { currentTeam, currentEvent, saveAllTeamsData, isViewer } from '../store/storage.js';
 import {
-    currentGame, formatPlayerName, formatPlayTime, extractPlayerName,
+    currentGame, formatPlayerName, formatPlayerNameWithRole, formatPlayTime, extractPlayerName,
     isPointInProgress,
 } from '../utils/helpers.js';
 import {
@@ -318,7 +318,7 @@ function renderRosterTable(scope, statsById, loading) {
 
         const playerRow = buildRosterRow([
             { element: checkbox, className: ['active-checkbox-column', 'roster-sticky-checkbox'] },
-            { value: formatPlayerName(player), className: nameClasses, onClick: () => showEditPlayerDialog(player) },
+            { value: formatPlayerNameWithRole(player), className: nameClasses, onClick: () => showEditPlayerDialog(player) },
             { value: genderLabel(player), className: genderClasses },
             { value: s.pointsPlayed || 0, className: 'roster-points-column' },
             { value: formatPlayTime(s.timePlayed || 0), className: 'roster-time-column' },

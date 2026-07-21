@@ -2,7 +2,7 @@
  * Utility Functions
  * Pure utility functions and data accessors
  */
-import { Gender, UNKNOWN_PLAYER } from '../store/models.js';
+import { Gender, PlayerPosition, DefaultLine, UNKNOWN_PLAYER } from '../store/models.js';
 import { UNKNOWN_PLAYER_OBJ, currentTeam } from '../store/storage.js';
 import { log } from './logger.js';
 
@@ -457,13 +457,46 @@ function formatPlayerName(player) {
 }
 
 /**
- * Extract player name from displayed text that may include number
- * Strips "(#)" suffix if present
+ * Format a player name with a role parenthetical for roster / line-selection
+ * tables: number, position, and default-line, in that order, comma-separated,
+ * only when each is known. Examples: "Kris", "Kris (10)", "Kris (10, H)",
+ * "Kris (10, H, Off)", "Kris (H, Off)".
+ *
+ * Position/line default to the player's own values; callers in an event
+ * context pass the EFFECTIVE (override-applied) values instead. Hybrid /
+ * Crossover / unset resolve to nothing shown. The jersey number honors the
+ * "show player numbers" setting, matching formatPlayerName.
+ * @param {object} player
+ * @param {string} [position] - effective position; omit to use player.position
+ * @param {string} [defaultLine] - effective line; omit to use player.defaultLine
+ * @returns {string}
+ */
+function formatPlayerNameWithRole(player, position, defaultLine) {
+    if (!player) return '';
+    const pos = position !== undefined ? position : (player.position || null);
+    const line = defaultLine !== undefined ? defaultLine : (player.defaultLine || null);
+    const parts = [];
+    if (player.number !== null && player.number !== undefined && showPlayerNumbers()) {
+        parts.push(String(player.number));
+    }
+    if (pos === PlayerPosition.HANDLER) parts.push('H');
+    else if (pos === PlayerPosition.CUTTER) parts.push('C');
+    if (line === DefaultLine.O) parts.push('Off');
+    else if (line === DefaultLine.D) parts.push('Def');
+    return parts.length ? `${player.name} (${parts.join(', ')})` : player.name;
+}
+
+/**
+ * Extract player name from displayed text that may include a role parenthetical
+ * Strips a trailing "(...)" suffix if present (number and/or position/line —
+ * e.g. "(10)", "(10, H, Off)", "(H)")
  */
 function extractPlayerName(displayText) {
     if (!displayText) return '';
-    // Match pattern: "Name (#)" and extract just "Name"
-    const match = displayText.match(/^(.+?)\s*\(\d+\)$/);
+    // Match pattern: "Name (...)" and extract just "Name". Non-greedy name +
+    // a trailing parenthetical of any non-")" content covers every role-suffix
+    // shape produced by formatPlayerNameWithRole.
+    const match = displayText.match(/^(.+?)\s*\([^)]*\)$/);
     return match ? match[1].trim() : displayText.trim();
 }
 
@@ -516,7 +549,7 @@ export {
     getLatestEvent, getPossessionOf, getPointOf, isPointInProgress,
     getActivePossession, getPlayerGameTime, formatPlayTime,
     buildPlayerNameResolver, buildPointMembership, buildPointPlayerLookup, playerStub,
-    determineStartingPosition, capitalize, formatPlayerName, extractPlayerName,
+    determineStartingPosition, capitalize, formatPlayerName, formatPlayerNameWithRole, extractPlayerName,
     showPlayerNumbers,
     getGenderRatioForPoint, getExpectedGenderRatio, getExpectedGenderCounts,
 };

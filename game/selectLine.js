@@ -11,7 +11,7 @@ import {
 } from '../store/storage.js';
 import {
     currentGame, isPointInProgress, determineStartingPosition,
-    getPlayerGameTime, formatPlayTime, formatPlayerName,
+    getPlayerGameTime, formatPlayTime, formatPlayerName, formatPlayerNameWithRole,
     getGenderRatioForPoint, getExpectedGenderRatio, getExpectedGenderCounts,
     buildPointMembership, buildPointPlayerLookup,
 } from '../utils/helpers.js';
@@ -1706,12 +1706,13 @@ function updateSelectLineTable() {
         checkboxCell.appendChild(checkbox);
         row.appendChild(checkboxCell);
         
-        // Name column
+        // Name column — show number + effective position/line (event override
+        // applied) in a parenthetical, e.g. "Kris (10, H, Off)".
         const nameCell = document.createElement('td');
         nameCell.classList.add('active-name-column');
-        nameCell.textContent = typeof formatPlayerName === 'function' 
-            ? formatPlayerName(player) 
-            : player.name;
+        nameCell.textContent = typeof formatPlayerNameWithRole === 'function'
+            ? formatPlayerNameWithRole(player, getEffectivePosition(player), getEffectiveDefaultLine(player))
+            : (typeof formatPlayerName === 'function' ? formatPlayerName(player) : player.name);
         
         // Gender color coding
         if (player.gender === Gender.FMP) nameCell.classList.add('player-fmp');
