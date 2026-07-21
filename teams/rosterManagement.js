@@ -900,13 +900,19 @@ function showEditPlayerDialog(player, options = {}) {
     editPlayerDialogPlayer = player;
     editPlayerDialogPlayerId = player.id;  // Store ID for reliable comparison
     editPlayerDialogContext = options;
-    // Store original values to detect changes
+    const isEventOverride = options.context === 'eventOverride';
+    // Store original values to detect changes. In event-override mode we only
+    // edit position/line (as an override), so the "original" is the current
+    // override state; position/line default to the inherited values for display.
     editPlayerDialogOriginalData = {
         name: player.name,
         number: player.number,
         gender: player.gender,
-        position: normalizePositionValue(player.position),
-        defaultLine: normalizeDefaultLineValue(player.defaultLine)
+        // Override values are stored RAW (hybrid/crossover kept, not nulled) so
+        // an override can force flex even when the base player is labeled.
+        position: isEventOverride ? (options.overridePosition || null) : normalizePositionValue(player.position),
+        defaultLine: isEventOverride ? (options.overrideDefaultLine || null) : normalizeDefaultLineValue(player.defaultLine),
+        hasOverride: isEventOverride ? !!options.hasOverride : false
     };
 
     const dialog = document.getElementById('editPlayerDialog');
@@ -971,9 +977,21 @@ function showEditPlayerDialog(player, options = {}) {
     }
 
     // Position / default-line toggles. Unset resolves to Hybrid / Crossover,
-    // so one option is always shown selected.
-    setEditPlayerToggleValue('position', player.position || PlayerPosition.HYBRID);
-    setEditPlayerToggleValue('line', player.defaultLine || DefaultLine.CROSSOVER);
+    // so one option is always shown selected. In event-override mode the
+    // displayed values come from the override (falling back to the inherited
+    // effective values passed in options) rather than the base player.
+    const showPos = isEventOverride
+        ? (options.overridePosition || options.inheritedPosition || PlayerPosition.HYBRID)
+        : (player.position || PlayerPosition.HYBRID);
+    const showLine = isEventOverride
+        ? (options.overrideDefaultLine || options.inheritedDefaultLine || DefaultLine.CROSSOVER)
+        : (player.defaultLine || DefaultLine.CROSSOVER);
+    setEditPlayerToggleValue('position', showPos);
+    setEditPlayerToggleValue('line', showLine);
+
+    // Apply dialog mode (event-override hides identity fields, shows the
+    // inherit/override checkbox) and gate the toggles accordingly.
+    applyEditPlayerDialogMode(isEventOverride, editPlayerDialogOriginalData.hasOverride);
 
     // Reset confirm button state
     if (confirmBtn) {
@@ -982,6 +1000,49 @@ function showEditPlayerDialog(player, options = {}) {
 
     // Show dialog
     dialog.style.display = 'block';
+}
+
+/**
+ * Toggle the edit-player dialog between full edit and event-override modes.
+ * Event-override mode hides the identity fields (name/number/gender) and the
+ * delete button, reveals the inherit/override checkbox, and enables the
+ * position/line toggles only when overriding.
+ * @param {boolean} isEventOverride
+ * @param {boolean} hasOverride - whether an override currently exists
+ */
+function applyEditPlayerDialogMode(isEventOverride, hasOverride) {
+    const nameField = document.getElementById('editPlayerName')?.closest('.edit-player-field');
+    const numberField = document.getElementById('editPlayerNumber')?.closest('.edit-player-field');
+    const genderField = document.querySelector('#editPlayerDialog .edit-player-gender-field');
+    const overrideField = document.getElementById('editPlayerOverrideField');
+    const overrideToggle = document.getElementById('editPlayerOverrideToggle');
+    const deleteBtn = document.getElementById('editPlayerDeleteBtn');
+    const title = document.querySelector('#editPlayerDialog .dialog-header h2');
+
+    const idHide = isEventOverride ? 'none' : '';
+    if (nameField) nameField.style.display = idHide;
+    if (numberField) numberField.style.display = idHide;
+    if (genderField) genderField.style.display = idHide;
+    if (deleteBtn) deleteBtn.style.display = idHide;
+    if (overrideField) overrideField.style.display = isEventOverride ? '' : 'none';
+    if (title) title.textContent = isEventOverride ? 'Event Position / Line' : 'Edit Player';
+
+    if (isEventOverride && overrideToggle) {
+        overrideToggle.checked = !!hasOverride;
+    }
+    setEditPlayerToggleGroupsEnabled(!isEventOverride || !!hasOverride);
+}
+
+/**
+ * Enable/disable (grey out) the position and line toggle groups — used in
+ * event-override mode so the toggles are inert while inheriting.
+ * @param {boolean} enabled
+ */
+function setEditPlayerToggleGroupsEnabled(enabled) {
+    document.querySelectorAll('#editPlayerDialog .attr-toggle-group').forEach(group => {
+        group.classList.toggle('attr-toggle-group--disabled', !enabled);
+        group.querySelectorAll('.attr-toggle-button').forEach(btn => { btn.disabled = !enabled; });
+    });
 }
 
 /**
@@ -1013,6 +1074,19 @@ function updateEditPlayerDialogState() {
     const confirmBtn = document.getElementById('editPlayerConfirmBtn');
 
     if (!nameInput || !confirmBtn) {
+        return;
+    }
+
+    // Event-override mode: only the override checkbox + position/line matter.
+    if (editPlayerDialogContext.context === 'eventOverride') {
+        const overriding = !!document.getElementById('editPlayerOverrideToggle')?.checked;
+        // Raw values (hybrid/crossover preserved) — see originalData note.
+        const curPos = overriding ? (getEditPlayerToggleValue('position') || null) : null;
+        const curLine = overriding ? (getEditPlayerToggleValue('line') || null) : null;
+        const orig = editPlayerDialogOriginalData;
+        const changed = (overriding !== orig.hasOverride)
+            || (overriding && (curPos !== orig.position || curLine !== orig.defaultLine));
+        confirmBtn.disabled = !changed;
         return;
     }
 
@@ -1158,6 +1232,22 @@ function saveEditedPlayer() {
     const newPosition = normalizePositionValue(getEditPlayerToggleValue('position'));
     const newDefaultLine = normalizeDefaultLineValue(getEditPlayerToggleValue('line'));
 
+    // Event-override context: only write the override (position/line), or clear
+    // it when the coach unchecks "override". Never touches the base player.
+    if (editPlayerDialogContext.context === 'eventOverride' && editPlayerDialogContext.onSave) {
+        const overriding = !!document.getElementById('editPlayerOverrideToggle')?.checked;
+        editPlayerDialogContext.onSave(overriding
+            ? {
+                override: true,
+                // Raw toggle values so an override can force hybrid/crossover.
+                position: getEditPlayerToggleValue('position'),
+                defaultLine: getEditPlayerToggleValue('line')
+            }
+            : { override: false });
+        closeEditPlayerDialog();
+        return;
+    }
+
     // Pickup context: delegate to callback
     if (editPlayerDialogContext.context === 'pickup' && editPlayerDialogContext.onSave) {
         editPlayerDialogContext.onSave({
@@ -1285,13 +1375,22 @@ function saveEditedPlayer() {
     document.querySelectorAll('#editPlayerDialog .attr-toggle-group').forEach(group => {
         group.addEventListener('click', function(event) {
             const btn = event.target.closest('.attr-toggle-button');
-            if (!btn || !this.contains(btn)) return;
+            if (!btn || !this.contains(btn) || btn.disabled) return;
             this.querySelectorAll('.attr-toggle-button').forEach(b => {
                 b.classList.toggle('selected', b === btn);
             });
             updateEditPlayerDialogState();
         });
     });
+
+    // Event-override inherit/override checkbox: enables the toggles when set.
+    const overrideToggle = document.getElementById('editPlayerOverrideToggle');
+    if (overrideToggle) {
+        overrideToggle.addEventListener('change', function() {
+            setEditPlayerToggleGroupsEnabled(this.checked);
+            updateEditPlayerDialogState();
+        });
+    }
 
     // Input fields - track changes
     const nameInput = document.getElementById('editPlayerName');

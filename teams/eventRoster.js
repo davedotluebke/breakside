@@ -26,6 +26,9 @@ import {
 let currentEventRosterEvent = null;
 let eventRosterPlayerIds = new Set();
 let eventRosterPickups = [];
+// Per-event position/line overrides for team players: { [playerId]: {position, defaultLine} }.
+// Seeded from event.roster.overrides, persisted by saveEventRoster.
+let eventRosterOverrides = {};
 let cachedEventStats = null; // { eventId, phase, playerStats, teamStats, record } — avoids re-fetching on re-renders
 let eventRosterSortController = null;
 let eventRosterSortState = null; // persists sort across re-renders
@@ -54,6 +57,11 @@ function showEventRosterUI(event) {
     }
 
     eventRosterPickups = (event.roster?.pickupPlayers || []).map(p => ({ ...p }));
+
+    // Clone existing per-event overrides (shallow-clone each entry).
+    const savedOverrides = event.roster?.overrides || {};
+    eventRosterOverrides = {};
+    Object.keys(savedOverrides).forEach(id => { eventRosterOverrides[id] = { ...savedOverrides[id] }; });
 
     // Set header (will be updated with record after stats load)
     const header = document.getElementById('eventRosterHeader');
@@ -386,8 +394,13 @@ function createEventRosterPlayerRow(player, computed, hasStats, options) {
         checkCell = { element: checkbox, style: { textAlign: 'center' } };
     }
 
+    // Mark team players that carry a per-event position/line override.
+    const hasOverride = !options.isPickup
+        && !!(eventRosterOverrides[player.id]
+            && (eventRosterOverrides[player.id].position || eventRosterOverrides[player.id].defaultLine));
+
     const nameCell = {
-        value: options.isPickup ? `${displayName} (pickup)` : displayName,
+        value: options.isPickup ? `${displayName} (pickup)` : (hasOverride ? `${displayName} ✎` : displayName),
         className: nameClasses.length ? nameClasses : undefined
     };
     if (options.isPickup) {
@@ -406,6 +419,10 @@ function createEventRosterPlayerRow(player, computed, hasStats, options) {
                 }
             });
         };
+    } else {
+        // Team player: tap the name to set/clear a per-event position/line override.
+        nameCell.style = { cursor: 'pointer' };
+        nameCell.onClick = () => openEventOverrideDialog(player);
     }
 
     const cells = [checkCell, nameCell];
@@ -416,6 +433,37 @@ function createEventRosterPlayerRow(player, computed, hasStats, options) {
     const row = buildRosterRow(cells);
     if (options.isPickup) row.className = 'pickup-row';
     return row;
+}
+
+/**
+ * Open the edit dialog in event-override mode for a team player, letting the
+ * coach set (or clear) a per-event position/line override without touching the
+ * base player. Writes into eventRosterOverrides; persisted by saveEventRoster.
+ * @param {object} player - team roster player (live ref)
+ */
+function openEventOverrideDialog(player) {
+    const ov = eventRosterOverrides[player.id] || {};
+    const hasOverride = !!(ov.position || ov.defaultLine);
+    showEditPlayerDialog(player, {
+        context: 'eventOverride',
+        hasOverride,
+        overridePosition: ov.position || null,
+        overrideDefaultLine: ov.defaultLine || null,
+        // Inherited (base-player) values shown greyed while not overriding.
+        inheritedPosition: player.position || null,
+        inheritedDefaultLine: player.defaultLine || null,
+        onSave: (result) => {
+            if (result.override) {
+                eventRosterOverrides[player.id] = {
+                    position: result.position || null,
+                    defaultLine: result.defaultLine || null
+                };
+            } else {
+                delete eventRosterOverrides[player.id];
+            }
+            renderEventRosterTable();
+        }
+    });
 }
 
 /**
@@ -452,11 +500,21 @@ function addEventPickupPlayer(gender) {
 async function saveEventRoster() {
     if (!currentEventRosterEvent) return;
 
+    // Persist only overrides for players still on the roster (drop stale ones).
+    const overrides = {};
+    Object.keys(eventRosterOverrides).forEach(id => {
+        const ov = eventRosterOverrides[id];
+        if (eventRosterPlayerIds.has(id) && ov && (ov.position || ov.defaultLine)) {
+            overrides[id] = ov;
+        }
+    });
+
     const updatedEvent = {
         ...currentEventRosterEvent,
         roster: {
             playerIds: [...eventRosterPlayerIds],
-            pickupPlayers: eventRosterPickups
+            pickupPlayers: eventRosterPickups,
+            overrides
         }
     };
 

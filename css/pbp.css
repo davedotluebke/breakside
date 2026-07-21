@@ -895,6 +895,26 @@
     border-color: var(--brand-orange);
 }
 
+/* Greyed out while inheriting (event-override mode, checkbox unchecked). */
+.attr-toggle-group--disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.edit-player-override-field .edit-player-override-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.edit-player-override-field input[type="checkbox"] {
+    width: 1.1rem;
+    height: 1.1rem;
+    cursor: pointer;
+}
+
 .edit-player-dialog-buttons {
     display: flex;
     flex-direction: column;
