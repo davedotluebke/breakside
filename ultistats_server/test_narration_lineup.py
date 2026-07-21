@@ -60,17 +60,25 @@ class TestLineupPrompt:
         assert '- Nate "Big Nate" #7' in prompt
         assert "- Everett Halberg" in prompt
 
-    def test_prompt_includes_previous_lineup_and_current_selection(self):
+    def test_prompt_includes_previous_lineup_and_base(self):
         prompt = _build_lineup_prompt(make_request())
-        prev_section = prompt.split("Previous lineup")[1].split("Currently selected")[0]
+        prev_section = prompt.split("Previous lineup")[1].split("BASE")[0]
         assert "- Alice" in prev_section and "- Bob" in prev_section
-        curr_section = prompt.split("Currently selected")[1].split("Transcript")[0]
-        assert "- Alice" in curr_section and "- Bob" not in curr_section
+        # BASE = the current selection when non-empty
+        base_section = prompt.split("BASE")[1].split("Transcript")[0]
+        assert "- Alice" in base_section and "- Bob" not in base_section
+
+    def test_prompt_base_falls_back_to_previous_lineup(self):
+        """Empty on-screen selection: the server-resolved BASE is the
+        previous lineup, so changes-idioms still have something to modify."""
+        prompt = _build_lineup_prompt(make_request(current_selection=[]))
+        base_section = prompt.split("BASE")[1].split("Transcript")[0]
+        assert "- Bob" in base_section
 
     def test_prompt_handles_empty_previous_lineup(self):
         prompt = _build_lineup_prompt(make_request(previous_lineup=[], current_selection=[]))
         assert "(none — no points played yet)" in prompt
-        assert "(empty)" in prompt
+        assert "(empty — the coach is building a line from scratch)" in prompt
 
     def test_prompt_includes_transcript(self):
         prompt = _build_lineup_prompt(make_request(transcript="same line but Cyrus for Nate"))
@@ -96,6 +104,24 @@ class TestLineupPrompt:
     def test_prompt_demands_exact_roster_spelling(self):
         prompt = _build_lineup_prompt(make_request())
         assert "EXACTLY as it appears" in prompt
+
+    def test_prompt_states_partial_utterances_are_additive(self):
+        """Field UX rule: bare names below the expected count ADD to the
+        current selection instead of replacing it (coaches build lines a
+        few players at a time). Pins the additive + fresh-line-gate text."""
+        prompt = _build_lineup_prompt(make_request())
+        assert "ADDITIONS to the current selection" in prompt
+        assert "everyone already selected stays" in prompt
+        assert "the expected size or more" in prompt
+        # worksheet form of a bare-name addition
+        assert "Bare added names are in-only changes" in prompt
+
+    def test_prompt_handles_numbers_embedded_in_names(self):
+        """Mumbo Sauce regression: roster names that embed jersey numbers
+        must be emitted byte-for-byte, never cleaned up."""
+        prompt = _build_lineup_prompt(make_request())
+        assert "digits or symbols as part of the name itself" in prompt
+        assert "byte-for-byte" in prompt
 
 
 # =============================================================================

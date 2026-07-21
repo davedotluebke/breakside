@@ -9,9 +9,29 @@
  */
 
 /**
+ * Normalize a name for digits-tolerant comparison: some rosters embed the
+ * jersey number in the name string itself ("Jamal 23", "23 Jamal",
+ * "Jamal #23"), and the model tends to return the cleaned-up name even
+ * when told not to. Strips digits and decoration characters, collapses
+ * whitespace, lowercases.
+ * @param {string} s
+ * @returns {string}
+ */
+function normalizeName(s) {
+    return String(s || '')
+        .toLowerCase()
+        .replace(/["\u2018\u2019\u201c\u201d'][^"\u2018\u2019\u201c\u201d']*["\u2018\u2019\u201c\u201d']/g, ' ')
+        .replace(/[0-9#()\[\].,_'"-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+/**
  * Match one returned name against the roster.
- * The backend prompt demands exact roster spellings, so exact match should
- * dominate; the case-insensitive name/nickname fallbacks absorb model slop.
+ * Tiers: exact name → case-insensitive name → case-insensitive nickname →
+ * UNIQUE normalized-name match (absorbs embedded jersey numbers on either
+ * side; ambiguity — two roster names normalizing identically — does not
+ * match, so "Jamal 23" vs "Jamal 40" still requires the exact spelling).
  * @param {string} returnedName
  * @param {Array<{name: string, nickname?: string}>} roster
  * @returns {object|null} The roster player, or null
@@ -30,6 +50,11 @@ function matchRosterPlayer(returnedName, roster) {
     }
     for (const p of roster) {
         if (p.nickname && String(p.nickname).toLowerCase() === lower) return p;
+    }
+    const norm = normalizeName(wanted);
+    if (norm) {
+        const hits = roster.filter(p => normalizeName(p.name) === norm);
+        if (hits.length === 1) return hits[0];
     }
     return null;
 }
@@ -59,23 +84,47 @@ function resolveLineupPlayers(returnedNames, roster) {
 }
 
 /**
- * Build the toast shown after a narrated lineup is applied.
- * Success only when the count matches expectations and nothing failed to
- * match — anything else is a warning so the coach glances at the list.
- * @param {{ appliedCount: number, expectedCount: number,
- *           unmatched?: string[], note?: string }} args
- * @returns {{ message: string, type: 'success'|'warning' }}
+ * Short display form of a player name for toasts: the first token that
+ * isn't just digits/decoration ("Jamal 23" → "Jamal", "23 Jamal" → "Jamal").
+ * Falls back to the raw name when every token is decoration.
+ * @param {string} name
+ * @returns {string}
  */
-function buildLineupToast({ appliedCount, expectedCount, unmatched = [], note = '' }) {
-    let message = `Line set by voice: ${appliedCount}/${expectedCount}`;
-    if (unmatched.length) {
-        message += ` — couldn't match ${unmatched.map(u => `"${u}"`).join(', ')}`;
+function displayFirstName(name) {
+    const tokens = String(name || '').split(/\s+/);
+    for (const t of tokens) {
+        if (normalizeName(t)) return t;
     }
-    if (note) {
-        message += ` — ${note}`;
-    }
-    const clean = appliedCount === expectedCount && unmatched.length === 0;
-    return { message, type: clean ? 'success' : 'warning' };
+    return String(name || '');
 }
 
-export { matchRosterPlayer, resolveLineupPlayers, buildLineupToast };
+/**
+ * Build the toast shown after a voice action changes the line. Short by
+ * design — a coach reads this in a glance on a sideline:
+ *   "7/7 selected. Added: Cyrus, Max"
+ *   "5/7 selected. Added: Priya"
+ *   "7/7 selected. Added: Cyrus. Off: Nate"
+ *   "6/7 selected. No match: \"Sirius\""
+ * Success only when the count matches expectations and nothing failed to
+ * match; anything else is a warning so the coach glances at the list.
+ * @param {{ selectedCount: number, expectedCount: number,
+ *           added?: string[], removed?: string[], unmatched?: string[] }} args
+ *   added/removed/unmatched are display-ready name strings.
+ * @returns {{ message: string, type: 'success'|'warning' }}
+ */
+function buildLineupToast({ selectedCount, expectedCount, added = [], removed = [], unmatched = [] }) {
+    const parts = [`${selectedCount}/${expectedCount} selected`];
+    if (added.length) parts.push(`Added: ${added.join(', ')}`);
+    if (removed.length) parts.push(`Off: ${removed.join(', ')}`);
+    if (unmatched.length) {
+        const shown = unmatched.slice(0, 3).map(u => `"${u}"`).join(', ');
+        parts.push(`No match: ${shown}${unmatched.length > 3 ? ', …' : ''}`);
+    }
+    const clean = selectedCount === expectedCount && unmatched.length === 0;
+    return { message: parts.join('. '), type: clean ? 'success' : 'warning' };
+}
+
+export {
+    normalizeName, matchRosterPlayer, resolveLineupPlayers,
+    displayFirstName, buildLineupToast,
+};

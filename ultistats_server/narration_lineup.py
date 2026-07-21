@@ -165,10 +165,14 @@ def _build_lineup_prompt(req: LineupRequest) -> str:
         if req.previous_lineup
         else "(none — no points played yet)"
     )
-    curr_block = (
-        "\n".join(f"- {n}" for n in req.current_selection)
-        if req.current_selection
-        else "(empty)"
+    # Resolve the changes-base server-side so the model never has to choose
+    # between two candidate lists (Haiku drifts to the fuller previous
+    # lineup when the on-screen selection is partial).
+    base_names = req.current_selection or req.previous_lineup
+    base_block = (
+        "\n".join(f"- {n}" for n in base_names)
+        if base_names
+        else "(empty — the coach is building a line from scratch)"
     )
 
     return f"""You are extracting an ultimate frisbee lineup — the set of players about to take the field — from a coach's spoken words.
@@ -178,11 +182,11 @@ Team roster. These are the ONLY valid players. Match spoken references against t
 
 Expected lineup size: {req.expected_count} players.
 
-Previous lineup (the players who played the last point / are on the field now):
+Previous lineup (who played the last point — this is what "same line" / "run it back" refers to):
 {prev_block}
 
-Currently selected on screen (the selection your answer will replace):
-{curr_block}
+BASE — the current on-screen selection that bare additions and substitutions modify (your "players" output replaces this selection):
+{base_block}
 
 Transcript of what the coach said (speech-to-text; may contain transcription errors and unrelated chatter):
 ---
@@ -198,12 +202,13 @@ How to interpret the transcript:
    - "same line", "run it back", "same as last point" — the previous lineup, unchanged.
    - "X is coming off", "X off", "X sits", "X takes a break" — X is out.
    - "X is on", "X's in", "add X" — X is in.
-   When the coach speaks in changes, start from the current selection (or the previous lineup if the selection is empty) and apply the changes. When the coach clearly recites a whole new line from scratch, use exactly the players they name.
-3. Later statements override earlier ones. "...and is that Leif? No, I think it's Everett" means Everett, not Leif. Naming a player and later saying they're coming off means they are OUT.
+   When the coach speaks in changes, start from the BASE above and apply the changes ("same line" / "run it back" swaps the BASE to the previous lineup first).
+   Coaches often build a line a few players at a time, thinking between utterances. Bare names with no in/out language ("Cyrus", "umm, Priya... and Dana") are ADDITIONS to the current selection (the BASE) — everyone already selected stays. Treat the utterance as a fresh from-scratch line (exactly the players named, replacing the selection) ONLY when the coach names a full line's worth of players (the expected size or more) or explicitly frames it as the whole line ("new line:", "the line is...").
+3. Later statements override earlier ones. "...and is that Leif? No, I think it's Everett" is the coach correcting an identification: Everett is the player going in, Leif is not (unless Leif was already on the BASE and the coach says nothing about removing him). Naming a player and later saying they're coming off means they are OUT.
 4. Ignore asides that aren't about lineup membership: commentary about the last point, scores, fatigue, weather, sideline chatter. "Cyrus is coming off, yeah that was a long point" — only the first clause matters.
 5. "X completes the lineup", "that's the seven", "and that's the line" mean the coach believes the lineup is now fully specified.
 6. Spoken references may be first names, full names, nicknames, jersey numbers ("number 12", "twelve", "#12"), or mispronounced/mistranscribed versions of a name — map each to the closest roster player. A trailing initial or fragment after a name ("Everett H", "Everett HB") usually disambiguates between similarly-named players; match it to the roster player whose name best fits.
-7. In the "players" output, use each player's name spelled EXACTLY as it appears at the start of its roster line — no nickname, no number. Never output anyone not on the roster; if a spoken reference cannot be matched to any roster player, put the spoken text in "unmatched" instead.
+7. In the "players" output, use each player's name spelled EXACTLY as it appears at the start of its roster line — do not append the "nickname" or the #jersey-number decorations. Some roster names contain digits or symbols as part of the name itself ("Jamal 23", "23 Jamal", "Jamal #23"): spoken "Jamal" or "Jamal twenty-three" refers to that player, and you must output the name byte-for-byte as the roster spells it, digits included — never a cleaned-up version. Never output anyone not on the roster; if a spoken reference cannot be matched to any roster player, put the spoken text in "unmatched" instead.
 8. Do not pad the lineup with unmentioned players to reach the expected size, and do not drop named players to fit it. If only four players are specified for a seven-player line, output four — NEVER pull extra players from the previous lineup, the bench, or the roster to fill the gap. The expected size is context for interpreting the coach (e.g. whether the line sounds complete) — the coach's words always win. If the final count differs from the expected size, or something else was ambiguous, say so briefly in "note".
 
 Reply with ONLY a JSON object of this exact shape (no prose, no markdown fences):
@@ -211,9 +216,11 @@ Reply with ONLY a JSON object of this exact shape (no prose, no markdown fences)
 
 Fill "changes" FIRST — it is your worksheet:
 - If the coach spoke in changes, list every change you heard: {{"out": "Nate", "in": "Cyrus"}} for "Cyrus in for Nate"; {{"out": "Max", "in": null}} for "Max is coming off" with no named replacement; {{"out": null, "in": "Henry"}} for "Henry's on".
+- Bare added names are in-only changes too: a partial utterance like "Cyrus and Priya" is {{"out": null, "in": "Cyrus"}}, {{"out": null, "in": "Priya"}} — never a fresh line.
 - If the coach corrects a change ("Priya in for Alice — actually no, Priya's in for Nate, Alice stays"), record ONLY the corrected version: {{"out": "Nate", "in": "Priya"}}. The retracted change never happened — Alice must NOT appear in "changes" and stays on the line. Never list both the first version and its correction.
 - If the coach recited a fresh line instead, leave "changes" as an empty list.
-- Then compute "players": when "changes" is non-empty, it MUST be exactly the base lineup (the current selection, or the previous lineup if the selection is empty) with those changes applied — every "out" player removed, every "in" player added, and NOBODY else added or removed. Double-check each "out" player is absent from "players" before replying.
+- Then compute "players": when "changes" is non-empty, it MUST be exactly the BASE with those changes applied — every "out" player removed, every "in" player added, and NOBODY else added or removed. The BASE stays the BASE even when it is smaller than the expected size: NEVER import players from the previous lineup or the roster to fill out the count. A 3-player BASE plus one addition is 4 players, full stop.
+- Count check before replying: if "players" has fewer than the expected size, reply with the smaller list AS IS — the coach will add more players in a later utterance. Adding anyone the coach never mentioned is the worst possible error. Also double-check each "out" player is absent from "players" — and that every player whose removal the coach RETRACTED ("actually no, ... Alice stays") is still present.
 """
 
 

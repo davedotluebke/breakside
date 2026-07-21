@@ -23,7 +23,8 @@
  */
 import { narrationRealtimeSession, mergeCompletedUtterance } from './realtimeSession.js';
 import { narrationEngine } from './narrationEngine.js';
-import { resolveLineupPlayers, buildLineupToast } from './lineupResolve.js';
+import { resolveLineupPlayers, buildLineupToast, displayFirstName } from './lineupResolve.js';
+import { log } from '../utils/logger.js';
 import { advancedSettings } from '../settings/advancedSettings.js';
 import { authFetch, API_BASE_URL } from '../store/sync.js';
 import { getActiveRoster } from '../store/storage.js';
@@ -285,13 +286,13 @@ const lineupNarration = (function() {
     async function processTranscript() {
         if (!transcript.trim()) {
             // Same signature as a dead audio path (G5) — always say something.
-            toast('Lineup narration: no speech was captured', 'warning');
+            toast('No speech captured', 'warning');
             return;
         }
         const game = typeof currentGame === 'function' ? currentGame() : null;
         const roster = typeof getActiveRoster === 'function' ? getActiveRoster() : [];
         if (!game || !roster || !roster.length) {
-            toast('Lineup narration: game context went away', 'error');
+            toast('Voice lineup failed — game context lost', 'error');
             return;
         }
 
@@ -329,28 +330,34 @@ const lineupNarration = (function() {
     }
 
     /**
-     * Apply the backend's lineup to the Lines tab. Never applies an empty
-     * or error result — a wrong no-op beats wiping the coach's selection.
+     * Apply the backend's lineup to the Lines tab. The model returns the
+     * FULL resulting lineup — partial utterances are resolved as additions
+     * against the current selection server-side — so applying is a plain
+     * replace, and the toast reports the DELTA ("Added: …", "Off: …").
+     * Never applies an empty or error result — a wrong no-op beats wiping
+     * the coach's selection.
      */
     function applyResult(data) {
         if (!data || data.error) {
-            toast('Lineup narration failed on the server — selection unchanged'
-                + (data && data.error ? ` (${data.error})` : ''), 'error');
+            if (data && data.error) console.warn('[lineupNarration] server error:', data.error);
+            toast('Voice lineup failed — selection unchanged', 'error');
             return false;
         }
         const returned = Array.isArray(data.players) ? data.players : [];
         const modelUnmatched = Array.isArray(data.unmatched) ? data.unmatched : [];
         if (!returned.length && !modelUnmatched.length) {
-            toast('Lineup narration: no lineup heard in the transcript', 'info');
+            toast('No lineup heard', 'info');
             return false;
         }
 
+        const game = typeof currentGame === 'function' ? currentGame() : null;
         const roster = typeof getActiveRoster === 'function' ? getActiveRoster() : [];
         const { players, unmatched: localUnmatched } = resolveLineupPlayers(returned, roster);
         const unmatched = modelUnmatched.concat(localUnmatched);
 
         if (!players.length) {
-            toast('Lineup narration: none of the narrated names matched the roster', 'warning');
+            const shown = unmatched.slice(0, 3).map(u => `"${u}"`).join(', ');
+            toast(`No roster match: ${shown}${unmatched.length > 3 ? ', …' : ''} — selection unchanged`, 'warning');
             return false;
         }
         // Re-check: the Line Coach role can move while recording.
@@ -359,13 +366,22 @@ const lineupNarration = (function() {
             return false;
         }
 
-        applyLineSelection('main', players.map(p => p.name));
+        // Delta vs the selection being replaced — what this voice action did.
+        const prevNames = getCurrentSelectionNames(game);
+        const newNames = players.map(p => p.name);
+        const prevSet = new Set(prevNames);
+        const newSet = new Set(newNames);
+        const added = newNames.filter(n => !prevSet.has(n)).map(displayFirstName);
+        const removed = prevNames.filter(n => !newSet.has(n)).map(displayFirstName);
 
+        applyLineSelection('main', newNames);
+
+        // The model's free-text note is for debugging, not the sideline.
+        if (data.note) log('[lineupNarration] note:', data.note);
         const { message, type } = buildLineupToast({
-            appliedCount: players.length,
+            selectedCount: newNames.length,
             expectedCount: getExpectedCount(),
-            unmatched,
-            note: data.note || ''
+            added, removed, unmatched
         });
         toast(message, type);
         return true;
