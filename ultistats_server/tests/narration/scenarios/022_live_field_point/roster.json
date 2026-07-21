@@ -1,0 +1,17 @@
+{
+  "roster": [
+    { "name": "Ben",    "nickname": null, "number": "2" },
+    { "name": "Cyrus",  "nickname": null, "number": "13" },
+    { "name": "Caleb",  "nickname": null, "number": "7" },
+    { "name": "Peter",  "nickname": null, "number": "21" },
+    { "name": "Marcus", "nickname": null, "number": "5" },
+    { "name": "Tessa",  "nickname": null, "number": "14" },
+    { "name": "Owen",   "nickname": null, "number": "9" }
+  ],
+  "game_context": {
+    "offense": true,
+    "our_score": 0,
+    "their_score": 0,
+    "point": 1
+  }
+}

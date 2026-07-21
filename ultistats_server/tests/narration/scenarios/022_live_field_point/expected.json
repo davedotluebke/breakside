@@ -1,0 +1,36 @@
+[
+  {
+    "kind": "throw",
+    "thrower": "Ben",
+    "receiver": "Cyrus"
+  },
+  {
+    "kind": "throw",
+    "thrower": "Cyrus",
+    "receiver": "Caleb",
+    "swing": true
+  },
+  {
+    "kind": "throw",
+    "thrower": "Caleb",
+    "receiver": "Cyrus"
+  },
+  {
+    "kind": "throw",
+    "thrower": "Cyrus",
+    "receiver": "Ben"
+  },
+  {
+    "kind": "throw",
+    "thrower": "Ben",
+    "receiver": "Peter"
+  },
+  {
+    "kind": "turnover",
+    "thrower": "Peter",
+    "throwaway": true
+  },
+  {
+    "kind": "opponent_score"
+  }
+]

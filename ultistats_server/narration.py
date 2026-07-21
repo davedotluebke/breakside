@@ -373,8 +373,23 @@ Event schema for ADD ops — the "event" object must have:
     "reset" or "dump", and BOTH words mean reset=true (there is no dump
     field). swing = a lateral cross-field pass; whenever the coach explicitly
     says "swing"/"swings it", set swing=true on that throw.
+    huck = a long deep shot; set huck=true only when the narration clearly
+    describes one ("hucks it", "puts it deep", "launches it", "bombs it").
+    Vague directional language alone ("upfield", "downfield") is NOT a huck.
   - For kind=turnover: thrower, receiver (optional), and any of
-    throwaway, drop, huck, good_defense, stall (booleans)
+    throwaway, drop, huck, good_defense, stall (booleans).
+    Note: throwaway and drop are mutually exclusive.
+    throwaway=true means the throw itself was errant — described as behind /
+    over / past / away from the target, too far, or out of reach — even if
+    the narration adds that the receiver couldn't pull it in. drop=true
+    means the throw was catchable and the receiver failed to hold it
+    ("drops it", "right through the hands"); a drop should name the
+    receiver in the receiver field when the narration identifies them.
+    When the coach explicitly assigns the turnover to a player
+    ("Turnover Peter there", "that's on Carla"), that player is the
+    turnover event's thrower — this explicit attribution overrides any
+    other inference about who turned it over. Any completed pass that got
+    that player the disc is still its own separate throw event.
   - For kind=defense: defender (player name), and any of
     block, interception, layout, sky, callahan (booleans).
     Note: block and interception are mutually exclusive.
@@ -391,6 +406,11 @@ One completed pass = ONE throw event:
   - Never emit a throw whose thrower and receiver are the same player;
     if a clause seems to say that, it is describing the catch of the
     previous throw.
+  - Narration often omits the thrower ("upfield to Peter", "swings it
+    across to Ella"). The thrower is whoever currently holds the disc —
+    the receiver of the previous throw, or the player who picked it up.
+    Emit a normal throw event with that inferred thrower; never drop a
+    throw just because the thrower is implicit.
 
 Player names in ADD events:
   - Use ONLY the player's name itself, e.g. "Alice", NOT the full roster line.
