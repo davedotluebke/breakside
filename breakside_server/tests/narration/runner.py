@@ -527,6 +527,14 @@ class FastPassConfig:
     try_strict: bool = True
     transcription_model: str = "gpt-4o-mini-transcribe"
     pace: float = 1.0  # per-chunk sleep multiplier; 1.0 = real-time, 0.5 = 2x speed
+    # Send a function_call_output ack for each call once its response
+    # completes. Production never did (fire-and-forget), which leaves every
+    # call "pending" — OpenAI's own dev notes say pending tool calls make
+    # the model hallucinate/stall, so this tests whether unacked calls cause
+    # the observed text-instead-of-calls truncation and the dead retract
+    # path. Acking after response.done avoids the mid-response
+    # short-circuit the original client hit.
+    ack_function_calls: bool = False
 
 
 @dataclass
@@ -544,6 +552,7 @@ class FastPassOutcome:
     unexpected_texts: List[str] = field(default_factory=list)
     errors: List[Dict[str, Any]] = field(default_factory=list)
     responses: int = 0  # response.done count
+    acks_sent: int = 0  # function_call_output items sent (ack_function_calls mode)
 
 
 def _fastpass_call_to_event(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -781,7 +790,12 @@ async def stream_audio_for_events(
                 {"where": "parse_arguments", "name": name, "arguments": arguments_json}
             )
             args = {}
-        outcome.calls.append({"name": name, "args": args, "call_id": call_id})
+        # response_index: how many responses had completed when this call
+        # arrived — i.e. which response it belongs to. Lets the retraction
+        # analysis see whether a correction crossed a response boundary.
+        outcome.calls.append(
+            {"name": name, "args": args, "call_id": call_id, "response_index": outcome.responses}
+        )
 
     async with websockets.connect(
         url, extra_headers=headers, max_size=2**24
@@ -805,7 +819,6 @@ async def stream_audio_for_events(
                 elif t == "response.function_call_arguments.done":
                     record_call(msg.get("call_id"), msg.get("name", ""), msg.get("arguments"))
                 elif t == "response.done":
-                    outcome.responses += 1
                     resp = msg.get("response") or {}
                     for item in resp.get("output") or []:
                         # Safety net: collect any call missed by the
@@ -817,6 +830,27 @@ async def stream_audio_for_events(
                             for part in item.get("content") or []:
                                 if part.get("text"):
                                     outcome.unexpected_texts.append(part["text"])
+                    outcome.responses += 1
+                    if config.ack_function_calls:
+                        # Resolve this response's calls so they aren't left
+                        # pending in conversation state. Safe here: the
+                        # response is complete, so this can't short-circuit
+                        # streaming the way mid-response acks did.
+                        for item in resp.get("output") or []:
+                            if item.get("type") == "function_call" and item.get("call_id"):
+                                await ws.send(
+                                    json.dumps(
+                                        {
+                                            "type": "conversation.item.create",
+                                            "item": {
+                                                "type": "function_call_output",
+                                                "call_id": item["call_id"],
+                                                "output": json.dumps({"status": "recorded"}),
+                                            },
+                                        }
+                                    )
+                                )
+                                outcome.acks_sent += 1
                     if flush_armed:
                         flush_response_done.set()
                 elif t == "response.text.done":

@@ -170,7 +170,13 @@ def _print_fast(d: Dict[str, Any], verbose: bool) -> None:
     if verbose:
         print(f"  transcript: {o['transcript']!r}")
         for c in o["calls"]:
-            print(f"    call: {c['name']} {json.dumps(c['args'], separators=(',', ':'))}")
+            ridx = c.get("response_index")
+            print(f"    call[r{ridx}]: {c['name']} {json.dumps(c['args'], separators=(',', ':'))}")
+        if o.get("acks_sent"):
+            print(f"  acks_sent: {o['acks_sent']}")
+    if o["retractions"]:
+        for r in o["retractions"]:
+            print(f"  retraction: {json.dumps(r['args'], separators=(',', ':'))} -> removed {json.dumps(r['retracted_event'], separators=(',', ':'))}")
     if d["missing"]:
         print(f"  missing: {_fmt_events(d['missing'])}")
     if d["extra"]:
@@ -215,6 +221,7 @@ async def run_eval(args: argparse.Namespace) -> Dict[str, Any]:
         vad_eagerness=args.eagerness,
         try_strict=not args.no_strict,
         pace=args.pace,
+        ack_function_calls=args.ack,
     )
     print(f"config: {config}")
     print(f"scenarios: {[d.name for d in scenario_dirs]}  runs={args.runs} baseline={args.baseline}")
@@ -337,6 +344,7 @@ def main(argv: List[str]) -> int:
     ap.add_argument("--noise-reduction", default="far_field", choices=["far_field", "near_field", "off"])
     ap.add_argument("--eagerness", default="low", choices=["low", "medium", "high", "auto"])
     ap.add_argument("--no-strict", action="store_true")
+    ap.add_argument("--ack", action="store_true", help="send function_call_output acks after each response")
     ap.add_argument("--pace", type=float, default=1.0)
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--baseline", action="store_true")
