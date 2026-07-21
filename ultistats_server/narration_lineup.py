@@ -204,10 +204,16 @@ How to interpret the transcript:
 5. "X completes the lineup", "that's the seven", "and that's the line" mean the coach believes the lineup is now fully specified.
 6. Spoken references may be first names, full names, nicknames, jersey numbers ("number 12", "twelve", "#12"), or mispronounced/mistranscribed versions of a name — map each to the closest roster player. A trailing initial or fragment after a name ("Morgan H", "Morgan HB") usually disambiguates between similarly-named players; match it to the roster player whose name best fits.
 7. In the "players" output, use each player's name spelled EXACTLY as it appears at the start of its roster line — no nickname, no number. Never output anyone not on the roster; if a spoken reference cannot be matched to any roster player, put the spoken text in "unmatched" instead.
-8. Do not pad the lineup with unmentioned players to reach the expected size, and do not drop named players to fit it. The expected size is context for interpreting the coach (e.g. whether the line sounds complete) — the coach's words always win. If the final count differs from the expected size, or something else was ambiguous, say so briefly in "note".
+8. Do not pad the lineup with unmentioned players to reach the expected size, and do not drop named players to fit it. If only four players are specified for a seven-player line, output four — NEVER pull extra players from the previous lineup, the bench, or the roster to fill the gap. The expected size is context for interpreting the coach (e.g. whether the line sounds complete) — the coach's words always win. If the final count differs from the expected size, or something else was ambiguous, say so briefly in "note".
 
 Reply with ONLY a JSON object of this exact shape (no prose, no markdown fences):
-{{"players": ["Name", ...], "unmatched": ["spoken reference", ...], "note": ""}}
+{{"changes": [{{"out": "Name or null", "in": "Name or null"}}], "players": ["Name", ...], "unmatched": ["spoken reference", ...], "note": ""}}
+
+Fill "changes" FIRST — it is your worksheet:
+- If the coach spoke in changes, list every change you heard: {{"out": "Wes", "in": "Kris"}} for "Kris in for Wes"; {{"out": "Sam", "in": null}} for "Sam is coming off" with no named replacement; {{"out": null, "in": "Nora"}} for "Nora's on".
+- If the coach corrects a change ("Priya in for Alice — actually no, Priya's in for Wes, Alice stays"), record ONLY the corrected version: {{"out": "Wes", "in": "Priya"}}. The retracted change never happened — Alice must NOT appear in "changes" and stays on the line. Never list both the first version and its correction.
+- If the coach recited a fresh line instead, leave "changes" as an empty list.
+- Then compute "players": when "changes" is non-empty, it MUST be exactly the base lineup (the current selection, or the previous lineup if the selection is empty) with those changes applied — every "out" player removed, every "in" player added, and NOBODY else added or removed. Double-check each "out" player is absent from "players" before replying.
 """
 
 
