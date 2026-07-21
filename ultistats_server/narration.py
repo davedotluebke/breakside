@@ -349,7 +349,17 @@ the order they happened.
 
 Be conservative: if a phrase is too garbled or ambiguous to interpret
 with confidence, skip it rather than guessing. It is better to miss an
-event than to fabricate one."""
+event than to fabricate one.
+
+If the coach corrects themselves mid-narration ("actually that was a
+throwaway", "no wait, it was Carol"), emit ONLY the corrected event —
+never the first version plus the correction. Example: "Bob hucks it to
+Dana — actually that was a throwaway" is ONE kind=turnover event with
+throwaway=true and huck=true (the modifiers move to the corrected
+event); it is NOT a throw event plus a turnover event. This includes a
+corrected score: "...to Dana in the endzone, score! — no, she dropped
+it" is ONE kind=turnover event with drop=true; the throw and the score
+never happened, so emit no throw event for them."""
 
     return f"""You are extracting structured ultimate frisbee events from a coach's spoken narration of one possession.
 
@@ -376,6 +386,10 @@ Event schema for ADD ops — the "event" object must have:
     huck = a long deep shot; set huck=true only when the narration clearly
     describes one ("hucks it", "puts it deep", "launches it", "bombs it").
     Vague directional language alone ("upfield", "downfield") is NOT a huck.
+    break_throw = a throw to the break side; set break_throw=true only when
+    the coach explicitly says "break" ("break throw", "around break", "to
+    the break side"). Throw-technique words alone ("IO flick", "around
+    backhand", "up the line") do NOT make it a break throw.
   - For kind=turnover: thrower, receiver (optional), and any of
     throwaway, drop, huck, good_defense, stall (booleans).
     Note: throwaway and drop are mutually exclusive.
@@ -396,6 +410,10 @@ Event schema for ADD ops — the "event" object must have:
     block=true means the disc was deflected (footblock, knockdown) and
     nobody caught it out of the air. interception=true means the defender
     caught the throw cleanly. Both can carry layout/sky modifiers.
+    callahan=true means the defender caught the opponent's throw in the
+    endzone, instantly scoring for US ("Callahan!"). Emit exactly ONE
+    defense event with interception=true and callahan=true — the
+    opponent did NOT score, so never add an opponent_score event.
   - For kind=opponent_score: no additional fields
 
 One completed pass = ONE throw event:
@@ -403,6 +421,10 @@ One completed pass = ONE throw event:
     Ella skies her defender for the score") supplies modifiers (sky,
     layout, score) for that SAME throw — never emit a separate event
     for the catch.
+    RIGHT: {{ "kind": "throw", "thrower": "Alice", "receiver": "Ella",
+    "sky": true, "score": true }} — one event.
+    WRONG: a throw to Ella followed by a second event where Ella is
+    both thrower and receiver carrying the sky/score flags.
   - Never emit a throw whose thrower and receiver are the same player;
     if a clause seems to say that, it is describing the catch of the
     previous throw.
@@ -411,6 +433,11 @@ One completed pass = ONE throw event:
     the receiver of the previous throw, or the player who picked it up.
     Emit a normal throw event with that inferred thrower; never drop a
     throw just because the thrower is implicit.
+  - Throw and turnover events describe OUR team only: thrower and
+    receiver must come from the roster above. Narration of the opponent
+    moving the disc ("their reset throws a flick") is context, not an
+    event — an opponent possession can only yield kind=opponent_score,
+    or kind=defense naming OUR defender when we take the disc away.
 
 Player names in ADD events:
   - Use ONLY the player's name itself, e.g. "Alice", NOT the full roster line.
@@ -426,7 +453,11 @@ Player names in ADD events:
     (e.g. a player named or nicknamed "Sky", "Hammer", or "Huck"). A word in a
     thrower/receiver/defender position refers to that player; jargon flags
     apply only when the word describes the throw or catch itself ("throws a
-    hammer", "skies her defender").
+    hammer", "skies her defender"). Transcription may lowercase a nickname
+    ("hits hammer for the score" = hits the player nicknamed Hammer). Each
+    word counts ONCE: matched to a player, it is consumed as that player and
+    must NOT also set the matching jargon flag — a receiver nicknamed Hammer
+    does not make the throw hammer=true.
 
 Output ONLY a JSON object of the form:
 {{
@@ -475,15 +506,40 @@ async def _call_claude_finalize(api_key: str, prompt: str) -> List[Dict[str, Any
             text_parts.append(block.get("text", ""))
     text = "".join(text_parts).strip()
 
-    # Be defensive about stray markdown fences.
-    if text.startswith("```"):
-        text = text.strip("`")
-        # Drop a leading "json" language tag if present
-        if text.lower().startswith("json"):
-            text = text[4:].strip()
-
-    parsed = json.loads(text)
+    parsed = _last_json_object(text, "operations")
     ops = parsed.get("operations", [])
     if not isinstance(ops, list):
         raise RuntimeError("Claude response 'operations' is not a list")
     return ops
+
+
+def _last_json_object(text: str, required_key: str) -> Dict[str, Any]:
+    """
+    Extract the LAST top-level JSON object in ``text`` containing
+    ``required_key``.
+
+    Despite the no-prose instruction, smaller models occasionally emit a
+    wrong first JSON block, prose reconsidering it, and then a corrected
+    block — the final object is the answer they mean. Scanning for objects
+    also tolerates markdown fences without special-casing them.
+    """
+    decoder = json.JSONDecoder()
+    found: Optional[Dict[str, Any]] = None
+    i = 0
+    while True:
+        start = text.find("{", i)
+        if start == -1:
+            break
+        try:
+            obj, end = decoder.raw_decode(text, start)
+        except json.JSONDecodeError:
+            i = start + 1
+            continue
+        if isinstance(obj, dict) and required_key in obj:
+            found = obj
+        i = end
+    if found is None:
+        raise RuntimeError(
+            f"no JSON object with key {required_key!r} in model reply"
+        )
+    return found
