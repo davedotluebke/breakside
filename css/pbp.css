@@ -847,6 +847,54 @@
     border-color: var(--gender-mmp);
 }
 
+/* Position / default-line 3-way toggles in the edit-player dialog. Neutral
+   until selected (unlike the color-coded gender buttons) — these attributes
+   have no established color language, so the brand accent marks the choice. */
+.edit-player-attr-field {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.edit-player-attr-field label {
+    margin: 0;
+    min-width: fit-content;
+}
+
+.attr-toggle-group {
+    display: flex;
+    flex-direction: row;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.attr-toggle-button {
+    min-width: 64px;
+    height: 40px;
+    padding: 4px 10px;
+    font-size: 0.95em;
+    font-weight: bold;
+    border: 2px solid var(--border-default);
+    border-radius: 0.5rem;
+    background-color: transparent;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.attr-toggle-button:hover {
+    border-color: var(--brand-orange-soft);
+}
+
+.attr-toggle-button.selected {
+    background-color: var(--brand-orange);
+    color: white;
+    border-color: var(--brand-orange);
+}
+
 .edit-player-dialog-buttons {
     display: flex;
     flex-direction: column;

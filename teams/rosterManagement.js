@@ -4,7 +4,32 @@
  * 
  * Phase 4 update: Player IDs, cloud sync for player creation/updates
  */
-import { Gender, Player, Role } from '../store/models.js';
+import { Gender, PlayerPosition, DefaultLine, Player, Role } from '../store/models.js';
+
+// Normalize an edit-dialog toggle value to what we STORE: an explicit
+// handler/cutter (or O/D) value, else null. HYBRID and CROSSOVER are the
+// "unset" defaults — storing them as null keeps null and hybrid/crossover
+// equivalent (matches the Auto resolvers) and avoids spurious dirty state.
+function normalizePositionValue(v) {
+    return (v === PlayerPosition.HANDLER || v === PlayerPosition.CUTTER) ? v : null;
+}
+function normalizeDefaultLineValue(v) {
+    return (v === DefaultLine.O || v === DefaultLine.D) ? v : null;
+}
+// Read/write the selected value of an edit-dialog toggle group by data-attr-group.
+function getEditPlayerToggleValue(attrGroup) {
+    const sel = document.querySelector(
+        `#editPlayerDialog .attr-toggle-group[data-attr-group="${attrGroup}"] .attr-toggle-button.selected`);
+    return sel ? sel.dataset.value : null;
+}
+function setEditPlayerToggleValue(attrGroup, value) {
+    const group = document.querySelector(
+        `#editPlayerDialog .attr-toggle-group[data-attr-group="${attrGroup}"]`);
+    if (!group) return;
+    group.querySelectorAll('.attr-toggle-button').forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.value === value);
+    });
+}
 import { currentTeam, currentEvent, saveAllTeamsData, isViewer } from '../store/storage.js';
 import {
     currentGame, formatPlayerName, formatPlayTime, extractPlayerName,
@@ -879,7 +904,9 @@ function showEditPlayerDialog(player, options = {}) {
     editPlayerDialogOriginalData = {
         name: player.name,
         number: player.number,
-        gender: player.gender
+        gender: player.gender,
+        position: normalizePositionValue(player.position),
+        defaultLine: normalizeDefaultLineValue(player.defaultLine)
     };
 
     const dialog = document.getElementById('editPlayerDialog');
@@ -943,6 +970,11 @@ function showEditPlayerDialog(player, options = {}) {
         }
     }
 
+    // Position / default-line toggles. Unset resolves to Hybrid / Crossover,
+    // so one option is always shown selected.
+    setEditPlayerToggleValue('position', player.position || PlayerPosition.HYBRID);
+    setEditPlayerToggleValue('line', player.defaultLine || DefaultLine.CROSSOVER);
+
     // Reset confirm button state
     if (confirmBtn) {
         confirmBtn.disabled = true;
@@ -997,13 +1029,21 @@ function updateEditPlayerDialogState() {
         currentGender = Gender.MMP;
     }
 
+    // Current position / default-line selections (normalized: hybrid/crossover => null)
+    const currentPosition = normalizePositionValue(getEditPlayerToggleValue('position'));
+    const currentDefaultLine = normalizeDefaultLineValue(getEditPlayerToggleValue('line'));
+
     // Check if any changes were made
     const nameChanged = currentName !== editPlayerDialogOriginalData.name;
     const numberChanged = currentNumberValue !== editPlayerDialogOriginalData.number;
     const genderChanged = currentGender !== editPlayerDialogOriginalData.gender;
+    const positionChanged = currentPosition !== editPlayerDialogOriginalData.position;
+    const lineChanged = currentDefaultLine !== editPlayerDialogOriginalData.defaultLine;
 
     // Enable confirm button if changes were made and name is not empty
-    confirmBtn.disabled = !(nameChanged || numberChanged || genderChanged) || currentName === '';
+    confirmBtn.disabled =
+        !(nameChanged || numberChanged || genderChanged || positionChanged || lineChanged)
+        || currentName === '';
 }
 
 /**
@@ -1114,9 +1154,16 @@ function saveEditedPlayer() {
         newGender = Gender.MMP;
     }
 
+    // Position / default-line (normalized: hybrid/crossover => null)
+    const newPosition = normalizePositionValue(getEditPlayerToggleValue('position'));
+    const newDefaultLine = normalizeDefaultLineValue(getEditPlayerToggleValue('line'));
+
     // Pickup context: delegate to callback
     if (editPlayerDialogContext.context === 'pickup' && editPlayerDialogContext.onSave) {
-        editPlayerDialogContext.onSave({ name: newName, number: newNumberValue, gender: newGender });
+        editPlayerDialogContext.onSave({
+            name: newName, number: newNumberValue, gender: newGender,
+            position: newPosition, defaultLine: newDefaultLine
+        });
         closeEditPlayerDialog();
         return;
     }
@@ -1145,6 +1192,8 @@ function saveEditedPlayer() {
     player.name = newName;
     player.number = newNumberValue;
     player.gender = newGender;
+    player.position = newPosition;
+    player.defaultLine = newDefaultLine;
     player.updatedAt = new Date().toISOString();
 
     // Phase 4: Sync player update to cloud
@@ -1230,6 +1279,19 @@ function saveEditedPlayer() {
             updateEditPlayerDialogState();
         });
     }
+
+    // Position / default-line toggle groups: one selection each (no deselect —
+    // hybrid/crossover is a real option, so a value is always chosen).
+    document.querySelectorAll('#editPlayerDialog .attr-toggle-group').forEach(group => {
+        group.addEventListener('click', function(event) {
+            const btn = event.target.closest('.attr-toggle-button');
+            if (!btn || !this.contains(btn)) return;
+            this.querySelectorAll('.attr-toggle-button').forEach(b => {
+                b.classList.toggle('selected', b === btn);
+            });
+            updateEditPlayerDialogState();
+        });
+    });
 
     // Input fields - track changes
     const nameInput = document.getElementById('editPlayerName');
