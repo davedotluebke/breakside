@@ -505,11 +505,15 @@ Never guess player names: if you cannot confidently match a spoken name to the r
 
 A single utterance often chains MULTIPLE events ("Alice to Bob, Bob hucks it to Carla for the score"). Emit a separate function call for each event, in the order they happened, before your response ends.
 
+One completed pass = ONE record_throw call. A follow-on clause about the receiver's catch ("...to Ella, Ella skies her defender for the score") supplies modifiers (sky, layout, score) for that SAME throw — never a second event for the catch. Never emit a throw whose thrower and receiver are the same player.
+
+Never record the same event twice. You may hear overlapping or repeated audio; before calling, make sure you have not already recorded that exact pass, turnover, or play earlier in this session.
+
 Corrections: coaches correct themselves ("to Bob — no, wait, to Daniel"). If the correction arrives before you have recorded anything, record only the corrected version. If you already recorded the wrong event, call retract_event for it, then record the corrected event.
 
 Set the required confidence field honestly on every call: "high" only when the utterance was clear and complete. If your honest confidence is "low", strongly prefer emitting nothing instead.
 
-Do not produce any text responses — only function calls. If there is nothing to record, produce no output at all."""
+Never produce text: no acknowledgments, no announcing what you are about to log, no commentary — function calls only. If there is nothing to record, produce no output at all."""
 
 
 @dataclass
@@ -621,6 +625,32 @@ def resolve_event_players(
                     ev[f] = resolved
         out.append(ev)
     return out
+
+
+def filter_appliable_events(
+    events: List[Dict[str, Any]], roster: List[Dict[str, Any]]
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Mirror the original fast-pass client's appliers: applyThrow returned null
+    (no event created) unless BOTH thrower and receiver resolved to roster
+    players, applyDefense required the defender, applyTurnover substituted
+    Unknown Player and kept the event. Run this AFTER resolve_event_players:
+    an event whose required player fields still aren't roster names would
+    never have reached the coach's screen. Returns (kept, dropped).
+    """
+    names = {str(p.get("name")) for p in roster}
+    kept: List[Dict[str, Any]] = []
+    dropped: List[Dict[str, Any]] = []
+    for ev in events:
+        kind = ev.get("kind")
+        if kind == "throw":
+            ok = ev.get("thrower") in names and ev.get("receiver") in names
+        elif kind == "defense":
+            ok = ev.get("defender") in names
+        else:
+            ok = True
+        (kept if ok else dropped).append(ev)
+    return kept, dropped
 
 
 def _apply_fastpass_retractions(
@@ -1129,9 +1159,12 @@ class FastPassScenarioResult:
     outcome: FastPassOutcome
     expected_transcript: str
     expected_events: List[Dict[str, Any]]
-    # net_events after resolve_event_players() — what production would show
-    # the coach, and what event_score is computed on.
+    # net_events after resolve_event_players() + filter_appliable_events() —
+    # what production would show the coach, and what event_score is computed on.
     scored_events: List[Dict[str, Any]]
+    # events production's appliers would have silently dropped (unresolvable
+    # thrower/receiver/defender) — excluded from scoring but reported.
+    dropped_unresolvable: List[Dict[str, Any]]
     event_score: EventScore
 
     @property
@@ -1149,6 +1182,7 @@ class FastPassScenarioResult:
             "expected_transcript": self.expected_transcript,
             "expected_events": self.expected_events,
             "scored_events": self.scored_events,
+            "dropped_unresolvable": self.dropped_unresolvable,
             "precision": self.event_score.precision,
             "recall": self.event_score.recall,
             "f1": self.event_score.f1,
@@ -1168,7 +1202,8 @@ async def run_scenario_fastpass(
     outcome = await stream_audio_for_events(
         s.audio_path, s.roster, s.game_context, sample_rate=s.sample_rate, config=config
     )
-    scored_events = resolve_event_players(outcome.net_events, s.roster)
+    resolved = resolve_event_players(outcome.net_events, s.roster)
+    scored_events, dropped = filter_appliable_events(resolved, s.roster)
     score = score_event_list(s.expected_events, scored_events)
     return FastPassScenarioResult(
         name=s.name,
@@ -1177,6 +1212,7 @@ async def run_scenario_fastpass(
         expected_transcript=s.expected_transcript,
         expected_events=s.expected_events,
         scored_events=scored_events,
+        dropped_unresolvable=dropped,
         event_score=score,
     )
 

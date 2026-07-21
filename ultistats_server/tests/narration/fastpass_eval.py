@@ -162,7 +162,7 @@ def _print_fast(d: Dict[str, Any], verbose: bool) -> None:
     print(f"=== {d['name']} (run {d['run']}) ===")
     print(
         f"  fast: P={d['precision']:.2f} R={d['recall']:.2f} F1={d['f1']:.2f}"
-        f"  events={len(o['net_events'])} retractions={len(o['retractions'])}"
+        f"  events={len(d['scored_events'])} retractions={len(o['retractions'])}"
         f" confab={confab}  strict={o['strict_mode']} responses={o['responses']}"
     )
     if d["wer"] is not None:
@@ -175,6 +175,8 @@ def _print_fast(d: Dict[str, Any], verbose: bool) -> None:
         print(f"  missing: {_fmt_events(d['missing'])}")
     if d["extra"]:
         print(f"  extra:   {_fmt_events(d['extra'])}")
+    if d.get("dropped_unresolvable"):
+        print(f"  dropped (unresolvable players): {_fmt_events(d['dropped_unresolvable'])}")
     if o["unexpected_texts"]:
         print(f"  ! model text output: {o['unexpected_texts']}")
     if o["errors"]:
@@ -277,13 +279,14 @@ async def run_eval(args: argparse.Namespace) -> Dict[str, Any]:
             f"  precision at confidence>=medium: {sum(pm)/len(pm):.3f}   >=high: {sum(ph)/len(ph):.3f} (macro)"
         )
     if noise:
-        total_noise_events = sum(len(d["outcome"]["net_events"]) for d in noise)
+        total_noise_events = sum(len(d["scored_events"]) for d in noise)
         agg["noise_confabulations"] = total_noise_events
         print(f"noise-only scenarios: {total_noise_events} event(s) emitted across all runs")
         for d in noise:
-            evs = d["outcome"]["net_events"]
+            evs = d["scored_events"]
             flag = f"  << CONFABULATION: {_fmt_events(evs)}" if evs else ""
-            print(f"  {d['name']} run {d['run']}: {len(evs)} event(s){flag}")
+            dropped = f" (+{len(d['dropped_unresolvable'])} dropped-unresolvable)" if d["dropped_unresolvable"] else ""
+            print(f"  {d['name']} run {d['run']}: {len(evs)} event(s){dropped}{flag}")
     if args.baseline and baseline_results:
         brows = [b for b in baseline_results.values() if "error" not in b and b["expected"]]
         if brows:
