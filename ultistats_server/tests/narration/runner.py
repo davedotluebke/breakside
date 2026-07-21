@@ -501,7 +501,7 @@ Never emit an event from:
 - sideline conversation that is not play-by-play narration;
 - a name alone with no clearly stated action.
 
-Never guess player names: if you cannot confidently match a spoken name to the roster, emit nothing. When you do match, put the exact roster spelling in the call (the coach may use partial names, nicknames, or jersey numbers).
+Never guess player names: if you cannot confidently match a spoken name to the roster, emit nothing. When you do match, put ONLY the player's bare name in the call, with the exact roster spelling — e.g. "Alice", never "Alice #7" or a nickname. The nicknames and jersey numbers on the roster lines are hints for matching what the coach said (partial names, nicknames, and numbers all refer to players), not part of the name.
 
 A single utterance often chains MULTIPLE events ("Alice to Bob, Bob hucks it to Carla for the score"). Emit a separate function call for each event, in the order they happened, before your response ends.
 
@@ -553,6 +553,74 @@ def _fastpass_call_to_event(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             continue
         ev[k] = v
     return ev
+
+
+def resolve_player_name(spoken: Any, roster: List[Dict[str, Any]]) -> Optional[str]:
+    """
+    Fuzzy-match a spoken/emitted name to a roster player, returning the
+    canonical roster name. Port of resolvePlayerName from the original
+    fast-pass client (pre-ff79ef1 narration/narrationEngine.js) — the
+    production path resolved model-emitted names this way before creating
+    events, so the eval scores what the coach would actually have seen.
+
+    Strategy (in order): exact name; exact nickname; case-insensitive
+    name/nickname; startsWith on name/nickname; jersey number (any digits in
+    the string); first-name match. Returns None if nothing matches.
+    """
+    if spoken is None:
+        return None
+    s = str(spoken).strip()
+    if not s:
+        return None
+    low = s.lower()
+    for p in roster:
+        if p.get("name") == s:
+            return p["name"]
+    for p in roster:
+        if p.get("nickname") and p["nickname"] == s:
+            return p["name"]
+    for p in roster:
+        if str(p.get("name", "")).lower() == low:
+            return p["name"]
+        if p.get("nickname") and str(p["nickname"]).lower() == low:
+            return p["name"]
+    for p in roster:
+        if str(p.get("name", "")).lower().startswith(low):
+            return p["name"]
+        if p.get("nickname") and str(p["nickname"]).lower().startswith(low):
+            return p["name"]
+    digits = "".join(ch for ch in s if ch.isdigit())
+    if digits:
+        for p in roster:
+            if str(p.get("number") or "") == digits:
+                return p["name"]
+    for p in roster:
+        name = str(p.get("name", ""))
+        first = name.split()[0].lower() if name else ""
+        if first and first == low:
+            return p["name"]
+    return None
+
+
+_PLAYER_FIELDS = ("thrower", "receiver", "defender")
+
+
+def resolve_event_players(
+    events: List[Dict[str, Any]], roster: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """Return copies of the events with player fields resolved to canonical
+    roster names where possible. Unresolvable names are left as emitted, so
+    a confabulated name still scores as a mismatch."""
+    out = []
+    for ev in events:
+        ev = dict(ev)
+        for f in _PLAYER_FIELDS:
+            if f in ev:
+                resolved = resolve_player_name(ev[f], roster)
+                if resolved is not None:
+                    ev[f] = resolved
+        out.append(ev)
+    return out
 
 
 def _apply_fastpass_retractions(
@@ -1061,6 +1129,9 @@ class FastPassScenarioResult:
     outcome: FastPassOutcome
     expected_transcript: str
     expected_events: List[Dict[str, Any]]
+    # net_events after resolve_event_players() — what production would show
+    # the coach, and what event_score is computed on.
+    scored_events: List[Dict[str, Any]]
     event_score: EventScore
 
     @property
@@ -1077,6 +1148,7 @@ class FastPassScenarioResult:
             "outcome": dataclasses.asdict(self.outcome),
             "expected_transcript": self.expected_transcript,
             "expected_events": self.expected_events,
+            "scored_events": self.scored_events,
             "precision": self.event_score.precision,
             "recall": self.event_score.recall,
             "f1": self.event_score.f1,
@@ -1096,13 +1168,15 @@ async def run_scenario_fastpass(
     outcome = await stream_audio_for_events(
         s.audio_path, s.roster, s.game_context, sample_rate=s.sample_rate, config=config
     )
-    score = score_event_list(s.expected_events, outcome.net_events)
+    scored_events = resolve_event_players(outcome.net_events, s.roster)
+    score = score_event_list(s.expected_events, scored_events)
     return FastPassScenarioResult(
         name=s.name,
         config=config,
         outcome=outcome,
         expected_transcript=s.expected_transcript,
         expected_events=s.expected_events,
+        scored_events=scored_events,
         event_score=score,
     )
 

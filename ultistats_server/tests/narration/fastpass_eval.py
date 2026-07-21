@@ -96,7 +96,7 @@ def _score_at_confidence(result: FastPassScenarioResult, min_conf: str):
     floor = _CONF_RANK[min_conf]
     events = [
         ev
-        for ev in result.outcome.net_events
+        for ev in result.scored_events
         if _CONF_RANK.get(str(ev.get("confidence", "high")), 2) >= floor
     ]
     return score_event_list(result.expected_events, events)
@@ -194,8 +194,8 @@ def _print_baseline(d: Dict[str, Any]) -> None:
 
 def _micro(rows: List[Dict[str, Any]]) -> Dict[str, float]:
     matched = sum(r["matched"] for r in rows)
-    expected = sum(len(r.get("expected_events", [])) if "expected_events" in r else r["expected"] for r in rows)
-    actual = sum(len(r["outcome"]["net_events"]) if "outcome" in r else r["actual"] for r in rows)
+    expected = sum(len(r["expected_events"]) if "expected_events" in r else r["expected"] for r in rows)
+    actual = sum(len(r["scored_events"]) if "scored_events" in r else r["actual"] for r in rows)
     p = matched / actual if actual else 1.0
     rc = matched / expected if expected else 1.0
     f1 = 2 * p * rc / (p + rc) if (p + rc) else 0.0
