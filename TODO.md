@@ -770,9 +770,11 @@ Higher-leverage interventions, in roughly priority order:
   - `computeAutoLine` / `buildAutoLineStats` in [game/gameScreen.js](game/gameScreen.js). Auto only *fills empty slots* up to the field count (7 for 7v7, 5 for 5v5, …); already-checked players are kept, and a full line fills nothing. Wholesale clears so Auto can repopulate from scratch.
   - Strict decreasing priority: (1) satisfy the active gender ratio's per-gender targets; (2) prefer players **not on the last point**; (3) prefer **less time played**, bucketed into **quintiles** (equal-time players share a bucket) so "about the same time" is one equivalence class; within a quintile tiebreak by (4) **fewer points played**, then (5) **longest current bench streak** (out the most points in a row).
   - All metrics are **current-game** scope. Time = `getPlayerGameTime`; roster = `getActiveRoster()` (event-aware, includes pickups).
-- [ ] Handlers / cutters with per-line minimums
-  - Add a position field to player records (handler / cutter / hybrid) and let the coach set a **minimum number of each** per line; Auto treats those minimums as constraints alongside the gender ratio (gender first, then position minimums), filling the rest by the priority order above.
-  - Also: O-line / D-line preference per player to bias Auto by point type.
+- [x] Handlers / cutters + O/D-line preference in Auto — shipped on `auto-line-2`
+  - Player `position` (handler / cutter / hybrid) and `defaultLine` (O / D / Crossover) attributes on the Player model (unset ⇒ hybrid / crossover); editable in the roster player dialog, and **inherited-but-overridable per event** (tap a team player in the event roster → "Event Position / Line"; overrides stored in `event.roster.overrides`). Resolvers `getEffectivePosition` / `getEffectiveDefaultLine` (store/storage.js).
+  - Auto priority is now: gender ratio → **rest (not on last point)** → **position** (aim ≥ floor(n/2) handler-capable, ≥ ceil(n/2) cutter-capable; hybrids/unlabeled satisfy both) → **O/D-line preference** (by resolved point side; skipped in combined mode mid-point and On Deck) → PT quintile → fewer points → bench streak → name. Position/O-D are **soft** (never override rest); only gender pulls in a just-played player. Need-aware greedy in `computeAutoLine` (game/selectLine.js).
+  - Warning toast "Auto line may have too few handlers/cutters" when the minimums can't be met (silent when players are unlabeled).
+  - **Still open**: explicit per-line **minimum** counts the coach can set (current rule is a fixed half/half target, not a configurable minimum).
 - [ ] AI/stats-driven "moneyball" auto-subbing
   - Use accumulated game/event stats (and/or an AI model) to pick players who **play well together** and suggest matchup-aware lines, beyond simple fatigue/rotation balancing.
 - [ ] Reward-workhorses tiebreak (optional)
