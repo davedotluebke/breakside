@@ -279,7 +279,19 @@ function deserializeEvent(eventData) {
             event[key] = eventData[key];
         }
     }
-    
+
+    // Legacy-flag alias: "dump" was renamed to "reset" (reset is the
+    // canonical term in code, logs, and stats). Games stored before the
+    // rename carry dump_flag; normalize here — the single chokepoint every
+    // rebuild path (localStorage load, cloud refresh, viewer sync) funnels
+    // through — and drop the stray so serializeEvent (which diffs against a
+    // default instance) writes back reset_flag only.
+    if (event.dump_flag) {
+        event.reset_flag = true;
+    }
+    delete event.dump_flag;
+
+
     // Now replace player references with Player instances
     // Try ID-based lookup first (new format), fall back to name lookup (legacy)
     switch (eventData.type) {

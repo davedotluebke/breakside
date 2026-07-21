@@ -13,7 +13,7 @@
     "kind": "throw",
     "thrower": "Carla",
     "receiver": "Bob",
-    "dump": true
+    "reset": true
   },
   {
     "kind": "throw",

@@ -306,13 +306,17 @@ class Event {
 
 // Throw event class
 class Throw extends Event {
-    constructor({thrower = "voidthrower", receiver = "voidreceiver", huck = false, breakmark = false, dump = false, swing = false, hammer = false, sky = false, layout = false, score = false, from = null, to = null, assist = null}) {
+    constructor({thrower = "voidthrower", receiver = "voidreceiver", huck = false, breakmark = false, reset = false, swing = false, hammer = false, sky = false, layout = false, score = false, from = null, to = null, assist = null}) {
         super('Throw');
         this.thrower = thrower;
         this.receiver = receiver;
         this.huck_flag = huck;
         this.break_flag = breakmark;
-        this.dump_flag = dump;
+        // Short backward pass to a handler. Coaches say "reset" or "dump" —
+        // "reset" is the canonical term everywhere in code, logs, and stats
+        // (2026-07-19 design call). deserializeEvent aliases legacy stored
+        // dump_flag onto this.
+        this.reset_flag = reset;
         this.swing_flag = swing;   // significant lateral (cross-field) throw (auto-set by Field mode, editable)
         this.hammer_flag = hammer;
         this.sky_flag = sky;
@@ -337,7 +341,7 @@ class Throw extends Event {
         let receiver = this.receiver ? this.receiver.name : '';
         if (this.break_flag)        { throwType += 'break '; }
         if (this.hammer_flag)       { throwType += 'hammer '; }
-        if (this.dump_flag)         { throwType += 'dump '; }
+        if (this.reset_flag)        { throwType += 'reset '; }
         if (this.swing_flag)        { throwType += 'swing '; }
         if (throwType)              { summary += `a ${throwType}`; }
         if (receiver)               { summary += `to ${this.receiver.name} `; }
