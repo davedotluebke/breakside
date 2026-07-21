@@ -74,6 +74,46 @@ clean it up, but it would be on the coach's screen until then.
   confidence here.
 - Cost per full-suite fast-pass run: well under $1 (≈3.5 min of audio).
 
+## Follow-up: the "dead retract path" diagnosed (2026-07-21, same day)
+
+Root cause found via two new harness capabilities: `026_delayed_correction`
+(TTS segments joined by a 4s gap via `tools/generate_gapped_audio.py`, so
+the wrong event must be emitted *before* the correction is heard) and a
+`response_index` on every recorded call.
+
+**`retract_event` is not broken — it was unexercised.** Findings:
+
+1. With `eagerness: low`, a 4-second silence does **not** close the turn.
+   The model hears the correction before responding and simply emits the
+   corrected event (5/5 runs, zero stale events — the correction is
+   absorbed invisibly). Retraction never gets an opportunity anywhere in
+   the suite at this setting.
+2. With `eagerness: high`, the gap closes the turn, the wrong event is
+   emitted, and the model then executes the ideal sequence **5/5 runs**:
+   `retract_event {kind: throw, player: Bob, reason: "coach corrected
+   receiver"}` → corrected `record_throw`. The mechanism works, with
+   well-targeted arguments, and needs no `function_call_output` acks.
+3. 006's one failing run (stale "Score!" throw + a text promise to fix it)
+   is single-turn flakiness, not a retract failure: 5/5 clean on re-runs.
+   The slow pass cleans this class up regardless.
+4. **Pending-call (ack) hypothesis for truncation: refuted.** Sending
+   `function_call_output` after each response (`--ack` /
+   `FastPassConfig.ack_function_calls`) left the truncation set at
+   R=0.40 with the same text-instead-of-calls pattern. Truncation is
+   intra-response model behavior on long event chains, the main real
+   weakness found in this eval.
+5. Full suite at `eagerness: high`: P=0.949 R=0.673 F1=0.787 —
+   statistically indistinguishable from `low` (P=0.949 R=0.685) — and the
+   noise probes stayed at **zero confabulations** (4 runs each at high).
+
+**Config implication for Phase 2**: eagerness low vs high is a UX choice,
+not a safety one. Low absorbs most corrections silently (nothing stale ever
+shown) but adds latency and leaves rare single-turn flakes; high shows
+events sooner and demonstrably self-corrects via the retract path the
+CONFIRM/RETRACT applier already supports. Neither fixes multi-event
+truncation — that is the open problem the slow-pass reviewer must keep
+covering.
+
 ## Verdict vs the plan's acceptance bar
 
 - Zero noise-only confabulations across 3 runs: **met** (0 across 5 runs).
