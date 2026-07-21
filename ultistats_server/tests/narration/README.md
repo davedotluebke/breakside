@@ -7,9 +7,12 @@ Audio-driven regression / evaluation harness for the AI narration feature. Each 
 ```
 tests/narration/
 ├── runner.py                # core: audio streaming + finalize call + metrics
+│                            #   + stream_audio_for_events (fast-pass replay)
+├── fastpass_eval.py         # fast pass vs slow pass eval driver (CLI)
 ├── test_scenarios.py        # pytest entry point (auto-discovers scenarios/)
 ├── tools/
-│   └── generate_synthetic_audio.py   # OpenAI TTS → audio.pcm
+│   ├── generate_synthetic_audio.py   # OpenAI TTS → audio.flac
+│   └── generate_noise_audio.py       # noise-probe audio for 023-025
 └── scenarios/
     └── 001_single_throw/
         ├── transcript.txt   # ground-truth: what the coach is saying
@@ -78,6 +81,40 @@ NARRATION_LIVE_TESTS=1 pytest ultistats_server/tests/narration/ -s
 These scenarios hit live paid APIs and are non-deterministic, so they're **opt-in**: without `NARRATION_LIVE_TESTS=1` they all skip (they also carry a `live_llm` pytest marker). That keeps the default `pytest ultistats_server/` run fast and deterministic even on machines with API keys exported.
 
 Pass threshold is F1 ≥ 0.6 by default (override with `NARRATION_MIN_F1=0.8`). Scenarios with no audio file are skipped, not failed — lets you commit a transcript + expected pair before generating audio.
+
+## Fast-pass replay eval (conversation mode)
+
+`runner.stream_audio_for_events()` replays scenario audio through a
+**conversation-mode** Realtime session (tools + function calling) — the "fast
+pass events" path abandoned in 2025, evaluated offline per
+`docs/narration-fastpass-pilot-plan.md`. Session config (model, noise
+reduction, semantic-VAD eagerness, strict schemas) is parameterized via
+`FastPassConfig`; scoring runs on the *net* event list after the model's own
+`retract_event` calls, with player names resolved the way the production
+client did.
+
+Drive it with the eval CLI:
+
+```bash
+python -m ultistats_server.tests.narration.fastpass_eval                      # all scenarios
+python -m ultistats_server.tests.narration.fastpass_eval --baseline --runs 3 \
+    023_noise_only_wind 024_noise_only_sideline                               # confabulation probe
+python -m ultistats_server.tests.narration.fastpass_eval --model gpt-realtime-2.1-mini --no-strict
+```
+
+`--baseline` also runs the production transcription+slow-pass path on the same
+audio so reports read "fast pass vs slow pass on identical audio". See the
+module docstring for all flags. Findings from the July 2026 run: GA realtime
+sessions **reject** `strict: true` on tools (`unknown_parameter`) — the runner
+falls back automatically and records the answer in `strict_mode`.
+
+**Noise-probe scenarios** (`023_noise_only_wind`, `024_noise_only_sideline`)
+have real audio but `expected.json: []` — any emitted event is a
+confabulation. `025_narration_over_crowd` overlays 002's narration on a loud
+crowd bed. Their audio comes from `tools/generate_noise_audio.py` (seeded
+wind synthesis + TTS chatter), not the TTS generator. Note they also join the
+regular pytest suite: with an empty expected list, precision 1.0 requires the
+*slow* pass to emit nothing either.
 
 ## Adding a scenario
 
