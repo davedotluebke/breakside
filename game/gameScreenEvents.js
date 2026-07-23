@@ -26,6 +26,7 @@ import {
 import { showSelectTeamScreen } from '../teams/teamList.js';
 import { showTeamSettingsScreen } from '../teams/teamSettings.js';
 import { showGameSummaryPostGame } from '../teams/gameSummary.js';
+import { showShareGameDialog } from './shareGame.js';
 import { showConnectionInfo } from '../teams/syncStatusUI.js';
 import { moveToNextPoint, stopCountdown } from './pointManagement.js';
 import { updateScore, undoEvent, appVersion } from './gameLogic.js';
@@ -142,6 +143,14 @@ function wireGameScreenEvents() {
             closeGameMenu();
             if (typeof hideGameScreen === 'function') hideGameScreen();
             if (typeof showTeamSettingsScreen === 'function') showTeamSettingsScreen('gameScreen');
+        });
+    }
+
+    const shareGameBtn = document.getElementById('menuShareGame');
+    if (shareGameBtn) {
+        shareGameBtn.addEventListener('click', () => {
+            closeGameMenu();
+            showShareGameDialog(currentGame());
         });
     }
 

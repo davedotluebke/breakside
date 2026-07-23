@@ -82,6 +82,9 @@ function createHeaderContent() {
                 <button class="menu-item" id="menuTeamSettings">
                     <i class="fas fa-shield-alt"></i> Team Settings
                 </button>
+                <button class="menu-item" id="menuShareGame">
+                    <i class="fas fa-share-alt"></i> Share Game
+                </button>
                 <button class="menu-item" id="menuToggleRoleButtons">
                     <i class="fas fa-user-tag"></i> Show Role Buttons
                 </button>
