@@ -66,7 +66,7 @@ import './store/models.js';
 import './store/pendingLineLogic.js';
 import './store/authFetchLogic.js';
 import './store/pointTimerNormalizer.js';
-import './utils/helpers.js';
+import { currentGame } from './utils/helpers.js';
 import { currentTeam } from './store/storage.js';
 import './store/sync.js';
 import './settings/advancedSettings.js';
@@ -89,6 +89,7 @@ import './teams/activeGamePolling.js';
 import { showTeamSettingsScreen } from './teams/teamSettings.js';
 import './teams/eventRoster.js';
 import { getGameSummaryBackTarget } from './teams/gameSummary.js';
+import { showShareGameDialog } from './game/shareGame.js';
 import './game/genderRatioDropdown.js';
 import './game/pointStats.js';
 import './game/undoLogic.js';
@@ -589,8 +590,17 @@ function updateAppMenuState() {
     const rosterBtn = document.getElementById('menuAppRoster');
     const settingsBtn = document.getElementById('menuAppTeamSettings');
     const switchBtn = document.getElementById('menuSwitchTeam');
+    const shareBtn = document.getElementById('menuAppShareGame');
 
     const onSelectScreen = document.getElementById('selectTeamScreen')?.style.display !== 'none';
+
+    // Share Game targets the CURRENT game — only meaningful while one is
+    // open (in-game screens). Everywhere else the game-summary Share button
+    // covers sharing after the fact.
+    if (shareBtn) {
+        const inGame = typeof isGameScreenVisible === 'function' && isGameScreenVisible();
+        shareBtn.style.display = inGame && hasTeam ? '' : 'none';
+    }
 
     // Roster and Team Settings are team-scoped — they only make sense once
     // you're inside a particular team. Hide them entirely on the team-selection
@@ -655,6 +665,11 @@ function initializeAppMenu() {
     document.getElementById('menuAppTeamSettings')?.addEventListener('click', () => {
         closeAppMenu();
         if (typeof showTeamSettingsScreen === 'function') showTeamSettingsScreen();
+    });
+
+    document.getElementById('menuAppShareGame')?.addEventListener('click', () => {
+        closeAppMenu();
+        showShareGameDialog(currentGame());
     });
 
     document.getElementById('menuAppAdvancedSettings')?.addEventListener('click', () => {

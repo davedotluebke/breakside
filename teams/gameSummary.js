@@ -19,6 +19,7 @@ import {
     safeSheetName, safeFilename,
 } from '../utils/xlsxExport.js';
 import { showScreen } from '../screens/navigation.js';
+import { showShareGameDialog } from '../game/shareGame.js';
 
 // Track where we came from so back button navigates correctly
 let gameSummaryOrigin = 'teamRosterScreen'; // default for post-game flow
@@ -82,6 +83,13 @@ function renderGameSummary(game) {
     if (exportBtn) {
         const hasStats = game.points && game.points.some(p => p.winner);
         exportBtn.style.display = hasStats ? '' : 'none';
+    }
+
+    // Share button: any game with a server id can be shared (the dialog
+    // handles the never-synced case with a friendly nudge).
+    const shareBtn = document.getElementById('shareGameSummaryBtn');
+    if (shareBtn) {
+        shareBtn.style.display = game.id ? '' : 'none';
     }
 
     showScreen('gameSummaryScreen');
@@ -395,6 +403,11 @@ function getGameSummaryBackTarget() {
 
 // Wire up XLSX export button
 document.getElementById('exportGameSummaryBtn')?.addEventListener('click', exportGameSummaryXLSX);
+
+// Wire up Share button (public live-link dialog for the rendered game)
+document.getElementById('shareGameSummaryBtn')?.addEventListener('click', () => {
+    if (_lastRenderedGame) showShareGameDialog(_lastRenderedGame);
+});
 
 // --- ES-module exports ---
 export { showGameSummaryFromList, showGameSummaryPostGame, getGameSummaryBackTarget };
