@@ -7,10 +7,25 @@
 // Configuration
 // =============================================================================
 
-// API base URL - use same origin in production, localhost in dev
-const API_BASE = window.location.hostname === 'localhost'
-    ? 'http://localhost:8000'
-    : window.location.origin;
+// API base URL. This page is served from the static origins (www/staging,
+// via CloudFront→S3) where there is NO /api/* behind the same origin — the
+// API lives at api.breakside.pro. Mirror store/sync.js getApiBaseUrl():
+// breakside domains → api.breakside.pro; localhost → :8000 (with a
+// transient ?api= override for dev backends on other ports); anything else
+// (e.g. the api host itself) → same origin.
+const API_BASE = (() => {
+    const apiParam = new URLSearchParams(window.location.search).get('api');
+    if (apiParam && apiParam !== 'reset') return apiParam;
+
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:8000';
+    if (host === 'breakside.pro' || host.endsWith('.breakside.pro') ||
+        host === 'breakside.us' || host.endsWith('.breakside.us') ||
+        host === 'luebke.us') {
+        return 'https://api.breakside.pro';
+    }
+    return window.location.origin;
+})();
 
 // The Supabase client (`supabaseClient`) is created by supabaseInit.js,
 // loaded before this script — shared with landing.js via the global scope.

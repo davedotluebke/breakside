@@ -1145,15 +1145,26 @@ Role claim buttons (Play-by-Play / Next Line) are hidden when only one coach is 
 
 ### Invite Codes
 
-URL structure for invite codes:
+Invites are 5-character codes (alphabet excludes 0/O/1/I/L; case-insensitive).
+Coach invites are single-use with 7-day expiry; viewer invites are multi-use
+with 30-day expiry (both revocable). The share URL minted by the API is
+`https://www.breakside.pro/join/{code}`.
 
-| Purpose | URL Format |
-|---------|------------|
-| Coach invite | `/join/t/{team-hash}?role=coach` |
-| Viewer invite | `/join/t/{team-hash}?role=viewer` |
-| Game spectator | `/join/g/{game-hash}` |
+**How `/join/{code}` resolves** — the canonical join page is
+`/landing/join.html?code={code}`; everything else funnels there:
 
-Coach invites are single-use with 7-day expiry. Viewer invites are multi-use and permanent (but revocable).
+| Origin | Mechanism |
+|--------|-----------|
+| www/staging (CloudFront→S3) | No `/join/*` route exists, so the S3 404 fallback serves `index.html` — an inline `<head>` shim there redirects `/join/<code>` to the canonical page before the app boots |
+| api.breakside.pro (FastAPI) | `routers/static_files.py` 302-redirects to the canonical page |
+
+Do NOT serve join.html directly at `/join/{code}`: the page's relative asset
+URLs (join.js, supabaseInit.js, CSS) would resolve under `/join/` and the
+`{code}` route would answer them with HTML (this was broken until 2026-07;
+`test_invite_redeem.py::TestJoinShortLink` pins the redirect). Note also that
+the static origins have no `/api/*` — `landing/join.js` maps breakside
+hostnames to `https://api.breakside.pro` itself (mirrors `getApiBaseUrl()`);
+same-origin API calls only work when the page is served by the API host.
 
 ### Multi-User Polling Strategy
 
@@ -1179,7 +1190,7 @@ Coaches poll the ping endpoint to maintain role claims and detect other coaches.
 | `/` | Landing page (intro, login, download instructions) |
 | `/app/` | PWA entry point |
 | `/view/{game-hash}` | Public game viewer (no auth required) |
-| `/join/{code}` | Invite redemption handler |
+| `/join/{code}` | Invite short link → redirects to `/landing/join.html?code={code}` |
 
 ### Client-Side Auth Module
 

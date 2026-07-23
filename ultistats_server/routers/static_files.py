@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from ._shared import safe_static_path
 
@@ -104,14 +104,16 @@ async def serve_app_file(filename: str):
 @router.get("/join/{code}")
 async def join_page(code: str):
     """
-    Serve the join page for invite redemption.
+    Redirect invite short links to the canonical join page.
 
-    The code is passed via URL path and read by the JavaScript.
+    Serving join.html directly at /join/{code} is a trap: the page's relative
+    asset URLs (join.js, supabaseInit.js, the stylesheets) also resolve under
+    /join/ and this same route would answer them with HTML. The redirect keeps
+    the document at /landing/join.html, where relative assets resolve.
     """
-    join_file = landing_dir / "join.html"
-    if join_file.exists():
-        return FileResponse(join_file, media_type="text/html")
-    raise HTTPException(status_code=404, detail="Join page not found")
+    if not (code.isascii() and code.isalnum()):
+        raise HTTPException(status_code=404, detail="Not found")
+    return RedirectResponse(url=f"/landing/join.html?code={code}", status_code=302)
 
 
 # =============================================================================
