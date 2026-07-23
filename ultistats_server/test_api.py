@@ -331,6 +331,33 @@ class TestTeamAPI:
         assert response.json()["team"]["name"] == "UpdatedTeam"
         assert response.json()["team"]["playerIds"] == ["Player-1234"]
     
+    def test_sets_fields_round_trip(self, client):
+        """setsEnabled + sets label lists survive create/update/get.
+
+        The per-possession set tagging feature stores its team-level opt-in
+        and label lists as plain team fields; storage is schema-loose, so
+        this pins that the API neither strips nor mangles them.
+        """
+        create_response = client.post("/api/teams", json={
+            "name": "SetsTeam",
+            "setsEnabled": True,
+            "sets": {"offensive": ["Vert", "Ho"], "defensive": ["Zone"]},
+        })
+        team_id = create_response.json()["team_id"]
+
+        got = client.get(f"/api/teams/{team_id}").json()
+        assert got["setsEnabled"] is True
+        assert got["sets"] == {"offensive": ["Vert", "Ho"], "defensive": ["Zone"]}
+
+        client.put(f"/api/teams/{team_id}", json={
+            "name": "SetsTeam",
+            "setsEnabled": False,
+            "sets": {"offensive": [], "defensive": ["Zone", "Match"]},
+        })
+        got = client.get(f"/api/teams/{team_id}").json()
+        assert got["setsEnabled"] is False
+        assert got["sets"]["defensive"] == ["Zone", "Match"]
+
     def test_delete_team(self, client):
         """Test DELETE /api/teams/{team_id} removes team."""
         create_response = client.post("/api/teams", json={"name": "DeleteTeam"})
@@ -530,6 +557,30 @@ class TestGameAPI:
         assert data["game_id"] == "api-test-game"
         assert "version" in data
     
+    def test_possession_set_survives_sync_round_trip(self, client):
+        """A possession's set label passes through sync + get untouched."""
+        game_id = "api-test-sets-game"
+        payload = {
+            "team": "TestTeam",
+            "teamId": "SyncTeam-0001",
+            "opponent": "Opponent",
+            "scores": {"team": 0, "opponent": 0},
+            "points": [{
+                "players": ["Alice"],
+                "winner": "",
+                "possessions": [
+                    {"offensive": False, "set": "Zone", "events": []},
+                    {"offensive": True, "events": []},
+                ],
+            }],
+        }
+        assert client.post(f"/api/games/{game_id}/sync", json=payload).status_code == 200
+
+        got = client.get(f"/api/games/{game_id}").json()
+        possessions = got["points"][0]["possessions"]
+        assert possessions[0]["set"] == "Zone"
+        assert "set" not in possessions[1] or possessions[1].get("set") is None
+
     def test_sync_game_without_team_fails(self, client):
         """Test that syncing without team/teamId returns 400."""
         response = client.post("/api/games/invalid-game/sync", json={

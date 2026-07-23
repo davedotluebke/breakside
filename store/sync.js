@@ -757,7 +757,10 @@ async function syncTeamToCloud(team) {
         updatedAt: updatedAt,
         // Phase 6b: Team identity fields (synced when team settings change)
         teamSymbol: team.teamSymbol || null,
-        iconUrl: team.iconUrl || null
+        iconUrl: team.iconUrl || null,
+        // Set tagging opt-in + label lists (see Team constructor)
+        setsEnabled: !!team.setsEnabled,
+        sets: team.sets || { offensive: [], defensive: [] }
     };
     
     log('📤 Queueing team sync:', {
@@ -1358,12 +1361,19 @@ async function syncUserTeams() {
                 // Phase 6b: Restore team identity fields
                 localTeam.teamSymbol = serverTeam.teamSymbol || null;
                 localTeam.iconUrl = serverTeam.iconUrl || null;
-                
+
+                // Set tagging fields (default off/empty when server predates them)
+                localTeam.setsEnabled = !!serverTeam.setsEnabled;
+                localTeam.sets = {
+                    offensive: serverTeam.sets?.offensive || [],
+                    defensive: serverTeam.sets?.defensive || [],
+                };
+
                 // If server has embedded roster data, deserialize it
                 if (serverTeam.teamRoster && serverTeam.teamRoster.length > 0) {
                     localTeam.teamRoster = serverTeam.teamRoster.map(p => deserializePlayer(p));
                 }
-                
+
                 // Add to local teams array
                 teams.push(localTeam);
                 syncedCount++;
@@ -1400,6 +1410,13 @@ async function syncUserTeams() {
                     // Phase 6b: Update team identity fields
                     localTeam.teamSymbol = serverTeam.teamSymbol || null;
                     localTeam.iconUrl = serverTeam.iconUrl || null;
+
+                    // Set tagging fields follow the same server-newer rule
+                    localTeam.setsEnabled = !!serverTeam.setsEnabled;
+                    localTeam.sets = {
+                        offensive: serverTeam.sets?.offensive || [],
+                        defensive: serverTeam.sets?.defensive || [],
+                    };
                     
                     // Update roster if provided
                     if (serverTeam.teamRoster && serverTeam.teamRoster.length > 0) {

@@ -174,6 +174,7 @@ function serializeGame(game) {
             possessions: point.possessions.map(possession => ({
                 offensive: possession.offensive,
                 modes: possession.modes || [],  // PBP modes events were recorded under in this possession
+                set: possession.set || null,  // set label (zone tracking) — null when untagged
                 events: possession.events.map(event => serializeEvent(event))
             }))
         }))
@@ -196,6 +197,10 @@ function serializeTeam(team) {
         // Phase 6b: Team identity for header display
         teamSymbol: team.teamSymbol || null,
         iconUrl: team.iconUrl || null,
+
+        // Per-possession set tagging opt-in + label lists
+        setsEnabled: !!team.setsEnabled,
+        sets: team.sets || { offensive: [], defensive: [] },
         
         // Existing fields
         name: team.name,
@@ -435,6 +440,7 @@ function deserializePointsFromServer(pointsData) {
             point.possessions = pointData.possessions.map(possessionData => {
                 const possession = new Possession(possessionData.offensive);
                 possession.modes = possessionData.modes || [];  // empty for legacy data
+                possession.set = possessionData.set || null;  // null for legacy/untagged data
                 if (possessionData.events && Array.isArray(possessionData.events)) {
                     possession.events = possessionData.events.map(eventData => deserializeEvent(eventData));
                 }
@@ -569,6 +575,13 @@ function deserializeTeams(serializedData) {
         // Phase 6b: Restore team identity fields
         team.teamSymbol = teamData.teamSymbol || null;
         team.iconUrl = teamData.iconUrl || null;
+
+        // Set tagging: default off / empty lists for legacy data
+        team.setsEnabled = !!teamData.setsEnabled;
+        team.sets = {
+            offensive: teamData.sets?.offensive || [],
+            defensive: teamData.sets?.defensive || [],
+        };
         
         // Deserialize the roster
         team.teamRoster = teamData.teamRoster.map(playerData => deserializePlayer(playerData));
