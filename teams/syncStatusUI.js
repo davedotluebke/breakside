@@ -229,12 +229,21 @@ async function showConnectionInfo() {
         }
     }
 
+    // Surface stuck sync-queue items with a path to inspect/clear them —
+    // the pending badge only exists on the teams screen's sync bar, so from
+    // here (e.g. mid-game) this is the only route to the pending dialog.
+    const pendingCount = getSyncStatus().pendingCount || 0;
+    const pendingLine = pendingCount > 0
+        ? `<br>${pendingCount} pending update${pendingCount > 1 ? 's' : ''} waiting to sync ` +
+          `<button onclick="showPendingSyncDialog()" class="update-now-btn">View / Clear…</button>`
+        : '';
+
     const message = `${isOnline ? 'Online' : 'Offline'}<br>` +
-        `<span style="font-size:0.9em;">${versionLine}<br>User: ${userEmail}<br>Server: ${serverUrl}${updateButton}</span>`;
+        `<span style="font-size:0.9em;">${versionLine}<br>User: ${userEmail}<br>Server: ${serverUrl}${pendingLine}${updateButton}</span>`;
 
     if (typeof showControllerToast === 'function') {
-        // Longer duration if update is available
-        showControllerToast(message, 'info', updateButton ? 8000 : 4000);
+        // Longer duration if update is available or pending items need action
+        showControllerToast(message, 'info', (updateButton || pendingLine) ? 8000 : 4000);
     }
 }
 
