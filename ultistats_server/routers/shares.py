@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ._shared import (
+    auth_required,
     create_share_link,
     game_exists,
     get_current_user,
@@ -135,8 +136,10 @@ async def revoke_share_endpoint(
     if not share:
         raise HTTPException(status_code=404, detail="Share link not found")
 
-    # Must be admin or coach of the team
-    if not is_admin(user["id"]):
+    # Must be admin or coach of the team. Skipped when auth is disabled,
+    # matching the require_* dependencies (local dev backends run with
+    # ULTISTATS_AUTH_REQUIRED=false and no memberships for the test user).
+    if auth_required() and not is_admin(user["id"]):
         role = get_user_team_role(user["id"], share["teamId"])
         if role != "coach":
             raise HTTPException(status_code=403, detail="Coach access required")
