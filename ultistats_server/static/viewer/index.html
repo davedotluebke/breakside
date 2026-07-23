@@ -99,6 +99,10 @@
             <div class="detail-header">
                 <button class="back-btn" onclick="showHomeView()">← Back to Games</button>
             </div>
+            <!-- Shown if a share link dies while someone is watching -->
+            <div id="share-expired-banner" class="share-banner" style="display: none;">
+                This share link has expired — the score below is no longer updating.
+            </div>
             <div class="game-header">
                 <div class="header-main-row">
                     <div id="info-toggle" class="info-icon" title="Show Game Info">
@@ -110,6 +114,7 @@
                     </div>
                     <h1 id="game-title">Loading...</h1>
                     <span id="game-score" class="score-display"></span>
+                    <span id="game-status-badge" class="game-status-badge" style="display: none;"></span>
                 </div>
                 
                 <div id="game-info-panel" class="game-info-panel">
@@ -137,6 +142,16 @@
 
             <div id="points-container" class="points-container">
                 <!-- Points will be injected here -->
+            </div>
+        </div>
+
+        <!-- Share-link error view (bad / expired / revoked link) -->
+        <div id="share-error-view" class="hidden">
+            <div class="share-error">
+                <div class="share-error-icon">🥏</div>
+                <h1 id="share-error-title">Game not found</h1>
+                <p id="share-error-message">This share link isn't valid.</p>
+                <a class="share-cta-btn" href="https://www.breakside.pro">What is Breakside?</a>
             </div>
         </div>
 
@@ -260,6 +275,12 @@
             </div>
         </div>
     </main>
+
+    <!-- Share-mode footer: the viewer is the shop window for anonymous visitors -->
+    <footer id="share-footer" class="share-footer" style="display: none;">
+        Live game tracking by <a href="https://www.breakside.pro">Breakside</a> —
+        free real-time ultimate stats for your team
+    </footer>
 
     <script src="viewer.js"></script>
 </body>

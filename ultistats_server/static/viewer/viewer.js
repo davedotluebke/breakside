@@ -44,11 +44,21 @@ console.log(`📡 Viewer API URL: ${API_BASE_URL || '(same origin)'}`);
 
 const POLL_INTERVAL = 3000; // 3 seconds
 const SYNC_STATUS_POLL_INTERVAL = 5000; // 5 seconds
+// A game with no end timestamp counts as LIVE only if it changed this
+// recently — otherwise it's just unfinished (coach forgot to end it).
+const LIVE_RECENCY_MS = 30 * 60 * 1000;
 let currentGameId = null;
 let lastGameVersion = null;
 let isPolling = false;
 let pollingInterval = null;
 let syncStatusInterval = null;
+
+// Share mode (public /view/{hash} links → /static/viewer/?share=<hash>).
+// All data flows through the public /api/share endpoints; the browse tabs
+// (auth-required endpoints, empty for anonymous visitors) are hidden.
+let currentShareHash = null;
+let lastShareStamp = null;
+let shareFetchInFlight = false;
 
 // Data caches
 let gamesCache = [];
@@ -68,13 +78,14 @@ let lastSyncStatus = null;
 document.addEventListener('DOMContentLoaded', () => {
     // Parse URL parameters
     const urlParams = new URLSearchParams(window.location.search);
+    const shareHash = urlParams.get('share');
     const gameId = urlParams.get('game_id');
     const teamId = urlParams.get('team_id');
     const playerId = urlParams.get('player_id');
-    
+
     // Setup navigation tabs
     setupNavigation();
-    
+
     // Setup info toggle for game detail view
     const infoToggle = document.getElementById('info-toggle');
     if (infoToggle) {
@@ -83,10 +94,17 @@ document.addEventListener('DOMContentLoaded', () => {
             infoPanel.classList.toggle('open');
         });
     }
-    
+
+    // Share mode is its own world: public endpoints only, no sync status,
+    // no browse navigation. Everything else about the page is unchanged.
+    if (shareHash) {
+        showSharedGame(shareHash);
+        return;
+    }
+
     // Start sync status polling (Phase 3)
     startSyncStatusPolling();
-    
+
     // Route to appropriate view
     if (gameId) {
         showGameDetail(gameId);
@@ -533,6 +551,180 @@ async function loadGameDetail() {
     updateConnectionStatus('connected');
 }
 
+// =============================================================================
+// Share Mode (public /view/{hash} links)
+// =============================================================================
+
+/**
+ * Enter share mode: single shared game, public endpoints, live polling.
+ * The page never leaves this mode — anonymous visitors have nowhere else
+ * to go (the browse endpoints require auth and would all come back empty).
+ */
+function showSharedGame(hash) {
+    currentShareHash = hash;
+    document.body.classList.add('share-mode');
+
+    // The logo has nothing useful to link to inside the viewer for an
+    // anonymous visitor — send it to the product page instead.
+    const logo = document.querySelector('.main-header .logo');
+    if (logo) logo.href = 'https://www.breakside.pro';
+
+    document.getElementById('home-view').classList.add('hidden');
+    document.getElementById('game-detail-view').classList.remove('hidden');
+    document.getElementById('team-detail-view').classList.add('hidden');
+    document.getElementById('player-detail-view').classList.add('hidden');
+    document.getElementById('main-nav').classList.add('hidden');
+    document.getElementById('share-footer').style.display = '';
+
+    updateConnectionStatus('connecting');
+    loadSharedGame();
+
+    pollingInterval = setInterval(pollSharedGame, POLL_INTERVAL);
+    isPolling = true;
+
+    // Parents pocket their phones between points: stop polling while the
+    // tab is hidden, catch up immediately when it comes back.
+    document.addEventListener('visibilitychange', () => {
+        if (!currentShareHash) return;
+        if (document.visibilityState === 'hidden') {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
+        } else if (!pollingInterval) {
+            pollSharedGame();
+            pollingInterval = setInterval(pollSharedGame, POLL_INTERVAL);
+        }
+    });
+}
+
+/**
+ * Full fetch of the shared game (initial load + whenever the poll stamp
+ * moves). 404/410 before anything rendered → dedicated error view;
+ * 410 after we have content → banner over the last-known state.
+ */
+async function loadSharedGame() {
+    if (shareFetchInFlight) return;
+    shareFetchInFlight = true;
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/share/${currentShareHash}`);
+
+        if (response.status === 404 || response.status === 410) {
+            handleShareDead(response.status);
+            return;
+        }
+        if (!response.ok) {
+            throw new Error(`Failed to fetch shared game: ${response.statusText}`);
+        }
+
+        const body = await response.json();
+        lastShareStamp = body.version || null;
+
+        renderGame(body.game);
+        renderShareStatusBadge(body.game);
+        updateConnectionStatus('connected');
+    } catch (error) {
+        console.error('Shared game fetch failed:', error);
+        updateConnectionStatus('disconnected');
+    } finally {
+        shareFetchInFlight = false;
+    }
+}
+
+/**
+ * Cheap poll: change stamp only. Refetch the full game when it moves.
+ */
+async function pollSharedGame() {
+    if (!currentShareHash) return;
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/share/${currentShareHash}/poll`);
+
+        if (response.status === 404 || response.status === 410) {
+            handleShareDead(response.status);
+            return;
+        }
+        if (!response.ok) throw new Error(response.statusText);
+
+        const { version } = await response.json();
+        if (version !== lastShareStamp) {
+            await loadSharedGame();
+        } else {
+            updateConnectionStatus('connected');
+        }
+    } catch (error) {
+        console.error('Share poll failed:', error);
+        updateConnectionStatus('disconnected');
+    }
+}
+
+/**
+ * The share stopped resolving (expired, revoked, or never existed).
+ * Stop polling; keep whatever is on screen with a banner if we have it.
+ */
+function handleShareDead(status) {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+    }
+    isPolling = false;
+
+    if (lastShareStamp) {
+        // Mid-session death: keep the last state visible, stop pretending
+        // it's live.
+        document.getElementById('share-expired-banner').style.display = '';
+        setStatusBadge(null);
+        updateConnectionStatus('disconnected');
+        return;
+    }
+
+    document.getElementById('game-detail-view').classList.add('hidden');
+    document.getElementById('share-error-view').classList.remove('hidden');
+    const title = document.getElementById('share-error-title');
+    const message = document.getElementById('share-error-message');
+    if (status === 410) {
+        title.textContent = 'This link has expired';
+        message.textContent =
+            'The coach’s share link for this game has expired or been turned off. ' +
+            'Ask them for a fresh link.';
+    } else {
+        title.textContent = 'Game not found';
+        message.textContent =
+            'This share link isn’t valid — check that the whole link was copied.';
+    }
+    updateConnectionStatus('disconnected');
+}
+
+/**
+ * LIVE / IN PROGRESS / FINAL badge next to the score.
+ * LIVE requires recent activity, not just a missing end timestamp —
+ * a game abandoned without "End Game" months ago is not live.
+ */
+function renderShareStatusBadge(game) {
+    if (game.gameEndTimestamp) {
+        setStatusBadge('final', 'Final');
+        return;
+    }
+    const stampMs = lastShareStamp ? Number(lastShareStamp) / 1e6 : NaN;
+    const isRecent = Number.isFinite(stampMs) && (Date.now() - stampMs) < LIVE_RECENCY_MS;
+    if (isRecent) {
+        setStatusBadge('live', 'Live');
+    } else {
+        setStatusBadge('stale', 'In progress');
+    }
+}
+
+function setStatusBadge(kind, label) {
+    const badge = document.getElementById('game-status-badge');
+    if (!badge) return;
+    if (!kind) {
+        badge.style.display = 'none';
+        return;
+    }
+    badge.textContent = label;
+    badge.className = `game-status-badge status-${kind}`;
+    badge.style.display = '';
+}
+
 /**
  * Resolve a player ID to display name (nickname if present, otherwise name)
  * Falls back to the ID itself if not found in rosterSnapshot
@@ -580,7 +772,9 @@ function renderGame(game) {
     
     // Render Header
     document.getElementById('game-title').textContent = `${game.team} vs ${game.opponent}`;
-    document.getElementById('game-id').textContent = `ID: ${currentGameId}`;
+    // Share mode has no game id in play (and it's internal plumbing anyway)
+    document.getElementById('game-id').textContent =
+        currentShareHash ? '' : `ID: ${currentGameId}`;
     
     const date = new Date(game.gameStartTimestamp);
     document.getElementById('game-date').textContent = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});

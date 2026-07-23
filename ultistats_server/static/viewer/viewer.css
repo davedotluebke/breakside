@@ -1099,3 +1099,109 @@ body {
     background-color: var(--mmp-light);
     color: var(--mmp-color);
 }
+
+/* =============================================================================
+   Share Mode (public /view/{hash} links)
+   ============================================================================= */
+
+/* Anonymous visitors: no browse nav, no PWA sync chrome, no back button,
+   no internal-id / format debugging chrome. */
+body.share-mode .sync-status-container,
+body.share-mode #main-nav,
+body.share-mode .back-btn,
+body.share-mode #game-id,
+body.share-mode #data-format-indicator {
+    display: none !important;
+}
+
+.game-status-badge {
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    align-self: center;
+}
+
+.game-status-badge.status-live {
+    background: var(--danger-color);
+    color: white;
+    animation: pulse 2s infinite;
+}
+
+.game-status-badge.status-stale {
+    background: var(--text-muted);
+    color: white;
+}
+
+.game-status-badge.status-final {
+    background: var(--accent-secondary);
+    color: white;
+}
+
+.share-banner {
+    background: #fff3cd;
+    border: 1px solid #ffeeba;
+    color: #856404;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin: 0.5rem 0 1rem;
+    font-size: 0.9rem;
+}
+
+.share-error {
+    max-width: 480px;
+    margin: 4rem auto;
+    text-align: center;
+    padding: 2rem 1.5rem;
+}
+
+.share-error-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.share-error h1 {
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--text-color);
+}
+
+.share-error p {
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+}
+
+.share-cta-btn {
+    display: inline-block;
+    background: var(--primary-color);
+    color: white;
+    padding: 0.6rem 1.4rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.share-cta-btn:hover {
+    background: var(--primary-dark);
+}
+
+.share-footer {
+    text-align: center;
+    padding: 1.5rem 1rem 2rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.share-footer a {
+    color: var(--primary-color);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.share-footer a:hover {
+    text-decoration: underline;
+}
