@@ -399,3 +399,42 @@ test('golden: full three-point game matches the pre-merge summarizeGame output',
         'Current score: LogDiff 2, Bad Guys 1',
     ].join('\n'));
 });
+
+// ── possession set tags (zone tracking) ─────────────────────────────────
+
+test('possession.set renders in the delimiter and keeps the O/D css classes', () => {
+    const tagged = makePossession(false, [stubEvent('They work it.')]);
+    tagged.set = 'Zone';
+    const game = makeGame({
+        points: [makePoint({
+            players: ['Alice'],
+            startingPosition: 'defense',
+            winner: '',
+            possessions: [tagged],
+        })],
+    });
+    const text = buildGameLogText(game, OPTS);
+    assert.ok(text.includes('— Us on defense (Zone) —'), text);
+
+    assert.equal(classifyGameLogLine('— Us on defense (Zone) —'),
+        'game-log-line game-log-possession-header game-log-possession-defense');
+    assert.equal(classifyGameLogLine('— Us on offense (Vert) —'),
+        'game-log-line game-log-possession-header game-log-possession-offense');
+    // Untagged delimiters unchanged
+    assert.equal(classifyGameLogLine('— Us on offense —'),
+        'game-log-line game-log-possession-header game-log-possession-offense');
+});
+
+test('untagged possession renders the plain delimiter (no empty parens)', () => {
+    const game = makeGame({
+        points: [makePoint({
+            players: ['Alice'],
+            startingPosition: 'offense',
+            winner: '',
+            possessions: [makePossession(true, [stubEvent('Alice to Bob.')])],
+        })],
+    });
+    const text = buildGameLogText(game, OPTS);
+    assert.ok(text.includes('— Us on offense —'), text);
+    assert.ok(!text.includes('()'), text);
+});

@@ -731,13 +731,20 @@ function createPointElement(point, pointNumber, teamName, opponentName) {
 // possession-boundary semantics change there or in gameLogRenderer, mirror
 // the change here by hand.
 // ─────────────────────────────────────────────────────────────────────────────
+// Minimal HTML escape for coach-entered strings interpolated into innerHTML
+// (currently just the possession set label).
+function escapeHtmlViewer(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function renderPossessions(possessions) {
     if (!possessions || possessions.length === 0) return '<div class="possession">No possessions yet</div>';
     
     return possessions.map((pos, index) => `
         <div class="possession">
             <div class="possession-header">
-                ${pos.offensive ? 'Offense' : 'Defense'}
+                ${pos.offensive ? 'Offense' : 'Defense'}${pos.set ? ` <span class="possession-set">(${escapeHtmlViewer(pos.set)})</span>` : ''}
             </div>
             <div class="events-list">
                 ${(pos.events || []).map(event => renderEvent(event)).join('')}

@@ -1099,3 +1099,9 @@ body {
     background-color: var(--mmp-light);
     color: var(--mmp-color);
 }
+
+/* Set label on a possession header (zone tracking) */
+.possession-set {
+    color: var(--text-muted);
+    font-weight: 400;
+}
