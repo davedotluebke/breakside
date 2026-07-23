@@ -1068,3 +1068,107 @@ body {
     }
 }
 
+
+/* =============================================================================
+   Public Games section (landing/publicGames.js)
+   ============================================================================= */
+
+.public-games {
+    padding: var(--space-2xl) var(--space-lg);
+    background: var(--gray-50);
+}
+
+.public-games .section-title {
+    color: var(--gray-800);
+}
+
+.public-games .section-subtitle {
+    color: var(--gray-600);
+}
+
+.public-games-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: var(--space-md, 16px);
+    margin-top: var(--space-lg, 24px);
+}
+
+.pg-card {
+    display: block;
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    padding: 16px;
+    text-decoration: none;
+    color: var(--gray-800);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pg-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+}
+
+.pg-card-top {
+    display: flex;
+    justify-content: flex-end;
+    min-height: 22px;
+    margin-bottom: 6px;
+}
+
+.pg-live-badge {
+    background: #DC2626;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    animation: pg-pulse 2s infinite;
+}
+
+@keyframes pg-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+}
+
+.pg-date {
+    color: var(--gray-500);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.pg-teams {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.pg-team {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.pg-team:last-child {
+    text-align: right;
+}
+
+.pg-score {
+    font-weight: 800;
+    font-size: 1.15rem;
+    white-space: nowrap;
+    color: var(--brand-orange-dark);
+}
+
+.pg-cta {
+    margin-top: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--brand-orange);
+}

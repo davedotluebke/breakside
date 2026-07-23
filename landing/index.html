@@ -46,7 +46,7 @@
                 </p>
                 <div class="hero-actions">
                     <button id="getStartedBtn" class="btn btn-primary btn-large">Get Started Free</button>
-                    <a href="/viewer/" class="btn btn-secondary btn-large">Watch Live Games</a>
+                    <a href="/viewer/" id="watchLiveGamesBtn" class="btn btn-secondary btn-large">Watch Live Games</a>
                 </div>
                 <p class="hero-note">
                     <span class="beta-badge">Beta</span>
@@ -63,6 +63,15 @@
                     <div class="carousel-pills" id="carouselPills" role="tablist" aria-label="Choose a feature"></div>
                 </div>
             </div>
+        </div>
+    </section>
+
+    <!-- Public Games (hidden unless the API returns listed games) -->
+    <section id="publicGamesSection" class="public-games" style="display: none;">
+        <div class="section-content">
+            <h2 class="section-title">Happening on Breakside</h2>
+            <p class="section-subtitle">Games coaches have shared publicly — tap one to watch the score and play-by-play live.</p>
+            <div id="publicGamesList" class="public-games-list"></div>
         </div>
     </section>
 
@@ -288,6 +297,7 @@
 
     <script src="supabaseInit.js"></script>
     <script src="landing.js"></script>
+    <script src="publicGames.js"></script>
     <script src="hero-carousel.js"></script>
 </body>
 </html>
