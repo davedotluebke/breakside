@@ -33,7 +33,7 @@
  *   - "…" popover (Stall / Good D / Callahan) (phase 5)
  */
 import { UNKNOWN_PLAYER } from '../store/models.js';
-import { saveAllTeamsData } from '../store/storage.js';
+import { saveAllTeamsData, currentTeam } from '../store/storage.js';
 import {
     currentGame, getLatestPoint, getPlayerFromName, isPointInProgress,
     formatPlayerName, buildPointPlayerLookup,
@@ -324,7 +324,8 @@ const fullPbp = (function() {
         if (!row) return;
 
         const editable = inPoint ? findLastEditableEvent(state.point) : null;
-        if (!editable) {
+        const setCtx = offensiveSetContext(state, inPoint);
+        if (!editable && !setCtx) {
             row.style.display = 'none';
             row.innerHTML = '';
             return;
@@ -333,40 +334,86 @@ const fullPbp = (function() {
         row.style.display = '';
         row.innerHTML = '';
 
-        const isThrow = editable.type === 'Throw';
-        const isTurnover = editable.type === 'Turnover';
-        const flags = isThrow ? THROW_MODIFIERS
-                    : isTurnover ? TURNOVER_MODIFIERS
-                    : DEFENSE_MODIFIERS;
-        const titleText = isThrow ? 'Last pass was a:'
-                        : isTurnover ? 'Last turnover was a:'
-                        : 'Last D was a:';
-
-        const title = document.createElement('span');
-        title.className = 'full-pbp-modifier-row-label';
-        title.textContent = titleText;
-        row.appendChild(title);
-
         const chips = document.createElement('div');
         chips.className = 'full-pbp-modifier-row-chips';
-        flags.forEach(f => {
-            const chip = document.createElement('label');
-            chip.className = 'full-pbp-modifier-chip';
-            if (editable[f.prop]) chip.classList.add('checked');
 
-            const cb = document.createElement('input');
-            cb.type = 'checkbox';
-            cb.checked = !!editable[f.prop];
-            cb.addEventListener('change', () => handleModifierChange(editable, f.prop, cb.checked, f.label));
+        if (editable) {
+            const isThrow = editable.type === 'Throw';
+            const isTurnover = editable.type === 'Turnover';
+            const flags = isThrow ? THROW_MODIFIERS
+                        : isTurnover ? TURNOVER_MODIFIERS
+                        : DEFENSE_MODIFIERS;
+            const titleText = isThrow ? 'Last pass was a:'
+                            : isTurnover ? 'Last turnover was a:'
+                            : 'Last D was a:';
 
-            const span = document.createElement('span');
-            span.textContent = f.label;
+            const title = document.createElement('span');
+            title.className = 'full-pbp-modifier-row-label';
+            title.textContent = titleText;
+            row.appendChild(title);
 
-            chip.appendChild(cb);
-            chip.appendChild(span);
-            chips.appendChild(chip);
-        });
+            flags.forEach(f => {
+                const chip = document.createElement('label');
+                chip.className = 'full-pbp-modifier-chip';
+                if (editable[f.prop]) chip.classList.add('checked');
+
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = !!editable[f.prop];
+                cb.addEventListener('change', () => handleModifierChange(editable, f.prop, cb.checked, f.label));
+
+                const span = document.createElement('span');
+                span.textContent = f.label;
+
+                chip.appendChild(cb);
+                chip.appendChild(span);
+                chips.appendChild(chip);
+            });
+        }
+
+        if (setCtx) {
+            chips.appendChild(buildSetCycleChip(setCtx));
+        }
+
         row.appendChild(chips);
+    }
+
+    /**
+     * Offensive set tagging (teams opted into set tracking with offensive
+     * labels configured): a cycling chip on the modifier row while the
+     * live possession is offensive. Taps advance — → label1 → … → —,
+     * writing possession.set in place. Defensive possessions are tagged
+     * at the pull dialog instead.
+     */
+    function offensiveSetContext(state, inPoint) {
+        if (!inPoint || !state.point) return null;
+        const labels = (currentTeam?.setsEnabled && currentTeam.sets?.offensive) || [];
+        if (!labels.length) return null;
+        const possessions = state.point.possessions || [];
+        const possession = possessions.length ? possessions[possessions.length - 1] : null;
+        if (!possession || !possession.offensive) return null;
+        return { labels, possession };
+    }
+
+    function buildSetCycleChip({ labels, possession }) {
+        const chip = document.createElement('label');
+        chip.className = 'full-pbp-modifier-chip full-pbp-set-chip';
+        if (possession.set) chip.classList.add('checked');
+
+        const span = document.createElement('span');
+        span.textContent = `Set: ${possession.set || '—'}`;
+        chip.appendChild(span);
+
+        chip.addEventListener('click', () => {
+            if (!requireActiveCoach()) return;
+            const cycle = [null, ...labels];
+            const idx = cycle.indexOf(possession.set);
+            possession.set = cycle[(idx === -1 ? 0 : idx + 1) % cycle.length];
+            if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+            render();
+        });
+
+        return chip;
     }
 
     /**
