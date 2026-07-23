@@ -14,8 +14,14 @@ Share link structure:
     "createdAt": "2025-01-15T10:00:00Z",
     "expiresAt": "2025-01-22T10:00:00Z",  # null = no expiry
     "revokedAt": null,
-    "revokedBy": null
+    "revokedBy": null,
+    "listed": false               # opt-in to the public landing-page list
 }
+
+"listed" is deliberately separate from the link itself existing: a coach
+sharing a URL with parents is NOT publishing the game. Only listed=true
+shares appear in the public games endpoint. Shares created before the flag
+existed lack the key — treated as unlisted.
 
 Storage: One JSON file per share, stored as {share_id}.json
 Also maintain an index file for fast lookups by hash and game.
@@ -148,7 +154,8 @@ def create_share_link(
     game_id: str,
     team_id: str,
     created_by: str,
-    expires_days: int = 7
+    expires_days: int = 7,
+    listed: bool = False
 ) -> Dict[str, Any]:
     """
     Create a new share link for a game.
@@ -158,6 +165,7 @@ def create_share_link(
         team_id: The team ID (denormalized for permission checks)
         created_by: User ID of who created the share
         expires_days: Days until expiration (1-365), or 0 for no expiry
+        listed: Opt the game into the public landing-page list
 
     Returns:
         The created share link dict
@@ -179,6 +187,7 @@ def create_share_link(
         "expiresAt": expires_at,
         "revokedAt": None,
         "revokedBy": None,
+        "listed": bool(listed),
     }
 
     # Ensure directory exists
@@ -191,6 +200,25 @@ def create_share_link(
     _update_index_add(share)
 
     return share
+
+
+def list_all_shares() -> List[Dict[str, Any]]:
+    """
+    List every share link, newest first.
+
+    Walks the index's byHash map (one file read per share). Share volume is
+    tiny — a handful per shared game — so this stays cheap; if that ever
+    changes, add a listed-only index bucket.
+    """
+    index = _index.load()
+    shares = []
+    for share_id in index.get("byHash", {}).values():
+        share = get_share(share_id)
+        if share:
+            shares.append(share)
+
+    shares.sort(key=lambda s: s.get("createdAt", ""), reverse=True)
+    return shares
 
 
 def list_game_shares(game_id: str) -> List[Dict[str, Any]]:

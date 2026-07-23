@@ -359,6 +359,25 @@ def get_game_current(game_id: str) -> dict:
         return json.load(f)
 
 
+def get_game_current_mtime_ns(game_id: str) -> Optional[int]:
+    """
+    Cheap change-detection stamp for a game: current.json's mtime in ns.
+
+    Every sync rewrites current.json (atomic os.replace), so the mtime is a
+    reliable "something changed" signal without parsing or sending the game
+    JSON. Used by the public share poll endpoint, where anonymous viewers
+    poll every few seconds.
+
+    Returns:
+        Nanosecond mtime, or None if the game doesn't exist.
+    """
+    current_file = _safe_game_dir(game_id) / "current.json"
+    try:
+        return current_file.stat().st_mtime_ns
+    except FileNotFoundError:
+        return None
+
+
 def get_game_version(game_id: str, timestamp: str) -> dict:
     """
     Get specific version of game.

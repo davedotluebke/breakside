@@ -117,6 +117,26 @@ async def join_page(code: str):
 
 
 # =============================================================================
+# Public share-link route (game viewer)
+# =============================================================================
+
+@router.get("/view/{hash}")
+async def view_shared_game(hash: str):
+    """
+    Redirect public share links to the standalone game viewer.
+
+    Same trap as /join/{code}: serving the viewer's index.html directly at
+    /view/{hash} would break its relative asset URLs (viewer.js/viewer.css
+    would resolve under /view/ and this route would answer them with HTML).
+    Redirect to the real viewer app, which reads ?share= and enters share
+    mode (public /api/share/{hash} data path, live polling).
+    """
+    if not (hash.isascii() and hash.isalnum()):
+        raise HTTPException(status_code=404, detail="Not found")
+    return RedirectResponse(url=f"/static/viewer/?share={hash}", status_code=302)
+
+
+# =============================================================================
 # Landing page routes
 # =============================================================================
 
