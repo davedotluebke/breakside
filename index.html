@@ -422,6 +422,31 @@
                 </div>
             </div>
             
+            <!-- Set Tracking Section (per-possession set tagging opt-in) -->
+            <div class="settings-section">
+                <h3>Set Tracking</h3>
+                <p class="section-description">Tag each possession with the set being played (zone, vert stack, …). Enabling adds a set picker to the pull dialog and Full play-by-play; stats can later split by set (e.g. breaks while running zone).</p>
+
+                <div class="sets-form">
+                    <label class="sets-enable-row">
+                        <input type="checkbox" id="setsEnabledToggle"> Track sets for this team
+                    </label>
+                    <div id="setsListsContainer" style="display: none;">
+                        <div class="form-group">
+                            <label for="defensiveSetsInput">Defensive sets (comma-separated)</label>
+                            <input type="text" id="defensiveSetsInput" placeholder="e.g. Zone, Match, Junk" class="url-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="offensiveSetsInput">Offensive sets (comma-separated)</label>
+                            <input type="text" id="offensiveSetsInput" placeholder="e.g. Vert, Ho, Side" class="url-input">
+                        </div>
+                    </div>
+                    <button id="saveSetsBtn" class="save-identity-btn">
+                        <i class="fas fa-save"></i> Save Set Tracking
+                    </button>
+                </div>
+            </div>
+
             <!-- Members Section -->
             <div class="settings-section">
                 <h3>Members (<span id="memberCount">0</span>)</h3>

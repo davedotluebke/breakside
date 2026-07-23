@@ -57,6 +57,9 @@ function showTeamSettingsScreen(returnScreen) {
     // Load team identity fields
     loadTeamIdentity();
 
+    // Load set-tracking fields
+    loadTeamSets();
+
     // Load data
     loadTeamMembers();
     loadTeamInvites();
@@ -724,6 +727,76 @@ function evictOldestIcons(cache, maxEntries, protectTeamId) {
 /**
  * Load team identity fields into the form
  */
+/**
+ * Populate the Set Tracking section from the current team.
+ */
+function loadTeamSets() {
+    const toggle = document.getElementById('setsEnabledToggle');
+    const container = document.getElementById('setsListsContainer');
+    const defensiveInput = document.getElementById('defensiveSetsInput');
+    const offensiveInput = document.getElementById('offensiveSetsInput');
+    if (!toggle || !currentTeam) return;
+
+    toggle.checked = !!currentTeam.setsEnabled;
+    if (container) container.style.display = toggle.checked ? '' : 'none';
+    if (defensiveInput) defensiveInput.value = (currentTeam.sets?.defensive || []).join(', ');
+    if (offensiveInput) offensiveInput.value = (currentTeam.sets?.offensive || []).join(', ');
+}
+
+/**
+ * Parse a comma-separated set-label list: trim, drop empties, dedupe
+ * (case-insensitive, first spelling wins), cap label length.
+ */
+function parseSetList(raw) {
+    const seen = new Set();
+    const labels = [];
+    for (const part of String(raw || '').split(',')) {
+        const label = part.trim().slice(0, 20);
+        if (!label) continue;
+        const key = label.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        labels.push(label);
+    }
+    return labels;
+}
+
+/**
+ * Save Set Tracking settings (opt-in toggle + label lists) and sync.
+ */
+function saveTeamSets() {
+    const toggle = document.getElementById('setsEnabledToggle');
+    const defensiveInput = document.getElementById('defensiveSetsInput');
+    const offensiveInput = document.getElementById('offensiveSetsInput');
+    const saveBtn = document.getElementById('saveSetsBtn');
+    if (!currentTeam || !toggle) return;
+
+    currentTeam.setsEnabled = toggle.checked;
+    currentTeam.sets = {
+        defensive: parseSetList(defensiveInput?.value),
+        offensive: parseSetList(offensiveInput?.value),
+    };
+    // Normalize the inputs to what was actually saved
+    if (defensiveInput) defensiveInput.value = currentTeam.sets.defensive.join(', ');
+    if (offensiveInput) offensiveInput.value = currentTeam.sets.offensive.join(', ');
+
+    currentTeam.updatedAt = new Date().toISOString();
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    if (typeof syncTeamToCloud === 'function' && currentTeam.id) {
+        syncTeamToCloud(currentTeam);
+    }
+
+    if (saveBtn) {
+        const originalHtml = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+        saveBtn.disabled = true;
+        setTimeout(() => {
+            saveBtn.innerHTML = originalHtml;
+            saveBtn.disabled = false;
+        }, 1500);
+    }
+}
+
 function loadTeamIdentity() {
     const symbolInput = document.getElementById('teamSymbolInput');
     const iconUrlInput = document.getElementById('teamIconUrlInput');
@@ -1005,6 +1078,19 @@ function initializeTeamIdentityHandlers() {
     const saveIdentityBtn = document.getElementById('saveIdentityBtn');
     if (saveIdentityBtn) {
         saveIdentityBtn.addEventListener('click', saveTeamIdentity);
+    }
+
+    // Set Tracking: toggle reveals the label lists; Save persists both
+    const setsToggle = document.getElementById('setsEnabledToggle');
+    if (setsToggle) {
+        setsToggle.addEventListener('change', () => {
+            const container = document.getElementById('setsListsContainer');
+            if (container) container.style.display = setsToggle.checked ? '' : 'none';
+        });
+    }
+    const saveSetsBtn = document.getElementById('saveSetsBtn');
+    if (saveSetsBtn) {
+        saveSetsBtn.addEventListener('click', saveTeamSets);
     }
     
     // Auto-uppercase symbol input

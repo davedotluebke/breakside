@@ -976,3 +976,18 @@
     color: var(--text-faint);
     font-style: italic;
 }
+
+/* Set Tracking section (team settings) */
+.sets-form .sets-enable-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    cursor: pointer;
+}
+
+.sets-form .sets-enable-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+}
