@@ -19,8 +19,10 @@
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
-    <link rel="stylesheet" href="landing.css">
-    <link rel="stylesheet" href="join.css">
+    <!-- Absolute paths: keeps the page working no matter what URL serves it
+         (it used to be served at /join/<code>, where relative refs broke). -->
+    <link rel="stylesheet" href="/landing/landing.css">
+    <link rel="stylesheet" href="/landing/join.css">
 </head>
 <body>
     <!-- Navigation -->
@@ -166,8 +168,8 @@
         </div>
     </footer>
 
-    <script src="supabaseInit.js"></script>
-    <script src="join.js"></script>
+    <script src="/landing/supabaseInit.js"></script>
+    <script src="/landing/join.js"></script>
 </body>
 </html>
 

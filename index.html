@@ -15,6 +15,15 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <script>
+        // Invite short links (/join/<code>): S3/CloudFront has no route for
+        // them, so its 404 fallback serves this file — the app — instead of
+        // the join page. Bounce to the canonical join page before booting.
+        (function () {
+            var m = location.pathname.match(/^\/join\/([A-Za-z0-9]+)\/?$/);
+            if (m) location.replace('/landing/join.html?code=' + m[1]);
+        })();
+    </script>
     <script>window._isStaging = location.hostname === 'staging.breakside.pro';</script>
     <meta name="apple-mobile-web-app-title" id="appTitle" content="Breakside">
     <meta name="msapplication-TileColor" content="#ffffff">
