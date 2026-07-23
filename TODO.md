@@ -217,10 +217,31 @@ Remaining:
 
 The multi-user push is mostly done. A few items linger:
 
-- [ ] PWA: Join game via URL (`/view/{game-hash}`)
-- [ ] Landing page: List recent public games
-- [ ] Viewer: Show live score and play-by-play
+- [x] ~~PWA: Join game via URL (`/view/{game-hash}`)~~ **Shipped 2026-07-23
+      (branch `share-links`) as the full share-link flow:** Share Game dialog
+      (in-game hamburger + game-summary button) mints `/view/{hash}` links
+      (expiry 1 day–6 months, revocable, auto-copy); `/view/{hash}` resolves on
+      every origin (S3-fallback shim on www/staging, FastAPI 302 on api) into
+      the standalone viewer's new **share mode**. See ARCHITECTURE.md § Share
+      Links. *Server-side pieces need the EC2 restart on deploy.*
+- [x] **Viewer: Show live score and play-by-play** — share mode polls a cheap
+      change stamp (`/api/share/{hash}/poll`, mtime-based) every 3s and
+      refetches the full game only on change; LIVE/In progress/Final badge
+      (LIVE requires activity within 30 min); polling pauses when the tab is
+      hidden; mid-view expiry keeps the last state under an "expired" banner.
+      (The pre-existing browse viewer had been dead for anonymous visitors
+      since auth hardening — every endpoint it fetched required auth.)
+- [x] **Landing page: List recent public games** — "Happening on Breakside"
+      section fed by `GET /api/public/games`. Listing is a per-share opt-in
+      (`listed=true`, the dialog's "List publicly" checkbox) — a share link
+      alone never lists the game. Hero "Watch Live Games" button retargets to
+      the section while it's populated (its old `/viewer/` target is
+      anonymous-empty).
 - [ ] "Clear pending" button in connection info dialog when sync queue has stuck items
+- [ ] Share-flow follow-ups (deliberately deferred): QR code in the Share
+      dialog (pairs with the invite-QR backlog item); central share-link
+      management outside the dialog (Team Settings list of all team shares);
+      viewer polish (fade transition on score change).
 
 ### Multi-user rollout — completed (historical)
 

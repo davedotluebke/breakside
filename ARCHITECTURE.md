@@ -1189,8 +1189,48 @@ Coaches poll the ping endpoint to maintain role claims and detect other coaches.
 |------|---------|
 | `/` | Landing page (intro, login, download instructions) |
 | `/app/` | PWA entry point |
-| `/view/{game-hash}` | Public game viewer (no auth required) |
+| `/view/{game-hash}` | Game share link → standalone viewer in share mode (no auth) |
 | `/join/{code}` | Invite short link → redirects to `/landing/join.html?code={code}` |
+
+### Share Links (public game viewing)
+
+A coach mints a share link from the **Share Game** dialog (in-game hamburger
+menu, or the Share button on the game summary). The API returns
+`https://www.breakside.pro/view/{hash}` (12-char hex hash; links expire —
+1 day to 6 months, revocable from the same dialog). The canonical
+destination is the **standalone viewer in share mode**:
+`/static/viewer/?share={hash}` on the API origin.
+
+**How `/view/{hash}` resolves** (same funnel pattern as `/join/{code}`):
+
+| Origin | Mechanism |
+|--------|-----------|
+| www/staging (CloudFront→S3) | No `/view/*` route exists; the S3 404 fallback serves the PWA `index.html`, whose inline `<head>` shim redirects to `{api-origin}/view/{hash}` (hostname-mapped like `landing/join.js`) |
+| api.breakside.pro (FastAPI) | `routers/static_files.py` 302-redirects to `/static/viewer/?share={hash}` |
+
+Do NOT serve the viewer's `index.html` directly at `/view/{hash}` — its
+relative asset URLs (viewer.js/viewer.css) would resolve under `/view/` and
+break, exactly like the join-page trap (`test_shares.py::TestViewShortLink`
+pins the redirect).
+
+**Share mode in the viewer** (`static/viewer/viewer.js`): all data flows
+through the public endpoints only — `GET /api/share/{hash}` (full game +
+change stamp) and `GET /api/share/{hash}/poll` (stamp only; the full game is
+refetched when the stamp moves; stamp = `current.json` mtime_ns). Browse
+tabs/sync chrome are hidden (`body.share-mode`) because the listing
+endpoints require auth and come back empty for anonymous visitors. Polling
+pauses while the tab is hidden. A share dying mid-view (410) keeps the last
+state with an "expired" banner; a dead link on first load gets an error view.
+The LIVE badge requires a missing `gameEndTimestamp` AND recent activity
+(~30 min) — an abandoned game is not "live".
+
+**Public listing is a separate opt-in.** A share link alone never lists the
+game anywhere; `POST /api/games/{id}/share?listed=true` (the dialog's "List
+publicly" checkbox) additionally surfaces it in `GET /api/public/games`,
+which the landing page's "Happening on Breakside" section
+(`landing/publicGames.js`) renders. The section hides itself when no listed
+games exist. Only currently-valid shares count; revoking or expiry delists
+immediately.
 
 ### Client-Side Auth Module
 
