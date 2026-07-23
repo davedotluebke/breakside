@@ -237,7 +237,10 @@ The multi-user push is mostly done. A few items linger:
       alone never lists the game. Hero "Watch Live Games" button retargets to
       the section while it's populated (its old `/viewer/` target is
       anonymous-empty).
-- [ ] "Clear pending" button in connection info dialog when sync queue has stuck items
+- [x] **"Clear pending" in connection info** — the Online/About toast now shows
+      "N pending updates waiting to sync" with a View / Clear… button opening
+      the existing pending-sync dialog (reachable mid-game, unlike the
+      teams-screen badge). Same branch (`share-links`).
 - [ ] Share-flow follow-ups (deliberately deferred): QR code in the Share
       dialog (pairs with the invite-QR backlog item); central share-link
       management outside the dialog (Team Settings list of all team shares);
