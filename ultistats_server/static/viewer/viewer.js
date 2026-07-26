@@ -59,6 +59,10 @@ let syncStatusInterval = null;
 let currentShareHash = null;
 let lastShareStamp = null;
 let shareFetchInFlight = false;
+// Whether a shared game has been rendered at least once. Decides between the
+// two "share died" presentations; deliberately NOT keyed on lastShareStamp,
+// which stays null against a backend that predates the change stamp.
+let shareGameRendered = false;
 
 // Data caches
 let gamesCache = [];
@@ -622,6 +626,7 @@ async function loadSharedGame() {
 
         renderGame(body.game);
         renderShareStatusBadge(body.game);
+        shareGameRendered = true;
         updateConnectionStatus('connected');
     } catch (error) {
         console.error('Shared game fetch failed:', error);
@@ -639,8 +644,19 @@ async function pollSharedGame() {
     try {
         const response = await fetch(`${API_BASE_URL}/api/share/${currentShareHash}/poll`);
 
-        if (response.status === 404 || response.status === 410) {
-            handleShareDead(response.status);
+        // 404 is ambiguous: the share vanished, OR this backend predates the
+        // poll endpoint (the frontend deploys on push, the API only on the
+        // manual EC2 restart — so that pairing is real, not theoretical).
+        // Fall back to a full fetch, which every backend has: if the share
+        // is genuinely gone its own 404 handling takes over, and if the
+        // backend is simply older the viewer keeps updating, just less
+        // cheaply. 410 is unambiguous — that endpoint exists and said no.
+        if (response.status === 404) {
+            await loadSharedGame();
+            return;
+        }
+        if (response.status === 410) {
+            handleShareDead(410);
             return;
         }
         if (!response.ok) throw new Error(response.statusText);
@@ -668,7 +684,7 @@ function handleShareDead(status) {
     }
     isPolling = false;
 
-    if (lastShareStamp) {
+    if (shareGameRendered) {
         // Mid-session death: keep the last state visible, stop pretending
         // it's live.
         document.getElementById('share-expired-banner').style.display = '';
