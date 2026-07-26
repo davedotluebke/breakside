@@ -935,3 +935,17 @@
     }
 }
 
+
+/* Defensive set picker row in the pull dialog (set tracking opt-in) */
+.pull-set-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
+}
+
+.pull-set-row select {
+    flex: 0 1 auto;
+    padding: 6px 8px;
+    font-size: 0.95em;
+}

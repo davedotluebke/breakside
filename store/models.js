@@ -263,6 +263,12 @@ function Team(name = "My Team", initialRoster = [], id = null) {
     // Team identity for header display (optional)
     this.teamSymbol = null;  // 4-char max abbreviation (e.g., "BRK", "FGC")
     this.iconUrl = null;     // URL or data URL to team icon PNG
+
+    // Per-possession set tagging (zone tracking etc.) — team-level opt-in.
+    // Invisible everywhere unless setsEnabled; label lists are coach-defined
+    // in Team Settings (e.g. defensive: Zone, Match; offensive: Vert, Ho).
+    this.setsEnabled = false;
+    this.sets = { offensive: [], defensive: [] };
     
     // New model: array of player IDs (references to Player entities)
     this.playerIds = [];
@@ -572,7 +578,7 @@ function captureCurrentMode() {
 
 // Possession class
 class Possession {
-    constructor(offensive) {
+    constructor(offensive, set = null) {
         this.offensive = offensive; // true for offensive, false for defensive
         this.events = [];
         // Distinct PBP modes ('simple' | 'full' | 'field') under which events
@@ -583,6 +589,10 @@ class Possession {
         // analytics: e.g. 'field' alone => location data for every throw;
         // 'simple' present => individual throws likely weren't all recorded.
         this.modes = [];
+        // Set label for this possession (zone/ho-stack/…, from the team's
+        // configured lists) — null = unspecified. Only teams with
+        // setsEnabled ever write it; legacy data simply lacks the key.
+        this.set = set;
     }
 
     addEvent(event) {

@@ -1205,3 +1205,9 @@ body.share-mode #data-format-indicator {
 .share-footer a:hover {
     text-decoration: underline;
 }
+
+/* Set label on a possession header (zone tracking) */
+.possession-set {
+    color: var(--text-muted);
+    font-weight: 400;
+}

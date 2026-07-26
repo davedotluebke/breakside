@@ -101,7 +101,14 @@ function buildGameLogText(game, {
         (point.possessions || []).forEach(possession => {
             if (!suppressNextPossessionDelimiter) {
                 const role = possession.offensive ? 'offense' : 'defense';
-                summary += `\n— ${teamName} on ${role} —`;
+                // Set tag (zone tracking): "— Team on defense (Zone) —".
+                // A suppressed delimiter can't carry one, but that case is
+                // unreachable in practice: suppression only follows a
+                // Turnover, and neither tagging surface (pull dialog =
+                // point-opening D possession, Full-PBP chip = offensive
+                // possessions) writes to the possession that follows one.
+                const setTag = possession.set ? ` (${possession.set})` : '';
+                summary += `\n— ${teamName} on ${role}${setTag} —`;
             }
             suppressNextPossessionDelimiter = false;
             (possession.events || []).forEach(event => {
@@ -190,10 +197,11 @@ function classifyGameLogLine(line, teamName) {
         lineClass += ' game-log-current-score';
     } else if (line.includes('pulls to')) {
         lineClass += ' game-log-pull';
-    } else if (line.startsWith('— ') && / on (offense|defense) —$/.test(line)) {
-        // Possession delimiter line, e.g. "— Breakside on offense —"
+    } else if (line.startsWith('— ') && / on (offense|defense)( \([^)]+\))? —$/.test(line)) {
+        // Possession delimiter line, e.g. "— Breakside on offense —" or,
+        // with a set tag, "— Breakside on defense (Zone) —"
         lineClass += ' game-log-possession-header';
-        if (line.endsWith('on offense —')) {
+        if (/ on offense( \([^)]+\))? —$/.test(line)) {
             lineClass += ' game-log-possession-offense';
         } else {
             lineClass += ' game-log-possession-defense';

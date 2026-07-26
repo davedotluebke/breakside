@@ -8,6 +8,136 @@
         "3001"
       ],
       "port": 3001
+    },
+    {
+      "name": "auto-line-2",
+      "runtimeExecutable": ".worktrees/auto-line-2/scripts/dev-server.sh",
+      "runtimeArgs": [
+        "3020"
+      ],
+      "port": 3020
+    },
+    {
+      "name": "cleanup-sweep",
+      "runtimeExecutable": ".worktrees/cleanup-sweep/scripts/dev-server.sh",
+      "runtimeArgs": [
+        "3002"
+      ],
+      "port": 3002
+    },
+    {
+      "name": "cleanup-sweep-nocache",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        ".claude/nocache-server.py",
+        "3003",
+        ".worktrees/cleanup-sweep"
+      ],
+      "port": 3003
+    },
+    {
+      "name": "css-tokens",
+      "runtimeExecutable": ".worktrees/css-tokens/scripts/dev-server.sh",
+      "runtimeArgs": [
+        "3004"
+      ],
+      "port": 3004
+    },
+    {
+      "name": "field-demo-video",
+      "runtimeExecutable": ".worktrees/field-demo-video/scripts/dev-server.sh",
+      "runtimeArgs": [
+        "3005"
+      ],
+      "port": 3005
+    },
+    {
+      "name": "tournament-fixes",
+      "runtimeExecutable": ".worktrees/tournament-fixes/scripts/dev-server.sh",
+      "runtimeArgs": [
+        "3006"
+      ],
+      "port": 3006
+    },
+    {
+      "name": "g4-authfetch-retry",
+      "runtimeExecutable": ".worktrees/g4-authfetch-retry/scripts/dev-server.sh",
+      "runtimeArgs": [
+        "3007"
+      ],
+      "port": 3007
+    },
+    {
+      "name": "fix-handoff-toast",
+      "runtimeExecutable": ".worktrees/fix-handoff-toast/scripts/dev-server.sh",
+      "runtimeArgs": [
+        "3012"
+      ],
+      "port": 3012
+    },
+    {
+      "name": "zombie-point-normalizer",
+      "runtimeExecutable": ".claude/worktrees/zombie-point-normalizer/scripts/dev-server.sh",
+      "runtimeArgs": [
+        "3013"
+      ],
+      "port": 3013
+    },
+    {
+      "name": "g5-narration-fix",
+      "runtimeExecutable": ".worktrees/g5-narration-fix/scripts/dev-server.sh",
+      "runtimeArgs": [
+        "3014"
+      ],
+      "port": 3014
+    },
+    {
+      "name": "narration-swing-reset",
+      "runtimeExecutable": ".worktrees/narration-swing-reset/scripts/dev-server.sh",
+      "runtimeArgs": [
+        "3015"
+      ],
+      "port": 3015
+    },
+    {
+      "name": "lineup-narration",
+      "runtimeExecutable": ".worktrees/lineup-narration/scripts/dev-server.sh",
+      "runtimeArgs": [
+        "3016"
+      ],
+      "port": 3016
+    },
+    {
+      "name": "mic-held-stream",
+      "runtimeExecutable": ".worktrees/mic-held-stream/scripts/dev-server.sh",
+      "runtimeArgs": [
+        "3017"
+      ],
+      "port": 3017
+    },
+    {
+      "name": "lineup-voice-ux",
+      "runtimeExecutable": ".worktrees/lineup-voice-ux/scripts/dev-server.sh",
+      "runtimeArgs": [
+        "3018"
+      ],
+      "port": 3018
+    },
+    {
+      "name": "share-links",
+      "runtimeExecutable": ".worktrees/share-links/scripts/dev-server.sh",
+      "runtimeArgs": [
+        "3019"
+      ],
+      "port": 3019
+    },
+    {
+      "name": "possession-sets",
+      "runtimeExecutable": ".worktrees/possession-sets/scripts/dev-server.sh",
+      "runtimeArgs": [
+        "3021"
+      ],
+      "port": 3021
     }
   ]
 }

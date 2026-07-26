@@ -3,7 +3,7 @@
  * Handles the pull dialog for logging pulls on defense points
  */
 import { Gender, Pull, Possession, UNKNOWN_PLAYER } from '../store/models.js';
-import { saveAllTeamsData } from '../store/storage.js';
+import { saveAllTeamsData, currentTeam } from '../store/storage.js';
 import {
     currentGame, getLatestPoint, getPlayerFromName, getGenderRatioForPoint,
     formatPlayerName, buildPointPlayerLookup,
@@ -24,6 +24,33 @@ let pullHangStart = 0;     // performance.now() at start
 let pullHangMs = null;     // captured hang in ms | null
 let pullHangRunning = false;
 let pullHangTimer = null;  // 100ms label updater while running
+
+// Last defensive set picked in this session — sticky default across points.
+let lastPullSet = '';
+
+/**
+ * Show + populate the defensive-set picker for opted-in teams
+ * (team.setsEnabled with non-empty sets.defensive); hide otherwise.
+ */
+function populatePullSetPicker() {
+    const row = document.getElementById('pullSetRow');
+    const select = document.getElementById('pullSetSelect');
+    if (!row || !select) return;
+
+    const labels = (currentTeam?.setsEnabled && currentTeam.sets?.defensive) || [];
+    if (!labels.length) {
+        row.style.display = 'none';
+        return;
+    }
+
+    select.innerHTML = '<option value="">—</option>' + labels.map(label => {
+        const esc = String(label).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        return `<option value="${esc}">${esc}</option>`;
+    }).join('');
+    // Sticky default: keep the last-picked set if it still exists
+    select.value = labels.includes(lastPullSet) ? lastPullSet : '';
+    row.style.display = '';
+}
 
 function pullHangLabel() {
     if (pullHangRunning) return '⏱ ' + ((performance.now() - pullHangStart) / 1000).toFixed(1) + 's — tap on landing';
@@ -139,6 +166,12 @@ function showPullDialog() {
     pullSelectedPlayer = undefined; // undefined = no selection yet, null = Unknown Player selected, Player object = specific player selected
     pullSelectedQuality = null;
     pullSelectedGender = null;
+
+    // Defensive set picker (per-possession set tagging). Rendered only for
+    // teams that opted in AND configured defensive labels; defaults to the
+    // last set picked this session (coaches usually stay in one D for runs
+    // of points), first-ever default is unspecified.
+    populatePullSetPicker();
     
     // Reset quality buttons - remove selected class from all
     document.querySelectorAll('.pull-quality-btn').forEach(btn => {
@@ -484,7 +517,16 @@ function createPullEvent() {
         firstPossession = new Possession(false);
         point.addPossession(firstPossession);
     }
-    
+
+    // Tag the defensive set (opted-in teams only; '' = unspecified). Also
+    // remember it as the sticky default for the next pull dialog.
+    const setSelect = document.getElementById('pullSetSelect');
+    const setRow = document.getElementById('pullSetRow');
+    if (setSelect && setRow && setRow.style.display !== 'none') {
+        firstPossession.set = setSelect.value || null;
+        lastPullSet = setSelect.value || '';
+    }
+
     // Add pull event at the beginning of the event list. Recording a pull is a
     // meaningful PBP entry, so stamp the surface it was recorded under — the
     // unshift bypasses Possession.addEvent (which does this for other events).

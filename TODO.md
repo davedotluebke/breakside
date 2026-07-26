@@ -560,6 +560,16 @@ Remaining work:
   - **Touch points:** `playByPlay/scoreAttribution.js` (dialog UI + new picker), `store/models.js` (Throw field), `store/storage.js` (serialize/deserialize the field), `utils/eventStats.js` (read explicit field, fall back to derivation), and the AI narration path (`narration/narrationEngine.js` + `ultistats_server/narration.py`) if we want narrated scores to capture HA too.
 
 - [ ] **Feature**: Per-possession defensive/offensive set flag (zone tracking, etc.)
+  - **STATUS 2026-07-23 (branch `possession-sets`): stages 1–5 of the ship
+    order are BUILT + live-verified** — schema/serialization (unit +
+    API round-trip tests), Team Settings opt-in (toggle + comma-separated
+    lists with dedupe/length caps), pull-dialog defensive picker (sticky
+    session default), Full-PBP offensive cycling chip (`Set: —/Vert/…`,
+    AC-gated, purple checked state), and set tags in the log
+    (`— Team on defense (Zone) —`, renderer tests) + public-viewer
+    possession headers. **Remaining: stage 6 (aggregation filters), the
+    xlsx export column, and a possible per-point set badge** — see the
+    Aggregation hook bullet below.
   - Tag each possession with the set being played (zone, ho-stack, vert-stack, force-middle, junk…). Primary v1 use case is marking which defensive possessions were played in zone, so that "breaks while running zone" type splits become possible later. Must stay invisible for teams that don't opt in.
   - **Data model**:
     - `Team.setsEnabled: boolean` (default `false`) — team-level opt-in.
