@@ -15,6 +15,53 @@ Sections, in roughly priority order:
 
 ## Active
 
+### 🧪 Field-test the two features shipped 2026-07-26 (share links + set tracking)
+
+Both merged as `2405fbd` with suites green (332 backend / 133 unit / 21 e2e) and
+walked through end-to-end — but only against a **local dev backend on one desktop
+browser**. Nothing below has been exercised on real devices, real origins, or a
+real game. Listed roughly in the order a failure would hurt most.
+
+**Share links** — *the API half stays inert until the EC2 `git pull` + `systemctl
+restart breakside`; confirm that happened before treating anything here as broken.*
+
+- [ ] **The actual promise: mint a link in the PWA, open it logged-out on another
+      device** (phone, different browser, no account). Everything else is detail.
+- [ ] **`/view/<hash>` on www AND staging.** Rides the same S3 404-fallback shim as
+      `/join/<code>` — and staging needed a bucket `ErrorDocument` fix before `/join`
+      resolved there (see G11.5 below). Assume nothing; test both origins.
+- [ ] **Live updating during a real game**: score + play-by-play should move within
+      ~3s while a coach records. Then lock the phone and wake it — polling pauses
+      while the tab is hidden and should catch up on resume.
+- [ ] **Copy-to-clipboard on iOS Safari.** The dialog copies *after* awaiting the
+      create call, and Safari can revoke the user-gesture context across an `await`.
+      There's an `execCommand` fallback and the URL is visible in the row, but
+      confirm the copy actually lands on a real iPhone.
+- [ ] **Expiry + revoke on a live link**: a revoked link should leave a watcher on
+      the last-known state under the "expired" banner, not a blank or error page.
+- [ ] **"List publicly"**: game appears in the landing page's "Happening on
+      Breakside" and disappears again when the share is revoked or expires.
+- [ ] Worth knowing: **two viewer copies are deployed** — `www/viewer/` (S3, synced
+      by the same Action) and `api/static/viewer/` (FastAPI). Share links route to
+      the API copy. If the two ever diverge, check that first.
+
+**Set tracking (zone)** — invisible until a team opts in via Team Settings → Set Tracking.
+
+- [ ] **Does the pull-dialog set picker slow down pull recording?** That dialog is
+      used under real time pressure; an extra control there is the main UX risk.
+- [ ] **Phone layout for the Full-PBP `Set:` chip.** It's appended *after* the seven
+      throw-modifier chips on a `nowrap` row that scrolls horizontally (verified:
+      layout doesn't break) — but on a narrow screen it will sit off-screen and may
+      never be discovered. Decide whether it should lead the row or get its own line.
+- [ ] **Sticky default**: the pull picker pre-selects the last set used. Confirm that
+      helps over a full game rather than silently mis-tagging when the D changes.
+- [ ] **Multi-coach**: tag a set mid-point on one device, confirm it survives the
+      sync merge and appears on the other.
+- [ ] **Legacy games unchanged**: untagged possessions must read exactly as before
+      in the log (no empty parens, no styling drift).
+- [ ] Not built yet — stage 6 (per-set stat filters + xlsx column). See the
+      *Per-possession set flag* item under Backlog.
+
 ### ✅ Temp ops cleanup — remove localhost from prod CORS (resolved 2026-07-19)
 
 Added `http://localhost:3002` (and possibly `:3001`/`:3000`) to `ULTISTATS_ALLOWED_ORIGINS`
