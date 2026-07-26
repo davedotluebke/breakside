@@ -23,16 +23,26 @@
             var m = location.pathname.match(/^\/join\/([A-Za-z0-9]+)\/?$/);
             if (m) location.replace('/landing/join.html?code=' + m[1]);
 
-            // Game share links (/view/<hash>) land here the same way, but
-            // their destination — the standalone viewer — lives on the API
-            // origin, not this static one. Map hostname → API base the same
-            // way landing/join.js does.
+            // Game share links (/view/<hash>) land here the same way. Keep
+            // the reader on THIS origin: the deploy syncs the viewer to
+            // /viewer/ on both www and staging (see "Sync viewer to S3" in
+            // .github/workflows/main.yml and deploy-staging.sh), and the
+            // viewer maps its own API calls to api.breakside.pro. Bouncing
+            // to the API host instead would cost a second redirect and put
+            // api.breakside.pro in the reader's URL bar.
             var v = location.pathname.match(/^\/view\/([A-Za-z0-9]+)\/?$/);
             if (v) {
-                var apiBase = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-                    ? 'http://localhost:8000'
-                    : 'https://api.breakside.pro';
-                location.replace(apiBase + '/view/' + v[1]);
+                var host = location.hostname;
+                if (host === 'localhost' || host === '127.0.0.1') {
+                    // Dev: no /viewer/ copy is served locally, so hand off to
+                    // the backend's own /view route (honoring an ?api= dev
+                    // backend override, as landing/join.js does).
+                    var apiParam = new URLSearchParams(location.search).get('api');
+                    var apiBase = (apiParam && apiParam !== 'reset') ? apiParam : 'http://localhost:8000';
+                    location.replace(apiBase + '/view/' + v[1]);
+                } else {
+                    location.replace('/viewer/?share=' + v[1]);
+                }
             }
         })();
     </script>

@@ -1197,21 +1197,33 @@ Coaches poll the ping endpoint to maintain role claims and detect other coaches.
 A coach mints a share link from the **Share Game** dialog (in-game hamburger
 menu, or the Share button on the game summary). The API returns
 `https://www.breakside.pro/view/{hash}` (12-char hex hash; links expire —
-1 day to 6 months, revocable from the same dialog). The canonical
-destination is the **standalone viewer in share mode**:
-`/static/viewer/?share={hash}` on the API origin.
+1 day to 6 months, revocable from the same dialog). The destination is the
+**standalone viewer in share mode**, which every origin serves from its own
+copy — so the reader never leaves the host they clicked.
 
-**How `/view/{hash}` resolves** (same funnel pattern as `/join/{code}`):
+**How `/view/{hash}` resolves** (same funnel pattern as `/join/{code}`, and
+like it, a *same-origin* bounce):
 
 | Origin | Mechanism |
 |--------|-----------|
-| www/staging (CloudFront→S3) | No `/view/*` route exists; the S3 404 fallback serves the PWA `index.html`, whose inline `<head>` shim redirects to `{api-origin}/view/{hash}` (hostname-mapped like `landing/join.js`) |
-| api.breakside.pro (FastAPI) | `routers/static_files.py` 302-redirects to `/static/viewer/?share={hash}` |
+| www/staging (CloudFront→S3) | No `/view/*` route exists; the S3 404 fallback serves the PWA `index.html`, whose inline `<head>` shim redirects to **`/viewer/?share={hash}` on the same origin** — the deploy syncs the viewer there (the "Sync viewer to S3" step in `.github/workflows/main.yml`; `deploy-staging.sh` does the same). The viewer's own `getApiBaseUrl()` maps www/staging → `api.breakside.pro` for its data calls |
+| api.breakside.pro (FastAPI) | `routers/static_files.py` 302-redirects to `/static/viewer/?share={hash}` (the viewer's path under the API host) |
+| localhost (dev) | No `/viewer/` copy is served locally, so the shim hands off to the dev backend's own `/view` route (honoring an `?api=` override). `scripts/dev-server.sh` serves `index.html` for `/join/*` and `/view/*` so both shims are testable locally — production's S3 `ErrorDocument` equivalent |
 
 Do NOT serve the viewer's `index.html` directly at `/view/{hash}` — its
 relative asset URLs (viewer.js/viewer.css) would resolve under `/view/` and
 break, exactly like the join-page trap (`test_shares.py::TestViewShortLink`
-pins the redirect).
+pins the redirect). Those asset paths stay **relative** on purpose (unlike
+`landing/join.html`, which 32a51ed made absolute): the same files are served
+at two different prefixes — `/static/viewer/` on the API host and `/viewer/`
+on S3 — so absolute paths would break one of them.
+
+⚠️ **Viewer-only changes do not reach S3.** The production workflow's
+`paths-ignore` includes `ultistats_server/**`, so a commit touching only
+`ultistats_server/static/viewer/` never triggers the deploy that syncs
+`/viewer/`. The www/staging copies then silently lag the API-hosted one.
+Touch a root-level file in the same commit, or run `deploy-staging.sh` /
+re-run the workflow manually.
 
 **Share mode in the viewer** (`static/viewer/viewer.js`): all data flows
 through the public endpoints only — `GET /api/share/{hash}` (full game +
