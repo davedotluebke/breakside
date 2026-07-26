@@ -2,10 +2,13 @@
 Lineup narration endpoint — speech-to-lineup for the Lines tab.
 
 POST /api/narration/lineup
-    Accepts a transcript of the coach speaking the next line, plus the
-    context needed to interpret it (full roster, expected player count,
-    previous lineup, current on-screen selection), and asks Claude to
-    return the final set of players for the line.
+    Accepts a transcript of the coach speaking, plus context (full roster,
+    expected player count, previous lineup, current on-screen selection),
+    and asks Claude for the TAP-EQUIVALENT CHANGES only — who goes in, who
+    comes off, exactly as if the coach had tapped those names. The endpoint
+    then derives the resulting selection itself via set arithmetic
+    (_apply_changes), so the model structurally cannot pick, complete, or
+    trim a line.
 
 This is a SEPARATE layer from the in-point narration pipeline in
 narration.py (token minting + play-by-play finalize). It deliberately
@@ -25,6 +28,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -94,10 +98,16 @@ class LineupRequest(BaseModel):
 
 
 class LineupResponse(BaseModel):
+    # The full resulting selection, derived server-side by set arithmetic
+    # (kept for client compatibility — every deployed client applies this).
     players: List[str]
     unmatched: List[str] = []
     note: str = ""
     error: Optional[str] = None
+    # Observability: the tap-equivalent changes the model actually voiced.
+    # players == (current_selection − voiced_out) ∪ voiced_in.
+    voiced_in: List[str] = []
+    voiced_out: List[str] = []
 
 
 # =============================================================================
@@ -137,11 +147,175 @@ async def extract_lineup(
         logger.exception("Lineup extraction LLM call failed")
         return LineupResponse(players=[], unmatched=[], note="", error=str(e))
 
-    # Defensive shaping: only ever return strings the model put in lists.
-    players = [str(p) for p in result.get("players", []) if isinstance(p, (str, int))]
+    players, ins, outs, dropped = _derive_players(result, req)
+    if dropped:
+        logger.info("Lineup outs dropped (missing/unrelated removal evidence): %s", dropped)
     unmatched = [str(u) for u in result.get("unmatched", []) if isinstance(u, (str, int))]
     note = str(result.get("note") or "")
-    return LineupResponse(players=players, unmatched=unmatched, note=note)
+    return LineupResponse(players=players, unmatched=unmatched, note=note,
+                          voiced_in=ins, voiced_out=outs)
+
+
+def _derive_players(result: Dict[str, Any], req: LineupRequest):
+    """The COMPLETE post-model derivation, in one place so the endpoint and
+    the offline eval harness cannot drift: defensive shaping, the out-
+    evidence guards (quote must exist in the transcript AND reference the
+    removed player), then tap-equivalent set arithmetic.
+
+    Returns (players, ins, honored_outs, dropped_outs).
+    """
+    ins = [str(p) for p in result.get("in", []) if isinstance(p, (str, int))]
+    outs = []
+    dropped = []
+    for e in result.get("out", []):
+        if not isinstance(e, dict) or not e.get("name"):
+            continue
+        said = str(e.get("said") or "").strip()
+        if (said and _evidence_in_transcript(said, req.transcript)
+                and _evidence_references_player(said, e["name"], req.roster)):
+            outs.append(e["name"])
+        else:
+            dropped.append(e["name"])
+    players = _apply_changes(req.current_selection, ins, outs)
+    return players, ins, outs, dropped
+
+
+# =============================================================================
+# Tap-equivalent set arithmetic
+# =============================================================================
+
+_QUOTED_SPAN_RE = re.compile(r"[\"\u2018\u2019\u201c\u201d'][^\"\u2018\u2019\u201c\u201d']*[\"\u2018\u2019\u201c\u201d']")
+_DECOR_RE = re.compile(r"[0-9#()\[\].,_'\"-]+")
+
+
+def _normalize_name(s: str) -> str:
+    """Digits/decoration-tolerant form, mirroring lineupResolve.js
+    normalizeName — rosters sometimes embed jersey numbers in the name
+    string ("Jamal 23") while the model returns the cleaned name."""
+    s = _QUOTED_SPAN_RE.sub(" ", str(s or "").lower())
+    s = _DECOR_RE.sub(" ", s)
+    return " ".join(s.split())
+
+
+_TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+_UNITS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+          "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+          "seventeen", "eighteen", "nineteen"]
+
+
+def _number_words(n: int) -> str:
+    """0-99 as spoken words ('23' -> 'twenty three'), for matching jersey
+    numbers inside quoted evidence."""
+    if 0 <= n < 20:
+        return _UNITS[n]
+    if 20 <= n < 100:
+        tens, unit = divmod(n, 10)
+        return _TENS[tens] + (f" {_UNITS[unit]}" if unit else "")
+    return str(n)
+
+
+_LIGHT_STRIP_RE = re.compile(r"[^a-z0-9\s]+")
+
+
+def _light_normalize(s: str) -> str:
+    """Lowercase, strip punctuation, collapse whitespace — but KEEP digits
+    (unlike _normalize_name) so quotes with jersey numbers stay checkable."""
+    return " ".join(_LIGHT_STRIP_RE.sub(" ", str(s or "").lower()).split())
+
+
+def _evidence_in_transcript(said: str, transcript: str) -> bool:
+    """The quoted removal words must actually occur in the transcript —
+    a fabricated quote ('Priya comes off' when the coach only recited other
+    names) fails this regardless of how plausible it sounds."""
+    said_l = _light_normalize(said)
+    return bool(said_l) and said_l in _light_normalize(transcript)
+
+
+def _evidence_references_player(said: str, out_name: str, roster) -> bool:
+    """Does the quoted removal evidence actually reference this player —
+    by a name token, nickname token, or jersey number (digits or words)?
+    'Line is Kris, Sam, ...' quoted as evidence for removing Priya
+    references her in no way and is rejected."""
+    said_norm_tokens = set(_normalize_name(said).split())
+    name_tokens = set(_normalize_name(out_name).split())
+    if said_norm_tokens & name_tokens:
+        return True
+
+    # Resolve the out-name to a roster entry for nickname/number checks.
+    player = None
+    for p in roster:
+        if p.name == out_name or p.name.casefold() == out_name.casefold():
+            player = p
+            break
+    if player is None:
+        norm = _normalize_name(out_name)
+        hits = [p for p in roster if _normalize_name(p.name) == norm]
+        player = hits[0] if len(hits) == 1 else None
+    if player is None:
+        return False
+
+    if player.nickname and set(_normalize_name(player.nickname).split()) & said_norm_tokens:
+        return True
+    if player.number:
+        num = str(player.number).strip()
+        if num and re.search(rf"(?<![0-9]){re.escape(num)}(?![0-9])", said):
+            return True
+        try:
+            words = set(_number_words(int(num)).split())
+        except ValueError:
+            words = set()
+        if words and words <= said_norm_tokens:
+            return True
+    return False
+
+
+def _apply_changes(selection: List[str], ins: List[str], outs: List[str]) -> List[str]:
+    """players = (selection − outs) ∪ ins.
+
+    Removal tiers per out-name: exact → casefold → UNIQUE normalized match
+    (ambiguity keeps both, same refusal rule as the frontend matcher).
+    Ins are appended in spoken order, skipping names already present
+    (exact/casefold/unique-normalized duplicate detection).
+    """
+    # An out beats a matching in: the model is told never to list a player
+    # in both, but when it happens anyway (player named early, removed
+    # later; or a whole-line expansion overlapping an out) the removal is
+    # the later, controlling statement.
+    def _matches(a: str, b: str) -> bool:
+        if a == b or a.casefold() == b.casefold():
+            return True
+        na, nb = _normalize_name(a), _normalize_name(b)
+        return bool(na) and na == nb
+
+    ins = [i for i in ins if not any(_matches(i, o) for o in outs)]
+
+    kept = list(selection)
+    for out_name in outs:
+        exact = [k for k in kept if k == out_name]
+        if not exact:
+            exact = [k for k in kept if k.casefold() == out_name.casefold()]
+        if not exact:
+            norm = _normalize_name(out_name)
+            if norm:
+                hits = [k for k in kept if _normalize_name(k) == norm]
+                if len(hits) == 1:
+                    exact = hits
+        if exact:
+            kept = [k for k in kept if k != exact[0]]
+
+    players = list(kept)
+    for in_name in ins:
+        dup = any(
+            k == in_name or k.casefold() == in_name.casefold() for k in players
+        )
+        if not dup:
+            norm = _normalize_name(in_name)
+            if norm:
+                hits = [k for k in players if _normalize_name(k) == norm]
+                dup = len(hits) == 1
+        if not dup:
+            players.append(in_name)
+    return players
 
 
 # =============================================================================
@@ -165,62 +339,49 @@ def _build_lineup_prompt(req: LineupRequest) -> str:
         if req.previous_lineup
         else "(none — no points played yet)"
     )
-    # Resolve the changes-base server-side so the model never has to choose
-    # between two candidate lists (Haiku drifts to the fuller previous
-    # lineup when the on-screen selection is partial).
-    base_names = req.current_selection or req.previous_lineup
-    base_block = (
-        "\n".join(f"- {n}" for n in base_names)
-        if base_names
-        else "(empty — the coach is building a line from scratch)"
+    # No base fallback of any kind: an empty selection stays empty (the
+    # coach cleared it — Wholesale means Wholesale). The model only ever
+    # sees the selection as context; it outputs changes, never a lineup.
+    curr_block = (
+        "\n".join(f"- {n}" for n in req.current_selection)
+        if req.current_selection
+        else "(empty — the coach cleared the selection or is starting fresh)"
     )
 
-    return f"""You are extracting an ultimate frisbee lineup — the set of players about to take the field — from a coach's spoken words.
+    return f"""You are the voice-input layer for an ultimate frisbee lineup screen. The coach speaks; you extract WHICH PLAYERS GO IN and WHICH COME OFF — the verbal equivalent of tapping their names on the roster list. You never pick, complete, trim, or output a lineup: the app applies your in/out changes to the on-screen selection, and line-filling is the coach's job (or the app's Auto button), never yours.
 
 Team roster. These are the ONLY valid players. Match spoken references against the name, the "nickname" in quotes, and the #jersey-number:
 {roster_block}
 
-Expected lineup size: {req.expected_count} players.
-
-Previous lineup (who played the last point — this is what "same line" / "run it back" refers to):
+Previous lineup (who played the last point). Used ONLY to expand explicit whole-line phrases like "same line" / "run it back" — never as something to fill from:
 {prev_block}
 
-BASE — the current on-screen selection that bare additions and substitutions modify (your "players" output replaces this selection):
-{base_block}
+Currently selected on screen (context only — the app applies your changes to this list; re-adding an already-selected player is harmless):
+{curr_block}
+
+Expected lineup size: {req.expected_count} players. Context for your "note" only — NEVER add players to approach it.
 
 Transcript of what the coach said (speech-to-text; may contain transcription errors and unrelated chatter):
 ---
 {req.transcript}
 ---
 
-Determine the FINAL lineup the coach wants, and reply with JSON only.
+Reply with ONLY a JSON object of this exact shape (no prose, no markdown fences):
+{{"in": ["Name", ...], "out": [{{"name": "Name", "said": "the coach's exact removal words"}}, ...], "unmatched": ["spoken reference", ...], "note": ""}}
+
+Every "out" entry MUST quote, in "said", the coach's actual words that took that player off ("Wes's coming off", "Priya in for Alice" quoting the replacement). If you cannot quote removal words for a player, that player does NOT go in "out". "in" entries are plain names — additions need no evidence.
 
 How to interpret the transcript:
-1. Naming players puts them on the line: "Kris, Sam, Morgan" means those players are in.
-2. The coach may speak in CHANGES relative to the previous lineup / current selection instead of naming everyone:
-   - "X goes in for Y", "X replaces Y", "X for Y" — X is in, Y is out, everyone else stays.
-   - "same line", "run it back", "same as last point" — the previous lineup, unchanged.
-   - "X is coming off", "X off", "X sits", "X takes a break" — X is out.
-   - "X is on", "X's in", "add X" — X is in.
-   When the coach speaks in changes, start from the BASE above and apply the changes ("same line" / "run it back" swaps the BASE to the previous lineup first).
-   Coaches often build a line a few players at a time, thinking between utterances. Bare names with no in/out language ("Kris", "umm, Priya... and Dana") are ADDITIONS to the current selection (the BASE) — everyone already selected stays. Treat the utterance as a fresh from-scratch line (exactly the players named, replacing the selection) ONLY when the coach names a full line's worth of players (the expected size or more) or explicitly frames it as the whole line ("new line:", "the line is...").
-3. Later statements override earlier ones. "...and is that Hank? No, I think it's Morgan" is the coach correcting an identification: Morgan is the player going in, Hank is not (unless Hank was already on the BASE and the coach says nothing about removing him). Naming a player and later saying they're coming off means they are OUT.
-4. Ignore asides that aren't about lineup membership: commentary about the last point, scores, fatigue, weather, sideline chatter. "Kris is coming off, yeah that was a long point" — only the first clause matters.
-5. "X completes the lineup", "that's the seven", "and that's the line" mean the coach believes the lineup is now fully specified.
-6. Spoken references may be first names, full names, nicknames, jersey numbers ("number 12", "twelve", "#12"), or mispronounced/mistranscribed versions of a name — map each to the closest roster player. A trailing initial or fragment after a name ("Morgan H", "Morgan HB") usually disambiguates between similarly-named players; match it to the roster player whose name best fits.
-7. In the "players" output, use each player's name spelled EXACTLY as it appears at the start of its roster line — do not append the "nickname" or the #jersey-number decorations. Some roster names contain digits or symbols as part of the name itself ("Jamal 23", "23 Jamal", "Jamal #23"): spoken "Jamal" or "Jamal twenty-three" refers to that player, and you must output the name byte-for-byte as the roster spells it, digits included — never a cleaned-up version. Never output anyone not on the roster; if a spoken reference cannot be matched to any roster player, put the spoken text in "unmatched" instead.
-8. Do not pad the lineup with unmentioned players to reach the expected size, and do not drop named players to fit it. If only four players are specified for a seven-player line, output four — NEVER pull extra players from the previous lineup, the bench, or the roster to fill the gap. The expected size is context for interpreting the coach (e.g. whether the line sounds complete) — the coach's words always win. If the final count differs from the expected size, or something else was ambiguous, say so briefly in "note".
-
-Reply with ONLY a JSON object of this exact shape (no prose, no markdown fences):
-{{"changes": [{{"out": "Name or null", "in": "Name or null"}}], "players": ["Name", ...], "unmatched": ["spoken reference", ...], "note": ""}}
-
-Fill "changes" FIRST — it is your worksheet:
-- If the coach spoke in changes, list every change you heard: {{"out": "Wes", "in": "Kris"}} for "Kris in for Wes"; {{"out": "Sam", "in": null}} for "Sam is coming off" with no named replacement; {{"out": null, "in": "Nora"}} for "Nora's on".
-- Bare added names are in-only changes too: a partial utterance like "Kris and Priya" is {{"out": null, "in": "Kris"}}, {{"out": null, "in": "Priya"}} — never a fresh line.
-- If the coach corrects a change ("Priya in for Alice — actually no, Priya's in for Wes, Alice stays"), record ONLY the corrected version: {{"out": "Wes", "in": "Priya"}}. The retracted change never happened — Alice must NOT appear in "changes" and stays on the line. Never list both the first version and its correction.
-- If the coach recited a fresh line instead, leave "changes" as an empty list.
-- Then compute "players": when "changes" is non-empty, it MUST be exactly the BASE with those changes applied — every "out" player removed, every "in" player added, and NOBODY else added or removed. The BASE stays the BASE even when it is smaller than the expected size: NEVER import players from the previous lineup or the roster to fill out the count. A 3-player BASE plus one addition is 4 players, full stop.
-- Count check before replying: if "players" has fewer than the expected size, reply with the smaller list AS IS — the coach will add more players in a later utterance. Adding anyone the coach never mentioned is the worst possible error. Also double-check each "out" player is absent from "players" — and that every player whose removal the coach RETRACTED ("actually no, ... Alice stays") is still present.
+1. Bare names go IN: "Kris", "umm, Priya... and Dana", "Jake, Kris, and Charlie go in" — exactly those players in "in", nothing in "out".
+2. "X goes in for Y", "X replaces Y", "X for Y" — X in, Y out. "X is coming off", "X off", "X sits", "X takes a break" — X out. "add X", "X is on", "X's in" — X in.
+3. "same line", "run it back", "same as last point" — every player of the Previous lineup goes in "in". "Kris in for Wes, everyone else run it back" — "in": Kris plus the rest of the Previous lineup, "out": Wes.
+4. Later statements override earlier ones. "...and is that Hank? No, I think it's Morgan" is an identity correction: Morgan in, Hank nowhere (not in "out" — the coach never removed him, they corrected themselves). A retracted change never happened: "Priya in for Alice — actually no, Priya's in for Wes, Alice stays" gives "in": Priya and "out": Wes only; Alice appears nowhere.
+5. Ignore asides: commentary about the last point, scores, fatigue, weather, sideline chatter. Wrap-up phrases ("Omar completes the lineup", "that's the seven", "that's the line") mean the named player goes in and the coach finished talking — they NEVER make you add anyone else.
+   A framing like "the line is X, Y, Z" only puts the named players in "in" — it puts NOBODY in "out". Already-selected players the coach didn't mention simply stay selected; when a coach wants a fresh line they clear the list first.
+   A player never appears in both "in" and "out": resolve to the coach's LAST statement about that player ("Kris, Max... and Kris is coming off" puts Kris ONLY in "out").
+6. Spoken references may be first names, full names, nicknames, jersey numbers ("number 12", "twelve", "#12"), or mispronounced/mistranscribed versions of a name — map each to the closest roster player. A trailing initial or fragment ("Morgan H", "Morgan HB") disambiguates between similarly-named players.
+7. Spell every entry in "in"/"out" EXACTLY as its roster line spells the name — digits and symbols included when they are part of the name itself ("Jamal 23", "23 Jamal", "Jamal #23"), never a cleaned-up version, and never with the "nickname" or #jersey-number decorations appended. A spoken reference that matches nobody on the roster goes in "unmatched", never in "in" or "out".
+8. THE CARDINAL RULE: "in" and "out" contain ONLY players the coach referred to — by name, or through an explicit whole-line phrase from rule 3. Never anyone else, no matter how short the resulting lineup would be: if the coach named 3 players, "in" has exactly 3 entries. And "out" contains ONLY players removed with explicit off/sits/coming-off/replaced-by language — NEVER a player who is merely absent from a list the coach recited. Reciting names ("the line is A, B, C") is tapping those names IN; it un-taps nobody. If something was notable (a retraction, an ambiguous reference, far fewer players than the expected size), say it in one short sentence in "note".
 """
 
 
@@ -263,8 +424,25 @@ async def _call_claude_lineup(api_key: str, prompt: str) -> Dict[str, Any]:
 
 
 def _parse_lineup_json(text: str) -> Dict[str, Any]:
-    """Parse the model's reply, tolerating fences, prose, and self-corrections."""
-    parsed = _last_json_object(text, "players")
-    if not isinstance(parsed.get("players"), list):
-        raise RuntimeError("Claude lineup response missing 'players' list")
+    """Parse the model's reply, tolerating fences, prose, and self-corrections.
+
+    Tap-equivalent shape: {"in": [...], "out": [...], ...}. "in" is the
+    anchor key; a reply without it (including the retired full-lineup
+    "players" shape) is a contract violation and errors out — the client
+    then leaves the selection untouched.
+    """
+    parsed = _last_json_object(text, "in")
+    if not isinstance(parsed.get("in"), list):
+        raise RuntimeError("Claude lineup response missing 'in' list")
+    if "out" in parsed and not isinstance(parsed.get("out"), list):
+        raise RuntimeError("Claude lineup response 'out' is not a list")
+    # Normalize out entries to {name, said} dicts; bare strings mean the
+    # model skipped the evidence field (treated as no evidence).
+    outs = []
+    for entry in parsed.get("out", []):
+        if isinstance(entry, dict) and entry.get("name"):
+            outs.append({"name": str(entry["name"]), "said": str(entry.get("said") or "")})
+        elif isinstance(entry, (str, int)):
+            outs.append({"name": str(entry), "said": ""})
+    parsed["out"] = outs
     return parsed
