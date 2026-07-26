@@ -2073,10 +2073,50 @@ body.game-screen-active header {
 
 .panel-player-table .active-name-column {
     min-width: 100px;
-    max-width: 150px;
+    max-width: 165px;
     overflow: hidden;
     text-overflow: ellipsis;
+    /* Flex row so the position/line tags stay visible while a long name
+       ellipsizes, rather than the whole cell truncating and clipping tags. */
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
 }
+
+.panel-player-table .active-name-column .pname-number {
+    flex: 0 0 auto;
+}
+
+.panel-player-table .active-name-column .pname-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+/* Position (H/C/Hy) and default-line (O/D) tags in the Line-tab name cell.
+   Position tags are light (purple=handler, orange=cutter, split=hybrid) with
+   dark text; line tags reuse the header O/D green/red with white text. */
+.role-tag {
+    flex: 0 0 auto;
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 4px;
+    letter-spacing: 0.3px;
+    color: #fff;
+}
+
+.role-tag--handler { background-color: #d8ccf0; color: #4a2f7a; }
+.role-tag--cutter  { background-color: #f7d9bd; color: #8a4a12; }
+.role-tag--hybrid  {
+    background: linear-gradient(105deg, #d8ccf0 0 50%, #f7d9bd 50% 100%);
+    color: #40355c;
+}
+.role-tag--line-o { background: linear-gradient(135deg, #28a745 0%, #218838 100%); }
+.role-tag--line-d { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); }
 
 .panel-player-table .active-time-column {
     font-family: 'JetBrains Mono', monospace;

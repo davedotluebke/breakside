@@ -271,9 +271,15 @@ function enterGameScreen() {
     setPanelShowingTotalStats(false);
     setCachedPanelEventStats(null);
 
-    // Set currentEvent if game is part of an event
+    // Set currentEvent if game is part of an event. Refetch when it's missing
+    // OR points at a different event than this game, so the Line tab always
+    // reflects the latest per-event position/line overrides (getEffective*
+    // read currentEvent). Same-event edits are also pushed into currentEvent
+    // synchronously by saveEventRoster, so this best-effort async fetch is a
+    // backstop rather than the only path.
     const currentGameObj = typeof currentGame === 'function' ? currentGame() : null;
-    if (currentGameObj && currentGameObj.eventId && !currentEvent) {
+    if (currentGameObj && currentGameObj.eventId
+        && (!currentEvent || currentEvent.id !== currentGameObj.eventId)) {
         // Try to fetch event data (best effort — will be null if not loaded)
         if (typeof listTeamEvents === 'function' && currentGameObj.teamId) {
             listTeamEvents(currentGameObj.teamId).then(events => {

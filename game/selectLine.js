@@ -11,7 +11,7 @@ import {
 } from '../store/storage.js';
 import {
     currentGame, isPointInProgress, determineStartingPosition,
-    getPlayerGameTime, formatPlayTime, formatPlayerName, formatPlayerNameWithRole,
+    getPlayerGameTime, formatPlayTime, formatPlayerName, formatPlayerNameWithRole, showPlayerNumbers,
     getGenderRatioForPoint, getExpectedGenderRatio, getExpectedGenderCounts,
     buildPointMembership, buildPointPlayerLookup,
 } from '../utils/helpers.js';
@@ -1500,6 +1500,51 @@ function selectAppropriateLineAtPointEnd() {
 // snap-to-right in makePanelColumnsSticky(). null = treat as "follow latest".
 let _selectLineScrollState = null;
 
+/**
+ * Render the Select Line table's name cell: a bold jersey number (if shown),
+ * the player name, then small colored role tags for effective position
+ * (H handler / C cutter / Hy hybrid) and default line (O / D — crossover shows
+ * no tag). Effective = per-event override applied. Builds DOM nodes (never
+ * innerHTML with the user-supplied name).
+ * @param {HTMLElement} nameCell
+ * @param {object} player
+ */
+function renderSelectLineNameCell(nameCell, player) {
+    nameCell.textContent = '';
+
+    const showNum = player.number !== null && player.number !== undefined
+        && (typeof showPlayerNumbers !== 'function' || showPlayerNumbers());
+    if (showNum) {
+        const num = document.createElement('b');
+        num.className = 'pname-number';
+        num.textContent = String(player.number);
+        nameCell.appendChild(num);
+    }
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'pname-name';
+    nameSpan.textContent = player.name;
+    nameCell.appendChild(nameSpan);
+
+    // Position tag (always one: H / C / Hy)
+    const pos = typeof getEffectivePosition === 'function' ? getEffectivePosition(player) : PlayerPosition.HYBRID;
+    const posTag = document.createElement('span');
+    posTag.classList.add('role-tag');
+    if (pos === PlayerPosition.HANDLER) { posTag.classList.add('role-tag--handler'); posTag.textContent = 'H'; }
+    else if (pos === PlayerPosition.CUTTER) { posTag.classList.add('role-tag--cutter'); posTag.textContent = 'C'; }
+    else { posTag.classList.add('role-tag--hybrid'); posTag.textContent = 'Hy'; }
+    nameCell.appendChild(posTag);
+
+    // Line tag (only when O or D — crossover / unset shows nothing)
+    const line = typeof getEffectiveDefaultLine === 'function' ? getEffectiveDefaultLine(player) : DefaultLine.CROSSOVER;
+    if (line === DefaultLine.O || line === DefaultLine.D) {
+        const lineTag = document.createElement('span');
+        lineTag.classList.add('role-tag', line === DefaultLine.O ? 'role-tag--line-o' : 'role-tag--line-d');
+        lineTag.textContent = line === DefaultLine.O ? 'O' : 'D';
+        nameCell.appendChild(lineTag);
+    }
+}
+
 function updateSelectLineTable() {
     const table = document.getElementById('panelActivePlayersTable');
     if (!table) return;
@@ -1706,14 +1751,13 @@ function updateSelectLineTable() {
         checkboxCell.appendChild(checkbox);
         row.appendChild(checkboxCell);
         
-        // Name column — show number + effective position/line (event override
-        // applied) in a parenthetical, e.g. "Kris (10, H, Off)".
+        // Name column — bold jersey number, name, then small colored role tags
+        // for effective position (H/C/Hy) and default line (O/D). Effective =
+        // event override applied.
         const nameCell = document.createElement('td');
         nameCell.classList.add('active-name-column');
-        nameCell.textContent = typeof formatPlayerNameWithRole === 'function'
-            ? formatPlayerNameWithRole(player, getEffectivePosition(player), getEffectiveDefaultLine(player))
-            : (typeof formatPlayerName === 'function' ? formatPlayerName(player) : player.name);
-        
+        renderSelectLineNameCell(nameCell, player);
+
         // Gender color coding
         if (player.gender === Gender.FMP) nameCell.classList.add('player-fmp');
         else if (player.gender === Gender.MMP) nameCell.classList.add('player-mmp');

@@ -4,7 +4,9 @@
  * Table-based layout matching team roster UI pattern.
  */
 import { Gender, generateShortId } from '../store/models.js';
-import { currentTeam } from '../store/storage.js';
+import {
+    currentTeam, currentEvent, setCurrentEvent, deserializeTournamentEvent,
+} from '../store/storage.js';
 import { formatPlayerName, formatPlayTime } from '../utils/helpers.js';
 import {
     getEventPlayerStats, getEventRecord, getEventTeamStats, formatTeamStatsLine,
@@ -517,6 +519,16 @@ async function saveEventRoster() {
             overrides
         }
     };
+
+    // Keep the in-memory currentEvent in sync so per-event position/line
+    // overrides take effect immediately (e.g. in the Line tab of a game already
+    // running under this event) without waiting for a reload/refetch. Without
+    // this, getEffectivePosition/getEffectiveDefaultLine read a stale
+    // currentEvent and fall back to the base player values.
+    if (currentEvent && currentEvent.id === updatedEvent.id
+        && typeof setCurrentEvent === 'function' && typeof deserializeTournamentEvent === 'function') {
+        setCurrentEvent(deserializeTournamentEvent(updatedEvent));
+    }
 
     try {
         await updateEventOnCloud(currentEventRosterEvent.id, updatedEvent);
