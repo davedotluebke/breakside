@@ -2076,19 +2076,24 @@ body.game-screen-active header {
     max-width: 165px;
     overflow: hidden;
     text-overflow: ellipsis;
-    /* Flex row so the position/line tags stay visible while a long name
-       ellipsizes, rather than the whole cell truncating and clipping tags. */
+}
+
+/* The cell content is a flex row (on an inner wrapper — NOT the <td>, since a
+   flex table cell breaks the sticky-column layout) so the position/line tags
+   stay visible while a long name ellipsizes. */
+.panel-player-table .active-name-column .pname-wrap {
     display: flex;
     align-items: center;
     gap: 3px;
+    min-width: 0;
     white-space: nowrap;
 }
 
-.panel-player-table .active-name-column .pname-number {
+.pname-number {
     flex: 0 0 auto;
 }
 
-.panel-player-table .active-name-column .pname-name {
+.pname-name {
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;

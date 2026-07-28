@@ -464,6 +464,13 @@ function openEventOverrideDialog(player) {
                 delete eventRosterOverrides[player.id];
             }
             renderEventRosterTable();
+            // Persist immediately — the dialog Confirm is a deliberate action,
+            // so the override must survive leaving the screen without also
+            // requiring the separate roster Save button. Surface failures.
+            persistEventRoster().catch(err => {
+                console.error('Failed to save event override:', err);
+                alert('Failed to save override: ' + (err && err.message ? err.message : err));
+            });
         }
     });
 }
@@ -499,8 +506,13 @@ function addEventPickupPlayer(gender) {
 /**
  * Save the event roster to the cloud
  */
-async function saveEventRoster() {
-    if (!currentEventRosterEvent) return;
+/**
+ * Build the updated event object from the current editor state (attendance,
+ * pickups, and per-event overrides). Overrides are pruned to on-roster players.
+ * @returns {object|null}
+ */
+function buildUpdatedEventFromState() {
+    if (!currentEventRosterEvent) return null;
 
     // Persist only overrides for players still on the roster (drop stale ones).
     const overrides = {};
@@ -511,7 +523,7 @@ async function saveEventRoster() {
         }
     });
 
-    const updatedEvent = {
+    return {
         ...currentEventRosterEvent,
         roster: {
             playerIds: [...eventRosterPlayerIds],
@@ -519,19 +531,32 @@ async function saveEventRoster() {
             overrides
         }
     };
+}
 
-    // Keep the in-memory currentEvent in sync so per-event position/line
-    // overrides take effect immediately (e.g. in the Line tab of a game already
-    // running under this event) without waiting for a reload/refetch. Without
-    // this, getEffectivePosition/getEffectiveDefaultLine read a stale
-    // currentEvent and fall back to the base player values.
+/**
+ * Persist the current editor state to the cloud WITHOUT navigating away. Also
+ * refreshes the in-memory currentEvent (so per-event position/line overrides
+ * take effect immediately in a running game's Line tab — getEffective* read
+ * currentEvent) and currentEventRosterEvent (so later edits spread fresh data).
+ * Throws on failure so callers can surface it.
+ */
+async function persistEventRoster() {
+    const updatedEvent = buildUpdatedEventFromState();
+    if (!updatedEvent) return;
+
     if (currentEvent && currentEvent.id === updatedEvent.id
         && typeof setCurrentEvent === 'function' && typeof deserializeTournamentEvent === 'function') {
         setCurrentEvent(deserializeTournamentEvent(updatedEvent));
     }
+    currentEventRosterEvent = updatedEvent;
 
+    await updateEventOnCloud(updatedEvent.id, updatedEvent);
+}
+
+async function saveEventRoster() {
+    if (!currentEventRosterEvent) return;
     try {
-        await updateEventOnCloud(currentEventRosterEvent.id, updatedEvent);
+        await persistEventRoster();
         showScreen('selectTeamScreen');
     } catch (error) {
         alert('Failed to save roster: ' + error.message);

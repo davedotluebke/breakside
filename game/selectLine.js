@@ -1501,16 +1501,40 @@ function selectAppropriateLineAtPointEnd() {
 let _selectLineScrollState = null;
 
 /**
+ * Whether the active roster uses the position / default-line features at all —
+ * i.e. at least one player has an explicit handler/cutter (or O/D) label. When
+ * nobody does, the Line tab shows NO role tags, so coaches who don't use these
+ * advanced features never see the extra clutter (hybrid/crossover are the
+ * unset defaults and don't count as "labeled").
+ * @param {Array} roster
+ * @returns {{positions:boolean, lines:boolean}}
+ */
+function rosterUsesRoleLabels(roster) {
+    let positions = false, lines = false;
+    (roster || []).forEach(p => {
+        const pos = typeof getEffectivePosition === 'function' ? getEffectivePosition(p) : null;
+        if (pos === PlayerPosition.HANDLER || pos === PlayerPosition.CUTTER) positions = true;
+        const line = typeof getEffectiveDefaultLine === 'function' ? getEffectiveDefaultLine(p) : null;
+        if (line === DefaultLine.O || line === DefaultLine.D) lines = true;
+    });
+    return { positions, lines };
+}
+
+/**
  * Render the Select Line table's name cell: a bold jersey number (if shown),
  * the player name, then small colored role tags for effective position
  * (H handler / C cutter / Hy hybrid) and default line (O / D — crossover shows
- * no tag). Effective = per-event override applied. Builds DOM nodes (never
- * innerHTML with the user-supplied name).
+ * no tag). Effective = per-event override applied. Tags render inside an inner
+ * flex wrapper so the <td> stays a table cell (a flex <td> breaks the sticky
+ * column layout). Builds DOM nodes (never innerHTML with the user name).
  * @param {HTMLElement} nameCell
  * @param {object} player
+ * @param {{positions:boolean, lines:boolean}} showTags - per-table gates
  */
-function renderSelectLineNameCell(nameCell, player) {
+function renderSelectLineNameCell(nameCell, player, showTags) {
     nameCell.textContent = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'pname-wrap';
 
     const showNum = player.number !== null && player.number !== undefined
         && (typeof showPlayerNumbers !== 'function' || showPlayerNumbers());
@@ -1518,31 +1542,37 @@ function renderSelectLineNameCell(nameCell, player) {
         const num = document.createElement('b');
         num.className = 'pname-number';
         num.textContent = String(player.number);
-        nameCell.appendChild(num);
+        wrap.appendChild(num);
     }
 
     const nameSpan = document.createElement('span');
     nameSpan.className = 'pname-name';
     nameSpan.textContent = player.name;
-    nameCell.appendChild(nameSpan);
+    wrap.appendChild(nameSpan);
 
-    // Position tag (always one: H / C / Hy)
-    const pos = typeof getEffectivePosition === 'function' ? getEffectivePosition(player) : PlayerPosition.HYBRID;
-    const posTag = document.createElement('span');
-    posTag.classList.add('role-tag');
-    if (pos === PlayerPosition.HANDLER) { posTag.classList.add('role-tag--handler'); posTag.textContent = 'H'; }
-    else if (pos === PlayerPosition.CUTTER) { posTag.classList.add('role-tag--cutter'); posTag.textContent = 'C'; }
-    else { posTag.classList.add('role-tag--hybrid'); posTag.textContent = 'Hy'; }
-    nameCell.appendChild(posTag);
-
-    // Line tag (only when O or D — crossover / unset shows nothing)
-    const line = typeof getEffectiveDefaultLine === 'function' ? getEffectiveDefaultLine(player) : DefaultLine.CROSSOVER;
-    if (line === DefaultLine.O || line === DefaultLine.D) {
-        const lineTag = document.createElement('span');
-        lineTag.classList.add('role-tag', line === DefaultLine.O ? 'role-tag--line-o' : 'role-tag--line-d');
-        lineTag.textContent = line === DefaultLine.O ? 'O' : 'D';
-        nameCell.appendChild(lineTag);
+    // Position tag (H / C / Hy) — only when the roster uses positions at all.
+    if (showTags && showTags.positions) {
+        const pos = typeof getEffectivePosition === 'function' ? getEffectivePosition(player) : PlayerPosition.HYBRID;
+        const posTag = document.createElement('span');
+        posTag.classList.add('role-tag');
+        if (pos === PlayerPosition.HANDLER) { posTag.classList.add('role-tag--handler'); posTag.textContent = 'H'; }
+        else if (pos === PlayerPosition.CUTTER) { posTag.classList.add('role-tag--cutter'); posTag.textContent = 'C'; }
+        else { posTag.classList.add('role-tag--hybrid'); posTag.textContent = 'Hy'; }
+        wrap.appendChild(posTag);
     }
+
+    // Line tag (O / D) — only when the roster uses line preferences at all.
+    if (showTags && showTags.lines) {
+        const line = typeof getEffectiveDefaultLine === 'function' ? getEffectiveDefaultLine(player) : DefaultLine.CROSSOVER;
+        if (line === DefaultLine.O || line === DefaultLine.D) {
+            const lineTag = document.createElement('span');
+            lineTag.classList.add('role-tag', line === DefaultLine.O ? 'role-tag--line-o' : 'role-tag--line-d');
+            lineTag.textContent = line === DefaultLine.O ? 'O' : 'D';
+            wrap.appendChild(lineTag);
+        }
+    }
+
+    nameCell.appendChild(wrap);
 }
 
 function updateSelectLineTable() {
@@ -1578,6 +1608,10 @@ function updateSelectLineTable() {
     // Use event roster if in event, else team roster
     const activeRoster = typeof getActiveRoster === 'function' ? getActiveRoster() : currentTeam.teamRoster;
     if (!activeRoster || activeRoster.length === 0) return;
+
+    // Only show role tags when the roster actually uses the feature — keeps the
+    // Line tab uncluttered for coaches who haven't labeled anyone.
+    const showRoleTags = rosterUsesRoleLabels(activeRoster);
 
     // Get current pending selections
     const pendingLine = game.pendingNextLine || {};
@@ -1756,7 +1790,7 @@ function updateSelectLineTable() {
         // event override applied.
         const nameCell = document.createElement('td');
         nameCell.classList.add('active-name-column');
-        renderSelectLineNameCell(nameCell, player);
+        renderSelectLineNameCell(nameCell, player, showRoleTags);
 
         // Gender color coding
         if (player.gender === Gender.FMP) nameCell.classList.add('player-fmp');
