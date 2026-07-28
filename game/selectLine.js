@@ -292,27 +292,23 @@ function getAutoLineSide(game) {
  * selection. Already-selected players are kept; only the remaining slots (up to
  * the field count) are filled. Candidates are chosen in this strict order of
  * priority (decreasing):
- *   1. Gender ratio  — satisfy the active ratio's per-gender targets first
- *                      (the ONLY rule that will pull in an off-role player past
- *                      the O/D squad rule below)
- *   2. O/D preference — the point's line "squad" first: exact-side line
- *                      (D on a defense point / O on offense) beats crossover
- *                      beats the opposite side. This is the primary line
- *                      selector so D-line players actually play defense points;
- *                      rest/position/PT balance WITHIN the matched pool. Skipped
- *                      (neutral) when the side is unknown or nobody is labeled.
- *   3. Rest          — players NOT on the last point beat those who just played.
- *                      Auto only fills empty boxes, so an unchecked last-point
- *                      player was deliberately rested by the coach.
- *   4. Position       — aim for >= floor(n/2) handler-capable and >= ceil(n/2)
- *                      cutter-capable (hybrids/unlabeled count for both). Soft:
- *                      prefer candidates that still advance an unmet minimum.
- *   5. PT quintile    — least time played first (see buildAutoLineStats)
- *   6. fewer points played
- *   7. longest current bench streak (out the most points in a row)
- *   8. name (stable final tiebreak)
+ * Gender ratio (when active) is always satisfied first — it's the only rule
+ * that pulls in an off-role player. After that come four SOFT factors whose
+ * order the coach sets in Advanced Settings (default = the classic order below,
+ * rest above O/D):
+ *   • Rest          — players NOT on the last point beat those who just played.
+ *   • Position      — aim for >= floor(n/2) handler-capable and >= ceil(n/2)
+ *                     cutter-capable (hybrids/unlabeled count for both); soft,
+ *                     prefer candidates that still advance an unmet minimum.
+ *   • O/D squad     — exact-side line (D on defense / O on offense) beats
+ *                     opposite side; Crossover sits between them, or ties the
+ *                     exact match when the "Crossover ranks with dedicated line"
+ *                     setting is on. Neutral when the side is unknown or nobody
+ *                     is labeled.
+ *   • Even PT       — least time played first (PT quintile; see buildAutoLineStats).
+ * Then fixed sub-tiebreakers: fewer points played → longest bench streak → name.
  *
- * Rules 2–8 are applied by a need-aware greedy pick (one player at a time), so
+ * All factors are applied by a need-aware greedy pick (one player at a time), so
  * the position minimums shrink as players are added. Gender is enforced by
  * filling each gender's deficit from that gender's pool, then topping up.
  * @param {string[]} alreadySelected - player names the coach has already picked
@@ -344,51 +340,61 @@ function computeAutoLine(alreadySelected = []) {
         if (isCutterCapable(p)) haveCutter++;
     });
 
+    // Coach-configurable priority (Advanced Settings). Order of the soft
+    // factors, and whether Crossover ranks with a dedicated line. Safe defaults
+    // (classic order, crossover==dedicated) if the settings module isn't loaded.
+    const adv = (typeof window !== 'undefined') ? window.advancedSettings : null;
+    const priorityOrder = (adv && typeof adv.getAutoLinePriorityOrder === 'function')
+        ? adv.getAutoLinePriorityOrder() : ['rest', 'position', 'od', 'pt'];
+    const crossoverSame = (adv && typeof adv.getAutoLineCrossoverSamePriority === 'function')
+        ? adv.getAutoLineCrossoverSamePriority() : true;
+
     // O/D preference context. null side => rule inactive (unknown side, e.g.
-    // combined mode mid-point / On Deck). 3-tier rank for the point's side:
+    // combined mode mid-point / On Deck). Rank for the point's side:
     //   0 = exact match (D player on a defense point, O player on offense)
-    //   1 = crossover / flexible (fine for either, but not a specialist)
-    //   2 = opposite side (off-role for this point)
-    // So a defense point prefers D over crossover over O. Crossover is NOT
-    // lumped with an exact match — that's what let crossover players crowd out
-    // the D-line before.
+    //   1 = crossover / flexible          (or 0 too, when crossoverSame is on)
+    //   2 = opposite side (off-role)      (or 1, when crossoverSame is on)
+    // With crossoverSame off, a defense point prefers D > crossover > O.
     const side = getAutoLineSide(game);
     const odRank = (p) => {
         if (!side) return 0;
         const line = typeof getEffectiveDefaultLine === 'function'
             ? getEffectiveDefaultLine(p) : DefaultLine.CROSSOVER;
-        if (line === DefaultLine.CROSSOVER) return 1;
+        if (line === DefaultLine.CROSSOVER) return crossoverSame ? 0 : 1;
         const exact = side === 'offense' ? line === DefaultLine.O : line === DefaultLine.D;
-        return exact ? 0 : 2;
+        return exact ? 0 : (crossoverSame ? 1 : 2);
     };
 
-    // Compare two candidates under the current position-need state (lower is
-    // better). Recomputed per greedy pick because needs shrink as we add.
-    // O/D preference is the top soft key (just below gender): the point's line
-    // squad is chosen first, then rest / position / playing-time balance WITHIN
-    // it. When O/D is inactive (no side, or nobody labeled) every rank is 0, so
-    // this collapses to the old rest-first ordering — teams not using O/D lines
-    // see no change.
+    // Per-factor comparators (lower = better). `position` and `od` are
+    // need/context-aware, recomputed per greedy pick (position needs shrink as
+    // players are added). haveHandler/haveCutter are closed over live.
+    const factorCmp = {
+        rest: (a, b) => (stats[a.name]?.inLastPoint ? 1 : 0) - (stats[b.name]?.inLastPoint ? 1 : 0),
+        pt: (a, b) => (stats[a.name]?.quintile || 0) - (stats[b.name]?.quintile || 0),
+        od: (a, b) => odRank(a) - odRank(b),
+        position: (a, b) => {
+            const hNeed = haveHandler < handlerTarget, cNeed = haveCutter < cutterTarget;
+            const helpA = (hNeed && isHandlerCapable(a) ? 1 : 0) + (cNeed && isCutterCapable(a) ? 1 : 0);
+            const helpB = (hNeed && isHandlerCapable(b) ? 1 : 0) + (cNeed && isCutterCapable(b) ? 1 : 0);
+            return helpB - helpA; // more help = better
+        },
+    };
+
+    // Compare two candidates: apply the coach's factor order, then fixed
+    // sub-tiebreakers (fewer points → longer bench streak → name). When O/D is
+    // inactive (no side, or nobody labeled) its comparator is always 0, so the
+    // ordering collapses to the remaining factors — teams not using O/D lines
+    // are unaffected by where it sits.
     const better = (a, b) => {
+        for (let i = 0; i < priorityOrder.length; i++) {
+            const cmp = factorCmp[priorityOrder[i]];
+            if (!cmp) continue;
+            const c = cmp(a, b);
+            if (c) return c;
+        }
         const sa = stats[a.name] || {}, sb = stats[b.name] || {};
-        // 1. O/D preference — exact side > crossover > opposite
-        const odA = odRank(a), odB = odRank(b);
-        if (odA !== odB) return odA - odB;
-        // 2. rest
-        const restA = sa.inLastPoint ? 1 : 0, restB = sb.inLastPoint ? 1 : 0;
-        if (restA !== restB) return restA - restB;
-        // 3. position — advancing more still-unmet minimums is better
-        const hNeed = haveHandler < handlerTarget, cNeed = haveCutter < cutterTarget;
-        const helpA = (hNeed && isHandlerCapable(a) ? 1 : 0) + (cNeed && isCutterCapable(a) ? 1 : 0);
-        const helpB = (hNeed && isHandlerCapable(b) ? 1 : 0) + (cNeed && isCutterCapable(b) ? 1 : 0);
-        if (helpA !== helpB) return helpB - helpA;
-        // 4. PT quintile
-        if ((sa.quintile || 0) !== (sb.quintile || 0)) return (sa.quintile || 0) - (sb.quintile || 0);
-        // 5. fewer points played
         if ((sa.pointsPlayed || 0) !== (sb.pointsPlayed || 0)) return (sa.pointsPlayed || 0) - (sb.pointsPlayed || 0);
-        // 6. longest bench streak
         if ((sa.outStreak || 0) !== (sb.outStreak || 0)) return (sb.outStreak || 0) - (sa.outStreak || 0);
-        // 7. name
         return a.name.localeCompare(b.name);
     };
 

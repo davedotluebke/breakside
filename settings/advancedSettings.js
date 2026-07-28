@@ -39,7 +39,29 @@ const advancedSettings = (function() {
     const DEFAULT_VOCAB_PROMPT =
         `Ultimate frisbee game. Likely names and terms: {names}, ${JARGON.join(', ')}.`;
 
+    // Auto line-selection priority factors (order = default order = the
+    // "classic" ordering: rest above O/D). Each is a soft key the Auto greedy
+    // applies in the user-chosen order; fixed sub-tiebreakers (fewer points,
+    // longer bench streak, name) always run last. Keys are the stable ids
+    // stored in autoLine.priorityOrder; labels drive the reorder UI.
+    const AUTO_LINE_FACTORS = [
+        ['rest', 'Rest (sit players who just played)'],
+        ['position', 'Position (handlers / cutters)'],
+        ['od', 'Prioritize O/D squad'],
+        ['pt', 'Even playing time'],
+    ];
+    const AUTO_LINE_FACTOR_KEYS = AUTO_LINE_FACTORS.map(f => f[0]);
+
     const DEFAULTS = {
+        // --- Auto Line Selection ---
+        // Ordered priority of the soft factors (drag to reorder). Default is the
+        // classic ordering (rest above O/D).
+        'autoLine.priorityOrder': AUTO_LINE_FACTOR_KEYS.slice(),
+        // true => a Crossover player counts the same as a dedicated D-line
+        // player on a defense point (and O-line on offense) — the classic
+        // behavior. false => dedicated line players are preferred over Crossover
+        // for their point type.
+        'autoLine.crossoverSamePriority': true,
         // --- Audio Narration ---
         'narration.vadEagerness': 'medium',              // low | medium | high | auto
         'narration.noiseReduction': 'near_field',        // near_field | far_field | off
@@ -148,6 +170,30 @@ const advancedSettings = (function() {
 
     function getDefault(key) { return DEFAULTS[key]; }
 
+    /**
+     * Sanitized Auto line-selection priority order: the stored order filtered to
+     * known factor keys and de-duped, with any missing factors appended in their
+     * canonical order. Guarantees every factor appears exactly once, so a stale
+     * or partial stored value (e.g. after a new factor is added) can't drop a
+     * rule.
+     * @returns {string[]}
+     */
+    function getAutoLinePriorityOrder() {
+        const stored = get('autoLine.priorityOrder');
+        const seen = new Set();
+        const order = [];
+        (Array.isArray(stored) ? stored : []).forEach(k => {
+            if (AUTO_LINE_FACTOR_KEYS.includes(k) && !seen.has(k)) { seen.add(k); order.push(k); }
+        });
+        AUTO_LINE_FACTOR_KEYS.forEach(k => { if (!seen.has(k)) order.push(k); });
+        return order;
+    }
+
+    /** Whether Crossover players rank with dedicated O/D-line players. */
+    function getAutoLineCrossoverSamePriority() {
+        return !!get('autoLine.crossoverSamePriority');
+    }
+
     /** Endzone depth (yards) for the Field tab. Defaults to 20 (USAU). */
     function getEndzoneYards() {
         let y = parseInt(get('field.endzoneYards'), 10);
@@ -173,6 +219,23 @@ const advancedSettings = (function() {
 
     // Declarative schema drives the form so adding a knob is a one-line edit.
     const SCHEMA = [
+        {
+            group: 'Auto Line Selection',
+            note: 'How the ⚡ Auto button fills a line. Gender ratio (when set) is always satisfied first; these factors then apply in the order below.',
+            fields: [
+                {
+                    key: 'autoLine.priorityOrder', label: 'Priority order',
+                    help: 'Drag (or use ▲▼) to rank how Auto decides — higher wins. <b>O/D squad</b>: on a defense point favor D-line players, on offense favor O-line players. <b>Rest</b>: favor players who sat the last point. <b>Position</b>: aim for a handler/cutter balance. <b>Even playing time</b>: favor players with less time on the field.',
+                    type: 'reorder',
+                    items: AUTO_LINE_FACTORS
+                },
+                {
+                    key: 'autoLine.crossoverSamePriority', label: 'Crossover ranks with dedicated line',
+                    help: 'When on, a Crossover player is treated as just as good a fit as a dedicated D-line player on a defense point (and O-line on offense) — the classic behavior. Turn off to prefer your dedicated D-line (or O-line) players over Crossover players for their point type.',
+                    type: 'toggle'
+                }
+            ]
+        },
         {
             group: 'Audio Narration',
             note: 'Changes apply the next time you tap the mic.',
@@ -362,6 +425,29 @@ const advancedSettings = (function() {
                     </div>
                 </div>`;
         }
+        if (field.type === 'reorder') {
+            const order = getAutoLinePriorityOrder();
+            const labelMap = {};
+            (field.items || []).forEach(([k, l]) => { labelMap[k] = l; });
+            const items = order.map((k, i) => `
+                <li class="adv-reorder-item" draggable="true" data-item-key="${escapeHtml(k)}">
+                    <span class="adv-reorder-grip" aria-hidden="true">⣿</span>
+                    <span class="adv-reorder-rank">${i + 1}</span>
+                    <span class="adv-reorder-label">${escapeHtml(labelMap[k] || k)}</span>
+                    <span class="adv-reorder-btns">
+                        <button type="button" class="adv-reorder-btn" data-dir="up" aria-label="Move up">▲</button>
+                        <button type="button" class="adv-reorder-btn" data-dir="down" aria-label="Move down">▼</button>
+                    </span>
+                </li>`).join('');
+            return `
+                <div class="adv-setting-row adv-setting-stack"${showWhenAttr}>
+                    <div class="adv-setting-text">
+                        <label class="adv-setting-label">${field.label}</label>
+                        <div class="adv-setting-help">${field.help}</div>
+                    </div>
+                    <ol class="adv-reorder-list" data-key="${field.key}" data-type="reorder">${items}</ol>
+                </div>`;
+        }
         // select
         const opts = field.options.map(([val, lbl]) => {
             const sel = String(current) === String(val) ? 'selected' : '';
@@ -426,6 +512,7 @@ const advancedSettings = (function() {
         // Textareas get `input` events too so typing persists keystroke-by-
         // keystroke without waiting for blur.
         modal.querySelectorAll('[data-key]').forEach(el => {
+            if (el.getAttribute('data-type') === 'reorder') return; // wired separately below
             const persist = () => {
                 const key = el.getAttribute('data-key');
                 const type = el.getAttribute('data-type');
@@ -449,6 +536,59 @@ const advancedSettings = (function() {
             if (el.getAttribute('data-type') === 'textarea') {
                 el.addEventListener('input', persist);
             }
+        });
+
+        // Reorder lists (priority order): drag on desktop, ▲▼ on touch. Both
+        // paths reorder the <li>s in the DOM, then persist + renumber from the
+        // resulting DOM order.
+        modal.querySelectorAll('.adv-reorder-list').forEach(list => {
+            const persistOrder = () => {
+                const key = list.getAttribute('data-key');
+                const items = [...list.querySelectorAll('.adv-reorder-item')];
+                set(key, items.map(li => li.getAttribute('data-item-key')));
+                items.forEach((li, i) => {
+                    const rank = li.querySelector('.adv-reorder-rank');
+                    if (rank) rank.textContent = String(i + 1);
+                });
+            };
+
+            // ▲▼ buttons
+            list.addEventListener('click', (e) => {
+                const btn = e.target.closest('.adv-reorder-btn');
+                if (!btn) return;
+                const li = btn.closest('.adv-reorder-item');
+                if (!li) return;
+                if (btn.getAttribute('data-dir') === 'up' && li.previousElementSibling) {
+                    list.insertBefore(li, li.previousElementSibling);
+                } else if (btn.getAttribute('data-dir') === 'down' && li.nextElementSibling) {
+                    list.insertBefore(li.nextElementSibling, li);
+                }
+                persistOrder();
+            });
+
+            // HTML5 drag (desktop). Touch devices use the buttons above.
+            let dragEl = null;
+            list.addEventListener('dragstart', (e) => {
+                const li = e.target.closest('.adv-reorder-item');
+                if (!li) return;
+                dragEl = li;
+                li.classList.add('adv-reorder-dragging');
+                if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+            });
+            list.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const li = e.target.closest('.adv-reorder-item');
+                if (!li || li === dragEl || !dragEl) return;
+                const rect = li.getBoundingClientRect();
+                const after = (e.clientY - rect.top) > rect.height / 2;
+                list.insertBefore(dragEl, after ? li.nextElementSibling : li);
+            });
+            list.addEventListener('dragend', () => {
+                if (dragEl) dragEl.classList.remove('adv-reorder-dragging');
+                dragEl = null;
+                persistOrder();
+            });
+            list.addEventListener('drop', (e) => e.preventDefault());
         });
 
         // Reset-to-default buttons restore the built-in default for their
@@ -478,6 +618,8 @@ const advancedSettings = (function() {
         buildNarrationVocabularyPrompt,
         getNarrationSessionOptions,
         getEndzoneYards,
+        getAutoLinePriorityOrder,
+        getAutoLineCrossoverSamePriority,
         showAdvancedSettings
     };
 })();
