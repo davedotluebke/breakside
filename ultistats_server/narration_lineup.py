@@ -105,9 +105,10 @@ class LineupResponse(BaseModel):
     note: str = ""
     error: Optional[str] = None
     # Observability: the tap-equivalent changes the model actually voiced.
-    # players == (current_selection − voiced_out) ∪ voiced_in.
+    # players == (clear ? [] : current_selection − voiced_out) ∪ voiced_in.
     voiced_in: List[str] = []
     voiced_out: List[str] = []
+    voiced_clear: bool = False
 
 
 # =============================================================================
@@ -147,26 +148,57 @@ async def extract_lineup(
         logger.exception("Lineup extraction LLM call failed")
         return LineupResponse(players=[], unmatched=[], note="", error=str(e))
 
-    players, ins, outs, dropped = _derive_players(result, req)
+    players, ins, outs, cleared, dropped = _derive_players(result, req)
     if dropped:
-        logger.info("Lineup outs dropped (missing/unrelated removal evidence): %s", dropped)
+        logger.info("Lineup outs/clear dropped (missing/unrelated evidence): %s", dropped)
     unmatched = [str(u) for u in result.get("unmatched", []) if isinstance(u, (str, int))]
     note = str(result.get("note") or "")
     return LineupResponse(players=players, unmatched=unmatched, note=note,
-                          voiced_in=ins, voiced_out=outs)
+                          voiced_in=ins, voiced_out=outs, voiced_clear=cleared)
+
+
+# Collective clear-everyone idioms, matched against the LIGHT-normalized
+# quote ("Wholesale" is the app's clear button — coaches verb it; STT may
+# split it "whole sale").
+_CLEAR_LEXICON_RE = re.compile(
+    r"whole ?sale"
+    r"|every(one|body)('?s)?\s+(comes?\s+|goes?\s+)?(off|out)"
+    r"|all\s+(the\s+)?players?\s+(come\s+|go\s+)?(off|out)"
+    r"|clear\s+(the\s+)?(line|list|selection)"
+    r"|clear\s+every(one|body)"
+    r"|(take|start)\s+every(one|body)\s+(off|over)"
+    r"|start\s+(over|fresh)"
+)
+
+
+def _clear_evidence_ok(said: str, transcript: str) -> bool:
+    """A voiced clear-everyone is honored only when its quote occurs in the
+    transcript AND actually contains a collective-clear idiom — the same
+    trust-but-verify stance as per-player outs, adapted for a phrase that
+    by design names nobody."""
+    if not said or not _evidence_in_transcript(said, transcript):
+        return False
+    return bool(_CLEAR_LEXICON_RE.search(_light_normalize(said)))
 
 
 def _derive_players(result: Dict[str, Any], req: LineupRequest):
     """The COMPLETE post-model derivation, in one place so the endpoint and
-    the offline eval harness cannot drift: defensive shaping, the out-
-    evidence guards (quote must exist in the transcript AND reference the
-    removed player), then tap-equivalent set arithmetic.
+    the offline eval harness cannot drift: defensive shaping, the clear/out
+    evidence guards (quotes must exist in the transcript; outs must also
+    reference the removed player; a clear must contain a collective idiom),
+    then tap-equivalent set arithmetic.
 
-    Returns (players, ins, honored_outs, dropped_outs).
+    Returns (players, ins, honored_outs, cleared, dropped).
     """
     ins = [str(p) for p in result.get("in", []) if isinstance(p, (str, int))]
-    outs = []
     dropped = []
+
+    cleared = bool(result.get("clear"))
+    if cleared and not _clear_evidence_ok(str(result.get("clear_said") or ""), req.transcript):
+        cleared = False
+        dropped.append("<clear>")
+
+    outs = []
     for e in result.get("out", []):
         if not isinstance(e, dict) or not e.get("name"):
             continue
@@ -176,8 +208,10 @@ def _derive_players(result: Dict[str, Any], req: LineupRequest):
             outs.append(e["name"])
         else:
             dropped.append(e["name"])
-    players = _apply_changes(req.current_selection, ins, outs)
-    return players, ins, outs, dropped
+
+    base = [] if cleared else req.current_selection
+    players = _apply_changes(base, ins, outs)
+    return players, ins, outs, cleared, dropped
 
 
 # =============================================================================
@@ -367,14 +401,15 @@ Transcript of what the coach said (speech-to-text; may contain transcription err
 ---
 
 Reply with ONLY a JSON object of this exact shape (no prose, no markdown fences):
-{{"in": ["Name", ...], "out": [{{"name": "Name", "said": "the coach's exact removal words"}}, ...], "unmatched": ["spoken reference", ...], "note": ""}}
+{{"clear": false, "clear_said": "", "in": ["Name", ...], "out": [{{"name": "Name", "said": "the coach's exact removal words"}}, ...], "unmatched": ["spoken reference", ...], "note": ""}}
 
-Every "out" entry MUST quote, in "said", the coach's actual words that took that player off ("Wes's coming off", "Priya in for Alice" quoting the replacement). If you cannot quote removal words for a player, that player does NOT go in "out". "in" entries are plain names — additions need no evidence.
+Every "out" entry MUST quote, in "said", the coach's actual words that took that player off ("Wes's coming off", "Priya in for Alice" quoting the replacement). If you cannot quote removal words for a player, that player does NOT go in "out". RETRACTED words are VOID as evidence: when the coach cancels a change ("Priya in for Alice — actually no, Priya's in for Wes, Alice stays"), the cancelled phrase no longer counts as removal words — Alice has no valid evidence and does NOT go in "out". "in" entries are plain names — additions need no evidence.
 
 How to interpret the transcript:
 1. Bare names go IN: "Kris", "umm, Priya... and Dana", "Jake, Kris, and Charlie go in" — exactly those players in "in", nothing in "out".
 2. "X goes in for Y", "X replaces Y", "X for Y" — X in, Y out. "X is coming off", "X off", "X sits", "X takes a break" — X out. "add X", "X is on", "X's in" — X in.
 3. "same line", "run it back", "same as last point" — every player of the Previous lineup goes in "in". "Kris in for Wes, everyone else run it back" — "in": Kris plus the rest of the Previous lineup, "out": Wes.
+   CLEAR-EVERYONE: "wholesale" / "let's get a wholesale" (Wholesale is this app's clear-the-selection button — coaches use it as a verb), "everybody comes off", "everyone off", "all players come off", "clear the line", "start fresh" — set "clear": true and quote the coach's exact words in "clear_said". A clear un-taps the whole current selection at once; players named AFTER the clear go in "in" ("Let's get a wholesale, then put in Kris and Charlie" → clear: true, in: Kris, Charlie). A clear also cancels any "in" spoken BEFORE it. Do not also list the cleared players in "out".
 4. Later statements override earlier ones. "...and is that Hank? No, I think it's Morgan" is an identity correction: Morgan in, Hank nowhere (not in "out" — the coach never removed him, they corrected themselves). A retracted change never happened: "Priya in for Alice — actually no, Priya's in for Wes, Alice stays" gives "in": Priya and "out": Wes only; Alice appears nowhere.
 5. Ignore asides: commentary about the last point, scores, fatigue, weather, sideline chatter. Wrap-up phrases ("Omar completes the lineup", "that's the seven", "that's the line") mean the named player goes in and the coach finished talking — they NEVER make you add anyone else.
    A framing like "the line is X, Y, Z" only puts the named players in "in" — it puts NOBODY in "out". Already-selected players the coach didn't mention simply stay selected; when a coach wants a fresh line they clear the list first.
@@ -436,6 +471,8 @@ def _parse_lineup_json(text: str) -> Dict[str, Any]:
         raise RuntimeError("Claude lineup response missing 'in' list")
     if "out" in parsed and not isinstance(parsed.get("out"), list):
         raise RuntimeError("Claude lineup response 'out' is not a list")
+    parsed["clear"] = bool(parsed.get("clear"))
+    parsed["clear_said"] = str(parsed.get("clear_said") or "")
     # Normalize out entries to {name, said} dicts; bare strings mean the
     # model skipped the evidence field (treated as no evidence).
     outs = []

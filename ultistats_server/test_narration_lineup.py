@@ -27,6 +27,7 @@ from narration_lineup import (
     LineupRosterPlayer,
     _apply_changes,
     _build_lineup_prompt,
+    _clear_evidence_ok,
     _lineup_model,
     _normalize_name,
     _parse_lineup_json,
@@ -117,7 +118,7 @@ class TestLineupPrompt:
 
     def test_prompt_output_shape_is_changes_only(self):
         prompt = _build_lineup_prompt(make_request())
-        assert '{"in": ["Name", ...], "out": [{"name": "Name", "said":' in prompt
+        assert '{"clear": false, "clear_said": "", "in": ["Name", ...], "out": [{"name": "Name", "said":' in prompt
         # The retired full-lineup output shape must be gone
         assert '"players":' not in prompt
 
@@ -155,6 +156,12 @@ class TestParseLineupJson:
     def test_non_list_out_raises(self):
         with pytest.raises(RuntimeError):
             _parse_lineup_json('{"in": [], "out": "Wes"}')
+
+    def test_clear_fields_normalized(self):
+        out = _parse_lineup_json('{"in": [], "clear": true, "clear_said": "wholesale"}')
+        assert out["clear"] is True and out["clear_said"] == "wholesale"
+        out2 = _parse_lineup_json('{"in": ["A"]}')
+        assert out2["clear"] is False and out2["clear_said"] == ""
 
     def test_out_entries_normalized_to_name_said(self):
         out = _parse_lineup_json(
@@ -216,6 +223,31 @@ class TestApplyChanges:
         assert _normalize_name("23 Jamal") == "jamal"
         assert _normalize_name("Jamal #23") == "jamal"
         assert _normalize_name('Morgan Vale "HB"') == "morgan vale"
+
+
+class TestClearEvidence:
+    def test_wholesale_variants_accepted(self):
+        for t, quote in [
+            ("Let's get a wholesale, then put in Kris", "Let's get a wholesale"),
+            ("OK whole sale everybody", "whole sale"),
+            ("Everybody comes off", "Everybody comes off"),
+            ("All players come off. Priya in.", "All players come off"),
+            ("Clear the line please", "Clear the line"),
+            ("Let's start fresh here", "start fresh"),
+            ("Everyone off, thanks", "Everyone off"),
+        ]:
+            assert _clear_evidence_ok(quote, t), (t, quote)
+
+    def test_quote_not_in_transcript_rejected(self):
+        assert not _clear_evidence_ok("everybody comes off", "Kris in for Wes")
+
+    def test_non_collective_quote_rejected(self):
+        """A real transcript quote that isn't a collective-clear idiom must
+        not clear the selection."""
+        assert not _clear_evidence_ok("Wes comes off", "Wes comes off")
+
+    def test_empty_quote_rejected(self):
+        assert not _clear_evidence_ok("", "wholesale")
 
 
 # =============================================================================
@@ -314,6 +346,50 @@ class TestLineupEndpoint:
         ))
         data = resp.json()
         assert data["players"] == ["Kris", "Alice"]
+
+    def test_voiced_clear_then_ins(self, client, monkeypatch):
+        """'Let's get a wholesale, then put in Kris' — selection empties,
+        then the named players go in. The field-requested idiom."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+        async def call(api_key, prompt):
+            return {"in": ["Kris"], "out": [], "clear": True,
+                    "clear_said": "Let's get a wholesale",
+                    "unmatched": [], "note": ""}
+        monkeypatch.setattr(narration_lineup, "_call_claude_lineup", call)
+        resp = client.post("/api/narration/lineup", json=request_body(
+            transcript="Let's get a wholesale, then put in Kris"))
+        data = resp.json()
+        assert data["players"] == ["Kris"]
+        assert data["voiced_clear"] is True
+
+    def test_voiced_clear_alone_empties(self, client, monkeypatch):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+        async def call(api_key, prompt):
+            return {"in": [], "out": [], "clear": True,
+                    "clear_said": "Everybody comes off",
+                    "unmatched": [], "note": ""}
+        monkeypatch.setattr(narration_lineup, "_call_claude_lineup", call)
+        resp = client.post("/api/narration/lineup", json=request_body(
+            transcript="Everybody comes off"))
+        data = resp.json()
+        assert data["players"] == []
+        assert data["voiced_clear"] is True
+
+    def test_unverified_clear_is_ignored(self, client, monkeypatch):
+        """clear=true without a verifiable collective quote must not wipe."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+        async def call(api_key, prompt):
+            return {"in": [], "out": [], "clear": True,
+                    "clear_said": "Kris goes in for Wes",
+                    "unmatched": [], "note": ""}
+        monkeypatch.setattr(narration_lineup, "_call_claude_lineup", call)
+        resp = client.post("/api/narration/lineup", json=request_body())
+        data = resp.json()
+        assert data["players"] == ["Wes", "Alice"]
+        assert data["voiced_clear"] is False
 
     def test_out_with_fabricated_quote_is_dropped(self, client, monkeypatch):
         """A quote that names the player but never occurs in the transcript

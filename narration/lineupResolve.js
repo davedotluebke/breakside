@@ -113,9 +113,14 @@ function displayFirstName(name) {
  * @returns {{ message: string, type: 'success'|'warning' }}
  */
 function buildLineupToast({ selectedCount, expectedCount, added = [], removed = [], unmatched = [] }) {
+    // Long delta lists (a voiced wholesale takes seven players off at once)
+    // collapse to a count — the checkbox list is the source of truth.
+    const fmtList = (names) => names.length > 4
+        ? `${names.length} players`
+        : names.join(', ');
     const parts = [`${selectedCount}/${expectedCount} selected`];
-    if (added.length) parts.push(`Added: ${added.join(', ')}`);
-    if (removed.length) parts.push(`Off: ${removed.join(', ')}`);
+    if (added.length) parts.push(`Added: ${fmtList(added)}`);
+    if (removed.length) parts.push(`Off: ${fmtList(removed)}`);
     if (unmatched.length) {
         const shown = unmatched.slice(0, 3).map(u => `"${u}"`).join(', ');
         parts.push(`No match: ${shown}${unmatched.length > 3 ? ', …' : ''}`);

@@ -101,6 +101,15 @@ test('buildLineupToast: unmatched forces warning, quoted, capped at three', () =
     assert.ok(message.includes('No match: "a", "b", "c", …'), message);
 });
 
+test('buildLineupToast: long delta lists collapse to a count', () => {
+    const { message } = buildLineupToast({
+        selectedCount: 2, expectedCount: 7,
+        added: ['Jake', 'Kris'],
+        removed: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+    });
+    assert.equal(message, '2/7 selected. Added: Jake, Kris. Off: 7 players');
+});
+
 test('buildLineupToast: no delta parts when nothing changed', () => {
     const { message } = buildLineupToast({ selectedCount: 7, expectedCount: 7 });
     assert.equal(message, '7/7 selected');

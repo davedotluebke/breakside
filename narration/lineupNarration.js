@@ -345,7 +345,13 @@ const lineupNarration = (function() {
         }
         const returned = Array.isArray(data.players) ? data.players : [];
         const modelUnmatched = Array.isArray(data.unmatched) ? data.unmatched : [];
-        if (!returned.length && !modelUnmatched.length) {
+        // A voiced clear ("wholesale", "everybody comes off") or explicit
+        // removals legitimately empty the selection — distinguish that from
+        // "nothing lineup-related was heard", which must never wipe.
+        const voicedClear = data.voiced_clear === true;
+        const voicedOut = Array.isArray(data.voiced_out) ? data.voiced_out : [];
+        const legitimatelyEmpty = voicedClear || voicedOut.length > 0;
+        if (!returned.length && !modelUnmatched.length && !legitimatelyEmpty) {
             toast('No lineup heard', 'info');
             return false;
         }
@@ -355,7 +361,7 @@ const lineupNarration = (function() {
         const { players, unmatched: localUnmatched } = resolveLineupPlayers(returned, roster);
         const unmatched = modelUnmatched.concat(localUnmatched);
 
-        if (!players.length) {
+        if (!players.length && !legitimatelyEmpty) {
             const shown = unmatched.slice(0, 3).map(u => `"${u}"`).join(', ');
             toast(`No roster match: ${shown}${unmatched.length > 3 ? ', …' : ''} — selection unchanged`, 'warning');
             return false;
