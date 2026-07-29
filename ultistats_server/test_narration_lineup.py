@@ -513,49 +513,154 @@ class TestLineupEndpoint:
 # Live prompt-quality eval (opt-in: NARRATION_LIVE_TESTS=1)
 # =============================================================================
 
+# The 18-scenario matrix that gated every prompt/contract change during
+# development, ported verbatim so future changes can re-run the gate:
+# Wholesale family (W), clear idioms (C), regression under tap semantics (S),
+# additive UX (A), numbers-embedded-in-names rosters (M). Each runs END TO
+# END: real prompt -> real model -> _derive_players -> the real frontend
+# matcher (narration/lineupResolve.js under node).
+_EVAL_R = [
+    {"name": "Kris", "number": "12"}, {"name": "Sam", "number": "3"},
+    {"name": "Hank", "number": "21"},
+    {"name": "Morgan Vale", "nickname": "HB", "number": "8"},
+    {"name": "Nora", "number": "44"}, {"name": "Omar", "number": "10"},
+    {"name": "Wes", "number": "7"}, {"name": "Alice", "number": "2"},
+    {"name": "Priya", "number": "5"}, {"name": "Dana", "nickname": "Hammer", "number": "99"},
+    {"name": "Jake", "number": "77"}, {"name": "Charlie", "number": "14"},
+]
+_EVAL_MUMBO = [{"name": f"{n} {j}"} for n, j in [
+    ("Jamal", 23), ("Keisha", 7), ("Marcus", 15), ("Tanya", 4),
+    ("DeShawn", 11), ("Lena", 9), ("Otis", 30), ("Rosa", 2), ("Andre", 55),
+]]
+_EVAL_PREV = ["Kris", "Wes", "Alice", "Sam", "Hank", "Nora", "Omar"]
+_RECITE7 = {"Kris", "Sam", "Morgan Vale", "Nora", "Omar", "Wes", "Alice"}
+
+_EVAL_SCENARIOS = [
+    dict(id="W1-wholesale-3-go-in", roster=_EVAL_R, prev=_EVAL_PREV, sel=[],
+         t="Jake, Kris, and Charlie go in", expect={"Jake", "Kris", "Charlie"}),
+    dict(id="W2-wholesale-run-it-back", roster=_EVAL_R, prev=_EVAL_PREV, sel=[],
+         t="Run it back", expect=set(_EVAL_PREV)),
+    dict(id="W3-wholesale-sub-phrase", roster=_EVAL_R, prev=_EVAL_PREV, sel=[],
+         t="Kris in for Wes", expect={"Kris"}),
+    dict(id="C1-voiced-wholesale-then-ins", roster=_EVAL_R, prev=_EVAL_PREV, sel=_EVAL_PREV,
+         t="Let's get a wholesale, then put in Kris, Charlie and Jake",
+         expect={"Kris", "Charlie", "Jake"}),
+    dict(id="C2-everybody-comes-off", roster=_EVAL_R, prev=_EVAL_PREV, sel=_EVAL_PREV,
+         t="Everybody comes off", expect=set()),
+    dict(id="C3-all-off-then-two-in", roster=_EVAL_R, prev=_EVAL_PREV, sel=_EVAL_PREV,
+         t="All players come off. Priya and Dana in.", expect={"Priya", "Dana"}),
+    dict(id="S1-messy-corrections", roster=_EVAL_R, prev=_EVAL_PREV, sel=_EVAL_PREV,
+         t="Kris, Sam, and is that Hank? No I think it's Morgan. Yeah, Morgan HB. "
+           "And Kris is coming off, yeah that was a long point. Nora's on and Omar completes the lineup",
+         grade="s1"),
+    dict(id="S2-sub-run-it-back", roster=_EVAL_R,
+         prev=["Wes", "Alice", "Sam", "Hank", "Nora", "Omar", "Priya"],
+         sel=["Wes", "Alice", "Sam", "Hank", "Nora", "Omar", "Priya"],
+         t="Kris goes in for Wes, everyone else run it back",
+         expect={"Kris", "Alice", "Sam", "Hank", "Nora", "Omar", "Priya"}),
+    dict(id="S3-jersey-sub", roster=_EVAL_R,
+         prev=["Wes", "Alice", "Sam", "Kris", "Nora", "Omar", "Priya"],
+         sel=["Wes", "Alice", "Sam", "Kris", "Nora", "Omar", "Priya"],
+         t="Same line but number five comes off for big Morgan",
+         expect={"Wes", "Alice", "Sam", "Kris", "Nora", "Omar", "Morgan Vale"}),
+    dict(id="S4-recite-over-full-sel-unions", roster=_EVAL_R, prev=_EVAL_PREV, sel=_EVAL_PREV,
+         t="Line is Kris, Sam, HB, Nora, Omar, Wes, Alice — water's behind the tent by the way",
+         expect=set(_EVAL_PREV) | _RECITE7),
+    dict(id="S5-corrected-sub-hammer", roster=_EVAL_R, prev=_EVAL_PREV, sel=_EVAL_PREV,
+         t="Run it back except Priya in for Alice — actually no, Priya's in for Wes, Alice stays. And Hammer replaces Max.",
+         expect={"Kris", "Priya", "Alice", "Dana", "Hank", "Nora", "Omar"}),
+    dict(id="A1-single-bare-add-partial", roster=_EVAL_R, prev=_EVAL_PREV,
+         sel=["Alice", "Sam", "Nora"], t="Kris",
+         expect={"Alice", "Sam", "Nora", "Kris"}),
+    dict(id="A2-two-adds-filler-partial", roster=_EVAL_R, prev=_EVAL_PREV,
+         sel=["Alice", "Sam", "Nora"], t="Umm... Priya. And Dana too.",
+         expect={"Alice", "Sam", "Nora", "Priya", "Dana"}),
+    dict(id="A3-bare-add-full-sel", roster=_EVAL_R, prev=_EVAL_PREV, sel=_EVAL_PREV,
+         t="Priya", expect=set(_EVAL_PREV) | {"Priya"}),
+    dict(id="A4-sub-partial-sel", roster=_EVAL_R, prev=_EVAL_PREV,
+         sel=["Wes", "Alice", "Sam"], t="Kris in for Wes",
+         expect={"Kris", "Alice", "Sam"}),
+    dict(id="A5-recite-over-partial-unions", roster=_EVAL_R,
+         prev=["Priya", "Dana"], sel=["Priya", "Dana"],
+         t="Line is Kris, Sam, HB, Nora, Omar, Wes, Alice",
+         expect={"Priya", "Dana"} | _RECITE7),
+    dict(id="M1-mumbo-recite-from-empty", roster=_EVAL_MUMBO, prev=[], sel=[],
+         t="Jamal, Keisha, Marcus, Tanya, DeShawn, Lena and Otis",
+         expect={"Jamal 23", "Keisha 7", "Marcus 15", "Tanya 4", "DeShawn 11", "Lena 9", "Otis 30"}),
+    dict(id="M2-mumbo-single-add-partial", roster=_EVAL_MUMBO,
+         prev=["Keisha 7", "Tanya 4"], sel=["Keisha 7", "Tanya 4"],
+         t="Add Jamal", expect={"Keisha 7", "Tanya 4", "Jamal 23"}),
+]
+
+_EVAL_MODELS = ["claude-haiku-4-5", "claude-sonnet-4-5-20250929"]
+
+
+def _grade_s1(matched):
+    """Constraint-graded: named players in, Kris out, no fabrication;
+    base members (Hank/Wes/Alice) may stay (merge read) or not (recite)."""
+    must_in = {"Sam", "Morgan Vale", "Nora", "Omar"}
+    must_out = {"Kris", "Priya", "Dana", "Jake", "Charlie"}
+    allowed = must_in | {"Wes", "Alice", "Hank"}
+    return must_in <= matched and not (matched & must_out) and matched <= allowed
+
+
+def _frontend_match(returned, roster):
+    """Run the returned names through the REAL client matcher under node."""
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node not available for frontend-matcher leg")
+    resolve_js = (Path(__file__).resolve().parents[1] / "narration" / "lineupResolve.js")
+    script = (
+        f"import {{ resolveLineupPlayers }} from '{resolve_js}';\n"
+        f"const out = resolveLineupPlayers({json.dumps(returned)}, {json.dumps(roster)});\n"
+        "console.log(JSON.stringify({m: out.players.map(p => p.name), u: out.unmatched}));"
+    )
+    r = subprocess.run(["node", "--input-type=module", "-e", script],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr[:300]
+    return json.loads(r.stdout)
+
+
 @pytest.mark.live_llm
 @pytest.mark.skipif(
     os.getenv("NARRATION_LIVE_TESTS") != "1" or not os.getenv("ANTHROPIC_API_KEY"),
-    reason="live LLM test; set NARRATION_LIVE_TESTS=1 with ANTHROPIC_API_KEY",
+    reason="live LLM eval; set NARRATION_LIVE_TESTS=1 with ANTHROPIC_API_KEY",
 )
-class TestLiveLineupExtraction:
-    """Canonical messy utterance against the real model, graded under
-    tap-equivalent semantics: named players go in, Kris comes off,
-    unmentioned selected players (Hank) stay, nobody is fabricated."""
+@pytest.mark.parametrize("model", _EVAL_MODELS)
+@pytest.mark.parametrize("sc", _EVAL_SCENARIOS, ids=lambda s: s["id"])
+def test_live_lineup_eval_matrix(sc, model, monkeypatch):
+    """The shipping gate for lineup prompt/contract changes. Run with:
+    NARRATION_LIVE_TESTS=1 pytest test_narration_lineup.py -k live -v
+    (36 calls, ~2min, ~$0.10). One retry absorbs transient API timeouts."""
+    import asyncio
+    from narration_lineup import _call_claude_lineup, _derive_players
 
-    def test_asides_and_corrections(self, client):
-        transcript = (
-            "Kris, Sam, and is that Hank? No I think it's Morgan. Yeah, Morgan HB. "
-            "And Kris is coming off, yeah that was a long point. "
-            "Nora's on and Omar completes the lineup"
-        )
-        roster = [
-            {"name": "Kris", "number": "12"},
-            {"name": "Sam", "number": "3"},
-            {"name": "Hank", "number": "21"},
-            {"name": "Morgan Vale", "nickname": "HB", "number": "8"},
-            {"name": "Nora", "number": "44"},
-            {"name": "Omar", "number": "10"},
-            {"name": "Wes", "number": "7"},
-            {"name": "Alice", "number": "2"},
-            {"name": "Priya", "number": "5"},
-        ]
-        prev = ["Kris", "Wes", "Alice", "Sam", "Hank", "Nora", "Omar"]
-        resp = client.post("/api/narration/lineup", json={
-            "game_id": "live-test",
-            "transcript": transcript,
-            "roster": roster,
-            "expected_count": 7,
-            "previous_lineup": prev,
-            "current_selection": prev,
-        })
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["error"] is None, data
-        players = set(data["players"])
-        assert "Kris" not in players, data          # explicitly came off
-        assert "Priya" not in players, data          # never mentioned, not selected
-        for named in ("Sam", "Morgan Vale", "Nora", "Omar"):
-            assert named in players, data
-        for p in players:
-            assert p in [r["name"] for r in roster] + prev, data
+    monkeypatch.setenv("NARRATION_LINEUP_MODEL", model)
+    req = make_request(
+        transcript=sc["t"],
+        roster=[LineupRosterPlayer(**pl) for pl in sc["roster"]],
+        previous_lineup=sc["prev"], current_selection=sc["sel"],
+    )
+    prompt = _build_lineup_prompt(req)
+    last_err = None
+    for _ in range(2):
+        try:
+            res = asyncio.run(_call_claude_lineup(os.environ["ANTHROPIC_API_KEY"], prompt))
+            break
+        except Exception as e:  # noqa: BLE001 — transient API errors get one retry
+            last_err = e
+    else:
+        pytest.fail(f"model call failed twice: {last_err}")
+
+    players, ins, outs, cleared, dropped = _derive_players(res, req)
+    fe = _frontend_match(players, sc["roster"])
+    matched = set(fe["m"])
+    assert not fe["u"], f"unmatched leak: {fe['u']} (in={ins})"
+    if sc.get("grade") == "s1":
+        assert _grade_s1(matched), f"matched={sorted(matched)} in={ins} out={outs}"
+    else:
+        assert matched == sc["expect"], (
+            f"matched={sorted(matched)} expect={sorted(sc['expect'])} "
+            f"in={ins} out={outs} clear={cleared}")
