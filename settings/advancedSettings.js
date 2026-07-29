@@ -39,14 +39,16 @@ const advancedSettings = (function() {
     const DEFAULT_VOCAB_PROMPT =
         `Ultimate frisbee game. Likely names and terms: {names}, ${JARGON.join(', ')}.`;
 
-    // Auto line-selection priority factors (order = default order = the
-    // "classic" ordering: rest above O/D). Each is a soft key the Auto greedy
-    // applies in the user-chosen order; fixed sub-tiebreakers (fewer points,
-    // longer bench streak, name) always run last. Keys are the stable ids
-    // stored in autoLine.priorityOrder; labels drive the reorder UI.
+    // Auto line-selection priority factors. This array's order IS the default
+    // priority order (position above rest, both above O/D). Each is a soft key
+    // the Auto greedy applies in the user-chosen order; fixed sub-tiebreakers
+    // (fewer points, longer bench streak, name) always run last. Keys are the
+    // stable ids stored in autoLine.priorityOrder; labels drive the reorder UI.
+    // NB: Auto only ADDS players (it never benches anyone), so "Rest" means
+    // "favor players who have sat out more", not "sit players".
     const AUTO_LINE_FACTORS = [
-        ['rest', 'Rest (sit players who just played)'],
         ['position', 'Position (handlers / cutters)'],
+        ['rest', 'Rest (favor players who have sat more)'],
         ['od', 'Prioritize O/D squad'],
         ['pt', 'Even playing time'],
     ];
@@ -225,7 +227,7 @@ const advancedSettings = (function() {
             fields: [
                 {
                     key: 'autoLine.priorityOrder', label: 'Priority order',
-                    help: 'Drag (or use ▲▼) to rank how Auto decides — higher wins. <b>O/D squad</b>: on a defense point favor D-line players, on offense favor O-line players. <b>Rest</b>: favor players who sat the last point. <b>Position</b>: aim for a handler/cutter balance. <b>Even playing time</b>: favor players with less time on the field.',
+                    help: 'Drag (or use ▲▼) to rank how Auto decides — higher wins. <b>Position</b>: aim for a handler/cutter balance. <b>Rest</b>: favor players who have sat out more (Auto only adds players — it never benches anyone). <b>O/D squad</b>: on a defense point favor D-line players, on offense favor O-line players. <b>Even playing time</b>: favor players with less time on the field.',
                     type: 'reorder',
                     items: AUTO_LINE_FACTORS
                 },

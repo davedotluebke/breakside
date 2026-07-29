@@ -294,12 +294,14 @@ function getAutoLineSide(game) {
  * priority (decreasing):
  * Gender ratio (when active) is always satisfied first — it's the only rule
  * that pulls in an off-role player. After that come four SOFT factors whose
- * order the coach sets in Advanced Settings (default = the classic order below,
- * rest above O/D):
- *   • Rest          — players NOT on the last point beat those who just played.
+ * order the coach sets in Advanced Settings (default order below: position,
+ * then rest, above O/D):
  *   • Position      — aim for >= floor(n/2) handler-capable and >= ceil(n/2)
  *                     cutter-capable (hybrids/unlabeled count for both); soft,
  *                     prefer candidates that still advance an unmet minimum.
+ *   • Rest          — Auto only ADDS players, so this favors players who have
+ *                     sat out more: those NOT on the last point beat those who
+ *                     just played.
  *   • O/D squad     — exact-side line (D on defense / O on offense) beats
  *                     opposite side; Crossover sits between them, or ties the
  *                     exact match when the "Crossover ranks with dedicated line"
@@ -345,7 +347,7 @@ function computeAutoLine(alreadySelected = []) {
     // (classic order, crossover==dedicated) if the settings module isn't loaded.
     const adv = (typeof window !== 'undefined') ? window.advancedSettings : null;
     const priorityOrder = (adv && typeof adv.getAutoLinePriorityOrder === 'function')
-        ? adv.getAutoLinePriorityOrder() : ['rest', 'position', 'od', 'pt'];
+        ? adv.getAutoLinePriorityOrder() : ['position', 'rest', 'od', 'pt'];
     const crossoverSame = (adv && typeof adv.getAutoLineCrossoverSamePriority === 'function')
         ? adv.getAutoLineCrossoverSamePriority() : true;
 
