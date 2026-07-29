@@ -429,6 +429,44 @@ lineupReadyMode:      'o' | 'd' | 'od' | null             // alongside existing 
 
 ---
 
+## Voice lineup (Lines-tab mic) — follow-ups
+
+Shipped through build 1105 / commit 35aa1f1 (2026-07-28): tap-equivalent
+contract (model returns only voiced in/out changes + verified clear; server
+does the set arithmetic — it structurally cannot pick or fill a line),
+wholesale/everybody-off idiom, additive partial utterances, numbers-in-names
+matching, short delta toasts. Field-verified on production. Remaining:
+
+- [ ] **Make the 18-scenario lineup eval permanent.** The eval matrix that
+      gated every prompt/contract change this round (Wholesale family, clear
+      idioms, corrections/retractions, jersey subs, Team C numbers-in-names,
+      additive cases — run end-to-end: prompt → model → `_derive_players` →
+      the real `lineupResolve.js` matcher under node) lived in session
+      scratchpad and is gone. Port the scenarios into the opt-in
+      `NARRATION_LIVE_TESTS=1` section of
+      `ultistats_server/test_narration_lineup.py` (parametrized over
+      claude-haiku-4-5 + claude-sonnet-4-5-20250929) so future prompt or
+      model changes can re-run the gate. Scenario definitions are
+      reconstructable from the S1/C1-style cases already in that file's live
+      test plus ARCHITECTURE.md § Lineup Narration.
+- [ ] **Field-watch two deliberate behavior choices** (revisit only if they
+      annoy in practice): reciting a full line over a non-empty selection
+      UNIONS (e.g. 9/7 warning toast; wholesale first is the intended flow),
+      and same-normalized roster names ("Jamal 23" vs "Jamal 40") refuse
+      fuzzy matching — the model must emit the exact spelling.
+- [ ] **If Haiku lineup quality regresses** (watch retraction-style compound
+      subs), pin `NARRATION_LINEUP_MODEL=claude-sonnet-4-5-20250929` in
+      `/etc/breakside/env` + restart — the per-pass override exists for
+      exactly this; Sonnet was 18/18 on every eval round.
+- [ ] Optional: Playwright e2e over the `window.lineupNarration._applyResult`
+      seam (unit tests + live eval + manual field tests covered everything
+      so far; the seam was built for this).
+
+Ops note: agent sessions currently cannot deploy to EC2 — after the Mac
+reboot the ssh-agent has no identity (`Permission denied (publickey)`).
+Re-establish once inside `tmux new -s breakside` (ssh to the EC2 host from
+that pane) and agent-driven deploys via send-keys work again.
+
 ## AI Narration — improvements
 
 Improvements deferred from the initial implementation (see Active section above for the architecture summary).
