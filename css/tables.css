@@ -405,9 +405,13 @@ ul {
     color: var(--white);
     font-weight: bold;
 }
-/* The Stats-detail menu shares the scope row; a little air separates it from
-   the scope pills when they sit on the same line. */
-.roster-stats-level-label {
+/* The Stats-detail menu shares the scope row. Label and <select> travel
+   together so the label never strands on the line above when the row wraps
+   on a phone; the left margin gives it air from the scope pills. */
+.roster-stats-level-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     margin-left: 6px;
 }
 #rosterStatsLevel {
