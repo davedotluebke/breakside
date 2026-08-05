@@ -1301,14 +1301,15 @@ function renderEventContainer(event, games, team, role) {
         const headerBtns = document.createElement('div');
         headerBtns.className = 'event-header-btns';
 
-        // Roster label collapses "Event roster" → "Roster" → icon-only;
-        // the settings label drops out first. See @container rules in css/teams.css.
+        // Roster label collapses "Event roster + stats" → "Roster + stats" →
+        // icon-only; the settings label drops out first. See @container rules
+        // in css/teams.css.
         const rosterBtn = document.createElement('button');
         rosterBtn.innerHTML = '<i class="fas fa-users"></i>' +
-            '<span class="ev-btn-label ev-roster-full">Event roster</span>' +
-            '<span class="ev-btn-label ev-roster-short">Roster</span>';
+            '<span class="ev-btn-label ev-roster-full">Event roster + stats</span>' +
+            '<span class="ev-btn-label ev-roster-short">Roster + stats</span>';
         rosterBtn.classList.add('icon-button', 'event-header-btn');
-        rosterBtn.title = 'Event Roster';
+        rosterBtn.title = 'Event Roster + Stats';
         rosterBtn.onclick = (e) => {
             e.stopPropagation();
             showEventRosterScreen(event, team);

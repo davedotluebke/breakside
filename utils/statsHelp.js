@@ -20,6 +20,8 @@ const STATS_COLUMN_HELP = {
                   desc: 'Threw the pass that led to the assist (the pass before the goal).' },
     'Huck HA':  { name: 'Huck Hockey Assists',
                   desc: 'Hockey assists where the throw was a huck. Counted in the HA total as well.' },
+    'Throws':   { name: 'Throws Attempted',
+                  desc: 'Every throw the player released — completions plus throwaways and stalls. The denominator behind Comp%.' },
     'Comp%':    { name: 'Completion Percentage',
                   desc: 'Completed throws ÷ total throws (completions + turnovers).' },
     'Huck%':    { name: 'Huck Completion Percentage',
@@ -28,10 +30,18 @@ const STATS_COLUMN_HELP = {
                   desc: 'Blocks, layouts, skies, interceptions, Callahans, stalls forced.' },
     'TOs':      { name: 'Turnovers',
                   desc: 'Throwaways, stalls, and drops attributed to the player.' },
+    'TAs':      { name: 'Throwaways',
+                  desc: 'Turnovers charged to the thrower — throwaways and stalls. A pass that was dropped counts as a turnover for the thrower but not a throwaway, so TAs + Drops can be less than TOs.' },
+    'Drops':    { name: 'Drops',
+                  desc: 'Passes the player failed to catch. Charged to the intended receiver (the thrower is charged a turnover for the same play).' },
     '+/-':      { name: 'Plus / Minus',
                   desc: '+1 for each point won while on the field, −1 for each point lost.' },
     '..per pt': { name: '+/- per Point',
-                  desc: 'Plus/minus divided by points played. A rate-adjusted version of +/-.' }
+                  desc: 'Plus/minus divided by points played. A rate-adjusted version of +/-.' },
+    'Pulls':    { name: 'Pulls',
+                  desc: 'Number of pulls the player threw.' },
+    'G/O/P/B':  { name: 'Pull Quality',
+                  desc: 'Good / Okay / Poor / Brick, in that order. Only pulls that were rated appear in the breakdown, so the four can add up to less than Pulls.' }
 };
 
 /**

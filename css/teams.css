@@ -286,24 +286,24 @@
 }
 
 /* Responsive label collapse. Widest: "Event roster" + "Event settings".
-   Narrower in stages: settings label drops, then "Event roster" → "Roster",
-   then roster label drops to icon-only. Thresholds are tuned to the buttons'
-   actual rendered widths (both labels need ~217px, "Event roster"+gear ~126px,
-   "Roster"+gear ~93px) so labels stay visible whenever there's real room. */
+   Narrower in stages: settings label drops, then "Event roster + stats" →
+   "Roster + stats", then roster label drops to icon-only. Thresholds are tuned
+   to the buttons' actual rendered widths so labels stay visible whenever
+   there's real room. */
 .event-header-btn .ev-roster-short {
     display: none;
 }
 
-@container event-header-row (max-width: 230px) {
+@container event-header-row (max-width: 310px) {
     .event-header-btn .ev-settings-label { display: none; }
 }
 
-@container event-header-row (max-width: 140px) {
+@container event-header-row (max-width: 190px) {
     .event-header-btn .ev-roster-full { display: none; }
     .event-header-btn .ev-roster-short { display: inline; }
 }
 
-@container event-header-row (max-width: 100px) {
+@container event-header-row (max-width: 150px) {
     .event-header-btn .ev-roster-short { display: none; }
 }
 
