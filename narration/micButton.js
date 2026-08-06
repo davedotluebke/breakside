@@ -1,7 +1,13 @@
 /*
  * Narration Mic Button
  *
- * Floating FAB at bottom-center that controls speech narration recording.
+ * Floating FAB at bottom-right that controls speech narration recording.
+ *
+ * One button, two jobs. Which one it drives depends on the active tab:
+ *   - Line tab       → lineup narration ("Kris in for Wes")
+ *   - every other    → in-point event narration
+ * See NARRATION_TARGETS below; the press handlers never branch on which
+ * one is live.
  *
  * Interaction model:
  *   - Short tap (press+release < LONG_PRESS_MS): toggle recording on/off
@@ -10,19 +16,109 @@
  *
  * Visibility: shown only when the in-game screen is active. Uses polling
  * against isGameScreenVisible() since the existing enter/exit functions do
- * not emit events.
+ * not emit events. The same poll notices tab changes, which only ever swap
+ * the tooltip — both targets look identical while idle.
  *
  * This module does not know anything about audio or LLMs — it delegates to
- * narrationEngine.startRecording() / stopRecording().
+ * the target's start()/stop().
  */
-import { isGameScreenVisible } from '../ui/panelSystem.js';
+import { isGameScreenVisible, getActiveTab } from '../ui/panelSystem.js';
 import { showControllerToast } from '../game/controllerState.js';
 import { narrationEngine } from './narrationEngine.js';
+import { lineupNarration } from './lineupNarration.js';
 
 const narrationMicButton = (function() {
     const BTN_ID = 'narrationMicBtn';
     const LONG_PRESS_MS = 400;
     const VISIBILITY_POLL_MS = 500;
+
+    // Phase → button class. Lineup's post-release work is called 'processing'
+    // and the engine's is called 'finalizing'; both mean "mic is cold, work is
+    // still running", so they share the blue pulse.
+    const PHASE_CLASS = {
+        connecting: 'mic-connecting',
+        recording:  'mic-recording',
+        finalizing: 'mic-finalizing',
+        processing: 'mic-finalizing',
+        idle:       'mic-idle'
+    };
+    const ALL_PHASE_CLASSES = ['mic-idle', 'mic-recording', 'mic-connecting', 'mic-disabled', 'mic-finalizing'];
+
+    // ---------------------------------------------------------------------
+    // Narration targets
+    //
+    // Each target wraps one narration subsystem behind the same surface:
+    //   phase()          current phase string (keys of PHASE_CLASS)
+    //   isBusy()         mic is hot or mid-handshake — a tap/release stops it
+    //   blocked(phase)   message to toast instead of starting, or null
+    //   start() / stop() promises
+    //   ui[phase]        [title, aria-label]
+    // ---------------------------------------------------------------------
+
+    const eventTarget = {
+        name: 'event',
+        phase: () => (narrationEngine && narrationEngine.getPhase)
+            ? narrationEngine.getPhase()
+            : 'idle',
+        // Kept as the engine's own recording flag rather than phase ===
+        // 'recording' so this stays byte-for-byte the pre-merge predicate.
+        isBusy() {
+            const recording = !!(narrationEngine && narrationEngine.isRecording && narrationEngine.isRecording());
+            return recording || this.phase() === 'connecting';
+        },
+        // Tapping during 'finalizing' starts the next recording, as before —
+        // the mic is already cold by then and coaches machine-gun events.
+        blocked: () => null,
+        start: () => narrationEngine.startRecording(),
+        stop: () => narrationEngine.stopRecording(),
+        failedToStart: (msg) => 'Narration failed to start: ' + msg,
+        ui: {
+            idle:       ['Tap to start recording, or hold to record while held', 'Start recording'],
+            connecting: ['Connecting…', 'Connecting'],
+            recording:  ['Recording — tap to stop', 'Stop recording'],
+            finalizing: ['Finalizing narration…', 'Finalizing']
+        }
+    };
+
+    const lineupTarget = {
+        name: 'lineup',
+        phase: () => (lineupNarration && lineupNarration.getPhase)
+            ? lineupNarration.getPhase()
+            : 'idle',
+        isBusy() {
+            const p = this.phase();
+            return p === 'recording' || p === 'connecting';
+        },
+        // A tap while the previous line is still resolving must not silently
+        // no-op — start() returns early and the coach reads that as a dead mic.
+        blocked: (phase) => phase === 'processing'
+            ? 'Still working out the previous lineup…'
+            : null,
+        start: () => lineupNarration.start(),
+        stop: () => lineupNarration.stop(),
+        failedToStart: (msg) => 'Lineup narration failed to start: ' + msg,
+        ui: {
+            idle:       ['Narrate the next line — tap, speak names or subs, tap again', 'Narrate lineup'],
+            connecting: ['Connecting…', 'Connecting'],
+            recording:  ['Listening — tap to finish the lineup', 'Finish lineup'],
+            processing: ['Working out the lineup…', 'Working out the lineup']
+        }
+    };
+
+    /**
+     * Which target the button drives right now.
+     *
+     * A non-idle target always wins over the tab: the coach can switch tabs
+     * mid-session, and the button must keep offering "stop" for the work
+     * that is actually running rather than starting a second one (both share
+     * the realtime-session singleton, so the second would fail anyway).
+     */
+    function currentTarget() {
+        if (lineupTarget.phase() !== 'idle') return lineupTarget;
+        if (eventTarget.phase() !== 'idle') return eventTarget;
+        const tab = typeof getActiveTab === 'function' ? getActiveTab() : null;
+        return tab === 'line' ? lineupTarget : eventTarget;
+    }
 
     // State
     let btn = null;
@@ -30,30 +126,11 @@ const narrationMicButton = (function() {
     let pressTimerId = null;
     let pressWasLongPress = false;
     let isPressed = false;
-
-    /**
-     * Current recording state, queried from the narration engine.
-     * Falls back to false if the engine isn't loaded yet.
-     */
-    function isRecording() {
-        return !!(narrationEngine && narrationEngine.isRecording && narrationEngine.isRecording());
-    }
-
-    /** Current engine phase ('idle'|'connecting'|'recording'|'finalizing'), or null. */
-    function currentPhase() {
-        return (narrationEngine && narrationEngine.getPhase)
-            ? narrationEngine.getPhase()
-            : null;
-    }
-
-    /**
-     * Whether the session is live OR mid-handshake. Releasing/cancelling during
-     * 'connecting' must still stop, otherwise the connect completes after the
-     * user lifted and the mic is left hot with no UI affordance to stop it.
-     */
-    function isRecordingOrConnecting() {
-        return isRecording() || currentPhase() === 'connecting';
-    }
+    // Target captured at press-start and held for the whole press, so a phase
+    // transition mid-press can't route the release to the other subsystem.
+    let pressTarget = null;
+    // Last target rendered, so the visibility poll can notice tab changes.
+    let renderedTarget = null;
 
     /**
      * Whether narration is available at all (engine loaded + browser supports
@@ -67,51 +144,40 @@ const narrationMicButton = (function() {
     }
 
     /**
-     * Update the button's visual state to match the current recording /
+     * Update the button's visual state to match the current target's phase /
      * availability state. Does not change visibility (show/hide).
      */
     function refreshButtonState() {
         if (!btn) return;
-        btn.classList.remove('mic-idle', 'mic-recording', 'mic-connecting', 'mic-disabled', 'mic-finalizing');
-
-        // Check if engine reports a transient connecting/finalizing phase
-        const phase = narrationEngine && narrationEngine.getPhase
-            ? narrationEngine.getPhase()
-            : null;
+        btn.classList.remove(...ALL_PHASE_CLASSES);
 
         if (!isNarrationAvailable()) {
             btn.classList.add('mic-disabled');
             btn.title = 'Narration unavailable (no microphone support)';
             btn.setAttribute('aria-label', 'Narration unavailable');
+            renderedTarget = null;
             return;
         }
 
-        if (phase === 'connecting') {
-            btn.classList.add('mic-connecting');
-            btn.title = 'Connecting…';
-            btn.setAttribute('aria-label', 'Connecting');
-        } else if (phase === 'finalizing') {
-            btn.classList.add('mic-finalizing');
-            btn.title = 'Finalizing narration…';
-            btn.setAttribute('aria-label', 'Finalizing');
-        } else if (isRecording()) {
-            btn.classList.add('mic-recording');
-            btn.title = 'Recording — tap to stop';
-            btn.setAttribute('aria-label', 'Stop recording');
-        } else {
-            btn.classList.add('mic-idle');
-            btn.title = 'Tap to start recording, or hold to record while held';
-            btn.setAttribute('aria-label', 'Start recording');
-        }
+        const target = currentTarget();
+        const phase = target.phase();
+        const [title, label] = target.ui[phase] || target.ui.idle;
+
+        btn.classList.add(PHASE_CLASS[phase] || 'mic-idle');
+        btn.title = title;
+        btn.setAttribute('aria-label', label);
+        renderedTarget = target;
     }
 
     /**
-     * Show or hide the button based on whether the game screen is visible.
+     * Show or hide the button based on whether the game screen is visible,
+     * and re-render if the active tab has swapped the target under us.
      */
     function refreshVisibility() {
         if (!btn) return;
         const visible = typeof isGameScreenVisible === 'function' && isGameScreenVisible();
         btn.classList.toggle('visible', !!visible);
+        if (visible && renderedTarget !== currentTarget()) refreshButtonState();
     }
 
     // ---------------------------------------------------------------------
@@ -125,8 +191,8 @@ const narrationMicButton = (function() {
      */
     function onLongPressFired() {
         pressWasLongPress = true;
-        if (!isRecordingOrConnecting()) {
-            startRecording();
+        if (!pressTarget.isBusy()) {
+            startRecording(pressTarget);
         }
     }
 
@@ -136,6 +202,7 @@ const narrationMicButton = (function() {
         isPressed = true;
         pressStartTime = Date.now();
         pressWasLongPress = false;
+        pressTarget = currentTarget();
 
         pressTimerId = setTimeout(onLongPressFired, LONG_PRESS_MS);
     }
@@ -151,20 +218,22 @@ const narrationMicButton = (function() {
         }
 
         const pressDuration = Date.now() - pressStartTime;
+        const target = pressTarget;
+        pressTarget = null;
 
         if (pressWasLongPress) {
             // Temporary recording mode: stop on release (even if we're still
-            // connecting — stopRecording aborts an in-flight connect).
-            if (isRecordingOrConnecting()) {
-                stopRecording();
+            // connecting — stop() aborts an in-flight connect).
+            if (target.isBusy()) {
+                stopRecording(target);
             }
         } else {
             // Short tap: toggle. While connecting/recording, a tap stops.
             if (pressDuration < LONG_PRESS_MS) {
-                if (isRecordingOrConnecting()) {
-                    stopRecording();
+                if (target.isBusy()) {
+                    stopRecording(target);
                 } else {
-                    startRecording();
+                    startRecording(target);
                 }
             }
         }
@@ -177,43 +246,51 @@ const narrationMicButton = (function() {
             clearTimeout(pressTimerId);
             pressTimerId = null;
         }
+        const target = pressTarget;
+        pressTarget = null;
         // If the long-press already fired (we started recording, or are still
         // connecting), treat this cancellation as a release so we don't leave
-        // the mic hot — stopRecording aborts an in-flight connect.
-        if (pressWasLongPress && isRecordingOrConnecting()) {
-            stopRecording();
+        // the mic hot — stop() aborts an in-flight connect.
+        if (pressWasLongPress && target && target.isBusy()) {
+            stopRecording(target);
         }
     }
 
     // ---------------------------------------------------------------------
-    // Recording actions — delegate to the narration engine
+    // Recording actions — delegate to the active target
     // ---------------------------------------------------------------------
 
-    function startRecording() {
+    function startRecording(target) {
         if (!isNarrationAvailable()) {
             console.warn('[micButton] Narration engine not available');
             return;
         }
+        const blockedMessage = target.blocked(target.phase());
+        if (blockedMessage) {
+            if (typeof showControllerToast === 'function') {
+                showControllerToast(blockedMessage, 'info');
+            }
+            return;
+        }
         refreshButtonState();  // Show connecting state immediately
-        narrationEngine.startRecording()
+        Promise.resolve(target.start())
             .then(() => refreshButtonState())
             .catch(err => {
-                console.error('[micButton] startRecording failed:', err);
+                console.error(`[micButton] ${target.name} start failed:`, err);
                 refreshButtonState();
                 if (typeof showControllerToast === 'function') {
                     // Not always a mic problem — the realtime socket can die
                     // during setup too (G5). Keep the message cause-neutral.
-                    showControllerToast('Narration failed to start: ' + (err.message || err), 'error');
+                    showControllerToast(target.failedToStart(err.message || err), 'error');
                 }
             });
     }
 
-    function stopRecording() {
-        if (!narrationEngine) return;
-        narrationEngine.stopRecording()
+    function stopRecording(target) {
+        Promise.resolve(target.stop())
             .then(() => refreshButtonState())
             .catch(err => {
-                console.error('[micButton] stopRecording failed:', err);
+                console.error(`[micButton] ${target.name} stop failed:`, err);
                 refreshButtonState();
             });
         refreshButtonState();
@@ -267,18 +344,21 @@ const narrationMicButton = (function() {
         init();
     }
 
-    // Public API: the refresh hook the engine calls on phase transitions.
-    // (There's no dedicated bus channel for phase; the engine invokes
+    // Public API: the refresh hook both narration layers call on phase
+    // transitions. (There's no dedicated bus channel for phase; they invoke
     // window.narrationMicButton.refresh() directly.)
     return {
         refresh: refreshButtonState,
-        refreshVisibility: refreshVisibility
+        refreshVisibility: refreshVisibility,
+        // Debug/e2e seam: which subsystem a tap would drive right now.
+        _currentTargetName: () => currentTarget().name
     };
 })();
 
 // --- ES-module export ---
 export { narrationMicButton };
 // window survivor: late-bound back-edge hook (called window-qualified by
-// narration/narrationEngine.js setPhase — an engine↔micButton import cycle
-// would invert their eval order; see setPhase)
+// narration/narrationEngine.js setPhase and narration/lineupNarration.js
+// setPhase — an engine↔micButton import cycle would invert their eval
+// order; see setPhase)
 window.narrationMicButton = narrationMicButton;

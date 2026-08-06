@@ -3,23 +3,26 @@
  *
  * A SEPARATE layer on top of the base narration plumbing. It reuses
  * narrationRealtimeSession (transcription-only mode) for capture and the
- * Advanced Settings narration knobs, but has its own mic button (in the
- * Select Line toolbar), its own state machine, and its own backend
- * endpoint (/api/narration/lineup). It never touches the in-point
- * narration engine beyond checking that it's idle — the two can't record
- * at once because they share the realtime-session singleton.
+ * Advanced Settings narration knobs, but has its own state machine and its
+ * own backend endpoint (/api/narration/lineup). It never touches the
+ * in-point narration engine beyond checking that it's idle — the two can't
+ * record at once because they share the realtime-session singleton.
+ *
+ * No button of its own: the floating mic FAB (narration/micButton.js) routes
+ * to this layer whenever the Line tab is active, and drives start()/stop()
+ * with the same tap-toggle / hold-to-record gestures it uses for event
+ * narration. This module owns only the inline status strip under the Select
+ * Line toolbar; button state is reported back through the late-bound
+ * window.narrationMicButton.refresh() hook.
  *
  * Flow:
- *   tap #lineupMicBtn → transcription session opens (vocabulary biased to
- *   the FULL active roster — calling a line names bench players) → coach
- *   speaks ("Kris goes in for Wes", "same line but…", corrections) →
- *   tap again → transcript + roster + expected count + previous lineup +
+ *   tap the mic on the Line tab → transcription session opens (vocabulary
+ *   biased to the FULL active roster — calling a line names bench players)
+ *   → coach speaks ("Kris goes in for Wes", "same line but…", corrections)
+ *   → tap again → transcript + roster + expected count + previous lineup +
  *   current selection POST to /api/narration/lineup → returned players
  *   are applied through selectLine's applyLineSelection (same path as the
  *   Auto button), replacing the active line's selection.
- *
- * The mic button lives in DOM built by gameScreenPanels; clicks are
- * delegated on document so panel rebuilds can't orphan the handler.
  */
 import { narrationRealtimeSession, mergeCompletedUtterance } from './realtimeSession.js';
 import { narrationEngine } from './narrationEngine.js';
@@ -33,7 +36,6 @@ import { showControllerToast } from '../game/controllerState.js';
 import { applyLineSelection, canEditSelectLinePanel } from '../game/selectLine.js';
 
 const lineupNarration = (function() {
-    const BTN_ID = 'lineupMicBtn';
     const STATUS_ID = 'lineupNarrationStatus';
     const LINEUP_ENDPOINT = '/api/narration/lineup';
     const TRANSCRIPT_TAIL_CHARS = 120;
@@ -63,30 +65,13 @@ const lineupNarration = (function() {
         refresh();
     }
 
-    /** Sync the mic button's classes/title and the status strip to `phase`.
-     *  Re-queries the DOM each time — the Lines panel can be rebuilt. */
+    /** Sync the status strip to `phase`, and nudge the shared mic FAB to
+     *  re-render — it reads getPhase() to pick its colour and tooltip.
+     *  window-qualified: micButton imports us, so importing it back would
+     *  make a cycle (same pattern as narrationEngine's setPhase). */
     function refresh() {
-        const btn = document.getElementById(BTN_ID);
-        if (btn) {
-            btn.classList.remove('mic-idle', 'mic-connecting', 'mic-recording', 'mic-processing', 'mic-disabled');
-            if (!isSupported()) {
-                btn.classList.add('mic-disabled');
-                btn.title = 'Lineup narration unavailable (no microphone support)';
-            } else if (phase === 'connecting') {
-                btn.classList.add('mic-connecting');
-                btn.title = 'Connecting…';
-            } else if (phase === 'recording') {
-                btn.classList.add('mic-recording');
-                btn.title = 'Listening — tap to finish the lineup';
-            } else if (phase === 'processing') {
-                btn.classList.add('mic-processing');
-                btn.title = 'Working out the lineup…';
-            } else {
-                btn.classList.add('mic-idle');
-                btn.title = 'Narrate the next line — tap, speak names or subs, tap again';
-            }
-        }
         refreshStatusStrip();
+        window.narrationMicButton?.refresh?.();
     }
 
     /** The inline "Listening… <transcript tail>" strip under the toolbar.
@@ -403,21 +388,10 @@ const lineupNarration = (function() {
         }
     }
 
-    // -----------------------------------------------------------------
-    // Wiring
-    // -----------------------------------------------------------------
-
-    // Delegated: the button is inside panel DOM that gameScreenPanels can
-    // rebuild; a document-level listener survives that.
-    document.addEventListener('click', (e) => {
-        if (e.target && e.target.closest && e.target.closest(`#${BTN_ID}`)) {
-            e.preventDefault();
-            toggle();
-        }
-    });
-
-    // Public API
+    // Public API — driven by narration/micButton.js while the Line tab is up.
     return {
+        start,
+        stop,
         toggle,
         getPhase: () => phase,
         isActive: () => phase !== 'idle',
