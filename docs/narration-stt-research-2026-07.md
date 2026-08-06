@@ -41,6 +41,37 @@ change without notice.
    are all unproven — treat as a staged experiment behind the existing
    pipeline, not a replacement.
 
+## Outcome: recommendation #1 shipped (2026-07-21)
+
+The slow pass runs **Claude Haiku 4.5 in production** as of 2026-07-21
+(`NARRATION_SLOW_MODEL=claude-haiku-4-5` in `/etc/breakside/env`; rollback =
+delete that line and restart the service — no code revert needed).
+
+- **Latency win confirmed.** Finalize-call A/B on ground-truth transcripts
+  (3 reps × short/medium/long scenarios): Haiku medians **1.4–2.3s** vs
+  Sonnet 4.5's 2.4–3.4s — a 1.5–2x cut in the stop→events wait.
+- **The "no code change" premise didn't survive contact.** Haiku follows the
+  extraction prompt far more literally than Sonnet, which surfaced five
+  prompt gaps Sonnet had been papering over by inference (branch
+  `haiku-callahan-prompt`, merged as `4f64cc2`): an undefined `callahan`
+  flag, no roster-only restriction on throw/turnover events, a catch-clause
+  rule that needed a worked RIGHT/WRONG example, an undefined `break_throw`,
+  and a self-correction rule that existed only in the hybrid branch of the
+  prompt. A sixth fix — a word matched to a player nickname ("hammer",
+  lowercased by the STT) must not also set the jargon flag — turned out to be
+  a **latent Sonnet bug in production**, only visible when transcription
+  lowercases the nickname.
+- **Parsing hardened.** Haiku occasionally emits a wrong JSON block,
+  reconsiders in prose, then emits a corrected block; `_last_json_object()`
+  now takes the final operations object (shared with the lineup pass).
+- **Validation:** full audio regression harness **21/21 green on both
+  models** after the fixes; per-scenario ground-truth probes 100% (5–6 reps
+  each, both models). Caveat for future runs: scenario 019 passes or fails
+  with either model depending on how the STT capitalizes "Hammer" — check
+  the transcript before blaming extraction.
+
+Cache-warming and streaming-finalize (Lower latency #2) remain unexplored.
+
 ---
 
 ## Current system baseline
@@ -175,8 +206,9 @@ save at most ~$2/month against real ops burden. **Not worth it at this scale.**
    now-dominant cost component 3x) — but do it for latency, not cost.
 
 ### Lower latency
-1. **Slow pass → Claude Haiku 4.5** via `NARRATION_SLOW_MODEL`, validated with
-   the audio regression harness. Highest impact per unit effort in this report.
+1. **Done (2026-07-21): slow pass → Claude Haiku 4.5** via
+   `NARRATION_SLOW_MODEL`, validated with the audio regression harness — see
+   the Outcome section above. Highest impact per unit effort in this report.
 2. Consider streaming the finalize response (Anthropic streaming API) and
    applying ADD ops as they parse, so first events land before the full
    response completes. Moderate frontend/backend change.
