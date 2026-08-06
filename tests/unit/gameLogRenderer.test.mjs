@@ -247,9 +247,9 @@ test('scoreBadge callback labels scored points; null label leaves line unchanged
 
 test('resolvePlayerName maps id-era point.players entries in roster lines', () => {
     const game = makeGame({
-        points: [makePoint({ players: ['Dana-7f3a', 'Iris-9k2f'], winner: 'team' })],
+        points: [makePoint({ players: ['Dana-7f3a', 'Iris-2c8b'], winner: 'team' })],
     });
-    const names = { 'Dana-7f3a': 'Dana', 'Iris-9k2f': 'Iris' };
+    const names = { 'Dana-7f3a': 'Dana', 'Iris-2c8b': 'Iris' };
     const text = buildGameLogText(game, {
         ...OPTS,
         resolvePlayerName: entry => names[entry] || entry,
