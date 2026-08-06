@@ -517,6 +517,39 @@ Improvements deferred from the initial implementation (see Active section above 
   - Current slow-pass prompt is told only the starting offense/defense state; doesn't explicitly handle multi-possession narrations
   - May need prompt strengthening or a more structured event-stream format to track team-side flips
 
+### Cost at scale
+
+**Measured datum (2026-08-05).** A real 3-day / 6-game tournament with lineup narration on and
+event narration off: **$0.43 all-in** — $0.28 Claude (Haiku 4.5) + $0.15 OpenAI STT, over ~120
+lineup calls. That's **$0.0036 per lineup call, $0.072 per game, ~$3.58 per team-season** (50
+games). Event narration would add ~$0.0078/point (~$7.81/team-season). Extrapolated: 1,000 teams
+≈ $3.6k/yr lineups-only, ≈ $11k/yr with events. **Conclusion: API cost is not a reason to meter,
+paywall, or usage-cap narration at any near-term scale.** The levers below are worth knowing, not
+worth doing yet.
+
+Cost splits ~65% Claude / 35% STT. Within the STT half, only 57% is audio ($1.25/1M audio tokens
+≈ 2,400 tok/min; the tournament ran ~14s of mic-open per line call). The other 43% is *text* — the
+vocabulary-bias `prompt` from `advancedSettings.js` (`buildNarrationVocabularyPrompt`), which
+OpenAI re-applies to every VAD-segmented utterance (~2.3 per line call), plus transcript output.
+
+- [ ] **Trim the vocabulary hint on the lineup path** — the ~186-token prompt is 46% ultimate
+      jargon (`callahan`, `huck`, `bookends`, `footblock`…) that a coach never says while *calling
+      a line*; only the roster names and a few terms (`handler`, `cutter`, `strike`, `deep`) earn
+      their place there. A lineup-specific subset would cut ~7% of all-in cost. Interacts with
+      "Measure the vocabulary hint's effect" above — measure accuracy first, then trim.
+- [ ] **Prompt caching is unused** (`grep cache_control ultistats_server/` is empty). Moot today:
+      the lineup prompt is 1,825 tokens, below Haiku 4.5's 4,096-token minimum cacheable prefix.
+      It's also ordered cache-hostile — the ~1,200-token static instruction block sits *last*, after
+      the volatile roster and transcript. Reorder static-first if the prompt ever grows past the
+      minimum or the model changes (Sonnet's minimum is 1,024).
+- Model choice is the biggest lever and is already exercised — the Haiku flip cut the Claude half
+      ~3x (see `NARRATION_SLOW_MODEL`). Note that flipping the default to `gpt-4o-transcribe`
+      (field-test item above) **doubles** the audio rate: $2.50 vs $1.25 per 1M audio tokens.
+- To re-measure: Console usage pages give the totals (Anthropic's Admin/Usage API needs an
+      *organization* — it's unavailable for individual accounts, which is why
+      `platform.claude.com/settings/admin-keys` 404s). Divide the OpenAI audio-token count by 2,400
+      for audio-minutes rather than dividing dollars by the published $/min, which bundles text.
+
 ### Coverage
 - [x] **Add `swing` to the slow-pass throw schema** *(done 2026-07-19, branch
       `narration-swing-reset` — swing in the schema + `applyThrow`, with an explicit
