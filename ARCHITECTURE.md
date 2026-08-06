@@ -843,6 +843,60 @@ All stats are computed on demand from the event stream — none are stored on pl
 - **Team point classification** (`classifyPoint`): each completed point is one of `break` (scored on D), `cleanHold` (scored on O, no turnover), `hold`/dirty (scored on O after ≥1 turnover), `broken` (started O, lost), or `opponentHold` (started D, lost). Surfaced as per-point badges in the game log and as a per-game / per-event summary line.
 - **Break denominators.** `getGameTeamStats` reports breaks per D-point *and* per D-possession. A D-point can contain multiple defensive possessions (turnover-back), so the per-possession rate is the truer measure of D-line conversion.
 
+### Possession Sets (zone tracking)
+
+Teams can tag each possession with the set being played — zone, ho-stack,
+vert, force-middle, junk — so "is our zone working?" becomes answerable.
+The whole feature is **invisible until a team opts in**.
+
+```js
+// Team
+{ setsEnabled: false,                       // team-level opt-in
+  sets: { offensive: [], defensive: [] } }  // coach-defined label lists
+
+// Possession
+{ set: "Zone" | null }                      // null = unspecified
+```
+
+- **Where tags come from.** Defensive sets are picked in the pull dialog
+  (`playByPlay/pullDialog.js`, sticky per session); offensive sets from the
+  cycling `Set:` chip on the Full-PBP modifier strip (`playByPlay/fullPbp.js`).
+  Simple mode is deliberately not tagged. Missing fields default to
+  `false` / `[]` / `null`, so legacy games need no migration.
+
+- **Aggregation is per possession, not per point** — the mismatch that shapes
+  everything below. `getGameTeamStats().sets` returns records keyed
+  `` `${side}:${label}` `` (a label listed under *both* sides stays two rows,
+  because the denominators mean different things):
+
+  | Field | Side | Meaning |
+  |---|---|---|
+  | `possessions` | both | possessions tagged with this set, completed points only |
+  | `stops` | D | possessions where we got the disc back instead of being scored on |
+  | `breaks` | D | won D-points credited to this set |
+  | `scores` | O | possessions that ended in our goal |
+
+- **Two attribution rules worth knowing**, both chosen to avoid crediting a set
+  for something it didn't do:
+  1. A defensive possession counts as a **stop** unless it is the *last*
+     possession of a point we lost — that is the one they scored on. A
+     defensive possession that ends a point we *won* is a Callahan, so it
+     counts as a stop, not a score-on.
+  2. A **break** is credited only to the set of the **last defensive
+     possession** of a won D-point — the stop we actually converted. Run zone,
+     get a stop, turn it over, then get a second stop in man and score, and the
+     break goes to man; zone keeps its stop but not the break.
+
+- **One rendering path.** The breakdown rides on the team-stats object, and
+  `formatTeamStatsLine` appends it, so both stats screens and all three xlsx
+  exports pick it up without call-site changes — they already split that
+  string on newlines. Lines are bulleted rather than space-indented because
+  `.team-stats-line` is `white-space: pre-line`, which collapses leading
+  spaces on screen (they would survive only in the spreadsheet).
+
+- **Silent for everyone else.** Nothing is emitted when no possession carries a
+  set, so a team that never opted in sees byte-identical output everywhere.
+
 ### Statistics Export (.xlsx)
 
 `utils/xlsxExport.js` builds Excel workbooks via the vendored SheetJS (`vendor/xlsx.mini.min.js`, precached by the service worker for offline use). Three entry points:

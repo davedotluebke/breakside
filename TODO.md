@@ -688,17 +688,48 @@ Remaining work:
   - **Stat computation.** `accumulateGameStats` reads the explicit HA attribution instead of walking the possession. **Backwards compat:** games played before this change have no explicit field — decide whether to (a) fall back to the existing auto-derivation for those, or (b) show them as having no HA. Leaning toward (a) so the tournament data already collected keeps its (approximate) HA numbers.
   - **Touch points:** `playByPlay/scoreAttribution.js` (dialog UI + new picker), `store/models.js` (Throw field), `store/storage.js` (serialize/deserialize the field), `utils/eventStats.js` (read explicit field, fall back to derivation), and the AI narration path (`narration/narrationEngine.js` + `ultistats_server/narration.py`) if we want narrated scores to capture HA too.
 
-- [ ] **Feature**: Per-possession defensive/offensive set flag (zone tracking, etc.)
-  - **STATUS 2026-07-23 (branch `possession-sets`): stages 1–5 of the ship
-    order are BUILT + live-verified** — schema/serialization (unit +
+- [x] **Feature**: Per-possession defensive/offensive set flag (zone tracking, etc.)
+  - **STATUS 2026-08-06 (branch `possession-sets-stage6`): COMPLETE through
+    stage 6.** Stages 1–5 shipped 2026-07-26 — schema/serialization (unit +
     API round-trip tests), Team Settings opt-in (toggle + comma-separated
     lists with dedupe/length caps), pull-dialog defensive picker (sticky
     session default), Full-PBP offensive cycling chip (`Set: —/Vert/…`,
     AC-gated, purple checked state), and set tags in the log
     (`— Team on defense (Zone) —`, renderer tests) + public-viewer
-    possession headers. **Remaining: stage 6 (aggregation filters), the
-    xlsx export column, and a possible per-point set badge** — see the
-    Aggregation hook bullet below.
+    possession headers.
+  - **Stage 6 (2026-08-06): per-set breakdown in team stats.** Landed as a
+    breakdown block rather than a filter dropdown — you see every set at once
+    and compare them side by side, instead of picking one and re-reading:
+
+    ```
+    Breaks: 2/3 D-points (2/5 D-possessions)
+    Holds: 2 clean + 0 dirty / 3 O-points
+    By set:
+    • Zone (D): 2/4 stops, 1 break
+    • Ho (O): 3/5 scored
+    ```
+
+    Reported per possession (sets live on possessions; breaks/holds are
+    per point), so each set is judged on its own terms. Two attribution
+    rules — a defensive possession is a stop unless it's the last one of a
+    point we lost (a won point ending on D is a Callahan, so still a stop),
+    and a break is credited only to the set of the **last** defensive
+    possession of a won D-point, i.e. the stop we actually converted. Both
+    documented in ARCHITECTURE.md § Possession Sets.
+
+    Rides on the team-stats object so both stats screens and all three xlsx
+    exports (game summary, event roster, team roster) pick it up with no
+    call-site changes; the xlsx gets it as footer rows under the existing
+    breaks/holds footer, outside the AutoFilter range. `rosterManagement`'s
+    hand-rolled team-stats re-sum was replaced by the shared
+    `getGamesTeamStats` — a numeric-only merge silently dropped the new
+    field. 13 unit tests in `tests/unit/setStats.test.mjs` (161/161 suite).
+    Emits nothing when no possession is tagged, so opted-out teams are
+    unaffected on every surface.
+  - **Not built (deliberate):** a per-point set badge in the game log, and
+    the set-vs-phase composition (`{set}` alongside `{phase}` in
+    `filterGames`) — the breakdown block answers the v1 question without
+    either. Revisit if coaches ask to slice a single set across a phase.
   - Tag each possession with the set being played (zone, ho-stack, vert-stack, force-middle, junk…). Primary v1 use case is marking which defensive possessions were played in zone, so that "breaks while running zone" type splits become possible later. Must stay invisible for teams that don't opt in.
   - **Data model**:
     - `Team.setsEnabled: boolean` (default `false`) — team-level opt-in.
@@ -711,7 +742,7 @@ Remaining work:
     2. **Defensive picker — pull dialog** (`playByPlay/pullDialog.js`): `<select>` populated from `currentTeam.sets.defensive`, only rendered if enabled and non-empty. Thread chosen value through `ensurePossessionExists(false)` (currently at `playByPlay/keyPlayDialog.js:607`).
     3. **Offensive picker — Full PBP modifier strip** (`playByPlay/fullPbp.js`): small cycling chip on the modifier-chips row; taps advance through `[null, ...currentTeam.sets.offensive]` and write to the current possession. Skip Simple mode for v1.
     4. **Display in event log** (`ui/eventLogDisplay.js` and game summary log): prepend possession blocks with `[Zone]` etc. when `possession.set` is set.
-    5. **Aggregation hook** (later): `getGameTeamStats(game, {set})` / `getEventTeamStats(event, {set})` so set composes with the existing phase filter — "breaks while running zone: 4 of 7".
+    5. **Aggregation** — *shipped 2026-08-06, but as a breakdown block rather than the filter sketched here.* `getGameTeamStats(game).sets` returns per-set records and `formatTeamStatsLine` renders them all at once ("Zone (D): 2/4 stops, 1 break"), so no `{set}` option and no composition with the phase filter was needed. See the stage-6 note at the top of this item.
   - **Undo**: set lives on the possession itself, so existing undo handling needs no changes.
   - **Ship order**: schema + serialization → team settings opt-in → defensive picker (zone use case) → offensive chip → event-log display → aggregation filters.
   - **Cross-cutting**: bump `cacheName` in `service-worker.js` on any deploy touching CSS or top-level files; add a round-trip test for `setsEnabled`/`sets` in the server test suite.
