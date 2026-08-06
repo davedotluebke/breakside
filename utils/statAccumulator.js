@@ -222,11 +222,59 @@ function classifyPoint(point) {
     return 'opponentHold';
 }
 
+/** A zeroed team-stats accumulator — the shape getGameTeamStats returns. */
+function emptyTeamStats() {
+    return {
+        breaks: 0, opponentBreaks: 0,
+        cleanHolds: 0, dirtyHolds: 0,
+        holdOpps: 0, breakOpps: 0, breakPossOpps: 0,
+        total: 0,
+        sets: {}
+    };
+}
+
+/** Every numeric key in emptyTeamStats() — `sets` merges structurally instead. */
+const TEAM_STAT_COUNTERS = Object.keys(emptyTeamStats()).filter(k => k !== 'sets');
+
+/**
+ * Per-set records are keyed `${side}:${label}` so a label a team lists under
+ * BOTH offensive and defensive sets stays two separate rows (the denominators
+ * mean different things on each side).
+ */
+function setKey(offensive, label) {
+    return `${offensive ? 'o' : 'd'}:${label}`;
+}
+
+function ensureSetRecord(sets, offensive, label) {
+    const key = setKey(offensive, label);
+    if (!sets[key]) {
+        sets[key] = {
+            label, offensive: !!offensive,
+            possessions: 0, stops: 0, breaks: 0, scores: 0
+        };
+    }
+    return sets[key];
+}
+
+/** Add one game's per-set records into an accumulating map. */
+function mergeSetStats(target, source) {
+    Object.keys(source || {}).forEach(key => {
+        const src = source[key];
+        if (!src) return;
+        const dst = ensureSetRecord(target, src.offensive, src.label);
+        dst.possessions += src.possessions || 0;
+        dst.stops += src.stops || 0;
+        dst.breaks += src.breaks || 0;
+        dst.scores += src.scores || 0;
+    });
+    return target;
+}
+
 /**
  * Aggregate team-level point classifications for a single game.
  * @param {object} game - Deserialized Game object
  * @returns {object} { breaks, opponentBreaks, cleanHolds, dirtyHolds,
- *                     holdOpps, breakOpps, breakPossOpps, total }
+ *                     holdOpps, breakOpps, breakPossOpps, total, sets }
  *   - holdOpps = number of points started on O (chances to hold)
  *   - breakOpps = number of points started on D (chances to break)
  *   - breakPossOpps = number of defensive possessions across all completed
@@ -234,14 +282,23 @@ function classifyPoint(point) {
  *     gives the disc back; per-possession break rate is the truer measure
  *     of D-line conversion efficiency)
  *   - opponentBreaks = points we started on O but lost (= got broken)
+ *   - sets = per-set possession outcomes, keyed by setKey(); empty {} unless
+ *     the team opted into set tracking AND actually tagged possessions, so
+ *     every downstream surface stays silent for teams that don't use it.
+ *     Each record: { label, offensive, possessions, stops, breaks, scores }
+ *       - stops  (D) — possessions where we got the disc back instead of being
+ *         scored on. A defensive possession is a stop unless it is the last
+ *         possession of a point we lost (that's the one they scored on); a
+ *         defensive possession that ends a point we WON is a Callahan, which
+ *         is both a stop and a score.
+ *       - breaks (D) — credited to the set of the LAST defensive possession of
+ *         a won D-point, i.e. the set that produced the stop we scored off.
+ *         Only that one gets the credit; earlier sets in the same point keep
+ *         their stop but not the break.
+ *       - scores (O) — possessions that ended in our goal.
  */
 function getGameTeamStats(game) {
-    const totals = {
-        breaks: 0, opponentBreaks: 0,
-        cleanHolds: 0, dirtyHolds: 0,
-        holdOpps: 0, breakOpps: 0, breakPossOpps: 0,
-        total: 0
-    };
+    const totals = emptyTeamStats();
     if (!game) return totals;
     (game.points || []).forEach(point => {
         const kind = classifyPoint(point);
@@ -249,9 +306,34 @@ function getGameTeamStats(game) {
         totals.total++;
         if (point.startingPosition === 'offense') totals.holdOpps++;
         else totals.breakOpps++;
-        (point.possessions || []).forEach(p => {
-            if (p && p.offensive === false) totals.breakPossOpps++;
+
+        const possessions = point.possessions || [];
+        const weWon = point.winner === 'team' || point.winner === Role.TEAM;
+        possessions.forEach((p, i) => {
+            if (!p) return;
+            const isDefensive = p.offensive === false;
+            if (isDefensive) totals.breakPossOpps++;
+            if (!p.set) return;
+            const rec = ensureSetRecord(totals.sets, !isDefensive, p.set);
+            rec.possessions++;
+            const isLast = i === possessions.length - 1;
+            if (isDefensive) {
+                if (!(isLast && !weWon)) rec.stops++;
+            } else if (isLast && weWon) {
+                rec.scores++;
+            }
         });
+        if (kind === 'break') {
+            // Walk back to the stop we converted and credit that set.
+            for (let i = possessions.length - 1; i >= 0; i--) {
+                const p = possessions[i];
+                if (p && p.offensive === false) {
+                    if (p.set) ensureSetRecord(totals.sets, false, p.set).breaks++;
+                    break;
+                }
+            }
+        }
+
         if (kind === 'break') totals.breaks++;
         else if (kind === 'cleanHold') totals.cleanHolds++;
         else if (kind === 'hold') totals.dirtyHolds++;
@@ -294,15 +376,11 @@ function getGamesPlayerStats(games) {
  * @param {Array<object>} games
  */
 function getGamesTeamStats(games) {
-    const totals = {
-        breaks: 0, opponentBreaks: 0,
-        cleanHolds: 0, dirtyHolds: 0,
-        holdOpps: 0, breakOpps: 0, breakPossOpps: 0,
-        total: 0
-    };
+    const totals = emptyTeamStats();
     (games || []).forEach(game => {
         const g = getGameTeamStats(game);
-        Object.keys(totals).forEach(k => { totals[k] += g[k] || 0; });
+        TEAM_STAT_COUNTERS.forEach(k => { totals[k] += g[k] || 0; });
+        mergeSetStats(totals.sets, g.sets);
     });
     return totals;
 }
@@ -331,8 +409,49 @@ function formatGameLabel(game) {
 }
 
 /**
+ * Render the per-set breakdown as display lines, one per set actually run.
+ * Defensive sets read "Zone (D): 8/12 stops, 4 breaks"; offensive sets read
+ * "Ho-stack (O): 5/8 scored" — the denominator is possessions tagged with
+ * that set, so each line answers "is this set working?" on its own terms.
+ *
+ * Ordering puts defensive sets first (zone tracking is the v1 use case), then
+ * most-used first, then alphabetical so the block is stable across renders.
+ *
+ * @param {object} sets - the `sets` map off a team-stats object
+ * @returns {Array<string>} [] when nothing was tagged — which is every team
+ *   that hasn't opted into set tracking, so the block never appears for them.
+ */
+function formatSetStatsLines(sets) {
+    const records = Object.keys(sets || {})
+        .map(k => sets[k])
+        .filter(r => r && r.possessions > 0);
+    if (records.length === 0) return [];
+    records.sort((a, b) => {
+        if (a.offensive !== b.offensive) return a.offensive ? 1 : -1;
+        if (b.possessions !== a.possessions) return b.possessions - a.possessions;
+        return String(a.label).localeCompare(String(b.label));
+    });
+    // Bulleted rather than space-indented: the on-screen container is
+    // white-space: pre-line (css/tables.css .team-stats-line), which collapses
+    // leading spaces, so a literal indent would show in the xlsx footer but
+    // vanish on the stats screen.
+    return records.map(r => (
+        r.offensive
+            ? `• ${r.label} (O): ${r.scores}/${r.possessions} scored`
+            : `• ${r.label} (D): ${r.stops}/${r.possessions} stops, ` +
+              `${r.breaks} break${r.breaks === 1 ? '' : 's'}`
+    ));
+}
+
+/**
  * Format a team-stats object as a human-readable summary, one stat per line
  * so the breakdown doesn't wrap mid-stat on narrow phone screens.
+ *
+ * The per-set block is appended here rather than at each call site so both
+ * stats screens and all three xlsx exports pick it up unchanged — they already
+ * split this on '\n' (the screens via CSS white-space: pre-line, the exports
+ * into footer rows).
+ *
  * @param {object} t - team stats from getGameTeamStats / getEventTeamStats
  * @returns {string} newline-separated lines (render with CSS white-space: pre-line)
  */
@@ -344,6 +463,11 @@ function formatTeamStatsLine(t) {
                     ? ` (${t.breaks}/${t.breakPossOpps} D-possession${t.breakPossOpps === 1 ? '' : 's'})`
                     : ''));
     lines.push(`Holds: ${t.cleanHolds} clean + ${t.dirtyHolds} dirty / ${t.holdOpps} O-point${t.holdOpps === 1 ? '' : 's'}`);
+    const setLines = formatSetStatsLines(t.sets);
+    if (setLines.length > 0) {
+        lines.push('By set:');
+        setLines.forEach(line => lines.push(line));
+    }
     return lines.join('\n');
 }
 
@@ -371,5 +495,6 @@ export {
     getGamesRecord,
     formatGameLabel,
     formatTeamStatsLine,
+    formatSetStatsLines,
     getGamePlayerStats
 };
