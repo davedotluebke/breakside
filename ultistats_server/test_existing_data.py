@@ -9,19 +9,37 @@ with caution (they don't modify data, only read and verify).
 
 The data/ subdirectories (data/games/, data/teams/, ...) are gitignored:
 fresh clones and feature worktrees have no production data, only whatever
-empty dirs config.py mkdir'd at import. The known Team-D team file
-doubles as the "real dataset is present" marker — without it the whole
-module skips rather than asserting against an empty or test-polluted dir.
+empty dirs config.py mkdir'd at import. A populated index.json doubles as
+the "real dataset is present" marker — without it the whole module skips
+rather than asserting against an empty or test-polluted dir.
+
+Assertions here are deliberately *structural*: they check invariants that
+hold for any real dataset (indexed things have files, player game lists are
+subsets of their teams' games) rather than naming particular teams or
+players. That keeps the suite useful on whatever data a coach has locally,
+and keeps real roster names out of the repository.
 """
 import pytest
 import json
 from pathlib import Path
 
 _DATA_DIR = Path(__file__).parent.parent / "data"
-_REAL_DATA_MARKER = _DATA_DIR / "teams" / "Team-D-8kr5.json"
+_INDEX_FILE = _DATA_DIR / "index.json"
+
+
+def _has_real_dataset() -> bool:
+    """True when data/index.json exists and indexes at least one real game."""
+    if not _INDEX_FILE.exists():
+        return False
+    try:
+        index = json.loads(_INDEX_FILE.read_text())
+    except (json.JSONDecodeError, OSError):
+        return False
+    return any(index.get("teamGames", {}).values())
+
 
 pytestmark = pytest.mark.skipif(
-    not _REAL_DATA_MARKER.exists(),
+    not _has_real_dataset(),
     reason=(
         "local production data not present (data/ subdirs are gitignored; "
         "these read-only integrity tests only run where real data exists, "
@@ -269,16 +287,16 @@ class TestIndexAccuracy:
 
 
 # =============================================================================
-# Test Specific Known Data (Team D)
+# Test Whatever Real Dataset Is Present (no hardcoded teams or rosters)
 # =============================================================================
 
-class TestCUDOMixedData:
-    """Tests specific to the known Team D data."""
-    
+class TestLocalDatasetIntegrity:
+    """Structural checks against whichever real dataset this machine has."""
+
     @pytest.fixture
     def data_dir(self):
         return Path(__file__).parent.parent / "data"
-    
+
     @pytest.fixture
     def index_data(self, data_dir):
         index_file = data_dir / "index.json"
@@ -286,73 +304,51 @@ class TestCUDOMixedData:
             pytest.skip("No index.json found")
         with open(index_file, 'r') as f:
             return json.load(f)
-    
-    def test_cudo_mixed_team_exists(self, data_dir):
-        """Verify Team D team file exists."""
-        team_file = data_dir / "teams" / "Team-D-8kr5.json"
-        assert team_file.exists(), "Team-D-8kr5.json should exist"
-    
-    def test_cudo_mixed_has_correct_player_count(self, data_dir):
-        """Verify Team D has expected players."""
-        team_file = data_dir / "teams" / "Team-D-8kr5.json"
-        with open(team_file, 'r') as f:
-            team = json.load(f)
-        
-        # Should have 18 players based on migrated data
-        assert len(team["playerIds"]) == 18, f"Expected 18 players, got {len(team['playerIds'])}"
-    
-    def test_cudo_mixed_has_four_games(self, index_data):
-        """Verify Team D has 4 games in index."""
-        team_games = index_data.get("teamGames", {}).get("Team-D-8kr5", [])
-        assert len(team_games) == 4, f"Expected 4 games, got {len(team_games)}"
-    
-    def test_expected_games_exist(self, data_dir):
-        """Verify all expected game directories exist."""
-        expected_games = [
-            "2025-11-15_Team-D_vs_Alexandria_1763235977720",
-            "2025-11-16_Team-D_vs_Fog_1763312279301",
-            "2025-11-16_Team-D_vs_Team-G-2_1763305300804",
-            "2025-11-16_Team-D_vs_SWW-2_1763318188719"
-        ]
-        
+
+    @pytest.fixture
+    def all_indexed_games(self, index_data):
+        return {g for games in index_data.get("teamGames", {}).values() for g in games}
+
+    def test_every_indexed_team_has_a_roster(self, data_dir, index_data):
+        """Every team that owns games has a file with a non-empty roster."""
+        for team_id in index_data.get("teamGames", {}):
+            team_file = data_dir / "teams" / f"{team_id}.json"
+            assert team_file.exists(), f"Indexed team {team_id} has no file"
+            with open(team_file, 'r') as f:
+                team = json.load(f)
+            assert team.get("playerIds"), f"Team {team_id} has an empty roster"
+
+    def test_every_indexed_game_has_a_directory(self, data_dir, all_indexed_games):
+        """Every indexed game id resolves to a directory with current.json."""
         games_dir = data_dir / "games"
-        for game_id in expected_games:
+        for game_id in all_indexed_games:
             game_dir = games_dir / game_id
-            assert game_dir.exists(), f"Expected game {game_id} not found"
-            assert (game_dir / "current.json").exists(), f"Game {game_id} missing current.json"
-    
-    def test_expected_players_exist(self, data_dir):
-        """Verify expected players have files."""
-        expected_players = [
-            "Kris-syip", "Hank-ajs9", "Tara-9ve7", "Alice-p0br",
-            "Eve-bpxf", "Hank-w435", "Zoe-a72s", "Mia-9ms5"
-        ]
-        
-        players_dir = data_dir / "players"
-        for player_id in expected_players:
-            player_file = players_dir / f"{player_id}.json"
-            assert player_file.exists(), f"Expected player {player_id} not found"
-    
-    def test_player_with_fewer_games(self, index_data):
-        """Verify players with partial attendance are correctly indexed."""
-        # Ella and Nora only played in the Team F game
-        ella_games = index_data.get("playerGames", {}).get("Ella-4mgm", [])
-        keelan_games = index_data.get("playerGames", {}).get("Nora-r85a", [])
-        
-        assert len(ella_games) == 1, f"Ella should have 1 game, got {len(ella_games)}"
-        assert len(keelan_games) == 1, f"Nora should have 1 game, got {len(keelan_games)}"
-        
-        # They should both be in the Team F game
-        assert "2025-11-15_Team-D_vs_Alexandria_1763235977720" in ella_games
-        assert "2025-11-15_Team-D_vs_Alexandria_1763235977720" in keelan_games
-    
-    def test_henry_played_three_games(self, index_data):
-        """Verify Nora (who missed Team F) has 3 games."""
-        henry_games = index_data.get("playerGames", {}).get("Nora-xydc", [])
-        assert len(henry_games) == 3, f"Nora should have 3 games, got {len(henry_games)}"
-        
-        # Should NOT include Team F
-        assert "2025-11-15_Team-D_vs_Alexandria_1763235977720" not in henry_games
+            assert game_dir.exists(), f"Indexed game {game_id} not found"
+            assert (game_dir / "current.json").exists(), \
+                f"Game {game_id} missing current.json"
+
+    def test_player_game_lists_are_subsets_of_indexed_games(self, index_data,
+                                                            all_indexed_games):
+        """A player can only be indexed into games that actually exist."""
+        for player_id, games in index_data.get("playerGames", {}).items():
+            unknown = set(games) - all_indexed_games
+            assert not unknown, f"Player {player_id} indexed into unknown games: {unknown}"
+
+    def test_partial_attendance_is_indexed(self, index_data, all_indexed_games):
+        """Players appear in 1..N games — never zero, never more than exist.
+
+        This is the generic form of the old per-player attendance checks:
+        players who missed games must still be indexed, with a shorter list.
+        """
+        player_games = index_data.get("playerGames", {})
+        if not player_games:
+            pytest.skip("No players indexed")
+        for player_id, games in player_games.items():
+            assert games, f"Player {player_id} is indexed with no games"
+            assert len(games) <= len(all_indexed_games), (
+                f"Player {player_id} indexed into {len(games)} games but only "
+                f"{len(all_indexed_games)} exist"
+            )
 
 
 # =============================================================================

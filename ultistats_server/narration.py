@@ -448,7 +448,7 @@ Player names in ADD events:
   - Match case and spelling EXACTLY to the name as it appears at the start of a
     roster line (e.g. roster line "- Alice "Ace" #7" → emit `"Alice"`).
   - If a transcribed name is misspelled but clearly corresponds to a roster
-    player (e.g. "Cris" → "Kris"), use the corrected roster spelling.
+    player (e.g. "Karla" → "Carla"), use the corrected roster spelling.
   - Some rosters contain names or nicknames that collide with ultimate jargon
     (e.g. a player named or nicknamed "Sky", "Hammer", or "Huck"). A word in a
     thrower/receiver/defender position refers to that player; jargon flags

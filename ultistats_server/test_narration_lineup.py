@@ -528,7 +528,7 @@ _EVAL_R = [
     {"name": "Priya", "number": "5"}, {"name": "Dana", "nickname": "Hammer", "number": "99"},
     {"name": "Jake", "number": "77"}, {"name": "Charlie", "number": "14"},
 ]
-_EVAL_MUMBO = [{"name": f"{n} {j}"} for n, j in [
+_EVAL_NUMBERED = [{"name": f"{n} {j}"} for n, j in [
     ("Jamal", 23), ("Keisha", 7), ("Marcus", 15), ("Tanya", 4),
     ("DeShawn", 11), ("Lena", 9), ("Otis", 30), ("Rosa", 2), ("Andre", 55),
 ]]
@@ -567,7 +567,7 @@ _EVAL_SCENARIOS = [
          t="Line is Kris, Sam, HB, Nora, Omar, Wes, Alice — water's behind the tent by the way",
          expect=set(_EVAL_PREV) | _RECITE7),
     dict(id="S5-corrected-sub-hammer", roster=_EVAL_R, prev=_EVAL_PREV, sel=_EVAL_PREV,
-         t="Run it back except Priya in for Alice — actually no, Priya's in for Wes, Alice stays. And Hammer replaces Max.",
+         t="Run it back except Priya in for Alice — actually no, Priya's in for Wes, Alice stays. And Hammer replaces Sam.",
          expect={"Kris", "Priya", "Alice", "Dana", "Hank", "Nora", "Omar"}),
     dict(id="A1-single-bare-add-partial", roster=_EVAL_R, prev=_EVAL_PREV,
          sel=["Alice", "Sam", "Nora"], t="Kris",
@@ -584,10 +584,10 @@ _EVAL_SCENARIOS = [
          prev=["Priya", "Dana"], sel=["Priya", "Dana"],
          t="Line is Kris, Sam, HB, Nora, Omar, Wes, Alice",
          expect={"Priya", "Dana"} | _RECITE7),
-    dict(id="M1-mumbo-recite-from-empty", roster=_EVAL_MUMBO, prev=[], sel=[],
+    dict(id="M1-numbered-recite-from-empty", roster=_EVAL_NUMBERED, prev=[], sel=[],
          t="Jamal, Keisha, Marcus, Tanya, DeShawn, Lena and Otis",
          expect={"Jamal 23", "Keisha 7", "Marcus 15", "Tanya 4", "DeShawn 11", "Lena 9", "Otis 30"}),
-    dict(id="M2-mumbo-single-add-partial", roster=_EVAL_MUMBO,
+    dict(id="M2-numbered-single-add-partial", roster=_EVAL_NUMBERED,
          prev=["Keisha 7", "Tanya 4"], sel=["Keisha 7", "Tanya 4"],
          t="Add Jamal", expect={"Keisha 7", "Tanya 4", "Jamal 23"}),
 ]

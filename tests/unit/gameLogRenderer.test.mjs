@@ -247,15 +247,15 @@ test('scoreBadge callback labels scored points; null label leaves line unchanged
 
 test('resolvePlayerName maps id-era point.players entries in roster lines', () => {
     const game = makeGame({
-        points: [makePoint({ players: ['Dana-mixr', 'Iris-9k2f'], winner: 'team' })],
+        points: [makePoint({ players: ['Dana-7f3a', 'Iris-9k2f'], winner: 'team' })],
     });
-    const names = { 'Dana-mixr': 'Dana', 'Iris-9k2f': 'Iris' };
+    const names = { 'Dana-7f3a': 'Dana', 'Iris-9k2f': 'Iris' };
     const text = buildGameLogText(game, {
         ...OPTS,
         resolvePlayerName: entry => names[entry] || entry,
     });
     assert.match(text, /\nPoint 1 roster: Dana Iris\n/);
-    assert.ok(!text.includes('Dana-mixr'));
+    assert.ok(!text.includes('Dana-7f3a'));
 });
 
 test('resolvePlayerName passes name-era entries through untouched (identity resolver)', () => {
@@ -271,15 +271,15 @@ test('resolvePlayerName passes name-era entries through untouched (identity reso
 
 test('without resolvePlayerName, roster entries print as stored (pure-leaf default)', () => {
     const game = makeGame({
-        points: [makePoint({ players: ['Dana-mixr'] })],
+        points: [makePoint({ players: ['Dana-7f3a'] })],
     });
     const text = buildGameLogText(game, OPTS);
-    assert.match(text, /\nPoint 1 roster: Dana-mixr\n?/);
+    assert.match(text, /\nPoint 1 roster: Dana-7f3a\n?/);
 });
 
 test('resolvePlayerName only touches point rosters — not the team roster header', () => {
     const game = makeGame({
-        points: [makePoint({ players: ['Dana-mixr'] })],
+        points: [makePoint({ players: ['Dana-7f3a'] })],
     });
     const text = buildGameLogText(game, {
         ...OPTS,

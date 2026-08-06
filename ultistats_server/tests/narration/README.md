@@ -109,15 +109,15 @@ Two events match if their `kind` and all "key fields" (player names, flags) are 
 - Slow-pass prompt regressions (wrong event types, dropped events, hallucinated players)
 - Player-name resolution issues (TTS pronunciations vs. roster spellings)
 - Schema drift (e.g., Claude emitting `throwaway: true` on a `defense` event)
-- Real-world audio conditions — lightly. `022_live_field_point` is a phone
-  recording of live narration from an actual game point: wind, background
-  chatter, and long dead-air gaps that fragment the transcript into
-  subject-less clauses ("Upfield to Daniel.Turns it over…"). Its first runs
-  surfaced four prompt gaps that clean TTS audio never had. One recording is
-  a smoke test, not coverage — more hand-recorded scenarios (different
-  narrators, venues, distances) would deepen this.
-
 **Doesn't catch (yet):**
+- Real-world audio conditions. Every scenario here is scripted TTS read against
+  a synthetic roster. There was once a `022_live_field_point` — a phone
+  recording of an actual game point, whose wind, background chatter and long
+  dead-air gaps fragmented the transcript into subject-less clauses and
+  surfaced four prompt gaps clean TTS never had. It was removed because the
+  recording named real players. Re-recording a live-conditions scenario, with
+  the roster called out in generic names, would restore that coverage — see
+  `TODO.md` under "Audio-Driven Test Suite".
 - Possession structure / state-machine bugs in the client (the runner only checks the ADD operations the slow pass returns, not how the JS client applies them).
 - Multi-speaker disambiguation — TTS uses one voice.
 

@@ -159,7 +159,7 @@ function getActivePossession(activePoint) {
  * `point.players` stores bare strings with no {name, id} structure — and
  * across data eras those strings are sometimes player NAMES (older games,
  * pre-line-sync flows) and sometimes player IDS (games whose lines came
- * through pendingNextLine, e.g. the Nov-2025 Team D tournament). Events
+ * through pendingNextLine, e.g. a Nov-2025 tournament). Events
  * carry resolved {name, id} refs, but point.players needs this resolver.
  * Sources for the mapping, most historically-accurate first:
  *   1. `game.rosterSnapshot` — the roster as it stood when the game was

@@ -2068,7 +2068,7 @@ function updateSelectLineSubtitle() {
 
     // Get first names only for compactness. Line entries may be player ids
     // (id-era games) or stale names — resolve to display names first so the
-    // header never shows raw ids like "Dana-mixr".
+    // header never shows raw ids like "Dana-7f3a".
     const lookup = buildPointPlayerLookup(game);
     const firstNames = selectedNames.map(entry => lookup(entry).name.split(' ')[0]);
     

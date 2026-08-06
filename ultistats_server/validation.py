@@ -16,7 +16,7 @@ from fastapi import HTTPException, status
 # A safe identifier is a non-empty run of letters, digits, underscore and
 # hyphen. This covers every ID format the app generates:
 #   - players/teams: ``Name-7f3a``
-#   - games: ``2025-11-15_Team-D_vs_Alexandria_1763235977720``
+#   - games: ``2025-11-15_Team-D_vs_Team-F_1763235977720``
 #   - version timestamps: ``2025-11-15T10-23-45`` (and counter suffixes)
 #   - invite codes / share hashes: alphanumeric tokens
 # Crucially it contains no ``.`` and no ``/``, so ``..`` and absolute/relative

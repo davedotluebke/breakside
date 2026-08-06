@@ -192,7 +192,7 @@ test('pop a Callahan → defender goals decremented and score reverted', () => {
 
 function makeInjurySub({ playersBefore, subbedOutBefore } = {}) {
     return new Other({
-        injury: true, description: 'Sub: Nora in for Alice',
+        injury: true, description: 'Sub: Hank in for Alice',
         playersBefore, subbedOutBefore,
     });
 }
@@ -201,7 +201,7 @@ test('pop an injury sub → roster restored from the event snapshots', () => {
     const { deps } = makeDeps();
     const pull = new Throw({ thrower: makePlayer('X'), receiver: makePlayer('Y') });
     const sub = makeInjurySub({ playersBefore: ['Alice', 'Bob'], subbedOutBefore: [] });
-    const point = makePoint({ possessions: [makePossession([pull, sub])], players: ['Bob', 'Nora'] });
+    const point = makePoint({ possessions: [makePossession([pull, sub])], players: ['Bob', 'Hank'] });
     point.substitutedOutPlayers = ['Alice'];
     const game = makeGame({ points: [point] });
 
@@ -220,7 +220,7 @@ test('injury sub as the point\'s only event → possession removed, point KEPT',
     // (a mid-point with zero possessions is the normal fresh-offense state).
     const { deps } = makeDeps();
     const sub = makeInjurySub({ playersBefore: ['Alice', 'Bob'], subbedOutBefore: [] });
-    const point = makePoint({ possessions: [makePossession([sub])], players: ['Bob', 'Nora'] });
+    const point = makePoint({ possessions: [makePossession([sub])], players: ['Bob', 'Hank'] });
     point.substitutedOutPlayers = ['Alice'];
     const game = makeGame({ points: [point] });
 
@@ -236,14 +236,14 @@ test('injury sub as the point\'s only event → possession removed, point KEPT',
 test('second sub then undo → restores to the FIRST sub\'s roster (chained snapshots)', () => {
     const { deps } = makeDeps();
     const sub1 = makeInjurySub({ playersBefore: ['Alice', 'Bob'], subbedOutBefore: [] });
-    const sub2 = makeInjurySub({ playersBefore: ['Bob', 'Nora'], subbedOutBefore: ['Alice'] });
+    const sub2 = makeInjurySub({ playersBefore: ['Bob', 'Hank'], subbedOutBefore: ['Alice'] });
     sub2.description = 'Sub: Grace in for Bob';
-    const point = makePoint({ possessions: [makePossession([sub1, sub2])], players: ['Nora', 'Grace'] });
+    const point = makePoint({ possessions: [makePossession([sub1, sub2])], players: ['Hank', 'Grace'] });
     point.substitutedOutPlayers = ['Alice', 'Bob'];
     const game = makeGame({ points: [point] });
 
     applyUndoToGame(game, deps);
-    assert.deepEqual(point.players, ['Bob', 'Nora']);
+    assert.deepEqual(point.players, ['Bob', 'Hank']);
     assert.deepEqual(point.substitutedOutPlayers, ['Alice']);
 
     applyUndoToGame(game, deps);
@@ -253,16 +253,16 @@ test('second sub then undo → restores to the FIRST sub\'s roster (chained snap
 
 test('legacy injury sub without snapshots → event popped, roster left alone', () => {
     const { deps } = makeDeps();
-    const legacy = new Other({ injury: true, description: 'Sub: Nora in for Alice' });
+    const legacy = new Other({ injury: true, description: 'Sub: Hank in for Alice' });
     const pull = new Throw({ thrower: makePlayer('X'), receiver: makePlayer('Y') });
-    const point = makePoint({ possessions: [makePossession([pull, legacy])], players: ['Bob', 'Nora'] });
+    const point = makePoint({ possessions: [makePossession([pull, legacy])], players: ['Bob', 'Hank'] });
     point.substitutedOutPlayers = ['Alice'];
     const game = makeGame({ points: [point] });
 
     const result = applyUndoToGame(game, deps);
 
     assert.equal(result.outcome, 'event-undone');
-    assert.deepEqual(point.players, ['Bob', 'Nora']);          // unchanged
+    assert.deepEqual(point.players, ['Bob', 'Hank']);          // unchanged
     assert.deepEqual(point.substitutedOutPlayers, ['Alice']);   // unchanged
 });
 

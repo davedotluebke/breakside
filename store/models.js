@@ -296,7 +296,7 @@ function Team(name = "My Team", initialRoster = [], id = null) {
     this.updatedAt = new Date().toISOString();
     
     // Team identity for header display (optional)
-    this.teamSymbol = null;  // 4-char max abbreviation (e.g., "BRK", "FGC")
+    this.teamSymbol = null;  // 4-char max abbreviation (e.g., "BRK", "RVL")
     this.iconUrl = null;     // URL or data URL to team icon PNG
 
     // Per-possession set tagging (zone tracking etc.) — team-level opt-in.

@@ -29,7 +29,7 @@ class TestValidation:
         good = [
             "Alice-7f3a",
             "Bob-Smith-2d9e",
-            "2025-11-15_Team-D_vs_Alexandria_1763235977720",
+            "2025-11-15_Team-D_vs_Team-F_1763235977720",
             "2025-11-15T10-23-45-123456",
             "2025-11-15T10-23-45_001",
             "X7K2M",

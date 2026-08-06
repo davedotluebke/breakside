@@ -8,7 +8,7 @@
  *
  * Era pairing (G11.1-.2 item 3): point.players entries are player NAMES on
  * legacy games but player IDS on id-era games (lines that came through
- * pendingNextLine, e.g. Nov-2025 Team D). Matching goes through
+ * pendingNextLine, e.g. a Nov-2025 tournament). Matching goes through
  * buildPointMembership so id-era points finally count — and every point
  * counted that way is stamped `playerStatsCounted`, so revert knows which
  * matching did the incrementing:

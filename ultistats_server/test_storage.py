@@ -194,12 +194,12 @@ class TestPlayerStorage:
         
         save_player({"name": "Zoe"})
         save_player({"name": "Alice"})
-        save_player({"name": "Bob"})
+        save_player({"name": "Mia"})
         
         players = list_players()
         names = [p["name"] for p in players]
         
-        assert names == ["Alice", "Bob", "Zoe"]
+        assert names == ["Alice", "Mia", "Zoe"]
     
     def test_update_player_modifies_data(self, isolate_test_data):
         """Test updating an existing player."""

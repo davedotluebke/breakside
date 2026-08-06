@@ -77,7 +77,7 @@ test('buildLineupToast: clean full line is a short success', () => {
     const { message, type } = buildLineupToast(
         { selectedCount: 7, expectedCount: 7, added: ['Kris', 'Sam'] });
     assert.equal(type, 'success');
-    assert.equal(message, '7/7 selected. Added: Kris, Max');
+    assert.equal(message, '7/7 selected. Added: Kris, Sam');
 });
 
 test('buildLineupToast: partial add warns with count and delta', () => {
