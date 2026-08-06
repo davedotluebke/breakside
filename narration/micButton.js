@@ -3,11 +3,11 @@
  *
  * Floating FAB at bottom-right that controls speech narration recording.
  *
- * One button, two jobs. Which one it drives depends on the active tab:
- *   - Line tab       → lineup narration ("Kris in for Wes")
- *   - every other    → in-point event narration
- * See NARRATION_TARGETS below; the press handlers never branch on which
- * one is live.
+ * One button, two jobs. Which one it drives follows the game clock, not the
+ * tab (see isLineupContext):
+ *   - between points → lineup narration ("Kris in for Wes"), on ANY tab
+ *   - during a point → event narration, except on the Line tab
+ * The press handlers never branch on which one is live.
  *
  * Interaction model:
  *   - Short tap (press+release < LONG_PRESS_MS): toggle recording on/off
@@ -16,14 +16,17 @@
  *
  * Visibility: shown only when the in-game screen is active. Uses polling
  * against isGameScreenVisible() since the existing enter/exit functions do
- * not emit events. The same poll notices tab changes, which only ever swap
- * the tooltip — both targets look identical while idle.
+ * not emit events. The same poll notices target changes, which only ever
+ * swap the tooltip — both targets look identical while idle, so a poll-length
+ * lag is invisible. Correctness never rides on it: every press reads
+ * currentTarget() live.
  *
  * This module does not know anything about audio or LLMs — it delegates to
  * the target's start()/stop().
  */
 import { isGameScreenVisible, getActiveTab } from '../ui/panelSystem.js';
 import { showControllerToast } from '../game/controllerState.js';
+import { isPointInProgress } from '../utils/helpers.js';
 import { narrationEngine } from './narrationEngine.js';
 import { lineupNarration } from './lineupNarration.js';
 
@@ -106,18 +109,35 @@ const narrationMicButton = (function() {
     };
 
     /**
+     * Whether the mic should be talking about a LINE rather than about play.
+     *
+     * Between points that's true on every tab — a solo coach shouldn't have
+     * to detour to the Line tab to call the next line, and it's the only
+     * thing there is to narrate with no point running. During a point the
+     * Line tab still counts: a coach sitting there is planning the next
+     * line, not watching the disc.
+     *
+     * (Phase two hangs "start point" off the same between-points window.)
+     */
+    function isLineupContext() {
+        if (typeof isPointInProgress === 'function' && !isPointInProgress()) return true;
+        return (typeof getActiveTab === 'function' ? getActiveTab() : null) === 'line';
+    }
+
+    /**
      * Which target the button drives right now.
      *
-     * A non-idle target always wins over the tab: the coach can switch tabs
-     * mid-session, and the button must keep offering "stop" for the work
-     * that is actually running rather than starting a second one (both share
-     * the realtime-session singleton, so the second would fail anyway).
+     * A non-idle target always wins over the context: the game clock and the
+     * tab can both move mid-session, and the button must keep offering "stop"
+     * for the work that is actually running rather than starting a second one
+     * (both share the realtime-session singleton, so the second would fail
+     * anyway). In particular this keeps a lineup recording stoppable through
+     * the point start that would otherwise flip the context under it.
      */
     function currentTarget() {
         if (lineupTarget.phase() !== 'idle') return lineupTarget;
         if (eventTarget.phase() !== 'idle') return eventTarget;
-        const tab = typeof getActiveTab === 'function' ? getActiveTab() : null;
-        return tab === 'line' ? lineupTarget : eventTarget;
+        return isLineupContext() ? lineupTarget : eventTarget;
     }
 
     // State
