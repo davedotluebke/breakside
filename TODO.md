@@ -585,11 +585,16 @@ Today the mic only narrates plays *during* a point. Two adjacent flows would ext
   - Touch points: `narration/narrationEngine.js` (new pre-point intent + applier), new pull schema in `ultistats_server/narration.py`, `pointManagement.js` (programmatic line-select + start-point hook), `game/gameScreen.js` (mic surfaced on Line tab when between points).
   - Open question: one mic-tap or two? Single tap that handles "line + pull" feels natural orally but mixes two state transitions; safer to gate the pull narration behind the line being confirmed first.
 
-- [ ] **Speech-driven line selection (oral roll-call)**
-  - On the Line tab between points: tap mic, read names ("Alice, Bob, Carol, Dan, Eve, Frank, Grace"), stop. App ticks the matching checkboxes. Pairs well with **Wholesale** (clear all → speak the seven).
-  - Player-name resolution already exists in `narrationEngine.js` (`resolvePlayerName`) including nickname/jersey-number matching; extract it into a shared helper.
-  - Touch points: `narration/narrationEngine.js` (new "name list" intent that maps transcript → player IDs without going through the slow-pass event extractor), `game/playerSelection.js` (programmatic checkbox toggle), gateway in `panelTableContainer{,O,D}` UI.
-  - Edge cases: ambiguous names ("Kris" vs "Cris"), name + jersey number disambiguation ("Alice number seven"), partial lines ("just sub Frank for Dan"), interaction with multi-coach Line Coach role enforcement.
+- [x] ~~**Speech-driven line selection (oral roll-call)**~~ **SHIPPED** as the
+      Lines-tab mic (build 1105 / `35aa1f1`, 2026-07-28) — tap mic on the Line
+      tab, speak names, checkboxes tick. Name resolution was extracted into
+      `narration/lineupResolve.js` (shared helper, unit-tested in
+      `tests/unit/lineupResolve.test.mjs`); the model returns only voiced
+      in/out deltas and the server does the set arithmetic. Wholesale-first is
+      the intended flow for a full line. The edge cases listed here were
+      resolved as deliberate behavior choices — see **Voice lineup (Lines-tab
+      mic) — follow-ups** above for what remains (permanent eval, field-watch
+      items) and ARCHITECTURE.md § Lineup Narration for the contract.
 
 ### UX
 - [ ] **Transcript panel UI polish**
@@ -599,7 +604,7 @@ Today the mic only narrates plays *during* a point. Two adjacent flows would ext
 
 ### Test suite
 
-The audio-driven test harness is implemented in `ultistats_server/tests/narration/`. Skeleton works end-to-end. Scenarios `001`–`003` are the original baseline; `004`–`020` were scaffolded in a corpus-expansion pass (transcript + roster + expected committed; `audio.flac` to be generated via `tools/generate_synthetic_audio.py`). Real-audio variants (`004b`, `008b`, `015b`, `021`) are scaffolded for hand-recording.
+The audio-driven test harness is implemented in `ultistats_server/tests/narration/`. Skeleton works end-to-end. Scenarios `001`–`003` are the original baseline; `004`–`020` were scaffolded in a corpus-expansion pass and their synthetic `audio.flac` is **generated and committed** (20 of the 25 scenario dirs have audio). The five without audio are the hand-record variants (`004b`, `008b`, `015b`, `019b`, `021`) — those need a human, a phone, and a windy field.
 
 Corpus structure:
 
@@ -614,12 +619,13 @@ Corpus structure:
 | Numbers | 017 jersey-number-only references |
 | Long form | 018 multi-possession spanning a point boundary |
 | Alt roster (nicknames + phonetic + name=vocab) | 019 nickname recognition • 020 phonetic similarity + name "Sky" |
-| Real audio (hand-record) | 004b name correction outdoor • 008b yo-yo outdoor • 015b commentary outdoor • 021 adversarial / coach-on-tilt |
+| Real audio (hand-record) | 004b name correction outdoor • 008b yo-yo outdoor • 015b commentary outdoor • 019b nickname short outdoor • 021 adversarial / coach-on-tilt |
 
 Remaining work:
 
-- [ ] **Generate audio for 004–020** via `tools/generate_synthetic_audio.py` (~$0.04 total at TTS rates)
-- [ ] **Hand-record 004b / 008b / 015b / 021** in noisy outdoor conditions; same expected.json, different audio.flac. Built-in regression for outdoor robustness.
+- [x] **Generate audio for 004–020** via `tools/generate_synthetic_audio.py` *(done — all 20
+      synthetic scenarios have a committed `audio.flac`)*
+- [ ] **Hand-record 004b / 008b / 015b / 019b / 021** in noisy outdoor conditions; same expected.json, different audio.flac. Built-in regression for outdoor robustness. *(These five are the only scenario dirs still without audio.)*
 - [ ] **Re-record a live-conditions scenario to replace the deleted `022_live_field_point`.** The original was a phone recording of a real game point — wind, sideline chatter, dead-air gaps that fragmented the transcript into subject-less clauses ("Upfield to the handler.Turns it over…"). It caught four prompt gaps clean TTS never did. It was deleted in the name scrub because the recording *speaks real player names*, which no text edit can fix. Narrate a fresh point calling the generic roster (Alice/Bob/Charlie/Dana/Eve/Hank/Iris) and rebuild roster/transcript/expected alongside it.
 - [ ] **Schema gap: opponent unforced turnover.** Several scenarios above (007, 008, 014) gloss over what happens when the opponent throws it away to us — the narration schema in `ultistats_server/narration.py` has no event for "they turnover". The Full-PBP requirements doc models this as `Defense{unforcedError, defender=null}`. Decide whether to add it to the narration schema or handle implicitly via the next throw being from us.
 - [ ] **Schema gap: `record_pull`.** Multiple scenarios start with "they pull" / "we pull" — currently dropped on the floor. Adding `kind: "pull"` (with `puller`, `out_of_bounds?`, `brick?`, `landed_in_endzone?`) would let those narrations carry their first event.
