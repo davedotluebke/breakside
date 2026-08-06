@@ -668,6 +668,40 @@ below).
 
 ## Data Model
 
+### Names in examples, fixtures and test data
+
+**Never commit a real player's name.** Breakside is coached by the people who
+build it, so real rosters leak in easily — sample teams, test fixtures, prompt
+examples, mockups, screenshots, commit messages. Everything in the repo uses one
+canonical fictional roster, the same one the landing-page screenshots show:
+
+| # | Name | | # | Name |
+|---|---------|---|---|---------|
+| 7 | Alice | | 5 | Hank |
+| 11 | Bob | | 14 | Iris |
+| 3 | Charlie | | 8 | Jake |
+| 22 | Dana | | 2 | Kris |
+| 9 | Eve | | 17 | Mia |
+
+Extend with Nora / Omar / Sam / Tara / Wes / Zoe, and `Morgan Vale` ("MV")
+where a full name is needed. Teams are `Team A`…`Team I`; `Breakside` vs
+`Rival City` in user-facing screenshots; team symbols `BRK` / `RVL`.
+
+Two standing exceptions, both deliberate:
+
+- `ultistats_server/tests/narration/scenarios/001`–`021` use their own
+  synthetic roster (Alice / Bob / Carla / Daniel / Ella / Felix / Gina, plus
+  Cara / Sky / Hannah). Each scenario's `audio.flac` **speaks** those names, so
+  renaming the fixtures would desync them from the audio and silently break the
+  eval. Leave them alone, and mirror that roster in the prompt examples in
+  `ultistats_server/narration.py` that describe it.
+- `Dave` / `David Luebke` appear as the author's own name — the LICENSE
+  copyright, `Coach Dave` signup placeholders, `Dave L.` invite copy, and
+  review-doc prose. Those are intentional, not leaks.
+
+Recorded audio is the one thing a find-and-replace cannot fix. If you hand-record
+a narration scenario, call the generic roster out loud.
+
 ### Entity IDs
 
 Human-readable IDs with collision-resistant hash suffix:
