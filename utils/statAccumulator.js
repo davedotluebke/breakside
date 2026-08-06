@@ -127,27 +127,28 @@ function accumulateGameStats(game, stats) {
                         }
                     }
                 } else if (event.type === 'Turnover') {
-                    // Fault attribution: exactly one player is charged the
-                    // turnover. A drop means the throw was good and the
-                    // receiver didn't catch it, so it goes on the receiver
-                    // alone — the thrower is charged nothing. Everything else
-                    // (throwaways, stalls) is the thrower's.
-                    const thrower = resolveRef(event.thrower);
-                    if (thrower.name) {
-                        const s = ensurePlayer(thrower.id, thrower.name);
-                        s.totalThrows++;
-                        if (event.huck_flag) s.totalHucks++;
-                        if (!event.drop_flag) {
-                            s.turnovers++;
-                            s.throwaways++;
-                        }
-                    }
+                    // Fault attribution: exactly one player is charged, and a
+                    // drop goes wholly on the receiver. The throw itself was
+                    // good, so a dropped pass touches NOTHING on the thrower —
+                    // not the turnover, and not Throws/Hucks either, so it
+                    // neither helps nor hurts their Comp%/Huck%. (Their Throws
+                    // count is therefore completions + throwaways + stalls,
+                    // which can be fewer than the passes they released.)
                     if (event.drop_flag) {
                         const receiver = resolveRef(event.receiver);
                         if (receiver.name) {
                             const s = ensurePlayer(receiver.id, receiver.name);
                             s.turnovers++;
                             s.drops++;
+                        }
+                    } else {
+                        const thrower = resolveRef(event.thrower);
+                        if (thrower.name) {
+                            const s = ensurePlayer(thrower.id, thrower.name);
+                            s.turnovers++;
+                            s.throwaways++;
+                            s.totalThrows++;
+                            if (event.huck_flag) s.totalHucks++;
                         }
                     }
                 } else if (event.type === 'Defense') {

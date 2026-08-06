@@ -8,8 +8,10 @@
  * exactly ONE player:
  *  - a throwaway (or stall) charges the thrower one turnover AND one throwaway
  *  - a drop means the throw was good, so it charges the RECEIVER a turnover
- *    and a drop, and charges the thrower nothing (per-player, throwaways +
- *    drops == turnovers)
+ *    and a drop, and touches the thrower NOT AT ALL — no turnover, and no
+ *    Throws/Hucks either, so a drop is excluded from the thrower's Comp% and
+ *    Huck% rather than counted against them (per-player, throwaways + drops
+ *    == turnovers)
  *  - pulls count for the puller; quality comes from `quality`, with Field
  *    mode's bare `brick_flag` counted as a Brick
  *
@@ -78,6 +80,35 @@ test('a drop charges the receiver alone — the thrower gets no turnover', () =>
     assert.equal(s[ALICE.id].throwaways, 0);
     assert.equal(s[BOB.id].turnovers, 1);
     assert.equal(s[BOB.id].drops, 1);
+});
+
+test("a drop is excluded from the thrower's Comp% — not counted against it", () => {
+    // One completion, then a pass Bob drops. The drop must leave Alice's
+    // throw counts alone, so her Comp% reads 1/1 rather than 1/2.
+    const s = statsFor([
+        { type: 'Throw', thrower: ALICE, receiver: BOB },
+        { type: 'Turnover', thrower: ALICE, receiver: BOB, drop_flag: true }
+    ]);
+    assert.equal(s[ALICE.id].completions, 1);
+    assert.equal(s[ALICE.id].totalThrows, 1, 'the dropped pass is not an attempted throw for the thrower');
+});
+
+test("a dropped huck is excluded from the thrower's Huck%", () => {
+    const s = statsFor([
+        { type: 'Throw', thrower: ALICE, receiver: BOB, huck_flag: true },
+        { type: 'Turnover', thrower: ALICE, receiver: BOB, huck_flag: true, drop_flag: true }
+    ]);
+    assert.equal(s[ALICE.id].huckCompletions, 1);
+    assert.equal(s[ALICE.id].totalHucks, 1, 'the dropped huck is not an attempted huck for the thrower');
+});
+
+test('a throwaway DOES count against Comp% (contrast with a drop)', () => {
+    const s = statsFor([
+        { type: 'Throw', thrower: ALICE, receiver: BOB },
+        { type: 'Turnover', thrower: ALICE, throwaway_flag: true }
+    ]);
+    assert.equal(s[ALICE.id].completions, 1);
+    assert.equal(s[ALICE.id].totalThrows, 2, 'a throwaway is the thrower\'s own failed attempt');
 });
 
 test('every turnover is charged to exactly one player', () => {

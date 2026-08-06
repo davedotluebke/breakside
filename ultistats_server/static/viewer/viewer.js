@@ -1510,15 +1510,17 @@ function computePlayerStatsFromGame(game, playerId) {
                     } else if (event.type === 'Turnover') {
                         // Fault attribution mirrors utils/statAccumulator.js:
                         // a drop means the throw was good and the receiver
-                        // didn't catch it, so the turnover is charged to the
-                        // receiver alone. Throwaways and stalls are the
-                        // thrower's. Keep the two in step — a player's TOs
-                        // must read the same here as in the app.
-                        if (thrower && playerNames.has(thrower)) {
+                        // didn't catch it, so it is charged wholly to the
+                        // receiver and touches nothing on the thrower — not
+                        // the turnover, not Throws. Throwaways and stalls are
+                        // the thrower's. Keep the two in step: a player's TOs
+                        // and Comp% must read the same here as in the app.
+                        if (event.drop_flag) {
+                            if (receiver && playerNames.has(receiver)) {
+                                stats.turnovers++;
+                            }
+                        } else if (thrower && playerNames.has(thrower)) {
                             stats.totalThrows++;
-                            if (!event.drop_flag) stats.turnovers++;
-                        }
-                        if (event.drop_flag && receiver && playerNames.has(receiver)) {
                             stats.turnovers++;
                         }
                     } else if (event.type === 'Defense') {
