@@ -966,16 +966,19 @@ The ADD `event` object has shape:
 
 ```json
 {
-  "kind": "throw" | "turnover" | "defense" | "opponent_score",
+  "kind": "throw" | "turnover" | "defense" | "opponent_score" | "pull",
   "thrower": "Alice", "receiver": "Bob",
   "huck": true, "break_throw": false, "reset": false, "swing": false,
   "hammer": false, "sky": false, "layout": false, "score": true,
   // turnover-specific:  "throwaway", "drop", "good_defense", "stall"
   // defense-specific:   "defender", "interception", "callahan"
+  // pull-specific:      "puller", "flick", "roller", "io", "oi", "brick", "quality"
 }
 ```
 
 Player names must match roster entries exactly. The slow-pass prompt explicitly tells Claude to emit bare names (not `"Alice #7"`) — this was a real bug caught by the test harness on its first run.
+
+**Pulls are gated on a named puller.** `puller` is required, and the prompt says so with an explicit `WRONG: {"kind": "pull"}` example; `applyPull` in `narration/narrationEngine.js` drops a pullerless pull as a second line of defense. The reason is that `showPullDialog()` already fires automatically at every point that starts on defense (`game/pointManagement.js`), so the coach has normally already entered the pull by hand — a narrated pull is only worth recording when it names a puller the dialog wouldn't have captured, and a nameless one is pure duplicate. `applyPull` additionally refuses to add a second Pull to a point that already has one, so tapping *and* narrating the pull yields one event, not two. Live probing confirmed this matters: before the required-puller rule was hardened, Haiku emitted a bare `{"kind": "pull"}` for scene-setting narration like "we pulled it" and "they pull". Both behaviors are pinned in `ultistats_server/test_narration_finalize.py`.
 
 Terminology: **"reset" is the canonical name** for the short backward pass (2026-07-19 design call) — in the schema, the `Throw.reset_flag` field, log lines, chips, and stats alike. Coaches saying "dump" set the same `reset` field (the prompt says so explicitly), and games stored before the rename carry `dump_flag`, which `deserializeEvent` aliases onto `reset_flag` (the public viewer, which renders raw server JSON, checks both).
 

@@ -20,7 +20,7 @@
  * When the slow pass returns, its operations (CONFIRM/AMEND/RETRACT/ADD) are
  * applied by mutating the possession's events array and publishing bus events.
  */
-import { Throw, Turnover, Defense, Role } from '../store/models.js';
+import { Throw, Turnover, Defense, Pull, Gender, Role } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
 import { authFetch, API_BASE_URL } from '../store/sync.js';
 import { buildPointPlayerLookup, currentGame, getPlayerFromName } from '../utils/helpers.js';
@@ -319,6 +319,71 @@ Just listen. Transcription happens automatically.`;
         return evt;
     }
 
+    // The three grades the pull dialog offers. Anything else the model
+    // invents (e.g. "Brick") is dropped rather than stored — statAccumulator
+    // buckets pulls by exactly these strings, and a bricked pull is carried
+    // by brick_flag instead.
+    const PULL_QUALITIES = ['Good Pull', 'Okay Pull', 'Poor Pull'];
+
+    /** True when the current point already carries a Pull event. */
+    function pointHasPull() {
+        if (typeof currentGame !== 'function') return false;
+        const game = currentGame();
+        if (!game || !game.points || !game.points.length) return false;
+        const pt = game.points[game.points.length - 1];
+        if (!pt || !pt.possessions) return false;
+        return pt.possessions.some(poss =>
+            (poss.events || []).some(e => e && e.type === 'Pull')
+        );
+    }
+
+    /**
+     * Record the pull that opened this point. Guarded against duplication:
+     * showPullDialog() fires automatically whenever a point starts on defense
+     * (game/pointManagement.js), so a coach who taps the pull in AND narrates
+     * it would otherwise get two Pull events for the one act. First one wins.
+     */
+    function applyPull(args, onField) {
+        if (typeof ensurePossessionExists !== 'function') return null;
+        if (pointHasPull()) {
+            console.warn('[narrationEngine] Point already has a pull; ignoring narrated one:', args);
+            return null;
+        }
+
+        // A pull with no puller is dropped, not recorded as "Unknown Player".
+        // The prompt requires `puller`, but live probing showed the model
+        // still emits a bare {kind:'pull'} for scene-setting narration ("we
+        // pulled it", "they pull"). Those carry no information the automatic
+        // pull dialog didn't already collect, so a nameless pull is a model
+        // slip to swallow rather than junk to write into the game.
+        const puller = resolvePlayerName(args.puller, onField);
+        if (!puller) {
+            console.warn('[narrationEngine] Pull with no resolvable puller; ignoring:', args);
+            return null;
+        }
+
+        const evt = new Pull({
+            puller: puller,
+            pullerGender: puller.gender || Gender.UNKNOWN,
+            quality: PULL_QUALITIES.includes(args.quality) ? args.quality : null,
+            flick: !!args.flick,
+            roller: !!args.roller,
+            io: !!args.io,
+            oi: !!args.oi,
+            brick: !!args.brick
+        });
+        // A pull lives in a defensive possession — we just pulled, so the
+        // opponent has the disc.
+        const possession = ensurePossessionExists(false);
+        possession.addEvent(evt);
+
+        const provId = nextProvisionalId();
+        provisionalEvents.push({ id: provId, event: evt, possession });
+        if (typeof logEvent === 'function') logEvent(evt.summarize());
+        publishAdded(evt, provId);
+        return evt;
+    }
+
     function applyOpponentScore() {
         if (typeof updateScore === 'function' && typeof Role !== 'undefined') {
             updateScore(Role.OPPONENT);
@@ -466,7 +531,7 @@ Just listen. Transcription happens automatically.`;
     /**
      * Add an event the slow pass discovered. The event spec from the backend
      * has shape:
-     *   { kind: 'throw'|'turnover'|'defense'|'opponent_score', <flags & names> }
+     *   { kind: 'throw'|'turnover'|'defense'|'opponent_score'|'pull', <flags & names> }
      *
      * We route through the SAME fast-pass apply functions (applyThrow, etc.)
      * so that event creation, possession handling, stats, logging, and bus
@@ -491,6 +556,8 @@ Just listen. Transcription happens automatically.`;
             case 'opponent_score':
                 applyOpponentScore();
                 return true;
+            case 'pull':
+                return applyPull(eventSpec, onField);
             default:
                 console.warn('[narrationEngine] Slow pass ADD unknown kind:', eventSpec.kind);
                 return null;

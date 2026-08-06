@@ -11,6 +11,10 @@
     "score": true
   },
   {
+    "kind": "pull",
+    "puller": "Daniel"
+  },
+  {
     "kind": "opponent_score"
   }
 ]

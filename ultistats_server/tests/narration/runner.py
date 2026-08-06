@@ -448,6 +448,15 @@ _EVENT_KEY_FIELDS = (
     "block",
     "interception",
     "callahan",
+    # Pull fields. Without these a pull's signature collapses to {"kind":
+    # "pull"} and any pull matches any other regardless of who threw it.
+    "puller",
+    "quality",
+    "flick",
+    "roller",
+    "io",
+    "oi",
+    "brick",
 )
 
 
