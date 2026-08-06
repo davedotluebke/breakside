@@ -37,8 +37,11 @@ import {
 } from '../utils/helpers.js';
 import {
     getGamePlayerStats, getEventPlayerStats, getTeamPlayerStats,
-    accumulateGameStats, getGameTeamStats,
+    accumulateGameStats, getGameTeamStats, sumPlayerStats,
 } from '../utils/eventStats.js';
+import {
+    StatsLevel, columnsForLevel, getStatsLevel, wireStatsLevelSelect,
+} from '../utils/statsLevel.js';
 import {
     createPlayerOffline, syncPlayerToCloud, syncTeamToCloud, syncEventToCloud,
     checkForUpdates, syncUserTeams, listServerGames, listTeamEvents,
@@ -93,20 +96,121 @@ function invalidateRosterStatsCache() {
 }
 
 // Column descriptors (everything after the checkbox). `num` columns default to
-// descending on first click; text columns to ascending.
+// descending on first click; text columns to ascending. `level` matches the
+// Stats menu (see utils/statsLevel.js) — no level means the column always
+// shows. Order here is the table order.
+// `cell(s, dash)` renders a player row from that player's stats; `total(ctx)`
+// renders the Team aggregate row from {totals, detailAvailable, scope, game,
+// dash}. Name and F/M carry per-player styling and are built separately.
 const ROSTER_COLUMNS = [
-    { key: 'name',      label: 'Name',     cls: 'roster-name-header',                 num: false },
-    { key: 'gender',    label: 'F/M',      cls: 'roster-gender-header',               num: false },
-    { key: 'points',    label: 'Pts',      cls: 'roster-points-header',               num: true },
-    { key: 'time',      label: 'Time',     cls: 'roster-time-header',                 num: true },
-    { key: 'goals',     label: 'Goals',    cls: 'roster-goals-header',                num: true },
-    { key: 'assists',   label: 'Assists',  cls: 'roster-assists-header',              num: true },
-    { key: 'comppct',   label: 'Comp%',    cls: 'roster-comppct-header',              num: true },
-    { key: 'dplays',    label: 'Ds',       cls: 'roster-dplays-header',               num: true },
-    { key: 'turnovers', label: 'TOs',      cls: 'roster-turnovers-header',            num: true },
-    { key: 'plusminus', label: '+/-',      cls: 'roster-plusminus-header',            num: true },
-    { key: 'perpoint',  label: '..per pt', cls: 'roster-plusminus-per-point-header',  num: true }
+    { key: 'name',   label: 'Name', cls: 'roster-name-header',   colCls: 'roster-name-column',   num: false },
+    { key: 'gender', label: 'F/M',  cls: 'roster-gender-header', colCls: 'roster-gender-column', num: false },
+    {
+        key: 'points', label: 'Pts', cls: 'roster-points-header', colCls: 'roster-points-column',
+        num: true, level: StatsLevel.BASIC,
+        cell: s => s.pointsPlayed || 0,
+        // Team points are the game's point count — meaningful only in game scope.
+        total: ctx => (ctx.scope === 'game' && ctx.game) ? ctx.game.points.length : ctx.dash
+    },
+    {
+        key: 'time', label: 'Time', cls: 'roster-time-header', colCls: 'roster-time-column',
+        num: true, level: StatsLevel.BASIC,
+        cell: s => formatPlayTime(s.timePlayed || 0),
+        total: ctx => formatPlayTime(ctx.totals.timePlayed)
+    },
+    {
+        key: 'goals', label: 'Goals', cls: 'roster-goals-header', colCls: 'roster-goals-column',
+        num: true, level: StatsLevel.BASIC,
+        cell: s => s.goals || 0,
+        total: ctx => ctx.totals.goals
+    },
+    {
+        key: 'assists', label: 'Assists', cls: 'roster-assists-header', colCls: 'roster-assists-column',
+        num: true, level: StatsLevel.BASIC,
+        cell: s => s.assists || 0,
+        total: ctx => ctx.totals.assists
+    },
+    {
+        key: 'throws', label: 'Throws', cls: 'roster-throws-header', colCls: 'roster-throws-column',
+        num: true, level: StatsLevel.FULL,
+        cell: (s, dash) => s.totalThrows == null ? dash : s.totalThrows,
+        total: ctx => ctx.detailAvailable ? ctx.totals.totalThrows : ctx.dash
+    },
+    {
+        key: 'comppct', label: 'Comp%', cls: 'roster-comppct-header', colCls: 'roster-comppct-column',
+        num: true, level: StatsLevel.ADVANCED,
+        cell: (s, dash) => s.totalThrows == null ? dash : formatPercentOrDash(s.completions, s.totalThrows),
+        total: ctx => (ctx.detailAvailable && ctx.totals.totalThrows > 0)
+            ? formatPercentOrDash(ctx.totals.completions, ctx.totals.totalThrows) : ctx.dash
+    },
+    {
+        key: 'dplays', label: 'Ds', cls: 'roster-dplays-header', colCls: 'roster-dplays-column',
+        num: true, level: StatsLevel.ADVANCED,
+        cell: (s, dash) => s.dPlays == null ? dash : (s.dPlays || 0),
+        total: ctx => ctx.detailAvailable ? ctx.totals.dPlays : ctx.dash
+    },
+    {
+        key: 'turnovers', label: 'TOs', cls: 'roster-turnovers-header', colCls: 'roster-turnovers-column',
+        num: true, level: StatsLevel.ADVANCED,
+        cell: (s, dash) => s.turnovers == null ? dash : (s.turnovers || 0),
+        total: ctx => ctx.detailAvailable ? ctx.totals.turnovers : ctx.dash
+    },
+    {
+        key: 'throwaways', label: 'TAs', cls: 'roster-throwaways-header', colCls: 'roster-throwaways-column',
+        num: true, level: StatsLevel.FULL,
+        cell: (s, dash) => s.throwaways == null ? dash : s.throwaways,
+        total: ctx => ctx.detailAvailable ? ctx.totals.throwaways : ctx.dash
+    },
+    {
+        key: 'drops', label: 'Drops', cls: 'roster-drops-header', colCls: 'roster-drops-column',
+        num: true, level: StatsLevel.FULL,
+        cell: (s, dash) => s.drops == null ? dash : s.drops,
+        total: ctx => ctx.detailAvailable ? ctx.totals.drops : ctx.dash
+    },
+    {
+        key: 'plusminus', label: '+/-', cls: 'roster-plusminus-header', colCls: 'roster-plusminus-column',
+        num: true, level: StatsLevel.ADVANCED,
+        cell: s => formatSigned(s.plusMinus || 0),
+        // Team +/- is the scoreline, not the sum of player +/-.
+        total: ctx => (ctx.scope === 'game' && ctx.game) ? formatSigned(teamGamePlusMinus(ctx.game)) : ctx.dash
+    },
+    {
+        key: 'perpoint', label: '..per pt', cls: 'roster-plusminus-per-point-header',
+        colCls: 'roster-plusminus-per-point-column',
+        num: true, level: StatsLevel.ADVANCED,
+        cell: s => formatSignedFixed((s.pointsPlayed > 0) ? (s.plusMinus || 0) / s.pointsPlayed : 0, 2),
+        total: ctx => {
+            if (!(ctx.scope === 'game' && ctx.game)) return ctx.dash;
+            const tp = ctx.game.points.length;
+            return formatSignedFixed(tp > 0 ? teamGamePlusMinus(ctx.game) / tp : 0, 2);
+        }
+    },
+    {
+        key: 'pulls', label: 'Pulls', cls: 'roster-pulls-header', colCls: 'roster-pulls-column',
+        num: true, level: StatsLevel.FULL,
+        cell: (s, dash) => s.pulls == null ? dash : s.pulls,
+        total: ctx => ctx.detailAvailable ? ctx.totals.pulls : ctx.dash
+    },
+    {
+        key: 'pullquality', label: 'G/O/P/B', cls: 'roster-pull-quality-header',
+        colCls: 'roster-pull-quality-column',
+        num: false, level: StatsLevel.FULL,
+        cell: (s, dash) => formatPullQuality(s, dash),
+        total: ctx => ctx.detailAvailable ? formatPullQuality(ctx.totals, ctx.dash) : ctx.dash
+    }
 ];
+
+/** Game scoreline as a +/- from the tracking team's perspective. */
+function teamGamePlusMinus(game) {
+    return (game.scores[Role.TEAM] || 0) - (game.scores[Role.OPPONENT] || 0);
+}
+
+/** "3/1/0/1" — good/okay/poor/brick pull counts, or `dash` when none rated. */
+function formatPullQuality(s, dash) {
+    const rated = (s.pullsGood || 0) + (s.pullsOkay || 0) + (s.pullsPoor || 0) + (s.pullsBrick || 0);
+    if (!rated) return dash;
+    return `${s.pullsGood || 0}/${s.pullsOkay || 0}/${s.pullsPoor || 0}/${s.pullsBrick || 0}`;
+}
 
 function genderLabel(player) {
     if (player.gender === Gender.FMP) return 'FMP';
@@ -128,9 +232,9 @@ function updateTeamRosterDisplay() {
     const teamRosterHeader = document.getElementById('teamRosterHeader');
     if (teamRosterHeader) {
         if (currentTeam && currentTeam.name) {
-            teamRosterHeader.textContent = `Roster: ${currentTeam.name}`;
+            teamRosterHeader.textContent = `Roster + Stats: ${currentTeam.name}`;
         } else {
-            teamRosterHeader.textContent = 'Team Roster';
+            teamRosterHeader.textContent = 'Team Roster + Stats';
         }
     }
 
@@ -184,6 +288,7 @@ function updateTeamRosterDisplay() {
 
     const scope = effectiveRosterScope();
     updateRosterScopeToggleUI(scope);
+    wireStatsLevelSelect(document.getElementById('rosterStatsLevel'), () => updateTeamRosterDisplay());
 
     if (scope === 'game') {
         // Sync: the current game is in memory.
@@ -233,6 +338,13 @@ function renderRosterTable(scope, statsById, loading) {
     rosterElement.innerHTML = '';
 
     const roster = currentTeam ? currentTeam.teamRoster.slice() : [];
+    const visibleColumns = columnsForLevel(ROSTER_COLUMNS);
+    // Narrowing the stats level can hide the column being sorted on; fall
+    // back to Name rather than sorting by an invisible column.
+    if (!visibleColumns.some(col => col.key === rosterSortKey)) {
+        rosterSortKey = 'name';
+        rosterSortDir = 1;
+    }
 
     // Per-player value accessor used for both sorting and display.
     const valueFor = (player, key) => {
@@ -244,13 +356,18 @@ function renderRosterTable(scope, statsById, loading) {
             case 'time': return s.timePlayed || 0;
             case 'goals': return s.goals || 0;
             case 'assists': return s.assists || 0;
+            case 'throws': return s.totalThrows == null ? -1 : s.totalThrows;
             case 'comppct':
                 if (s.totalThrows == null) return -1; // detail not tracked (all-time)
                 return s.totalThrows > 0 ? (s.completions / s.totalThrows) : -1;
             case 'dplays': return s.dPlays == null ? -1 : s.dPlays;
             case 'turnovers': return s.turnovers == null ? -1 : s.turnovers;
+            case 'throwaways': return s.throwaways == null ? -1 : s.throwaways;
+            case 'drops': return s.drops == null ? -1 : s.drops;
             case 'plusminus': return s.plusMinus || 0;
             case 'perpoint': return (s.pointsPlayed > 0) ? (s.plusMinus || 0) / s.pointsPlayed : 0;
+            case 'pulls': return s.pulls == null ? -1 : s.pulls;
+            case 'pullquality': return formatPullQuality(s, '');
             default: return 0;
         }
     };
@@ -279,7 +396,7 @@ function renderRosterTable(scope, statsById, loading) {
     checkboxHeader.classList.add('roster-header', 'roster-checkbox-header');
     headerRow.appendChild(checkboxHeader);
 
-    ROSTER_COLUMNS.forEach(col => {
+    visibleColumns.forEach(col => {
         const th = document.createElement('th');
         th.classList.add('roster-header', col.cls, 'roster-sortable');
         let label = col.label;
@@ -313,44 +430,28 @@ function renderRosterTable(scope, statsById, loading) {
             genderClasses.push('player-mmp');
         }
 
-        const plusMinus = s.plusMinus || 0;
-        const perPoint = (s.pointsPlayed > 0) ? (plusMinus / s.pointsPlayed) : 0;
+        const cells = [{ element: checkbox, className: ['active-checkbox-column', 'roster-sticky-checkbox'] }];
+        visibleColumns.forEach(col => {
+            if (col.key === 'name') {
+                cells.push({
+                    value: formatPlayerNameWithRole(player), className: nameClasses,
+                    onClick: () => showEditPlayerDialog(player)
+                });
+            } else if (col.key === 'gender') {
+                cells.push({ value: genderLabel(player), className: genderClasses });
+            } else {
+                cells.push({ value: col.cell(s, dash), className: col.colCls });
+            }
+        });
 
-        const playerRow = buildRosterRow([
-            { element: checkbox, className: ['active-checkbox-column', 'roster-sticky-checkbox'] },
-            { value: formatPlayerNameWithRole(player), className: nameClasses, onClick: () => showEditPlayerDialog(player) },
-            { value: genderLabel(player), className: genderClasses },
-            { value: s.pointsPlayed || 0, className: 'roster-points-column' },
-            { value: formatPlayTime(s.timePlayed || 0), className: 'roster-time-column' },
-            { value: s.goals || 0, className: 'roster-goals-column' },
-            { value: s.assists || 0, className: 'roster-assists-column' },
-            { value: s.totalThrows == null ? dash : formatPercentOrDash(s.completions, s.totalThrows), className: 'roster-comppct-column' },
-            { value: s.dPlays == null ? dash : (s.dPlays || 0), className: 'roster-dplays-column' },
-            { value: s.turnovers == null ? dash : (s.turnovers || 0), className: 'roster-turnovers-column' },
-            { value: formatSigned(plusMinus), className: 'roster-plusminus-column' },
-            { value: formatSignedFixed(perPoint, 2), className: 'roster-plusminus-per-point-column' }
-        ]);
-
-        rosterElement.appendChild(playerRow);
+        rosterElement.appendChild(buildRosterRow(cells));
     });
 
     // --- Team aggregate row ---
-    let totGoals = 0, totAssists = 0, totTime = 0;
-    let totCompletions = 0, totThrows = 0, totDPlays = 0, totTurnovers = 0;
-    let detailAvailable = false;
-    roster.forEach(player => {
-        const s = statsById[player.id] || {};
-        totGoals += s.goals || 0;
-        totAssists += s.assists || 0;
-        totTime += s.timePlayed || 0;
-        if (s.totalThrows != null) {
-            detailAvailable = true;
-            totCompletions += s.completions || 0;
-            totThrows += s.totalThrows || 0;
-            totDPlays += s.dPlays || 0;
-            totTurnovers += s.turnovers || 0;
-        }
-    });
+    // detailAvailable distinguishes "no event data tracked" (legacy all-time
+    // stats carry no throw/D detail) from a genuine zero.
+    const totals = sumPlayerStats(roster.map(p => statsById[p.id] || {}));
+    const detailAvailable = roster.some(p => (statsById[p.id] || {}).totalThrows != null);
 
     const teamRow = document.createElement('tr');
     teamRow.classList.add('team-aggregate-row');
@@ -362,27 +463,13 @@ function renderRosterTable(scope, statsById, loading) {
     };
 
     const game = (typeof currentGame === 'function') ? currentGame() : null;
+    const totalCtx = { totals, detailAvailable, scope, game, dash };
     appendTeamCell('', 'active-checkbox-column', 'checkbox');
-    appendTeamCell('Team', 'roster-name-column', 'name');
-    appendTeamCell('', 'roster-gender-column');
-    // Team points: meaningful only for the current game scope.
-    appendTeamCell(scope === 'game' && game ? game.points.length : dash, 'roster-points-column');
-    appendTeamCell(formatPlayTime(totTime), 'roster-time-column');
-    appendTeamCell(totGoals, 'roster-goals-column');
-    appendTeamCell(totAssists, 'roster-assists-column');
-    appendTeamCell(detailAvailable && totThrows > 0 ? formatPercentOrDash(totCompletions, totThrows) : dash, 'roster-comppct-column');
-    appendTeamCell(detailAvailable ? totDPlays : dash, 'roster-dplays-column');
-    appendTeamCell(detailAvailable ? totTurnovers : dash, 'roster-turnovers-column');
-    if (scope === 'game' && game) {
-        const teamPM = (game.scores[Role.TEAM] || 0) - (game.scores[Role.OPPONENT] || 0);
-        appendTeamCell(formatSigned(teamPM), 'roster-plusminus-column');
-        const tp = game.points.length;
-        const pmpp = tp > 0 ? teamPM / tp : 0;
-        appendTeamCell(formatSignedFixed(pmpp, 2), 'roster-plusminus-per-point-column');
-    } else {
-        appendTeamCell(dash, 'roster-plusminus-column');
-        appendTeamCell(dash, 'roster-plusminus-per-point-column');
-    }
+    visibleColumns.forEach(col => {
+        if (col.key === 'name') appendTeamCell('Team', col.colCls, 'name');
+        else if (col.key === 'gender') appendTeamCell('', col.colCls);
+        else appendTeamCell(col.total(totalCtx), col.colCls);
+    });
     rosterElement.appendChild(teamRow);
 
     requestAnimationFrame(() => makeRosterColumnsSticky());
@@ -695,6 +782,7 @@ async function exportTeamRosterXLSX() {
         }
 
         const wb = XLSX.utils.book_new();
+        const level = getStatsLevel();   // columns follow the Stats menu
 
         // Helper: build a sheet from a set of games
         const buildSheet = (sheetGames, label) => {
@@ -711,7 +799,7 @@ async function exportTeamRosterXLSX() {
                 Object.keys(teamStats).forEach(k => { teamStats[k] += t[k] || 0; });
             });
             const titleRow = `${currentTeam.name} — ${label} (${sheetGames.length} game${sheetGames.length === 1 ? '' : 's'})`;
-            const aoa = buildStatsSheetAoA(players, playerStats, teamStats, { titleRow });
+            const aoa = buildStatsSheetAoA(players, playerStats, teamStats, { titleRow, level });
             return aoaToFormattedSheet(aoa);
         };
 

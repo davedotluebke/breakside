@@ -73,14 +73,29 @@ th {
 .event-roster-filter-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 8px 14px;
     margin: 8px 10px;
     font-size: 0.95em;
+    flex-wrap: wrap;   /* Show: + Stats: stack on narrow phones */
+}
+
+/* Each label + <select> pair travels together when the row wraps. */
+.event-roster-filter-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
 }
 
 .event-roster-filter-row label {
     font-weight: 600;
     color: var(--gray-dark);
+}
+
+/* The scope menu can hold long game labels; let it shrink instead of
+   pushing the Stats menu off-screen. */
+#eventRosterScopeFilter {
+    max-width: 45vw;
 }
 
 /* Phase grouping in the event games list */
@@ -390,6 +405,18 @@ ul {
     color: var(--white);
     font-weight: bold;
 }
+/* The Stats-detail menu shares the scope row. Label and <select> travel
+   together so the label never strands on the line above when the row wraps
+   on a phone; the left margin gives it air from the scope pills. */
+.roster-stats-level-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 6px;
+}
+#rosterStatsLevel {
+    font-size: 0.85em;
+}
 
 /* Sortable roster headers */
 .roster-sortable {
@@ -656,6 +683,11 @@ td.player-mmp,
 .roster-time-column,
 .roster-goals-column,
 .roster-assists-column,
+.roster-throws-column,
+.roster-throwaways-column,
+.roster-drops-column,
+.roster-pulls-column,
+.roster-pull-quality-column,
 .roster-plusminus-column,
 .roster-plusminus-per-point-column {
     text-align: center;

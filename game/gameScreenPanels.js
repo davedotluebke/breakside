@@ -74,7 +74,7 @@ function createHeaderContent() {
                 </button>
                 <div class="menu-divider"></div>
                 <button class="menu-item" id="menuRoster">
-                    <i class="fas fa-users"></i> Edit Roster
+                    <i class="fas fa-users"></i> Roster + Stats
                 </button>
                 <button class="menu-item" id="menuGameSettings">
                     <i class="fas fa-sliders-h"></i> Game Settings

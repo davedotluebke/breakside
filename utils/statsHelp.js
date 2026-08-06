@@ -20,18 +20,28 @@ const STATS_COLUMN_HELP = {
                   desc: 'Threw the pass that led to the assist (the pass before the goal).' },
     'Huck HA':  { name: 'Huck Hockey Assists',
                   desc: 'Hockey assists where the throw was a huck. Counted in the HA total as well.' },
+    'Throws':   { name: 'Throws Attempted',
+                  desc: 'Completions plus throwaways and stalls — the denominator behind Comp%. A pass the receiver dropped is left out entirely, since the throw was good, so this can be fewer than the passes actually released.' },
     'Comp%':    { name: 'Completion Percentage',
-                  desc: 'Completed throws ÷ total throws (completions + turnovers).' },
+                  desc: 'Completed throws ÷ throws attempted (completions + throwaways + stalls). Dropped passes are excluded from both sides — a drop neither helps nor hurts the thrower.' },
     'Huck%':    { name: 'Huck Completion Percentage',
-                  desc: 'Completed hucks ÷ total hucks attempted.' },
+                  desc: 'Completed hucks ÷ hucks attempted. Like Comp%, a huck the receiver dropped is excluded rather than counted against the thrower.' },
     'Ds':       { name: 'Defensive Plays',
                   desc: 'Blocks, layouts, skies, interceptions, Callahans, stalls forced.' },
     'TOs':      { name: 'Turnovers',
-                  desc: 'Throwaways, stalls, and drops attributed to the player.' },
+                  desc: 'Throwaways and stalls by the player, plus passes they dropped. Every turnover is charged to exactly one player, so TAs + Drops = TOs.' },
+    'TAs':      { name: 'Throwaways',
+                  desc: 'Turnovers charged to the thrower — throwaways and stalls. A dropped pass is the receiver\'s error, so it is charged to them instead and never appears here.' },
+    'Drops':    { name: 'Drops',
+                  desc: 'Passes the player failed to catch. The throw was good, so the drop is charged to the intended receiver alone — the thrower gets no turnover and no hit to their Comp%.' },
     '+/-':      { name: 'Plus / Minus',
                   desc: '+1 for each point won while on the field, −1 for each point lost.' },
     '..per pt': { name: '+/- per Point',
-                  desc: 'Plus/minus divided by points played. A rate-adjusted version of +/-.' }
+                  desc: 'Plus/minus divided by points played. A rate-adjusted version of +/-.' },
+    'Pulls':    { name: 'Pulls',
+                  desc: 'Number of pulls the player threw.' },
+    'G/O/P/B':  { name: 'Pull Quality',
+                  desc: 'Good / Okay / Poor / Brick, in that order. Only pulls that were rated appear in the breakdown, so the four can add up to less than Pulls.' }
 };
 
 /**

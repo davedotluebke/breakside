@@ -297,8 +297,8 @@
                 <span class="panel-title" id="startGameHeader">Start Game</span>
             </div>
             <div class="subscreen-content">
-                <button id="showRosterBtn" class="roster-nav-btn" title="Edit Roster">
-                    <i class="fas fa-users"></i> Edit Roster
+                <button id="showRosterBtn" class="roster-nav-btn" title="Roster + Stats">
+                    <i class="fas fa-users"></i> Roster + Stats
                 </button>
                 <button id="continueGameBtn" class="inactive">Continue Game</button>
                 <div class="start-game-settings">
@@ -333,17 +333,21 @@
                 <button class="title-bar-back-btn" id="backToStartGameBtn">
                     <i class="fas fa-arrow-left"></i>
                 </button>
-                <span class="panel-title" id="teamRosterHeader">Edit Roster</span>
+                <span class="panel-title" id="teamRosterHeader">Roster + Stats</span>
                 <button id="exportTeamRosterBtn" class="back-button" title="Export team roster + lifetime stats to Excel (.xlsx)">
                     <i class="fas fa-file-excel"></i> Export
                 </button>
             </div>
             <div class="subscreen-content">
                 <div class="roster-scope-toggle" id="rosterScopeToggle">
-                    <span class="roster-scope-label">Stats:</span>
+                    <span class="roster-scope-label">Scope:</span>
                     <button type="button" class="roster-scope-btn" data-scope="all">All-time</button>
                     <button type="button" class="roster-scope-btn" data-scope="event">Event</button>
                     <button type="button" class="roster-scope-btn" data-scope="game">Game</button>
+                    <span class="roster-stats-level-group">
+                        <span class="roster-scope-label">Stats:</span>
+                        <select id="rosterStatsLevel" class="event-dialog-select"></select>
+                    </span>
                 </div>
                 <div class="roster-table-container">
                     <table id="rosterTable">
@@ -512,14 +516,20 @@
             <button id="backFromEventRosterBtn" class="back-button">
                 <i class="fas fa-arrow-left"></i> Back
             </button>
-            <h2 id="eventRosterHeader">Event Roster</h2>
-            <button id="exportEventRosterBtn" class="back-button" title="Export attending players to Excel (.xlsx) — one sheet per phase" style="display:none;">
+            <h2 id="eventRosterHeader">Event Roster + Stats</h2>
+            <button id="exportEventRosterBtn" class="back-button" title="Export attending players to Excel (.xlsx) — one sheet per phase and per game" style="display:none;">
                 <i class="fas fa-file-excel"></i> Export
             </button>
         </div>
-        <div id="eventRosterPhaseFilterRow" class="event-roster-filter-row" style="display:none;">
-            <label for="eventRosterPhaseFilter">Phase:</label>
-            <select id="eventRosterPhaseFilter" class="event-dialog-select"></select>
+        <div id="eventRosterFilterRow" class="event-roster-filter-row" style="display:none;">
+            <span id="eventRosterScopeWrap" class="event-roster-filter-group" style="display:none;">
+                <label for="eventRosterScopeFilter">Show:</label>
+                <select id="eventRosterScopeFilter" class="event-dialog-select"></select>
+            </span>
+            <span class="event-roster-filter-group">
+                <label for="eventRosterStatsLevel">Stats:</label>
+                <select id="eventRosterStatsLevel" class="event-dialog-select"></select>
+            </span>
         </div>
         <div class="roster-table-container">
             <table id="eventRosterTable">

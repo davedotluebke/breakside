@@ -9,13 +9,17 @@ import {
 } from '../store/storage.js';
 import { formatPlayerName, formatPlayTime } from '../utils/helpers.js';
 import {
-    getEventPlayerStats, getEventRecord, getEventTeamStats, formatTeamStatsLine,
+    loadEventGames, filterGames, getGamesPlayerStats, getGamesRecord,
+    getGamesTeamStats, formatGameLabel, sumPlayerStats, formatTeamStatsLine,
 } from '../utils/eventStats.js';
 import { createTableSortController } from '../utils/tableSort.js';
 import { attachStatsColumnHelp } from '../utils/statsHelp.js';
 import {
+    StatsLevel, columnsForLevel, getStatsLevel, wireStatsLevelSelect,
+} from '../utils/statsLevel.js';
+import {
     buildStatsSheetAoA, aoaToFormattedSheet, downloadWorkbook,
-    safeSheetName, safeFilename,
+    uniqueSheetName, safeFilename,
 } from '../utils/xlsxExport.js';
 import { updateEventOnCloud } from '../store/sync.js';
 import { showScreen } from '../screens/navigation.js';
@@ -31,10 +35,75 @@ let eventRosterPickups = [];
 // Per-event position/line overrides for team players: { [playerId]: {position, defaultLine} }.
 // Seeded from event.roster.overrides, persisted by saveEventRoster.
 let eventRosterOverrides = {};
-let cachedEventStats = null; // { eventId, phase, playerStats, teamStats, record } — avoids re-fetching on re-renders
+// The event's games, loaded from cloud once per screen visit. Every filter
+// (all / phase / single game) and the xlsx export are computed from this list,
+// so switching filters is instant and costs no extra fetches.
+let cachedEventGames = null; // { eventId, games }
 let eventRosterSortController = null;
 let eventRosterSortState = null; // persists sort across re-renders
-let eventRosterPhaseFilter = null; // null = "All phases"
+// Current scope: {} = everything, {phase} = one phase, {gameId} = one game.
+let eventRosterFilter = {};
+
+/*
+ * Stats columns, in table order. `level` matches the Stats menu (see
+ * utils/statsLevel.js); `value(ps)` renders a cell from an accumulateGameStats
+ * stats object (the Team row passes the summed object, so rates recompute
+ * correctly rather than averaging).
+ */
+const EVENT_ROSTER_COLUMNS = [
+    { key: 'pts',      label: 'Pts',      level: StatsLevel.BASIC,    type: 'number',
+      value: ps => ps.pointsPlayed || 0 },
+    { key: 'time',     label: 'Time',     level: StatsLevel.BASIC,    type: 'time',
+      value: ps => (typeof formatPlayTime === 'function' ? formatPlayTime(ps.timePlayed || 0) : '0:00') },
+    { key: 'goals',    label: 'Goals',    level: StatsLevel.BASIC,    type: 'number',
+      value: ps => ps.goals || 0 },
+    { key: 'assists',  label: 'Assists',  level: StatsLevel.BASIC,    type: 'number',
+      value: ps => ps.assists || 0 },
+    { key: 'ha',       label: 'HA',       level: StatsLevel.ADVANCED, type: 'number',
+      value: ps => ps.hockeyAssists || 0 },
+    { key: 'huckHa',   label: 'Huck HA',  level: StatsLevel.ADVANCED, type: 'number',
+      value: ps => ps.huckHockeyAssists || 0 },
+    { key: 'throws',   label: 'Throws',   level: StatsLevel.FULL,     type: 'number',
+      value: ps => ps.totalThrows || 0 },
+    { key: 'compPct',  label: 'Comp%',    level: StatsLevel.ADVANCED, type: 'percentage',
+      value: ps => formatPercentOrDash(ps.completions || 0, ps.totalThrows || 0) },
+    { key: 'huckPct',  label: 'Huck%',    level: StatsLevel.ADVANCED, type: 'percentage',
+      value: ps => formatPercentOrDash(ps.huckCompletions || 0, ps.totalHucks || 0) },
+    { key: 'ds',       label: 'Ds',       level: StatsLevel.ADVANCED, type: 'number',
+      value: ps => ps.dPlays || 0 },
+    { key: 'tos',      label: 'TOs',      level: StatsLevel.ADVANCED, type: 'number',
+      value: ps => ps.turnovers || 0 },
+    { key: 'tas',      label: 'TAs',      level: StatsLevel.FULL,     type: 'number',
+      value: ps => ps.throwaways || 0 },
+    { key: 'drops',    label: 'Drops',    level: StatsLevel.FULL,     type: 'number',
+      value: ps => ps.drops || 0 },
+    { key: 'plusMinus', label: '+/-',     level: StatsLevel.ADVANCED, type: 'number',
+      value: ps => formatSigned(ps.plusMinus || 0) },
+    { key: 'pmPerPt',  label: '..per pt', level: StatsLevel.ADVANCED, type: 'number',
+      value: ps => formatSigned(formatPerPoint(ps)) },
+    { key: 'pulls',    label: 'Pulls',    level: StatsLevel.FULL,     type: 'number',
+      value: ps => ps.pulls || 0 },
+    { key: 'pullQuality', label: 'G/O/P/B', level: StatsLevel.FULL,   type: 'string',
+      value: ps => formatPullQuality(ps) }
+];
+
+/** "+0.33" / "0.0" — +/- per point, preserving the historical zero-point text. */
+function formatPerPoint(ps) {
+    const pts = ps.pointsPlayed || 0;
+    return pts > 0 ? ((ps.plusMinus || 0) / pts).toFixed(2) : '0.0';
+}
+
+/** "3/1/0/1" — good/okay/poor/brick pull counts, or "-" when nothing to show. */
+function formatPullQuality(ps) {
+    const rated = (ps.pullsGood || 0) + (ps.pullsOkay || 0) + (ps.pullsPoor || 0) + (ps.pullsBrick || 0);
+    if (!rated) return '-';
+    return `${ps.pullsGood || 0}/${ps.pullsOkay || 0}/${ps.pullsPoor || 0}/${ps.pullsBrick || 0}`;
+}
+
+/** The stats columns the active Stats level shows. */
+function activeEventRosterColumns() {
+    return columnsForLevel(EVENT_ROSTER_COLUMNS);
+}
 
 /**
  * Show the event roster UI for editing an event's roster
@@ -42,10 +111,10 @@ let eventRosterPhaseFilter = null; // null = "All phases"
  */
 function showEventRosterUI(event) {
     currentEventRosterEvent = event;
-    cachedEventStats = null; // clear cache for fresh load
+    cachedEventGames = null; // clear cache for fresh load
     eventRosterSortState = null; // reset sort for new event
-    eventRosterPhaseFilter = null; // reset to "All" when opening a new event
-    renderEventRosterPhaseFilter();
+    eventRosterFilter = {}; // reset to "All games" when opening a new event
+    renderEventRosterFilterRow();
 
     // Clone roster state into local variables
     const existingPlayerIds = event.roster?.playerIds || [];
@@ -71,7 +140,7 @@ function showEventRosterUI(event) {
         const hasGameIds = (event.gameIds || []).length > 0;
         header.textContent = hasGameIds
             ? `${event.name} — Loading stats...`
-            : `${event.name} — Roster`;
+            : `${event.name} — Roster + Stats`;
     }
 
     showScreen('eventRosterScreen');
@@ -79,35 +148,96 @@ function showEventRosterUI(event) {
 }
 
 /**
- * Render the phase-filter row. Hidden if the event has no phases defined.
+ * Encode/decode the scope-select option values. Phases and game ids share one
+ * <select>, so each value carries its own kind.
  */
-function renderEventRosterPhaseFilter() {
-    const row = document.getElementById('eventRosterPhaseFilterRow');
-    const select = document.getElementById('eventRosterPhaseFilter');
-    if (!row || !select) return;
+function filterToValue(filter) {
+    if (filter.gameId) return `game:${filter.gameId}`;
+    if (filter.phase) return `phase:${filter.phase}`;
+    return '';
+}
+function valueToFilter(value) {
+    if (!value) return {};
+    if (value.startsWith('game:')) return { gameId: value.slice(5) };
+    if (value.startsWith('phase:')) return { phase: value.slice(6) };
+    return {};
+}
+
+/**
+ * Render the filter row: the scope menu ("All games", each declared phase,
+ * then each individual game) plus the Stats detail menu. The scope menu is
+ * hidden when there is nothing to narrow to; the Stats menu always shows.
+ */
+function renderEventRosterFilterRow() {
+    const row = document.getElementById('eventRosterFilterRow');
+    const scopeWrap = document.getElementById('eventRosterScopeWrap');
+    const select = document.getElementById('eventRosterScopeFilter');
+    const levelSelect = document.getElementById('eventRosterStatsLevel');
+    if (!row) return;
+
+    row.style.display = '';
+    wireStatsLevelSelect(levelSelect, () => renderEventRosterTable());
+
+    if (!scopeWrap || !select) return;
     const phases = currentEventRosterEvent?.phases || [];
-    if (phases.length === 0) {
-        row.style.display = 'none';
+    const games = cachedEventGames?.games || [];
+    // Only one game and no phases → nothing to narrow to.
+    if (phases.length === 0 && games.length < 2) {
+        scopeWrap.style.display = 'none';
         return;
     }
-    row.style.display = '';
+    scopeWrap.style.display = '';
+
     select.innerHTML = '';
     const allOpt = document.createElement('option');
     allOpt.value = '';
-    allOpt.textContent = 'All phases';
+    allOpt.textContent = 'All games';
     select.appendChild(allOpt);
-    phases.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p;
-        opt.textContent = p;
-        select.appendChild(opt);
-    });
-    select.value = eventRosterPhaseFilter || '';
+
+    if (phases.length > 0) {
+        const group = document.createElement('optgroup');
+        group.label = 'Phases';
+        phases.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = `phase:${p}`;
+            opt.textContent = p;
+            group.appendChild(opt);
+        });
+        select.appendChild(group);
+    }
+
+    if (games.length > 0) {
+        const group = document.createElement('optgroup');
+        group.label = 'Games';
+        games.forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = `game:${g.id}`;
+            opt.textContent = formatGameLabel(g);
+            group.appendChild(opt);
+        });
+        select.appendChild(group);
+    }
+
+    select.value = filterToValue(eventRosterFilter);
+    // A stale selection (e.g. the game vanished) falls back to "All games".
+    if (select.selectedIndex < 0) {
+        select.value = '';
+        eventRosterFilter = {};
+    }
     select.onchange = () => {
-        eventRosterPhaseFilter = select.value || null;
-        cachedEventStats = null;
+        eventRosterFilter = valueToFilter(select.value);
         renderEventRosterTable();
     };
+}
+
+/** The label for the current filter, appended to the screen header. */
+function currentFilterLabel() {
+    if (eventRosterFilter.phase) return ` — ${eventRosterFilter.phase}`;
+    if (eventRosterFilter.gameId) {
+        const game = (cachedEventGames?.games || []).find(g => g.id === eventRosterFilter.gameId);
+        return game ? ` — ${formatGameLabel(game)}` : '';
+    }
+    return '';
 }
 
 /**
@@ -125,37 +255,34 @@ async function renderEventRosterTable() {
         eventRosterSortController = null;
     }
 
-    // Load event stats and record from cloud (games aren't in local state)
+    // Load the event's games from cloud once (games aren't in local state),
+    // then derive every filtered view from that list without re-fetching.
     const event = currentEventRosterEvent;
     let eventPlayerStats = {};
     let record = null;
     let teamStats = null;
     const eventId = event?.id;
-    const phase = eventRosterPhaseFilter;
     const hasGameIds = (event?.gameIds || []).length > 0;
 
-    if (hasGameIds && typeof getEventPlayerStats === 'function') {
-        // Use cache if available for this event + phase
-        if (cachedEventStats && cachedEventStats.eventId === eventId && cachedEventStats.phase === phase) {
-            eventPlayerStats = cachedEventStats.playerStats;
-            record = cachedEventStats.record;
-            teamStats = cachedEventStats.teamStats;
-        } else {
+    if (hasGameIds) {
+        if (!cachedEventGames || cachedEventGames.eventId !== eventId) {
             try {
-                const opts = phase ? { phase } : {};
-                [eventPlayerStats, record, teamStats] = await Promise.all([
-                    getEventPlayerStats(event, opts),
-                    typeof getEventRecord === 'function' ? getEventRecord(event, opts) : null,
-                    typeof getEventTeamStats === 'function' ? getEventTeamStats(event, opts) : null
-                ]);
-                cachedEventStats = { eventId, phase, playerStats: eventPlayerStats, teamStats, record };
+                cachedEventGames = { eventId, games: await loadEventGames(event) };
+                // The scope menu lists the games, so it can only be built now.
+                renderEventRosterFilterRow();
             } catch (e) {
-                console.error('Error loading event stats:', e);
+                console.error('Error loading event games:', e);
+                cachedEventGames = { eventId, games: [] };
             }
         }
+        const games = filterGames(cachedEventGames.games, eventRosterFilter);
+        eventPlayerStats = getGamesPlayerStats(games);
+        record = getGamesRecord(games);
+        teamStats = getGamesTeamStats(games);
     }
 
     const hasStats = Object.keys(eventPlayerStats).length > 0;
+    const statsColumns = activeEventRosterColumns();
 
     // Show/hide export button
     const exportBtn = document.getElementById('exportEventRosterBtn');
@@ -170,8 +297,7 @@ async function renderEventRosterTable() {
         const recordStr = record && (record.wins + record.losses + record.ties) > 0
             ? ` (${record.wins}W-${record.losses}L${record.ties ? `-${record.ties}T` : ''})`
             : '';
-        const phaseStr = phase ? ` — ${phase}` : '';
-        header.textContent = `${event.name}${phaseStr}${recordStr}`;
+        header.textContent = `${event.name}${currentFilterLabel()}${recordStr}`;
     }
 
     // Team-level breaks/holds line
@@ -199,29 +325,22 @@ async function renderEventRosterTable() {
     headerRow.appendChild(thName);
 
     if (hasStats) {
-        ['Pts', 'Time', 'Goals', 'Assists', 'HA', 'Huck HA', 'Comp%', 'Huck%', 'Ds', 'TOs', '+/-', '..per pt'].forEach(text => {
+        statsColumns.forEach(col => {
             const th = document.createElement('th');
-            th.textContent = text;
+            th.textContent = col.label;
             th.classList.add('roster-header');
             headerRow.appendChild(th);
         });
     }
     tbody.appendChild(headerRow);
 
-    // Aggregate totals
-    const totals = {
-        pointsPlayed: 0, timePlayed: 0, goals: 0, assists: 0,
-        hockeyAssists: 0, huckHockeyAssists: 0,
-        completions: 0, totalThrows: 0, huckCompletions: 0, totalHucks: 0,
-        dPlays: 0, turnovers: 0, plusMinus: 0
-    };
-
     // Team player rows
+    const rowStats = [];
     const roster = currentTeam ? currentTeam.teamRoster : [];
     roster.forEach(player => {
-        const computed = computeEventRosterPlayerStats(eventPlayerStats[player.id] || {});
-        if (hasStats) accumulateEventRosterTotals(totals, computed);
-        const row = createEventRosterPlayerRow(player, computed, hasStats, {
+        const ps = eventPlayerStats[player.id] || {};
+        if (hasStats) rowStats.push(ps);
+        const row = createEventRosterPlayerRow(player, ps, hasStats, statsColumns, {
             isPickup: false,
             checked: eventRosterPlayerIds.has(player.id),
             onCheckChange: (checked) => {
@@ -234,9 +353,9 @@ async function renderEventRosterTable() {
 
     // Pickup player rows
     eventRosterPickups.forEach((pickup, idx) => {
-        const computed = computeEventRosterPlayerStats(eventPlayerStats[pickup.id] || {});
-        if (hasStats) accumulateEventRosterTotals(totals, computed);
-        const row = createEventRosterPlayerRow(pickup, computed, hasStats, {
+        const ps = eventPlayerStats[pickup.id] || {};
+        if (hasStats) rowStats.push(ps);
+        const row = createEventRosterPlayerRow(pickup, ps, hasStats, statsColumns, {
             isPickup: true,
             pickupIndex: idx
         });
@@ -245,28 +364,11 @@ async function renderEventRosterTable() {
 
     // Team aggregate row
     if (hasStats) {
-        const totalPoints = totals.pointsPlayed > 0 ? totals.pointsPlayed : 0;
-        const pmPerPt = totalPoints > 0 ? (totals.plusMinus / totalPoints).toFixed(2) : '0.0';
-
-        const aggValues = [
-            totals.pointsPlayed,
-            typeof formatPlayTime === 'function' ? formatPlayTime(totals.timePlayed) : '',
-            totals.goals,
-            totals.assists,
-            totals.hockeyAssists,
-            totals.huckHockeyAssists,
-            formatPercentOrDash(totals.completions, totals.totalThrows),
-            formatPercentOrDash(totals.huckCompletions, totals.totalHucks),
-            totals.dPlays,
-            totals.turnovers,
-            formatSigned(totals.plusMinus),
-            formatSigned(pmPerPt)
-        ];
-
+        const totals = sumPlayerStats(rowStats);
         const aggRow = buildRosterRow([
             { value: '', className: 'team-total-cell' },
             { value: 'Team', className: ['roster-name-column', 'team-total-cell'] },
-            ...aggValues.map(val => ({ value: val, className: 'team-total-cell' }))
+            ...statsColumns.map(col => ({ value: col.value(totals), className: 'team-total-cell' }))
         ]);
         aggRow.classList.add('team-aggregate-row');
 
@@ -280,20 +382,10 @@ async function renderEventRosterTable() {
             { key: 'name', type: 'string', colIndex: 1 }
         ];
         if (hasStats) {
-            columns.push(
-                { key: 'pts', type: 'number', colIndex: 2 },
-                { key: 'time', type: 'time', colIndex: 3 },
-                { key: 'goals', type: 'number', colIndex: 4 },
-                { key: 'assists', type: 'number', colIndex: 5 },
-                { key: 'hockeyAssists', type: 'number', colIndex: 6 },
-                { key: 'huckHockeyAssists', type: 'number', colIndex: 7 },
-                { key: 'compPct', type: 'percentage', colIndex: 8 },
-                { key: 'huckPct', type: 'percentage', colIndex: 9 },
-                { key: 'ds', type: 'number', colIndex: 10 },
-                { key: 'tos', type: 'number', colIndex: 11 },
-                { key: 'plusMinus', type: 'number', colIndex: 12 },
-                { key: 'pmPerPt', type: 'number', colIndex: 13 }
-            );
+            // Column indices shift with the stats level, so derive them.
+            statsColumns.forEach((col, i) => {
+                columns.push({ key: col.key, type: col.type, colIndex: i + 2 });
+            });
         }
         eventRosterSortController = createTableSortController({
             getHeaderRow: () => tbody.querySelector('tr:first-child'),
@@ -315,71 +407,14 @@ async function renderEventRosterTable() {
 }
 
 /**
- * Compute the display values and raw stat contributions for one event-roster
- * row. Pure — does not touch the `totals` accumulator (see
- * accumulateEventRosterTotals) and does not build any DOM.
- * @param {Object} ps - this player's stats from eventPlayerStats (or {})
+ * Build a player row for the event roster table.
+ * @param {object} player - roster player or pickup
+ * @param {object} ps - this player's stats from eventPlayerStats (or {})
+ * @param {boolean} hasStats - whether the table is showing stat columns at all
+ * @param {Array<object>} statsColumns - the columns the active level shows
+ * @param {object} options - {isPickup, checked, onCheckChange, pickupIndex}
  */
-function computeEventRosterPlayerStats(ps) {
-    const pts = ps.pointsPlayed || 0;
-    const time = ps.timePlayed || 0;
-    const goals = ps.goals || 0;
-    const assists = ps.assists || 0;
-    const hockeyAssists = ps.hockeyAssists || 0;
-    const huckHockeyAssists = ps.huckHockeyAssists || 0;
-    const completions = ps.completions || 0;
-    const totalThrows = ps.totalThrows || 0;
-    const huckCompletions = ps.huckCompletions || 0;
-    const totalHucks = ps.totalHucks || 0;
-    const dPlays = ps.dPlays || 0;
-    const turnovers = ps.turnovers || 0;
-    const pm = ps.plusMinus || 0;
-    const pmPerPt = pts > 0 ? (pm / pts).toFixed(2) : '0.0';
-
-    return {
-        pts, time, goals, assists, hockeyAssists, huckHockeyAssists,
-        completions, totalThrows, huckCompletions, totalHucks, dPlays, turnovers, pm,
-        values: [
-            pts,
-            typeof formatPlayTime === 'function' ? formatPlayTime(time) : '0:00',
-            goals,
-            assists,
-            hockeyAssists,
-            huckHockeyAssists,
-            formatPercentOrDash(completions, totalThrows),
-            formatPercentOrDash(huckCompletions, totalHucks),
-            dPlays,
-            turnovers,
-            formatSigned(pm),
-            formatSigned(pmPerPt)
-        ]
-    };
-}
-
-/**
- * Add one player's raw stat contributions into the shared event-roster
- * totals accumulator. Call once per row, separately from row construction.
- */
-function accumulateEventRosterTotals(totals, computed) {
-    totals.pointsPlayed += computed.pts;
-    totals.timePlayed += computed.time;
-    totals.goals += computed.goals;
-    totals.assists += computed.assists;
-    totals.hockeyAssists += computed.hockeyAssists;
-    totals.huckHockeyAssists += computed.huckHockeyAssists;
-    totals.completions += computed.completions;
-    totals.totalThrows += computed.totalThrows;
-    totals.huckCompletions += computed.huckCompletions;
-    totals.totalHucks += computed.totalHucks;
-    totals.dPlays += computed.dPlays;
-    totals.turnovers += computed.turnovers;
-    totals.plusMinus += computed.pm;
-}
-
-/**
- * Build a player row for the event roster table from precomputed stats.
- */
-function createEventRosterPlayerRow(player, computed, hasStats, options) {
+function createEventRosterPlayerRow(player, ps, hasStats, statsColumns, options) {
     const displayName = typeof formatPlayerName === 'function' ? formatPlayerName(player) : player.name;
     const nameClasses = [];
     if (player.gender === Gender.FMP) nameClasses.push('player-fmp');
@@ -429,7 +464,7 @@ function createEventRosterPlayerRow(player, computed, hasStats, options) {
 
     const cells = [checkCell, nameCell];
     if (hasStats) {
-        computed.values.forEach(val => cells.push({ value: val }));
+        statsColumns.forEach(col => cells.push({ value: col.value(ps) }));
     }
 
     const row = buildRosterRow(cells);
@@ -571,9 +606,10 @@ function backFromEventRoster() {
 }
 
 /**
- * Export event roster stats to an .xlsx workbook with one sheet per phase
- * (plus an "All phases" sheet at the front when phases are configured).
- * Only checked team players are included; pickups always export.
+ * Export event roster stats to an .xlsx workbook: an "All games" sheet, then
+ * one per declared phase, then one per individual game ("v. <opponent>").
+ * Only checked team players are included; pickups always export. Columns
+ * follow whatever the Stats menu is set to at export time.
  */
 async function exportEventRosterXLSX() {
     const event = currentEventRosterEvent;
@@ -588,26 +624,30 @@ async function exportEventRosterXLSX() {
         const attendingTeamPlayers = roster.filter(p => eventRosterPlayerIds.has(p.id));
         const players = [...attendingTeamPlayers, ...eventRosterPickups];
 
-        // Build the sheet list: "All phases" first, then one per phase.
-        // (If no phases configured, just one "All" sheet.)
-        const phases = event.phases || [];
-        const sheetSpecs = [{ label: 'All phases', phase: null }];
-        phases.forEach(p => sheetSpecs.push({ label: p, phase: p }));
+        // Reuse the games the screen already loaded when they're for this event.
+        const allGames = (cachedEventGames && cachedEventGames.eventId === event.id)
+            ? cachedEventGames.games
+            : await loadEventGames(event);
 
+        // Sheets: "All games" first, then one per phase, then one per game.
+        const sheetSpecs = [{ label: 'All games', filter: {} }];
+        (event.phases || []).forEach(p => sheetSpecs.push({ label: p, filter: { phase: p }, skipIfEmpty: true }));
+        allGames.forEach(g => sheetSpecs.push({ label: formatGameLabel(g), filter: { gameId: g.id } }));
+
+        const level = getStatsLevel();
+        const usedSheetNames = new Set();
         const wb = XLSX.utils.book_new();
         for (const spec of sheetSpecs) {
-            const opts = spec.phase ? { phase: spec.phase } : {};
-            const [playerStats, teamStats] = await Promise.all([
-                getEventPlayerStats(event, opts),
-                typeof getEventTeamStats === 'function' ? getEventTeamStats(event, opts) : null
-            ]);
+            const games = filterGames(allGames, spec.filter);
+            const teamStats = getGamesTeamStats(games);
             // Skip empty phase sheets (no points played in that phase)
-            if (spec.phase && (!teamStats || teamStats.total === 0)) continue;
+            if (spec.skipIfEmpty && teamStats.total === 0) continue;
 
+            const playerStats = getGamesPlayerStats(games);
             const title = `${event.name} — ${spec.label}`;
-            const aoa = buildStatsSheetAoA(players, playerStats, teamStats, { titleRow: title });
+            const aoa = buildStatsSheetAoA(players, playerStats, teamStats, { titleRow: title, level });
             const ws = aoaToFormattedSheet(aoa);
-            XLSX.utils.book_append_sheet(wb, ws, safeSheetName(spec.label));
+            XLSX.utils.book_append_sheet(wb, ws, uniqueSheetName(spec.label, usedSheetNames));
         }
 
         downloadWorkbook(wb, `${safeFilename(event.name)}-stats.xlsx`);
