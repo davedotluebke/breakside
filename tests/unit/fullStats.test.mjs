@@ -4,10 +4,12 @@
  * good/okay/poor/brick pull-quality breakdown — plus the sumPlayerStats
  * aggregation the Team rows are built from.
  *
- * The fault-attribution contract under test:
+ * The fault-attribution contract under test — every turnover is charged to
+ * exactly ONE player:
  *  - a throwaway (or stall) charges the thrower one turnover AND one throwaway
- *  - a drop charges the thrower a turnover but NOT a throwaway, and charges
- *    the receiver a turnover AND a drop (so throwaways + drops < turnovers)
+ *  - a drop means the throw was good, so it charges the RECEIVER a turnover
+ *    and a drop, and charges the thrower nothing (per-player, throwaways +
+ *    drops == turnovers)
  *  - pulls count for the puller; quality comes from `quality`, with Field
  *    mode's bare `brick_flag` counted as a Brick
  *
@@ -70,23 +72,39 @@ test('a stall counts as a throwaway (thrower-charged, not a drop)', () => {
     assert.equal(s[ALICE.id].drops, 0);
 });
 
-test('a drop charges the receiver, and the thrower a turnover but no throwaway', () => {
+test('a drop charges the receiver alone — the thrower gets no turnover', () => {
     const s = statsFor([{ type: 'Turnover', thrower: ALICE, receiver: BOB, drop_flag: true }]);
-    assert.equal(s[ALICE.id].turnovers, 1);
-    assert.equal(s[ALICE.id].throwaways, 0, 'a dropped pass is not the thrower\'s throwaway');
+    assert.equal(s[ALICE.id].turnovers, 0, 'the throw was good; the drop is not the thrower\'s turnover');
+    assert.equal(s[ALICE.id].throwaways, 0);
     assert.equal(s[BOB.id].turnovers, 1);
     assert.equal(s[BOB.id].drops, 1);
 });
 
-test('throwaways + drops can be less than turnovers for the same player', () => {
-    // Alice throws one away, then has a later pass dropped by Bob.
+test('every turnover is charged to exactly one player', () => {
+    // Alice throws one away, then has a later (good) pass dropped by Bob.
     const s = statsFor([
         { type: 'Turnover', thrower: ALICE, throwaway_flag: true },
         { type: 'Turnover', thrower: ALICE, receiver: BOB, drop_flag: true }
     ]);
-    const a = s[ALICE.id];
-    assert.equal(a.turnovers, 2);
-    assert.equal(a.throwaways + a.drops, 1);
+    assert.equal(s[ALICE.id].turnovers, 1);
+    assert.equal(s[BOB.id].turnovers, 1);
+    // Two turnover events → two charged turnovers total, not three.
+    const totalTOs = Object.values(s).reduce((n, ps) => n + ps.turnovers, 0);
+    assert.equal(totalTOs, 2);
+});
+
+test('per player, throwaways + drops always equals turnovers', () => {
+    const s = statsFor([
+        { type: 'Turnover', thrower: ALICE, throwaway_flag: true },
+        { type: 'Turnover', thrower: ALICE, stall_flag: true },
+        { type: 'Turnover', thrower: ALICE, receiver: BOB, drop_flag: true },
+        { type: 'Turnover', thrower: BOB, receiver: ALICE, drop_flag: true }
+    ]);
+    Object.values(s).forEach(ps => {
+        assert.equal(ps.throwaways + ps.drops, ps.turnovers);
+    });
+    assert.equal(s[ALICE.id].turnovers, 3);  // 2 throwaway-side + 1 drop
+    assert.equal(s[BOB.id].turnovers, 1);    // 1 drop, nothing for the good throw
 });
 
 // ── pulls ───────────────────────────────────────────────────────────────

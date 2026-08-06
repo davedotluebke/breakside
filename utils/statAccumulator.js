@@ -127,15 +127,20 @@ function accumulateGameStats(game, stats) {
                         }
                     }
                 } else if (event.type === 'Turnover') {
+                    // Fault attribution: exactly one player is charged the
+                    // turnover. A drop means the throw was good and the
+                    // receiver didn't catch it, so it goes on the receiver
+                    // alone — the thrower is charged nothing. Everything else
+                    // (throwaways, stalls) is the thrower's.
                     const thrower = resolveRef(event.thrower);
                     if (thrower.name) {
                         const s = ensurePlayer(thrower.id, thrower.name);
-                        s.turnovers++;
                         s.totalThrows++;
                         if (event.huck_flag) s.totalHucks++;
-                        // Throwaway = the thrower's fault (includes stalls);
-                        // a drop is the receiver's, so it isn't counted here.
-                        if (!event.drop_flag) s.throwaways++;
+                        if (!event.drop_flag) {
+                            s.turnovers++;
+                            s.throwaways++;
+                        }
                     }
                     if (event.drop_flag) {
                         const receiver = resolveRef(event.receiver);
