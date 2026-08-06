@@ -10,6 +10,9 @@ on:
       - 'scripts/**'
       - '*.md'
       - '*.py'
+  # Manual trigger: lets you deploy without inventing a commit — e.g. after
+  # (re)adding the AWS secrets, or to re-push the current main to S3.
+  workflow_dispatch:
 
 permissions:
   contents: read
