@@ -79,6 +79,11 @@ const advancedSettings = (function() {
         'narration.autoGainControl': false,
         // --- Sync ---
         'sync.refreshIntervalSec': 10,                   // cloud auto-refresh cadence (applies after reload)
+        // --- Battery ---
+        // Hold a screen wake lock during a game so the display doesn't sleep.
+        // On by default: it's what lets a coach dim the screen right down,
+        // which is the single biggest battery saving available.
+        'power.keepScreenAwake': true,
         // --- Display ---
         'display.showPlayerNumbers': true,               // jersey numbers alongside names everywhere
         // --- Field ---
@@ -325,6 +330,17 @@ const advancedSettings = (function() {
             ]
         },
         {
+            group: 'Battery',
+            note: 'Phones don’t always survive a full tournament day. These help.',
+            fields: [
+                {
+                    key: 'power.keepScreenAwake', label: 'Keep screen awake in a game',
+                    help: 'Stops the display sleeping while you’re on the game screen, so you can turn your brightness right down — which saves far more power than the wake lock costs. Tap the ☀ in the game header to release it when you pocket the phone.',
+                    type: 'toggle'
+                }
+            ]
+        },
+        {
             group: 'Display',
             fields: [
                 {
@@ -529,6 +545,11 @@ const advancedSettings = (function() {
                 // and for us to re-test new ones. See ui/hints.js.
                 if (key === 'hints.hideAll' && window.hints && typeof window.hints.resetAll === 'function') {
                     window.hints.resetAll();
+                }
+                // The wake lock is the one setting that acts immediately —
+                // the coach may well be mid-game with the modal open.
+                if (key === 'power.keepScreenAwake') {
+                    window.wakeLockManager?.reconcile?.();
                 }
                 // A toggle flip may unhide a gated row (e.g. flipping the
                 // vocabulary hint on reveals the prompt textarea).

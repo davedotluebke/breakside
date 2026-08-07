@@ -133,6 +133,11 @@ function createHeaderContent() {
                 <i class="fas fa-pause"></i>
             </button>
         </div>
+
+        <button class="header-wake-lock-btn" id="gameWakeLockBtn" hidden
+                title="Screen is being kept awake — tap to release">
+            <i class="fas fa-sun"></i>
+        </button>
     `;
     
     return content;
@@ -615,9 +620,48 @@ function initGameScreen() {
     
     // Wire up event handlers
     wireGameScreenEvents();
-    
+    wireWakeLockIndicator();
+
     gameScreenInitialized = true;
     log('🎮 Game screen initialized');
+}
+
+/**
+ * Wake-lock indicator in the game header.
+ *
+ * Visible only while the lock is actually held or the coach has released it —
+ * so on a browser without the API (or with the setting off) it never appears
+ * and costs nothing. Tapping toggles: the released state is sticky for the
+ * rest of the game so pocketing the phone isn't undone by an app switch.
+ */
+function wireWakeLockIndicator() {
+    const btn = document.getElementById('gameWakeLockBtn');
+    if (!btn) return;
+
+    function render() {
+        const wl = window.wakeLockManager;
+        if (!wl || !wl.isSupported() || !wl.isEnabled()) {
+            btn.hidden = true;
+            return;
+        }
+        const held = wl.isHeld();
+        const released = wl.isUserReleased();
+        // Nothing to say when we're not in a game and the coach hasn't
+        // explicitly opted out.
+        btn.hidden = !held && !released;
+        btn.classList.toggle('wake-lock-off', !held);
+        btn.title = held
+            ? 'Screen is being kept awake — tap to release'
+            : 'Screen may sleep — tap to keep it awake';
+    }
+
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.wakeLockManager?.toggleByUser?.();
+    });
+    document.addEventListener('breakside:wake-lock-changed', render);
+    document.addEventListener('breakside:power-plan', render);
+    render();
 }
 
 /**

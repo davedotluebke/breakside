@@ -624,6 +624,36 @@ body.game-screen-active header {
     background: rgba(40, 167, 69, 0.8);
 }
 
+/* Wake-lock indicator. Sits beside the timer; `margin: 0` because the global
+   `button { margin: 10px }` rule would otherwise push it out of the header
+   (see ARCHITECTURE.md § CSS Styling Gotchas). */
+.header-wake-lock-btn {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    margin: 0 0 0 6px;
+    flex: 0 0 auto;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.05);
+    color: #E08600;
+    font-size: 0.8rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.header-wake-lock-btn[hidden] {
+    display: none;
+}
+
+/* Released by the coach: same affordance, visibly inert. */
+.header-wake-lock-btn.wake-lock-off {
+    color: #9e9e9e;
+    opacity: 0.65;
+}
+
 /* Timer state colors (tuned for the white header) */
 .header-timer-value.timer-warning {
     color: #E08600;

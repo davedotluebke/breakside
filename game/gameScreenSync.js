@@ -20,6 +20,7 @@ import {
     resetMultiCoachDetected,
 } from '../ui/panelSystem.js';
 import { startActiveGamePolling, stopActiveGamePolling } from '../teams/activeGamePolling.js';
+import { powerManager } from '../utils/powerManager.js';
 import { showSelectTeamScreen } from '../teams/teamList.js';
 import {
     getControllerState, getCurrentUserId, startControllerPolling,
@@ -265,6 +266,10 @@ function updateGameScreenRoleButtons(state) {
  * Called when starting a point or entering a game
  */
 function enterGameScreen() {
+    // Tell the power manager we're in a game: this gates the in-game polling
+    // loops and is what makes the screen wake lock acquire.
+    powerManager.setGameActive(true);
+
     // Reset stats mode (module-scoped state owned by game/selectLine.js —
     // written via its exported setters)
     setPanelStatsMode('game');
@@ -391,6 +396,11 @@ function enterGameScreen() {
     // Set up ResizeObserver for Play-by-Play panel layout
     setupPlayByPlayResizeObserver();
 
+    // The mic button's visibility used to be discovered by a 2×/sec poll;
+    // enter/exit now tell it directly. Called here, after showGameScreen(),
+    // because it reads the game screen's DOM class.
+    window.narrationMicButton?.refreshVisibility?.();
+
     log('🎮 Entered game screen');
 }
 
@@ -402,6 +412,12 @@ function exitGameScreen() {
     hideGameScreen();
     stopGameScreenTimerLoop();
     stopGameStateRefresh();
+
+    // Releases the wake lock and stops the in-game loops.
+    powerManager.setGameActive(false);
+    // The mic button's visibility used to be discovered by a 2×/sec poll;
+    // enter/exit now tell it directly.
+    window.narrationMicButton?.refreshVisibility?.();
 
     // Clear event context when leaving game (state owned by store/storage.js
     // and game/selectLine.js — written via their exported setters)
