@@ -23,12 +23,13 @@
 import { Throw, Turnover, Defense, Pull, Gender, Role } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
 import { authFetch, API_BASE_URL } from '../store/sync.js';
-import { buildPointPlayerLookup, currentGame, getPlayerFromName } from '../utils/helpers.js';
+import { buildPointPlayerLookup, currentGame, getLatestPoint, getPlayerFromName, pointHasPull } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { showControllerToast } from '../game/controllerState.js';
 import { updateScore } from '../game/gameLogic.js';
 import { moveToNextPoint } from '../game/pointManagement.js';
 import { ensurePossessionExists } from '../playByPlay/keyPlayDialog.js';
+import { closePullDialog } from '../playByPlay/pullDialog.js';
 import { advancedSettings } from '../settings/advancedSettings.js';
 import { narrationEventBus } from './eventBus.js';
 import { narrationRealtimeSession, mergeCompletedUtterance } from './realtimeSession.js';
@@ -325,27 +326,16 @@ Just listen. Transcription happens automatically.`;
     // by brick_flag instead.
     const PULL_QUALITIES = ['Good Pull', 'Okay Pull', 'Poor Pull'];
 
-    /** True when the current point already carries a Pull event. */
-    function pointHasPull() {
-        if (typeof currentGame !== 'function') return false;
-        const game = currentGame();
-        if (!game || !game.points || !game.points.length) return false;
-        const pt = game.points[game.points.length - 1];
-        if (!pt || !pt.possessions) return false;
-        return pt.possessions.some(poss =>
-            (poss.events || []).some(e => e && e.type === 'Pull')
-        );
-    }
-
     /**
      * Record the pull that opened this point. Guarded against duplication:
      * showPullDialog() fires automatically whenever a point starts on defense
      * (game/pointManagement.js), so a coach who taps the pull in AND narrates
-     * it would otherwise get two Pull events for the one act. First one wins.
+     * it would otherwise get two Pull events for the one act. First one wins —
+     * pullDialog's createPullEvent carries the mirror-image guard.
      */
     function applyPull(args, onField) {
         if (typeof ensurePossessionExists !== 'function') return null;
-        if (pointHasPull()) {
+        if (pointHasPull(getLatestPoint())) {
             console.warn('[narrationEngine] Point already has a pull; ignoring narrated one:', args);
             return null;
         }
@@ -381,6 +371,14 @@ Just listen. Transcription happens automatically.`;
         provisionalEvents.push({ id: provId, event: evt, possession });
         if (typeof logEvent === 'function') logEvent(evt.summarize());
         publishAdded(evt, provId);
+
+        // The pull dialog is almost certainly still open — it opens itself at
+        // point start and nothing has dismissed it. The coach just supplied
+        // the pull by voice, so leaving the form up would ask them to enter
+        // an event that is already in the log. Closing is a no-op when the
+        // dialog isn't showing.
+        if (typeof closePullDialog === 'function') closePullDialog();
+
         return evt;
     }
 

@@ -569,13 +569,19 @@ OpenAI re-applies to every VAD-segmented utterance (~2.3 per line call), plus tr
 - [x] **Add `record_pull` to the slow-pass schema** *(done 2026-08-06, branch
       `narration-record-pull`) — `kind: "pull"` in the schema
       (`puller`, `flick`, `roller`, `io`, `oi`, `brick`, `quality`) plus
-      `applyPull` in `narration/narrationEngine.js`. Two guards make it safe
+      `applyPull` in `narration/narrationEngine.js`. Three guards make it safe
       to narrate a pull the dialog already collected: **a named puller is
       required** (a bare `{"kind":"pull"}` is dropped client-side and the
-      prompt shows it as a WRONG example), and **a point that already has a
-      Pull rejects a second one**, so tapping it in *and* narrating it yields
-      one event. Rationale: `showPullDialog()` fires automatically at every
-      D-point start, so an unattributed narrated pull is pure duplicate.
+      prompt shows it as a WRONG example); **one Pull per point, checked from
+      both sides** via `pointHasPull()` in `utils/helpers.js` — narration skips
+      if the dialog got there first AND the dialog skips (with a toast) if
+      narration did, since the slow pass lands seconds after the coach stops
+      talking and either order is reachable; and **a narrated pull closes the
+      pull dialog**, so the coach isn't left filling in a form for an event
+      already in the log. Rationale: `showPullDialog()` fires automatically at
+      every D-point start, so an unattributed narrated pull is pure duplicate.
+      End-to-end this makes the flow hands-free: Start Point → dialog opens →
+      tap mic, speak, stop → event lands, dialog closes itself.
       Hardening the puller rule was driven by live probing — Haiku emitted a
       pullerless pull for "we pulled it" and "they pull" until the rule got
       an explicit REQUIRED gate; after it, 7/7 probe cases twice consecutively
@@ -586,7 +592,16 @@ OpenAI re-applies to every VAD-segmented utterance (~2.3 per line call), plus tr
       `ultistats_server/test_narration_finalize.py` (11 tests) pins the prompt
       rules and gives `score_events`/`_event_signature` their first coverage
       in the default run — the live corpus module is entirely
-      `NARRATION_LIVE_TESTS`-gated, so they had none.*
+      `NARRATION_LIVE_TESTS`-gated, so they had none;
+      `tests/unit/pointHasPull.test.mjs` (9 tests) pins the duplicate guard.
+      Suites: backend 346, unit 157, e2e 21/21.*
+  - [ ] **Still needs a human: the mic leg.** Everything up to the microphone
+        is verified, but nobody has confirmed on a real device that the mic
+        button actually takes the tap while the pull dialog is up (it should —
+        `z-index` 2000 over the modal's 1000, and `startRecording` has no
+        dialog gate — but that's read off the CSS, not observed), nor timed
+        how long the dialog lingers while the slow pass runs. Worth folding
+        into the next staging field test.
 - [ ] **Re-evaluate streaming events (fast pass)**
   - Currently disabled via `FAST_PASS_EVENTS_ENABLED = false` in `narrationEngine.js`
   - All code is preserved — flip the flag to re-enable
