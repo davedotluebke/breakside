@@ -121,3 +121,26 @@ th, td {
     font-size: 0.9em;
     color: var(--text-muted);
 }
+
+/* =============================================================================
+   Reduced motion
+   =============================================================================
+   Honors the OS setting, and doubles as the battery-saving motion switch that
+   TODO.md § Backlog asks for. Looping animations are the ones that matter for
+   power: a one-shot transition is cheap, but anything running `infinite` keeps
+   the compositor from idling for as long as the element is on screen. This
+   neutralizes both, since a user who has asked for less motion wants the
+   one-shots gone too.
+
+   `!important` because the rules it overrides are spread across a dozen
+   stylesheets, several of which load after this one. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

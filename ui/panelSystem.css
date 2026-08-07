@@ -659,14 +659,20 @@ body.game-screen-active header {
     color: #E08600;
 }
 
+/* Finite pulse counts, not `infinite`. These states are entered once a point
+   runs long or a game passes its cap and then persist for the rest of the
+   game — an infinite animation there keeps the compositor awake for as long
+   as the state lasts, which can be an hour. The colour is what carries the
+   meaning; the pulse is an attention-getter, and an attention-getter that
+   never stops has stopped getting attention anyway. */
 .header-timer-value.timer-danger {
     color: #e53935;
-    animation: timerPulse 1s infinite;
+    animation: timerPulse 1s 6;
 }
 
 .header-timer-value.timer-negative {
     color: #d32f2f;
-    animation: timerPulse 0.5s infinite;
+    animation: timerPulse 0.5s 8;
 }
 
 .header-timer-value.timer-paused {

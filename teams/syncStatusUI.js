@@ -238,12 +238,50 @@ async function showConnectionInfo() {
           `<button onclick="showPendingSyncDialog()" class="update-now-btn">View / Clear…</button>`
         : '';
 
+    // Battery report — what this session actually did. Lives here rather than
+    // in its own screen because this overlay is already the "what's going on
+    // under the hood" surface, and it's reachable mid-game.
+    const powerLine = window.powerLog
+        ? '<br><button onclick="showPowerReport()" class="update-now-btn">Battery report…</button>'
+        : '';
+
     const message = `${isOnline ? 'Online' : 'Offline'}<br>` +
-        `<span style="font-size:0.9em;">${versionLine}<br>User: ${userEmail}<br>Server: ${serverUrl}${pendingLine}${updateButton}</span>`;
+        `<span style="font-size:0.9em;">${versionLine}<br>User: ${userEmail}<br>Server: ${serverUrl}${pendingLine}${powerLine}${updateButton}</span>`;
 
     if (typeof showControllerToast === 'function') {
         // Longer duration if update is available or pending items need action
         showControllerToast(message, 'info', (updateButton || pendingLine) ? 8000 : 4000);
+    }
+}
+
+/**
+ * Show the power/battery report for this session as a copyable toast.
+ *
+ * The copy button matters more than the display: the useful version of this
+ * data is pasted into a field report next to "phone died at 2pm", not squinted
+ * at on a sideline.
+ */
+function showPowerReport() {
+    const report = window.powerLog?.formatReport?.();
+    if (!report) return;
+
+    const body = escapeHtml(report).replace(/\n/g, '<br>');
+    const message = `<b>Battery report</b><br>` +
+        `<span style="font-size:0.85em;font-family:monospace;">${body}</span><br>` +
+        `<button onclick="copyPowerReport()" class="update-now-btn">Copy</button>`;
+
+    if (typeof showControllerToast === 'function') {
+        showControllerToast(message, 'info', 30000);
+    }
+}
+
+/** Copy the power report to the clipboard for pasting into a field report. */
+function copyPowerReport() {
+    const report = window.powerLog?.formatReport?.();
+    if (!report) return;
+    const done = () => showControllerToast?.('Battery report copied', 'success', 2000);
+    if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(report).then(done).catch(() => {});
     }
 }
 
@@ -376,3 +414,7 @@ window.handleSignOut = handleSignOut;
 window.showPendingSyncDialog = showPendingSyncDialog;
 // window survivor: referenced by generated-HTML onclick
 window.confirmAppUpdate = confirmAppUpdate;
+// window survivor: referenced by generated-HTML onclick
+window.showPowerReport = showPowerReport;
+// window survivor: referenced by generated-HTML onclick
+window.copyPowerReport = copyPowerReport;

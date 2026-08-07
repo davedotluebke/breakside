@@ -285,6 +285,7 @@ function startGameScreenTimerLoop() {
     if (timerUpdateInterval) return;
     
     timerUpdateInterval = setInterval(() => {
+        window.powerLog?.countWakeup?.('gameTimer');
         if (isGameScreenVisible()) {
             updateTimerDisplay();
             // Also update player time cells in Select Line panel

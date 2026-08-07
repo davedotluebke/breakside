@@ -72,6 +72,7 @@ import './store/sync.js';
 import './settings/advancedSettings.js';
 import './utils/powerPolicy.js';
 import './utils/powerManager.js';
+import './utils/powerLog.js';
 import './utils/wakeLockManager.js';
 import './utils/statAccumulator.js';
 import './utils/eventStats.js';

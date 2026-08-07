@@ -476,6 +476,7 @@ function installPingInterval() {
     const hasRole = controllerState.isActiveCoach || controllerState.isLineCoach;
     const interval = hasRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
     controllerPollIntervalId = setInterval(() => {
+        window.powerLog?.countWakeup?.('controllerPing');
         if (currentGameIdForPolling) {
             window.pingController(currentGameIdForPolling); // via window: e2e test seam (tests replace window.pingController)
         }

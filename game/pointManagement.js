@@ -23,6 +23,11 @@ let isPaused = false;
 function moveToNextPoint() {
     log('moveToNextPoint() called');
 
+    // Point boundaries are the natural sampling interval for battery drain:
+    // frequent enough to see a trend over a game, rare enough to be free.
+    // No-ops on iOS/Safari, which has no Battery Status API.
+    window.powerLog?.sampleBattery?.('point-end');
+
     logEvent("New point started");
 
     // Enter panel UI in between-points state
@@ -310,7 +315,10 @@ let pointTimerInterval = null;
 function startPointTimerLoop() {
     if (pointTimerInterval) return;
     updatePointTimer();
-    pointTimerInterval = setInterval(updatePointTimer, 1000);
+    pointTimerInterval = setInterval(() => {
+        window.powerLog?.countWakeup?.('pointTimer');
+        updatePointTimer();
+    }, 1000);
 }
 
 function stopPointTimerLoop() {

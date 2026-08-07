@@ -1563,6 +1563,7 @@ function startRosterPolling() {
     }
     
     rosterPollIntervalId = setInterval(async () => {
+        window.powerLog?.countWakeup?.('rosterPoll');
         // Only poll if we're on the roster screen
         const rosterScreen = document.getElementById('teamRosterScreen');
         if (!rosterScreen || rosterScreen.style.display === 'none') {

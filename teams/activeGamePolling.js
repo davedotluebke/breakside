@@ -23,7 +23,10 @@ function startActiveGamePolling() {
     if (!navigator.onLine) return;
 
     checkForActiveGames(); // immediate first check
-    _activeGamePollInterval = setInterval(checkForActiveGames, 30000);
+    _activeGamePollInterval = setInterval(() => {
+        window.powerLog?.countWakeup?.('activeGamePoll');
+        checkForActiveGames();
+    }, 30000);
     log('📡 Active-game polling started');
 }
 
@@ -95,6 +98,7 @@ let _autoRefreshInterval = null;
 function startAutoRefresh() {
     stopAutoRefresh();
     _autoRefreshInterval = setInterval(() => {
+        window.powerLog?.countWakeup?.('teamAutoRefresh');
         // Only auto-refresh when the select team screen is visible
         const syncContainer = document.getElementById('syncStatusContainer');
         const selectScreen = document.getElementById('selectTeamScreen');

@@ -413,8 +413,9 @@ function exitGameScreen() {
     stopGameScreenTimerLoop();
     stopGameStateRefresh();
 
-    // Releases the wake lock and stops the in-game loops.
+    // Closes out the wake lock and stops the in-game loops.
     powerManager.setGameActive(false);
+    window.powerLog?.sampleBattery?.('game-exit');
     // The mic button's visibility used to be discovered by a 2×/sec poll;
     // enter/exit now tell it directly.
     window.narrationMicButton?.refreshVisibility?.();
@@ -463,6 +464,7 @@ function startGameStateRefresh() {
     
     // Refresh every 3 seconds
     gameStateRefreshIntervalId = setInterval(async () => {
+        window.powerLog?.countWakeup?.('gameStateRefresh');
         // Stop if no longer visible
         if (!isGameScreenVisible()) {
             stopGameStateRefresh();

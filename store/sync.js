@@ -117,6 +117,23 @@ const authFetchCore = makeAuthFetch({
 });
 
 /**
+ * Bucket a request URL for the power log. Coarse on purpose — per-endpoint
+ * counts make the report unreadable, and the question it answers is "which
+ * subsystem is doing the chattering", not "which route".
+ * @param {string} url
+ * @returns {string}
+ */
+function classifyRequest(url) {
+    const path = String(url || '');
+    if (path.includes('/controller')) return 'controller';
+    if (path.includes('/games')) return 'games';
+    if (path.includes('/teams')) return 'teams';
+    if (path.includes('/players') || path.includes('/memberships')) return 'roster';
+    if (path.includes('/narration')) return 'narration';
+    return 'other';
+}
+
+/**
  * Make an authenticated fetch request if auth is available.
  * Falls back to regular fetch if not authenticated.
  * On a 401 with a bearer attached, forces one session refresh and retries the
@@ -127,6 +144,10 @@ const authFetchCore = makeAuthFetch({
  * @returns {Promise<Response>}
  */
 async function authFetch(url, options = {}) {
+    // Single chokepoint for authenticated API traffic, so it's the honest
+    // place to count requests for the power log.
+    window.powerLog?.countRequest?.(classifyRequest(url));
+
     const response = await authFetchCore(url, options);
 
     // Self-heal a stale offline flag. isOnline can be set false by a single
@@ -1647,6 +1668,7 @@ function startAutoSync() {
     lastSyncCheck.playerCount = teams.reduce((sum, t) => sum + (t.teamRoster?.length || 0), 0);
     
     autoSyncIntervalId = setInterval(async () => {
+        window.powerLog?.countWakeup?.('autoSync');
         // Only check if we're online and authenticated
         if (!isOnline || !window.breakside?.auth?.isAuthenticated?.()) {
             return;

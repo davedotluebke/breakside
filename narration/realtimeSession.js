@@ -609,9 +609,14 @@ const narrationRealtimeSession = (function() {
         sourceNode.connect(processorNode);
         // ScriptProcessorNode must be connected somewhere to fire onaudioprocess.
         processorNode.connect(audioContext.destination);
+
+        // Mic-open seconds are the third battery term after screen and
+        // polling; the power log tracks them so we can size that claim.
+        window.powerLog?.micOpened?.();
     }
 
     function stopAudioCapture() {
+        window.powerLog?.micClosed?.();
         try { if (processorNode) processorNode.disconnect(); } catch (_) {}
         try { if (sourceNode) sourceNode.disconnect(); } catch (_) {}
         try { if (audioContext) audioContext.close(); } catch (_) {}
