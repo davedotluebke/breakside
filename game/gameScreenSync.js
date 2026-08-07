@@ -604,6 +604,18 @@ function stopGameStateRefresh() {
     }
 }
 
+// Power plan: this is a 3s network poll, so it's one of the two loops that
+// matter most while the phone is pocketed. Both calls are idempotent.
+//
+// On resume this races with controllerState.js's wake-recovery handler, which
+// deliberately stops the refresh, re-fetches game state, and restarts it. That
+// ordering is fine — recovery's restart is the authoritative one; starting here
+// covers the paths where recovery early-returns (e.g. no controller session).
+document.addEventListener('breakside:power-plan', (e) => {
+    if (e.detail?.plan?.gameStateRefresh) startGameStateRefresh();
+    else stopGameStateRefresh();
+});
+
 /**
  * Update all game screen UI elements after a game state refresh
  */

@@ -1625,6 +1625,28 @@ function stopRosterPolling() {
     }
 }
 
+// Power plan: the loop already stops itself once the roster screen is hidden,
+// but that never fired for a coach who left the roster up and pocketed the
+// phone — it kept making a network call every 10s. Resume restores only what
+// the power manager suspended, so a poll that had legitimately stopped itself
+// (navigated away) stays stopped.
+let rosterPollSuspendedByPower = false;
+
+document.addEventListener('breakside:power-plan', (e) => {
+    const plan = e.detail?.plan;
+    if (!plan) return;
+
+    if (plan.rosterPoll) {
+        if (rosterPollSuspendedByPower) {
+            rosterPollSuspendedByPower = false;
+            startRosterPolling();
+        }
+    } else if (rosterPollIntervalId) {
+        rosterPollSuspendedByPower = true;
+        stopRosterPolling();
+    }
+});
+
 // Start polling when roster screen becomes visible
 // React to navigation via the module-era hook (replaces the old
 // window.showScreen wrapper, which broke once navigation.js became a module).

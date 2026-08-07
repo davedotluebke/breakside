@@ -22,7 +22,6 @@ import { narrationEngine } from './narrationEngine.js';
 const narrationMicButton = (function() {
     const BTN_ID = 'narrationMicBtn';
     const LONG_PRESS_MS = 400;
-    const VISIBILITY_POLL_MS = 500;
 
     // State
     let btn = null;
@@ -257,8 +256,12 @@ const narrationMicButton = (function() {
         refreshVisibility();
         refreshButtonState();
 
-        // Poll visibility since enterGameScreen/exitGameScreen don't emit events.
-        setInterval(refreshVisibility, VISIBILITY_POLL_MS);
+        // Visibility used to be discovered by polling isGameScreenVisible()
+        // twice a second, forever, because "enterGameScreen/exitGameScreen
+        // don't emit events". They do now: both call refreshVisibility()
+        // directly (game/gameScreenSync.js), and this listener catches every
+        // other navigation path.
+        document.addEventListener('breakside:screen-shown', refreshVisibility);
     }
 
     if (document.readyState === 'loading') {

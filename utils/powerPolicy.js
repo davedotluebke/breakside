@@ -36,7 +36,9 @@ export const LOOPS = Object.freeze({
     /** store/sync.js — background team/player sync (network) */
     AUTO_SYNC: 'autoSync',
     /** teams/activeGamePolling.js — "another coach started a game" (network) */
-    ACTIVE_GAME_POLL: 'activeGamePoll'
+    ACTIVE_GAME_POLL: 'activeGamePoll',
+    /** teams/rosterManagement.js — roster cross-device sync (network) */
+    ROSTER_POLL: 'rosterPoll'
 });
 
 const ALL_LOOPS = Object.freeze(Object.values(LOOPS));
@@ -72,6 +74,10 @@ export function loopPlan(ctx) {
         // the existing behavior and adds the visibility gate.
         [LOOPS.TEAM_AUTO_REFRESH]: visible && !inGame,
         [LOOPS.ACTIVE_GAME_POLL]: visible && !inGame,
+
+        // Self-stops when the roster screen is hidden, but nothing stopped it
+        // for a coach who left that screen up and pocketed the phone.
+        [LOOPS.ROSTER_POLL]: visible && !inGame,
 
         // Auto-sync is deliberately NOT gated on `inGame`: it already skips
         // its own body while a game is live, and that in-callback guard also

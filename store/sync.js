@@ -1712,6 +1712,35 @@ function stopAutoSync() {
     }
 }
 
+// Power plan: pause background sync while the page is hidden. Deliberately NOT
+// gated on being in a game — the loop already skips its own body while a game
+// is live, and that in-callback guard is what correctly keeps syncing in the
+// window after a game ends but before the coach leaves the game screen.
+//
+// Resume restores only what the power manager itself suspended. Sign-out
+// (auth/auth.js) also calls stopAutoSync(), and a plain "plan says true ->
+// start" would quietly resurrect the loop for a signed-out user on their next
+// app switch.
+//
+// A DOM event rather than an import: this file is the data layer and cannot
+// import upward into utils/ (ARCHITECTURE.md § Module Loading).
+let autoSyncSuspendedByPower = false;
+
+document.addEventListener('breakside:power-plan', (e) => {
+    const plan = e.detail?.plan;
+    if (!plan) return;
+
+    if (plan.autoSync) {
+        if (autoSyncSuspendedByPower) {
+            autoSyncSuspendedByPower = false;
+            startAutoSync();
+        }
+    } else if (autoSyncIntervalId) {
+        autoSyncSuspendedByPower = true;
+        stopAutoSync();
+    }
+});
+
 // =============================================================================
 // Full Sync Functions
 // =============================================================================

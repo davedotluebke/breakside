@@ -88,6 +88,12 @@ const narrationEngine = (function() {
         if (window.narrationMicButton && window.narrationMicButton.refresh) {
             window.narrationMicButton.refresh();
         }
+        // Same window-lookup reasoning as micButton above. The transcript
+        // panel used to discover phase changes by polling 5×/sec; it is now
+        // told, so the poll could go away entirely.
+        if (window.narrationTranscriptDisplay && window.narrationTranscriptDisplay.refreshPhase) {
+            window.narrationTranscriptDisplay.refreshPhase();
+        }
     }
 
     function isRecording() { return recording; }

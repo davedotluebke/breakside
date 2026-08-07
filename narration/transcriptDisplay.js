@@ -19,8 +19,10 @@
  * since structured events now only appear after stop (transcription-only
  * fast pass).
  *
- * Exposes nothing — pure side-effect module (builds the panel, subscribes to
- * the bus, polls the engine phase). No exports, no window shims.
+ * Builds the panel and subscribes to the bus. Exposes a single late-bound
+ * hook, window.narrationTranscriptDisplay.refreshPhase(), which the engine
+ * calls on each phase transition — this replaced a 200ms phase poll that ran
+ * for the lifetime of the tab.
  */
 import { narrationEventBus } from './eventBus.js';
 import { narrationEngine } from './narrationEngine.js';
@@ -90,11 +92,14 @@ import { narrationEngine } from './narrationEngine.js';
     }
 
     /**
-     * Poll the engine's phase so we know when to show/hide the panel and
-     * when to update the label text. We don't currently have a bus channel
-     * for phase changes; polling is cheap.
+     * Sync the panel to the engine's phase: show/hide, and update the label.
+     *
+     * Called on every phase transition (narrationEngine.setPhase invokes
+     * window.narrationTranscriptDisplay.refreshPhase). This used to be a
+     * 200ms poll that ran for the entire lifetime of the tab — five wakeups a
+     * second, forever, whether or not narration had ever been used.
      */
-    function pollPhase() {
+    function refreshPhase() {
         if (!narrationEngine || !narrationEngine.getPhase) return;
         const phase = narrationEngine.getPhase();
         if (!labelEl) return;
@@ -131,8 +136,9 @@ import { narrationEngine } from './narrationEngine.js';
             });
         }
 
-        // Poll phase 5x/sec — cheap and avoids needing a phase channel.
-        setInterval(pollPhase, 200);
+        // Reflect whatever phase the engine is already in, in case a
+        // transition happened before this module finished initializing.
+        refreshPhase();
     }
 
     if (document.readyState === 'loading') {
@@ -140,4 +146,10 @@ import { narrationEngine } from './narrationEngine.js';
     } else {
         init();
     }
+
+    // window survivor: late-bound back-edge hook (called window-qualified by
+    // narration/narrationEngine.js setPhase — the same cycle that keeps
+    // window.narrationMicButton window-qualified applies here: an
+    // engine↔display import would invert their eval order)
+    window.narrationTranscriptDisplay = { refreshPhase };
 })();

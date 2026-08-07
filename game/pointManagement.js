@@ -300,7 +300,29 @@ function updatePointTimer() {
     }
 }
 
-setInterval(updatePointTimer, 1000);
+// This used to be a bare `setInterval(updatePointTimer, 1000)` at module
+// scope: it ran once a second for the entire lifetime of the tab, including on
+// the team-selection screen and while the phone was in a pocket, to redraw a
+// readout that only exists on the game screen. It is now driven by the power
+// plan — in a game, page visible.
+let pointTimerInterval = null;
+
+function startPointTimerLoop() {
+    if (pointTimerInterval) return;
+    updatePointTimer();
+    pointTimerInterval = setInterval(updatePointTimer, 1000);
+}
+
+function stopPointTimerLoop() {
+    if (!pointTimerInterval) return;
+    clearInterval(pointTimerInterval);
+    pointTimerInterval = null;
+}
+
+document.addEventListener('breakside:power-plan', (e) => {
+    if (e.detail?.plan?.pointTimer) startPointTimerLoop();
+    else stopPointTimerLoop();
+});
 
 // Setters for module-scoped mutable state — converted writers (game/gameLogic.js)
 // import these instead of assigning the bare globals.

@@ -303,6 +303,18 @@ function stopGameScreenTimerLoop() {
     }
 }
 
+// Power plan: a display-only 1s loop — there is nothing to redraw for a screen
+// nobody is looking at. Resume repaints immediately so the timer never shows a
+// stale value for up to a second after the coach comes back.
+document.addEventListener('breakside:power-plan', (e) => {
+    if (e.detail?.plan?.gameTimer) {
+        updateTimerDisplay();
+        startGameScreenTimerLoop();
+    } else {
+        stopGameScreenTimerLoop();
+    }
+});
+
 // Setter for module-scoped mutable state — the converted writer
 // (game/gameScreenSync.js) imports this instead of assigning the bare global.
 function setPointTimerPaused(v) { pointTimerPaused = v; }

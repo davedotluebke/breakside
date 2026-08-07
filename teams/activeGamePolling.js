@@ -114,6 +114,21 @@ function stopAutoRefresh() {
 // Start auto-refresh on load
 startAutoRefresh();
 
+// Power plan: both of these are network polls that only ever act on the team
+// screen, so there is nothing for them to do while the page is hidden or while
+// the coach is inside a game. startActiveGamePolling() keeps its own auth /
+// online guards; this only decides whether the timer exists at all.
+document.addEventListener('breakside:power-plan', (e) => {
+    const plan = e.detail?.plan;
+    if (!plan) return;
+
+    if (plan.teamAutoRefresh) startAutoRefresh();
+    else stopAutoRefresh();
+
+    if (plan.activeGamePoll) startActiveGamePolling();
+    else stopActiveGamePolling();
+});
+
 // --- ES-module exports ---
 export { startActiveGamePolling, stopActiveGamePolling };
 // window survivor: late-bound back-edge hook (called by screens/navigation.js,

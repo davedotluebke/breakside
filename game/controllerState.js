@@ -484,6 +484,33 @@ function installPingInterval() {
 }
 
 /**
+ * Suspend the ping interval WITHOUT tearing down the session.
+ *
+ * Distinct from stopControllerPolling(), which also clears
+ * `currentGameIdForPolling` and resets every role/toast flag — correct when
+ * leaving a game, catastrophic when the coach merely backgrounded the app for
+ * ten seconds. This pair is what the power manager drives.
+ */
+function suspendControllerPolling() {
+    if (!controllerPollIntervalId) return;
+    clearInterval(controllerPollIntervalId);
+    controllerPollIntervalId = null;
+    log('🎮 Controller polling suspended (page hidden)');
+}
+
+/**
+ * Resume pinging after a suspend. Fetches immediately so the coach doesn't
+ * stare at up-to-5-second-old role state, then reinstalls the interval at the
+ * cadence their current role calls for.
+ */
+function resumeControllerPolling() {
+    if (controllerPollIntervalId || !currentGameIdForPolling) return;
+    fetchControllerState(currentGameIdForPolling);
+    installPingInterval();
+    log('🎮 Controller polling resumed');
+}
+
+/**
  * Stop controller state polling
  */
 function stopControllerPolling() {
@@ -556,6 +583,16 @@ function getPollingGameId() {
  */
 // Maximum game age (in hours) before prompting the user on wake
 const STALE_GAME_HOURS = 6;
+
+// Power plan: stop pinging the server while the page is hidden. This is the
+// 2s-cadence network loop that kept a pocketed Line Coach's phone warm.
+// utils/powerManager.js dispatches this synchronously from its own
+// visibilitychange handler, which is registered first (main.js import order),
+// so polling is back up before the recovery handler below runs.
+document.addEventListener('breakside:power-plan', (e) => {
+    if (e.detail?.plan?.controllerPing) resumeControllerPolling();
+    else suspendControllerPolling();
+});
 
 document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState !== 'visible') return;
