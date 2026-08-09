@@ -180,3 +180,107 @@ test.describe('sleep/wake recovery', () => {
     expect(state.state.lineCoach.userId).toBe(COACH_A);
   });
 });
+
+/**
+ * Power management: polling stops while the page is hidden.
+ *
+ * This partially closes the COVERAGE GAP noted in this file's header. Rather
+ * than manipulating module-scoped state (which the earlier attempt found too
+ * brittle), these drive the app's real `visibilitychange` path — overriding
+ * document.visibilityState and dispatching the event, exactly as a phone
+ * does — and assert the OBSERVABLE effect: whether requests keep arriving.
+ *
+ * That's the property that matters for battery, and it's stable to assert:
+ * it doesn't care which module owns which interval.
+ */
+test.describe('power management', () => {
+  /** Override visibilityState and fire the event the way a real device does. */
+  async function setVisibility(page: Page, state: 'visible' | 'hidden') {
+    await page.evaluate((s) => {
+      const w = window as any;
+      if (!w.__visibilityOverridden) {
+        Object.defineProperty(document, 'visibilityState', {
+          configurable: true,
+          get: () => w.__fakeVisibility ?? 'visible',
+        });
+        w.__visibilityOverridden = true;
+      }
+      w.__fakeVisibility = s;
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, state);
+  }
+
+  test('hiding the page stops in-game polling; showing it resumes', async ({ page, request }) => {
+    await page.goto(`/?${TEST_PARAMS}&testUserId=${COACH_A}`);
+    await expect(page.locator('#selectTeamScreen')).toBeVisible({ timeout: 10_000 });
+    await setupTeamWithPlayers(page, 'Power Team');
+    await startGame(page, 'offense');
+
+    const gameId = await getGameId(page);
+    await waitForGameOnServer(request, gameId, COACH_A);
+
+    // Count controller pings arriving from the app itself. The ping cadence
+    // while holding a role is 2s, so a 5s window sees at least two.
+    let pings = 0;
+    await page.route('**/api/games/*/ping', async (route) => {
+      pings++;
+      await route.continue();
+    });
+
+    await page.waitForTimeout(5_000);
+    const whileVisible = pings;
+    expect(whileVisible, 'app should be pinging while visible').toBeGreaterThan(0);
+
+    // Pocket the phone.
+    await setVisibility(page, 'hidden');
+    const atHide = pings;
+    await page.waitForTimeout(5_000);
+    expect(pings, 'no pings should be sent while the page is hidden').toBe(atHide);
+
+    // Take it back out.
+    await setVisibility(page, 'visible');
+    await expect.poll(
+      () => pings,
+      { message: 'polling should resume when the page becomes visible', timeout: 10_000 },
+    ).toBeGreaterThan(atHide);
+
+    await page.unroute('**/api/games/*/ping');
+  });
+
+  test('the power plan turns every loop off while hidden', async ({ page }) => {
+    await page.goto(`/?${TEST_PARAMS}&testUserId=${COACH_A}`);
+    await expect(page.locator('#selectTeamScreen')).toBeVisible({ timeout: 10_000 });
+    await setupTeamWithPlayers(page, 'Power Plan Team');
+    await startGame(page, 'offense');
+
+    // Capture the plans the manager broadcasts, so the assertion covers every
+    // loop the policy knows about — a loop added later is covered without
+    // editing this test.
+    await page.evaluate(() => {
+      const w = window as any;
+      w.__plans = [];
+      document.addEventListener('breakside:power-plan', (e: any) => {
+        w.__plans.push(e.detail.plan);
+      });
+    });
+
+    await setVisibility(page, 'hidden');
+    const hiddenPlan = await page.evaluate(() => {
+      const w = window as any;
+      return w.__plans[w.__plans.length - 1];
+    });
+    const runningWhileHidden = Object.entries(hiddenPlan)
+      .filter(([, on]) => on)
+      .map(([loop]) => loop);
+    expect(runningWhileHidden, 'no loop should run while hidden').toEqual([]);
+
+    await setVisibility(page, 'visible');
+    const visiblePlan = await page.evaluate(() => {
+      const w = window as any;
+      return w.__plans[w.__plans.length - 1];
+    });
+    // Coming back into a game, the in-game loops must actually come back.
+    expect(visiblePlan.controllerPing, 'controller ping resumes').toBe(true);
+    expect(visiblePlan.gameStateRefresh, 'game state refresh resumes').toBe(true);
+  });
+});
