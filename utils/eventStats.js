@@ -14,7 +14,7 @@ import { loadGameFromCloud, listServerGames } from '../store/sync.js';
 import {
     accumulateGameStats, sumPlayerStats, classifyPoint, getGameTeamStats,
     filterGames, getGamesPlayerStats, getGamesTeamStats, getGamesRecord,
-    formatGameLabel, formatTeamStatsLine, getGamePlayerStats,
+    formatGameLabel, formatTeamStatsLine, formatSetStatsLines, getGamePlayerStats,
 } from './statAccumulator.js';
 
 /**
@@ -140,6 +140,7 @@ export {
     getGameTeamStats,
     getEventTeamStats,
     formatTeamStatsLine,
+    formatSetStatsLines,
     getGamePlayerStats,
     getTeamPlayerStats,
     getEventPlayerStats,

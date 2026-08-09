@@ -196,6 +196,7 @@ A handful of non-obvious cascade and box-model details have bitten layout work i
 - **`width: 100%` on flex/grid children resolves against the *containing block including its padding*.** When a 100%-width child overflows on the right, the fix is usually to drop `width: 100%`, use `align-self: stretch`, and add `box-sizing: border-box`. The "They turnover / They score" buttons in Full PBP hit this.
 - **Flex/grid children with their own min-content won't shrink below it** unless you give them `min-width: 0` (flex) or `minmax(0, …fr)` (grid columns). If a 60/40 split is rendering more like 75/25, this is why. Full PBP migrated from flex to grid for exactly this reason.
 - **Service worker caching makes CSS look "stuck."** The PWA serves the cached `service-worker.js` until its `cacheName` constant changes. If a CSS edit isn't visible after deploy, bump `cacheName` in [service-worker.js](service-worker.js) and double-reload. Always verify against build number in version.json before assuming the change didn't deploy.
+- **`.form-group` is styled globally for the DARK auth screen.** [auth/auth.css](auth/auth.css) defines `.form-group`, `.form-group label`, `.form-group input` and `::placeholder` **unscoped** — white label text, `rgba(255,255,255,0.05)` input background, white input text, `rgba(255,255,255,0.2)` border. Those rules leak into every `.form-group` in the app. Drop one onto a white settings card (`.settings-section` is `background: white`) and it renders **white-on-white**: invisible label, invisible placeholder, and an input you can only locate by tapping it, because the orange `:focus` border is its only visible state. Set Tracking shipped this way and it read as "an apparently blank space". The fix is an ancestor class in [css/teams-manage.css](css/teams-manage.css) (`.identity-form`, `.sets-form`), which outranks auth.css on specificity so no `!important` is needed even though auth.css loads later — but it is opt-in per section, so **any new form on a settings card must be added to that selector list** or it inherits the same invisibility. Note the file is `auth/auth.css`, not `css/auth.css`; grepping only `css/` will convince you the rules don't exist.
 - **`position: sticky` table cells need `border-collapse: separate`.** The stats tables (game summary, event/team roster) use sticky header rows and sticky leftmost columns. With the default `border-collapse: collapse`, sticky cell backgrounds render transparent and other rows bleed through on scroll. The fix (in [css/tables.css](css/tables.css)) is `border-collapse: separate; border-spacing: 0;` plus an opaque `background-color` on every `th`/`td`, and a raised `z-index` on the header-row corner cells so they outrank both the sticky row and sticky column. Sticky also silently no-ops unless the scroll container (`.roster-table-container`) is the actual `overflow: auto` ancestor.
 
 When CLAUDE finds a *new* gotcha worth remembering across sessions, add it here rather than to CLAUDE.md.
@@ -842,6 +843,108 @@ All stats are computed on demand from the event stream — none are stored on pl
 - **Player stats** (`accumulateGameStats`): goals, assists, **hockey assists** (the thrower of the pass *before* the assist) and **huck hockey assists** (a hockey assist that was itself a huck — counted in the HA total too), completions, completion %, hucks, defensive plays, turnovers, +/-, points/time played.
 - **Team point classification** (`classifyPoint`): each completed point is one of `break` (scored on D), `cleanHold` (scored on O, no turnover), `hold`/dirty (scored on O after ≥1 turnover), `broken` (started O, lost), or `opponentHold` (started D, lost). Surfaced as per-point badges in the game log and as a per-game / per-event summary line.
 - **Break denominators.** `getGameTeamStats` reports breaks per D-point *and* per D-possession. A D-point can contain multiple defensive possessions (turnover-back), so the per-possession rate is the truer measure of D-line conversion.
+
+### Possession Sets (zone tracking)
+
+Teams can tag each possession with the set being played — zone, ho-stack,
+vert, force-middle, junk — so "is our zone working?" becomes answerable.
+The whole feature is **invisible until a team opts in**.
+
+```js
+// Team
+{ setsEnabled: false,                       // team-level opt-in
+  sets: { offensive: [], defensive: [] } }  // coach-defined label lists
+
+// Possession
+{ set: "Zone" | null }                      // null = unspecified
+```
+
+- **One set per possession — a mid-possession switch overwrites.** `set` is a
+  single label, so a team that starts a defensive possession in zone and calls
+  "Fire!" partway through can only re-tag it: the possession then reads as man
+  for its whole length, and the zone that forced the situation gets no credit
+  in the breakdown. Recording the *transition* would need `set` to become a
+  sequence (or a set-change event on the possession's event stream) plus a rule
+  for which segment a stop or break is attributed to. See TODO.md § Backlog for
+  the sketch.
+
+- **Where tags come from.** One control, in three places, all tagging the same
+  live possession and offering the label list for the side in play — offensive
+  labels on offence, defensive on defence:
+  - **Full tab header**, on the top line with the O/D pill and Undo. The
+    primary one: a coach taps it as the possession unfolds.
+  - **Full tab modifier row** ("Last pass was a:" / "Last D was a:"), a mirror
+    of the same possession, so whatever was picked during the possession is
+    what shows next to the play it belongs with.
+  - **Field tab action row**, immediately left of Events.
+
+  **Tap cycles** — → label1 → … → —; **long-press (450 ms) opens the full
+  list**, which also surfaces a tag whose label the team has since deleted
+  (marked "no longer configured"). Gestures live in
+  [ui/setPicker.js](ui/setPicker.js) and the side/cycle logic in
+  [utils/possessionSets.js](utils/possessionSets.js), both shared, so no
+  surface can drift from another. Simple mode is deliberately not tagged.
+  Missing fields default to `false` / `[]` / `null`, so legacy games need no
+  migration.
+  - Possessions are created on the first recorded event, so the control appears
+    after the pull on a D point and after the first throw on an O point. A set
+    tap never materializes a possession — empty possessions carry their own
+    undo/cleanup edge cases.
+  - The Field control is hidden between points: that's when its row is tightest
+    (the O/D pill becomes "Start Point (Offense)") and there is no live
+    possession to tag anyway.
+  - The pull dialog used to hold a defensive-set picker. Removed 2026-08-09: it
+    overflowed the dialog on a phone, and at pull time the coach usually can't
+    know yet what set the D will end up running. Tagging once play makes it
+    obvious is both easier and more accurate.
+
+- **Labels are snapshots, not references.** `Possession.set` is a plain string
+  copied in at tag time. Editing Team Settings → Set Tracking changes only what
+  is *offered* next; it never renames, remaps or removes a tag already recorded
+  on a possession, and nothing in the codebase reconciles the two. So renaming
+  "Zone" to "Zone 3-3-1" leaves every previously tagged possession reading
+  "Zone", and the breakdown will show both as separate rows — it groups by the
+  strings actually present in the data, not by the team's current lists. A tag
+  whose label no longer exists still displays and still aggregates; tapping the
+  control clears it to unspecified first, then rejoins the current cycle.
+
+- **Aggregation is per possession, not per point** — the mismatch that shapes
+  everything below. `getGameTeamStats().sets` returns records keyed
+  `` `${side}:${label}` `` (a label listed under *both* sides stays two rows,
+  because the denominators mean different things):
+
+  | Field | Side | Meaning |
+  |---|---|---|
+  | `possessions` | both | possessions tagged with this set, completed points only |
+  | `stops` | D | possessions where we got the disc back instead of being scored on |
+  | `breaks` | D | won D-points credited to this set |
+  | `scores` | O | possessions that ended in our goal |
+
+- **Two attribution rules worth knowing**, both chosen to avoid crediting a set
+  for something it didn't do:
+  0. *(Log rendering trap.)* A `Turnover` makes the log emit an **inline**
+     "on defense" delimiter and suppress the following possession's own, so
+     that inline one has to carry the **next** possession's set tag. Reading it
+     off the possession holding the Turnover is what once made mid-point
+     defensive sets invisible in the log while offensive ones rendered fine.
+  1. A defensive possession counts as a **stop** unless it is the *last*
+     possession of a point we lost — that is the one they scored on. A
+     defensive possession that ends a point we *won* is a Callahan, so it
+     counts as a stop, not a score-on.
+  2. A **break** is credited only to the set of the **last defensive
+     possession** of a won D-point — the stop we actually converted. Run zone,
+     get a stop, turn it over, then get a second stop in man and score, and the
+     break goes to man; zone keeps its stop but not the break.
+
+- **One rendering path.** The breakdown rides on the team-stats object, and
+  `formatTeamStatsLine` appends it, so both stats screens and all three xlsx
+  exports pick it up without call-site changes — they already split that
+  string on newlines. Lines are bulleted rather than space-indented because
+  `.team-stats-line` is `white-space: pre-line`, which collapses leading
+  spaces on screen (they would survive only in the spreadsheet).
+
+- **Silent for everyone else.** Nothing is emitted when no possession carries a
+  set, so a team that never opted in sees byte-identical output everywhere.
 
 ### Statistics Export (.xlsx)
 

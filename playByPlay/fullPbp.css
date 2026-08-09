@@ -478,7 +478,36 @@
 /* Offensive set cycling chip (per-possession set tagging) — distinct hue
    from the blue flag chips so "tagged Zone" reads differently than
    "modifier on". */
+/* Long-press target: no text selection / no iOS callout, so the gesture
+   raises our popover instead of the OS Copy/Translate bubble. */
+.full-pbp-set-chip {
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+
 .full-pbp-set-chip.checked {
     background: #6d28d9;
     border-color: #6d28d9;
+}
+
+/* Header copy of the set chip — the primary control, on the top line with the
+   O/D pill and Undo so it's tapped as the possession unfolds. The header is
+   `justify-content: space-between`, so this sits between the pill group and
+   the density/undo buttons. Shrinks before the buttons do on a narrow phone;
+   the caption is short ("Set: Zone") so it rarely needs to. */
+.full-pbp-header-set {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.full-pbp-set-chip-header {
+    margin: 0;
+    max-width: 100%;
+}
+
+.full-pbp-set-chip-header > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }

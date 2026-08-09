@@ -98,17 +98,13 @@ function buildGameLogText(game, {
         // switch sides) are deferred past the score lines below so the log
         // reads in real-world order.
         const afterPointLines = [];
-        (point.possessions || []).forEach(possession => {
+        const allPossessions = point.possessions || [];
+        // Set tag (zone tracking): "— Team on defense (Zone) —".
+        const setTagFor = poss => (poss && poss.set) ? ` (${poss.set})` : '';
+        allPossessions.forEach((possession, possIdx) => {
             if (!suppressNextPossessionDelimiter) {
                 const role = possession.offensive ? 'offense' : 'defense';
-                // Set tag (zone tracking): "— Team on defense (Zone) —".
-                // A suppressed delimiter can't carry one, but that case is
-                // unreachable in practice: suppression only follows a
-                // Turnover, and neither tagging surface (pull dialog =
-                // point-opening D possession, Full-PBP chip = offensive
-                // possessions) writes to the possession that follows one.
-                const setTag = possession.set ? ` (${possession.set})` : '';
-                summary += `\n— ${teamName} on ${role}${setTag} —`;
+                summary += `\n— ${teamName} on ${role}${setTagFor(possession)} —`;
             }
             suppressNextPossessionDelimiter = false;
             (possession.events || []).forEach(event => {
@@ -134,7 +130,15 @@ function buildGameLogText(game, {
                     // shows it even when no Defense event has yet been
                     // recorded (e.g. inferred Turnover from the pill,
                     // or a Turnover before the user logs any D events).
-                    summary += `\n— ${teamName} on defense —`;
+                    //
+                    // This delimiter STANDS IN for the next possession's own
+                    // (suppressed just below), so it has to carry that
+                    // possession's set tag — a defensive set tagged after a
+                    // turnover lives there, not on the possession holding
+                    // this Turnover. Reading it off `possession` instead is
+                    // what made mid-point defensive sets invisible in the log
+                    // while offensive ones showed fine.
+                    summary += `\n— ${teamName} on defense${setTagFor(allPossessions[possIdx + 1])} —`;
                     suppressNextPossessionDelimiter = true;
                 }
             });
