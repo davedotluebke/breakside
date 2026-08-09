@@ -692,9 +692,7 @@ Remaining work:
   - **STATUS 2026-08-06 (branch `possession-sets-stage6`): COMPLETE through
     stage 6.** Stages 1–5 shipped 2026-07-26 — schema/serialization (unit +
     API round-trip tests), Team Settings opt-in (toggle + comma-separated
-    lists with dedupe/length caps), pull-dialog defensive picker (sticky
-    session default), Full-PBP offensive cycling chip (`Set: —/Vert/…`,
-    AC-gated, purple checked state), and set tags in the log
+    lists with dedupe/length caps), the set pickers, and set tags in the log
     (`— Team on defense (Zone) —`, renderer tests) + public-viewer
     possession headers.
   - **Stage 6 (2026-08-06): per-set breakdown in team stats.** Landed as a
@@ -739,8 +737,8 @@ Remaining work:
   - **Backwards compat**: missing fields default to `false` / `[]` / `null`; UI hidden everywhere unless `setsEnabled` is on.
   - **UI surfaces** (all guarded by `team.setsEnabled === true`):
     1. **Team settings opt-in** (`teams/teamSettings.js`): toggle + two editable lists (offensive sets, defensive sets).
-    2. **Defensive picker — pull dialog** (`playByPlay/pullDialog.js`): `<select>` populated from `currentTeam.sets.defensive`, only rendered if enabled and non-empty. Thread chosen value through `ensurePossessionExists(false)` (currently at `playByPlay/keyPlayDialog.js:607`).
-    3. **Offensive picker — Full PBP modifier strip** (`playByPlay/fullPbp.js`): small cycling chip on the modifier-chips row; taps advance through `[null, ...currentTeam.sets.offensive]` and write to the current possession. Skip Simple mode for v1.
+    2. ~~**Defensive picker — pull dialog**~~ — built, then **removed 2026-08-09**: it overflowed the dialog on a phone, and at pull time the coach usually can't know yet what set the D will run. Defensive sets are tagged from the Full/Field control instead (see 3).
+    3. **Set picker — Full + Field tabs** (`playByPlay/fullPbp.js`, `playByPlay/fieldPbp.js`): a cycling control that tags the live possession, offering the label list for the side in play (offensive labels on offence, defensive on defence). Shared logic in `utils/possessionSets.js`. Simple mode deliberately not tagged. *Originally offensive-only on Full — that meant a defensive-only team saw no control anywhere; fixed 2026-08-09 along with the pull-dialog removal.*
     4. **Display in event log** (`ui/eventLogDisplay.js` and game summary log): prepend possession blocks with `[Zone]` etc. when `possession.set` is set.
     5. **Aggregation** — *shipped 2026-08-06, but as a breakdown block rather than the filter sketched here.* `getGameTeamStats(game).sets` returns per-set records and `formatTeamStatsLine` renders them all at once ("Zone (D): 2/4 stops, 1 break"), so no `{set}` option and no composition with the phase filter was needed. See the stage-6 note at the top of this item.
   - **Undo**: set lives on the possession itself, so existing undo handling needs no changes.

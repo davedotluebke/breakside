@@ -859,11 +859,31 @@ The whole feature is **invisible until a team opts in**.
 { set: "Zone" | null }                      // null = unspecified
 ```
 
-- **Where tags come from.** Defensive sets are picked in the pull dialog
-  (`playByPlay/pullDialog.js`, sticky per session); offensive sets from the
-  cycling `Set:` chip on the Full-PBP modifier strip (`playByPlay/fullPbp.js`).
+- **Where tags come from.** One cycling control, on the **Full** tab (a chip on
+  the modifier strip) and the **Field** tab (a button under the last-play
+  chips). It tags the live possession and offers the label list for the side in
+  play — offensive labels on offence, defensive on defence. Both surfaces share
+  [utils/possessionSets.js](utils/possessionSets.js) so they can't drift.
   Simple mode is deliberately not tagged. Missing fields default to
   `false` / `[]` / `null`, so legacy games need no migration.
+  - Possessions are created on the first recorded event, so the control appears
+    after the pull on a D point and after the first throw on an O point. A set
+    tap never materializes a possession — empty possessions carry their own
+    undo/cleanup edge cases.
+  - The pull dialog used to hold a defensive-set picker. Removed 2026-08-09: it
+    overflowed the dialog on a phone, and at pull time the coach usually can't
+    know yet what set the D will end up running. Tagging once play makes it
+    obvious is both easier and more accurate.
+
+- **Labels are snapshots, not references.** `Possession.set` is a plain string
+  copied in at tag time. Editing Team Settings → Set Tracking changes only what
+  is *offered* next; it never renames, remaps or removes a tag already recorded
+  on a possession, and nothing in the codebase reconciles the two. So renaming
+  "Zone" to "Zone 3-3-1" leaves every previously tagged possession reading
+  "Zone", and the breakdown will show both as separate rows — it groups by the
+  strings actually present in the data, not by the team's current lists. A tag
+  whose label no longer exists still displays and still aggregates; tapping the
+  control clears it to unspecified first, then rejoins the current cycle.
 
 - **Aggregation is per possession, not per point** — the mismatch that shapes
   everything below. `getGameTeamStats().sets` returns records keyed
