@@ -186,6 +186,40 @@ ships to S3 as-is and runs directly in the browser.
   caches module files at fetch time exactly like any other asset, so no SW
   changes were needed for the migration.
 
+### Boot Splash
+
+`index.html` ships with `#teamRosterScreen` **visible** — it is the one screen
+section without an inline `display: none`. Nothing navigates away from it until
+`initializeApp()` finishes (auth init is async and can take a network round
+trip), so between first paint and that point the user briefly sees the Start
+Game subscreen before the app lands on the team list.
+
+[css/splash.css](css/splash.css) + [ui/splashScreen.js](ui/splashScreen.js) cover
+that window with `#splashScreen`: a full-viewport white panel holding the
+wordmark (white to match the logo's own background), `z-index: 100000`, first
+element in `<body>`, which retracts upward like a window shade and is then
+removed from the DOM.
+
+Two decisions worth knowing before changing it:
+
+- **It's an overlay, not "hide the screens until ready."** `main.js` runs
+  `matchButtonWidths()` at `DOMContentLoaded`, and hidden elements measure zero.
+  Giving `#teamRosterScreen` a `display: none` would silently break button
+  sizing; a fixed overlay leaves the layout underneath intact. If you ever do
+  hide it, fix the measurement first.
+- **Dismissal is signal-driven.** `screens/navigation.js` dispatches
+  `breakside:screen-shown` on every `showScreen()`; the first one retracts the
+  splash. `main.js` calls `dismissSplash()` directly on the auth-screen path,
+  which bypasses `showScreen()`. Any *new* boot path that shows UI without going
+  through `showScreen()` must call `dismissSplash()` too — the `MAX_VISIBLE_MS`
+  timer in the module is a safety net so a missed signal can't lock the user
+  out, not a substitute for wiring the path up. The logged-out redirect to
+  `/landing/` deliberately keeps the splash up: covering that hop is the point.
+
+The wordmark is `<link rel="preload" as="image">`ed in `<head>` (same file the
+header logo uses, so no extra bytes) and the module waits briefly for it, so the
+shade never flies up as an empty white panel on a cold load.
+
 ### CSS Styling Gotchas
 
 A handful of non-obvious cascade and box-model details have bitten layout work in this codebase. Check this list before chasing a "why is the button the wrong size" rabbit hole.

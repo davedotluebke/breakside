@@ -14,10 +14,19 @@ import { TEST_PARAMS } from './constants';
 
 // ─── App Navigation ─────────────────────────────────────────────────────────
 
-/** Navigate to the app in test mode and wait for the team selection screen. */
+/**
+ * Navigate to the app in test mode and wait for the team selection screen.
+ *
+ * Also waits out the boot splash (ui/splashScreen.js). It covers the whole
+ * viewport for ~1s after boot, and Playwright's hit-target check would silently
+ * retry the first click behind it — passing, but a second slower and prone to
+ * timing out on a loaded machine. Waiting explicitly keeps the failure legible
+ * if the splash ever fails to retract.
+ */
 export async function goToApp(page: Page) {
   await page.goto(`/?${TEST_PARAMS}`);
   await expect(page.locator('#selectTeamScreen')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('#splashScreen')).toHaveCount(0, { timeout: 10_000 });
 }
 
 // ─── Team & Roster ──────────────────────────────────────────────────────────
