@@ -41,7 +41,10 @@
  * score dialog (6), modifier strip / orientation flips / polish (7).
  */
 import { UNKNOWN_PLAYER } from '../store/models.js';
-import { saveAllTeamsData } from '../store/storage.js';
+import { saveAllTeamsData, currentTeam } from '../store/storage.js';
+import {
+    setLabelsFor, nextSetValue, setControlLabel, taggablePossession,
+} from '../utils/possessionSets.js';
 import {
     currentGame, getLatestPoint, getPlayerFromName, isPointInProgress,
     determineStartingPosition, showPlayerNumbers,
@@ -693,7 +696,33 @@ const fieldPbp = (function() {
         return '';
     }
 
-    function modColHTML(state) {
+    /**
+     * Set tagging for the live possession — one cycling button below the
+     * last-play chips, separated so it doesn't crowd the tagging the coach
+     * reaches for every throw. Renders only for teams opted into set
+     * tracking that configured labels for the side currently in possession.
+     *
+     * Shares utils/possessionSets.js with the Full tab's chip so the two
+     * surfaces can't drift. Defensive sets used to be picked in the pull
+     * dialog; that was removed 2026-08-09 (overflowed on a phone, and the
+     * set usually isn't known until the D is actually running).
+     */
+    function setControlHTML(state, inPoint) {
+        if (!inPoint || !state.point) return '';
+        const possession = taggablePossession(state.point);
+        const labels = setLabelsFor(currentTeam, possession);
+        if (!labels.length) return '';
+        const caption = setControlLabel(possession)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return '<div class="fp-modsep"></div>'
+            + `<button class="fp-modbtn fp-setbtn${possession.set ? ' on' : ''}" data-setcycle="1">${caption}</button>`;
+    }
+
+    function modColHTML(state, inPoint) {
+        return modColBodyHTML(state) + setControlHTML(state, inPoint);
+    }
+
+    function modColBodyHTML(state) {
         if (S.pulling) {
             const sub = S.puller ? S.puller.name : '—';
             return `<div class="fp-modcol-label">This pull:</div><div class="fp-modcol-sub">${sub}</div>`
@@ -847,7 +876,7 @@ const fieldPbp = (function() {
                     <div class="fp-sidebar">
                         <div class="fp-rail">${playerRailHTML(state, inPoint)}</div>
                         <div class="fp-modsep"></div>
-                        <div class="fp-modcol">${modColHTML(state)}</div>
+                        <div class="fp-modcol">${modColHTML(state, inPoint)}</div>
                     </div>
                     ${fieldBox}
                 </div>
@@ -1303,6 +1332,16 @@ const fieldPbp = (function() {
                 event: le, previousEvent: null, source: 'manual', provisionalId: null
             });
         }
+        render();
+    }
+    function cycleSet() {
+        if (!requireActiveCoach()) return;
+        const state = reconstructState();
+        const possession = taggablePossession(state.point);
+        const labels = setLabelsFor(currentTeam, possession);
+        if (!possession || !labels.length) return;
+        possession.set = nextSetValue(possession.set, labels);
+        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
         render();
     }
     function placeD(l, w) {
@@ -1777,6 +1816,11 @@ const fieldPbp = (function() {
         // Last-play tag chips: toggle a flag on the most recent event.
         root.querySelectorAll('.fp-modbtn[data-lastmod]').forEach(b => {
             b.onclick = () => toggleLastMod(b.dataset.lastmod);
+        });
+
+        // Set tag: cycle the live possession's set label.
+        root.querySelectorAll('.fp-modbtn[data-setcycle]').forEach(b => {
+            b.onclick = () => cycleSet();
         });
 
         // During pull, chips are tap-only (drag is disabled so the rail can

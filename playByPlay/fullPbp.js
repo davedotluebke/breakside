@@ -38,6 +38,9 @@ import {
     currentGame, getLatestPoint, getPlayerFromName, isPointInProgress,
     formatPlayerName, buildPointPlayerLookup,
 } from '../utils/helpers.js';
+import {
+    setLabelsFor, nextSetValue, setControlLabel, taggablePossession,
+} from '../utils/possessionSets.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { undoEvent } from '../game/gameLogic.js';
 import { startNextPoint } from '../game/pointManagement.js';
@@ -324,7 +327,7 @@ const fullPbp = (function() {
         if (!row) return;
 
         const editable = inPoint ? findLastEditableEvent(state.point) : null;
-        const setCtx = offensiveSetContext(state, inPoint);
+        const setCtx = setChipContext(state, inPoint);
         if (!editable && !setCtx) {
             row.style.display = 'none';
             row.innerHTML = '';
@@ -379,19 +382,21 @@ const fullPbp = (function() {
     }
 
     /**
-     * Offensive set tagging (teams opted into set tracking with offensive
-     * labels configured): a cycling chip on the modifier row while the
-     * live possession is offensive. Taps advance — → label1 → … → —,
-     * writing possession.set in place. Defensive possessions are tagged
-     * at the pull dialog instead.
+     * Set tagging for the live possession — a cycling chip on the modifier
+     * row. Taps advance — → label1 → … → —, writing possession.set in place.
+     *
+     * Covers BOTH sides: an offensive possession offers the team's offensive
+     * labels, a defensive one its defensive labels. It used to render only on
+     * offense (defense was tagged in the pull dialog), which meant a team that
+     * had configured just defensive sets — the primary zone-tracking case —
+     * never saw a chip here at all. The pull-dialog picker is gone as of
+     * 2026-08-09, so this and the Field tab are the only places sets are set.
      */
-    function offensiveSetContext(state, inPoint) {
+    function setChipContext(state, inPoint) {
         if (!inPoint || !state.point) return null;
-        const labels = (currentTeam?.setsEnabled && currentTeam.sets?.offensive) || [];
+        const possession = taggablePossession(state.point);
+        const labels = setLabelsFor(currentTeam, possession);
         if (!labels.length) return null;
-        const possessions = state.point.possessions || [];
-        const possession = possessions.length ? possessions[possessions.length - 1] : null;
-        if (!possession || !possession.offensive) return null;
         return { labels, possession };
     }
 
@@ -401,14 +406,12 @@ const fullPbp = (function() {
         if (possession.set) chip.classList.add('checked');
 
         const span = document.createElement('span');
-        span.textContent = `Set: ${possession.set || '—'}`;
+        span.textContent = setControlLabel(possession);
         chip.appendChild(span);
 
         chip.addEventListener('click', () => {
             if (!requireActiveCoach()) return;
-            const cycle = [null, ...labels];
-            const idx = cycle.indexOf(possession.set);
-            possession.set = cycle[(idx === -1 ? 0 : idx + 1) % cycle.length];
+            possession.set = nextSetValue(possession.set, labels);
             if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
             render();
         });

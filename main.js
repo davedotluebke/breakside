@@ -73,6 +73,7 @@ import './settings/advancedSettings.js';
 import './utils/statAccumulator.js';
 import './utils/eventStats.js';
 import './utils/gameLogRenderer.js';
+import './utils/possessionSets.js';
 import './utils/tableSort.js';
 import './utils/statsHelp.js';
 import './utils/statsLevel.js';
