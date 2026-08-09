@@ -72,6 +72,12 @@
         if (window._isStaging) document.title = 'Breakside STG';
     </script>
     
+    <!-- The boot splash's wordmark. Preloaded so its fetch starts at parse time,
+         in parallel with the render-blocking CSS, instead of waiting for the
+         splash <img> to be discovered. Same file as the header logo, so this
+         costs no extra bytes. -->
+    <link rel="preload" as="image" href="images/logo.wordmark.png">
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -82,6 +88,9 @@
          The css/*.css files were split from the old main.css; their rule order
          is preserved across the load sequence below, so keep this order. -->
     <link rel="stylesheet" href="css/tokens.css">
+    <!-- Boot splash. Early in the sequence so it is styled at first paint; its
+         rules are self-contained so nothing below can leave it half-styled. -->
+    <link rel="stylesheet" href="css/splash.css">
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/tables.css">
     <link rel="stylesheet" href="css/teams.css">
@@ -104,6 +113,13 @@
 </head>
 <body>
 <script>if(window._isStaging) document.body.classList.add('staging');</script>
+    <!-- Boot splash: covers the Start Game flash while initializeApp() runs,
+         then retracts upward. Removed from the DOM by ui/splashScreen.js. -->
+    <div id="splashScreen" role="presentation">
+        <img class="splash-logo" src="images/logo.wordmark.png" alt="Breakside">
+        <span class="splash-staging-pill">Staging</span>
+    </div>
+
     <!-- Auth Screen (shown when not logged in) -->
     <section id="authScreen" class="auth-screen" style="display: none;">
         <div class="auth-container">

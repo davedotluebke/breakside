@@ -78,6 +78,9 @@ import './utils/tableSort.js';
 import './utils/statsHelp.js';
 import './utils/statsLevel.js';
 import './utils/xlsxExport.js';
+// Evaluated before anything can show a screen, so its breakside:screen-shown
+// listener never misses the first navigation.
+import { dismissSplash } from './ui/splashScreen.js';
 import './ui/activePlayersDisplay.js';
 import './ui/eventLogDisplay.js';
 import './ui/setPicker.js';
@@ -358,6 +361,9 @@ async function initializeApp() {
                 if (window.breakside?.loginScreen?.showAuthScreen) {
                     window.breakside.loginScreen.showAuthScreen();
                 }
+                // showAuthScreen() bypasses showScreen(), so no
+                // breakside:screen-shown fires — retract the splash by hand.
+                dismissSplash();
             }
         } catch (error) {
             // Auth failed to initialize, allow offline mode
