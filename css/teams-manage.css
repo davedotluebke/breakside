@@ -518,36 +518,52 @@
     gap: 15px;
 }
 
-.identity-form .form-group {
+/* ── .form-group on a white settings card ──────────────────────────────
+   auth/auth.css styles `.form-group` UNSCOPED for the dark auth screen:
+   white label text, near-transparent white input background, white input
+   text, translucent white border. Those rules leak into every .form-group
+   in the app, so any form dropped onto one of these white settings cards
+   renders white-on-white — invisible labels, invisible placeholder, an
+   input you can only find by tapping (its orange :focus ring is the sole
+   visible state). That is exactly what shipped with Set Tracking.
+
+   The fix is an ancestor class, which outranks auth.css on specificity, so
+   no !important is needed even though auth.css loads later. EVERY form
+   section on this screen must be listed here — add yours when you add one.
+   See ARCHITECTURE.md § CSS Styling Gotchas. */
+.identity-form .form-group,
+.sets-form .form-group {
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
 
-.identity-form .form-group label {
+.identity-form .form-group label,
+.sets-form .form-group label {
     font-size: 0.85rem;
     font-weight: 500;
     color: var(--text-secondary);
 }
 
-/* Override auth.css .form-group input styles for the identity form — the extra
-   .identity-form ancestor outranks auth.css on specificity, so no !important
-   is needed even though auth.css loads later. */
 .identity-form .form-group input,
 .identity-form .form-group input[type="text"],
-.identity-form .form-group input[type="url"] {
+.identity-form .form-group input[type="url"],
+.sets-form .form-group input,
+.sets-form .form-group input[type="text"] {
     background: var(--white);
     color: var(--text-primary);
     border: 2px solid var(--border-light);
 }
 
-.identity-form .form-group input:focus {
+.identity-form .form-group input:focus,
+.sets-form .form-group input:focus {
     border-color: var(--brand-orange);
     outline: none;
     box-shadow: none;
 }
 
-.identity-form .form-group input::placeholder {
+.identity-form .form-group input::placeholder,
+.sets-form .form-group input::placeholder {
     color: var(--text-placeholder);
 }
 
