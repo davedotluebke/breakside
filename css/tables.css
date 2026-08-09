@@ -340,16 +340,6 @@ ul {
     padding: 0;
 }
 
-/* Scrollable container for table */
-#tableContainer {
-    overflow-x: auto;
-}
-
-#activePlayersTable {
-    border-collapse: collapse;
-    width: max-content;
-}
-
 /* Roster table scrollable container — scrolls both axes so sticky header
    and sticky left columns work in the same container. max-height keeps
    the table from pushing other UI off-screen on tall pages. */
@@ -478,16 +468,20 @@ ul {
     background-color: var(--surface-raised);
 }
 
-#activePlayersTable th, #activePlayersTable td {
-    border: 1px solid grey;
-    padding: 1vw 1vw;
-}
+/* Shared .active-* column styling. These classes are worn by three live
+   tables: the Line tab's #panelActivePlayersTable (game/selectLine.js), the
+   injury-sub dialog's #subPlayersTable, and the team roster
+   (teams/rosterManagement.js).
 
-/* Sticky columns (active players table): position/color/border/z-index are
-   static CSS below; only the checkbox column's width and the name/time
-   columns' `left` offsets are width-synced from JS in makeColumnsSticky()
-   (ui/activePlayersDisplay.js), since those depend on measured column
-   widths that vary with content and can't be known statically. */
+   The sticky declarations below are believed vestigial — they were written
+   for a Before Point Screen table that no longer exists, and the Line tab
+   overrides every one of them from its own id-scoped rules in
+   ui/panelSystem.css (which also own the makePanelColumnsSticky() width-sync).
+   They are kept anyway because #subPlayersTable and the roster table also
+   match these selectors, and confirming that sticky/background/box-shadow are
+   inert *there* needs eyes on all three surfaces mid-game — a visual check no
+   test covers. Prune only with that verification in hand; the non-sticky
+   declarations (padding, text-align, font-style) are load-bearing regardless. */
 .active-checkbox-column {
     text-align: center;
     padding: 5px !important;  /* !important is load-bearing: #subPlayersTable cells share this class and .sub-players-table-container td (later, higher specificity) sets 10px 15px */

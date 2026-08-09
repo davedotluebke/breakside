@@ -35,7 +35,7 @@
  *   │   └── pullDialog.js       # Pull dialog for defensive points
  *   │
  *   ├── ui/                      # UI update functions
- *   │   ├── activePlayersDisplay.js # Active players table rendering and management
+ *   │   ├── activePlayersDisplay.js # Line-tab helpers (running scores); table itself lives in game/selectLine.js
  *   │   ├── eventLogDisplay.js   # Event log management and display
  *   │   └── buttonLayout.js      # UI consistency functions (button width matching)
  *   │

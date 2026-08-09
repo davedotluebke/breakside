@@ -121,7 +121,7 @@ ultistats/
 ├── ui/                      # UI components
 │   ├── panelSystem.js       # Panel layout and drag-to-resize system
 │   ├── panelSystem.css      # Panel system styles
-│   ├── activePlayersDisplay.js # Active players table
+│   ├── activePlayersDisplay.js # Line-tab helpers (running scores)
 │   ├── eventLogDisplay.js   # Event log management
 │   └── buttonLayout.js      # UI consistency functions
 │
