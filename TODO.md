@@ -724,10 +724,30 @@ Remaining work:
     field. 13 unit tests in `tests/unit/setStats.test.mjs` (161/161 suite).
     Emits nothing when no possession is tagged, so opted-out teams are
     unaffected on every surface.
+  - **Field-test round, 2026-08-09** (same branch). Fixed: Team Settings'
+    Set Tracking fields were white-on-white and unfindable (unscoped
+    `.form-group` rules from `auth/auth.css` — see ARCHITECTURE.md § CSS
+    Styling Gotchas); the game log silently dropped a defensive set tagged
+    mid-point (the inline post-Turnover delimiter has to carry the *next*
+    possession's tag); and the Full chip only rendered on offence, so a
+    defensive-only team saw no control anywhere. Changed: the pull-dialog
+    defensive picker was **removed** (overflowed on a phone, and the set
+    usually isn't knowable at pull time); tagging moved to a `Set:` control
+    on the Full tab's top line and in the Field tab's action row, with a
+    second copy beside "Last turnover was a:" / "Last D was a:" bound to
+    that possession; tap cycles, long-press opens a light anchored popover.
+    Both primary controls key off the **live mode**, not the last
+    possession — those diverge at a change of possession, which is exactly
+    when a coach names the set they're switching into.
   - **Not built (deliberate):** a per-point set badge in the game log, and
     the set-vs-phase composition (`{set}` alongside `{phase}` in
     `filterGames`) — the breakdown block answers the v1 question without
     either. Revisit if coaches ask to slice a single set across a phase.
+  - **Known limitation: one set per possession.** `Possession.set` is a
+    single label, so a defence that starts in zone and calls "Fire!" partway
+    through can only be re-tagged — the possession then reads as man for its
+    whole length, and the zone that forced the situation gets no credit. See
+    the set-transition item under Backlog.
   - Tag each possession with the set being played (zone, ho-stack, vert-stack, force-middle, junk…). Primary v1 use case is marking which defensive possessions were played in zone, so that "breaks while running zone" type splits become possible later. Must stay invisible for teams that don't opt in.
   - **Data model**:
     - `Team.setsEnabled: boolean` (default `false`) — team-level opt-in.
@@ -744,6 +764,43 @@ Remaining work:
   - **Undo**: set lives on the possession itself, so existing undo handling needs no changes.
   - **Ship order**: schema + serialization → team settings opt-in → defensive picker (zone use case) → offensive chip → event-log display → aggregation filters.
   - **Cross-cutting**: bump `cacheName` in `service-worker.js` on any deploy touching CSS or top-level files; add a round-trip test for `setsEnabled`/`sets` in the server test suite.
+
+- [ ] **Extension**: Record a *transition* between sets within one possession ("Fire!")
+  - **Problem.** `Possession.set` holds a single label, so a defence that starts
+    in zone and switches to man partway through — the classic "Fire!" call —
+    can only be re-tagged. The possession then reads as man for its whole
+    length: the zone that forced the stall or the panic throw gets no credit,
+    and a coach reviewing "is our zone working?" sees a possession that never
+    mentions it. The same applies on offence (a vert set that breaks into ho).
+  - **UI.** The set control's long-press popover
+    ([ui/setPicker.js](ui/setPicker.js)) is the natural home: alongside the
+    plain list of labels, a checkbox or toggle — "switched to this set" vs
+    "correct the set" — so a tap that means *we changed* is distinguishable
+    from a tap that means *I mistagged it*. Plain tap-to-cycle should keep
+    meaning "correct it" (it's the fast path, used to fix a mis-tap), which
+    means the transition can only be recorded from the popover.
+  - **Model.** Either `Possession.set` becomes a sequence
+    (`[{label, at}]`, first entry = the set it started in) with the current
+    string kept as a read-side alias for back-compat, or a set-change lands on
+    the possession's own event stream like any other event (which gets undo,
+    serialization and log rendering for free — probably the cheaper route).
+    Legacy possessions keep a bare string and must read as a one-entry
+    sequence.
+  - **Stats — the real design question.** `getGameTeamStats().sets` currently
+    credits a whole possession to one label, so the attribution rules
+    (ARCHITECTURE.md § Possession Sets) need a per-segment answer: which
+    segment owns the **stop**, and which owns the **break**? Most defensible
+    is probably "the set in play when the possession ended" for the stop, with
+    earlier segments counted as *played* but not *credited* — otherwise a team
+    that always bails to man would show man doing all the work. Whatever is
+    chosen, `possessions` (denominator) and `stops`/`breaks` (numerator) stop
+    being the same unit, so the display line needs rethinking too.
+  - **Touch points:** [store/models.js](store/models.js) (Possession),
+    [store/storage.js](store/storage.js) (serialize/deserialize),
+    [utils/statAccumulator.js](utils/statAccumulator.js) (per-set records +
+    `formatSetStatsLines`), [utils/gameLogRenderer.js](utils/gameLogRenderer.js)
+    and the viewer's bespoke renderer (a possession header showing one label
+    would need to show the sequence), plus the set control itself.
 
 - [ ] **Extension**: Richer modifier flags on `Turnover` events
   - The Full PBP "Last turnover was a:" panel currently exposes only `huck` and `good D` because those are the only orthogonal flags on the `Turnover` model today. To support "threw it away while attempting a *break* / *hammer* / *dump*" (and `sky` / `layout` for drops, e.g. receiver tried to layout but missed), add `break_flag`, `hammer_flag`, `dump_flag`, `sky_flag`, `layout_flag` to the `Turnover` constructor in `store/models.js` and surface them in `summarize()`.

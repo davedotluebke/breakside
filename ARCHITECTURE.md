@@ -859,6 +859,15 @@ The whole feature is **invisible until a team opts in**.
 { set: "Zone" | null }                      // null = unspecified
 ```
 
+- **One set per possession — a mid-possession switch overwrites.** `set` is a
+  single label, so a team that starts a defensive possession in zone and calls
+  "Fire!" partway through can only re-tag it: the possession then reads as man
+  for its whole length, and the zone that forced the situation gets no credit
+  in the breakdown. Recording the *transition* would need `set` to become a
+  sequence (or a set-change event on the possession's event stream) plus a rule
+  for which segment a stop or break is attributed to. See TODO.md § Backlog for
+  the sketch.
+
 - **Where tags come from.** One control, in three places, all tagging the same
   live possession and offering the label list for the side in play — offensive
   labels on offence, defensive on defence:
