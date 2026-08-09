@@ -119,6 +119,9 @@ import './playByPlay/fieldPbp.js';
 // evaluating it here — earlier than its old tag position after the pbp files —
 // is harmless: its top level only builds the namespace object.
 import './narration/eventBus.js';
+// Pure leaf (no imports, no DOM) — the engine imports it for the toast text
+// that explains why an event wasn't recorded.
+import './narration/dropReasons.js';
 import './narration/realtimeSession.js';
 import { narrationEngine } from './narration/narrationEngine.js';
 import './narration/transcriptDisplay.js';
