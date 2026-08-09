@@ -482,3 +482,26 @@
     background: #6d28d9;
     border-color: #6d28d9;
 }
+
+/* Header copy of the set chip — the primary control, on the top line with the
+   O/D pill and Undo so it's tapped as the possession unfolds. The header is
+   `justify-content: space-between`, so this sits between the pill group and
+   the density/undo buttons. Shrinks before the buttons do on a narrow phone;
+   the caption is short ("Set: Zone") so it rarely needs to. */
+.full-pbp-header-set {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.full-pbp-set-chip-header {
+    margin: 0;
+    max-width: 100%;
+}
+
+.full-pbp-set-chip-header > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

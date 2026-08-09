@@ -859,17 +859,31 @@ The whole feature is **invisible until a team opts in**.
 { set: "Zone" | null }                      // null = unspecified
 ```
 
-- **Where tags come from.** One cycling control, on the **Full** tab (a chip on
-  the modifier strip) and the **Field** tab (a button under the last-play
-  chips). It tags the live possession and offers the label list for the side in
-  play — offensive labels on offence, defensive on defence. Both surfaces share
-  [utils/possessionSets.js](utils/possessionSets.js) so they can't drift.
-  Simple mode is deliberately not tagged. Missing fields default to
-  `false` / `[]` / `null`, so legacy games need no migration.
+- **Where tags come from.** One control, in three places, all tagging the same
+  live possession and offering the label list for the side in play — offensive
+  labels on offence, defensive on defence:
+  - **Full tab header**, on the top line with the O/D pill and Undo. The
+    primary one: a coach taps it as the possession unfolds.
+  - **Full tab modifier row** ("Last pass was a:" / "Last D was a:"), a mirror
+    of the same possession, so whatever was picked during the possession is
+    what shows next to the play it belongs with.
+  - **Field tab action row**, immediately left of Events.
+
+  **Tap cycles** — → label1 → … → —; **long-press (450 ms) opens the full
+  list**, which also surfaces a tag whose label the team has since deleted
+  (marked "no longer configured"). Gestures live in
+  [ui/setPicker.js](ui/setPicker.js) and the side/cycle logic in
+  [utils/possessionSets.js](utils/possessionSets.js), both shared, so no
+  surface can drift from another. Simple mode is deliberately not tagged.
+  Missing fields default to `false` / `[]` / `null`, so legacy games need no
+  migration.
   - Possessions are created on the first recorded event, so the control appears
     after the pull on a D point and after the first throw on an O point. A set
     tap never materializes a possession — empty possessions carry their own
     undo/cleanup edge cases.
+  - The Field control is hidden between points: that's when its row is tightest
+    (the O/D pill becomes "Start Point (Offense)") and there is no live
+    possession to tag anyway.
   - The pull dialog used to hold a defensive-set picker. Removed 2026-08-09: it
     overflowed the dialog on a phone, and at pull time the coach usually can't
     know yet what set the D will end up running. Tagging once play makes it
@@ -899,6 +913,11 @@ The whole feature is **invisible until a team opts in**.
 
 - **Two attribution rules worth knowing**, both chosen to avoid crediting a set
   for something it didn't do:
+  0. *(Log rendering trap.)* A `Turnover` makes the log emit an **inline**
+     "on defense" delimiter and suppress the following possession's own, so
+     that inline one has to carry the **next** possession's set tag. Reading it
+     off the possession holding the Turnover is what once made mid-point
+     defensive sets invisible in the log while offensive ones rendered fine.
   1. A defensive possession counts as a **stop** unless it is the *last*
      possession of a point we lost — that is the one they scored on. A
      defensive possession that ends a point we *won* is a Callahan, so it

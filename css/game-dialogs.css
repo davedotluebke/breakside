@@ -487,3 +487,38 @@
     opacity: 0.6;
     cursor: default;
 }
+
+
+/* Long-press menu for the possession set picker (ui/setPicker.js). Shared by
+   the Full and Field tabs; tap-to-cycle stays the fast path, this is the
+   "show me everything" affordance. */
+.set-picker-menu-content {
+    max-width: 320px;
+    width: 86%;
+}
+
+.set-picker-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+}
+
+.set-picker-option {
+    margin: 0;                    /* override global button { margin: 10px } */
+    padding: 12px 14px;
+    text-align: left;
+    font-size: 1rem;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    background: var(--white);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.set-picker-option.selected {
+    background: #6d28d9;
+    border-color: #6d28d9;
+    color: #fff;
+    font-weight: 600;
+}

@@ -344,6 +344,20 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 }
 .fp-modbtn.on { background: var(--fp-blue); border-color: var(--fp-blue); color: #fff; }
 
+/* Set picker in the action row, left of Events. Sized like the other
+   action-row buttons; the caption is short ("Set: Zone") so it fits beside
+   Events + Undo in portrait. Only rendered mid-point — between points the row
+   is tightest (the O/D pill becomes "Start Point (Offense)") and there is no
+   live possession to tag. */
+.fp-setbtn {
+    flex: 0 0 auto; margin: 0;   /* override global button { margin: 10px } */
+    border: 1px solid #cfcfcf; border-radius: 6px; background: #f7f7f7;
+    padding: 7px 10px; font-size: 13px; font-weight: 600; color: #333;
+    cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent;
+    max-width: 34vw; overflow: hidden; text-overflow: ellipsis;
+}
+.fp-setbtn.on { background: #6d28d9; border-color: #6d28d9; color: #fff; }
+
 /* Defense: D-action buttons fill the player slot until one is chosen.
    Plain/neutral styling — same look as the other buttons, no color coding.
    Sized to match the player chips (~35px) that replace them once a defender

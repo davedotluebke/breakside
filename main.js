@@ -80,6 +80,7 @@ import './utils/statsLevel.js';
 import './utils/xlsxExport.js';
 import './ui/activePlayersDisplay.js';
 import './ui/eventLogDisplay.js';
+import './ui/setPicker.js';
 import { matchButtonWidths } from './ui/buttonLayout.js';
 import { isGameScreenVisible } from './ui/panelSystem.js';
 import { showScreen, showEditRosterScreen, showEditRosterSubscreen } from './screens/navigation.js';

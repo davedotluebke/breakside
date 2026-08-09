@@ -39,8 +39,9 @@ import {
     formatPlayerName, buildPointPlayerLookup,
 } from '../utils/helpers.js';
 import {
-    setLabelsFor, nextSetValue, setControlLabel, taggablePossession,
+    setLabelsFor, setControlLabel, taggablePossession,
 } from '../utils/possessionSets.js';
+import { wireSetControl } from '../ui/setPicker.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { undoEvent } from '../game/gameLogic.js';
 import { startNextPoint } from '../game/pointManagement.js';
@@ -190,6 +191,7 @@ const fullPbp = (function() {
                 <button class="full-pbp-start-point-btn" id="fullPbpStartPointBtn" style="display:none">Start Point</button>
                 <span class="full-pbp-mode-pill" id="fullPbpModePill">Offense</span>
                 <span class="full-pbp-no-point-msg" id="fullPbpNoPointMsg" style="display:none">No active point</span>
+                <span class="full-pbp-header-set" id="fullPbpHeaderSet" style="display:none"></span>
                 <button class="full-pbp-density-btn" id="fullPbpDensityBtn" title="Toggle row density">
                     <i class="fas fa-compress"></i>
                 </button>
@@ -301,6 +303,7 @@ const fullPbp = (function() {
             }
         }
 
+        renderHeaderSetChip(state, inPoint);
         renderModifierRow(state, inPoint);
         renderBottomActions(state, inPoint);
         renderMiniLog(state.point);
@@ -400,23 +403,52 @@ const fullPbp = (function() {
         return { labels, possession };
     }
 
-    function buildSetCycleChip({ labels, possession }) {
+    /**
+     * One set control, used in two places: the header (primary — a coach taps
+     * it as the possession unfolds) and the modifier row (secondary — it
+     * mirrors the same possession, so whatever was picked during the
+     * possession is what shows there).
+     *
+     * Tap cycles; long-press opens the full list. Both gestures are wired by
+     * ui/setPicker.js, shared with the Field tab.
+     */
+    function buildSetCycleChip({ labels, possession }, extraClass) {
         const chip = document.createElement('label');
-        chip.className = 'full-pbp-modifier-chip full-pbp-set-chip';
+        chip.className = `full-pbp-modifier-chip full-pbp-set-chip${extraClass ? ' ' + extraClass : ''}`;
         if (possession.set) chip.classList.add('checked');
 
         const span = document.createElement('span');
         span.textContent = setControlLabel(possession);
         chip.appendChild(span);
 
-        chip.addEventListener('click', () => {
-            if (!requireActiveCoach()) return;
-            possession.set = nextSetValue(possession.set, labels);
-            if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
-            render();
+        wireSetControl(chip, {
+            // Re-read rather than close over: cloud sync swaps these objects.
+            getPossession: () => taggablePossession(reconstructState().point),
+            getLabels: () => labels,
+            canEdit: () => requireActiveCoach(),
+            onChange: () => {
+                if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+                render();
+            },
         });
-
         return chip;
+    }
+
+    /**
+     * Header set chip — sits on the top line with the O/D pill and Undo, where
+     * it's reachable mid-possession rather than only after the fact.
+     */
+    function renderHeaderSetChip(state, inPoint) {
+        const slot = document.getElementById('fullPbpHeaderSet');
+        if (!slot) return;
+        const ctx = setChipContext(state, inPoint);
+        slot.innerHTML = '';
+        if (!ctx) {
+            slot.style.display = 'none';
+            return;
+        }
+        slot.style.display = '';
+        slot.appendChild(buildSetCycleChip(ctx, 'full-pbp-set-chip-header'));
     }
 
     /**

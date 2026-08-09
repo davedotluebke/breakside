@@ -43,7 +43,7 @@
 import { UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData, currentTeam } from '../store/storage.js';
 import {
-    setLabelsFor, nextSetValue, setControlLabel, taggablePossession,
+    setLabelsFor, setControlLabel, taggablePossession,
 } from '../utils/possessionSets.js';
 import {
     currentGame, getLatestPoint, getPlayerFromName, isPointInProgress,
@@ -55,6 +55,7 @@ import { startNextPoint } from '../game/pointManagement.js';
 import { showControllerToast } from '../game/controllerState.js';
 import { ensureDialogVisible, handlePbpTheyScore, handlePbpGameEvents } from '../game/gameScreenEvents.js';
 import { handlePanelStartPoint } from '../game/selectLine.js';
+import { wireSetControl } from '../ui/setPicker.js';
 import { showScoreAttributionDialog } from './scoreAttribution.js';
 
 const fieldPbp = (function() {
@@ -697,15 +698,20 @@ const fieldPbp = (function() {
     }
 
     /**
-     * Set tagging for the live possession — one cycling button below the
-     * last-play chips, separated so it doesn't crowd the tagging the coach
-     * reaches for every throw. Renders only for teams opted into set
-     * tracking that configured labels for the side currently in possession.
+     * Set tagging for the live possession — a button in the action row, just
+     * left of Events, where it's reachable as the possession unfolds. Tap
+     * cycles, long-press opens the full list (ui/setPicker.js, shared with the
+     * Full tab so the two surfaces can't drift).
      *
-     * Shares utils/possessionSets.js with the Full tab's chip so the two
-     * surfaces can't drift. Defensive sets used to be picked in the pull
-     * dialog; that was removed 2026-08-09 (overflowed on a phone, and the
-     * set usually isn't known until the D is actually running).
+     * Renders only mid-point, and only for teams opted into set tracking that
+     * configured labels for the side currently in possession. Hiding it
+     * between points is deliberate: that's when the action row is tightest
+     * (the O/D pill becomes "Start Point (Offense)"), and there is no live
+     * possession to tag anyway.
+     *
+     * Defensive sets used to be picked in the pull dialog; that was removed
+     * 2026-08-09 (overflowed on a phone, and the set usually isn't known until
+     * the D is actually running).
      */
     function setControlHTML(state, inPoint) {
         if (!inPoint || !state.point) return '';
@@ -714,12 +720,12 @@ const fieldPbp = (function() {
         if (!labels.length) return '';
         const caption = setControlLabel(possession)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        return '<div class="fp-modsep"></div>'
-            + `<button class="fp-modbtn fp-setbtn${possession.set ? ' on' : ''}" data-setcycle="1">${caption}</button>`;
+        return `<button class="fp-setbtn${possession.set ? ' on' : ''}" data-setcycle="1" `
+            + `title="Tap to cycle sets, long-press for the full list">${caption}</button>`;
     }
 
     function modColHTML(state, inPoint) {
-        return modColBodyHTML(state) + setControlHTML(state, inPoint);
+        return modColBodyHTML(state);
     }
 
     function modColBodyHTML(state) {
@@ -868,6 +874,7 @@ const fieldPbp = (function() {
                 ${leftSlot}
                 <span class="fp-actionrow-spacer"></span>
                 <span class="fp-status-inline">${statusText(state, inPoint)}</span>
+                ${setControlHTML(state, inPoint)}
                 <button class="fp-gameevents" id="fpGameEventsBtn" title="Timeout, injury sub, halftime, switch sides, end game"><i class="fas fa-cog"></i><span>Events</span></button>
                 <button class="fp-undo" id="fpUndoBtn" title="Undo last event"><i class="fas fa-undo"></i><span>Undo</span></button>
             </div>
@@ -1332,16 +1339,6 @@ const fieldPbp = (function() {
                 event: le, previousEvent: null, source: 'manual', provisionalId: null
             });
         }
-        render();
-    }
-    function cycleSet() {
-        if (!requireActiveCoach()) return;
-        const state = reconstructState();
-        const possession = taggablePossession(state.point);
-        const labels = setLabelsFor(currentTeam, possession);
-        if (!possession || !labels.length) return;
-        possession.set = nextSetValue(possession.set, labels);
-        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
         render();
     }
     function placeD(l, w) {
@@ -1818,9 +1815,17 @@ const fieldPbp = (function() {
             b.onclick = () => toggleLastMod(b.dataset.lastmod);
         });
 
-        // Set tag: cycle the live possession's set label.
-        root.querySelectorAll('.fp-modbtn[data-setcycle]').forEach(b => {
-            b.onclick = () => cycleSet();
+        // Set tag: tap cycles, long-press opens the full list.
+        root.querySelectorAll('[data-setcycle]').forEach(b => {
+            wireSetControl(b, {
+                getPossession: () => taggablePossession(reconstructState().point),
+                getLabels: () => setLabelsFor(currentTeam, taggablePossession(reconstructState().point)),
+                canEdit: () => requireActiveCoach(),
+                onChange: () => {
+                    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+                    render();
+                },
+            });
         });
 
         // During pull, chips are tap-only (drag is disabled so the rail can
