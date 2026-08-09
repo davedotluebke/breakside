@@ -1103,16 +1103,25 @@ The ADD `event` object has shape:
 
 ```json
 {
-  "kind": "throw" | "turnover" | "defense" | "opponent_score",
+  "kind": "throw" | "turnover" | "defense" | "opponent_score" | "pull",
   "thrower": "Alice", "receiver": "Bob",
   "huck": true, "break_throw": false, "reset": false, "swing": false,
   "hammer": false, "sky": false, "layout": false, "score": true,
   // turnover-specific:  "throwaway", "drop", "good_defense", "stall"
   // defense-specific:   "defender", "interception", "callahan"
+  // pull-specific:      "puller", "flick", "roller", "io", "oi", "brick", "quality"
 }
 ```
 
 Player names must match roster entries exactly. The slow-pass prompt explicitly tells Claude to emit bare names (not `"Alice #7"`) — this was a real bug caught by the test harness on its first run.
+
+**Pulls are gated on a named puller.** `puller` is required, and the prompt says so with an explicit `WRONG: {"kind": "pull"}` example; `applyPull` in `narration/narrationEngine.js` drops a pullerless pull as a second line of defense. The reason is that `showPullDialog()` already fires automatically at every point that starts on defense (`game/pointManagement.js`), so the coach has normally already entered the pull by hand — a narrated pull is only worth recording when it names a puller the dialog wouldn't have captured, and a nameless one is pure duplicate. Live probing confirmed this matters: before the required-puller rule was hardened, Haiku emitted a bare `{"kind": "pull"}` for scene-setting narration like "we pulled it" and "they pull". The prompt rules are pinned in `ultistats_server/test_narration_finalize.py`.
+
+**One pull per point, guarded from both sides.** Two independent paths can record the pull, so each checks `pointHasPull()` (`utils/helpers.js`) before writing and the first one wins: `applyPull` skips a narrated pull when the dialog already recorded one, and `createPullEvent` (`playByPlay/pullDialog.js`) skips the dialog entry when narration got there first, toasting "Pull already recorded from narration" so the coach isn't left wondering where their quality/hang selections went. A one-sided guard is not enough — the slow pass lands seconds after the coach stops talking, so either order is reachable in practice. `pointHasPull` scans all possessions and keys on `event.type === 'Pull'` rather than `instanceof`, because points rebuilt from the server come back through `deserializeEvent`; `tests/unit/pointHasPull.test.mjs` pins both.
+
+**Dropped events say why.** When an applier declines to record an event it returns null, and the coach gets a warning toast. That toast used to read "N couldn't be matched to on-field players" for *every* cause, which was wrong in the case that reached the field: before `kind=pull` existed, a narrated pull came back as `{kind: "throw", thrower: "Inez"}` with no receiver, `applyThrow` requires both, and the coach was told to check a roster that was fine. Appliers now call `dropWith(reason, detail)` before returning null — `'unmatched-name'` (a name we couldn't match, quoted in the message), `'incomplete'` (a required field missing, e.g. "throw with no receiver"), `'duplicate-pull'`, `'unsupported'` — and `summarizeDrops()` in `narration/dropReasons.js` (pure leaf, unit-tested) turns the collected reasons into one clause. Keep the distinction between "the model named someone we don't have" and "the model named nobody": they send the coach to completely different places.
+
+**A narrated pull dismisses the pull dialog.** `applyPull` calls `closePullDialog()` on success. Without it the coach is left staring at a form asking for an event that is already in the log, since the dialog opens itself at point start and nothing else would close it. This is what makes the narrate-the-pull flow hands-free: Start Point → dialog opens → tap mic, speak, stop → a few seconds later the event lands and the dialog closes on its own. Note the mic button is `position: fixed; z-index: 2000` on `document.body` while `.modal` is `z-index: 1000`, which is why it is reachable while the dialog is up.
 
 Terminology: **"reset" is the canonical name** for the short backward pass (2026-07-19 design call) — in the schema, the `Throw.reset_flag` field, log lines, chips, and stats alike. Coaches saying "dump" set the same `reset` field (the prompt says so explicitly), and games stored before the rename carry `dump_flag`, which `deserializeEvent` aliases onto `reset_flag` (the public viewer, which renders raw server JSON, checks both).
 

@@ -575,9 +575,42 @@ OpenAI re-applies to every VAD-segmented utterance (~2.3 per line call), plus tr
       single-scenario flip across four runs — inherent LLM variance at the F1
       threshold, see test_scenarios.py docstring). ARCHITECTURE.md § AI Narration
       documents the terminology.)*
-- [ ] **Add `record_pull` to the slow-pass schema**
-  - Currently if a coach narrates a pull (e.g. "Alice flicks an OI pull, brick"), it's ignored
-  - Easy add: extend the event schema in `ultistats_server/narration.py` and add an applier in `narration/narrationEngine.js`
+- [x] **Add `record_pull` to the slow-pass schema** *(done 2026-08-06, branch
+      `narration-record-pull`) — `kind: "pull"` in the schema
+      (`puller`, `flick`, `roller`, `io`, `oi`, `brick`, `quality`) plus
+      `applyPull` in `narration/narrationEngine.js`. Three guards make it safe
+      to narrate a pull the dialog already collected: **a named puller is
+      required** (a bare `{"kind":"pull"}` is dropped client-side and the
+      prompt shows it as a WRONG example); **one Pull per point, checked from
+      both sides** via `pointHasPull()` in `utils/helpers.js` — narration skips
+      if the dialog got there first AND the dialog skips (with a toast) if
+      narration did, since the slow pass lands seconds after the coach stops
+      talking and either order is reachable; and **a narrated pull closes the
+      pull dialog**, so the coach isn't left filling in a form for an event
+      already in the log. Rationale: `showPullDialog()` fires automatically at
+      every D-point start, so an unattributed narrated pull is pure duplicate.
+      End-to-end this makes the flow hands-free: Start Point → dialog opens →
+      tap mic, speak, stop → event lands, dialog closes itself.
+      Hardening the puller rule was driven by live probing — Haiku emitted a
+      pullerless pull for "we pulled it" and "they pull" until the rule got
+      an explicit REQUIRED gate; after it, 7/7 probe cases twice consecutively
+      (named pull, named pull after a mid-narration score, named pull with
+      flags, plus the four unattributed/opponent-pull negatives from the
+      corpus). Corpus: 018's expected gains the Daniel pull; 007/010/011/015
+      stay unchanged as the negatives. New deterministic suite
+      `ultistats_server/test_narration_finalize.py` (11 tests) pins the prompt
+      rules and gives `score_events`/`_event_signature` their first coverage
+      in the default run — the live corpus module is entirely
+      `NARRATION_LIVE_TESTS`-gated, so they had none;
+      `tests/unit/pointHasPull.test.mjs` (9 tests) pins the duplicate guard.
+      Suites: backend 346, unit 157, e2e 21/21.*
+  - [ ] **Still needs a human: the mic leg.** Everything up to the microphone
+        is verified, but nobody has confirmed on a real device that the mic
+        button actually takes the tap while the pull dialog is up (it should —
+        `z-index` 2000 over the modal's 1000, and `startRecording` has no
+        dialog gate — but that's read off the CSS, not observed), nor timed
+        how long the dialog lingers while the slow pass runs. Worth folding
+        into the next staging field test.
 - [ ] **Re-evaluate streaming events (fast pass)**
   - Currently disabled via `FAST_PASS_EVENTS_ENABLED = false` in `narrationEngine.js`
   - All code is preserved — flip the flag to re-enable
@@ -590,7 +623,10 @@ Today the mic only narrates plays *during* a point. Two adjacent flows would ext
 
 - [ ] **Speech-driven point start (incl. pull recording)**
   - Tap mic on the pre-point screen and speak: "Alice, Bob, Carol, Dan, Eve, Frank, Grace — Bob hucks a flick OI pull, brick" → app selects those 7 players, transitions to in-point, and records the pull with puller + flags in one shot.
-  - Requires the `record_pull` schema gap to be closed first (see Coverage above) so the pull leg of this flow has somewhere to land.
+  - ~~Requires the `record_pull` schema gap to be closed first~~ — **unblocked
+    2026-08-06**: `kind: "pull"` and `applyPull` exist (see Coverage above), so
+    the pull leg of this flow has somewhere to land. Note the puller-required
+    rule: "Bob hucks a flick OI pull" works, a bare "we pull" records nothing.
   - Touch points: `narration/narrationEngine.js` (new pre-point intent + applier), new pull schema in `ultistats_server/narration.py`, `pointManagement.js` (programmatic line-select + start-point hook), `game/gameScreen.js` (mic surfaced on Line tab when between points).
   - Open question: one mic-tap or two? Single tap that handles "line + pull" feels natural orally but mixes two state transitions; safer to gate the pull narration behind the line being confirmed first.
 
@@ -637,7 +673,14 @@ Remaining work:
 - [ ] **Hand-record 004b / 008b / 015b / 019b / 021** in noisy outdoor conditions; same expected.json, different audio.flac. Built-in regression for outdoor robustness. *(These five are the only scenario dirs still without audio.)*
 - [ ] **Re-record a live-conditions scenario to replace the deleted `022_live_field_point`.** The original was a phone recording of a real game point — wind, sideline chatter, dead-air gaps that fragmented the transcript into subject-less clauses ("Upfield to the handler.Turns it over…"). It caught four prompt gaps clean TTS never did. It was deleted in the name scrub because the recording *speaks real player names*, which no text edit can fix. Narrate a fresh point calling the generic roster (Alice/Bob/Charlie/Dana/Eve/Hank/Iris) and rebuild roster/transcript/expected alongside it.
 - [ ] **Schema gap: opponent unforced turnover.** Several scenarios above (007, 008, 014) gloss over what happens when the opponent throws it away to us — the narration schema in `ultistats_server/narration.py` has no event for "they turnover". The Full-PBP requirements doc models this as `Defense{unforcedError, defender=null}`. Decide whether to add it to the narration schema or handle implicitly via the next throw being from us.
-- [ ] **Schema gap: `record_pull`.** Multiple scenarios start with "they pull" / "we pull" — currently dropped on the floor. Adding `kind: "pull"` (with `puller`, `out_of_bounds?`, `brick?`, `landed_in_endzone?`) would let those narrations carry their first event.
+- [x] **Schema gap: `record_pull`.** *(closed 2026-08-06 — see the Coverage
+      section above.)* Worth knowing how it landed, because the answer was not
+      what this entry assumed: the "they pull" / "we pull" openers **stay**
+      dropped on the floor, deliberately. They name no puller, and an
+      unattributed pull duplicates what the pull dialog already collects at
+      point start. Only a pull that names one of our players becomes an event.
+      So 007/010/011/015 keep their expectations as negative cases, and 018
+      ("Daniel pulls") is the positive one.
 - [ ] **Noise injection** — mix in wind/crowd samples to simulate field conditions, run the same scenarios at varying SNR.
 - [ ] **CI integration** — run on PRs that touch `narration/` or `ultistats_server/narration.py`. Fail on metric regression beyond a threshold. Cost note: ~$0.10 per scenario per run.
 

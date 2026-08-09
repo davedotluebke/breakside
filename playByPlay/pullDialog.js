@@ -6,8 +6,9 @@ import { Gender, Pull, Possession, UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData, currentTeam } from '../store/storage.js';
 import {
     currentGame, getLatestPoint, getPlayerFromName, getGenderRatioForPoint,
-    formatPlayerName, buildPointPlayerLookup,
+    formatPlayerName, buildPointPlayerLookup, pointHasPull,
 } from '../utils/helpers.js';
+import { showControllerToast } from '../game/controllerState.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { getCurrentMode } from '../ui/panelSystem.js';
 import { log } from '../utils/logger.js';
@@ -449,7 +450,21 @@ function createPullEvent() {
         console.error('Cannot create pull event: no game or point');
         return;
     }
-    
+
+    // One pull per point. Narration can record the pull too, and its slow
+    // pass lands a few seconds after the coach stops talking — so a coach who
+    // narrates the pull and then taps Proceed would otherwise end up with two
+    // Pull events. First one wins, symmetric with applyPull's guard on the
+    // narration side. Normally unreachable: a narrated pull closes this
+    // dialog, so this only catches the race where Proceed beats that by a
+    // hair.
+    if (pointHasPull(point)) {
+        log('Pull already recorded for this point; ignoring dialog entry');
+        showControllerToast('Pull already recorded from narration', 'info');
+        closePullDialog();
+        return;
+    }
+
     // Ensure a player has been selected (including Unknown Player)
     if (pullSelectedPlayer === undefined) {
         console.error('Cannot create pull event: no player selected');
@@ -596,6 +611,10 @@ function getExpectedPullGender(game) {
 
 // --- ES-module exports ---
 // showPullDialog is imported by game/pointManagement.js — no shim needed.
-export { initializePullDialog, showPullDialog };
+// closePullDialog is imported by narration/narrationEngine.js: a narrated
+// pull dismisses this dialog, since the coach has already supplied the pull
+// by voice and would otherwise be left staring at a form for an event that
+// is already in the log.
+export { initializePullDialog, showPullDialog, closePullDialog };
 
 
