@@ -6,10 +6,16 @@
  * reach is natural on phone and so it doesn't cover the center of the
  * mini-log strip in the Full PBP panel.)
  *
+ * Drives event narration on the play tabs and lineup narration on the Line
+ * tab (see micButton.js); the states below are shared by both, so lineup's
+ * "processing" reuses .mic-finalizing rather than adding a fifth colour.
+ *
  * States:
  *   .mic-idle       Red - tap to start recording (or hold for temp recording)
  *   .mic-recording  Green (pulsing) - tap to stop
  *   .mic-connecting Amber - briefly while opening the session
+ *   .mic-finalizing Blue (pulsing) - post-release work: the event slow pass,
+ *                   or the lineup being resolved
  *   .mic-disabled   Grey - not in a game or recording unavailable
  * The button is hidden (display:none) when not in a game.
  */

@@ -73,12 +73,17 @@ import './settings/advancedSettings.js';
 import './utils/statAccumulator.js';
 import './utils/eventStats.js';
 import './utils/gameLogRenderer.js';
+import './utils/possessionSets.js';
 import './utils/tableSort.js';
 import './utils/statsHelp.js';
 import './utils/statsLevel.js';
 import './utils/xlsxExport.js';
+// Evaluated before anything can show a screen, so its breakside:screen-shown
+// listener never misses the first navigation.
+import { dismissSplash } from './ui/splashScreen.js';
 import './ui/activePlayersDisplay.js';
 import './ui/eventLogDisplay.js';
+import './ui/setPicker.js';
 import { matchButtonWidths } from './ui/buttonLayout.js';
 import { isGameScreenVisible } from './ui/panelSystem.js';
 import { showScreen, showEditRosterScreen, showEditRosterSubscreen } from './screens/navigation.js';
@@ -117,8 +122,10 @@ import './narration/eventBus.js';
 import './narration/realtimeSession.js';
 import { narrationEngine } from './narration/narrationEngine.js';
 import './narration/transcriptDisplay.js';
-import './narration/micButton.js';
+// lineupNarration before micButton: the FAB imports it to route Line-tab
+// presses, so it evaluates first either way — list it in the real order.
 import './narration/lineupNarration.js';
+import './narration/micButton.js';
 
 // Skip the service worker during local development (localhost / 127.0.0.1).
 // Its offline precache otherwise serves stale JS/CSS across edits, so source
@@ -354,6 +361,9 @@ async function initializeApp() {
                 if (window.breakside?.loginScreen?.showAuthScreen) {
                     window.breakside.loginScreen.showAuthScreen();
                 }
+                // showAuthScreen() bypasses showScreen(), so no
+                // breakside:screen-shown fires — retract the splash by hand.
+                dismissSplash();
             }
         } catch (error) {
             // Auth failed to initialize, allow offline mode

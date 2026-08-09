@@ -425,6 +425,60 @@ test('possession.set renders in the delimiter and keeps the O/D css classes', ()
         'game-log-line game-log-possession-header game-log-possession-offense');
 });
 
+test('a defensive set tagged after a turnover still shows in the log', () => {
+    // The turnover emits an INLINE "on defense" delimiter and suppresses the
+    // real defensive possession's own, so the tag has to be read off the NEXT
+    // possession. Reading it off the one holding the Turnover made mid-point
+    // defensive sets silently invisible while offensive ones rendered fine.
+    const oPoss = makePossession(true, [stubEvent('Alice throws it away.', 'Turnover')]);
+    const dPoss = makePossession(false, [stubEvent('Carla gets a block.')]);
+    dPoss.set = 'Zone';
+    const nextO = makePossession(true, [stubEvent('Alice to Bob.')]);
+    nextO.set = 'Vert';
+    const game = makeGame({
+        points: [makePoint({
+            players: ['Alice'],
+            startingPosition: 'offense',
+            winner: 'team',
+            possessions: [oPoss, dPoss, nextO],
+        })],
+    });
+    const text = buildGameLogText(game, OPTS);
+    assert.ok(text.includes('— Us on defense (Zone) —'), text);
+    // Exactly one defensive delimiter — the inline one, not a duplicate.
+    assert.equal((text.match(/— Us on defense/g) || []).length, 1, text);
+    // The offensive possessions still tag normally.
+    assert.ok(text.includes('— Us on offense (Vert) —'), text);
+});
+
+test('an untagged possession after a turnover renders the bare delimiter', () => {
+    const oPoss = makePossession(true, [stubEvent('Alice throws it away.', 'Turnover')]);
+    const dPoss = makePossession(false, [stubEvent('Carla gets a block.')]);
+    const game = makeGame({
+        points: [makePoint({
+            players: ['Alice'], startingPosition: 'offense', winner: '',
+            possessions: [oPoss, dPoss],
+        })],
+    });
+    const text = buildGameLogText(game, OPTS);
+    assert.ok(text.includes('— Us on defense —'), text);
+    assert.ok(!/on defense \(/.test(text), text);
+});
+
+test('a turnover with no following possession still emits its delimiter', () => {
+    // Turnover recorded before any D event exists — the look-ahead must not
+    // throw or invent a tag.
+    const oPoss = makePossession(true, [stubEvent('Alice throws it away.', 'Turnover')]);
+    const game = makeGame({
+        points: [makePoint({
+            players: ['Alice'], startingPosition: 'offense', winner: '',
+            possessions: [oPoss],
+        })],
+    });
+    const text = buildGameLogText(game, OPTS);
+    assert.ok(text.includes('— Us on defense —'), text);
+});
+
 test('untagged possession renders the plain delimiter (no empty parens)', () => {
     const game = makeGame({
         points: [makePoint({

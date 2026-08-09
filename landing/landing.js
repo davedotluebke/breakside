@@ -86,6 +86,52 @@ document.addEventListener('keydown', (e) => {
 });
 
 // =============================================================================
+// Field Mode Demo Video
+// =============================================================================
+
+const videoModal = document.getElementById('videoModal');
+const fieldDemoLink = document.getElementById('fieldDemoLink');
+const fieldDemoVideo = document.getElementById('fieldDemoVideo');
+const closeVideoModal = document.getElementById('closeVideoModal');
+
+function openVideoModal() {
+    videoModal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    fieldDemoVideo.currentTime = 0;
+    fieldDemoVideo.play().catch(() => {});
+    // Go straight to full screen (we're inside a user gesture). The lightbox
+    // stays behind as the fallback chrome — iOS Safari only fullscreens via
+    // webkitEnterFullscreen, and either API may refuse.
+    if (fieldDemoVideo.requestFullscreen) {
+        fieldDemoVideo.requestFullscreen().catch(() => {});
+    } else if (fieldDemoVideo.webkitEnterFullscreen) {
+        try { fieldDemoVideo.webkitEnterFullscreen(); } catch (_) { /* lightbox fallback */ }
+    }
+}
+
+function closeVideo() {
+    videoModal.classList.remove('active');
+    document.body.style.overflow = '';
+    fieldDemoVideo.pause();
+}
+
+fieldDemoLink?.addEventListener('click', openVideoModal);
+closeVideoModal?.addEventListener('click', closeVideo);
+
+videoModal?.addEventListener('click', (e) => {
+    if (e.target === videoModal) closeVideo();
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && videoModal?.classList.contains('active')) closeVideo();
+});
+
+// Leaving native fullscreen returns to the lightbox; closing it entirely is
+// the ✕ / backdrop / Escape. iOS fires webkitendfullscreen when the user
+// dismisses the native player — treat that as closing the whole thing.
+fieldDemoVideo?.addEventListener('webkitendfullscreen', closeVideo);
+
+// =============================================================================
 // Auth Tab Switching
 // =============================================================================
 

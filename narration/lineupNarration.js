@@ -3,23 +3,26 @@
  *
  * A SEPARATE layer on top of the base narration plumbing. It reuses
  * narrationRealtimeSession (transcription-only mode) for capture and the
- * Advanced Settings narration knobs, but has its own mic button (in the
- * Select Line toolbar), its own state machine, and its own backend
- * endpoint (/api/narration/lineup). It never touches the in-point
- * narration engine beyond checking that it's idle — the two can't record
- * at once because they share the realtime-session singleton.
+ * Advanced Settings narration knobs, but has its own state machine and its
+ * own backend endpoint (/api/narration/lineup). It never touches the
+ * in-point narration engine beyond checking that it's idle — the two can't
+ * record at once because they share the realtime-session singleton.
+ *
+ * No button of its own: the floating mic FAB (narration/micButton.js) routes
+ * to this layer whenever the Line tab is active, and drives start()/stop()
+ * with the same tap-toggle / hold-to-record gestures it uses for event
+ * narration. This module owns only the inline status strip under the Select
+ * Line toolbar; button state is reported back through the late-bound
+ * window.narrationMicButton.refresh() hook.
  *
  * Flow:
- *   tap #lineupMicBtn → transcription session opens (vocabulary biased to
- *   the FULL active roster — calling a line names bench players) → coach
- *   speaks ("Kris goes in for Wes", "same line but…", corrections) →
- *   tap again → transcript + roster + expected count + previous lineup +
+ *   tap the mic on the Line tab → transcription session opens (vocabulary
+ *   biased to the FULL active roster — calling a line names bench players)
+ *   → coach speaks ("Kris goes in for Wes", "same line but…", corrections)
+ *   → tap again → transcript + roster + expected count + previous lineup +
  *   current selection POST to /api/narration/lineup → returned players
  *   are applied through selectLine's applyLineSelection (same path as the
  *   Auto button), replacing the active line's selection.
- *
- * The mic button lives in DOM built by gameScreenPanels; clicks are
- * delegated on document so panel rebuilds can't orphan the handler.
  */
 import { narrationRealtimeSession, mergeCompletedUtterance } from './realtimeSession.js';
 import { narrationEngine } from './narrationEngine.js';
@@ -29,14 +32,23 @@ import { advancedSettings } from '../settings/advancedSettings.js';
 import { authFetch, API_BASE_URL } from '../store/sync.js';
 import { getActiveRoster } from '../store/storage.js';
 import { currentGame, buildPointPlayerLookup } from '../utils/helpers.js';
-import { showControllerToast } from '../game/controllerState.js';
+import { showControllerToast, dismissToast } from '../game/controllerState.js';
 import { applyLineSelection, canEditSelectLinePanel } from '../game/selectLine.js';
+import { getActiveTab } from '../ui/panelSystem.js';
 
 const lineupNarration = (function() {
-    const BTN_ID = 'lineupMicBtn';
     const STATUS_ID = 'lineupNarrationStatus';
     const LINEUP_ENDPOINT = '/api/narration/lineup';
     const TRANSCRIPT_TAIL_CHARS = 120;
+
+    // showControllerToast's own default, which the confirmation toast scales
+    // off. It reports a whole line ("7/7 selected. Added: Kris. Off: Wes") and
+    // flags a miscount, so it needs reading time, not glance time — 3x on the
+    // Line tab, where the checkboxes next to it already tell the story, and
+    // double that again elsewhere, where the toast IS the only feedback.
+    const TOAST_BASE_MS = 4000;
+    const CONFIRM_TOAST_MS = TOAST_BASE_MS * 3;
+    const CONFIRM_TOAST_OFF_LINE_TAB_MS = CONFIRM_TOAST_MS * 2;
 
     // 'idle' | 'connecting' | 'recording' | 'processing'
     let phase = 'idle';
@@ -45,6 +57,10 @@ const lineupNarration = (function() {
     // as narrationEngine — never leave the mic hot after a cancel).
     let abortRequested = false;
     let transcript = '';
+    // The long-lived confirmation toast, held so we can retire it early once
+    // the coach has visibly moved on. Cleared by its own onDismiss, so a
+    // manual close/swipe doesn't leave us holding a detached node.
+    let confirmToast = null;
 
     function toast(message, type = 'info') {
         if (typeof showControllerToast === 'function') {
@@ -52,6 +68,36 @@ const lineupNarration = (function() {
         } else {
             console.warn(`[lineupNarration] (no toast) ${type}: ${message}`);
         }
+    }
+
+    /**
+     * The "here's your line" toast. Outlives a normal toast (see the constants
+     * above) and is dismissed early by dismissConfirmToast() rather than being
+     * left to time out after the coach has already acted on it.
+     */
+    function showConfirmToast(message, type) {
+        if (typeof showControllerToast !== 'function') {
+            console.warn(`[lineupNarration] (no toast) ${type}: ${message}`);
+            return;
+        }
+        dismissConfirmToast();  // never stack two line reports
+        const onLineTab = (typeof getActiveTab === 'function') && getActiveTab() === 'line';
+        confirmToast = showControllerToast(
+            message,
+            type,
+            onLineTab ? CONFIRM_TOAST_MS : CONFIRM_TOAST_OFF_LINE_TAB_MS,
+            { onDismiss: () => { confirmToast = null; } }
+        );
+    }
+
+    /** Retire the confirmation toast early. Safe to call when there isn't one
+     *  (or when the coach already closed it — dismissToast no-ops on a node
+     *  that's out of the DOM). */
+    function dismissConfirmToast() {
+        if (!confirmToast) return;
+        const t = confirmToast;
+        confirmToast = null;
+        if (typeof dismissToast === 'function') dismissToast(t);
     }
 
     // -----------------------------------------------------------------
@@ -63,30 +109,13 @@ const lineupNarration = (function() {
         refresh();
     }
 
-    /** Sync the mic button's classes/title and the status strip to `phase`.
-     *  Re-queries the DOM each time — the Lines panel can be rebuilt. */
+    /** Sync the status strip to `phase`, and nudge the shared mic FAB to
+     *  re-render — it reads getPhase() to pick its colour and tooltip.
+     *  window-qualified: micButton imports us, so importing it back would
+     *  make a cycle (same pattern as narrationEngine's setPhase). */
     function refresh() {
-        const btn = document.getElementById(BTN_ID);
-        if (btn) {
-            btn.classList.remove('mic-idle', 'mic-connecting', 'mic-recording', 'mic-processing', 'mic-disabled');
-            if (!isSupported()) {
-                btn.classList.add('mic-disabled');
-                btn.title = 'Lineup narration unavailable (no microphone support)';
-            } else if (phase === 'connecting') {
-                btn.classList.add('mic-connecting');
-                btn.title = 'Connecting…';
-            } else if (phase === 'recording') {
-                btn.classList.add('mic-recording');
-                btn.title = 'Listening — tap to finish the lineup';
-            } else if (phase === 'processing') {
-                btn.classList.add('mic-processing');
-                btn.title = 'Working out the lineup…';
-            } else {
-                btn.classList.add('mic-idle');
-                btn.title = 'Narrate the next line — tap, speak names or subs, tap again';
-            }
-        }
         refreshStatusStrip();
+        window.narrationMicButton?.refresh?.();
     }
 
     /** The inline "Listening… <transcript tail>" strip under the toolbar.
@@ -197,6 +226,9 @@ const lineupNarration = (function() {
             toast('No roster to match a lineup against', 'warning');
             return;
         }
+
+        // Narrating again supersedes the previous line report.
+        dismissConfirmToast();
 
         abortRequested = false;
         transcript = '';
@@ -389,7 +421,7 @@ const lineupNarration = (function() {
             expectedCount: getExpectedCount(),
             added, removed, unmatched
         });
-        toast(message, type);
+        showConfirmToast(message, type);
         return true;
     }
 
@@ -407,18 +439,20 @@ const lineupNarration = (function() {
     // Wiring
     // -----------------------------------------------------------------
 
-    // Delegated: the button is inside panel DOM that gameScreenPanels can
-    // rebuild; a document-level listener survives that.
-    document.addEventListener('click', (e) => {
-        if (e.target && e.target.closest && e.target.closest(`#${BTN_ID}`)) {
-            e.preventDefault();
-            toggle();
-        }
-    });
+    // Navigating to any nav-managed screen means leaving the game (the
+    // panel-based game screen isn't one of them, so this only fires on the
+    // way out) — the line report is moot once the coach is elsewhere.
+    document.addEventListener('breakside:screen-shown', dismissConfirmToast);
 
-    // Public API
+    // Public API — driven by narration/micButton.js whenever a line, rather
+    // than play, is what the coach would be narrating.
     return {
+        start,
+        stop,
         toggle,
+        // Point start = the coach accepted this line and moved on; called
+        // window-qualified by game/pointManagement.js startNextPoint.
+        onPointStarted: dismissConfirmToast,
         getPhase: () => phase,
         isActive: () => phase !== 'idle',
         refresh,

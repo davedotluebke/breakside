@@ -437,18 +437,27 @@ does the set arithmetic — it structurally cannot pick or fill a line),
 wholesale/everybody-off idiom, additive partial utterances, numbers-in-names
 matching, short delta toasts. Field-verified on production. Remaining:
 
-- [ ] **Make the 18-scenario lineup eval permanent.** The eval matrix that
-      gated every prompt/contract change this round (Wholesale family, clear
-      idioms, corrections/retractions, jersey subs, Team C numbers-in-names,
-      additive cases — run end-to-end: prompt → model → `_derive_players` →
-      the real `lineupResolve.js` matcher under node) lived in session
-      scratchpad and is gone. Port the scenarios into the opt-in
-      `NARRATION_LIVE_TESTS=1` section of
-      `ultistats_server/test_narration_lineup.py` (parametrized over
-      claude-haiku-4-5 + claude-sonnet-4-5-20250929) so future prompt or
-      model changes can re-run the gate. Scenario definitions are
-      reconstructable from the S1/C1-style cases already in that file's live
-      test plus ARCHITECTURE.md § Lineup Narration.
+- [x] **Make the 18-scenario lineup eval permanent.** *(DONE — ported by commit
+      `0eeba34`; this entry was stale. It lives in
+      `ultistats_server/test_narration_lineup.py` as
+      `test_live_lineup_eval_matrix`: all 18 scenarios (W1–W3, C1–C3, S1–S5,
+      A1–A5, M1–M2) parametrized over `claude-haiku-4-5` +
+      `claude-sonnet-4-5-20250929`, each running end-to-end — real prompt →
+      real model → `_derive_players` → the real `narration/lineupResolve.js`
+      matcher under node — behind the `NARRATION_LIVE_TESTS=1` gate. S1 is
+      constraint-graded rather than exact-matched; every other scenario asserts
+      an exact resolved set, and all of them assert no unmatched-name leak.*
+
+      **First actual run 2026-08-06: 36/36 green, twice consecutively, ~80s
+      and a few cents per pass.** The gate had never been executed since it was
+      written, so this is its first confirmation that it both runs and passes.
+      Model coverage checks out against `_lineup_model()`: the built-in default
+      (`claude-sonnet-4-5-20250929`) and production's Haiku override are both in
+      the matrix. Run it before shipping any lineup prompt or model change:
+
+      ```bash
+      cd ultistats_server && NARRATION_LIVE_TESTS=1 python3 -m pytest test_narration_lineup.py -k live -q
+      ```
 - [ ] **Field-watch two deliberate behavior choices** (revisit only if they
       annoy in practice): reciting a full line over a non-empty selection
       UNIONS (e.g. 9/7 warning toast; wholesale first is the intended flow),
@@ -731,17 +740,66 @@ Remaining work:
   - **Stat computation.** `accumulateGameStats` reads the explicit HA attribution instead of walking the possession. **Backwards compat:** games played before this change have no explicit field — decide whether to (a) fall back to the existing auto-derivation for those, or (b) show them as having no HA. Leaning toward (a) so the tournament data already collected keeps its (approximate) HA numbers.
   - **Touch points:** `playByPlay/scoreAttribution.js` (dialog UI + new picker), `store/models.js` (Throw field), `store/storage.js` (serialize/deserialize the field), `utils/eventStats.js` (read explicit field, fall back to derivation), and the AI narration path (`narration/narrationEngine.js` + `ultistats_server/narration.py`) if we want narrated scores to capture HA too.
 
-- [ ] **Feature**: Per-possession defensive/offensive set flag (zone tracking, etc.)
-  - **STATUS 2026-07-23 (branch `possession-sets`): stages 1–5 of the ship
-    order are BUILT + live-verified** — schema/serialization (unit +
+- [x] **Feature**: Per-possession defensive/offensive set flag (zone tracking, etc.)
+  - **STATUS 2026-08-06 (branch `possession-sets-stage6`): COMPLETE through
+    stage 6.** Stages 1–5 shipped 2026-07-26 — schema/serialization (unit +
     API round-trip tests), Team Settings opt-in (toggle + comma-separated
-    lists with dedupe/length caps), pull-dialog defensive picker (sticky
-    session default), Full-PBP offensive cycling chip (`Set: —/Vert/…`,
-    AC-gated, purple checked state), and set tags in the log
+    lists with dedupe/length caps), the set pickers, and set tags in the log
     (`— Team on defense (Zone) —`, renderer tests) + public-viewer
-    possession headers. **Remaining: stage 6 (aggregation filters), the
-    xlsx export column, and a possible per-point set badge** — see the
-    Aggregation hook bullet below.
+    possession headers.
+  - **Stage 6 (2026-08-06): per-set breakdown in team stats.** Landed as a
+    breakdown block rather than a filter dropdown — you see every set at once
+    and compare them side by side, instead of picking one and re-reading:
+
+    ```
+    Breaks: 2/3 D-points (2/5 D-possessions)
+    Holds: 2 clean + 0 dirty / 3 O-points
+    By set:
+    • Zone (D): 2/4 stops, 1 break
+    • Ho (O): 3/5 scored
+    ```
+
+    Reported per possession (sets live on possessions; breaks/holds are
+    per point), so each set is judged on its own terms. Two attribution
+    rules — a defensive possession is a stop unless it's the last one of a
+    point we lost (a won point ending on D is a Callahan, so still a stop),
+    and a break is credited only to the set of the **last** defensive
+    possession of a won D-point, i.e. the stop we actually converted. Both
+    documented in ARCHITECTURE.md § Possession Sets.
+
+    Rides on the team-stats object so both stats screens and all three xlsx
+    exports (game summary, event roster, team roster) pick it up with no
+    call-site changes; the xlsx gets it as footer rows under the existing
+    breaks/holds footer, outside the AutoFilter range. `rosterManagement`'s
+    hand-rolled team-stats re-sum was replaced by the shared
+    `getGamesTeamStats` — a numeric-only merge silently dropped the new
+    field. 13 unit tests in `tests/unit/setStats.test.mjs` (161/161 suite).
+    Emits nothing when no possession is tagged, so opted-out teams are
+    unaffected on every surface.
+  - **Field-test round, 2026-08-09** (same branch). Fixed: Team Settings'
+    Set Tracking fields were white-on-white and unfindable (unscoped
+    `.form-group` rules from `auth/auth.css` — see ARCHITECTURE.md § CSS
+    Styling Gotchas); the game log silently dropped a defensive set tagged
+    mid-point (the inline post-Turnover delimiter has to carry the *next*
+    possession's tag); and the Full chip only rendered on offence, so a
+    defensive-only team saw no control anywhere. Changed: the pull-dialog
+    defensive picker was **removed** (overflowed on a phone, and the set
+    usually isn't knowable at pull time); tagging moved to a `Set:` control
+    on the Full tab's top line and in the Field tab's action row, with a
+    second copy beside "Last turnover was a:" / "Last D was a:" bound to
+    that possession; tap cycles, long-press opens a light anchored popover.
+    Both primary controls key off the **live mode**, not the last
+    possession — those diverge at a change of possession, which is exactly
+    when a coach names the set they're switching into.
+  - **Not built (deliberate):** a per-point set badge in the game log, and
+    the set-vs-phase composition (`{set}` alongside `{phase}` in
+    `filterGames`) — the breakdown block answers the v1 question without
+    either. Revisit if coaches ask to slice a single set across a phase.
+  - **Known limitation: one set per possession.** `Possession.set` is a
+    single label, so a defence that starts in zone and calls "Fire!" partway
+    through can only be re-tagged — the possession then reads as man for its
+    whole length, and the zone that forced the situation gets no credit. See
+    the set-transition item under Backlog.
   - Tag each possession with the set being played (zone, ho-stack, vert-stack, force-middle, junk…). Primary v1 use case is marking which defensive possessions were played in zone, so that "breaks while running zone" type splits become possible later. Must stay invisible for teams that don't opt in.
   - **Data model**:
     - `Team.setsEnabled: boolean` (default `false`) — team-level opt-in.
@@ -751,13 +809,50 @@ Remaining work:
   - **Backwards compat**: missing fields default to `false` / `[]` / `null`; UI hidden everywhere unless `setsEnabled` is on.
   - **UI surfaces** (all guarded by `team.setsEnabled === true`):
     1. **Team settings opt-in** (`teams/teamSettings.js`): toggle + two editable lists (offensive sets, defensive sets).
-    2. **Defensive picker — pull dialog** (`playByPlay/pullDialog.js`): `<select>` populated from `currentTeam.sets.defensive`, only rendered if enabled and non-empty. Thread chosen value through `ensurePossessionExists(false)` (currently at `playByPlay/keyPlayDialog.js:607`).
-    3. **Offensive picker — Full PBP modifier strip** (`playByPlay/fullPbp.js`): small cycling chip on the modifier-chips row; taps advance through `[null, ...currentTeam.sets.offensive]` and write to the current possession. Skip Simple mode for v1.
+    2. ~~**Defensive picker — pull dialog**~~ — built, then **removed 2026-08-09**: it overflowed the dialog on a phone, and at pull time the coach usually can't know yet what set the D will run. Defensive sets are tagged from the Full/Field control instead (see 3).
+    3. **Set picker — Full + Field tabs** (`playByPlay/fullPbp.js`, `playByPlay/fieldPbp.js`): a cycling control that tags the live possession, offering the label list for the side in play (offensive labels on offence, defensive on defence). Shared logic in `utils/possessionSets.js`. Simple mode deliberately not tagged. *Originally offensive-only on Full — that meant a defensive-only team saw no control anywhere; fixed 2026-08-09 along with the pull-dialog removal.*
     4. **Display in event log** (`ui/eventLogDisplay.js` and game summary log): prepend possession blocks with `[Zone]` etc. when `possession.set` is set.
-    5. **Aggregation hook** (later): `getGameTeamStats(game, {set})` / `getEventTeamStats(event, {set})` so set composes with the existing phase filter — "breaks while running zone: 4 of 7".
+    5. **Aggregation** — *shipped 2026-08-06, but as a breakdown block rather than the filter sketched here.* `getGameTeamStats(game).sets` returns per-set records and `formatTeamStatsLine` renders them all at once ("Zone (D): 2/4 stops, 1 break"), so no `{set}` option and no composition with the phase filter was needed. See the stage-6 note at the top of this item.
   - **Undo**: set lives on the possession itself, so existing undo handling needs no changes.
   - **Ship order**: schema + serialization → team settings opt-in → defensive picker (zone use case) → offensive chip → event-log display → aggregation filters.
   - **Cross-cutting**: bump `cacheName` in `service-worker.js` on any deploy touching CSS or top-level files; add a round-trip test for `setsEnabled`/`sets` in the server test suite.
+
+- [ ] **Extension**: Record a *transition* between sets within one possession ("Fire!")
+  - **Problem.** `Possession.set` holds a single label, so a defence that starts
+    in zone and switches to man partway through — the classic "Fire!" call —
+    can only be re-tagged. The possession then reads as man for its whole
+    length: the zone that forced the stall or the panic throw gets no credit,
+    and a coach reviewing "is our zone working?" sees a possession that never
+    mentions it. The same applies on offence (a vert set that breaks into ho).
+  - **UI.** The set control's long-press popover
+    ([ui/setPicker.js](ui/setPicker.js)) is the natural home: alongside the
+    plain list of labels, a checkbox or toggle — "switched to this set" vs
+    "correct the set" — so a tap that means *we changed* is distinguishable
+    from a tap that means *I mistagged it*. Plain tap-to-cycle should keep
+    meaning "correct it" (it's the fast path, used to fix a mis-tap), which
+    means the transition can only be recorded from the popover.
+  - **Model.** Either `Possession.set` becomes a sequence
+    (`[{label, at}]`, first entry = the set it started in) with the current
+    string kept as a read-side alias for back-compat, or a set-change lands on
+    the possession's own event stream like any other event (which gets undo,
+    serialization and log rendering for free — probably the cheaper route).
+    Legacy possessions keep a bare string and must read as a one-entry
+    sequence.
+  - **Stats — the real design question.** `getGameTeamStats().sets` currently
+    credits a whole possession to one label, so the attribution rules
+    (ARCHITECTURE.md § Possession Sets) need a per-segment answer: which
+    segment owns the **stop**, and which owns the **break**? Most defensible
+    is probably "the set in play when the possession ended" for the stop, with
+    earlier segments counted as *played* but not *credited* — otherwise a team
+    that always bails to man would show man doing all the work. Whatever is
+    chosen, `possessions` (denominator) and `stops`/`breaks` (numerator) stop
+    being the same unit, so the display line needs rethinking too.
+  - **Touch points:** [store/models.js](store/models.js) (Possession),
+    [store/storage.js](store/storage.js) (serialize/deserialize),
+    [utils/statAccumulator.js](utils/statAccumulator.js) (per-set records +
+    `formatSetStatsLines`), [utils/gameLogRenderer.js](utils/gameLogRenderer.js)
+    and the viewer's bespoke renderer (a possession header showing one label
+    would need to show the sequence), plus the set control itself.
 
 - [ ] **Extension**: Richer modifier flags on `Turnover` events
   - The Full PBP "Last turnover was a:" panel currently exposes only `huck` and `good D` because those are the only orthogonal flags on the `Turnover` model today. To support "threw it away while attempting a *break* / *hammer* / *dump*" (and `sky` / `layout` for drops, e.g. receiver tried to layout but missed), add `break_flag`, `hammer_flag`, `dump_flag`, `sky_flag`, `layout_flag` to the `Turnover` constructor in `store/models.js` and surface them in `summarize()`.

@@ -186,6 +186,40 @@ ships to S3 as-is and runs directly in the browser.
   caches module files at fetch time exactly like any other asset, so no SW
   changes were needed for the migration.
 
+### Boot Splash
+
+`index.html` ships with `#teamRosterScreen` **visible** — it is the one screen
+section without an inline `display: none`. Nothing navigates away from it until
+`initializeApp()` finishes (auth init is async and can take a network round
+trip), so between first paint and that point the user briefly sees the Start
+Game subscreen before the app lands on the team list.
+
+[css/splash.css](css/splash.css) + [ui/splashScreen.js](ui/splashScreen.js) cover
+that window with `#splashScreen`: a full-viewport white panel holding the
+wordmark (white to match the logo's own background), `z-index: 100000`, first
+element in `<body>`, which retracts upward like a window shade and is then
+removed from the DOM.
+
+Two decisions worth knowing before changing it:
+
+- **It's an overlay, not "hide the screens until ready."** `main.js` runs
+  `matchButtonWidths()` at `DOMContentLoaded`, and hidden elements measure zero.
+  Giving `#teamRosterScreen` a `display: none` would silently break button
+  sizing; a fixed overlay leaves the layout underneath intact. If you ever do
+  hide it, fix the measurement first.
+- **Dismissal is signal-driven.** `screens/navigation.js` dispatches
+  `breakside:screen-shown` on every `showScreen()`; the first one retracts the
+  splash. `main.js` calls `dismissSplash()` directly on the auth-screen path,
+  which bypasses `showScreen()`. Any *new* boot path that shows UI without going
+  through `showScreen()` must call `dismissSplash()` too — the `MAX_VISIBLE_MS`
+  timer in the module is a safety net so a missed signal can't lock the user
+  out, not a substitute for wiring the path up. The logged-out redirect to
+  `/landing/` deliberately keeps the splash up: covering that hop is the point.
+
+The wordmark is `<link rel="preload" as="image">`ed in `<head>` (same file the
+header logo uses, so no extra bytes) and the module waits briefly for it, so the
+shade never flies up as an empty white panel on a cold load.
+
 ### CSS Styling Gotchas
 
 A handful of non-obvious cascade and box-model details have bitten layout work in this codebase. Check this list before chasing a "why is the button the wrong size" rabbit hole.
@@ -196,6 +230,7 @@ A handful of non-obvious cascade and box-model details have bitten layout work i
 - **`width: 100%` on flex/grid children resolves against the *containing block including its padding*.** When a 100%-width child overflows on the right, the fix is usually to drop `width: 100%`, use `align-self: stretch`, and add `box-sizing: border-box`. The "They turnover / They score" buttons in Full PBP hit this.
 - **Flex/grid children with their own min-content won't shrink below it** unless you give them `min-width: 0` (flex) or `minmax(0, …fr)` (grid columns). If a 60/40 split is rendering more like 75/25, this is why. Full PBP migrated from flex to grid for exactly this reason.
 - **Service worker caching makes CSS look "stuck."** The PWA serves the cached `service-worker.js` until its `cacheName` constant changes. If a CSS edit isn't visible after deploy, bump `cacheName` in [service-worker.js](service-worker.js) and double-reload. Always verify against build number in version.json before assuming the change didn't deploy.
+- **`.form-group` is styled globally for the DARK auth screen.** [auth/auth.css](auth/auth.css) defines `.form-group`, `.form-group label`, `.form-group input` and `::placeholder` **unscoped** — white label text, `rgba(255,255,255,0.05)` input background, white input text, `rgba(255,255,255,0.2)` border. Those rules leak into every `.form-group` in the app. Drop one onto a white settings card (`.settings-section` is `background: white`) and it renders **white-on-white**: invisible label, invisible placeholder, and an input you can only locate by tapping it, because the orange `:focus` border is its only visible state. Set Tracking shipped this way and it read as "an apparently blank space". The fix is an ancestor class in [css/teams-manage.css](css/teams-manage.css) (`.identity-form`, `.sets-form`), which outranks auth.css on specificity so no `!important` is needed even though auth.css loads later — but it is opt-in per section, so **any new form on a settings card must be added to that selector list** or it inherits the same invisibility. Note the file is `auth/auth.css`, not `css/auth.css`; grepping only `css/` will convince you the rules don't exist.
 - **`position: sticky` table cells need `border-collapse: separate`.** The stats tables (game summary, event/team roster) use sticky header rows and sticky leftmost columns. With the default `border-collapse: collapse`, sticky cell backgrounds render transparent and other rows bleed through on scroll. The fix (in [css/tables.css](css/tables.css)) is `border-collapse: separate; border-spacing: 0;` plus an opaque `background-color` on every `th`/`td`, and a raised `z-index` on the header-row corner cells so they outrank both the sticky row and sticky column. Sticky also silently no-ops unless the scroll container (`.roster-table-container`) is the actual `overflow: auto` ancestor.
 
 When CLAUDE finds a *new* gotcha worth remembering across sessions, add it here rather than to CLAUDE.md.
@@ -843,6 +878,108 @@ All stats are computed on demand from the event stream — none are stored on pl
 - **Team point classification** (`classifyPoint`): each completed point is one of `break` (scored on D), `cleanHold` (scored on O, no turnover), `hold`/dirty (scored on O after ≥1 turnover), `broken` (started O, lost), or `opponentHold` (started D, lost). Surfaced as per-point badges in the game log and as a per-game / per-event summary line.
 - **Break denominators.** `getGameTeamStats` reports breaks per D-point *and* per D-possession. A D-point can contain multiple defensive possessions (turnover-back), so the per-possession rate is the truer measure of D-line conversion.
 
+### Possession Sets (zone tracking)
+
+Teams can tag each possession with the set being played — zone, ho-stack,
+vert, force-middle, junk — so "is our zone working?" becomes answerable.
+The whole feature is **invisible until a team opts in**.
+
+```js
+// Team
+{ setsEnabled: false,                       // team-level opt-in
+  sets: { offensive: [], defensive: [] } }  // coach-defined label lists
+
+// Possession
+{ set: "Zone" | null }                      // null = unspecified
+```
+
+- **One set per possession — a mid-possession switch overwrites.** `set` is a
+  single label, so a team that starts a defensive possession in zone and calls
+  "Fire!" partway through can only re-tag it: the possession then reads as man
+  for its whole length, and the zone that forced the situation gets no credit
+  in the breakdown. Recording the *transition* would need `set` to become a
+  sequence (or a set-change event on the possession's event stream) plus a rule
+  for which segment a stop or break is attributed to. See TODO.md § Backlog for
+  the sketch.
+
+- **Where tags come from.** One control, in three places, all tagging the same
+  live possession and offering the label list for the side in play — offensive
+  labels on offence, defensive on defence:
+  - **Full tab header**, on the top line with the O/D pill and Undo. The
+    primary one: a coach taps it as the possession unfolds.
+  - **Full tab modifier row** ("Last pass was a:" / "Last D was a:"), a mirror
+    of the same possession, so whatever was picked during the possession is
+    what shows next to the play it belongs with.
+  - **Field tab action row**, immediately left of Events.
+
+  **Tap cycles** — → label1 → … → —; **long-press (450 ms) opens the full
+  list**, which also surfaces a tag whose label the team has since deleted
+  (marked "no longer configured"). Gestures live in
+  [ui/setPicker.js](ui/setPicker.js) and the side/cycle logic in
+  [utils/possessionSets.js](utils/possessionSets.js), both shared, so no
+  surface can drift from another. Simple mode is deliberately not tagged.
+  Missing fields default to `false` / `[]` / `null`, so legacy games need no
+  migration.
+  - Possessions are created on the first recorded event, so the control appears
+    after the pull on a D point and after the first throw on an O point. A set
+    tap never materializes a possession — empty possessions carry their own
+    undo/cleanup edge cases.
+  - The Field control is hidden between points: that's when its row is tightest
+    (the O/D pill becomes "Start Point (Offense)") and there is no live
+    possession to tag anyway.
+  - The pull dialog used to hold a defensive-set picker. Removed 2026-08-09: it
+    overflowed the dialog on a phone, and at pull time the coach usually can't
+    know yet what set the D will end up running. Tagging once play makes it
+    obvious is both easier and more accurate.
+
+- **Labels are snapshots, not references.** `Possession.set` is a plain string
+  copied in at tag time. Editing Team Settings → Set Tracking changes only what
+  is *offered* next; it never renames, remaps or removes a tag already recorded
+  on a possession, and nothing in the codebase reconciles the two. So renaming
+  "Zone" to "Zone 3-3-1" leaves every previously tagged possession reading
+  "Zone", and the breakdown will show both as separate rows — it groups by the
+  strings actually present in the data, not by the team's current lists. A tag
+  whose label no longer exists still displays and still aggregates; tapping the
+  control clears it to unspecified first, then rejoins the current cycle.
+
+- **Aggregation is per possession, not per point** — the mismatch that shapes
+  everything below. `getGameTeamStats().sets` returns records keyed
+  `` `${side}:${label}` `` (a label listed under *both* sides stays two rows,
+  because the denominators mean different things):
+
+  | Field | Side | Meaning |
+  |---|---|---|
+  | `possessions` | both | possessions tagged with this set, completed points only |
+  | `stops` | D | possessions where we got the disc back instead of being scored on |
+  | `breaks` | D | won D-points credited to this set |
+  | `scores` | O | possessions that ended in our goal |
+
+- **Two attribution rules worth knowing**, both chosen to avoid crediting a set
+  for something it didn't do:
+  0. *(Log rendering trap.)* A `Turnover` makes the log emit an **inline**
+     "on defense" delimiter and suppress the following possession's own, so
+     that inline one has to carry the **next** possession's set tag. Reading it
+     off the possession holding the Turnover is what once made mid-point
+     defensive sets invisible in the log while offensive ones rendered fine.
+  1. A defensive possession counts as a **stop** unless it is the *last*
+     possession of a point we lost — that is the one they scored on. A
+     defensive possession that ends a point we *won* is a Callahan, so it
+     counts as a stop, not a score-on.
+  2. A **break** is credited only to the set of the **last defensive
+     possession** of a won D-point — the stop we actually converted. Run zone,
+     get a stop, turn it over, then get a second stop in man and score, and the
+     break goes to man; zone keeps its stop but not the break.
+
+- **One rendering path.** The breakdown rides on the team-stats object, and
+  `formatTeamStatsLine` appends it, so both stats screens and all three xlsx
+  exports pick it up without call-site changes — they already split that
+  string on newlines. Lines are bulleted rather than space-indented because
+  `.team-stats-line` is `white-space: pre-line`, which collapses leading
+  spaces on screen (they would survive only in the spreadsheet).
+
+- **Silent for everyone else.** Nothing is emitted when no possession carries a
+  set, so a team that never opted in sees byte-identical output everywhere.
+
 ### Statistics Export (.xlsx)
 
 `utils/xlsxExport.js` builds Excel workbooks via the vendored SheetJS (`vendor/xlsx.mini.min.js`, precached by the service worker for offline use). Three entry points:
@@ -1023,8 +1160,10 @@ Test deps (`websockets`, `soundfile`) are listed in `requirements.txt` under a "
 
 ### Lineup Narration (Lines tab)
 
-A second, independent narration layer lets a coach *speak the next line* instead of tapping checkboxes: a small round mic button in the Select Line toolbar (next to Auto). It reuses the transcription plumbing but nothing of the in-point event pipeline — separate button, separate state machine, separate endpoint — so the two features can evolve without touching each other. Only one can record at a time (they share the realtime-session singleton; each refuses to start while the other is active).
+A second, independent narration layer lets a coach *speak the next line* instead of tapping checkboxes. It reuses the transcription plumbing but nothing of the in-point event pipeline — separate state machine, separate endpoint — so the two features can evolve without touching each other. Only one can record at a time (they share the realtime-session singleton; each refuses to start while the other is active).
 
+- **Entry point**: the one floating mic FAB, not a button of its own. `narration/micButton.js` holds a target per narration layer and picks between them at press time. The predicate is the **game clock, not the tab** (`isLineupContext()`): **between points → lineup on every tab**, so a solo coach never has to detour to the Line tab to call the next line; **during a point → event narration, except on the Line tab**, where a coach is by definition planning the next line rather than watching the disc. A **non-idle layer always wins over the context**, so a lineup recording stays stoppable through the very point start that would otherwise flip the context under it, and neither layer can start a second session against the shared realtime-session singleton. The same tap-toggle and hold-to-record gestures drive both. Phase colours are shared (micButton.css): lineup's `processing` reuses `.mic-finalizing`, so there is no fifth state. The FAB polls its target every 500ms and `applyTabState()` / `startNextPoint()` refresh it directly, since background tabs throttle the poll hard — but that only keeps the *tooltip* fresh, as both targets render identically while idle and every press reads the target live. The Lines-tab mic button that shipped in build 1105 is gone; `lineupNarration.js` now owns only the inline status strip under the Select Line toolbar.
+- **Line-report toast lifetime**: the confirmation toast ("7/7 selected. Added: Kris. Off: Wes") is a whole line plus a miscount flag, so it gets reading time rather than glance time — **3× the 4s default on the Line tab** (where the checkboxes beside it already tell the story) and **6× off it** (where the toast is the only feedback). It's dismissed early the moment the coach visibly moves on — point start (via `startNextPoint` → `lineupNarration.onPointStarted()`), a fresh narration superseding it, or leaving the game screen (`breakside:screen-shown`) — plus the usual manual close/swipe. `lineupNarration` holds the live toast and clears its handle through the toast's own `onDismiss`, so a manual close never leaves a detached node behind.
 - **Capture**: `narration/lineupNarration.js` opens the same transcription-only Realtime session, but vocabulary-biases the recognizer toward the **full active roster** rather than the on-field seven — calling a line is precisely about naming bench players.
 - **Extraction**: on stop, the transcript is POSTed to **`POST /api/narration/lineup`** (`ultistats_server/narration_lineup.py`) along with the full roster (names, nicknames, jersey numbers), the **expected player count**, the **previous point's lineup**, and the current on-screen selection. Claude returns `{players, unmatched, note}` — the final set of roster names.
 - **Tap-equivalent contract** (see `_build_lineup_prompt` / `_derive_players`): the model NEVER outputs a lineup. It returns only the voiced changes — `{"in": [names], "out": [{name, said}]}` — the verbal equivalent of tapping names on the list, and the SERVER derives `players = (current_selection − outs) ∪ ins` by set arithmetic. Picking, completing, or trimming a line is therefore structurally impossible (the Wholesale-then-"3 go in" fill-out bug class is dead: there is no slot for the model to fill). Bare names add; off/sits/replaced-by language removes; "same line"/"run it back" expands to the previous lineup as ins; later statements override earlier ones and retracted changes vanish; asides are ignored; the expected count is toast context only. An empty selection stays empty — there is NO fallback to the previous lineup (Wholesale means Wholesale). Reciting "the line is X, Y, Z" over a non-empty selection unions (9/7 toast) rather than replacing — clear first for a fresh line.

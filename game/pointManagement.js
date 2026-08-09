@@ -185,6 +185,18 @@ function startNextPoint() {
         showPullDialog();
     }
 
+    // The lineup narration's line report has served its purpose once the
+    // point is running — retire it rather than leaving it to time out over
+    // live play. Also re-point the mic FAB, which serves lineup narration
+    // between points and event narration during one.
+    // late-bound back-edges; see ARCHITECTURE.md § ES modules.
+    if (typeof window.lineupNarration?.onPointStarted === 'function') {
+        window.lineupNarration.onPointStarted();
+    }
+    if (typeof window.narrationMicButton?.refresh === 'function') {
+        window.narrationMicButton.refresh();
+    }
+
     // Save and Sync on point start
     if (typeof saveAllTeamsData === 'function') {
         saveAllTeamsData();
