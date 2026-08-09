@@ -437,18 +437,27 @@ does the set arithmetic — it structurally cannot pick or fill a line),
 wholesale/everybody-off idiom, additive partial utterances, numbers-in-names
 matching, short delta toasts. Field-verified on production. Remaining:
 
-- [ ] **Make the 18-scenario lineup eval permanent.** The eval matrix that
-      gated every prompt/contract change this round (Wholesale family, clear
-      idioms, corrections/retractions, jersey subs, Team C numbers-in-names,
-      additive cases — run end-to-end: prompt → model → `_derive_players` →
-      the real `lineupResolve.js` matcher under node) lived in session
-      scratchpad and is gone. Port the scenarios into the opt-in
-      `NARRATION_LIVE_TESTS=1` section of
-      `ultistats_server/test_narration_lineup.py` (parametrized over
-      claude-haiku-4-5 + claude-sonnet-4-5-20250929) so future prompt or
-      model changes can re-run the gate. Scenario definitions are
-      reconstructable from the S1/C1-style cases already in that file's live
-      test plus ARCHITECTURE.md § Lineup Narration.
+- [x] **Make the 18-scenario lineup eval permanent.** *(DONE — ported by commit
+      `0eeba34`; this entry was stale. It lives in
+      `ultistats_server/test_narration_lineup.py` as
+      `test_live_lineup_eval_matrix`: all 18 scenarios (W1–W3, C1–C3, S1–S5,
+      A1–A5, M1–M2) parametrized over `claude-haiku-4-5` +
+      `claude-sonnet-4-5-20250929`, each running end-to-end — real prompt →
+      real model → `_derive_players` → the real `narration/lineupResolve.js`
+      matcher under node — behind the `NARRATION_LIVE_TESTS=1` gate. S1 is
+      constraint-graded rather than exact-matched; every other scenario asserts
+      an exact resolved set, and all of them assert no unmatched-name leak.*
+
+      **First actual run 2026-08-06: 36/36 green, twice consecutively, ~80s
+      and a few cents per pass.** The gate had never been executed since it was
+      written, so this is its first confirmation that it both runs and passes.
+      Model coverage checks out against `_lineup_model()`: the built-in default
+      (`claude-sonnet-4-5-20250929`) and production's Haiku override are both in
+      the matrix. Run it before shipping any lineup prompt or model change:
+
+      ```bash
+      cd ultistats_server && NARRATION_LIVE_TESTS=1 python3 -m pytest test_narration_lineup.py -k live -q
+      ```
 - [ ] **Field-watch two deliberate behavior choices** (revisit only if they
       annoy in practice): reciting a full line over a non-empty selection
       UNIONS (e.g. 9/7 warning toast; wholesale first is the intended flow),
