@@ -786,18 +786,34 @@ Field reports: phones don't last a full day of 3–4 games. Battery sinks ranked
 
 Higher-leverage interventions, in roughly priority order:
 
-- [ ] **Screen Wake Lock API + brightness guidance**
-  - Acquire a wake lock during active game so the OS keeps the screen on even at very low brightness — coaches can then dim aggressively (the dominant battery saver) without their session dying.
-  - Show a small "screen lock active" indicator + an explicit unlock affordance for when the user wants to pocket the phone.
-  - Falls back gracefully on browsers that don't support the API.
+- [x] **Screen Wake Lock API + brightness guidance** *(shipped on branch
+      `battery`, 2026-08-09)* — `utils/wakeLockManager.js` holds a lock during a
+      game; ☀ indicator in the game header toggles it (opt-out sticky for the
+      rest of the game so pocketing the phone survives an app switch);
+      `power.keepScreenAwake` in Advanced Settings → Battery, on by default;
+      a hint toast on first acquire tells the coach to dim their screen, which
+      is where the actual saving comes from. Silent no-op where unsupported.
+      **The trap, for anyone touching this:** browsers auto-release a wake lock
+      on hide and never restore it, so it re-acquires on every power plan
+      rather than assuming it still holds one. See ARCHITECTURE.md § Power
+      Management.
 
-- [ ] **Pause polling when tab is backgrounded / phone is pocketed**
-  - The Page Visibility API hook already exists for wake recovery — extend it to suspend all setInterval polling loops while `document.visibilityState === 'hidden'`.
-  - Resume + immediate-refresh on visibility change.
-  - Risk: a backgrounded Line Coach misses an Active Coach handoff. Acceptable — wake recovery already handles re-sync on resume.
+- [x] **Pause polling when tab is backgrounded / phone is pocketed** *(shipped
+      on branch `battery`, 2026-08-09)* — `utils/powerManager.js` is now the
+      app's single `visibilitychange` owner and broadcasts a
+      `breakside:power-plan` event; every recurring loop follows it. Measured
+      in the preview: **zero timer wakeups while hidden**, where before *nothing*
+      in the app was visibility-gated. Three loops turned out to be worse than
+      this item assumed — they ran for the lifetime of the tab, not just during
+      a game: the narration transcript phase poll (5×/sec), the mic-button
+      visibility poll (2×/sec) and the point timer (1/sec). The first two are
+      deleted rather than gated (the engine tells them now); the third is
+      plan-driven. The accepted risk (backgrounded Line Coach misses a handoff
+      until resume) stands.
 
 - [ ] **Audit Full PBP for persistent repaints / animations**
-  - Long-running CSS animations and frequent DOM mutation force the compositor to stay active. Audit for: animated icons that never stop, the mini-log auto-scroll on each event, gradient/box-shadow that triggers full-layer repaints.
+  - Partly done on branch `battery`: the header timer's danger/negative states no longer pulse `infinite` (they were entered once past a time cap and then ran for the rest of the game), and a global `prefers-reduced-motion` block landed in `css/base.css` — which also covers most of the "Low-power / reduced-motion mode" backlog item above.
+  - Still to audit: the mini-log auto-scroll on each event, gradient/box-shadow that triggers full-layer repaints, and the remaining `infinite` pulses (`pendingPulse` on the role-claim button, `pulse` on the teams screen, the narration mic pulses — all of which are at least bounded by a transient state rather than running all game).
 
 - [ ] **AudioWorklet migration for the narration mic path**
   - `ScriptProcessorNode` runs on the main thread and is deprecated; AudioWorklet runs on the audio thread and is the documented modern replacement. Should reduce per-frame CPU + main-thread jank during narration.
@@ -806,8 +822,20 @@ Higher-leverage interventions, in roughly priority order:
 - [ ] **WebSockets for non-Active-Coach in-game sync** — see `### Infrastructure` above
   - Less polling overhead on the secondary devices. Modest savings; only worth it after (1) and (2) above are shipped.
 
-- [ ] **Instrument before you optimize**
-  - Add a lightweight battery-impact log: timestamp + `navigator.getBattery()` snapshots at session start, point boundaries, and game end. Even rough deltas across 2–3 games would tell us which intervention matters before we build it.
+- [x] **Instrument before you optimize** *(shipped on branch `battery`,
+      2026-08-09 — but not the way this item imagined)*. `navigator.getBattery()`
+      **does not exist on iOS**: the Battery Status API was never shipped in
+      WebKit and was removed from Firefox, so snapshots alone would measure only
+      the Android half of the field. `utils/powerLog.js` therefore leads with an
+      activity proxy that works everywhere — timer wakeups per loop, API
+      requests per subsystem, seconds visible / in game / wake-lock-held /
+      mic-open — and samples real battery levels where available as a
+      cross-check. Read it at Online/About → "Battery report…" (copy button for
+      pasting into a field report).
+  - **Still open — the actual field measurement.** Take a real tournament day
+    on staging and read the log: how many wakeups and requests per hour, and on
+    an Android device, points of battery per game. That's the number that tells
+    us whether the remaining items below are worth building.
 
 ### Line Selection
 - [x] Auto fill algorithm (priority-ordered) — shipped on `auto-line`

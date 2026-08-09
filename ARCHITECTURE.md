@@ -1494,6 +1494,98 @@ aws cloudfront create-invalidation --distribution-id E6M9KCXIU9CKD --paths "/*"
 
 ---
 
+## Power Management
+
+Phones have to survive a full tournament day, so the app treats "what is
+running right now" as an explicit, single-owner decision rather than a
+property that emerges from a dozen independent `setInterval` calls.
+
+**Three modules, one rule.**
+
+| Module | Role |
+|---|---|
+| `utils/powerPolicy.js` | Pure rules. No DOM, no timers, no imports. Answers "which loops should run" and "should the wake lock be held". Unit-tested in `tests/unit/powerPolicy.test.mjs`. |
+| `utils/powerManager.js` | The app's **only** `visibilitychange` listener. Feeds context into the policy and broadcasts the plan. |
+| `utils/wakeLockManager.js` | Owns the screen wake lock sentinel. |
+| `utils/powerLog.js` | Counts what actually happened, for field measurement. |
+
+**The plan is broadcast, not imported.** `powerManager` dispatches a
+`breakside:power-plan` CustomEvent carrying the whole plan; each loop's owning
+module listens for its own flag:
+
+```js
+document.addEventListener('breakside:power-plan', (e) => {
+    if (e.detail.plan.autoSync) startAutoSync(); else stopAutoSync();
+});
+```
+
+An event rather than a registry because listeners live at every layer —
+`store/sync.js` (data) through `ui/` — and a data-layer module cannot import
+upward into `utils/` (see § Module Loading). The event carries the entire plan,
+not just the delta, so a listener that missed an edge still converges.
+
+**Adding a new recurring loop:** add its id to `LOOPS` in `powerPolicy.js`, give
+it a rule in `loopPlan()`, and have its owner listen for the flag. Do not add a
+bare `setInterval` at module scope — three of those existed before this system
+and each ran for the entire lifetime of the tab, including on screens where the
+thing they updated didn't exist.
+
+**Resume restores only what was suspended.** Loops that something else stops
+deliberately — auto-sync on sign-out, roster polling on navigation — track a
+`suspendedByPower` flag, because a plain "plan says true → start" resurrects
+them. Loops whose start functions carry their own guards (auth, online, screen
+visible) don't need it.
+
+**`stop` is not always the opposite of `start`.** `stopControllerPolling()` also
+clears the polling game id and resets every role flag: correct when leaving a
+game, destructive for a ten-second app switch. It has a separate
+`suspendControllerPolling()` / `resumeControllerPolling()` pair for the power
+path. Check for this asymmetry before wiring a loop up.
+
+### Screen wake lock
+
+Held during a game so the display doesn't sleep. It *spends* power; the point is
+that it lets a coach dim the screen to near-minimum for a three-game day without
+losing the session, and brightness dominates every other term in the budget.
+On by default (`power.keepScreenAwake` in Advanced Settings → Battery), with a
+☀ indicator in the game header that toggles it.
+
+**The sharp edge:** the browser silently releases a wake lock whenever the page
+becomes hidden, and never restores it. An acquire-on-entry implementation
+therefore works exactly once and dies at the coach's first app switch. This is
+why the wake lock re-evaluates on every power plan instead of tracking whether
+it "already has" a lock, and why it lives next to the visibility owner.
+Support: Chrome/Edge and Safari 16.4+; a silent no-op elsewhere.
+
+### Measuring
+
+`navigator.getBattery()` does not exist on iOS — the Battery Status API was
+never shipped in WebKit and was removed from Firefox — so battery deltas alone
+would measure only the Android half of the field. `utils/powerLog.js` therefore
+leads with an **activity proxy** that works everywhere: timer wakeups per loop,
+API requests per subsystem, and seconds spent visible / in a game / holding a
+wake lock / with the mic open. Real battery levels are sampled where available
+(session start, each point boundary, game exit) as a cross-check. Read it from
+Online/About → "Battery report…", which has a copy button for field reports; it
+states explicitly when readings aren't available, so an iPhone report isn't
+misread as a bug.
+
+### Animations
+
+Looping animations are the ones that matter: a one-shot transition is cheap, but
+anything running `infinite` keeps the compositor from idling for as long as the
+element is on screen. The header timer's danger/negative states pulse a fixed
+number of times rather than forever — they're entered once a point runs long or
+a game passes its cap and then persist for the rest of the game. A global
+`@media (prefers-reduced-motion: reduce)` block in `css/base.css` neutralizes
+animation and transition durations app-wide.
+
+Note that `updateTimerDisplay()` removes and re-adds these state classes every
+second. That does **not** restart the animation — restarting requires a forced
+reflow between the remove and the add, which it doesn't do — so a finite
+iteration count really does terminate. Verified empirically; don't "fix" it by
+adding a reflow.
+
 ## Performance Characteristics
 
 | Metric | Value |
