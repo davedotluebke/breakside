@@ -39,7 +39,7 @@ import {
     formatPlayerName, buildPointPlayerLookup,
 } from '../utils/helpers.js';
 import {
-    setLabelsFor, setControlLabel, taggablePossession,
+    setLabelsFor, setLabelsForSide, setControlLabel, taggablePossession,
 } from '../utils/possessionSets.js';
 import { wireSetControl } from '../ui/setPicker.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
@@ -51,6 +51,7 @@ import {
     handlePbpTheyScore, handlePbpGameEvents,
 } from '../game/gameScreenEvents.js';
 import { handlePanelStartPoint } from '../game/selectLine.js';
+import { ensurePossessionExists } from './keyPlayDialog.js';
 import { showScoreAttributionDialog } from './scoreAttribution.js';
 
 const fullPbp = (function() {
@@ -330,8 +331,8 @@ const fullPbp = (function() {
         if (!row) return;
 
         const editable = inPoint ? findLastEditableEvent(state.point) : null;
-        const setCtx = setChipContext(state, inPoint);
-        if (!editable && !setCtx) {
+        const setCtx = modifierSetContext(state, inPoint, editable);
+        if (!editable) {
             row.style.display = 'none';
             row.innerHTML = '';
             return;
@@ -384,23 +385,64 @@ const fullPbp = (function() {
         row.appendChild(chips);
     }
 
+    /** The possession holding a given event, or null. */
+    function possessionOfEvent(point, event) {
+        if (!point || !event) return null;
+        return (point.possessions || []).find(p => (p.events || []).includes(event)) || null;
+    }
+
     /**
-     * Set tagging for the live possession — a cycling chip on the modifier
-     * row. Taps advance — → label1 → … → —, writing possession.set in place.
+     * HEADER chip — the set for the side in play RIGHT NOW, keyed off the live
+     * mode rather than off the last possession.
      *
-     * Covers BOTH sides: an offensive possession offers the team's offensive
-     * labels, a defensive one its defensive labels. It used to render only on
-     * offense (defense was tagged in the pull dialog), which meant a team that
-     * had configured just defensive sets — the primary zone-tracking case —
-     * never saw a chip here at all. The pull-dialog picker is gone as of
-     * 2026-08-09, so this and the Field tab are the only places sets are set.
+     * Those two diverge exactly at a change of possession: win the disc on a
+     * block and the mode flips to offense while the last possession is still
+     * the defensive one (possessions are created on the first recorded event).
+     * Keying off the last possession therefore offered defensive labels — Zone,
+     * Match — to a coach trying to name the O set they were about to run.
+     *
+     * When the possession for this side doesn't exist yet, it's materialized on
+     * write via ensurePossessionExists — the same helper every event-recording
+     * path uses — rather than dropping the pick. In practice the first throw or
+     * turnover lands in that same possession moments later, so it doesn't leave
+     * an empty one behind.
      */
-    function setChipContext(state, inPoint) {
+    function headerSetContext(state, inPoint) {
         if (!inPoint || !state.point) return null;
-        const possession = taggablePossession(state.point);
-        const labels = setLabelsFor(currentTeam, possession);
+        const wantOffensive = state.mode !== 'defense';
+        const labels = setLabelsForSide(currentTeam, wantOffensive);
         if (!labels.length) return null;
-        return { labels, possession };
+        const last = taggablePossession(state.point);
+        const matchesSide = !!last && ((last.offensive !== false) === wantOffensive);
+        return {
+            labels,
+            possession: matchesSide ? last : null,
+            resolve: () => ensurePossessionExists(wantOffensive),
+        };
+    }
+
+    /**
+     * MODIFIER-ROW chip — the set for the possession the row is describing.
+     *
+     * Only rendered beside "Last turnover was a:" and "Last D was a:", i.e.
+     * while the row is about the defensive phase, where naming the set that was
+     * being played is the useful thing. Beside "Last pass was a:" the header
+     * chip already governs the live offensive possession, and two chips for the
+     * same possession is just noise.
+     */
+    function modifierSetContext(state, inPoint, editable) {
+        if (!inPoint || !state.point || !editable) return null;
+        if (editable.type !== 'Turnover' && editable.type !== 'Defense') return null;
+        const possession = possessionOfEvent(state.point, editable);
+        const labels = setLabelsFor(currentTeam, possession);
+        if (!possession || !labels.length) return null;
+        return {
+            labels,
+            possession,
+            // Cloud sync can swap the objects out from under us; re-find by
+            // identity, falling back to what this render captured.
+            resolve: () => possessionOfEvent(reconstructState().point, editable) || possession,
+        };
     }
 
     /**
@@ -412,18 +454,17 @@ const fullPbp = (function() {
      * Tap cycles; long-press opens the full list. Both gestures are wired by
      * ui/setPicker.js, shared with the Field tab.
      */
-    function buildSetCycleChip({ labels, possession }, extraClass) {
+    function buildSetCycleChip({ labels, possession, resolve }, extraClass) {
         const chip = document.createElement('label');
         chip.className = `full-pbp-modifier-chip full-pbp-set-chip${extraClass ? ' ' + extraClass : ''}`;
-        if (possession.set) chip.classList.add('checked');
+        if (possession && possession.set) chip.classList.add('checked');
 
         const span = document.createElement('span');
         span.textContent = setControlLabel(possession);
         chip.appendChild(span);
 
         wireSetControl(chip, {
-            // Re-read rather than close over: cloud sync swaps these objects.
-            getPossession: () => taggablePossession(reconstructState().point),
+            getPossession: resolve,
             getLabels: () => labels,
             canEdit: () => requireActiveCoach(),
             onChange: () => {
@@ -441,7 +482,7 @@ const fullPbp = (function() {
     function renderHeaderSetChip(state, inPoint) {
         const slot = document.getElementById('fullPbpHeaderSet');
         if (!slot) return;
-        const ctx = setChipContext(state, inPoint);
+        const ctx = headerSetContext(state, inPoint);
         slot.innerHTML = '';
         if (!ctx) {
             slot.style.display = 'none';

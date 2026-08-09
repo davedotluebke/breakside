@@ -38,6 +38,14 @@ function wireSetControl(el, opts) {
         opts.onChange();
     };
 
+    // A long-press on text otherwise triggers the OS selection UI — the word
+    // highlights and Copy/Translate/Look Up pops up over the control. Belt and
+    // braces: CSS kills the callout + selection (see .full-pbp-set-chip /
+    // .fp-setbtn), and this kills the context menu the gesture would raise.
+    el.style.webkitUserSelect = 'none';
+    el.style.userSelect = 'none';
+    el.style.webkitTouchCallout = 'none';
+
     let timer = null;
     let triggered = false;   // long-press fired; swallow the trailing click
 
@@ -49,9 +57,15 @@ function wireSetControl(el, opts) {
             if (!allowed()) return;
             const possession = opts.getPossession();
             if (!possession) return;
-            showSetMenu(possession.set ?? null, opts.getLabels(), write);
+            // Drop any selection the press managed to start before the CSS
+            // guards took effect, so the popover isn't sharing the screen with
+            // a highlighted word.
+            const sel = window.getSelection && window.getSelection();
+            if (sel && sel.removeAllRanges) sel.removeAllRanges();
+            showSetMenu(possession.set ?? null, opts.getLabels(), write, el);
         }, LONG_PRESS_MS);
     };
+    const blockContextMenu = (e) => { e.preventDefault(); };
     const cancel = () => {
         if (timer) { clearTimeout(timer); timer = null; }
     };
@@ -77,6 +91,7 @@ function wireSetControl(el, opts) {
     el.addEventListener('mouseup', cancel);
     el.addEventListener('mouseleave', cancel);
     el.addEventListener('click', click);
+    el.addEventListener('contextmenu', blockContextMenu);
 
     el._setPickerCleanup = () => {
         cancel();
@@ -88,55 +103,73 @@ function wireSetControl(el, opts) {
         el.removeEventListener('mouseup', cancel);
         el.removeEventListener('mouseleave', cancel);
         el.removeEventListener('click', click);
+        el.removeEventListener('contextmenu', blockContextMenu);
         el._setPickerCleanup = null;
     };
 }
 
 /**
- * The long-press menu: every label for this side plus "unspecified", with the
- * current one marked. A tag whose label the team has since deleted is listed
- * too (marked "no longer configured") so it's visible rather than silently
- * absent from its own menu.
+ * The long-press menu — a light popover anchored to the control, modelled on
+ * the Field tab's player picker (.fp-picker) rather than a full dialog: this
+ * is a quick "show me the options" affordance, not a decision worth a modal.
+ *
+ * Lists every label for this side plus "unspecified", with the current one
+ * marked. A tag whose label the team has since deleted is listed too (marked
+ * "was removed") so it's visible rather than silently absent from its own
+ * menu — tap-cycling alone can never restore it.
  */
-function showSetMenu(current, labels, onPick) {
-    const existing = document.getElementById('setPickerMenu');
-    if (existing) existing.remove();
+function showSetMenu(current, labels, onPick, anchorEl) {
+    document.querySelectorAll('.set-picker-pop').forEach(n => n.remove());
 
-    const options = [{ value: null, text: '— (unspecified)' }]
+    const options = [{ value: null, text: '—' }]
         .concat((labels || []).map(l => ({ value: l, text: l })));
     if (current && !(labels || []).includes(current)) {
-        options.push({ value: current, text: `${current} (no longer configured)` });
+        options.push({ value: current, text: `${current} (was removed)` });
     }
 
-    const modal = document.createElement('div');
-    modal.id = 'setPickerMenu';
-    modal.className = 'modal';
-    modal.style.display = 'flex';
-    modal.innerHTML = `
-        <div class="modal-content set-picker-menu-content">
-            <div class="dialog-header prominent-dialog-header">
-                <h2>Set for this possession</h2>
-                <span class="close">&times;</span>
-            </div>
-            <div class="set-picker-options">
-                ${options.map((o, i) => `
-                    <button type="button" class="set-picker-option${o.value === current ? ' selected' : ''}"
-                            data-idx="${i}">${escapeHtml(o.text)}</button>
-                `).join('')}
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
+    const pop = document.createElement('div');
+    pop.className = 'set-picker-pop';
+    pop.innerHTML = `<div class="set-picker-pop-ttl">Set for this possession</div>`
+        + options.map((o, i) => `<div class="set-picker-pop-opt${o.value === current ? ' selected' : ''}"`
+            + ` data-idx="${i}">${escapeHtml(o.text)}</div>`).join('');
 
-    const close = () => modal.remove();
-    modal.querySelector('.close').onclick = close;
-    modal.onclick = (e) => { if (e.target === modal) close(); };
-    modal.querySelectorAll('.set-picker-option').forEach(btn => {
-        btn.onclick = () => {
-            close();
-            onPick(options[Number(btn.dataset.idx)].value);
+    // Measure before positioning so the popover always lands fully on-screen
+    // (same approach as .fp-picker): prefer above the control, flip below when
+    // there isn't room, then clamp to the viewport.
+    pop.style.left = '0px';
+    pop.style.top = '0px';
+    pop.style.visibility = 'hidden';
+    document.body.appendChild(pop);
+
+    const margin = 8;
+    const r = anchorEl ? anchorEl.getBoundingClientRect() : null;
+    const cx = r ? r.left + r.width / 2 : window.innerWidth / 2;
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    let left = Math.max(margin, Math.min(cx - pw / 2, window.innerWidth - pw - margin));
+    let top = r ? r.top - ph - 8 : (window.innerHeight - ph) / 2;
+    if (top < margin) top = r ? r.bottom + 8 : margin;
+    top = Math.max(margin, Math.min(top, window.innerHeight - ph - margin));
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+    pop.style.visibility = 'visible';
+
+    pop.querySelectorAll('.set-picker-pop-opt').forEach(opt => {
+        opt.onclick = (ev) => {
+            ev.stopPropagation();
+            pop.remove();
+            onPick(options[Number(opt.dataset.idx)].value);
         };
     });
+    // Deferred so the pointerdown that opened this popover doesn't close it.
+    setTimeout(() => {
+        const close = (ev) => {
+            if (!pop.contains(ev.target)) {
+                pop.remove();
+                document.removeEventListener('pointerdown', close);
+            }
+        };
+        document.addEventListener('pointerdown', close);
+    }, 0);
 }
 
 export { wireSetControl, showSetMenu };

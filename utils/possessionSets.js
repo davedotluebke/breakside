@@ -9,18 +9,34 @@
  */
 
 /**
- * The set labels that apply to a possession — the team's offensive list for an
- * offensive possession, the defensive list for a defensive one.
+ * The set labels for one side of the disc.
+ *
+ * The primary controls key off the LIVE MODE rather than off a possession,
+ * because the two diverge at a change of possession: win the disc on a block
+ * and the mode is already offense while the last possession is still the
+ * defensive one (possessions are created on the first recorded event). Offering
+ * labels from the stale possession there hands a coach naming their O set a
+ * list of defensive sets.
+ *
+ * @param {boolean} wantOffensive
  * @returns {Array<string>} [] when the team hasn't opted in, or hasn't
  *   configured that side (in which case no control should render at all)
  */
-function setLabelsFor(team, possession) {
-    if (!team || !team.setsEnabled || !possession) return [];
-    // Mirrors the app-wide convention: defensive iff `offensive === false`.
-    const labels = possession.offensive === false
-        ? team.sets?.defensive
-        : team.sets?.offensive;
+function setLabelsForSide(team, wantOffensive) {
+    if (!team || !team.setsEnabled) return [];
+    const labels = wantOffensive ? team.sets?.offensive : team.sets?.defensive;
     return Array.isArray(labels) ? labels : [];
+}
+
+/**
+ * The set labels that apply to an existing possession — its own side's list.
+ * Use this for controls bound to a specific possession (e.g. the modifier-row
+ * chip); use setLabelsForSide for ones bound to the live mode.
+ */
+function setLabelsFor(team, possession) {
+    if (!possession) return [];
+    // Mirrors the app-wide convention: defensive iff `offensive === false`.
+    return setLabelsForSide(team, possession.offensive !== false);
 }
 
 /**
@@ -44,18 +60,20 @@ function setControlLabel(possession) {
 }
 
 /**
- * The possession a set control should tag: the live (last) one, or null.
+ * The last possession of a point, or null.
  *
  * Possessions are created lazily on the first recorded event (see
- * ensurePossessionExists), so this is null at the very start of an O point and
- * the control renders nothing until the first throw. On a D point the pull
- * itself creates the possession, so the control is available immediately after
- * it. A set tap deliberately does NOT materialize a possession — empty
- * possessions carry their own undo/cleanup edge cases.
+ * ensurePossessionExists), so this is null at the very start of a point, and
+ * right after a change of possession it is still the PREVIOUS side's — which
+ * is why the primary controls read their labels from the live mode
+ * (setLabelsForSide) and use this only to decide whether a possession for that
+ * side already exists. When it doesn't, they materialize one on write through
+ * ensurePossessionExists rather than dropping the pick; in practice the first
+ * throw or turnover lands in that same possession moments later.
  */
 function taggablePossession(point) {
     const possessions = (point && point.possessions) || [];
     return possessions.length ? possessions[possessions.length - 1] : null;
 }
 
-export { setLabelsFor, nextSetValue, setControlLabel, taggablePossession };
+export { setLabelsFor, setLabelsForSide, nextSetValue, setControlLabel, taggablePossession };

@@ -478,6 +478,12 @@
 /* Offensive set cycling chip (per-possession set tagging) — distinct hue
    from the blue flag chips so "tagged Zone" reads differently than
    "modifier on". */
+/* Long-press target: no text selection / no iOS callout, so the gesture
+   raises our popover instead of the OS Copy/Translate bubble. */
+.full-pbp-set-chip {
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+
 .full-pbp-set-chip.checked {
     background: #6d28d9;
     border-color: #6d28d9;

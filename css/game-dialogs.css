@@ -489,36 +489,30 @@
 }
 
 
-/* Long-press menu for the possession set picker (ui/setPicker.js). Shared by
-   the Full and Field tabs; tap-to-cycle stays the fast path, this is the
-   "show me everything" affordance. */
-.set-picker-menu-content {
-    max-width: 320px;
-    width: 86%;
+/* Long-press popover for the possession set picker (ui/setPicker.js). Modelled
+   on the Field tab's .fp-picker rather than a modal — it's a quick "show me the
+   options" affordance, positioned in JS against the control with viewport
+   clamping. Shared by the Full and Field tabs. */
+.set-picker-pop {
+    position: fixed; z-index: 999;
+    background: #fff; border: 1px solid #bbb; border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+    padding: 7px; display: flex; flex-wrap: wrap; gap: 5px;
+    max-width: 250px; max-height: 70vh; overflow-y: auto;
 }
 
-.set-picker-options {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 12px;
+.set-picker-pop-ttl {
+    flex: 1 1 100%;
+    font-size: 11px; color: #888; text-align: center; margin-bottom: 2px;
 }
 
-.set-picker-option {
-    margin: 0;                    /* override global button { margin: 10px } */
-    padding: 12px 14px;
-    text-align: left;
-    font-size: 1rem;
-    border: 1px solid var(--border-light);
-    border-radius: 8px;
-    background: var(--white);
-    color: var(--text-primary);
-    cursor: pointer;
+.set-picker-pop-opt {
+    padding: 7px 12px; font-size: 14px; font-weight: 600;
+    background: #f7f7f7; border: 1px solid #cfcfcf; border-radius: 999px;
+    color: #222; cursor: pointer; white-space: nowrap;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
 
-.set-picker-option.selected {
-    background: #6d28d9;
-    border-color: #6d28d9;
-    color: #fff;
-    font-weight: 600;
+.set-picker-pop-opt.selected {
+    background: #6d28d9; border-color: #6d28d9; color: #fff;
 }

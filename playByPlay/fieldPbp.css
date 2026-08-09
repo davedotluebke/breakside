@@ -355,6 +355,8 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
     padding: 7px 10px; font-size: 13px; font-weight: 600; color: #333;
     cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent;
     max-width: 34vw; overflow: hidden; text-overflow: ellipsis;
+    /* Long-press raises our popover, not the OS selection bubble. */
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
 .fp-setbtn.on { background: #6d28d9; border-color: #6d28d9; color: #fff; }
 

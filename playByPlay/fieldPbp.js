@@ -43,7 +43,7 @@
 import { UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData, currentTeam } from '../store/storage.js';
 import {
-    setLabelsFor, setControlLabel, taggablePossession,
+    setLabelsForSide, setControlLabel, taggablePossession,
 } from '../utils/possessionSets.js';
 import {
     currentGame, getLatestPoint, getPlayerFromName, isPointInProgress,
@@ -56,6 +56,7 @@ import { showControllerToast } from '../game/controllerState.js';
 import { ensureDialogVisible, handlePbpTheyScore, handlePbpGameEvents } from '../game/gameScreenEvents.js';
 import { handlePanelStartPoint } from '../game/selectLine.js';
 import { wireSetControl } from '../ui/setPicker.js';
+import { ensurePossessionExists } from './keyPlayDialog.js';
 import { showScoreAttributionDialog } from './scoreAttribution.js';
 
 const fieldPbp = (function() {
@@ -713,14 +714,27 @@ const fieldPbp = (function() {
      * 2026-08-09 (overflowed on a phone, and the set usually isn't known until
      * the D is actually running).
      */
+    function liveSetTarget(state) {
+        // Keyed off the LIVE mode, not the last possession — the two diverge at
+        // a change of possession, and the stale possession's side would offer
+        // the wrong list (see utils/possessionSets.js § setLabelsForSide).
+        const wantOffensive = state.mode !== 'defense';
+        const last = taggablePossession(state.point);
+        const matchesSide = !!last && ((last.offensive !== false) === wantOffensive);
+        return {
+            wantOffensive,
+            labels: setLabelsForSide(currentTeam, wantOffensive),
+            possession: matchesSide ? last : null,
+        };
+    }
+
     function setControlHTML(state, inPoint) {
         if (!inPoint || !state.point) return '';
-        const possession = taggablePossession(state.point);
-        const labels = setLabelsFor(currentTeam, possession);
+        const { labels, possession } = liveSetTarget(state);
         if (!labels.length) return '';
         const caption = setControlLabel(possession)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        return `<button class="fp-setbtn${possession.set ? ' on' : ''}" data-setcycle="1" `
+        return `<button class="fp-setbtn${possession && possession.set ? ' on' : ''}" data-setcycle="1" `
             + `title="Tap to cycle sets, long-press for the full list">${caption}</button>`;
     }
 
@@ -1818,8 +1832,10 @@ const fieldPbp = (function() {
         // Set tag: tap cycles, long-press opens the full list.
         root.querySelectorAll('[data-setcycle]').forEach(b => {
             wireSetControl(b, {
-                getPossession: () => taggablePossession(reconstructState().point),
-                getLabels: () => setLabelsFor(currentTeam, taggablePossession(reconstructState().point)),
+                // Materialize the possession for the side in play if the first
+                // event hasn't created it yet, rather than dropping the pick.
+                getPossession: () => ensurePossessionExists(liveSetTarget(reconstructState()).wantOffensive),
+                getLabels: () => liveSetTarget(reconstructState()).labels,
                 canEdit: () => requireActiveCoach(),
                 onChange: () => {
                     if (typeof saveAllTeamsData === 'function') saveAllTeamsData();

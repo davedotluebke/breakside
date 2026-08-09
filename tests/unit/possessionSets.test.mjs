@@ -13,7 +13,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { setLabelsFor, nextSetValue, setControlLabel, taggablePossession } =
+const { setLabelsFor, setLabelsForSide, nextSetValue, setControlLabel, taggablePossession } =
     await import('../../utils/possessionSets.js');
 
 const TEAM = {
@@ -56,6 +56,41 @@ test('missing team / possession / sets are all safe', () => {
 test('possession with no explicit offensive flag counts as offensive', () => {
     // App-wide convention: defensive iff `offensive === false`.
     assert.deepEqual(setLabelsFor(TEAM, { set: null }), ['Vert', 'Ho']);
+});
+
+// ── live-mode keying (the change-of-possession case) ────────────────────
+
+test('setLabelsForSide keys off the side in play, not a possession', () => {
+    assert.deepEqual(setLabelsForSide(TEAM, true), ['Vert', 'Ho']);
+    assert.deepEqual(setLabelsForSide(TEAM, false), ['Zone', 'Match']);
+    assert.deepEqual(setLabelsForSide({ setsEnabled: false, sets: TEAM.sets }, true), []);
+    assert.deepEqual(setLabelsForSide(null, true), []);
+    assert.deepEqual(setLabelsForSide({ setsEnabled: true, sets: {} }, true), []);
+});
+
+test('just after winning the disc, the live side is offense while the last possession is still defensive', () => {
+    // The reported bug: a block flips the mode to offense, but no offensive
+    // possession exists yet (they're created on the first recorded event), so
+    // keying off the last possession offered DEFENSIVE labels to a coach
+    // naming their O set.
+    const point = { possessions: [oPoss(), dPoss('Zone')] };  // block landed in the D possession
+    const last = taggablePossession(point);
+    assert.equal(last.offensive, false, 'last possession is still the defensive one');
+
+    // Wrong (old) behaviour — labels from the stale possession:
+    assert.deepEqual(setLabelsFor(TEAM, last), ['Zone', 'Match']);
+    // Right behaviour — labels from the live mode:
+    assert.deepEqual(setLabelsForSide(TEAM, /* offense */ true), ['Vert', 'Ho']);
+});
+
+test('side-match test decides whether a possession already exists for the live side', () => {
+    const matches = (poss, wantOffensive) =>
+        !!poss && ((poss.offensive !== false) === wantOffensive);
+    assert.equal(matches(oPoss(), true), true);
+    assert.equal(matches(dPoss(), true), false, 'defensive possession, offense in play → none yet');
+    assert.equal(matches(dPoss(), false), true);
+    assert.equal(matches(null, true), false);
+    assert.equal(matches({ set: null }, true), true, 'missing flag counts as offensive');
 });
 
 // ── the tap cycle ───────────────────────────────────────────────────────
