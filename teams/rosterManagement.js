@@ -1544,77 +1544,89 @@ function makeRosterColumnsSticky() {
 // Roster Screen Polling (for cross-device sync)
 // =============================================================================
 
-let rosterPollIntervalId = null;
-const ROSTER_POLL_INTERVAL = 10000;  // 10 seconds
+// Driven by the power manager's shared base tick rather than its own
+// setInterval, so it lands on the same moments as the other out-of-game polls
+// and shares one radio wake (utils/powerPolicy.js § TICK_DRIVEN_LOOPS). The
+// cadence — the Cloud refresh interval, as before — now lives in the schedule.
+let rosterPollRunning = false;
 
 /**
  * Start polling for roster updates while on the roster screen
  */
 function startRosterPolling() {
-    if (rosterPollIntervalId) {
+    if (rosterPollRunning) {
         return; // Already running
     }
-    
-    rosterPollIntervalId = setInterval(async () => {
-        window.powerLog?.countWakeup?.('rosterPoll');
-        // Only poll if we're on the roster screen
-        const rosterScreen = document.getElementById('teamRosterScreen');
-        if (!rosterScreen || rosterScreen.style.display === 'none') {
-            stopRosterPolling();
-            return;
-        }
-        
-        // Check if we're authenticated and online
-        if (!window.breakside?.auth?.isAuthenticated?.() || !navigator.onLine) {
-            return;
-        }
-        
-        // Don't poll during active game
-        if (typeof currentGame === 'function') {
-            try {
-                const game = currentGame();
-                if (game && !game.gameEndTimestamp) {
-                    return;
-                }
-            } catch (e) {
-                // No current game
-            }
-        }
-        
-        try {
-            // Check for updates
-            if (typeof checkForUpdates === 'function') {
-                const hasUpdates = await checkForUpdates();
-                
-                if (hasUpdates && typeof syncUserTeams === 'function') {
-                    log('📥 Roster: Updates detected, syncing...');
-                    const result = await syncUserTeams();
-                    
-                    // Always refresh roster display after sync completes
-                    // The sync may have updated player attributes even if counts didn't change
-                    if (result.success) {
-                        if (typeof updateTeamRosterDisplay === 'function') {
-                            updateTeamRosterDisplay();
-                        }
-                        log('✅ Roster: Refreshed display after sync');
-                    }
-                }
-            }
-        } catch (error) {
-            console.warn('Roster poll failed:', error);
-        }
-    }, (window.advancedSettings?.getRefreshIntervalMs?.() || ROSTER_POLL_INTERVAL));
-    
+
+    rosterPollRunning = true;
     log('🔄 Started roster polling');
 }
+
+/**
+ * One roster poll — the body of the old interval, unchanged.
+ */
+async function pollRosterOnce() {
+    // Only poll if we're on the roster screen
+    const rosterScreen = document.getElementById('teamRosterScreen');
+    if (!rosterScreen || rosterScreen.style.display === 'none') {
+        stopRosterPolling();
+        return;
+    }
+    
+    // Check if we're authenticated and online
+    if (!window.breakside?.auth?.isAuthenticated?.() || !navigator.onLine) {
+        return;
+    }
+    
+    // Don't poll during active game
+    if (typeof currentGame === 'function') {
+        try {
+            const game = currentGame();
+            if (game && !game.gameEndTimestamp) {
+                return;
+            }
+        } catch (e) {
+            // No current game
+        }
+    }
+    
+    try {
+        // Check for updates
+        if (typeof checkForUpdates === 'function') {
+            const hasUpdates = await checkForUpdates();
+            
+            if (hasUpdates && typeof syncUserTeams === 'function') {
+                log('📥 Roster: Updates detected, syncing...');
+                const result = await syncUserTeams();
+                
+                // Always refresh roster display after sync completes
+                // The sync may have updated player attributes even if counts didn't change
+                if (result.success) {
+                    if (typeof updateTeamRosterDisplay === 'function') {
+                        updateTeamRosterDisplay();
+                    }
+                    log('✅ Roster: Refreshed display after sync');
+                }
+            }
+        }
+    } catch (error) {
+        console.warn('Roster poll failed:', error);
+    }
+}
+
+document.addEventListener('breakside:power-tick', (e) => {
+    if (!rosterPollRunning) return;
+    if (!e.detail?.due?.includes('rosterPoll')) return;
+    window.powerLog?.countWakeup?.('rosterPoll');
+    pollRosterOnce();
+});
 
 /**
  * Stop roster polling
  */
 function stopRosterPolling() {
-    if (rosterPollIntervalId) {
-        clearInterval(rosterPollIntervalId);
-        rosterPollIntervalId = null;
+    if (rosterPollRunning) {
+        rosterPollRunning = false;
         log('⏹️ Stopped roster polling');
     }
 }
@@ -1635,7 +1647,7 @@ document.addEventListener('breakside:power-plan', (e) => {
             rosterPollSuspendedByPower = false;
             startRosterPolling();
         }
-    } else if (rosterPollIntervalId) {
+    } else if (rosterPollRunning) {
         rosterPollSuspendedByPower = true;
         stopRosterPolling();
     }

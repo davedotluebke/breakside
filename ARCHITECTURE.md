@@ -1678,6 +1678,89 @@ bare `setInterval` at module scope — three of those existed before this system
 and each ran for the entire lifetime of the tab, including on screens where the
 thing they updated didn't exist.
 
+### The shared base tick
+
+The plan says *whether* a loop may run; `breakside:power-tick` says *when*. The
+four out-of-game polls (`TICK_DRIVEN_LOOPS` in `powerPolicy.js`) don't own
+intervals at all — `powerManager` runs one interval and dispatches a tick
+carrying the ids that are due:
+
+```js
+document.addEventListener('breakside:power-tick', (e) => {
+    if (!running || !e.detail.due.includes('autoSync')) return;
+    autoSyncOnce();
+});
+```
+
+This is a battery change, not a correctness one, and the reason is the radio
+rather than the CPU. After any request a phone's radio sits in a high-power
+state for several seconds before dropping to idle, so the bill tracks *how many
+separate times you woke it*, not how many bytes you sent — three requests in one
+moment share a tail, three spread over ten seconds pay three. Left to
+themselves the four loops installed their intervals whenever their modules
+happened to start (sign-in, opening the roster screen, leaving a game), so their
+phases scattered.
+
+Two rules in `tickSchedule()` are deliberate and easy to get backwards:
+
+- **The base is the shortest period, not the GCD.** A GCD would be exact, but a
+  coach who sets the Cloud refresh interval to 7s would get gcd(7000, 30000) =
+  1000 — a 1-second tick, ten times today's timer wakeups, to serve loops that
+  wanted 7 and 30 seconds. It self-corrects at the far end too: at a 120s
+  refresh the base falls back to the 30s active-game poll, so that notification
+  isn't dragged out to two minutes.
+- **Multiples round up.** A period that isn't a clean multiple of the base runs
+  slightly slower than asked, never faster; the other way would quietly poll the
+  API harder than the user's own setting allows.
+
+Due-ness is "at least N ticks since this loop last ran", not `tickIndex % N`.
+Both keep same-period loops together, but the modulo form silently *skips* a
+loop whenever its multiple lands on a tick the browser threw away — and a
+backgrounded phone throttles plenty.
+
+Ticks count from the device's own start epoch, deliberately **not** the wall
+clock: aligning every client in the world to :00 and :10 would hand the server a
+thundering herd.
+
+The in-game loops are deliberately not on the tick. The 1s display timer sends
+nothing, and after the change gate below the only in-game network loop left is
+the 2s controller ping — there is nothing for it to align with.
+
+### In-game change gating
+
+The in-game refresh (`game/gameScreenSync.js`) used to `GET /api/games/{id}` —
+the whole game, every point and event — every 3 seconds regardless of whether
+anything had changed. It now pulls only when a change stamp says the server's
+copy moved. `utils/changeStamp.js` holds the comparison; the stamp is
+`current.json`'s mtime, the same token the public share poll has always used.
+
+Two sources, and the cheap one is the point:
+
+| Client | Stamp from | Cost while idle |
+|---|---|---|
+| Coach | `gameStamp` on the 2s controller ping | **nothing** — the request was already being sent |
+| Viewer (never pings) | `GET /api/games/{id}/poll` | ~30 bytes vs ~6 KB |
+
+**Unknown means pull.** A null stamp — old server, failed poll, ping not landed
+yet — has to mean refetch. That is the only direction in which this can lose
+data, and it would fail silently rather than loudly, which is why the rule lives
+in one pure module with its own tests.
+
+**The stamp is claimed before the fetch, never after.** A write landing in
+between costs one extra refetch next tick; recording the later stamp would mark
+a change as seen that was never pulled. For the same reason a refresh that
+didn't reach the server gives the stamp back — otherwise one transient failure
+strands the client on stale state until some other coach happens to write.
+
+Latency went *down*, not up: the ping fires `breakside:game-stamp-changed` when
+its stamp moves and the refresh runs on that event, so an Active Coach sees a
+Line Coach's line edit within a ping (≤2s) rather than within a poll (≤3s).
+That matters because the `pendingNextLine` merge assumes near-live refresh
+(TODO.md § Multi-Coach Line Selection). Both halves — idle silence *and* fast
+propagation — are pinned by `tests/scenarios/09-in-game-change-gate.spec.ts`,
+together, because either one alone is trivially satisfiable by breaking the
+other.
+
 **Resume restores only what was suspended.** Loops that something else stops
 deliberately — auto-sync on sign-out, roster polling on navigation — track a
 `suspendedByPower` flag, because a plain "plan says true → start" resurrects
@@ -1717,6 +1800,16 @@ wake lock / with the mic open. Real battery levels are sampled where available
 Online/About → "Battery report…", which has a copy button for field reports; it
 states explicitly when readings aren't available, so an iPhone report isn't
 misread as a bug.
+
+Request classes are chosen so the numbers are readable rather than merely
+correct. The role keepalive lives at `/api/games/{id}/ping` but counts as
+`controller`, not `games` — classifying it by URL prefix buried the in-game full
+game poll inside a bucket three times its size, which is the one number the log
+existed to expose. Change-stamp polls get their own `gamePoll` class for the
+same reason: ~30 bytes against ~6 KB shouldn't read as "we still poll
+constantly". In a game with nothing being recorded, `requests.games` should now
+sit near zero while `requests.controller` continues at the ping cadence; if it
+doesn't, the change gate isn't working.
 
 ### Animations
 

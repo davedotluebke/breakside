@@ -21,12 +21,22 @@
  * layer — store/sync.js (data) through ui/ — and a data-layer module cannot
  * import upward into utils/ (ARCHITECTURE.md § Module Loading). The event
  * carries the whole plan so a listener that missed an edge still converges.
+ *
+ * This module also owns the shared base tick that *drives* the out-of-game
+ * polls (`breakside:power-tick`). The plan says whether a loop may run; the
+ * tick says when. Keeping both here is what makes same-cadence loops fire in
+ * the same moment instead of at four unrelated offsets — see TICK_DRIVEN_LOOPS
+ * in powerPolicy.js for why that matters more than the request count does.
  */
-import { loopPlan, diffPlan, LOOPS } from './powerPolicy.js';
+import {
+    loopPlan, diffPlan, LOOPS,
+    TICK_DRIVEN_LOOPS, loopPeriods, tickSchedule, loopsDueOnTick,
+} from './powerPolicy.js';
 import { log } from './logger.js';
 
 const powerManager = (function() {
     const EVENT_NAME = 'breakside:power-plan';
+    const TICK_EVENT_NAME = 'breakside:power-tick';
 
     // The context powerPolicy consumes. `inGame` is pushed in by
     // game/gameScreenSync.js's enterGameScreen/exitGameScreen.
@@ -36,6 +46,75 @@ const powerManager = (function() {
     };
 
     let lastPlan = null;
+
+    // ─── Shared base tick ───────────────────────────────────────────────────
+    //
+    // The out-of-game polls used to install their own intervals whenever their
+    // modules happened to start, so their phases scattered and each one woke
+    // the radio at its own unrelated moment. They now ride a single tick here:
+    // same-period loops land on the same tick, share one radio tail, and —
+    // being same-origin — share the HTTP/2 connection too.
+    //
+    // powerManager owns it because it already owns the plan and the visibility
+    // listener; a second scheduler would be a second source of truth about
+    // what is allowed to run.
+
+    let tickIntervalId = null;
+    let tickEpoch = 0;
+    let schedule = null;
+    let lastRunIndex = {};
+
+    /** Whether any tick-driven loop is supposed to be running right now. */
+    function anyTickLoopPlanned(plan) {
+        return TICK_DRIVEN_LOOPS.some(loop => !!plan[loop]);
+    }
+
+    /**
+     * The user's Cloud refresh interval, read late-bound: settings/ evaluates
+     * above utils/ and cannot be imported from here (§ Module Loading).
+     */
+    function refreshIntervalMs() {
+        return window.advancedSettings?.getRefreshIntervalMs?.();
+    }
+
+    function onTick() {
+        // Derive the index from the clock rather than counting callbacks, so a
+        // throttled tab that fires late doesn't drift the whole schedule.
+        const tickIndex = Math.max(0, Math.round((Date.now() - tickEpoch) / schedule.baseMs));
+        const result = loopsDueOnTick(tickIndex, schedule, lastRunIndex);
+        lastRunIndex = result.lastRunIndex;
+        if (!result.due.length) return;
+
+        document.dispatchEvent(new CustomEvent(TICK_EVENT_NAME, {
+            detail: { due: result.due, tickIndex }
+        }));
+    }
+
+    function startTick() {
+        const periods = loopPeriods({ refreshIntervalMs: refreshIntervalMs() });
+        const next = tickSchedule(periods);
+
+        // Nothing to do if the cadence is unchanged and we're already ticking.
+        if (tickIntervalId && schedule && schedule.baseMs === next.baseMs) {
+            schedule = next;
+            return;
+        }
+
+        stopTick();
+        schedule = next;
+        // The device's own epoch, not the wall clock: aligning every client to
+        // :00 and :10 would hand the server a thundering herd.
+        tickEpoch = Date.now();
+        lastRunIndex = {};
+        tickIntervalId = setInterval(onTick, schedule.baseMs);
+        log(`🔋 power tick: ${schedule.baseMs}ms base`);
+    }
+
+    function stopTick() {
+        if (!tickIntervalId) return;
+        clearInterval(tickIntervalId);
+        tickIntervalId = null;
+    }
 
     /**
      * Recompute the plan and broadcast it if anything changed.
@@ -64,6 +143,12 @@ const powerManager = (function() {
                 ctx: { visible: ctx.visible, inGame: ctx.inGame }
             }
         }));
+
+        // Listeners have set their own running flags off the plan above, so
+        // the tick's only job is to exist when at least one of them wants it.
+        // Ticking with nothing subscribed would be a wakeup for no one.
+        if (anyTickLoopPlanned(plan)) startTick();
+        else stopTick();
     }
 
     function handleVisibilityChange() {
@@ -110,7 +195,7 @@ const powerManager = (function() {
 
     init();
 
-    return { setGameActive, getContext, isVisible, LOOPS, EVENT_NAME };
+    return { setGameActive, getContext, isVisible, LOOPS, EVENT_NAME, TICK_EVENT_NAME };
 })();
 
 // --- ES-module export ---

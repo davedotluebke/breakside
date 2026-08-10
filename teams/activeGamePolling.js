@@ -8,8 +8,12 @@ import { doFullRefresh } from './syncStatusUI.js';
 import { showControllerToast } from '../game/controllerState.js';
 import { log } from '../utils/logger.js';
 
-// Active-game polling state
-let _activeGamePollInterval = null;
+// Active-game polling state. Both loops in this file are driven by the power
+// manager's shared base tick rather than their own setInterval, so they fire
+// on the same moments as the other out-of-game polls and share one radio wake
+// (see utils/powerPolicy.js § TICK_DRIVEN_LOOPS). These flags are only
+// "subscribed or not"; the cadence lives in the schedule.
+let _activeGamePollRunning = false;
 const _dismissedActiveGames = new Set();  // game IDs user dismissed this session
 let _previousActiveGameIds = new Set();   // game IDs that were active last poll
 
@@ -18,15 +22,12 @@ let _previousActiveGameIds = new Set();   // game IDs that were active last poll
  * Shows a toast when another coach starts or resumes a game.
  */
 function startActiveGamePolling() {
-    if (_activeGamePollInterval) return; // already polling
+    if (_activeGamePollRunning) return; // already polling
     if (!window.breakside?.auth?.isAuthenticated?.()) return;
     if (!navigator.onLine) return;
 
+    _activeGamePollRunning = true;
     checkForActiveGames(); // immediate first check
-    _activeGamePollInterval = setInterval(() => {
-        window.powerLog?.countWakeup?.('activeGamePoll');
-        checkForActiveGames();
-    }, 30000);
     log('📡 Active-game polling started');
 }
 
@@ -34,9 +35,8 @@ function startActiveGamePolling() {
  * Stop active-game polling.
  */
 function stopActiveGamePolling() {
-    if (_activeGamePollInterval) {
-        clearInterval(_activeGamePollInterval);
-        _activeGamePollInterval = null;
+    if (_activeGamePollRunning) {
+        _activeGamePollRunning = false;
         log('📡 Active-game polling stopped');
     }
 }
@@ -92,27 +92,16 @@ async function checkForActiveGames() {
     }
 }
 
-// Auto-refresh every 10 seconds when on the team selection screen
-let _autoRefreshInterval = null;
+// Team-screen auto-refresh, on the shared tick (cadence from the Cloud
+// refresh interval setting — see utils/powerPolicy.js loopPeriods).
+let _autoRefreshRunning = false;
 
 function startAutoRefresh() {
-    stopAutoRefresh();
-    _autoRefreshInterval = setInterval(() => {
-        window.powerLog?.countWakeup?.('teamAutoRefresh');
-        // Only auto-refresh when the select team screen is visible
-        const syncContainer = document.getElementById('syncStatusContainer');
-        const selectScreen = document.getElementById('selectTeamScreen');
-        if (syncContainer && selectScreen && selectScreen.style.display !== 'none') {
-            doFullRefresh(true); // silent refresh
-        }
-    }, (window.advancedSettings?.getRefreshIntervalMs?.() || 10000));
+    _autoRefreshRunning = true;
 }
 
 function stopAutoRefresh() {
-    if (_autoRefreshInterval) {
-        clearInterval(_autoRefreshInterval);
-        _autoRefreshInterval = null;
-    }
+    _autoRefreshRunning = false;
 }
 
 // Start auto-refresh on load
@@ -121,7 +110,7 @@ startAutoRefresh();
 // Power plan: both of these are network polls that only ever act on the team
 // screen, so there is nothing for them to do while the page is hidden or while
 // the coach is inside a game. startActiveGamePolling() keeps its own auth /
-// online guards; this only decides whether the timer exists at all.
+// online guards; this only decides whether they're subscribed to the tick.
 document.addEventListener('breakside:power-plan', (e) => {
     const plan = e.detail?.plan;
     if (!plan) return;
@@ -131,6 +120,28 @@ document.addEventListener('breakside:power-plan', (e) => {
 
     if (plan.activeGamePoll) startActiveGamePolling();
     else stopActiveGamePolling();
+});
+
+// The tick. Both bodies are exactly what their setIntervals used to run; only
+// the clock they hang off has changed.
+document.addEventListener('breakside:power-tick', (e) => {
+    const due = e.detail?.due;
+    if (!due) return;
+
+    if (_autoRefreshRunning && due.includes('teamAutoRefresh')) {
+        window.powerLog?.countWakeup?.('teamAutoRefresh');
+        // Only auto-refresh when the select team screen is visible
+        const syncContainer = document.getElementById('syncStatusContainer');
+        const selectScreen = document.getElementById('selectTeamScreen');
+        if (syncContainer && selectScreen && selectScreen.style.display !== 'none') {
+            doFullRefresh(true); // silent refresh
+        }
+    }
+
+    if (_activeGamePollRunning && due.includes('activeGamePoll')) {
+        window.powerLog?.countWakeup?.('activeGamePoll');
+        checkForActiveGames();
+    }
 });
 
 // --- ES-module exports ---

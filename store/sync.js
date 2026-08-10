@@ -1640,8 +1640,9 @@ let lastSyncCheck = {
 };
 
 // Auto-sync interval ID
-let autoSyncIntervalId = null;
-const AUTO_SYNC_INTERVAL = 10000;  // 10 seconds
+// "Subscribed to the shared tick", not an interval handle — the cadence lives
+// in utils/powerPolicy.js's schedule now.
+let autoSyncRunning = false;
 
 /**
  * Check if there are updates on the server that need to be synced.
@@ -1707,79 +1708,94 @@ async function checkForUpdates() {
  * Checks for updates every 10 seconds and syncs if needed.
  */
 function startAutoSync() {
-    if (autoSyncIntervalId) {
+    if (autoSyncRunning) {
         return; // Already running
     }
-    
+
     log('🔄 Starting auto-sync polling...');
-    
+
     // Initialize last known state from local data
     lastSyncCheck.teamCount = teams.length;
     lastSyncCheck.playerCount = teams.reduce((sum, t) => sum + (t.teamRoster?.length || 0), 0);
-    
-    autoSyncIntervalId = setInterval(async () => {
-        window.powerLog?.countWakeup?.('autoSync');
-        // Only check if we're online and authenticated
-        if (!isOnline || !window.breakside?.auth?.isAuthenticated?.()) {
-            return;
-        }
-        
-        // Don't poll during active game (to avoid interference)
-        if (typeof currentGame === 'function') {
-            try {
-                const game = currentGame();
-                if (game && !game.gameEndTimestamp) {
-                    return; // Game in progress, skip auto-sync
-                }
-            } catch (e) {
-                // No current game, continue
-            }
-        }
-        
-        try {
-            const hasUpdates = await checkForUpdates();
-            
-            if (hasUpdates) {
-                log('📥 Auto-syncing due to detected updates...');
-                const result = await syncUserTeams();
-                
-                if (result.success) {
-                    // Data→UI notifications: late-bound back-edges (teams/* UI
-                    // lives "above" this layer); see ARCHITECTURE.md § ES
-                    // modules — the window shims at the owners are kept.
-                    // Refresh the team selection screen if visible
-                    if (document.getElementById('selectTeamScreen')?.style.display !== 'none') {
-                        if (typeof window.showSelectTeamScreen === 'function') {
-                            window.showSelectTeamScreen();
-                        }
-                    }
 
-                    // Refresh the roster screen if visible
-                    if (document.getElementById('teamRosterScreen')?.style.display !== 'none') {
-                        if (typeof window.updateTeamRosterDisplay === 'function') {
-                            window.updateTeamRosterDisplay();
-                        }
-                    }
-
-                    // Update sync status display
-                    if (typeof window.updateSyncStatusDisplay === 'function') {
-                        window.updateSyncStatusDisplay();
-                    }
-                }
-            }
-        } catch (error) {
-            console.warn('Auto-sync check failed:', error);
-        }
-    }, (window.advancedSettings?.getRefreshIntervalMs?.() || AUTO_SYNC_INTERVAL));
+    autoSyncRunning = true;
 }
+
+/**
+ * One auto-sync pass — the body of the old interval, unchanged.
+ */
+async function autoSyncOnce() {
+    // Only check if we're online and authenticated
+    if (!isOnline || !window.breakside?.auth?.isAuthenticated?.()) {
+        return;
+    }
+    
+    // Don't poll during active game (to avoid interference)
+    if (typeof currentGame === 'function') {
+        try {
+            const game = currentGame();
+            if (game && !game.gameEndTimestamp) {
+                return; // Game in progress, skip auto-sync
+            }
+        } catch (e) {
+            // No current game, continue
+        }
+    }
+    
+    try {
+        const hasUpdates = await checkForUpdates();
+        
+        if (hasUpdates) {
+            log('📥 Auto-syncing due to detected updates...');
+            const result = await syncUserTeams();
+            
+            if (result.success) {
+                // Data→UI notifications: late-bound back-edges (teams/* UI
+                // lives "above" this layer); see ARCHITECTURE.md § ES
+                // modules — the window shims at the owners are kept.
+                // Refresh the team selection screen if visible
+                if (document.getElementById('selectTeamScreen')?.style.display !== 'none') {
+                    if (typeof window.showSelectTeamScreen === 'function') {
+                        window.showSelectTeamScreen();
+                    }
+                }
+
+                // Refresh the roster screen if visible
+                if (document.getElementById('teamRosterScreen')?.style.display !== 'none') {
+                    if (typeof window.updateTeamRosterDisplay === 'function') {
+                        window.updateTeamRosterDisplay();
+                    }
+                }
+
+                // Update sync status display
+                if (typeof window.updateSyncStatusDisplay === 'function') {
+                    window.updateSyncStatusDisplay();
+                }
+            }
+        }
+    } catch (error) {
+        console.warn('Auto-sync check failed:', error);
+    }
+}
+
+// Driven by the power manager's shared base tick, so this lands on the same
+// moment as the other out-of-game polls and shares one radio wake rather than
+// poking it at whatever offset this module happened to start at. The cadence
+// is still the Cloud refresh interval — it just lives in the schedule now
+// (utils/powerPolicy.js § loopPeriods).
+document.addEventListener('breakside:power-tick', (e) => {
+    if (!autoSyncRunning) return;
+    if (!e.detail?.due?.includes('autoSync')) return;
+    window.powerLog?.countWakeup?.('autoSync');
+    autoSyncOnce();
+});
 
 /**
  * Stop automatic sync polling.
  */
 function stopAutoSync() {
-    if (autoSyncIntervalId) {
-        clearInterval(autoSyncIntervalId);
-        autoSyncIntervalId = null;
+    if (autoSyncRunning) {
+        autoSyncRunning = false;
         log('⏹️ Stopped auto-sync polling');
     }
 }
@@ -1807,7 +1823,7 @@ document.addEventListener('breakside:power-plan', (e) => {
             autoSyncSuspendedByPower = false;
             startAutoSync();
         }
-    } else if (autoSyncIntervalId) {
+    } else if (autoSyncRunning) {
         autoSyncSuspendedByPower = true;
         stopAutoSync();
     }
