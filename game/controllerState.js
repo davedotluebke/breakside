@@ -14,6 +14,7 @@
 import { authFetch, API_BASE_URL, refreshGameStateFromCloud } from '../store/sync.js';
 import { isTestGame } from '../store/models.js';
 import { currentGame } from '../utils/helpers.js';
+import { normalizeStamp, stampSaysChanged } from '../utils/changeStamp.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { showSelectTeamScreen } from '../teams/teamList.js';
 import { log } from '../utils/logger.js';
@@ -248,28 +249,76 @@ async function respondToHandoff(gameId, accept) {
 }
 
 /**
+ * The game change stamp the most recent successful ping reported, tagged with
+ * the game it belongs to. This is what lets game/gameScreenSync.js's in-game
+ * refresh skip its network call entirely: the ping is already running every
+ * 2s, so change detection costs nothing extra.
+ * @type {{gameId: string, stamp: string|null}|null}
+ */
+let lastPingGameStamp = null;
+
+/**
+ * The change stamp from the last ping, for a specific game.
+ *
+ * Returns null — meaning "no opinion", so the caller must assume the game may
+ * have changed — when no ping has landed yet, when the last one was for a
+ * different game, or when the server is old enough not to send the field.
+ *
+ * @param {string} gameId
+ * @returns {string|null}
+ */
+function getPingGameStamp(gameId) {
+    if (!lastPingGameStamp || !gameId) return null;
+    if (lastPingGameStamp.gameId !== gameId) return null;
+    return lastPingGameStamp.stamp;
+}
+
+/**
  * Ping server to keep role alive
  * @param {string} gameId - The game ID
  * @returns {Promise<object|null>} Ping result or null on error
  */
 async function pingController(gameId) {
     if (!gameId) return null;
-    
+
     try {
         const response = await authFetch(`${API_BASE_URL}/api/games/${gameId}/ping`, {
             method: 'POST'
         });
-        
+
         if (response.ok) {
             const data = await response.json();
-            
+
             // Update local state - role flags are computed in updateLocalControllerState
             updateLocalControllerState({
                 state: data.controllerState,
                 hasPendingHandoffForMe: data.hasPendingHandoffForMe,
                 connectedCoaches: data.connectedCoaches
             });
-            
+
+            // Stash the game change stamp for the in-game refresh loop. An
+            // absent field (old server) stores null, which reads as "no
+            // opinion" and keeps that client on unconditional refreshes.
+            const stamp = normalizeStamp(data.gameStamp);
+            // Only a *known* stamp that differs from the previous ping's is
+            // news. An unknown one isn't an event — it's the absence of one,
+            // and the refresh loop's own gate already treats it as "pull".
+            const sameGame = lastPingGameStamp && lastPingGameStamp.gameId === gameId;
+            const moved = stamp !== null
+                && (!sameGame || stampSaysChanged(lastPingGameStamp.stamp, stamp));
+            lastPingGameStamp = { gameId, stamp };
+
+            // Tell game/gameScreenSync.js to pull, instead of making it wait
+            // for its own next tick. An event rather than a direct call: this
+            // module is imported *by* gameScreenSync, so calling into it would
+            // be the back-edge (see ARCHITECTURE.md § Module Loading), and
+            // updateControllerUI already publishes to the same screen this way.
+            if (moved) {
+                document.dispatchEvent(new CustomEvent('breakside:game-stamp-changed', {
+                    detail: { gameId, stamp }
+                }));
+            }
+
             return data;
         }
         return null;
@@ -539,6 +588,9 @@ function stopControllerPolling() {
     lastResolvedHandoffKey = null;
     lastRoleLossToastKey = null;
     suppressRoleLossToast = { activeCoach: false, lineCoach: false };
+    // getPingGameStamp() is game-scoped and would return null for a later
+    // game anyway; dropping it here keeps this reset total.
+    lastPingGameStamp = null;
     log('🎮 Controller polling stopped');
 }
 
@@ -1483,7 +1535,7 @@ export {
     startControllerPolling, stopControllerPolling,
     isControllerPollingActive, getPollingGameId,
     setControllerButtonsVisible, showControllerToast, dismissToast,
-    getCurrentUserId, pingController,
+    getCurrentUserId, pingController, getPingGameStamp,
     // Role-claim click handlers: imported by game/gameScreenEvents.js for the
     // game-screen role buttons (its old typeof-guarded bare references went
     // silently dead at C6a when this file became a module).

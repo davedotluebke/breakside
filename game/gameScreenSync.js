@@ -11,8 +11,10 @@ import {
     currentTeam, currentEvent, setCurrentEvent, deserializeTournamentEvent,
 } from '../store/storage.js';
 import { currentGame, isPointInProgress } from '../utils/helpers.js';
+import { normalizeStamp, stampSaysChanged } from '../utils/changeStamp.js';
 import {
     listTeamEvents, refreshPendingLineFromCloud, refreshGameStateFromCloud,
+    fetchGameStamp,
 } from '../store/sync.js';
 import {
     isGameScreenVisible, showGameScreen, hideGameScreen, resetAllPanelStates,
@@ -24,7 +26,7 @@ import { powerManager } from '../utils/powerManager.js';
 import { showSelectTeamScreen } from '../teams/teamList.js';
 import {
     getControllerState, getCurrentUserId, startControllerPolling,
-    stopControllerPolling, showControllerToast, dismissToast,
+    stopControllerPolling, showControllerToast, dismissToast, getPingGameStamp,
 } from './controllerState.js';
 import { summarizeGame } from './gameLogic.js';
 import { renderGameLogHTML, escapeHtml } from '../utils/gameLogRenderer.js';
@@ -445,10 +447,91 @@ function exitGameScreen() {
 // Track game state refresh interval
 let gameStateRefreshIntervalId = null;
 
+// =============================================================================
+// Change gating
+// =============================================================================
+//
+// This loop used to pull GET /api/games/{id} — the entire game, every point
+// and every event — every 3 seconds, whether or not anything had changed.
+// Twenty full payloads a minute per device, for a game state that only moves
+// when a coach records something. The radio never got to idle, and the radio
+// tail is where the battery actually goes.
+//
+// So the loop now asks a cheap question first: has the server's copy changed
+// since the one we already hold? The answer is a change stamp
+// (current.json's mtime), and there are two ways to get one:
+//
+//   - From the controller ping. It already runs every 2s and now carries
+//     `gameStamp`, so for any coach in a game this costs *nothing* — the
+//     3s loop makes zero requests while the game is idle.
+//   - From GET /api/games/{id}/poll, ~30 bytes. Only for in-game clients
+//     that never ping (viewers), and for the gap right after a resume.
+//
+// A null stamp anywhere in the chain means "no opinion" and falls through to
+// an unconditional refresh: an old server that doesn't send the field, a
+// failed request, a ping that hasn't landed yet. Stale-but-working beats
+// clever-but-silent.
+
+/**
+ * The stamp of the game state we last pulled, or null for "unknown — pull".
+ * Reset whenever the game screen is entered or left, because a stamp from a
+ * previous session says nothing about what we hold now.
+ * @type {string|null}
+ */
+let lastRefreshedStamp = null;
+
+/**
+ * The game the refresh loop is currently installed for, so the stamp-change
+ * event knows what to refresh. Null when the loop isn't running.
+ * @type {string|null}
+ */
+let refreshGameId = null;
+
+/**
+ * Guards against two refreshes overlapping — the 3s tick and the ping's
+ * stamp-change event are independent triggers.
+ * @type {boolean}
+ */
+let refreshInFlight = false;
+
+/**
+ * The current server stamp for a game, as cheaply as this client can get it.
+ * @param {string} gameId
+ * @returns {Promise<string|null>} null = unknown, treat as changed
+ */
+async function currentGameStamp(gameId) {
+    // Free: the ping is already running for every coach in a game.
+    const fromPing = getPingGameStamp(gameId);
+    if (fromPing) return fromPing;
+
+    // Viewers hold no controller session and never ping, so they pay for a
+    // stamp — still ~200x smaller than the game they'd otherwise pull.
+    return await fetchGameStamp(gameId);
+}
+
+/**
+ * Whether the server's game state differs from the copy we last pulled.
+ *
+ * Reads the stamp *before* the caller fetches, never after. A write landing
+ * between the two makes us record the older stamp and refetch once more next
+ * tick — wasteful but correct. Recording the newer one would mean marking a
+ * change as seen that we never actually pulled, which is a lost update.
+ *
+ * @param {string} gameId
+ * @returns {Promise<{changed: boolean, stamp: string|null}>}
+ */
+async function gameStateChanged(gameId) {
+    const stamp = normalizeStamp(await currentGameStamp(gameId));
+    return { changed: stampSaysChanged(lastRefreshedStamp, stamp), stamp };
+}
+
 /**
  * Start periodic refresh of game state from cloud.
  * - Active Coach: Only refresh pending line (they push game data, not pull)
  * - Everyone else: Refresh full game state (scores, points, events)
+ *
+ * Gated on a change stamp (see above), so an idle game costs no network at
+ * all for a coach and one tiny poll for a viewer.
  */
 function startGameStateRefresh() {
     if (gameStateRefreshIntervalId) {
@@ -461,44 +544,169 @@ function startGameStateRefresh() {
     }
     
     const gameId = game.id;
-    
-    // Refresh every 3 seconds
-    gameStateRefreshIntervalId = setInterval(async () => {
+    refreshGameId = gameId;
+
+    // Every (re)start is a fresh claim: game entry, a different game, resume
+    // after the power manager stopped us, and the wake-recovery restart all
+    // land here. Forgetting the stamp makes the first pull unconditional,
+    // which is what "refetch on the first ping after a resume" means in
+    // practice — we can't trust a stamp from before a sleep.
+    lastRefreshedStamp = null;
+
+    // Tick every 3 seconds. The tick itself is nearly free now: for a coach it
+    // reads the stamp the ping already cached and usually stops there. It is
+    // the safety net; the ping's stamp-change event below is the fast path.
+    gameStateRefreshIntervalId = setInterval(() => {
         window.powerLog?.countWakeup?.('gameStateRefresh');
         // Stop if no longer visible
         if (!isGameScreenVisible()) {
             stopGameStateRefresh();
             return;
         }
-        
-        // Check if we're the Active Coach
-        const state = typeof getControllerState === 'function' ? getControllerState() : {};
-        const isActiveCoach = state.isActiveCoach;
-        
-        if (isActiveCoach) {
-            // Active Coach: refresh the pending line continuously, including
-            // during a live point. Originally gated on !isPointInProgress()
-            // to protect mid-point edits from being clobbered by Line Coach
-            // syncs — that risk was eliminated by the server-side per-field
-            // merge + non-authoritative writer guard (commit 9fadda1), so
-            // the gate can now go. With it gone, the AC sees the LC's view
-            // switches and line edits live, which is what the LC-viewing
-            // sub-header (rendered below) needs to stay accurate.
-            if (typeof refreshPendingLineFromCloud === 'function') {
-                // Snapshot lineupReadyAt before refresh so we can
-                // detect a *new* "Lineup Ready" ping from the Line
-                // Coach. The merge happens in-place inside the
-                // refresh function; comparing pre/post tells us
-                // whether to surface a toast.
-                const gameForSnapshot = (typeof currentGame === 'function') ? currentGame() : null;
-                const prevLineupReadyAt = (gameForSnapshot
-                    && gameForSnapshot.pendingNextLine
-                    && gameForSnapshot.pendingNextLine.lineupReadyAt) || 0;
+        refreshGameStateIfChanged(gameId);
+    }, 3000);
 
-                const result = await refreshPendingLineFromCloud(gameId);
-                if (result && typeof result === 'object' && result.gameJustEnded) {
-                    // Game ended by another session/device
-                    log('🏁 Game ended by another session — leaving game screen');
+    log('🔄 Started game state refresh polling');
+}
+
+/**
+ * Pull and apply the game state, but only if the server's copy has moved.
+ *
+ * Serialized on `refreshInFlight`: the ping's stamp event and the 3s tick both
+ * call this, and a slow network could otherwise have two pulls racing to claim
+ * the same stamp.
+ *
+ * @param {string} gameId
+ */
+async function refreshGameStateIfChanged(gameId) {
+    if (refreshInFlight) return;
+    // Claim the guard before the first await, not after: on the viewer path
+    // the stamp check is itself a network round-trip, and two callers that
+    // both got past an unclaimed guard would race from there.
+    refreshInFlight = true;
+    try {
+        // Nothing changed on the server since our last pull — skip the whole
+        // refresh. For a coach this costs no network at all.
+        const { changed, stamp } = await gameStateChanged(gameId);
+        if (!changed) return;
+
+        // Claim the stamp before fetching, not after — see gameStateChanged.
+        lastRefreshedStamp = stamp;
+        await applyGameStateRefresh(gameId);
+    } finally {
+        refreshInFlight = false;
+    }
+}
+
+/**
+ * The refresh itself, once we know there is something to pull.
+ * @param {string} gameId
+ */
+async function applyGameStateRefresh(gameId) {
+    // Check if we're the Active Coach
+    const state = typeof getControllerState === 'function' ? getControllerState() : {};
+    const isActiveCoach = state.isActiveCoach;
+
+    if (isActiveCoach) {
+        // Active Coach: refresh the pending line continuously, including
+        // during a live point. Originally gated on !isPointInProgress()
+        // to protect mid-point edits from being clobbered by Line Coach
+        // syncs — that risk was eliminated by the server-side per-field
+        // merge + non-authoritative writer guard (commit 9fadda1), so
+        // the gate can now go. With it gone, the AC sees the LC's view
+        // switches and line edits live, which is what the LC-viewing
+        // sub-header (rendered below) needs to stay accurate.
+        if (typeof refreshPendingLineFromCloud === 'function') {
+            // Snapshot lineupReadyAt before refresh so we can
+            // detect a *new* "Lineup Ready" ping from the Line
+            // Coach. The merge happens in-place inside the
+            // refresh function; comparing pre/post tells us
+            // whether to surface a toast.
+            const gameForSnapshot = (typeof currentGame === 'function') ? currentGame() : null;
+            const prevLineupReadyAt = (gameForSnapshot
+                && gameForSnapshot.pendingNextLine
+                && gameForSnapshot.pendingNextLine.lineupReadyAt) || 0;
+
+            const result = await refreshPendingLineFromCloud(gameId);
+            // `false` means the pull never reached the server. Give the
+            // stamp back so the next tick retries — otherwise one
+            // transient failure strands us on stale state until some
+            // other coach happens to write.
+            if (result === false) lastRefreshedStamp = null;
+            if (result && typeof result === 'object' && result.gameJustEnded) {
+                // Game ended by another session/device
+                log('🏁 Game ended by another session — leaving game screen');
+                if (typeof showControllerToast === 'function') {
+                    showControllerToast('Game has ended', 'info', 4000);
+                }
+                stopControllerPolling();
+                exitGameScreen();
+                if (typeof showSelectTeamScreen === 'function') {
+                    showSelectTeamScreen();
+                }
+                return;
+            }
+            if (result) {
+                // Re-evaluate which line will be used for the
+                // next point now that we have fresh data — but
+                // ONLY between points. autoSelect overrides
+                // activeType to whatever the Intent Rule picks,
+                // which is the right behavior at point-end (snap
+                // the AC's view to the line that will actually
+                // start) but the wrong behavior mid-point: a
+                // manual O|D toggle by the AC or LC gets reverted
+                // on the next 3s poll. The refresh-gate removal
+                // (this commit's parent) is for keeping line
+                // *data* and the LC-viewing label fresh during a
+                // point — not for forcing view auto-selection.
+                const pointInProgress = typeof isPointInProgress === 'function'
+                    && isPointInProgress();
+                if (!pointInProgress
+                    && typeof autoSelectActiveTypeForNextPoint === 'function') {
+                    autoSelectActiveTypeForNextPoint();
+                }
+                updateSelectLinePanel();
+
+                // Refresh PBP-side button state too. updateSelect-
+                // LinePanel only touches the Line tab's table —
+                // the Start Point buttons on Simple, Full, AND
+                // Line tabs all read from updatePlayByPlayPanel-
+                // State. Without this, the Active Coach who's
+                // sitting on Full or Simple sees stale button
+                // colors (and the Line tab's own button doesn't
+                // refresh either, since its state is hung off
+                // updatePlayByPlayPanelState via
+                // updateLineTabStartPointBtn).
+                if (typeof updatePlayByPlayPanelState === 'function') {
+                    updatePlayByPlayPanelState();
+                }
+
+                // Surface a Lineup Ready ping if this refresh
+                // brought one. Skip if the timestamp is stale
+                // (>60s old) — could be a leftover from a
+                // previous between-points window that we just
+                // happened to refresh into now.
+                const newReadyAt = (result && result.lineupReadyAt) || 0;
+                if (newReadyAt > prevLineupReadyAt
+                    && (Date.now() - newReadyAt) < 60000) {
+                    const who = (result.lineupReadyBy || 'Line Coach');
+                    if (typeof showControllerToast === 'function') {
+                        showControllerToast(`${who} says lineup ready`, 'success', 4000);
+                    }
+                }
+            }
+        }
+    } else {
+        // Line Coach / Viewer: Refresh full game state
+        if (typeof refreshGameStateFromCloud === 'function') {
+            const result = await refreshGameStateFromCloud(gameId);
+            // Same deal as the Active Coach branch: nothing was applied,
+            // so we have no claim on the stamp we just recorded.
+            if (!result.refreshed) lastRefreshedStamp = null;
+            if (result.refreshed) {
+                // Game ended by another coach — navigate away
+                if (result.gameJustEnded) {
+                    log('🏁 Game ended by another coach — leaving game screen');
                     if (typeof showControllerToast === 'function') {
                         showControllerToast('Game has ended', 'info', 4000);
                     }
@@ -509,90 +717,19 @@ function startGameStateRefresh() {
                     }
                     return;
                 }
-                if (result) {
-                    // Re-evaluate which line will be used for the
-                    // next point now that we have fresh data — but
-                    // ONLY between points. autoSelect overrides
-                    // activeType to whatever the Intent Rule picks,
-                    // which is the right behavior at point-end (snap
-                    // the AC's view to the line that will actually
-                    // start) but the wrong behavior mid-point: a
-                    // manual O|D toggle by the AC or LC gets reverted
-                    // on the next 3s poll. The refresh-gate removal
-                    // (this commit's parent) is for keeping line
-                    // *data* and the LC-viewing label fresh during a
-                    // point — not for forcing view auto-selection.
-                    const pointInProgress = typeof isPointInProgress === 'function'
-                        && isPointInProgress();
-                    if (!pointInProgress
-                        && typeof autoSelectActiveTypeForNextPoint === 'function') {
-                        autoSelectActiveTypeForNextPoint();
-                    }
-                    updateSelectLinePanel();
 
-                    // Refresh PBP-side button state too. updateSelect-
-                    // LinePanel only touches the Line tab's table —
-                    // the Start Point buttons on Simple, Full, AND
-                    // Line tabs all read from updatePlayByPlayPanel-
-                    // State. Without this, the Active Coach who's
-                    // sitting on Full or Simple sees stale button
-                    // colors (and the Line tab's own button doesn't
-                    // refresh either, since its state is hung off
-                    // updatePlayByPlayPanelState via
-                    // updateLineTabStartPointBtn).
-                    if (typeof updatePlayByPlayPanelState === 'function') {
-                        updatePlayByPlayPanelState();
-                    }
+                // Update all UI elements
+                updateGameScreenAfterRefresh();
 
-                    // Surface a Lineup Ready ping if this refresh
-                    // brought one. Skip if the timestamp is stale
-                    // (>60s old) — could be a leftover from a
-                    // previous between-points window that we just
-                    // happened to refresh into now.
-                    const newReadyAt = (result && result.lineupReadyAt) || 0;
-                    if (newReadyAt > prevLineupReadyAt
-                        && (Date.now() - newReadyAt) < 60000) {
-                        const who = (result.lineupReadyBy || 'Line Coach');
-                        if (typeof showControllerToast === 'function') {
-                            showControllerToast(`${who} says lineup ready`, 'success', 4000);
-                        }
-                    }
-                }
-            }
-        } else {
-            // Line Coach / Viewer: Refresh full game state
-            if (typeof refreshGameStateFromCloud === 'function') {
-                const result = await refreshGameStateFromCloud(gameId);
-                if (result.refreshed) {
-                    // Game ended by another coach — navigate away
-                    if (result.gameJustEnded) {
-                        log('🏁 Game ended by another coach — leaving game screen');
-                        if (typeof showControllerToast === 'function') {
-                            showControllerToast('Game has ended', 'info', 4000);
-                        }
-                        stopControllerPolling();
-                        exitGameScreen();
-                        if (typeof showSelectTeamScreen === 'function') {
-                            showSelectTeamScreen();
-                        }
-                        return;
-                    }
-
-                    // Update all UI elements
-                    updateGameScreenAfterRefresh();
-
-                    // Show conflict toast when another coach made meaningful changes
-                    // (skip for viewers — they expect live updates)
-                    const isViewerUser = typeof window.isViewer === 'function' && window.isViewer();
-                    if (!isViewerUser && (result.scoreChanged || result.pointCountChanged)) {
-                        showGameUpdatedToast(result);
-                    }
+                // Show conflict toast when another coach made meaningful changes
+                // (skip for viewers — they expect live updates)
+                const isViewerUser = typeof window.isViewer === 'function' && window.isViewer();
+                if (!isViewerUser && (result.scoreChanged || result.pointCountChanged)) {
+                    showGameUpdatedToast(result);
                 }
             }
         }
-    }, 3000);
-    
-    log('🔄 Started game state refresh polling');
+    }
 }
 
 /**
@@ -602,9 +739,22 @@ function stopGameStateRefresh() {
     if (gameStateRefreshIntervalId) {
         clearInterval(gameStateRefreshIntervalId);
         gameStateRefreshIntervalId = null;
+        refreshGameId = null;
         log('⏹️ Stopped game state refresh polling');
     }
 }
+
+// The fast path. controllerState.js fires this when a ping comes back with a
+// game stamp different from the one the previous ping reported, so a coach
+// sees another coach's write about as fast as their own ping cadence (≤2s)
+// rather than waiting out the next 3s tick. That makes this change a latency
+// *improvement* over the old unconditional poll, not just a battery one —
+// which matters because the Active Coach's pendingNextLine merge depends on
+// seeing Line Coach edits promptly (TODO.md § Multi-Coach Line Selection).
+document.addEventListener('breakside:game-stamp-changed', () => {
+    if (!refreshGameId || !isGameScreenVisible()) return;
+    refreshGameStateIfChanged(refreshGameId);
+});
 
 // Power plan: this is a 3s network poll, so it's one of the two loops that
 // matter most while the phone is pocketed. Both calls are idempotent.

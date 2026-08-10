@@ -67,6 +67,7 @@ import './store/pendingLineLogic.js';
 import './store/authFetchLogic.js';
 import './store/pointTimerNormalizer.js';
 import './utils/helpers.js';
+import './utils/changeStamp.js';
 import { currentTeam } from './store/storage.js';
 import './store/sync.js';
 import './settings/advancedSettings.js';

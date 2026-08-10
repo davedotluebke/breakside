@@ -125,7 +125,15 @@ const authFetchCore = makeAuthFetch({
  */
 function classifyRequest(url) {
     const path = String(url || '');
-    if (path.includes('/controller')) return 'controller';
+    // The role keepalive lives under /api/games/{id}/ping but is controller
+    // traffic, not game traffic. Classifying it as 'games' hid the in-game
+    // full-game poll inside a bucket three times its size, which is exactly
+    // the number this log exists to make visible.
+    if (path.includes('/controller') || path.endsWith('/ping')) return 'controller';
+    // Change-stamp polls are ~30 bytes against a game payload's ~6 KB, so
+    // lumping them in with 'games' would read as "we still poll constantly"
+    // when the expensive part is what went away.
+    if (path.endsWith('/poll')) return 'gamePoll';
     if (path.includes('/games')) return 'games';
     if (path.includes('/teams')) return 'teams';
     if (path.includes('/players') || path.includes('/memberships')) return 'roster';
@@ -1161,32 +1169,74 @@ async function loadGameFromCloud(gameId) {
 }
 
 /**
+ * Fetch the server's change stamp for a game without downloading the game.
+ *
+ * The authenticated twin of the share viewer's poll. Coaches don't need it —
+ * their 2s controller ping already carries the same stamp as `gameStamp`, so
+ * they detect change without spending a request at all. This is for in-game
+ * clients that hold no controller session and therefore never ping (viewers),
+ * and as the fallback for the window between suspend and resume.
+ *
+ * @param {string} gameId
+ * @returns {Promise<string|null>} the stamp, or null if it couldn't be read
+ *     (offline, request failed, old server without the route) — null means
+ *     "don't know", and callers must treat that as "assume it changed".
+ */
+async function fetchGameStamp(gameId) {
+    if (!isOnline || !gameId) return null;
+
+    try {
+        const response = await authFetch(`${API_BASE_URL}/api/games/${gameId}/poll`);
+        if (!response.ok) return null;
+        const data = await response.json();
+        return data && data.version ? String(data.version) : null;
+    } catch (error) {
+        // Not worth a console line: this runs every few seconds and a failure
+        // is self-correcting (the caller falls back to a full refresh).
+        return null;
+    }
+}
+
+/**
  * Refresh pending line selections from the cloud for the current game.
  * Used during active games to sync line selections between coaches.
  * Only updates pendingNextLine, not points or other game data.
+ *
+ * Three-valued on purpose, because the in-game refresh loop has to tell
+ * "nothing to apply" apart from "we never reached the server" — it records a
+ * change stamp as seen after each refresh, and recording one for a pull that
+ * failed would strand the client until the next server-side write:
+ *
+ *   object  the merged pendingNextLine (or { gameJustEnded: true, ... })
+ *   null    fetched fine, nothing to apply (no pending line on the server)
+ *   false   the fetch did not happen or did not succeed
+ *
+ * Both falsy values keep every existing `if (result)` caller behaving as
+ * before; only a caller that checks `=== false` sees the difference.
+ *
  * @param {string} gameId - Game ID to refresh
- * @returns {Promise<object|null>} Updated pendingNextLine or null if failed
+ * @returns {Promise<object|null|false>}
  */
 // mergePendingNextLine (and its toMs helper) moved to ./pendingLineLogic.js
 // (pure, unit-tested) in the F3 sweep — imported at the top of this file.
 async function refreshPendingLineFromCloud(gameId) {
     if (!isOnline || !gameId) {
-        return null;
+        return false;
     }
-    
+
     try {
         const response = await authFetch(`${API_BASE_URL}/api/games/${gameId}`);
         if (!response.ok) {
             console.warn('Failed to refresh pending line from cloud');
-            return null;
+            return false;
         }
-        
+
         const gameData = await response.json();
-        
+
         if (!gameData.pendingNextLine) {
             return null;
         }
-        
+
         // Get the current game
         const game = typeof currentGame === 'function' ? currentGame() : null;
         if (!game || game.id !== gameId) {
@@ -1208,10 +1258,10 @@ async function refreshPendingLineFromCloud(gameId) {
 
         log('📥 Refreshed pending line from cloud');
         return localPending;
-        
+
     } catch (error) {
         console.error('Error refreshing pending line:', error);
-        return null;
+        return false;
     }
 }
 
@@ -1927,6 +1977,7 @@ export {
     deleteEventFromCloud, listTeamEvents, updateGamePhase,
     generateGameId, createGameOffline, prepareGameForSync, syncGameToCloud,
     listServerGames, loadGameFromCloud,
+    fetchGameStamp,
     refreshPendingLineFromCloud, refreshGameStateFromCloud, deleteGameFromCloud,
     syncUserTeams, checkForUpdates, startAutoSync, stopAutoSync,
     syncAllData, pullFromCloud, getSyncStatus, checkIsOnline, clearSyncData,
