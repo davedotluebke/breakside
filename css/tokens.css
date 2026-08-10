@@ -276,14 +276,6 @@
     --role-other-text: #8b5a2b;
     --role-other-holder: #a0522d;
 
-    /* Select-line gender-ratio badges. Deliberately NOT the --gender-* pair:
-       those color player NAMES, these are toolbar counters, and the app has
-       always drawn them in Material purple/blue. */
-    --badge-fmp: #9c27b0;
-    --badge-fmp-tint: rgba(156, 39, 176, 0.15);
-    --badge-mmp: #1976d2;
-    --badge-mmp-tint: rgba(25, 118, 210, 0.15);
-
     --btn-disabled-bg: #ccc;         /* button.inactive / :disabled */
     --btn-disabled-text: #666;
     --border-emphasis: #555;         /* outline buttons, totals-row rule */
@@ -583,11 +575,6 @@
     --role-other-surface-deep: #2e1f0e;
     --role-other-text: #e0aa6d;
     --role-other-holder: #d99a63;
-
-    --badge-fmp: #ce6fdd;
-    --badge-fmp-tint: rgba(206, 111, 221, 0.18);
-    --badge-mmp: #5aa9ee;
-    --badge-mmp-tint: rgba(90, 169, 238, 0.18);
 
     --btn-disabled-bg: #333;
     --btn-disabled-text: #909090;

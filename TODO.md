@@ -905,6 +905,30 @@ Remaining work:
 
 Bigger asks, deferred until current themes settle.
 
+### Visual polish
+- [ ] **Light-mode contrast pass.** The dark-mode work added a contrast auditor
+      (`tests/sweep/`) that measures every visible text run and border against
+      its real composited backdrop. Dark mode came out clean — 0 findings that
+      are dark-only or worse-in-dark — but it surfaced ~147 *pre-existing*
+      light-mode findings that nobody has ever swept for. Nothing here is new
+      or urgent; it is a standing list of places the app is harder to read on
+      a bright sideline than it needs to be. The recurring ones:
+      - every orange dialog header (`.prominent-dialog-header h2`) is 2.53:1
+        on white. Fixing it means a darker orange for text specifically —
+        `--brand-orange-ink` existed for this and was pruned as unused.
+      - the in-game point-timer warning colors are 2.52:1 (`--timer-warning`)
+        and 3.83:1 (`--timer-danger`) on the white header — the one place a
+        coach glances at mid-point.
+      - MMP green on its pastel surface is 3.51:1 app-wide (the FMP/MMP
+        buttons in edit-player and the roster, and the select-line ratio
+        badge, which was migrated onto that pair in Aug 2026). FMP purple is
+        fine at 5.13:1; the green is the weak half of the pair.
+      - disabled buttons (`Score`, `Callahan`, `Continue Game`) sit at
+        2.0–3.6:1. Arguably intentional for a disabled control, but the Score
+        button is the primary action of its dialog.
+      Run `BREAKSIDE_THEME=light` in `tests/sweep` for the current full list;
+      see ARCHITECTURE.md § Theming.
+
 ### User & Auth
 - [ ] User profile settings (update display name)
 - [x] Google OAuth login

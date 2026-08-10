@@ -83,6 +83,50 @@ test('sweep every dialog', async ({ page }) => {
   console.log(`captured ${ids.length} dialogs/screens`);
 });
 
+/**
+ * Swatch board for components that only render under game state a sweep can't
+ * cheaply reach — an alternating gender ratio, a held coach role, a warning
+ * state. Each is mounted from its real class names against the real
+ * stylesheets, so it is measured, not eyeballed from a mockup.
+ */
+test('swatch the state-gated components', async ({ page }) => {
+  await goToApp(page);
+  await page.evaluate(() => {
+    const board = document.createElement('div');
+    board.id = 'swatchBoard';
+    board.style.cssText = 'position:fixed;inset:0;z-index:99999;padding:24px;' +
+      'display:flex;flex-wrap:wrap;gap:14px;align-content:flex-start;' +
+      'background:var(--surface-page);overflow:auto';
+    board.innerHTML = `
+      <span class="select-line-gender-badge gender-badge-fmp">FMP 4:3</span>
+      <span class="select-line-gender-badge gender-badge-mmp">MMP 3:4</span>
+      <span class="select-line-gender-badge gender-badge-neutral">Any</span>
+      <span class="role-tag role-tag--handler">H</span>
+      <span class="role-tag role-tag--cutter">C</span>
+      <span class="role-tag role-tag--hybrid">H/C</span>
+      <span class="role-tag role-tag--line-o">O</span>
+      <span class="role-tag role-tag--line-d">D</span>
+      <button class="role-claim-btn other-has-role">Active Coach
+        <span class="role-claim-holder">held by Sam</span></button>
+      <button class="role-claim-btn role-available">Line Coach</button>
+      <button class="pbp-start-point-btn inactive feedback-ok">Start Point</button>
+      <button class="pbp-start-point-btn inactive feedback-count-warning">Start Point</button>
+      <button class="pbp-start-point-btn inactive feedback-gender-warning">Start Point</button>
+      <span class="header-timer-value timer-warning">-0:15</span>
+      <span class="header-timer-value timer-danger">-0:05</span>
+      <span class="header-timer-value timer-negative">+0:20</span>
+      <div class="warning-box">Warning box copy</div>
+      <table><tbody><tr>
+        <td class="score-cell-fmp">4:3</td><td class="score-cell-mmp">3:4</td>
+        <td class="player-fmp">Alice</td><td class="player-mmp">Bob</td>
+      </tr></tbody></table>`;
+    document.body.appendChild(board);
+  });
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(SHOTS, 'zz-swatches.png') });
+  findings.push(...await auditContrast(page, 'swatches'));
+});
+
 test.afterAll(() => {
   const byKey = new Map<string, Finding>();
   for (const f of findings) {

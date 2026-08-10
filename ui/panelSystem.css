@@ -1947,14 +1947,18 @@ body.game-screen-active header {
     cursor: default;
 }
 
+/* Same surface+ink pairing as the FMP/MMP buttons in the edit-player and
+   roster dialogs, so every gender-coded control in the app agrees. (These
+   were Material purple/blue until 2026-08; blue read as a gendered signal,
+   and the app codes FMP/MMP purple/green everywhere else.) */
 .select-line-gender-badge.gender-badge-fmp {
-    background: var(--badge-fmp-tint);
-    color: var(--badge-fmp);
+    background: var(--gender-fmp-surface);
+    color: var(--gender-fmp-ink);
 }
 
 .select-line-gender-badge.gender-badge-mmp {
-    background: var(--badge-mmp-tint);
-    color: var(--badge-mmp);
+    background: var(--gender-mmp-surface);
+    color: var(--gender-mmp-ink);
 }
 
 .select-line-gender-badge.gender-badge-neutral {
