@@ -142,16 +142,32 @@ function setPreference(pref) {
     applyTheme(pref);
 }
 
+/** Re-resolve if (and only if) the OS is the thing deciding. */
+function resyncWithSystem() {
+    if (getPreference() === 'auto') applyTheme('auto');
+}
+
 // Follow the OS while the preference is 'auto'. (addEventListener on a
 // MediaQueryList is Safari 14+; the addListener fallback covers older iOS.)
 if (darkQuery) {
-    const onSystemChange = () => { if (getPreference() === 'auto') applyTheme('auto'); };
     if (typeof darkQuery.addEventListener === 'function') {
-        darkQuery.addEventListener('change', onSystemChange);
+        darkQuery.addEventListener('change', resyncWithSystem);
     } else if (typeof darkQuery.addListener === 'function') {
-        darkQuery.addListener(onSystemChange);
+        darkQuery.addListener(resyncWithSystem);
     }
 }
+
+// Belt and braces for the resumed-PWA case. This app spends whole games
+// backgrounded on a sideline and is resumed rather than reloaded — and iOS in
+// particular will flip to dark on a schedule while we are not running. A
+// missed `change` event would otherwise leave a stale theme on screen until
+// the next cold start, so re-resolve whenever the page comes back to the
+// foreground. Both handlers are no-ops unless the preference is 'auto', and
+// applyTheme is idempotent, so this costs an attribute read.
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') resyncWithSystem();
+});
+window.addEventListener('pageshow', resyncWithSystem);
 
 // Re-apply on module load. The inline boot script already set data-theme, but
 // it deliberately does not touch <img> (the splash/header images may not be
