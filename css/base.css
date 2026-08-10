@@ -69,8 +69,8 @@ button.selected {
 
 /* Inactive button style */
 button.inactive {
-    background-color: var(--border-default); /* A gray color to indicate inactivity */
-    color: var(--text-muted);
+    background-color: var(--btn-disabled-bg); /* A gray color to indicate inactivity */
+    color: var(--btn-disabled-text);
     cursor: not-allowed; /* Change cursor to indicate the button is inactive */
     pointer-events: none; /* Prevent clicking on the button */
 }

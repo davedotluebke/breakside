@@ -22,16 +22,21 @@ import {
   goToApp, setupTeamWithPlayers, startGame, selectAllPlayers, startPoint,
   weScoreWithAttribution, theyScore, completePullDialog,
 } from '../helpers/app';
+import { auditContrast, Finding } from './contrast';
 
 const THEME = process.env.BREAKSIDE_THEME === 'dark' ? 'dark' : 'light';
 const SHOTS = path.join(__dirname, 'shots', THEME);
 fs.mkdirSync(SHOTS, { recursive: true });
 
 let n = 0;
+const findings: Finding[] = [];
+
+/** Screenshot the current screen AND measure its contrast. */
 async function shot(page: Page, name: string) {
   n += 1;
   const file = path.join(SHOTS, `${String(n).padStart(2, '0')}-${name}.png`);
   await page.screenshot({ path: file });
+  findings.push(...await auditContrast(page, name));
 }
 
 /** Dismiss any toast that would sit on top of the next screenshot. */
@@ -39,6 +44,22 @@ async function clearToasts(page: Page) {
   await page.evaluate(() => {
     document.querySelectorAll('#toastContainer > *').forEach(t => t.remove());
   });
+}
+
+/**
+ * Click something that may or may not be there, without paying Playwright's
+ * 30s actionability timeout when it isn't. The sweep is a best-effort walk —
+ * a missing optional control should cost a second, not half a minute.
+ */
+async function tap(page: Page, selector: string, timeout = 2_000) {
+  const el = page.locator(selector).first();
+  try {
+    if (!(await el.count())) return false;
+    await el.click({ timeout });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 test.beforeEach(async ({ page }) => {
@@ -51,7 +72,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('sweep every screen', async ({ page }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(480_000);
 
   // ── Team list ────────────────────────────────────────────────────────────
   await goToApp(page);
@@ -60,8 +81,7 @@ test('sweep every screen', async ({ page }) => {
   await page.click('.teams-action-create');
   await expect(page.locator('#createTeamModal')).toBeVisible();
   await shot(page, 'create-team-modal');
-  await page.locator('#createTeamModal .close, #createTeamModal .cancel-btn').first().click()
-    .catch(() => page.keyboard.press('Escape'));
+  if (!(await tap(page, '#createTeamModal .close'))) await page.keyboard.press('Escape');
 
   // ── Roster ───────────────────────────────────────────────────────────────
   await setupTeamWithPlayers(page, 'Night Owls');
@@ -72,22 +92,18 @@ test('sweep every screen', async ({ page }) => {
   await shot(page, 'edit-roster');
 
   // Roster row expanded (per-player detail + role tags)
-  const firstRow = page.locator('#rosterList .roster-player-row, #rosterList li').first();
-  if (await firstRow.count()) {
-    await firstRow.click().catch(() => {});
-    await page.waitForTimeout(300);
+  if (await tap(page, '#rosterList .roster-player-row, #rosterList li')) {
+    await page.waitForTimeout(400);
     await shot(page, 'roster-row-expanded');
   }
-  await page.click('#backToStartGameBtn');
+  await tap(page, '#backToStartGameBtn');
 
   // ── Team settings ────────────────────────────────────────────────────────
-  const settingsBtn = page.locator('#teamSettingsBtn, #showTeamSettingsBtn').first();
-  if (await settingsBtn.count()) {
-    await settingsBtn.click().catch(() => {});
-    await page.waitForTimeout(400);
+  if (await tap(page, '#teamSettingsBtn, #showTeamSettingsBtn')) {
+    await page.waitForTimeout(600);
     await shot(page, 'team-settings');
-    await page.locator('#backToStartGameBtn, .title-bar-back-btn').first().click().catch(() => {});
-    await page.waitForTimeout(300);
+    await tap(page, '#backToStartGameBtn, .title-bar-back-btn');
+    await page.waitForTimeout(400);
   }
 
   // ── In-game: line selection ──────────────────────────────────────────────
@@ -103,7 +119,8 @@ test('sweep every screen', async ({ page }) => {
   await expect(page.locator('#gameMenuDropdown')).toBeVisible();
   await shot(page, 'game-hamburger-menu');
   await page.keyboard.press('Escape');
-  await page.click('body', { position: { x: 5, y: 400 } }).catch(() => {});
+  await page.mouse.click(5, 400);
+  await page.waitForTimeout(200);
 
   await startPoint(page);
   await page.waitForTimeout(600);
@@ -136,82 +153,104 @@ test('sweep every screen', async ({ page }) => {
   await shot(page, 'game-defense-pbp');
 
   // Key play dialog
-  const keyPlay = page.locator('#pbpKeyPlayBtn');
-  if (await keyPlay.count() && await keyPlay.isVisible().catch(() => false)) {
-    await keyPlay.click();
-    await page.waitForTimeout(400);
+  if (await tap(page, '#pbpKeyPlayBtn')) {
+    await page.waitForTimeout(500);
     await shot(page, 'key-play-dialog');
-    await page.keyboard.press('Escape');
-    await page.locator('#keyPlayDialog .close').first().click().catch(() => {});
-    await page.waitForTimeout(300);
+    if (!(await tap(page, '#keyPlayDialog .close'))) await page.keyboard.press('Escape');
+    await page.waitForTimeout(400);
   }
 
   await theyScore(page);
   await page.waitForTimeout(500);
   await clearToasts(page);
 
-  // ── Panel tabs: Stats / Log / Full PBP / Field ───────────────────────────
-  const tabs: Array<[string, string]> = [
-    ['#panelTabStats', 'panel-stats'],
-    ['#panelTabLog', 'panel-event-log'],
-    ['#panelTabFullPbp', 'panel-full-pbp'],
-    ['#panelTabField', 'panel-field'],
-    ['#panelTabLine', 'panel-line'],
-  ];
-  for (const [sel, name] of tabs) {
-    const tab = page.locator(sel);
-    if (!(await tab.count()) || !(await tab.isVisible().catch(() => false))) continue;
-    await tab.click().catch(() => {});
-    await page.waitForTimeout(700);
+  // ── Panel tabs (the segmented control in the game header) ────────────────
+  for (const tab of ['simple', 'full', 'field', 'line', 'log', 'all']) {
+    if (!(await tap(page, `#headerSegControl button[data-tab="${tab}"]`))) continue;
+    await page.waitForTimeout(800);
     await clearToasts(page);
-    await shot(page, name);
+    await shot(page, `tab-${tab}`);
   }
 
-  // Every tab, by whatever its real selector turns out to be
-  const anyTabs = page.locator('.panel-tab, .game-tab-btn');
-  const tabCount = await anyTabs.count();
-  for (let i = 0; i < tabCount; i++) {
-    const t = anyTabs.nth(i);
-    const label = ((await t.textContent()) || `tab${i}`).trim().toLowerCase().replace(/\W+/g, '-');
-    await t.click().catch(() => {});
-    await page.waitForTimeout(700);
-    await clearToasts(page);
-    await shot(page, `tab-${label || i}`);
-  }
+  // Field mode again in landscape — it has its own takeover layout
+  await tap(page, '#headerSegControl button[data-tab="field"]');
+  await page.setViewportSize({ width: 932, height: 430 });
+  await page.waitForTimeout(900);
+  await clearToasts(page);
+  await shot(page, 'tab-field-landscape');
+  await page.setViewportSize({ width: 430, height: 932 });
+  await page.waitForTimeout(600);
+  await tap(page, '#headerSegControl button[data-tab="all"]');
+  await page.waitForTimeout(500);
 
   // ── Advanced Settings (contains the Theme control) ───────────────────────
-  await page.click('#gameMenuBtn').catch(() => {});
+  await tap(page, '#gameMenuBtn');
   await page.waitForTimeout(300);
-  const advItem = page.locator('#menuAdvancedSettings, [id*="dvanced"]').first();
-  if (await advItem.count()) {
-    await advItem.click().catch(() => {});
-    await page.waitForTimeout(500);
+  if (await tap(page, '#menuSettings')) {
+    await page.waitForTimeout(600);
     await shot(page, 'advanced-settings');
     const body = page.locator('.adv-settings-body');
     if (await body.count()) {
       await body.evaluate(el => { el.scrollTop = el.scrollHeight; });
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(400);
       await shot(page, 'advanced-settings-bottom');
     }
-    await page.locator('#advancedSettingsModal .adv-done-btn').click().catch(() => {});
+    await tap(page, '#advancedSettingsModal .adv-done-btn');
   }
   await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
 
   // ── Game summary ─────────────────────────────────────────────────────────
-  page.once('dialog', d => d.accept());
-  await page.click('#gameMenuBtn').catch(() => {});
-  await page.waitForTimeout(300);
-  await page.click('#menuEndGame').catch(() => {});
+  page.on('dialog', d => d.accept());
+  // Make sure no menu/modal is already open — the hamburger TOGGLES, so a
+  // stale-open dropdown means this click closes it instead of opening it.
+  await page.keyboard.press('Escape');
+  await page.mouse.click(5, 900);
+  await page.waitForTimeout(400);
+  const menu = page.locator('#gameMenuDropdown');
+  if (!(await menu.isVisible().catch(() => false))) await tap(page, '#gameMenuBtn');
+  await expect(menu).toBeVisible({ timeout: 5_000 });
+  await page.waitForTimeout(400);   // let the open transition settle
+  await page.locator('#menuEndGame').click({ timeout: 15_000 });
   await expect(page.locator('#gameSummaryScreen')).toBeVisible({ timeout: 10_000 });
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(700);
   await shot(page, 'game-summary');
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(400);
   await shot(page, 'game-summary-bottom');
 
   // ── Back to the team list, now with a finished game on it ────────────────
-  await page.locator('.title-bar-back-btn, #backToTeamsBtn').first().click().catch(() => {});
-  await page.waitForTimeout(800);
+  await tap(page, '.title-bar-back-btn, #backToTeamsBtn');
+  await page.waitForTimeout(900);
   await clearToasts(page);
   await shot(page, 'team-list-with-game');
+
+  // A toast, deliberately: they are fixed-position and easy to miss by eye
+  await page.evaluate(() => {
+    (window as unknown as { showToast?: (m: string, t?: string) => void })
+      .showToast?.('Dark-mode toast sample', 'success');
+  });
+  await page.waitForTimeout(500);
+  await shot(page, 'toast');
+});
+
+test.afterAll(() => {
+  // One row per distinct (selector, kind) — the same control reappears on many
+  // screens and the fix is the same wherever it shows up.
+  const byKey = new Map<string, Finding>();
+  for (const f of findings) {
+    const key = `${f.kind}|${f.selector}|${f.sample}`;
+    const prev = byKey.get(key);
+    if (!prev || f.ratio < prev.ratio) byKey.set(key, f);
+  }
+  const rows = [...byKey.values()].sort((a, b) => a.ratio - b.ratio);
+  fs.writeFileSync(path.join(SHOTS, '..', `contrast-${THEME}.json`),
+    JSON.stringify(rows, null, 2));
+  console.log(`\n${THEME}: ${rows.length} contrast findings ` +
+    `(${rows.filter(r => r.kind === 'text').length} text, ` +
+    `${rows.filter(r => r.kind === 'border').length} border)`);
+  for (const r of rows.slice(0, 40)) {
+    console.log(`  ${r.ratio.toFixed(2)}  ${r.kind.padEnd(6)} ${r.screen.padEnd(22)} ` +
+      `${r.fg} on ${r.bg}  ${r.selector}  ${r.kind === 'text' ? JSON.stringify(r.sample) : r.sample}`);
+  }
 });

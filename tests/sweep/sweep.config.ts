@@ -17,7 +17,7 @@ const ROOT = path.resolve(__dirname, '..', '..');
 
 export default defineConfig({
   testDir: '.',
-  timeout: 300_000,
+  timeout: 480_000,
   expect: { timeout: 8_000 },
   fullyParallel: false,
   retries: 0,

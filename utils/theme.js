@@ -88,9 +88,13 @@ function setMeta(name, content) {
  * black half vanishes, so images/logo.wordmark.dark.png carries light
  * lettering with the same orange accent. Elements opt in by declaring both
  * sources: `src` is the light one, `data-dark-src` the dark one.
+ *
+ * `root` defaults to the document, but callers building markup can pass the
+ * detached subtree they just created — document.querySelectorAll cannot see a
+ * node that has not been inserted yet.
  */
-function applyImages(resolved) {
-    document.querySelectorAll('[data-dark-src]').forEach(img => {
+function applyImages(resolved, root = document) {
+    root.querySelectorAll('[data-dark-src]').forEach(img => {
         const light = img.getAttribute('data-light-src') || img.getAttribute('src');
         // Remember the light source the first time, before we overwrite src.
         if (!img.getAttribute('data-light-src')) img.setAttribute('data-light-src', light);
@@ -155,9 +159,24 @@ if (darkQuery) {
 applyTheme();
 document.addEventListener('DOMContentLoaded', () => applyTheme());
 
-const theme = { applyTheme, setPreference, getPreference, resolve, isDark };
+/**
+ * Re-point themed images after new markup is inserted.
+ *
+ * Call this from any module that builds an <img data-dark-src="…"> at runtime
+ * (game/gameScreenPanels.js does, for the in-game header wordmark). applyTheme
+ * only sees the DOM as it stood when the theme last changed, so freshly built
+ * nodes keep whatever src their template hardcoded.
+ *
+ * @param {ParentNode} [root] the subtree to fix up; pass the element you just
+ *   built if it is not attached to the document yet.
+ */
+function refreshThemedImages(root) {
+    applyImages(isDark() ? 'dark' : 'light', root || document);
+}
 
-export { theme, applyTheme, setPreference, getPreference, isDark };
+const theme = { applyTheme, setPreference, getPreference, resolve, isDark, refreshThemedImages };
+
+export { theme, applyTheme, setPreference, getPreference, isDark, refreshThemedImages };
 // window survivor: late-bound accessor for the Advanced Settings modal, which
 // builds its rows from a data-driven schema and needs to react to this one
 // setting immediately rather than on next load.

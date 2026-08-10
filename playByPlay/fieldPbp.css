@@ -204,13 +204,13 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 }
 /* In pull mode chips aren't draggable, so let the rail scroll vertically. */
 .field-pbp-content[data-mode="pull"] .fp-chip { touch-action: pan-y; }
-.fp-chip .fp-num { font: 700 11px 'JetBrains Mono', monospace; color: var(--text-faint); }
+.fp-chip .fp-num { font: 700 11px 'JetBrains Mono', monospace; color: var(--text-muted); }
 .fp-chip .fp-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 /* The holder chip is inert on offense (no drag / no tap — can't pass to
    yourself), so it shouldn't advertise interactivity. */
 .fp-chip.holder { background: var(--fp-holdbg); border-color: var(--fp-hold); box-shadow: 0 0 0 2px rgba(224, 166, 75, .3); cursor: default; }
 .fp-chip.unknown { background: var(--surface-light); border: 1px dashed var(--border-strong); color: var(--text-muted); font-style: italic; }
-.fp-chip .fp-umark { font: 700 12px 'JetBrains Mono', monospace; color: var(--text-placeholder); }
+.fp-chip .fp-umark { font: 700 12px 'JetBrains Mono', monospace; color: var(--text-muted); }
 
 /* Field box. */
 .fp-fieldwrap {
