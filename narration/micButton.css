@@ -85,10 +85,10 @@
 
 @keyframes narrationMicPulse {
     0%, 100% {
-        box-shadow: var(--shadow-lg), 0 0 0 0 rgba(46, 204, 113, 0.6);
+        box-shadow: var(--shadow-lg), 0 0 0 0 var(--mic-ok-pulse);
     }
     50% {
-        box-shadow: var(--shadow-lg), 0 0 0 14px rgba(46, 204, 113, 0);
+        box-shadow: var(--shadow-lg), 0 0 0 14px var(--mic-ok-pulse-out);
     }
 }
 
@@ -199,7 +199,7 @@
 }
 
 @keyframes narrationAmendedFlash {
-    0%   { background-color: rgba(52, 152, 219, 0.25); }
+    0%   { background-color: var(--mic-info-tint); }
     100% { background-color: transparent; }
 }
 

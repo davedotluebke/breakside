@@ -123,12 +123,12 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    color: var(--color-secondary);
+    color: var(--color-secondary-ink);
     font-size: 0.95em;
 }
 
 .team-header .role-badge.viewer-badge i {
-    color: var(--color-secondary);
+    color: var(--color-secondary-ink);
 }
 
 /* On very narrow screens, hide the "Coach" text and show only the icon */

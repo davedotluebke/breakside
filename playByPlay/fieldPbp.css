@@ -208,7 +208,7 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 .fp-chip .fp-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 /* The holder chip is inert on offense (no drag / no tap — can't pass to
    yourself), so it shouldn't advertise interactivity. */
-.fp-chip.holder { background: var(--fp-holdbg); border-color: var(--fp-hold); box-shadow: 0 0 0 2px rgba(224, 166, 75, .3); cursor: default; }
+.fp-chip.holder { background: var(--fp-holdbg); border-color: var(--fp-hold); box-shadow: 0 0 0 2px var(--pbp-hold-tint); cursor: default; }
 .fp-chip.unknown { background: var(--surface-light); border: 1px dashed var(--border-strong); color: var(--text-muted); font-style: italic; }
 .fp-chip .fp-umark { font: 700 12px 'JetBrains Mono', monospace; color: var(--text-muted); }
 

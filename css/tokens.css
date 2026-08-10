@@ -46,7 +46,6 @@
     --brand-orange-soft: #e19049;    /* dialog headers */
     --brand-orange-deep: #d06e1f;    /* orange CTA hover */
     --brand-orange-deeper: #b85a10;  /* orange CTA hover gradient end */
-    --brand-orange-ink: #b8600f;     /* orange as text on the page */
     --brand-purple: #7b68ae;         /* staging pill */
 
     /* Primary (Bootstrap blue family) */
@@ -57,7 +56,6 @@
     --color-primary-glow: rgba(0, 123, 255, 0.4);
     --color-primary-surface: #e7f1ff;
     --color-primary-ink: #0056b3;
-    --color-primary-tint: rgba(0, 123, 255, 0.15);
 
     /* Success */
     --color-success: #28a745;
@@ -89,13 +87,11 @@
     --color-warning-surface-soft: #fff7e6;
     --color-warning-border: #e8a86e;
     --color-warning-text: #856404;
-    --color-warning-ink: #8a5a00;
 
     /* Info */
     --color-info: #17a2b8;
     --color-info-hover: #138496;
     --color-info-active: #117a8b;
-    --color-info-ink: #10707f;
 
     /* Secondary (muted gray-blue buttons) */
     --color-secondary: #6c757d;
@@ -161,7 +157,6 @@
     --text-disabled: #aaa;
     --gray-chrome: #c0c0c0;          /* legacy footer band */
     --ink-700: #495057;              /* text */
-    --ink-800: #343a40;              /* text */
     --btn-dark: #495057;             /* dark neutral button fill */
     --btn-dark-hover: #343a40;
     --btn-darker: #212529;
@@ -184,6 +179,11 @@
     --overlay-tooltip: rgba(0, 0, 0, 0.85);
     --on-overlay: #fff;              /* text on a scrim/tooltip */
     --on-overlay-muted: rgba(255, 255, 255, 0.75);
+    --on-overlay-soft: rgba(255, 255, 255, 0.7);
+    --on-overlay-dim: rgba(255, 255, 255, 0.5);
+    --on-overlay-bright: rgba(255, 255, 255, 0.95);
+    --wash-on-color: rgba(255, 255, 255, 0.15);   /* hover on a colored bar */
+    --grip-on-color: rgba(255, 255, 255, 0.5);    /* swipe grabber on a colored bar */
 
     /* Shadows. In dark mode a drop shadow against a black page is invisible,
        so each preset also carries a hairline ring; the dark block swaps the
@@ -193,10 +193,7 @@
     --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.15);
     --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.25);
     --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.3);
-    --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.1);
-    /* Hairline that separates a surface from what's behind it. Invisible in
-       light mode (shadows already do that job), a visible ring in dark. */
-    --ring-hairline: 0 0 0 0 rgba(0, 0, 0, 0);
+    --shadow-text: 1px 1px 2px rgba(0, 0, 0, 0.2);  /* label on a colored bar */
 
     /* One-off component colors */
     --blue-action: #0066cc;          /* key-play/pull selected, pause btn */
@@ -319,6 +316,10 @@
     --color-danger-surface-hover: #fecaca;
     --color-danger-surface-active: #fca5a5;
     --success-tint-soft: #2e7d3220;  /* 12% green wash behind a confirmed row */
+    --pbp-hold-tint: rgba(224, 166, 75, 0.25);
+    --neutral-tint: rgba(128, 128, 128, 0.08);   /* read-only projection cells */
+    --neutral-rule: rgba(128, 128, 128, 0.3);
+    --success-solid-80: rgba(40, 167, 69, 0.8);  /* paused-timer pill */
 
     /* Narration mic button (flat-UI palette, all white-label fills) */
     --mic-record: #e74c3c;
@@ -328,6 +329,10 @@
     --mic-ok-deep: #28b463;
     --mic-info: #3498db;
     --mic-fab: #e0533a;             /* Field-mode mic FAB */
+    --mic-ok-tint: rgba(46, 204, 113, 0.08);
+    --mic-ok-pulse: rgba(46, 204, 113, 0.6);
+    --mic-ok-pulse-out: rgba(46, 204, 113, 0);
+    --mic-info-tint: rgba(52, 152, 219, 0.25);
 }
 
 /* ============================================================================
@@ -351,7 +356,6 @@
     --brand-orange-soft: #e19049;
     --brand-orange-deep: #d06e1f;
     --brand-orange-deeper: #b85a10;
-    --brand-orange-ink: #f9a35c;
     --brand-purple: #8f7dc4;
 
     /* Primary */
@@ -362,7 +366,6 @@
     --color-primary-glow: rgba(77, 163, 255, 0.5);
     --color-primary-surface: #10233d;
     --color-primary-ink: #5cb0ff;
-    --color-primary-tint: rgba(77, 163, 255, 0.18);
 
     /* Success */
     --color-success: #248f3c;
@@ -394,13 +397,11 @@
     --color-warning-surface-soft: #2a2008;
     --color-warning-border: #6b5320;
     --color-warning-text: #f2c94c;
-    --color-warning-ink: #ffcf4d;
 
     /* Info */
     --color-info: #148ea1;
     --color-info-hover: #16a2b8;
     --color-info-active: #117a8b;
-    --color-info-ink: #3fc9de;
 
     /* Secondary */
     --color-secondary: #5c646b;
@@ -468,7 +469,6 @@
     --text-disabled: #6b6b6b;
     --gray-chrome: #262626;
     --ink-700: #cbd1d7;
-    --ink-800: #e2e6ea;
     --btn-dark: #33383d;
     --btn-dark-hover: #414851;
     --btn-darker: #23272b;
@@ -489,6 +489,11 @@
     --overlay-tooltip: rgba(38, 38, 38, 0.96);
     --on-overlay: #fff;
     --on-overlay-muted: rgba(255, 255, 255, 0.75);
+    --on-overlay-soft: rgba(255, 255, 255, 0.7);
+    --on-overlay-dim: rgba(255, 255, 255, 0.5);
+    --on-overlay-bright: rgba(255, 255, 255, 0.95);
+    --wash-on-color: rgba(255, 255, 255, 0.15);
+    --grip-on-color: rgba(255, 255, 255, 0.5);
 
     /* Shadows become rings. A soft black blur over a black page is nothing;
        a 1px light ring is what actually reads as "this sits above that". */
@@ -497,8 +502,7 @@
     --shadow-md: 0 0 0 1px rgba(255, 255, 255, 0.10), 0 2px 8px rgba(0, 0, 0, 0.7);
     --shadow-lg: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 6px 20px rgba(0, 0, 0, 0.8);
     --shadow-xl: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 10px 34px rgba(0, 0, 0, 0.85);
-    --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.6);
-    --ring-hairline: 0 0 0 1px rgba(255, 255, 255, 0.09);
+    --shadow-text: 1px 1px 2px rgba(0, 0, 0, 0.2);  /* label on a colored bar */
 
     /* One-off component colors. These are saturated fills that carry white
        text; they survive the flip as-is except where they were tuned against
@@ -615,6 +619,10 @@
     --color-danger-surface-hover: #4a1a22;
     --color-danger-surface-active: #5c2029;
     --success-tint-soft: #4fd07430;
+    --pbp-hold-tint: rgba(224, 166, 75, 0.22);
+    --neutral-tint: rgba(160, 160, 160, 0.09);
+    --neutral-rule: rgba(160, 160, 160, 0.35);
+    --success-solid-80: rgba(40, 167, 69, 0.75);
 
     --mic-record: #cf4032;
     --mic-record-deep: #b8382b;
@@ -623,4 +631,8 @@
     --mic-ok-deep: #219355;
     --mic-info: #2b83bd;
     --mic-fab: #c4472f;
+    --mic-ok-tint: rgba(46, 204, 113, 0.12);
+    --mic-ok-pulse: rgba(46, 204, 113, 0.55);
+    --mic-ok-pulse-out: rgba(46, 204, 113, 0);
+    --mic-info-tint: rgba(52, 152, 219, 0.3);
 }

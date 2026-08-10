@@ -37,6 +37,11 @@ data/index.json
 tests/node_modules/
 tests/test-results/
 tests/playwright-report/
+# Theme-sweep output: ~100 screenshots + contrast JSON per run. They are a
+# working artifact to eyeball and diff locally, not something to version —
+# committing them put 25 MB of PNGs in the history once already.
+tests/sweep/shots/
+tests/sweep/test-results/
 tests/test-data-dir/
 
 # Per-session local backend data copies (scripts/dev-backend.sh)

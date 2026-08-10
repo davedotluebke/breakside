@@ -114,13 +114,13 @@ body.game-screen-active header {
 /* Inline grip icon for draggable panels */
 .panel-grip-icon {
     margin-right: 6px;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--on-overlay-dim);
     font-size: 0.85rem;
     transition: color 0.15s;
 }
 
 .panel-title-bar.draggable .panel-grip-icon {
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--on-overlay-soft);
 }
 
 .panel-title-bar.draggable:hover .panel-grip-icon {
@@ -139,7 +139,7 @@ body.game-screen-active header {
 /* Panel subtitle (e.g., player names when minimized) */
 .panel-subtitle {
     font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.75);
+    color: var(--on-overlay-muted);
     margin-left: 4px;
     white-space: nowrap;
     overflow: hidden;
@@ -621,7 +621,7 @@ body.game-screen-active header {
 }
 
 .header-timer-pause-btn.paused {
-    background: rgba(40, 167, 69, 0.8);
+    background: var(--success-solid-80);
 }
 
 /* Timer state colors (tuned for the white header) */
@@ -740,7 +740,7 @@ body.game-screen-active header {
 }
 
 .role-claim-btn.has-role .role-claim-holder {
-    color: rgba(255, 255, 255, 0.95);
+    color: var(--on-overlay-bright);
     font-weight: 500;
 }
 
@@ -1948,12 +1948,12 @@ body.game-screen-active header {
 }
 
 .select-line-gender-badge.gender-badge-fmp {
-    background: rgba(156, 39, 176, 0.15);
+    background: var(--badge-fmp-tint);
     color: var(--badge-fmp);
 }
 
 .select-line-gender-badge.gender-badge-mmp {
-    background: rgba(25, 118, 210, 0.15);
+    background: var(--badge-mmp-tint);
     color: var(--badge-mmp);
 }
 
@@ -2197,15 +2197,15 @@ body.game-screen-active header {
     font-size: 0.75rem;
     text-align: center;
     min-width: 30px;
-    border-left: 2px solid rgba(128, 128, 128, 0.3);
+    border-left: 2px solid var(--neutral-rule);
     font-weight: 600;
 }
 
 /* Body cells are greyed (read-only); the header keeps its gender-ratio color
    (score-cell-fmp/mmp), so the grey background lives on the data cells only. */
 .panel-player-table td.active-ondeck-projection {
-    color: var(--text-secondary, #888);
-    background: rgba(128, 128, 128, 0.08);
+    color: var(--text-secondary);
+    background: var(--neutral-tint);
 }
 
 /* Header stacks "On / Deck" on two lines to keep the column narrow. */
@@ -2233,11 +2233,11 @@ body.game-screen-active header {
 
 /* Score cell gender ratio colors */
 .panel-player-table .score-cell-fmp {
-    background-color: rgba(125, 60, 152, 0.2);
+    background-color: var(--gender-fmp-tint);
 }
 
 .panel-player-table .score-cell-mmp {
-    background-color: rgba(45, 134, 89, 0.2);
+    background-color: var(--gender-mmp-tint);
 }
 
 /* Readonly indicator. Centered badge over the table — the previous

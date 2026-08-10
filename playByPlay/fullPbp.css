@@ -287,7 +287,7 @@
 .full-pbp-player-row.is-holder {
     background: var(--color-warning-surface-soft);       /* warm yellow — current holder */
     border-color: var(--pbp-hold);
-    box-shadow: 0 0 0 2px rgba(224, 166, 75, 0.25);
+    box-shadow: 0 0 0 2px var(--pbp-hold-tint);
 }
 
 /* Unknown player row — visually distinct so it's easy to skip past when
@@ -329,7 +329,7 @@
     white-space: nowrap;
     -webkit-tap-highlight-color: transparent;
 }
-.full-pbp-name-btn:active { background: rgba(0, 0, 0, 0.05); }
+.full-pbp-name-btn:active { background: var(--wash-subtle); }
 
 /* Actions: every button is content-sized via auto columns. "Block"
  * (~50px) and "D!" (~30px) no longer waste the same area as
