@@ -29,8 +29,6 @@ export const LOOPS = Object.freeze({
     GAME_STATE_REFRESH: 'gameStateRefresh',
     /** game/gameTimer.js — header timer + Line-tab time cells (display only) */
     GAME_TIMER: 'gameTimer',
-    /** game/pointManagement.js — elapsed point time readout (display only) */
-    POINT_TIMER: 'pointTimer',
     /** teams/activeGamePolling.js — team-screen silent refresh (network) */
     TEAM_AUTO_REFRESH: 'teamAutoRefresh',
     /** store/sync.js — background team/player sync (network) */
@@ -67,7 +65,6 @@ export function loopPlan(ctx) {
         [LOOPS.CONTROLLER_PING]: visible && inGame,
         [LOOPS.GAME_STATE_REFRESH]: visible && inGame,
         [LOOPS.GAME_TIMER]: visible && inGame,
-        [LOOPS.POINT_TIMER]: visible && inGame,
 
         // Out-of-game loops. Both are stopped on game entry today
         // (enterGameScreen -> stopActiveGamePolling), so `!inGame` preserves

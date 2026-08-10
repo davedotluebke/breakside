@@ -4,7 +4,7 @@
  */
 import { Point } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
-import { currentGame, getLatestPoint, determineStartingPosition } from '../utils/helpers.js';
+import { currentGame, determineStartingPosition } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { matchButtonWidths } from '../ui/buttonLayout.js';
 import { clearNextLineSelections } from '../ui/activePlayersDisplay.js';
@@ -297,52 +297,13 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(matchButtonWidths, 100);
 });
 
-function updatePointTimer() {
-    const point = getLatestPoint();
-    if (!point) return;
-
-    let elapsedTime = point.totalPointTime;
-    if (point.startTimestamp && !isPaused) {
-        elapsedTime += (new Date() - point.startTimestamp);
-    }
-
-    const minutes = Math.floor(elapsedTime / 60000);
-    const seconds = Math.floor((elapsedTime % 60000) / 1000);
-    const formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-
-    // Update the point timer display
-    const pointTimerEl = document.getElementById('pointTimer');
-    if (pointTimerEl) {
-        pointTimerEl.textContent = formattedTime;
-    }
-}
-
-// This used to be a bare `setInterval(updatePointTimer, 1000)` at module
-// scope: it ran once a second for the entire lifetime of the tab, including on
-// the team-selection screen and while the phone was in a pocket, to redraw a
-// readout that only exists on the game screen. It is now driven by the power
-// plan — in a game, page visible.
-let pointTimerInterval = null;
-
-function startPointTimerLoop() {
-    if (pointTimerInterval) return;
-    updatePointTimer();
-    pointTimerInterval = setInterval(() => {
-        window.powerLog?.countWakeup?.('pointTimer');
-        updatePointTimer();
-    }, 1000);
-}
-
-function stopPointTimerLoop() {
-    if (!pointTimerInterval) return;
-    clearInterval(pointTimerInterval);
-    pointTimerInterval = null;
-}
-
-document.addEventListener('breakside:power-plan', (e) => {
-    if (e.detail?.plan?.pointTimer) startPointTimerLoop();
-    else stopPointTimerLoop();
-});
+// Deleted: `updatePointTimer()` and its 1s loop. It formatted the elapsed
+// point time into `#pointTimer` — an element removed in 1f36e0d (Feb 2026,
+// "Remove legacy screen-based in-game UI"). From then until now the loop woke
+// the phone once a second for the whole of every game to compute a string and
+// hand it to a `getElementById` that returned null. The live readout is the
+// header chip, which game/gameTimer.js's loop already draws on the same
+// cadence; that one survives as LOOPS.GAME_TIMER.
 
 // Setters for module-scoped mutable state — converted writers (game/gameLogic.js)
 // import these instead of assigning the bare globals.

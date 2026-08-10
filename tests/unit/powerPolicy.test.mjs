@@ -40,7 +40,6 @@ test('in a game: in-game loops run, team-screen loops do not', () => {
     assert.equal(plan[LOOPS.CONTROLLER_PING], true);
     assert.equal(plan[LOOPS.GAME_STATE_REFRESH], true);
     assert.equal(plan[LOOPS.GAME_TIMER], true);
-    assert.equal(plan[LOOPS.POINT_TIMER], true);
 
     assert.equal(plan[LOOPS.TEAM_AUTO_REFRESH], false);
     assert.equal(plan[LOOPS.ACTIVE_GAME_POLL], false);
@@ -57,7 +56,6 @@ test('outside a game: team-screen loops run, in-game loops do not', () => {
     assert.equal(plan[LOOPS.CONTROLLER_PING], false);
     assert.equal(plan[LOOPS.GAME_STATE_REFRESH], false);
     assert.equal(plan[LOOPS.GAME_TIMER], false);
-    assert.equal(plan[LOOPS.POINT_TIMER], false);
 });
 
 test('auto-sync tracks visibility only, not game state', () => {
@@ -97,7 +95,7 @@ test('hiding the page stops every running loop', () => {
     assert.deepEqual(start, []);
     assert.deepEqual(stop.sort(), [
         LOOPS.AUTO_SYNC, LOOPS.CONTROLLER_PING, LOOPS.GAME_STATE_REFRESH,
-        LOOPS.GAME_TIMER, LOOPS.POINT_TIMER,
+        LOOPS.GAME_TIMER,
     ].sort());
 });
 
@@ -108,7 +106,7 @@ test('entering a game swaps team-screen loops for in-game ones', () => {
 
     assert.deepEqual(start.sort(), [
         LOOPS.CONTROLLER_PING, LOOPS.GAME_STATE_REFRESH,
-        LOOPS.GAME_TIMER, LOOPS.POINT_TIMER,
+        LOOPS.GAME_TIMER,
     ].sort());
     assert.deepEqual(stop.sort(), [
         LOOPS.ACTIVE_GAME_POLL, LOOPS.ROSTER_POLL, LOOPS.TEAM_AUTO_REFRESH,

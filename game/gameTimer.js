@@ -39,8 +39,8 @@ const ACTIVE_GAME_WINDOW_MS = 3 * 60 * 60 * 1000;
 // point, banked from each running segment as it ends; `point.startTimestamp`
 // is the start of the currently-running segment (null while paused). This is
 // the single source of truth shared with updateScore() (gameLogic.js — adds
-// the final running segment into totalPointTime and reads it as play time) and
-// updatePointTimer() (pointManagement.js). Pausing banks the running segment
+// the final running segment into totalPointTime and reads it as play time).
+// Pausing banks the running segment
 // into totalPointTime and nulls startTimestamp; resuming starts a fresh
 // segment. startTimestamp must stay a Date object (storage/sync serialize it
 // via .toISOString()), so always assign `new Date()`, never an ISO string.
