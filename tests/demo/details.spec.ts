@@ -64,15 +64,18 @@ test('full-01-offense', async ({ page }) => {
   await expect(page.locator('.full-pbp-modifier-chip').filter({ hasText: 'huck' }))
     .toHaveClass(/checked/);
 
-  // Score comes off the receiver's row, and opens the attribution dialog
-  // pre-filled with thrower and receiver.
-  await tapLocator(page, row(page, 'Grace').locator('.full-pbp-row-action-score'),
-    { after: BEAT.notable });
-  await expect(page.locator('#scoreAttributionDialog')).toBeVisible();
-  await tap(page, '#scoreConfirmBtn', { after: BEAT.notable });
+  // One more pass, then rest on the mini log — the running record of the
+  // possession is this clip's payoff.
+  //
+  // The clip deliberately stops short of scoring. Tapping Score on a row opens
+  // the same attribution dialog Simple mode uses, and qs-04-we-score already
+  // shows that dialog; scripting it here also proved flaky in a way that wasn't
+  // worth chasing for a clip whose subject is pass entry.
+  await tapLocator(page, nameBtn(page, 'Dave'), { after: BEAT.notable });
+  await expect(row(page, 'Dave')).toHaveClass(/is-holder/);
+  await expect(page.locator('#fullPbpLogList')).toContainText('hucks to Carol');
 
-  await expect(page.locator('#gameScoreUs')).toHaveText('1', { timeout: 8_000 });
-  await glide(page, 240, 300);
+  await glide(page, 240, 740);
   await holdEnding(page, 'full-01-offense');
 });
 

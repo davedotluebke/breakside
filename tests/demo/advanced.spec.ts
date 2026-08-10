@@ -14,6 +14,7 @@ import {
   beginGame, checkWholeLine, completePull, goToTab, makeTeamWithRoster, openApp, scoreFor, startPoint,
 } from './setup';
 import { BACKEND_URL } from '../helpers/constants';
+import { waitForGameOnServer } from '../helpers/controllerApi';
 
 test('adv-player-details', async ({ page }) => {
   const t0 = Date.now();
@@ -119,8 +120,7 @@ test('adv-pull-hang', async ({ page }) => {
 
   // The hang time rides the event into the log.
   await tap(page, '#headerSegControl button[data-tab="log"]', { after: BEAT.read });
-  await expect(page.locator('#gameLogContainer, .game-log-container, #panel-gameLog').first())
-    .toContainText(/hang/i, { timeout: 8_000 });
+  await expect(page.locator('.game-screen-container')).toContainText(/hang/i, { timeout: 8_000 });
   await holdEnding(page, 'adv-pull-hang');
 });
 
@@ -216,10 +216,13 @@ test('adv-events-phases', async ({ page }) => {
   // Back out to the Teams screen, where each team card offers New Event.
   await page.locator('#backFromStartGameBtn').click();
   await expect(page.locator('#selectTeamScreen')).toBeVisible({ timeout: 8_000 });
+  await expect(page.locator('.team-header').first()).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(1200);
   resetCursor();
   await markTrim(page, t0, 'adv-events-phases');
 
+  // Team cards start collapsed — the New Event button lives inside.
+  await tapLocator(page, page.locator('.team-header').first(), { after: BEAT.notable });
   await tapLocator(page, page.locator('.new-event-btn').first(), { after: BEAT.notable });
   await expect(page.locator('#createEventModal')).toBeVisible({ timeout: 8_000 });
   await page.waitForTimeout(BEAT.action);
@@ -233,43 +236,49 @@ test('adv-events-phases', async ({ page }) => {
 });
 
 /**
- * Multi-coach needs two browser contexts. Only the first page's video is the
- * clip — the second coach acts off-camera, so what the viewer sees is one
- * phone reacting to another coach joining and claiming a role.
+ * The second coach is driven through the controller API rather than a second
+ * browser: the clip is one phone reacting to someone else joining, so a whole
+ * second context only adds a page that never appears on camera — and the
+ * offline-first game creation makes "open the app, find the game, resume it"
+ * a multi-second race that timed out more often than it worked.
  */
-test('adv-multi-coach', async ({ page, browser }) => {
+test('adv-multi-coach', async ({ page, request }) => {
   const t0 = Date.now();
   await makeTeamWithRoster(page, 'advmc');
   await beginGame(page, 'offense');
   await goToTab(page, 'line');
 
-  // Reveal the role buttons — normally they stay hidden until a second coach
-  // is detected, and we want them on screen from the clip's first frame.
+  // Reveal the role buttons — normally they stay hidden while you're solo, and
+  // this clip is about what they do once you're not.
   await page.locator('#gameMenuBtn').click();
   await page.locator('#menuToggleRoleButtons').click();
   await page.waitForTimeout(800);
 
+  const gameId: string = await page.evaluate(() => {
+    const g = (window as any).currentGame;
+    return typeof g === 'function' ? g()?.id : g?.id;
+  });
+  expect(gameId, 'game id should be readable from the page').toBeTruthy();
+  // The first sync is queued, so the backend 404s controller calls until it lands.
+  await waitForGameOnServer(request, gameId, 'demo-advmc');
+
   resetCursor();
   await markTrim(page, t0, 'adv-multi-coach');
 
-  // Coach A claims play-by-play control.
+  // Coach A takes play-by-play control.
   await tap(page, '#gameActiveCoachBtn', { after: BEAT.notable });
   await expect(page.locator('#gameActiveCoachHolder')).not.toHaveText(/Available/i, { timeout: 8_000 });
   await page.waitForTimeout(BEAT.action);
 
-  // A second coach opens the same game on another device and takes the line.
-  const ctxB = await browser.newContext({ viewport: { width: 480, height: 960 } });
-  const pageB = await ctxB.newPage();
-  await pageB.goto(`/?testMode=true&testUserId=demo-advmc&api=${BACKEND_URL}`);
-  await pageB.waitForTimeout(2500);
-  const resume = pageB.locator('#continueGameBtn');
-  if (await resume.isVisible().catch(() => false)) await resume.click();
-  await pageB.waitForTimeout(2500);
-  await pageB.locator('#gameLineCoachBtn').click().catch(() => {});
+  // A second coach connects and takes the line, off camera.
+  const headers = { 'Content-Type': 'application/json', 'X-Test-User-Id': 'demo-linecoach' };
+  await request.post(`${BACKEND_URL}/api/games/${gameId}/ping`, { headers });
+  await request.post(`${BACKEND_URL}/api/games/${gameId}/claim-line`, { headers });
 
-  // Coach A's screen shows the line role taken by someone else.
+  // Coach A's screen picks it up on the next poll.
+  await expect(page.locator('#gameLineCoachHolder')).not.toHaveText(/Available/i, { timeout: 20_000 });
   await page.waitForTimeout(BEAT.read);
+
   await glide(page, 240, 300);
   await holdEnding(page, 'adv-multi-coach');
-  await ctxB.close();
 });

@@ -171,7 +171,20 @@ will be 200–500KB each, fine for the repo and S3.
    recording log the cutter parses) has to live outside it.
 10. **Parsing `DEMO_TRIM_MS[clip]=ms` in bash:** `${line#DEMO_TRIM_MS[}` reads the bracket
    as a glob character class and eats a wrong-length prefix — silently, and differently on
-   each line, so the first clip cuts fine and later ones "have no take". Use `sed -nE`.
+   each line, so the first clip cuts fine and later ones "have no take". Use `sed -nE`. Then
+   strip ANSI first: the list reporter's cursor escapes interleave with the tests' stdout
+   *mid-line*, so the extracted name can have an escape sequence buried inside it.
+11. **`ffmpeg -ss` must come AFTER `-i` for these takes.** Playwright's VP8 webm has no
+   duration header and sparse keyframes; input-side seeking makes ffmpeg stop early and
+   the encoded clip ends several seconds before the payoff — a clean-looking mp4 that is
+   simply missing its ending. Output-side seeking decodes from the start and is
+   frame-accurate; at 30s that costs nothing.
+12. **A tap can land and do nothing.** The game screen re-renders on a 3s timer
+   (`startGameStateRefresh`). If that fires between a manual `mouse.down()` and
+   `mouse.up()`, the two events have different targets, the browser dispatches no `click`,
+   and the handler never runs — the video shows a press with no result, in a different
+   place each take. Glide the cursor by hand, but press with `locator.click({delay})`,
+   which re-resolves and retries when the DOM moves under it.
 
 ## Publishing lessons (landing-page integration)
 

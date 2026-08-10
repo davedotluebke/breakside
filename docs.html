@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Breakside — Docs</title>
+    <meta name="description" content="How to use Breakside: quickstart, every tab, and the advanced features.">
+
+    <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/images/favicon-192x192.png">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+    <!-- landing.css supplies the design tokens; docs.css is the page layout. -->
+    <link rel="stylesheet" href="/landing/landing.css">
+    <link rel="stylesheet" href="/docs.css">
+</head>
+<body class="docs-body">
+
+<header class="docs-header">
+    <div class="docs-header-inner">
+        <a href="/landing/"><img src="/images/logo.wordmark.png" alt="Breakside" class="docs-header-logo"></a>
+        <span class="docs-header-spacer"></span>
+        <a href="/landing/" class="docs-header-link">Home</a>
+        <a href="/" class="docs-header-link primary">Open app</a>
+    </div>
+</header>
+
+<div class="docs-layout">
+
+    <nav class="docs-rail" aria-label="Contents">
+        <div class="docs-rail-title">Contents</div>
+        <a href="#quickstart" class="section">Quickstart</a>
+        <a href="#create-team">Create a team</a>
+        <a href="#start-game">Start a game</a>
+        <a href="#pick-line">Pick a line</a>
+        <a href="#we-score">We Score</a>
+        <a href="#they-score">They Score</a>
+        <a href="#key-play">Key Play</a>
+        <a href="#game-log">The game log</a>
+        <a href="#end-game">End the game</a>
+
+        <a href="#details" class="section">Details</a>
+        <a href="#tabs">The six tabs</a>
+        <a href="#full-offense">Full: offense</a>
+        <a href="#full-defense">Full: defense</a>
+        <a href="#modifiers">Modifier chips</a>
+        <a href="#od-pill">The O/D pill</a>
+        <a href="#undo">Undo</a>
+        <a href="#field">Field mode</a>
+        <a href="#next-line">Next line</a>
+        <a href="#all-tab">The All tab</a>
+
+        <a href="#advanced" class="section">Advanced</a>
+        <a href="#player-details">Player details</a>
+        <a href="#wholesale-auto">Wholesale &amp; Auto</a>
+        <a href="#game-events">Game events</a>
+        <a href="#pull">Pull details</a>
+        <a href="#sets">Set tracking</a>
+        <a href="#sets-tagging">Tagging possessions</a>
+        <a href="#stats-scope">Stats scope</a>
+        <a href="#export">Export</a>
+        <a href="#multi-coach">Multi-coach</a>
+        <a href="#events-phases">Tournaments</a>
+        <a href="#narration">Speech narration</a>
+    </nav>
+
+    <main>
+        <div class="docs-intro">
+            <h1>Breakside docs</h1>
+            <p>
+                Breakside records ultimate frisbee games at whatever level of detail you want:
+                two taps a point, or every throw placed on a field diagram.
+            </p>
+            <p>
+                <strong>Quickstart</strong> is enough to run a game. <strong>Details</strong> covers
+                each tab. <strong>Advanced</strong> covers the features you turn on when you need them.
+                Every clip is a silent screen recording of the app, and plays as you scroll past it.
+            </p>
+            <p class="docs-note">
+                You can use Breakside without an account — data stays on the device.
+                Cloud sync, multi-coach, and share links need one; sign in from the
+                <a href="/landing/">home page</a>.
+            </p>
+        </div>
+
+        <!-- ================================================================ -->
+        <section class="docs-section" id="quickstart">
+            <div class="docs-section-head">
+                <h2>Quickstart</h2>
+                <p>Everything needed to track a real game.</p>
+            </div>
+
+            <article class="docs-entry" id="create-team">
+                <div>
+                    <h3>Create a team and add players</h3>
+                    <p>
+                        On the Teams screen tap <strong>Create Team</strong> and name it. That opens the
+                        team's Start Game screen; <strong>Roster + Stats</strong> is where players go.
+                    </p>
+                    <p>
+                        Each player needs a name; the jersey number is optional.
+                        <strong>+FMP</strong> and <strong>+MMP</strong> add the player under their
+                        gender-matching category, which drives ratio checks and the Auto line filler.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="qs-01-create-team"></div>
+            </article>
+
+            <article class="docs-entry" id="start-game">
+                <div>
+                    <h3>Start a game</h3>
+                    <p>
+                        Type the opponent's name, then tap <strong>Offense</strong> or
+                        <strong>Defense</strong> — whichever side you're starting on.
+                    </p>
+                    <p>
+                        The same screen sets players on field (7 by default), whether to enforce a gender
+                        ratio, and how long the between-points countdown runs.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="qs-02-start-game"></div>
+            </article>
+
+            <article class="docs-entry" id="pick-line">
+                <div>
+                    <h3>Pick a line and start the point</h3>
+                    <p>
+                        The <strong>Line</strong> tab is the roster with a checkbox per player. Check who's
+                        going on and tap <strong>Start Point</strong>.
+                    </p>
+                    <p>
+                        The button names the line it will use — <code>Start Point (O-line)</code>. A wrong
+                        player count or gender ratio colors it as a warning but never blocks you: you can
+                        always start the point with whoever is checked.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="qs-03-pick-line"></div>
+            </article>
+
+            <article class="docs-entry" id="we-score">
+                <div>
+                    <h3>We Score</h3>
+                    <p>
+                        <strong>We Score</strong> opens the attribution dialog: assist on the left, goal on
+                        the right. Picking both records the point and closes the dialog.
+                    </p>
+                    <p>
+                        <strong>Unknown Player</strong> covers the ones you didn't catch. The chips
+                        (Huck, Break, Sky, Layout, Hammer) tag the scoring throw, and
+                        <strong>Not a score — continue possession</strong> backs out of a mistaken tap.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="qs-04-we-score"></div>
+            </article>
+
+            <article class="docs-entry" id="they-score">
+                <div>
+                    <h3>They Score</h3>
+                    <p>
+                        One tap, no dialog — the opponent's players aren't on your roster. The point ends
+                        and the between-points countdown starts.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="qs-05-they-score"></div>
+            </article>
+
+            <article class="docs-entry" id="key-play">
+                <div>
+                    <h3>Key Play</h3>
+                    <p>
+                        <strong>Key Play</strong> records one event without switching to full play-by-play.
+                        Open a group — Throws, Turnover, or Defense — pick the play, pick the player.
+                    </p>
+                    <p>
+                        Use it when most of the game isn't worth recording but one block or one drop is.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="qs-06-key-play"></div>
+            </article>
+
+            <article class="docs-entry" id="game-log">
+                <div>
+                    <h3>The game log</h3>
+                    <p>
+                        The <strong>Log</strong> tab lists each point in order: its roster, the events inside
+                        it, the score line, and a break/hold badge. Between-point events — timeouts,
+                        halftime, subs — appear in real-world order after the score line.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="qs-07-log"></div>
+            </article>
+
+            <article class="docs-entry" id="end-game">
+                <div>
+                    <h3>End the game</h3>
+                    <p>
+                        Menu → <strong>End Game</strong>. The summary has the final score, a sortable player
+                        stats table, team break/hold totals, and the full game log.
+                    </p>
+                    <p>
+                        From there: Excel (.xlsx) export, JSON download, or <strong>Copy Summary</strong> to
+                        paste the log into a message.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="qs-08-end-game"></div>
+            </article>
+        </section>
+
+        <!-- ================================================================ -->
+        <section class="docs-section" id="details">
+            <div class="docs-section-head">
+                <h2>Details</h2>
+                <p>Every in-game tab, and what each is for.</p>
+            </div>
+
+            <article class="docs-entry no-clip" id="tabs">
+                <div>
+                    <h3>The six tabs</h3>
+                    <ul>
+                        <li><strong>Simple</strong> — We Score / They Score / Key Play.</li>
+                        <li><strong>Full</strong> — every-event play-by-play, as a list of players.</li>
+                        <li><strong>Field</strong> — every-event play-by-play, placed on a field diagram.</li>
+                        <li><strong>Line</strong> — the roster with checkboxes; where lines are set.</li>
+                        <li><strong>Log</strong> — the running game log.</li>
+                        <li><strong>All</strong> — play-by-play, next line, and log in resizable panels.</li>
+                    </ul>
+                    <p>
+                        Simple, Full, and Field share one possession model, so you can switch tabs
+                        mid-point and they agree on who has the disc. Timeout, halftime, and End Game are
+                        reachable from all of them.
+                    </p>
+                </div>
+            </article>
+
+            <article class="docs-entry" id="full-offense">
+                <div>
+                    <h3>Full play-by-play: offense</h3>
+                    <p>
+                        One row per player on the field. Your first tap on a name says who has the disc —
+                        no event is recorded for it. Every tap after that records a completed pass to the
+                        player you tapped, and they become the holder.
+                    </p>
+                    <p>
+                        The holder's row offers <strong>Throwaway</strong> and <strong>Break</strong>;
+                        every other row offers <strong>Drop</strong> and <strong>Score</strong>. Score opens
+                        the same attribution dialog Simple mode uses, pre-filled with thrower and receiver.
+                    </p>
+                    <p>
+                        The mini log at the bottom is the running record of the possession, newest last.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="full-01-offense"></div>
+            </article>
+
+            <article class="docs-entry" id="full-defense">
+                <div>
+                    <h3>Full play-by-play: defense</h3>
+                    <p>
+                        On defense every row offers <strong>Block</strong> and
+                        <strong>Interception</strong>. A block puts the disc down with nobody holding it —
+                        your next name tap says who picked it up. An interception makes that defender the
+                        holder straight away.
+                    </p>
+                    <p>
+                        The bottom bar adds <strong>They turnover</strong> (the opponent gave it away with
+                        no defender to credit) and <strong>They score</strong>.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="full-02-defense"></div>
+            </article>
+
+            <article class="docs-entry no-clip" id="modifiers">
+                <div>
+                    <h3>Modifier chips</h3>
+                    <p>
+                        Under the player rows, a strip tags the event that just happened.
+                        <strong>Last pass was a:</strong> break, huck, reset, swing, hammer, sky catch,
+                        layout catch. After a turnover it reads <strong>Last turnover was a:</strong>
+                        (huck, good D); after a defensive play, <strong>Last D was a:</strong> (sky, layout).
+                    </p>
+                    <p>
+                        Chips amend the event in place, so tagging one a beat late doesn't reorder anything.
+                        In Field mode huck, reset, and swing are set automatically from throw geometry —
+                        the chips stay editable either way.
+                    </p>
+                </div>
+            </article>
+
+            <article class="docs-entry" id="od-pill">
+                <div>
+                    <h3>The O/D pill</h3>
+                    <p>
+                        The pill in the header shows which side you're on. Tap it when possession changed
+                        and you didn't see how: it inserts an inferred turnover charged to Unknown Player,
+                        so no real player's stats move.
+                    </p>
+                    <p>
+                        Tapping it again retracts that inferred event rather than stacking another.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="full-03-od-pill"></div>
+            </article>
+
+            <article class="docs-entry" id="undo">
+                <div>
+                    <h3>Undo and row density</h3>
+                    <p>
+                        <strong>Undo</strong> removes the last event. Repeated taps walk back through the
+                        possession and across a point boundary; a double-tap backs out a point you started
+                        by accident. Undo is on the Full, Field, and Line tabs.
+                    </p>
+                    <p>
+                        The compress button toggles row density, trading row height for more of the mini
+                        log at the bottom of the Full tab.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="full-04-mini-log"></div>
+            </article>
+
+            <article class="docs-entry" id="field">
+                <div>
+                    <h3>Field mode</h3>
+                    <p>
+                        Field records <em>where</em> each play happened. Tap a player, then tap the field
+                        where the throw landed. Tapping an empty spot brings up a player picker; you can
+                        also drag a player onto the field.
+                    </p>
+                    <p>
+                        Huck, reset, and swing are classified from the geometry of each throw as it lands —
+                        a huck covers at least half the playing field, a reset goes meaningfully backward,
+                        a swing travels at least a quarter of the field's width. The thresholds are in
+                        Advanced Settings → Field, and dragging a placed marker re-derives them.
+                    </p>
+                    <p>
+                        Rotating the phone to landscape drops the app chrome for a full-screen field. The
+                        attacking direction flips automatically each point.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="field-mode"
+                     data-src="/landing/screens/field-mode-demo.mp4"
+                     data-poster="/landing/screens/field-mode-demo-poster.png"></div>
+            </article>
+
+            <article class="docs-entry" id="next-line">
+                <div>
+                    <h3>Setting the next line during a point</h3>
+                    <p>
+                        The Line tab works while the current point is running, with its own Start Point and
+                        Lineup Ready buttons. Checking players there sets the line for the <em>next</em>
+                        point; the current point is unaffected.
+                    </p>
+                    <p>
+                        The <strong>Mode</strong> control chooses how you plan. <strong>Combined</strong>
+                        keeps a single Next line. <strong>Separate</strong> keeps distinct O and D lines and
+                        fields the right one based on who scored.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="line-01-next-line"></div>
+            </article>
+
+            <article class="docs-entry" id="all-tab">
+                <div>
+                    <h3>The All tab</h3>
+                    <p>
+                        All shows play-by-play, next line, and the game log at once, with drag-to-resize
+                        dividers between the panels. It's the layout for a tablet, or a phone in a stand.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="all-01-panels"></div>
+            </article>
+        </section>
+
+        <!-- ================================================================ -->
+        <section class="docs-section" id="advanced">
+            <div class="docs-section-head">
+                <h2>Advanced</h2>
+                <p>Features you turn on when you need them.</p>
+            </div>
+
+            <article class="docs-entry" id="player-details">
+                <div>
+                    <h3>Player details</h3>
+                    <p>
+                        Tapping a player's name on the roster opens their details: name, jersey number,
+                        FMP/MMP, <strong>Position</strong> (Handler / Cutter / Hybrid), and
+                        <strong>Default line</strong> (O-line / D-line / Crossover). Delete is here too.
+                    </p>
+                    <p>
+                        Default line is what the Auto line filler reads when it decides who to put on for
+                        an offense or defense point.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="adv-player-details"></div>
+            </article>
+
+            <article class="docs-entry" id="wholesale-auto">
+                <div>
+                    <h3>Wholesale and Auto</h3>
+                    <p>
+                        The controls row above the line table holds a <strong>Wholesale</strong> icon over
+                        the checkbox column — one tap clears the whole line — and <strong>Auto</strong>,
+                        which fills the empty slots with the players who have played the fewest points,
+                        respecting the gender ratio.
+                    </p>
+                    <p>
+                        Check your handlers first, then tap Auto to round out the line. Auto on a line
+                        that's already full warns instead of replacing your picks.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="adv-wholesale-auto"></div>
+            </article>
+
+            <article class="docs-entry" id="game-events">
+                <div>
+                    <h3>Game events</h3>
+                    <p>
+                        <strong>Events</strong> is reachable from every tab, during points and between them.
+                    </p>
+                    <ul>
+                        <li><strong>Timeout</strong> — asks who called it; logged by team name.</li>
+                        <li><strong>Injury Sub</strong> — swap a player mid-point.</li>
+                        <li><strong>Correct Lineup</strong> — replace a mistakenly entered player and reassign that point's stats.</li>
+                        <li><strong>Half Time</strong> — records the break, flips the drawn field's ends, and applies the opening-puller-receives rule to the next point.</li>
+                        <li><strong>Swap O &amp; D</strong> — force-swap which team pulls next. A correction, for stats started mid-game or a game entered on the wrong side; not a substitute for halftime.</li>
+                        <li><strong>End Game</strong>.</li>
+                    </ul>
+                </div>
+                <div class="docs-clip" data-clip="adv-game-events"></div>
+            </article>
+
+            <article class="docs-entry" id="pull">
+                <div>
+                    <h3>Pull details and hang time</h3>
+                    <p>
+                        Starting a defense point opens the pull dialog: who pulled, the quality
+                        (Good / Okay / Poor / Brick), and optional flags — Flick, Roller, IO, OI.
+                    </p>
+                    <p>
+                        The stopwatch is optional. Tap it on release, tap again on landing; the hang time
+                        rides the event and shows up in the log as
+                        <code>Pull by Frank (1.9s hang)</code>. Field mode has the same flow, timed against
+                        the spot you tap for the landing.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="adv-pull-hang"></div>
+            </article>
+
+            <article class="docs-entry" id="sets">
+                <div>
+                    <h3>Set tracking: turning it on</h3>
+                    <p>
+                        Team Settings → <strong>Set Tracking</strong>. Name your own offensive and
+                        defensive sets — zone, vert, ho-stack, whatever you call them. Teams that don't
+                        turn it on never see any of this.
+                    </p>
+                    <p>
+                        The stats screens and every Excel export then gain a <strong>By set</strong>
+                        breakdown, each side judged on its own terms —
+                        <code>Zone (D): 8/12 stops, 4 breaks</code>,
+                        <code>Ho-stack (O): 5/8 scored</code>.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="adv-sets"></div>
+            </article>
+
+            <article class="docs-entry" id="sets-tagging">
+                <div>
+                    <h3>Tagging a possession</h3>
+                    <p>
+                        With set tracking on, a <code>Set:</code> control sits on the Full tab's top line
+                        and in the Field tab's action row. It offers your offensive list while you have
+                        the disc and your defensive list while you don't. Tap to cycle, long-press for
+                        the full list.
+                    </p>
+                    <p>
+                        The "Last turnover was a:" / "Last D was a:" row carries a second copy showing the
+                        set that possession was played in, so you can name the D you were running after
+                        the fact.
+                    </p>
+                    <p>
+                        One set per possession: switching from zone to man partway through overwrites the
+                        tag rather than recording the change, so that possession reads as man.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="adv-sets-tagging"></div>
+            </article>
+
+            <article class="docs-entry" id="stats-scope">
+                <div>
+                    <h3>Stats scope</h3>
+                    <p>
+                        The roster screen's <strong>Scope</strong> control switches between All-time, Event,
+                        and Game numbers. <strong>Stats</strong> next to it picks how many columns to show.
+                        Column headers sort.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="adv-stats-scope"></div>
+            </article>
+
+            <article class="docs-entry no-clip" id="export">
+                <div>
+                    <h3>Export</h3>
+                    <p>
+                        Excel (.xlsx) export is on the game summary, the event roster, and the team roster.
+                        Workbooks are multi-sheet — split by phase on the event roster, by event on the team
+                        roster — with real number and percent types, so the columns sort and chart as
+                        numbers rather than text.
+                    </p>
+                    <p>
+                        JSON export from the game summary gives you the complete game object, including
+                        every event.
+                    </p>
+                </div>
+            </article>
+
+            <article class="docs-entry" id="multi-coach">
+                <div>
+                    <h3>Multi-coach</h3>
+                    <p>
+                        Two coaches on the same game claim different roles: <strong>Play-by-Play</strong>
+                        and <strong>Next Line</strong>. The role buttons stay hidden while you're coaching
+                        solo and appear once a second coach connects.
+                    </p>
+                    <p>
+                        The line coach taps <strong>Lineup Ready</strong> to signal the next line is set;
+                        the indicator turns green on both screens until the point starts. Lineup edits sync
+                        continuously either way — the ping is a notification, not a commit gate.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="adv-multi-coach"></div>
+            </article>
+
+            <article class="docs-entry" id="events-phases">
+                <div>
+                    <h3>Tournaments and phases</h3>
+                    <p>
+                        Group games under an <strong>event</strong> to get aggregate stats and a shared
+                        event roster across the weekend.
+                    </p>
+                    <p>
+                        Tag games with free-form <strong>phases</strong> — Day 1, Pool Play, Bracket —
+                        retroactively, or auto-labelled by day. Stats screens and exports filter and group
+                        by phase.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="adv-events-phases"></div>
+            </article>
+
+            <article class="docs-entry no-clip" id="narration">
+                <div>
+                    <h3>Speech narration</h3>
+                    <p>
+                        Tap the mic and describe plays out loud — "Alice to Bob, huck to Carol for the
+                        score". Speech is transcribed live and converted into structured events when you
+                        stop. Between points, the same mic takes the next line ("Alice, Bob, Carol…").
+                    </p>
+                    <p>
+                        Opt-in per session, and it needs a connection. Events it can't place are reported
+                        rather than dropped silently.
+                    </p>
+                </div>
+            </article>
+        </section>
+    </main>
+</div>
+
+<footer class="docs-footer">
+    <div class="docs-footer-inner">
+        <span>Breakside is beta software. Export your team data regularly.</span>
+        <span class="docs-header-spacer"></span>
+        <a href="/landing/">Home</a>
+        <a href="/">Open app</a>
+        <a href="https://github.com/davedotluebke/ultistats" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/davedotluebke/ultistats/issues/new?labels=beta_feedback" target="_blank" rel="noopener">Feedback</a>
+    </div>
+</footer>
+
+<script>
+/*
+ * Clips are built from the data-clip slugs rather than written out inline, so
+ * adding a clip is one attribute and the markup can't drift from the file names.
+ * A slug with no recorded mp4 leaves an empty slot, which collapses to a
+ * text-only entry — see the 404 handler below.
+ */
+(function () {
+    var slots = document.querySelectorAll('.docs-clip[data-clip]');
+
+    slots.forEach(function (slot) {
+        var slug = slot.dataset.clip;
+        var frame = document.createElement('div');
+        frame.className = 'device-frame';
+        var screen = document.createElement('div');
+        screen.className = 'device-screen';
+
+        var video = document.createElement('video');
+        // data-src lets an entry reuse a clip that already ships elsewhere —
+        // the Field-mode demo is the landing page's carousel finale, and
+        // copying it here would duplicate 760KB for no reason.
+        video.src = slot.dataset.src || '/docs/clips/' + slug + '.mp4';
+        video.poster = slot.dataset.poster || '/docs/clips/' + slug + '.jpg';
+        video.muted = true;              // property AND attribute — autoplay policies want both
+        video.setAttribute('muted', '');
+        video.playsInline = true;
+        video.setAttribute('playsinline', '');
+        video.preload = 'metadata';
+        video.controls = true;
+        video.setAttribute('aria-label', slug.replace(/-/g, ' '));
+
+        // A missing clip shouldn't leave a broken-media box: drop the slot and
+        // let the entry reflow to full width.
+        video.addEventListener('error', function () {
+            var entry = slot.closest('.docs-entry');
+            if (entry) entry.classList.add('no-clip');
+            slot.remove();
+        });
+
+        screen.appendChild(video);
+        frame.appendChild(screen);
+        slot.appendChild(frame);
+    });
+
+    // Play a clip when it scrolls into view, pause when it leaves. One clip is
+    // ~20s and ~300KB, so this stays cheap; reduced-motion users get stills.
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduce && 'IntersectionObserver' in window) {
+        var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) {
+                var v = e.target;
+                if (e.isIntersecting) {
+                    if (v.dataset.played !== 'true') {
+                        v.play().catch(function () { /* autoplay refused — controls still work */ });
+                    }
+                } else {
+                    v.pause();
+                }
+            });
+        }, { threshold: 0.6 });
+
+        document.querySelectorAll('.docs-clip video').forEach(function (v) {
+            // Don't restart a clip every time it scrolls back through view.
+            v.addEventListener('ended', function () { v.dataset.played = 'true'; });
+            io.observe(v);
+        });
+    }
+
+    // Highlight the rail entry for whatever section is on screen.
+    var rail = document.querySelector('.docs-rail');
+    if (rail && 'IntersectionObserver' in window) {
+        var links = {};
+        rail.querySelectorAll('a[href^="#"]').forEach(function (a) {
+            links[a.getAttribute('href').slice(1)] = a;
+        });
+        var spy = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) {
+                var a = links[e.target.id];
+                if (a) a.style.color = e.isIntersecting ? 'var(--brand-orange)' : '';
+            });
+        }, { rootMargin: '-80px 0px -70% 0px' });
+        document.querySelectorAll('.docs-entry[id], .docs-section[id]').forEach(function (el) {
+            spy.observe(el);
+        });
+    }
+})();
+</script>
+
+</body>
+</html>

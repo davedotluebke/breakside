@@ -44,14 +44,34 @@ echo
 echo "▶ cutting"
 CUT=0
 SKIPPED=0
+
+# The list reporter interleaves cursor-control escapes with the tests' own
+# stdout, and they land mid-line — so a raw grep of the log yields clip names
+# with an ESC sequence buried inside, which then fail to match anything.
+CLEAN="$TESTS/.demo-record.clean.log"
+perl -pe 's/\e\[[0-9;?]*[a-zA-Z]//g' "$LOG" > "$CLEAN"
+
 # Only takes that reached their own last line get cut. A test that failed
 # halfway still leaves a video.webm and a DEMO_TRIM_MS line behind, and cutting
 # that would ship truncated footage from a green-looking run.
-OK_CLIPS=$(sed -nE 's/.*DEMO_OK\[([^]]+)\].*/\1/p' "$LOG" | sort -u)
+OK_CLIPS=$(sed -nE 's/.*DEMO_OK\[([^]]+)\].*/\1/p' "$CLEAN" | sort -u)
 
+# Collect the whole work list BEFORE the loop, and iterate the array rather
+# than a pipe. ffmpeg reads stdin, so a `while read … done < <(sed …)` loop with
+# ffmpeg in its body has the encoder eat the loop's own input: later clip names
+# come back missing their first character(s) and "have no take". `-nostdin`
+# below is the belt to this braces.
+#
 # sed, not shell parameter expansion: `${line#DEMO_TRIM_MS[}` reads the bracket
 # as a glob character class and silently eats the wrong prefix.
-while IFS='|' read -r clip ms; do
+PAIRS=()
+while IFS= read -r pair; do
+  [[ -n "$pair" ]] && PAIRS+=("$pair")
+done < <(sed -nE 's/.*DEMO_TRIM_MS\[([^]]+)\]=([0-9]+).*/\1|\2/p' "$CLEAN" || true)
+
+for pair in ${PAIRS+"${PAIRS[@]}"}; do
+  clip="${pair%%|*}"
+  ms="${pair##*|}"
   if ! grep -qx "$clip" <<<"$OK_CLIPS"; then
     echo "  ✗ $clip — take did not finish; keeping the previous clip"
     SKIPPED=$((SKIPPED + 1))
@@ -67,17 +87,32 @@ while IFS='|' read -r clip ms; do
     continue
   fi
 
-  ffmpeg -loglevel error -y -ss "$secs" -i "$src" \
+  # -ss AFTER -i (output-side, frame-accurate). Input-side seeking on these
+  # webms silently truncates the tail — Playwright's VP8 output has no duration
+  # header and sparse keyframes, so ffmpeg stops early and you get a clip that
+  # ends several seconds before the payoff. Decoding from the start costs
+  # nothing at this length.
+  ffmpeg -nostdin -loglevel error -y -i "$src" -ss "$secs" \
          -c:v libx264 -pix_fmt yuv420p -crf 20 -preset slow -movflags +faststart \
          "$OUT/$clip.mp4"
   # Poster = first frame, so the still matches where playback begins.
-  ffmpeg -loglevel error -y -i "$OUT/$clip.mp4" -frames:v 1 -q:v 3 "$OUT/$clip.jpg"
+  ffmpeg -nostdin -loglevel error -y -i "$OUT/$clip.mp4" -frames:v 1 -q:v 3 "$OUT/$clip.jpg"
 
   dur=$(ffprobe -loglevel error -show_entries format=duration -of csv=p=0 "$OUT/$clip.mp4")
   size=$(du -h "$OUT/$clip.mp4" | cut -f1)
   printf "  ✓ %-28s %5.1fs  %s\n" "$clip" "$dur" "$size"
+
+  # Playwright's video is a screencast encoded at a fixed 25fps, so its length
+  # is a frame count, not wall-clock: under load the capture drops frames and
+  # the take can come out seconds shorter than the test ran — losing the end of
+  # the choreography, not just speeding it up. The clip still looks fine on its
+  # own, so say so out loud and re-record that one.
+  srcdur=$(ffprobe -loglevel error -show_entries format=duration -of csv=p=0 "$src" 2>/dev/null || echo 0)
+  awk -v d="$dur" -v s="$srcdur" -v t="$secs" -v c="$clip" \
+      'BEGIN { if (s > 0 && (s - t) - d > 2.0)
+                 printf "     ⚠ %s is %.1fs shorter than its take — frames were dropped; re-record it\n", c, (s-t)-d }'
   CUT=$((CUT + 1))
-done < <(sed -nE 's/.*DEMO_TRIM_MS\[([^]]+)\]=([0-9]+).*/\1|\2/p' "$LOG" || true)
+done
 
 echo
 if [[ $SKIPPED -gt 0 ]]; then

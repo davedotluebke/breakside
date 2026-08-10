@@ -183,17 +183,20 @@ export async function centerOf(page: Page, selector: string): Promise<{ x: numbe
 }
 
 /**
- * Glide to a selector and tap it. This is the workhorse — prefer it over
- * page.click() everywhere on camera, since page.click() teleports the pointer.
+ * Glide to a selector and tap it. This is the workhorse — prefer it over a bare
+ * page.click() everywhere on camera, since page.click() teleports the pointer
+ * and the cursor jumps.
+ *
+ * The glide is ours; the press is Playwright's `locator.click()`, not raw
+ * `mouse.down()`/`mouse.up()`. That matters: the game screen re-renders on a
+ * 3-second timer (startGameStateRefresh in game/gameScreenSync.js), and if that
+ * lands between a manual down and up, the two events have different targets, no
+ * `click` is dispatched, and the tap silently does nothing — a visible press
+ * that changes no state, in a different spot every take. `locator.click()`
+ * re-resolves and retries when the element is replaced under it.
  */
 export async function tap(page: Page, selector: string, opts: { settle?: number; after?: number } = {}) {
-  const { x, y } = await centerOf(page, selector);
-  await glide(page, x, y);
-  await page.waitForTimeout(opts.settle ?? BEAT.settle);
-  await page.mouse.down();
-  await page.waitForTimeout(BEAT.press);
-  await page.mouse.up();
-  await page.waitForTimeout(opts.after ?? BEAT.action);
+  await tapLocator(page, page.locator(selector).first(), opts);
 }
 
 /** Tap a Playwright Locator (for text filters and :has-text chains). */
@@ -208,9 +211,9 @@ export async function tapLocator(
   if (!box) throw new Error('no bounding box for locator');
   await glide(page, box.x + box.width / 2, box.y + box.height / 2);
   await page.waitForTimeout(opts.settle ?? BEAT.settle);
-  await page.mouse.down();
-  await page.waitForTimeout(BEAT.press);
-  await page.mouse.up();
+  // delay keeps the cursor's pressed state on screen for a beat, as a real
+  // finger would; the click itself is retried by Playwright if the DOM moves.
+  await locator.click({ delay: BEAT.press });
   await page.waitForTimeout(opts.after ?? BEAT.action);
 }
 
