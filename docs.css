@@ -141,11 +141,13 @@ body.docs-body {
 
 .docs-entry {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 244px;
+    grid-template-columns: minmax(0, 1fr) 200px;
     gap: var(--space-xl);
-    padding: var(--space-xl) 0;
+    padding: var(--space-lg) 0;
     border-top: 1px solid var(--gray-200);
-    align-items: start;
+    /* Centered, not top-aligned: a short paragraph pinned to the top of a
+       380px phone reads as a layout bug rather than as a caption. */
+    align-items: center;
     scroll-margin-top: 72px;
 }
 
@@ -199,15 +201,18 @@ body.docs-body {
 
 /* --- Clips -------------------------------------------------------------- */
 
+/* Clips are 480×960, so the screen is exactly 1:2 — sizing the frame to match
+   means object-fit: cover crops nothing and the app's header stays visible. */
 .docs-clip {
+    --clip-w: 180px;
     justify-self: center;
-    width: 244px;
+    width: calc(var(--clip-w) + 20px);
 }
 
 .docs-clip .device-frame {
-    width: 244px;
-    height: 452px;
-    border-radius: 32px;
+    width: calc(var(--clip-w) + 20px);
+    height: calc(var(--clip-w) * 2 + 20px);
+    border-radius: 30px;
     padding: 10px;
     background: linear-gradient(145deg, var(--gray-700), var(--gray-800));
     box-shadow: 0 18px 34px -14px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1);
@@ -216,9 +221,10 @@ body.docs-body {
 .docs-clip .device-screen {
     width: 100%;
     height: 100%;
-    border-radius: 24px;
+    border-radius: 22px;
     overflow: hidden;
     background: var(--gray-900);
+    cursor: pointer;
 }
 
 .docs-clip video {
@@ -229,21 +235,23 @@ body.docs-body {
     display: block;
 }
 
-/* Landscape clips (Field mode rotated) keep their own aspect. */
-.docs-clip.landscape .device-frame {
-    width: 244px;
-    height: 148px;
-    border-radius: 20px;
-}
-
-.docs-clip.landscape .device-screen { border-radius: 13px; }
-
+/* Replay affordance — a real button, since the clips carry no native controls. */
 .docs-clip-caption {
-    margin-top: var(--space-sm);
+    display: block;
+    width: 100%;
+    margin-top: var(--space-xs);
+    padding: 2px;
+    border: none;
+    background: none;
     text-align: center;
-    font-size: 0.78rem;
+    font-family: inherit;
+    font-size: 0.75rem;
     color: var(--gray-400);
+    cursor: pointer;
+    user-select: none;
 }
+
+.docs-clip-caption:hover { color: var(--brand-orange); }
 
 /* --- Footer ------------------------------------------------------------- */
 
@@ -276,10 +284,15 @@ body.docs-body {
         padding: var(--space-lg) var(--space-md) var(--space-2xl);
     }
 
-    /* The rail becomes a horizontal scroller pinned under the header. */
+    /* On a phone, only one thing stays pinned. The rail is the useful one, so
+       the header scrolls away and the rail takes the top. */
+    .docs-header { position: static; }
+
+    .docs-section, .docs-entry { scroll-margin-top: 60px; }
+
     .docs-rail {
         position: sticky;
-        top: 51px;
+        top: 0;
         background: var(--gray-50);
         border-bottom: 1px solid var(--gray-200);
         margin: 0 calc(-1 * var(--space-md));
@@ -307,5 +320,10 @@ body.docs-body {
         gap: var(--space-lg);
     }
 
-    .docs-clip { justify-self: start; }
+    /* Stacked layout has the width to spare, and a phone screenshot on a phone
+       wants to be nearer life size. */
+    .docs-clip {
+        --clip-w: 240px;
+        justify-self: center;
+    }
 }

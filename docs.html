@@ -608,7 +608,8 @@
         video.playsInline = true;
         video.setAttribute('playsinline', '');
         video.preload = 'metadata';
-        video.controls = true;
+        // No native controls: the bar sits over the bottom of the phone screen
+        // and hides the very UI the clip is about. Tapping the clip replays it.
         video.setAttribute('aria-label', slug.replace(/-/g, ' '));
 
         // A missing clip shouldn't leave a broken-media box: drop the slot and
@@ -622,6 +623,19 @@
         screen.appendChild(video);
         frame.appendChild(screen);
         slot.appendChild(frame);
+
+        var caption = document.createElement('button');
+        caption.type = 'button';
+        caption.className = 'docs-clip-caption';
+        caption.textContent = 'Replay';
+        var replay = function () {
+            video.currentTime = 0;
+            video.dataset.played = '';
+            video.play().catch(function () { /* nothing more to do */ });
+        };
+        caption.addEventListener('click', replay);
+        screen.addEventListener('click', replay);
+        slot.appendChild(caption);
     });
 
     // Play a clip when it scrolls into view, pause when it leaves. One clip is
