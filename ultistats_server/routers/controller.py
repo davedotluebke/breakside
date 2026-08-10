@@ -13,6 +13,7 @@ from ._shared import (
     game_exists,
     get_connected_coaches,
     get_controller_state,
+    get_game_current_mtime_ns,
     get_user,
     ping_role,
     record_coach_ping,
@@ -249,6 +250,11 @@ async def ping_controller(
 
     Also returns current controller state and pending handoffs.
 
+    Carries a `gameStamp` so the client's in-game refresh loop can skip
+    downloading the game when nothing has changed. This ping is already the
+    most frequent call a coach makes, so folding change detection into it
+    removes the separate 3s full-game poll entirely rather than shrinking it.
+
     Requires: Coach access to the game's team.
     """
     if not game_exists(game_id):
@@ -285,6 +291,11 @@ async def ping_controller(
         state["pendingHandoff"]["currentHolderId"] == user["id"]
     )
 
+    # Change stamp for the game itself (one stat() — see
+    # get_game_current_mtime_ns). Same value and format as the public share
+    # poll's `version`, so both sides of the app detect change the same way.
+    stamp = get_game_current_mtime_ns(game_id)
+
     return {
         "status": "ok",
         "pinged": pinged,
@@ -292,5 +303,6 @@ async def ping_controller(
         "hasPendingHandoffForMe": has_pending_for_me,
         "handoffTimeoutSeconds": HANDOFF_EXPIRY_SECONDS,
         "connectedCoaches": get_connected_coaches(game_id),
+        "gameStamp": str(stamp) if stamp is not None else None,
         "serverTime": datetime.now().isoformat()
     }

@@ -19,6 +19,7 @@ from ._shared import (
     game_exists,
     get_controller_state,
     get_game_current,
+    get_game_current_mtime_ns,
     get_game_version,
     get_json_body,
     get_optional_user,
@@ -113,6 +114,29 @@ async def get_game(game_id: str, user: dict = Depends(require_game_team_access))
 
     game_data = get_game_current(game_id)
     return game_data
+
+
+@router.get("/api/games/{game_id}/poll")
+async def poll_game(game_id: str, user: dict = Depends(require_game_team_access)):
+    """
+    Lightweight change poll for a game — returns only a change stamp.
+
+    The authenticated twin of GET /api/share/{hash}/poll. Callers refetch the
+    full game via GET /api/games/{game_id} only when the stamp differs from the
+    one they hold, instead of pulling the whole payload every few seconds.
+
+    Coaches don't need this: POST /api/games/{game_id}/ping already carries the
+    same `gameStamp` and they already call it every 2s. It exists for the
+    in-game paths that hold no controller session and therefore never ping —
+    viewers, most of all.
+
+    Requires: Coach or Viewer access to the game's team.
+    """
+    stamp = get_game_current_mtime_ns(game_id)
+    if stamp is None:
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+
+    return {"version": str(stamp)}
 
 
 def _enrich_game_with_activity(game: dict) -> None:
