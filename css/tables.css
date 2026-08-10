@@ -89,7 +89,7 @@ th {
 
 .event-roster-filter-row label {
     font-weight: 600;
-    color: var(--gray-dark);
+    color: var(--text-primary);
 }
 
 /* The scope menu can hold long game labels; let it shrink instead of
@@ -202,7 +202,7 @@ th {
 }
 
 .sortable-header:active {
-    background-color: rgba(0, 0, 0, 0.08);
+    background-color: var(--wash);
 }
 
 .sortable-header::after {
@@ -528,7 +528,7 @@ ul {
 td.player-fmp,
 .active-name-column.player-fmp,
 .roster-name-column.player-fmp {
-    color: var(--gender-fmp) !important; /* kept: applies across 4 tables incl. id-scoped sticky cells in ui/panelSystem.css */
+    color: var(--gender-fmp-ink) !important; /* kept: applies across 4 tables incl. id-scoped sticky cells in ui/panelSystem.css */
     font-weight: bold;
 }
 
@@ -536,18 +536,18 @@ td.player-fmp,
 td.player-mmp,
 .active-name-column.player-mmp,
 .roster-name-column.player-mmp {
-    color: var(--gender-mmp) !important; /* kept: same reason as .player-fmp above */
+    color: var(--gender-mmp-ink) !important; /* kept: same reason as .player-fmp above */
     font-weight: bold;
 }
 
 /* Gender ratio warning styling - matches player colors */
 #genderRatioText.gender-ratio-fmp-warning {
-    color: var(--gender-fmp); /* Darker purple - matches FMP player color */
+    color: var(--gender-fmp-ink); /* Darker purple - matches FMP player color */
     font-weight: bold;
 }
 
 #genderRatioText.gender-ratio-mmp-warning {
-    color: var(--gender-mmp); /* Darker green - matches MMP player color */
+    color: var(--gender-mmp-ink); /* Darker green - matches MMP player color */
     font-weight: bold;
 }
 
@@ -561,13 +561,13 @@ td.player-mmp,
 /* Score cell coloring for alternating gender ratio games */
 .score-cell-fmp {
     background-color: var(--gender-fmp-tint); /* Light darker purple background */
-    color: var(--black); /* Black text for better contrast */
+    color: var(--text-strong); /* Max contrast against the tint, in either theme */
     font-weight: bold;
 }
 
 .score-cell-mmp {
     background-color: var(--gender-mmp-tint); /* Light darker green background */
-    color: var(--black); /* Black text for better contrast */
+    color: var(--text-strong); /* Max contrast against the tint, in either theme */
     font-weight: bold;
 }
 
@@ -721,12 +721,12 @@ td.player-mmp,
     width: 100%; /* Full width */
     height: 100%; /* Full height */
     overflow: auto; /* Enable scroll if needed */
-    background-color: rgb(0,0,0); /* Fallback color */
-    background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+    background-color: var(--black); /* Fallback color */
+    background-color: var(--overlay-scrim); /* Black w/ opacity */
 }
 
 .modal-content {
-    background-color: var(--white);
+    background-color: var(--surface-card);
     margin: 15% auto; /* 15% from the top and centered */
     padding: 20px;
     border: 1px solid var(--border-strong);

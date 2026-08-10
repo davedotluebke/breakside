@@ -331,7 +331,7 @@ body.game-screen-active header {
     height: 36px;
     padding: 0;
     margin: 0;
-    background: rgba(0,0,0,0.06);
+    background: var(--wash);
     border: none;
     border-radius: 6px;
     color: var(--text-secondary);
@@ -344,7 +344,7 @@ body.game-screen-active header {
 }
 
 .header-menu-btn:hover {
-    background: rgba(0,0,0,0.12);
+    background: var(--wash-hover);
 }
 
 /* Menu dropdown container */
@@ -456,7 +456,7 @@ body.game-screen-active header {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.85);
+    background: var(--overlay-tooltip);
     color: var(--white);
     padding: 4px 8px;
     border-radius: 4px;
@@ -495,7 +495,7 @@ body.game-screen-active header {
 }
 
 .header-score-separator {
-    color: rgba(0,0,0,0.3);
+    color: var(--ink-faint);
     font-weight: 400;
     font-size: 1.1rem;
 }
@@ -543,7 +543,7 @@ body.game-screen-active header {
 }
 
 .team-identity-fallback {
-    color: rgba(0,0,0,0.4);
+    color: var(--ink-dim);
     font-weight: 500;
 }
 
@@ -553,7 +553,7 @@ body.game-screen-active header {
     height: 34px;
     border-radius: 6px;
     object-fit: contain;
-    background: rgba(0,0,0,0.05);
+    background: var(--wash-subtle);
 }
 
 /* Large team symbol (4-char abbreviation, main display) */
@@ -572,7 +572,7 @@ body.game-screen-active header {
     flex-direction: column;
     align-items: center;
     padding: 4px 8px;
-    background: rgba(0,0,0,0.05);
+    background: var(--wash-subtle);
     border-radius: 6px;
     cursor: pointer;
     min-width: 60px;
@@ -606,7 +606,7 @@ body.game-screen-active header {
     margin: 0;
     border: none;
     border-radius: 50%;
-    background: rgba(0,0,0,0.35);
+    background: var(--wash-control);
     color: var(--white);
     cursor: pointer;
     display: none; /* Hidden by default, shown for point timer */
@@ -617,7 +617,7 @@ body.game-screen-active header {
 }
 
 .header-timer-pause-btn:hover {
-    background: rgba(0,0,0,0.5);
+    background: var(--wash-control-hover);
 }
 
 .header-timer-pause-btn.paused {
@@ -1380,7 +1380,7 @@ body.game-screen-active header {
     padding: 8px 14px;
     border: 1px solid var(--border-strong);
     border-radius: 8px;
-    background: var(--white);
+    background: var(--surface-card);
     color: var(--text-primary);
     font-weight: 600;
     font-size: 0.9rem;
@@ -1421,7 +1421,7 @@ body.game-screen-active header {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--overlay-scrim);
     z-index: 1000;
     align-items: center;
     justify-content: center;
@@ -2262,7 +2262,7 @@ body.game-screen-active header {
 }
 
 .readonly-badge {
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--overlay-scrim-strong);
     color: var(--white);
     padding: 6px 14px;
     border-radius: 16px;
@@ -2740,7 +2740,7 @@ body.panel-dragging .panel-content {
 
 .header-seg-control {
     display: flex;
-    background: rgba(0, 0, 0, 0.07);
+    background: var(--wash);
     border-radius: 8px;
     padding: 2px;
     position: relative;
@@ -2767,7 +2767,7 @@ body.panel-dragging .panel-content {
 }
 
 .header-seg-control button.disabled {
-    color: rgba(0, 0, 0, 0.25);
+    color: var(--ink-faint);
     pointer-events: none;
 }
 

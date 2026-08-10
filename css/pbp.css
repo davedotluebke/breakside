@@ -130,11 +130,11 @@
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0,0,0,0.4);
+    background-color: var(--overlay-scrim);
 }
 
 .modal-content {
-    background-color: var(--white);
+    background-color: var(--surface-card);
     margin: 15% auto;
     padding: 1rem 1rem;
     border: 1px solid var(--border-strong);
@@ -391,7 +391,7 @@
     border: 1px solid var(--border-default);
     border-radius: 999px;
     background: var(--surface-light);
-    color: var(--gray-dark);
+    color: var(--text-primary);
     font-size: 0.85rem;
     line-height: 1.1;
     white-space: nowrap;
@@ -485,7 +485,7 @@
 }
 
 .key-play-panel {
-    border: 3px solid var(--black);
+    border: 3px solid var(--border-contrast);
     border-radius: 0.5rem;
     background-color: var(--surface-subtle);
     overflow: visible;
@@ -502,7 +502,7 @@
     padding: 0 0.75rem;
     font-weight: bold;
     font-size: 1.1rem;
-    color: var(--black);
+    color: var(--text-strong);
     z-index: 1;
 }
 
@@ -517,10 +517,10 @@
 
 .key-play-sub-btn {
     padding: 0.2rem 0.4rem;
-    border: 1px solid var(--black);
+    border: 1px solid var(--border-contrast);
     border-radius: 0.25rem;
     background-color: var(--surface-subtle);
-    color: var(--black);
+    color: var(--text-strong);
     font-size: 0.85rem;
     cursor: pointer;
     transition: all 0.2s;
@@ -625,10 +625,10 @@
 
 .pull-quality-btn {
     padding: 0.7rem;
-    border: 2px solid var(--black);
+    border: 2px solid var(--border-contrast);
     border-radius: 0.5rem;
     background-color: var(--surface-subtle);
-    color: var(--black);
+    color: var(--text-strong);
     font-size: 1rem;
     cursor: pointer;
     transition: all 0.2s;
@@ -825,7 +825,7 @@
 
 .edit-player-gender-field .gender-button.fmp-button {
     background-color: var(--gender-fmp-surface);
-    color: var(--gender-fmp);
+    color: var(--gender-fmp-ink);
     border-color: var(--gender-fmp);
 }
 
@@ -837,7 +837,7 @@
 
 .edit-player-gender-field .gender-button.mmp-button {
     background-color: var(--gender-mmp-surface);
-    color: var(--gender-mmp);
+    color: var(--gender-mmp-ink);
     border-color: var(--gender-mmp);
 }
 

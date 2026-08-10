@@ -8,7 +8,7 @@
 
 /* Header styles — compact unified header with hamburger menu */
 header {
-    background-color: var(--white);
+    background-color: var(--surface-card);
     color: var(--text-primary);
     border-bottom: 3px solid var(--brand-orange); /* brand orange accent (replaces full-orange fill) */
     box-shadow: var(--shadow-sm);

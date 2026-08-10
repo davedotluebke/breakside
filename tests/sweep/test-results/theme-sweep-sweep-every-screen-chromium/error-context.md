@@ -1,0 +1,202 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]: Next Point
+    - generic [ref=e4]: 00:00
+  - text:                          
+  - button "Narrate lineup" [ref=e5] [cursor=pointer]:
+    - generic [ref=e6]: 
+  - generic [ref=e8]:
+    - generic [ref=e9]:
+      - generic [ref=e11]:
+        - generic [ref=e12]:
+          - button "" [active] [ref=e13] [cursor=pointer]:
+            - generic [ref=e14]: 
+          - generic [ref=e15]:
+            - text: 
+            - button " Leave Game" [ref=e16] [cursor=pointer]:
+              - generic [ref=e17]: 
+              - text: Leave Game
+            - button " End Game" [ref=e18] [cursor=pointer]:
+              - generic [ref=e19]: 
+              - text: End Game
+            - button " Roster + Stats" [ref=e21] [cursor=pointer]:
+              - generic [ref=e22]: 
+              - text: Roster + Stats
+            - button " Game Settings" [ref=e23] [cursor=pointer]:
+              - generic [ref=e24]: 
+              - text: Game Settings
+            - button " Team Settings" [ref=e25] [cursor=pointer]:
+              - generic [ref=e26]: 
+              - text: Team Settings
+            - button " Share Game" [ref=e27] [cursor=pointer]:
+              - generic [ref=e28]: 
+              - text: Share Game
+            - button " Show Role Buttons" [ref=e29] [cursor=pointer]:
+              - generic [ref=e30]: 
+              - text: Show Role Buttons
+            - text:   
+            - button " Advanced Settings" [ref=e32] [cursor=pointer]:
+              - generic [ref=e33]: 
+              - text: Advanced Settings
+            - button " About / Version" [ref=e34] [cursor=pointer]:
+              - generic [ref=e35]: 
+              - text: About / Version
+        - img "Breakside" [ref=e37] [cursor=pointer]
+        - generic [ref=e38]:
+          - generic [ref=e40]: Us
+          - generic [ref=e41]: "1"
+          - generic [ref=e42]: –
+          - generic [ref=e43]: "1"
+          - generic [ref=e45]: Them
+        - generic "Toggle timer mode" [ref=e46] [cursor=pointer]:
+          - generic [ref=e47]: 0:02
+          - generic [ref=e48]: point
+          - button "" [ref=e49]:
+            - generic [ref=e50]: 
+      - generic [ref=e52]:
+        - button "Simple" [ref=e54] [cursor=pointer]
+        - button "Full" [ref=e55] [cursor=pointer]
+        - button "Field" [ref=e56] [cursor=pointer]
+        - button "Line" [ref=e57] [cursor=pointer]
+        - button "Log" [ref=e58] [cursor=pointer]
+        - button "All" [ref=e59] [cursor=pointer]
+    - generic [ref=e60]:
+      - generic [ref=e62]: Play-by-Play
+      - generic [ref=e64]:
+        - button "Start Point (Offense)" [ref=e65] [cursor=pointer]
+        - text:   
+        - generic [ref=e66]:
+          - text:   
+          - button "" [ref=e67] [cursor=pointer]:
+            - generic [ref=e68]: 
+    - text:     
+    - generic [ref=e69]:
+      - generic [ref=e70]:
+        - generic [ref=e71]:
+          - generic [ref=e72]: 
+          - text: Next Line
+        - generic [ref=e73]: Alice, Bob, Carol, Dave, Eve, Frank, Grace
+      - generic [ref=e75]:
+        - generic:  
+        - generic [ref=e76]:
+          - button "Auto" [ref=e77] [cursor=pointer]:
+            - img [ref=e78]
+            - generic [ref=e80]: Auto
+          - button "Lines..." [ref=e81] [cursor=pointer]
+          - 'button "Mode: O/D" [ref=e82] [cursor=pointer]'
+          - button "Next" [ref=e83] [cursor=pointer]
+        - table [ref=e85]:
+          - rowgroup [ref=e86]:
+            - row "Night Owls 0 1 1" [ref=e87]:
+              - columnheader "Night Owls" [ref=e88]
+              - columnheader "0" [ref=e89]
+              - columnheader "1" [ref=e90]
+              - columnheader "1" [ref=e91]
+            - row "Bad Guys 0 0 1" [ref=e92]:
+              - columnheader "Bad Guys" [ref=e93]
+              - columnheader "0" [ref=e94]
+              - columnheader "0" [ref=e95]
+              - columnheader "1" [ref=e96]
+            - row "Player Game" [ref=e97]:
+              - columnheader "Clear all selected players" [ref=e98] [cursor=pointer]:
+                - img [ref=e99]
+              - columnheader "Player" [ref=e101]
+              - columnheader "Game" [ref=e102] [cursor=pointer]
+              - columnheader [ref=e103]
+              - columnheader [ref=e104]
+              - columnheader [ref=e105]
+          - rowgroup [ref=e106]:
+            - row "1 Alice 00:02 1 2" [ref=e107]:
+              - cell [ref=e108]:
+                - checkbox [checked] [ref=e109] [cursor=pointer]
+              - cell "1 Alice" [ref=e110] [cursor=pointer]:
+                - generic [ref=e111]:
+                  - generic [ref=e112]: "1"
+                  - generic [ref=e113]: Alice
+              - cell "00:02" [ref=e114]
+              - cell "1" [ref=e115]
+              - cell "2" [ref=e116]
+            - row "2 Bob 00:02 1 2" [ref=e117]:
+              - cell [ref=e118]:
+                - checkbox [checked] [ref=e119] [cursor=pointer]
+              - cell "2 Bob" [ref=e120] [cursor=pointer]:
+                - generic [ref=e121]:
+                  - generic [ref=e122]: "2"
+                  - generic [ref=e123]: Bob
+              - cell "00:02" [ref=e124]
+              - cell "1" [ref=e125]
+              - cell "2" [ref=e126]
+            - row "3 Carol 00:02 1 2" [ref=e127]:
+              - cell [ref=e128]:
+                - checkbox [checked] [ref=e129] [cursor=pointer]
+              - cell "3 Carol" [ref=e130] [cursor=pointer]:
+                - generic [ref=e131]:
+                  - generic [ref=e132]: "3"
+                  - generic [ref=e133]: Carol
+              - cell "00:02" [ref=e134]
+              - cell "1" [ref=e135]
+              - cell "2" [ref=e136]
+            - row "4 Dave 00:02 1 2" [ref=e137]:
+              - cell [ref=e138]:
+                - checkbox [checked] [ref=e139] [cursor=pointer]
+              - cell "4 Dave" [ref=e140] [cursor=pointer]:
+                - generic [ref=e141]:
+                  - generic [ref=e142]: "4"
+                  - generic [ref=e143]: Dave
+              - cell "00:02" [ref=e144]
+              - cell "1" [ref=e145]
+              - cell "2" [ref=e146]
+            - row "5 Eve 00:02 1 2" [ref=e147]:
+              - cell [ref=e148]:
+                - checkbox [checked] [ref=e149] [cursor=pointer]
+              - cell "5 Eve" [ref=e150] [cursor=pointer]:
+                - generic [ref=e151]:
+                  - generic [ref=e152]: "5"
+                  - generic [ref=e153]: Eve
+              - cell "00:02" [ref=e154]
+              - cell "1" [ref=e155]
+              - cell "2" [ref=e156]
+            - row "6 Frank 00:02 1 2" [ref=e157]:
+              - cell [ref=e158]:
+                - checkbox [checked] [ref=e159] [cursor=pointer]
+              - cell "6 Frank" [ref=e160] [cursor=pointer]:
+                - generic [ref=e161]:
+                  - generic [ref=e162]: "6"
+                  - generic [ref=e163]: Frank
+              - cell "00:02" [ref=e164]
+              - cell "1" [ref=e165]
+              - cell "2" [ref=e166]
+            - row "7 Grace 00:02 1 2" [ref=e167]:
+              - cell [ref=e168]:
+                - checkbox [checked] [ref=e169] [cursor=pointer]
+              - cell "7 Grace" [ref=e170] [cursor=pointer]:
+                - generic [ref=e171]:
+                  - generic [ref=e172]: "7"
+                  - generic [ref=e173]: Grace
+              - cell "00:02" [ref=e174]
+              - cell "1" [ref=e175]
+              - cell "2" [ref=e176]
+    - generic [ref=e177]:
+      - generic [ref=e179]:
+        - generic [ref=e180]: 
+        - generic [ref=e181]: Night Owls 1 – Bad Guys 1
+      - generic [ref=e184]:
+        - generic [ref=e185]: "App Version: 1.10.0 (Build dev)"
+        - generic [ref=e186]: "Game Summary: Night Owls vs. Bad Guys."
+        - generic [ref=e187]: "Night Owls roster: Alice Bob Carol Dave Eve Frank Grace"
+        - generic [ref=e188]: "Point 1 roster: Alice Bob Carol Dave Eve Frank Grace"
+        - generic [ref=e189]: Bad Guys pulls to Night Owls.
+        - generic [ref=e190]: — Night Owls on offense —
+        - generic [ref=e191]: Alice throws to Bob for the score!
+        - generic [ref=e192]: Night Owls scores!
+        - generic [ref=e193]: "Current score: Night Owls 1, Bad Guys 0"
+        - generic [ref=e194]: "Point 2 roster: Alice Bob Carol Dave Eve Frank Grace"
+        - generic [ref=e195]: Night Owls pulls to Bad Guys.
+        - generic [ref=e196]: — Night Owls on defense —
+        - generic [ref=e197]: Pull by Alice (Good Pull)
+        - generic [ref=e198]: Bad Guys scores!
+        - generic [ref=e199]: "Current score: Night Owls 1, Bad Guys 1"
+```

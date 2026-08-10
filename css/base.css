@@ -112,6 +112,27 @@ th, td {
 }
 
 
+/* Form controls.
+   `color-scheme: dark` (set on :root by css/tokens.css) already makes the UA
+   render these legibly in dark mode, but in its own greys, so fields end up
+   lighter than the panels they sit in. Pinning them to the token surfaces here
+   — at element level, the lowest specificity — means every control in the app
+   matches the palette without each feature stylesheet having to remember, and
+   any component rule that wants something different still wins. */
+input[type="text"], input[type="number"], input[type="email"],
+input[type="password"], input[type="url"], input[type="search"],
+input[type="tel"], input[type="date"], input[type="time"],
+select, textarea {
+    background-color: var(--surface-inset);
+    color: var(--text-primary);
+    border: 1px solid var(--border-default);
+}
+
+::placeholder {
+    color: var(--text-placeholder);
+    opacity: 1;   /* Firefox dims placeholders by default; the token already is dim */
+}
+
 /* Utility classes for JS-generated markup (replaces inline style="" colors) */
 .icon-danger {
     color: var(--color-danger);

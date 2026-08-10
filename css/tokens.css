@@ -165,6 +165,17 @@
     --btn-darker: #212529;
     --btn-darker-hover: #1a1d20;
 
+    /* Translucent washes. A black wash reads as "slightly recessed" on a light
+       surface and as nothing at all on a dark one, so these flip polarity with
+       the theme — unlike the scrims below, which sit OVER content in both. */
+    --wash-subtle: rgba(0, 0, 0, 0.05);
+    --wash: rgba(0, 0, 0, 0.07);
+    --wash-hover: rgba(0, 0, 0, 0.12);
+    --wash-control: rgba(0, 0, 0, 0.35);      /* circular button on the header */
+    --wash-control-hover: rgba(0, 0, 0, 0.5);
+    --ink-faint: rgba(0, 0, 0, 0.25);         /* de-emphasised label */
+    --ink-dim: rgba(0, 0, 0, 0.4);
+
     /* Overlays — scrims sit over content, so they stay dark in both themes */
     --overlay-scrim: rgba(0, 0, 0, 0.5);
     --overlay-scrim-strong: rgba(0, 0, 0, 0.7);
@@ -432,7 +443,8 @@
     --border-muted: #424242;
     --border-default: #4d4d4d;
     --border-strong: #666;
-    --border-contrast: #fff;         /* hard outline flips to white on black */
+    --border-contrast: #dcdcdc;      /* hard outline flips to near-white; pure
+                                        white at 3px glares against a black page */
 
     /* Text — the ramp inverts end for end */
     --black: #000;                   /* unchanged: still literal black */
@@ -451,6 +463,14 @@
     --btn-dark-hover: #414851;
     --btn-darker: #23272b;
     --btn-darker-hover: #2d3237;
+
+    --wash-subtle: rgba(255, 255, 255, 0.05);
+    --wash: rgba(255, 255, 255, 0.07);
+    --wash-hover: rgba(255, 255, 255, 0.12);
+    --wash-control: rgba(255, 255, 255, 0.18);
+    --wash-control-hover: rgba(255, 255, 255, 0.28);
+    --ink-faint: rgba(255, 255, 255, 0.28);
+    --ink-dim: rgba(255, 255, 255, 0.42);
 
     /* Overlays keep their light-mode values — a scrim over content is dark in
        both themes — but the tooltip fill needs a rim to separate from black. */
@@ -492,9 +512,9 @@
     --accent-purple-hover: #5b4bd5;
     --accent-violet: #a78bfa;        /* icon on the page — needs to be an ink */
     --violet-set: #6d28d9;
-    --slate: #46586e;
-    --slate-hover: #55697f;
-    --slate-edge: #5b7089;
+    --slate: #33414f;
+    --slate-hover: #3d4d5e;
+    --slate-edge: #4a5c70;
     --surface-sunken: #2e2e2e;
 
     /* Action-button gradients survive as-is: white labels on saturated fills

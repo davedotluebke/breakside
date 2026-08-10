@@ -13,7 +13,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: var(--overlay-scrim);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -102,7 +102,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: var(--overlay-scrim);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -300,7 +300,7 @@
 
 .management-icons .gender-button.fmp-button {
     background-color: var(--gender-fmp-surface); /* Light purple background */
-    color: var(--gender-fmp); /* Darker purple text - matches FMP player color */
+    color: var(--gender-fmp-ink); /* Darker purple text - matches FMP player color */
     border-color: var(--gender-fmp);
 }
 
@@ -310,7 +310,7 @@
 
 .management-icons .gender-button.mmp-button {
     background-color: var(--gender-mmp-surface); /* Light green background */
-    color: var(--gender-mmp); /* Darker green text - matches MMP player color */
+    color: var(--gender-mmp-ink); /* Darker green text - matches MMP player color */
     border-color: var(--gender-mmp);
 }
 
