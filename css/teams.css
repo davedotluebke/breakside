@@ -560,7 +560,7 @@
 }
 
 .unknown-player {
-    background-color: var(--border-muted);
+    background-color: var(--btn-disabled-bg);
     border: 2px dashed var(--border-strong);
     font-style: italic;
 }

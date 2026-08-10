@@ -282,7 +282,7 @@
     position: absolute;
     cursor: pointer;
     top: 0; left: 0; right: 0; bottom: 0;
-    background-color: var(--border-default);
+    background-color: var(--surface-dim);   /* off-state track */
     transition: 0.2s;
     border-radius: 26px;
 }
