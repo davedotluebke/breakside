@@ -1704,8 +1704,10 @@ async function checkForUpdates() {
 }
 
 /**
- * Start automatic sync polling.
- * Checks for updates every 10 seconds and syncs if needed.
+ * Subscribe to automatic sync polling.
+ *
+ * Doesn't own a timer: the pass below runs on the power manager's shared base
+ * tick, at the Cloud refresh interval (default 10s) as before.
  */
 function startAutoSync() {
     if (autoSyncRunning) {

@@ -977,6 +977,30 @@ Higher-leverage interventions, in roughly priority order:
       plan-driven. The accepted risk (backgrounded Line Coach misses a handoff
       until resume) stands.
 
+- [x] **Stop polling for game state that hasn't changed** *(shipped on branch
+      `polling-opt`, 2026-08-10)* — this is sink (2) above, and it was worse
+      than the ranking assumed: the 3s in-game refresh pulled the **entire
+      game** (every point, every event) 20×/minute regardless of whether
+      anything had changed, on every device including the Active Coach's. It
+      now pulls only when a change stamp says the server's copy moved, and for
+      a coach that stamp rides on the controller ping they were already
+      sending — so an idle game costs **zero** extra requests, measured
+      4-pulls-per-12s → 0. Viewers, who never ping, fall back to a ~30-byte
+      poll instead of a ~6 KB payload. Latency improved too (the ping's stamp
+      change triggers the refresh, so ≤2s instead of ≤3s). Same commit deleted
+      the point-timer loop, which had been redrawing an element removed in Feb
+      2026, and put the four out-of-game polls on one shared tick so they wake
+      the radio together instead of at four unrelated offsets. See
+      ARCHITECTURE.md § Power Management and POLLING_OPTIMIZATION.md.
+
+      Left deliberately undone: backing the **controller ping** off for a solo
+      coach. After the above it is the only remaining in-game request stream
+      (~30/min), and a coach alone in a game is pinging that hard to hold a
+      role nobody contests and detect changes nobody is making — but role
+      expiry, handoff timing and change propagation all hang off that one
+      interval, so it wants a real game's battery report first.
+      POLLING_OPTIMIZATION.md § F4 has the proposal.
+
 - [ ] **Audit Full PBP for persistent repaints / animations**
   - Partly done on branch `battery`: the header timer's danger/negative states no longer pulse `infinite` (they were entered once past a time cap and then ran for the rest of the game), and a global `prefers-reduced-motion` block landed in `css/base.css` — which also covers most of the "Low-power / reduced-motion mode" backlog item above.
   - Still to audit: the mini-log auto-scroll on each event, gradient/box-shadow that triggers full-layer repaints, and the remaining `infinite` pulses (`pendingPulse` on the role-claim button, `pulse` on the teams screen, the narration mic pulses — all of which are at least bounded by a transient state rather than running all game).
@@ -987,6 +1011,12 @@ Higher-leverage interventions, in roughly priority order:
 
 - [ ] **WebSockets for non-Active-Coach in-game sync** — see `### Infrastructure` above
   - Less polling overhead on the secondary devices. Modest savings; only worth it after (1) and (2) above are shipped.
+  - **Weaker case now that (2) has shipped.** The change-stamp gate already
+    removed the full-game pulls a socket would have replaced; what's left is
+    the 2s controller ping, which a socket wouldn't remove so much as convert
+    into a persistent connection with its own keepalive. Worth re-costing
+    against the solo-coach ping backoff (POLLING_OPTIMIZATION.md § F4) before
+    committing to the infrastructure.
 
 - [x] **Instrument before you optimize** *(shipped on branch `battery`,
       2026-08-09 — but not the way this item imagined)*. `navigator.getBattery()`
