@@ -11,7 +11,7 @@ header {
     background-color: var(--white);
     color: var(--text-primary);
     border-bottom: 3px solid var(--brand-orange); /* brand orange accent (replaces full-orange fill) */
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow-sm);
     /* Break out of the body's 5px padding so the white header reaches the
        top/side edges, and fill the iOS safe area (notch/dynamic island) white */
     margin: -5px -5px 0;
@@ -176,7 +176,7 @@ section > .panel-title-bar {
 /* Add back specific button styles */
 .special-action-btn {
     background-color: var(--orange-vivid);
-    color: white;
+    color: var(--white);
 }
 
 
@@ -190,7 +190,7 @@ section > .panel-title-bar {
 
 .secondary-action-btn {
     background-color: var(--blue-action);
-    color: white;
+    color: var(--white);
 }
 
 /* Primary commit action in the Score Attribution dialog. Used when the
@@ -202,7 +202,7 @@ section > .panel-title-bar {
  * this button — it just sits as a visible affordance. */
 .primary-action-btn {
     background-color: var(--green-deep);
-    color: white;
+    color: var(--white);
 }
 .primary-action-btn.inactive,
 .primary-action-btn:disabled {
@@ -225,7 +225,7 @@ section > .panel-title-bar {
     border-radius: 1rem;
     padding: 1rem;
     margin: 2rem auto;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow-sm);
 }
 
 .point-clock {
@@ -236,7 +236,7 @@ section > .panel-title-bar {
     font-weight: bold;
     color: var(--text-primary);
     padding: 0.5rem 1rem;
-    background-color: white;
+    background-color: var(--surface-card);
     border: 1px solid var(--border-default);
     border-radius: 0.5rem;
     margin-right: 1rem;
@@ -255,7 +255,7 @@ section > .panel-title-bar {
     border: none;
     cursor: pointer;
     padding: 1rem;
-    color: white;
+    color: var(--white);
     border-radius: 0.5rem;
     min-width: 100px;
     transition: background-color 0.2s;
@@ -289,9 +289,9 @@ section > .panel-title-bar {
     left: 0;
     width: 100%;
     background-color: var(--brand-orange-soft);
-    color: white;
+    color: var(--white);
     z-index: 100;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    box-shadow: var(--shadow-sm);
     transition: transform 0.3s ease;
 }
 
@@ -308,7 +308,7 @@ section > .panel-title-bar {
     font-size: 0.9rem;
     border-radius: 4px;
     background-color: var(--gray-dark);
-    color: white;
+    color: var(--white);
     border: none;
     margin: 0;
 }
@@ -354,7 +354,7 @@ section > .panel-title-bar {
     max-width: 400px;
     margin-top: 10px;
     background-color: var(--blue-action);
-    color: white;
+    color: var(--white);
 }
 
 

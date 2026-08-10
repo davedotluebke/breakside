@@ -91,7 +91,7 @@
 
 .sub-players-buttons .ge-btn-confirm {
     background: var(--color-success);
-    color: white;
+    color: var(--white);
     border-color: var(--color-success);
 }
 
@@ -161,7 +161,7 @@
     justify-content: space-between;
     gap: 14px;
     padding: 10px 0;
-    border-bottom: 1px solid var(--surface-header-cell);
+    border-bottom: 1px solid var(--border-lighter);
 }
 
 .adv-setting-row:last-child {
@@ -369,7 +369,7 @@
     height: 22px;
     border-radius: 50%;
     background: var(--brand-orange);
-    color: #fff;
+    color: var(--white);
     font-weight: 700;
     font-size: 0.8rem;
     display: flex;

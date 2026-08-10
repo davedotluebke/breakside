@@ -59,7 +59,7 @@
 
 .handoff-circular-btn.accept-btn {
     background: var(--color-primary);
-    color: white;
+    color: var(--white);
     box-shadow: 0 2px 6px var(--color-primary-glow);
 }
 
@@ -70,7 +70,7 @@
 
 .handoff-circular-btn.deny-btn {
     background: var(--color-danger);
-    color: white;
+    color: var(--white);
     box-shadow: 0 2px 6px var(--color-danger-glow);
 }
 
@@ -121,7 +121,7 @@
     gap: 10px;
     padding: 12px 16px;
     border-radius: 10px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--shadow-lg);
     animation: toastSlideDown 0.3s ease-out;
     pointer-events: auto;
     font-size: 0.9rem;
@@ -134,12 +134,12 @@
 
 .toast.toast-success {
     background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%);
-    color: white;
+    color: var(--white);
 }
 
 .toast.toast-info {
     background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info-active) 100%);
-    color: white;
+    color: var(--white);
 }
 
 .toast.toast-warning {
@@ -149,7 +149,7 @@
 
 .toast.toast-error {
     background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-hover) 100%);
-    color: white;
+    color: var(--white);
 }
 
 .toast i {

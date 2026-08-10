@@ -11,7 +11,7 @@
     height: 100dvh; /* Dynamic viewport height for mobile browsers */
     width: 100%;
     overflow: hidden;
-    background: #f4f4f4;
+    background: var(--surface-page);
     position: fixed;
     top: 0;
     left: 0;
@@ -57,7 +57,7 @@ body.game-screen-active header {
 .game-panel {
     display: flex;
     flex-direction: column;
-    background: #fff;
+    background: var(--surface-card);
     overflow: hidden;
     min-height: 0;
     transition: height 0.25s ease-out, flex 0.25s ease-out;
@@ -91,8 +91,8 @@ body.game-screen-active header {
     align-items: center;
     justify-content: flex-start; /* Left-align content to make room for subtitle */
     padding: 4px 36px 4px 8px; /* 8px left, 36px right for expand button (28px btn + 6px gap + 2px margin) */
-    background: linear-gradient(135deg, #5a6f8a 0%, #475a72 100%);
-    border-bottom: 1px solid #3d4f65;
+    background: linear-gradient(135deg, var(--slate) 0%, var(--slate-hover) 100%);
+    border-bottom: 1px solid var(--slate-edge);
     cursor: default;
     user-select: none;
     min-height: 28px;
@@ -124,14 +124,14 @@ body.game-screen-active header {
 }
 
 .panel-title-bar.draggable:hover .panel-grip-icon {
-    color: #fff;
+    color: var(--white);
 }
 
 /* Panel title text */
 .panel-title {
     font-weight: 600;
     font-size: 0.9rem;
-    color: #fff;
+    color: var(--white);
     white-space: nowrap;
     flex-shrink: 0;
 }
@@ -167,10 +167,10 @@ body.game-screen-active header {
     height: 28px;
     padding: 0;
     margin: 0;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-default);
     border-radius: 4px;
-    background: #fff;
-    color: #666;
+    background: var(--surface-card);
+    color: var(--text-muted);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -180,15 +180,15 @@ body.game-screen-active header {
 }
 
 .panel-action-btn:hover {
-    background: #f0f0f0;
-    border-color: #999;
-    color: #333;
+    background: var(--surface-light);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
 }
 
 .panel-action-btn.active {
-    background: #007bff;
-    border-color: #007bff;
-    color: #fff;
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--white);
 }
 
 .panel-action-btn i {
@@ -210,7 +210,7 @@ body.game-screen-active header {
     gap: 6px;
     padding: 6px 12px;
     font-size: 0.85rem;
-    color: #666;
+    color: var(--text-muted);
 }
 
 /* =============================================================================
@@ -248,11 +248,11 @@ body.game-screen-active header {
 
 .panel-stub-icon {
     font-size: 2rem;
-    color: #aaa;
+    color: var(--text-disabled);
 }
 
 .panel-stub-text {
-    color: #666;
+    color: var(--text-muted);
     font-size: 0.9rem;
 }
 
@@ -261,8 +261,8 @@ body.game-screen-active header {
     align-items: center;
     gap: 8px;
     padding: 10px 20px;
-    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
-    color: #fff;
+    background: linear-gradient(135deg, var(--color-secondary) 0%, var(--btn-dark) 100%);
+    color: var(--white);
     border: none;
     border-radius: 6px;
     font-size: 0.9rem;
@@ -273,7 +273,7 @@ body.game-screen-active header {
 }
 
 .panel-stub-action:hover {
-    background: linear-gradient(135deg, #5a6268 0%, #343a40 100%);
+    background: linear-gradient(135deg, var(--color-secondary-hover) 0%, var(--btn-dark-hover) 100%);
     transform: translateY(-1px);
 }
 
@@ -287,9 +287,9 @@ body.game-screen-active header {
 
 .panel-header {
     flex: 0 0 auto;
-    background: #fff;
-    color: #333;
-    border-bottom: 3px solid #EB8232; /* brand orange accent — matches main header */
+    background: var(--surface-card);
+    color: var(--text-primary);
+    border-bottom: 3px solid var(--brand-orange); /* brand orange accent — matches main header */
     position: relative;
     /* Fill the iOS safe area (notch/dynamic island) white */
     padding-top: env(safe-area-inset-top, 0);
@@ -334,7 +334,7 @@ body.game-screen-active header {
     background: rgba(0,0,0,0.06);
     border: none;
     border-radius: 6px;
-    color: #4a4a4a;
+    color: var(--text-secondary);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -358,9 +358,9 @@ body.game-screen-active header {
     top: auto;
     left: 12px;
     margin-top: 4px;
-    background: #fff;
+    background: var(--surface-card);
     border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--shadow-lg);
     min-width: 180px;
     z-index: 9999;
     opacity: 0;
@@ -384,7 +384,7 @@ body.game-screen-active header {
     background: none;
     border: none;
     font-size: 0.95rem;
-    color: #333;
+    color: var(--text-primary);
     cursor: pointer;
     text-align: left;
     transition: background 0.15s;
@@ -399,11 +399,11 @@ body.game-screen-active header {
 }
 
 .header-menu-dropdown .menu-item:hover {
-    background: #f0f0f0;
+    background: var(--surface-light);
 }
 
 .header-menu-dropdown .menu-item:disabled {
-    color: #999;
+    color: var(--text-placeholder);
     cursor: not-allowed;
 }
 
@@ -414,28 +414,28 @@ body.game-screen-active header {
 .header-menu-dropdown .menu-item i {
     width: 18px;
     text-align: center;
-    color: #666;
+    color: var(--text-muted);
 }
 
 .header-menu-dropdown .menu-item-danger {
-    color: #dc3545;
+    color: var(--color-danger-ink);
 }
 
 .header-menu-dropdown .menu-item-danger i {
-    color: #dc3545;
+    color: var(--color-danger-ink);
 }
 
 .header-menu-dropdown .menu-item-danger:disabled {
-    color: #e9a0a7;
+    color: var(--color-danger-disabled);
 }
 
 .header-menu-dropdown .menu-item-danger:disabled i {
-    color: #e9a0a7;
+    color: var(--color-danger-disabled);
 }
 
 .header-menu-dropdown .menu-divider {
     height: 1px;
-    background: #e0e0e0;
+    background: var(--surface-dim);
     margin: 4px 0;
 }
 
@@ -457,7 +457,7 @@ body.game-screen-active header {
     left: 50%;
     transform: translate(-50%, -50%);
     background: rgba(0, 0, 0, 0.85);
-    color: #fff;
+    color: var(--white);
     padding: 4px 8px;
     border-radius: 4px;
     font-size: 0.7rem;
@@ -491,7 +491,7 @@ body.game-screen-active header {
 }
 
 .header-score-us {
-    color: #222;
+    color: var(--text-strong);
 }
 
 .header-score-separator {
@@ -501,7 +501,7 @@ body.game-screen-active header {
 }
 
 .header-score-them {
-    color: #555;
+    color: var(--text-secondary);
 }
 
 /* Team identity containers */
@@ -533,7 +533,7 @@ body.game-screen-active header {
 .team-identity-text {
     font-size: 0.7rem;
     font-weight: 600;
-    color: #444;
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -560,7 +560,7 @@ body.game-screen-active header {
 .team-identity-symbol-large {
     font-size: 1rem;
     font-weight: 700;
-    color: #333;
+    color: var(--text-primary);
     text-transform: uppercase;
     letter-spacing: 1px;
     font-family: 'JetBrains Mono', monospace;
@@ -583,13 +583,13 @@ body.game-screen-active header {
     font-family: 'JetBrains Mono', monospace;
     font-size: 1rem;
     font-weight: 700;
-    color: #222;
+    color: var(--text-strong);
     transition: color 0.3s;
 }
 
 .header-timer-label {
     font-size: 0.6rem;
-    color: #888;
+    color: var(--text-faint);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -607,7 +607,7 @@ body.game-screen-active header {
     border: none;
     border-radius: 50%;
     background: rgba(0,0,0,0.35);
-    color: #fff;
+    color: var(--white);
     cursor: pointer;
     display: none; /* Hidden by default, shown for point timer */
     align-items: center;
@@ -626,16 +626,16 @@ body.game-screen-active header {
 
 /* Timer state colors (tuned for the white header) */
 .header-timer-value.timer-warning {
-    color: #E08600;
+    color: var(--timer-warning);
 }
 
 .header-timer-value.timer-danger {
-    color: #e53935;
+    color: var(--timer-danger);
     animation: timerPulse 1s infinite;
 }
 
 .header-timer-value.timer-negative {
-    color: #d32f2f;
+    color: var(--timer-negative);
     animation: timerPulse 0.5s infinite;
 }
 
@@ -654,7 +654,7 @@ body.game-screen-active header {
 
 .panel-role-buttons {
     flex: 0 0 auto;
-    background: #f4f4f4;
+    background: var(--surface-page);
 }
 
 .panel-role-buttons .panel-title-bar {
@@ -676,16 +676,16 @@ body.game-screen-active header {
     padding: 6px 12px;
     margin: 0;
     border-radius: 6px;
-    border: 2px solid #ccc;
-    background: #e8e8e8;
-    color: #444;
+    border: 2px solid var(--border-default);
+    background: var(--surface-raised);
+    color: var(--text-primary);
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .role-claim-btn:hover {
-    background: #ddd;
-    border-color: #aaa;
+    background: var(--surface-dim);
+    border-color: var(--border-strong);
 }
 
 /* Spectating badge for viewers */
@@ -698,7 +698,7 @@ body.game-screen-active header {
     padding: 8px;
     font-size: 0.9rem;
     font-weight: 600;
-    color: #6c757d;
+    color: var(--text-muted);
     letter-spacing: 0.5px;
 }
 
@@ -708,9 +708,9 @@ body.game-screen-active header {
 
 /* Watch button in team selection */
 .game-watch-btn {
-    background: #6c757d;
-    color: white;
-    border-color: #6c757d;
+    background: var(--color-secondary);
+    color: var(--white);
+    border-color: var(--color-secondary);
 }
 
 .role-claim-label {
@@ -723,7 +723,7 @@ body.game-screen-active header {
 
 .role-claim-holder {
     font-size: 0.7rem;
-    color: #666;
+    color: var(--text-muted);
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -733,9 +733,9 @@ body.game-screen-active header {
 
 /* Role button states - green when YOU have the role */
 .role-claim-btn.has-role {
-    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
-    border-color: #28a745;
-    color: white;
+    background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%);
+    border-color: var(--color-success);
+    color: var(--white);
     box-shadow: 0 2px 6px rgba(40, 167, 69, 0.35);
 }
 
@@ -746,33 +746,33 @@ body.game-screen-active header {
 
 /* When someone else has the role - light orange */
 .role-claim-btn.other-has-role {
-    background: linear-gradient(135deg, #fde8d4 0%, #f8dcc4 100%);
-    border-color: #e8a86e;
-    color: #8b5a2b;
+    background: linear-gradient(135deg, var(--role-other-surface) 0%, var(--role-other-surface-deep) 100%);
+    border-color: var(--color-warning-border);
+    color: var(--role-other-text);
 }
 
 .role-claim-btn.other-has-role .role-claim-holder {
-    color: #a0522d;
+    color: var(--role-other-holder);
     font-weight: 500;
 }
 
 /* Role is available/unclaimed - grey, claimable */
 .role-claim-btn.role-available {
-    background: linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%);
-    border-color: #999;
-    color: #666;
+    background: linear-gradient(135deg, var(--surface-light) 0%, var(--surface-dim) 100%);
+    border-color: var(--border-strong);
+    color: var(--text-muted);
 }
 
 .role-claim-btn.role-available .role-claim-holder {
-    color: #888;
+    color: var(--text-faint);
     font-weight: 400;
 }
 
 /* Pending handoff request animation */
 .role-claim-btn.pending-handoff {
     animation: pendingPulse 1.5s infinite;
-    border-color: #ffc107;
-    background: #fff3cd;
+    border-color: var(--color-warning);
+    background: var(--color-warning-surface);
 }
 
 /* =============================================================================
@@ -780,7 +780,7 @@ body.game-screen-active header {
    ============================================================================= */
 
 .panel-playByPlay {
-    background: #fff;
+    background: var(--surface-card);
     flex: 0 0 auto;
     /* min-height controlled by JS during drag, not CSS */
     /* This allows chevron minimize to collapse to title bar only */
@@ -1206,35 +1206,35 @@ body.game-screen-active header {
 
 /* We Score - green */
 .pbp-btn-us {
-    background: linear-gradient(135deg, #4CAF50 0%, #43A047 100%);
-    color: #fff;
+    background: linear-gradient(135deg, var(--green-bright) 0%, var(--green-bright-deep) 100%);
+    color: var(--white);
     box-shadow: 0 3px 8px rgba(76, 175, 80, 0.3);
 }
 
 .pbp-btn-us:hover:not(:disabled) {
-    background: linear-gradient(135deg, #43A047 0%, #388E3C 100%);
+    background: linear-gradient(135deg, var(--green-bright-deep) 0%, var(--green-bright-deeper) 100%);
 }
 
 /* They Score - red */
 .pbp-btn-them {
-    background: linear-gradient(135deg, #EF5350 0%, #E53935 100%);
-    color: #fff;
+    background: linear-gradient(135deg, var(--red-soft) 0%, var(--red-soft-deep) 100%);
+    color: var(--white);
     box-shadow: 0 3px 8px rgba(239, 83, 80, 0.3);
 }
 
 .pbp-btn-them:hover:not(:disabled) {
-    background: linear-gradient(135deg, #E53935 0%, #D32F2F 100%);
+    background: linear-gradient(135deg, var(--red-soft-deep) 0%, var(--red-soft-deeper) 100%);
 }
 
 /* Key Play button - blue */
 .pbp-btn-keyplay {
-    background: linear-gradient(135deg, #2196F3 0%, #1E88E5 100%);
-    color: #fff;
+    background: linear-gradient(135deg, var(--blue-vivid) 0%, var(--blue-vivid-deep) 100%);
+    color: var(--white);
     box-shadow: 0 2px 6px rgba(33, 150, 243, 0.3);
 }
 
 .pbp-btn-keyplay:hover:not(:disabled) {
-    background: linear-gradient(135deg, #1E88E5 0%, #1976D2 100%);
+    background: linear-gradient(135deg, var(--blue-vivid-deep) 0%, var(--blue-vivid-deeper) 100%);
 }
 
 /* More button (...) - gray */
@@ -1242,35 +1242,35 @@ body.game-screen-active header {
     flex: 0 0 40px;
     width: 40px;
     padding: 10px;
-    background: linear-gradient(135deg, #78909C 0%, #607D8B 100%);
-    color: #fff;
+    background: linear-gradient(135deg, var(--bluegray) 0%, var(--bluegray-deep) 100%);
+    color: var(--white);
 }
 
 .pbp-btn-more:hover:not(:disabled) {
-    background: linear-gradient(135deg, #607D8B 0%, #546E7A 100%);
+    background: linear-gradient(135deg, var(--bluegray-deep) 0%, var(--bluegray-deeper) 100%);
 }
 
 .pbp-btn-more.active {
-    background: linear-gradient(135deg, #546E7A 0%, #455A64 100%);
+    background: linear-gradient(135deg, var(--bluegray-deeper) 0%, var(--bluegray-deepest) 100%);
 }
 
 /* Action buttons in expanded row */
 .pbp-btn-action {
     flex: 1;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    color: #495057;
-    border: 1px solid #dee2e6;
+    background: linear-gradient(135deg, var(--surface-subtle) 0%, var(--surface-hover) 100%);
+    color: var(--ink-700);
+    border: 1px solid var(--border-soft);
     padding: 8px 10px;
     font-size: 0.85rem;
 }
 
 .pbp-btn-action:hover:not(:disabled) {
-    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
-    border-color: #ced4da;
+    background: linear-gradient(135deg, var(--surface-hover) 0%, var(--surface-sunken) 100%);
+    border-color: var(--border-muted);
 }
 
 .pbp-btn-action i {
-    color: #6c757d;
+    color: var(--text-muted);
 }
 
 /* =============================================================================
@@ -1291,9 +1291,9 @@ body.game-screen-active header {
     transition: all 0.15s ease;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); /* Neutral gray - same as Select Line */
-    color: #fff;
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+    background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-secondary-hover) 100%); /* Neutral gray - same as Select Line */
+    color: var(--white);
+    box-shadow: var(--shadow-md);
 }
 
 .pbp-start-point-btn:active {
@@ -1302,22 +1302,22 @@ body.game-screen-active header {
 
 /* Feedback colors for Start Point button - MUST match Select Line panel colors exactly */
 .pbp-start-point-btn.feedback-ok {
-    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%);
     box-shadow: 0 3px 8px rgba(40, 167, 69, 0.3);
 }
 
 .pbp-start-point-btn.feedback-count-warning {
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-hover) 100%);
     box-shadow: 0 3px 8px rgba(220, 53, 69, 0.3);
 }
 
 .pbp-start-point-btn.feedback-gender-warning {
-    background: linear-gradient(135deg, #ff8800 0%, #e67700 100%);
+    background: linear-gradient(135deg, var(--orange-alert) 0%, var(--orange-alert-deep) 100%);
     box-shadow: 0 3px 8px rgba(255, 136, 0, 0.3);
 }
 
 .pbp-start-point-btn.inactive {
-    background: linear-gradient(135deg, #adb5bd 0%, #868e96 100%);
+    background: linear-gradient(135deg, var(--muted-gray) 0%, var(--muted-gray-deep) 100%);
     opacity: 0.7;
 }
 
@@ -1328,17 +1328,17 @@ body.game-screen-active header {
  * selectors are more specific than `.inactive` alone, so they win
  * regardless of source order. */
 .pbp-start-point-btn.inactive.feedback-ok {
-    background: linear-gradient(135deg, #6fae7d 0%, #5e9669 100%); /* desaturated green */
+    background: linear-gradient(135deg, var(--muted-green) 0%, var(--muted-green-deep) 100%); /* desaturated green */
     box-shadow: 0 3px 8px rgba(40, 167, 69, 0.18);
     opacity: 0.85;
 }
 .pbp-start-point-btn.inactive.feedback-count-warning {
-    background: linear-gradient(135deg, #b97a82 0%, #a56870 100%); /* desaturated red */
+    background: linear-gradient(135deg, var(--muted-red) 0%, var(--muted-red-deep) 100%); /* desaturated red */
     box-shadow: 0 3px 8px rgba(220, 53, 69, 0.18);
     opacity: 0.85;
 }
 .pbp-start-point-btn.inactive.feedback-gender-warning {
-    background: linear-gradient(135deg, #d29a55 0%, #b8843e 100%); /* desaturated orange */
+    background: linear-gradient(135deg, var(--muted-orange) 0%, var(--muted-orange-deep) 100%); /* desaturated orange */
     box-shadow: 0 3px 8px rgba(255, 136, 0, 0.18);
     opacity: 0.85;
 }
@@ -1394,19 +1394,19 @@ body.game-screen-active header {
  * appearance with a desaturated blue (white text on muted blue stays
  * legible, unlike grey-on-grey which collides with the white label). */
 .pbp-start-point-btn.line-tab-lineup-ready-btn {
-    background: linear-gradient(135deg, #007bff 0%, #0069d9 100%);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
     box-shadow: 0 3px 8px rgba(0, 123, 255, 0.3);
 }
 
 .pbp-start-point-btn.line-tab-lineup-ready-btn.inactive {
     /* Desaturated blue (#007bff → #6c8ab0): same hue, lower chroma. */
-    background: linear-gradient(135deg, #6c8ab0 0%, #5a7595 100%);
+    background: linear-gradient(135deg, var(--muted-blue) 0%, var(--muted-blue-deep) 100%);
     box-shadow: 0 3px 8px rgba(108, 138, 176, 0.25);
     opacity: 0.85;
 }
 
 .pbp-start-point-btn.line-tab-lineup-ready-btn.sent {
-    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%);
     box-shadow: 0 3px 8px rgba(40, 167, 69, 0.3);
 }
 
@@ -1428,12 +1428,12 @@ body.game-screen-active header {
 }
 
 .game-events-modal-content {
-    background: #fff;
+    background: var(--surface-card);
     border-radius: 12px;
     padding: 20px;
     width: 90%;
     max-width: 360px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow-xl);
 }
 
 .game-events-buttons {
@@ -1455,7 +1455,7 @@ body.game-screen-active header {
     border-radius: 10px;
     font-size: 0.9rem;
     font-weight: 600;
-    color: #fff;
+    color: var(--white);
     cursor: pointer;
     transition: all 0.15s ease;
 }
@@ -1476,59 +1476,59 @@ body.game-screen-active header {
 
 /* Timeout - blue (available anytime) */
 .ge-btn-timeout {
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-active) 100%);
 }
 
 .ge-btn-timeout:hover:not(:disabled) {
-    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+    background: linear-gradient(135deg, var(--color-primary-active) 0%, var(--color-primary-deep) 100%);
 }
 
 /* Injury Sub - amber */
 .ge-btn-injurysub {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    background: linear-gradient(135deg, var(--amber-btn) 0%, var(--amber-btn-deep) 100%);
 }
 
 /* .disabled excluded too: Injury Sub uses class-only disabling (stays
    clickable so the tap can toast an explanation) and shouldn't light up. */
 .ge-btn-injurysub:hover:not(:disabled):not(.disabled) {
-    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+    background: linear-gradient(135deg, var(--amber-btn-deep) 0%, var(--amber-btn-deeper) 100%);
 }
 
 /* Half Time - purple */
 .ge-btn-halftime {
-    background: linear-gradient(135deg, #6f42c1 0%, #5a32a3 100%);
+    background: linear-gradient(135deg, var(--violet-btn) 0%, var(--violet-btn-deep) 100%);
 }
 
 .ge-btn-halftime:hover:not(:disabled) {
-    background: linear-gradient(135deg, #5a32a3 0%, #4a2885 100%);
+    background: linear-gradient(135deg, var(--violet-btn-deep) 0%, var(--violet-btn-deeper) 100%);
 }
 
 /* Switch Sides - teal */
 .ge-btn-switch {
-    background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+    background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info-hover) 100%);
 }
 
 .ge-btn-switch:hover:not(:disabled) {
-    background: linear-gradient(135deg, #138496 0%, #117a8b 100%);
+    background: linear-gradient(135deg, var(--color-info-hover) 0%, var(--color-info-active) 100%);
 }
 
 /* Correct Lineup - green (mid-point fix-it, pairs with amber Injury Sub) */
 .ge-btn-correctlineup {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    background: linear-gradient(135deg, var(--emerald-btn) 0%, var(--emerald-btn-deep) 100%);
 }
 
 /* .disabled excluded too: class-only disabling, same as Injury Sub. */
 .ge-btn-correctlineup:hover:not(:disabled):not(.disabled) {
-    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    background: linear-gradient(135deg, var(--emerald-btn-deep) 0%, var(--emerald-btn-deeper) 100%);
 }
 
 /* End Game - dark/warning */
 .ge-btn-endgame {
-    background: linear-gradient(135deg, #343a40 0%, #212529 100%);
+    background: linear-gradient(135deg, var(--btn-dark-hover) 0%, var(--btn-darker) 100%);
 }
 
 .ge-btn-endgame:hover:not(:disabled) {
-    background: linear-gradient(135deg, #212529 0%, #1a1d20 100%);
+    background: linear-gradient(135deg, var(--btn-darker) 0%, var(--btn-darker-hover) 100%);
 }
 
 /* "Who called timeout?" follow-up modal: three choices in one row */
@@ -1699,7 +1699,7 @@ body.game-screen-active header {
    ============================================================================= */
 
 .panel-selectLine {
-    background: #fff;
+    background: var(--surface-card);
 }
 
 
@@ -1738,7 +1738,7 @@ body.game-screen-active header {
 .select-line-lc-viewing {
     font-size: 0.78rem;
     font-style: italic;
-    color: #666;
+    color: var(--text-muted);
     padding: 0 12px 2px 12px;
     flex-shrink: 0;
     white-space: nowrap;
@@ -1760,9 +1760,9 @@ body.game-screen-active header {
     padding: 2px 8px;
     font-size: 0.8rem;
     font-weight: 500;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    color: #495057;
-    border: 1px solid #dee2e6;
+    background: linear-gradient(135deg, var(--surface-subtle) 0%, var(--surface-hover) 100%);
+    color: var(--ink-700);
+    border: 1px solid var(--border-soft);
     border-radius: 4px;
     cursor: pointer;
     margin: 0;
@@ -1771,7 +1771,7 @@ body.game-screen-active header {
 }
 
 .select-line-action-btn:hover {
-    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    background: linear-gradient(135deg, var(--surface-hover) 0%, var(--surface-sunken) 100%);
 }
 
 .select-line-action-icon {
@@ -1784,7 +1784,7 @@ body.game-screen-active header {
 /* Accent the Auto bolt so it stands out from the neutral Wholesale icon */
 #panelAutoBtn .select-line-action-icon,
 #subAutoBtn .select-line-action-icon {
-    color: #7c3aed;
+    color: var(--accent-violet);
 }
 
 .panel-selectLine.readonly .select-line-action-btn {
@@ -1804,9 +1804,9 @@ body.game-screen-active header {
     padding: 2px 10px;
     font-size: 0.8rem;
     font-weight: 500;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    color: #495057;
-    border: 1px solid #dee2e6;
+    background: linear-gradient(135deg, var(--surface-subtle) 0%, var(--surface-hover) 100%);
+    color: var(--ink-700);
+    border: 1px solid var(--border-soft);
     border-radius: 4px;
     cursor: pointer;
     margin: 0;
@@ -1815,7 +1815,7 @@ body.game-screen-active header {
 }
 
 .select-line-mode-btn:hover {
-    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    background: linear-gradient(135deg, var(--surface-hover) 0%, var(--surface-sunken) 100%);
 }
 
 .panel-selectLine.readonly .select-line-mode-btn {
@@ -1826,10 +1826,10 @@ body.game-screen-active header {
 /* "Mode:" popup menu — two choices (O/D combined, O&D separate), each with a
    one-line explanation. Appended to <body>, fixed-positioned under the button. */
 .line-mode-menu {
-    background: #fff;
-    border: 1px solid #ced4da;
+    background: var(--surface-card);
+    border: 1px solid var(--border-muted);
     border-radius: 6px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    box-shadow: var(--shadow-lg);
     overflow: hidden;
     min-width: 190px;
     z-index: 10000;
@@ -1843,9 +1843,9 @@ body.game-screen-active header {
     width: 100%;
     margin: 0; /* override the global `button { margin: 10px }` */
     padding: 9px 14px;
-    background: #fff;
+    background: var(--surface-card);
     border: none;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--border-lighter);
     text-align: left;
     cursor: pointer;
 }
@@ -1855,22 +1855,22 @@ body.game-screen-active header {
 }
 
 .line-mode-option:hover {
-    background: #f1f3f5;
+    background: var(--surface-light);
 }
 
 .line-mode-option.selected {
-    background: #e7f1ff;
+    background: var(--color-primary-surface);
 }
 
 .line-mode-option-title {
     font-weight: 600;
     font-size: 0.9rem;
-    color: #212529;
+    color: var(--text-strong);
 }
 
 .line-mode-option-desc {
     font-size: 0.78rem;
-    color: #6c757d;
+    color: var(--text-muted);
 }
 
 /* Collapse: the toolbar is roomy now (Wholesale + stats toggle moved into the
@@ -1885,7 +1885,7 @@ body.game-screen-active header {
 
 .select-line-stats-toggle {
     font-size: 0.8rem;
-    color: #007bff;
+    color: var(--color-primary-ink);
     cursor: pointer;
     user-select: none;
 }
@@ -1898,8 +1898,8 @@ body.game-screen-active header {
     padding: 2px 8px;
     font-size: 0.8rem;
     font-weight: 600;
-    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
-    color: #fff;
+    background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-secondary-hover) 100%);
+    color: var(--white);
     border: none;
     border-radius: 4px;
     cursor: pointer;
@@ -1908,15 +1908,15 @@ body.game-screen-active header {
 }
 
 .select-line-od-toggle:hover {
-    background: linear-gradient(135deg, #5a6268 0%, #495057 100%);
+    background: linear-gradient(135deg, var(--color-secondary-hover) 0%, var(--btn-dark) 100%);
 }
 
 .select-line-od-toggle.active-o {
-    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%);
 }
 
 .select-line-od-toggle.active-d {
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-hover) 100%);
 }
 
 
@@ -1924,9 +1924,9 @@ body.game-screen-active header {
     padding: 2px 8px;
     font-size: 0.8rem;
     font-weight: 500;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    color: #495057;
-    border: 1px solid #dee2e6;
+    background: linear-gradient(135deg, var(--surface-subtle) 0%, var(--surface-hover) 100%);
+    color: var(--ink-700);
+    border: 1px solid var(--border-soft);
     border-radius: 4px;
     cursor: pointer;
     margin: 0;
@@ -1934,7 +1934,7 @@ body.game-screen-active header {
 }
 
 .select-line-lines-btn:hover {
-    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    background: linear-gradient(135deg, var(--surface-hover) 0%, var(--surface-sunken) 100%);
 }
 
 /* Gender ratio badge */
@@ -1949,24 +1949,24 @@ body.game-screen-active header {
 
 .select-line-gender-badge.gender-badge-fmp {
     background: rgba(156, 39, 176, 0.15);
-    color: #9c27b0;
+    color: var(--badge-fmp);
 }
 
 .select-line-gender-badge.gender-badge-mmp {
     background: rgba(25, 118, 210, 0.15);
-    color: #1976d2;
+    color: var(--badge-mmp);
 }
 
 .select-line-gender-badge.gender-badge-neutral {
-    background: #f0f0f0;
-    color: #666;
+    background: var(--surface-light);
+    color: var(--text-muted);
 }
 
 /* Starting ratio selection (only shown when alternating + no starting ratio set) */
 .select-line-starting-ratio {
     font-size: 0.85rem;
     padding: 4px 8px;
-    background: #fff3cd;
+    background: var(--color-warning-surface);
     border-radius: 4px;
     flex-shrink: 0;
 }
@@ -1984,9 +1984,9 @@ body.game-screen-active header {
     flex: 1;
     overflow: auto;
     min-height: 0;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--border-soft);
     border-radius: 4px;
-    background: #fff;
+    background: var(--surface-card);
 }
 
 /* Panel player table */
@@ -2000,7 +2000,7 @@ body.game-screen-active header {
 .panel-player-table td {
     padding: 6px 8px;
     text-align: left;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--border-lighter);
     white-space: nowrap;
 }
 
@@ -2010,7 +2010,7 @@ body.game-screen-active header {
 }
 
 .panel-player-table th {
-    background: #f8f9fa;
+    background: var(--surface-subtle);
     font-weight: 600;
     font-size: 0.75rem;
 }
@@ -2020,7 +2020,7 @@ body.game-screen-active header {
    !important beats the #fafafa the id-scoped sticky-column rules below put on
    the sticky checkbox/name/time cells, so the whole band reads as one colour. */
 .panel-player-table .select-line-controls-row th {
-    background: #e4e7ea !important;
+    background: var(--surface-hover) !important;
     font-weight: 600;
     font-size: 0.75rem;
     /* Normal UI font: these are labels, not the monospace/italic time readouts
@@ -2030,7 +2030,7 @@ body.game-screen-active header {
     /* Double-thick rule to firmly separate the header band from the players.
        !important beats the `border: none` the id-scoped sticky-column rules
        below put on the sticky checkbox/name/time cells. */
-    border-bottom: 3px solid #868e96 !important;
+    border-bottom: 3px solid var(--border-strong) !important;
 }
 
 .panel-player-table .select-line-controls-row th .select-line-stats-toggle {
@@ -2046,7 +2046,7 @@ body.game-screen-active header {
 
 .panel-player-table .select-line-th-wholesale {
     cursor: pointer;
-    color: #495057;
+    color: var(--ink-700);
 }
 
 .panel-player-table .select-line-th-wholesale .select-line-action-icon {
@@ -2111,22 +2111,22 @@ body.game-screen-active header {
     padding: 2px 4px;
     border-radius: 4px;
     letter-spacing: 0.3px;
-    color: #fff;
+    color: var(--white);
 }
 
-.role-tag--handler { background-color: #d8ccf0; color: #4a2f7a; }
-.role-tag--cutter  { background-color: #f7d9bd; color: #8a4a12; }
+.role-tag--handler { background-color: var(--role-handler-surface); color: var(--role-handler-text); }
+.role-tag--cutter  { background-color: var(--role-cutter-surface); color: var(--role-cutter-text); }
 .role-tag--hybrid  {
-    background: linear-gradient(105deg, #d8ccf0 0 50%, #f7d9bd 50% 100%);
-    color: #40355c;
+    background: linear-gradient(105deg, var(--role-handler-surface) 0 50%, var(--role-cutter-surface) 50% 100%);
+    color: var(--role-hybrid-text);
 }
-.role-tag--line-o { background: linear-gradient(135deg, #28a745 0%, #218838 100%); }
-.role-tag--line-d { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); }
+.role-tag--line-o { background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%); }
+.role-tag--line-d { background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-hover) 100%); }
 
 .panel-player-table .active-time-column {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.75rem;
-    color: #6c757d;
+    color: var(--text-muted);
 }
 
 /* Sticky checkbox/name/time columns + merged score-row header cells on the
@@ -2144,8 +2144,8 @@ body.game-screen-active header {
     position: sticky;
     left: 0;
     z-index: 4;
-    background-color: #fafafa;
-    box-shadow: inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
+    background-color: var(--surface-sticky);
+    box-shadow: inset -2px 0 0 0 var(--table-sticky-edge), inset 1px 0 0 0 var(--table-sticky-edge-soft), inset 0 -1px 0 0 var(--table-sticky-edge-soft);
     border: none;
     touch-action: pan-y;
 }
@@ -2153,8 +2153,8 @@ body.game-screen-active header {
     position: sticky;
     left: 30px; /* overwritten dynamically to the measured checkbox width */
     z-index: 3;
-    background-color: #fafafa;
-    box-shadow: inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey;
+    background-color: var(--surface-sticky);
+    box-shadow: inset -2px 0 0 0 var(--table-sticky-edge), inset 0 -1px 0 0 var(--table-sticky-edge-soft);
     border: none;
     touch-action: pan-y;
 }
@@ -2162,8 +2162,8 @@ body.game-screen-active header {
     position: sticky;
     left: 140px; /* overwritten dynamically to checkbox + name width */
     z-index: 3;
-    background-color: #fafafa;
-    box-shadow: inset -2px 0 0 0 #888, inset 0 -1px 0 0 grey;
+    background-color: var(--surface-sticky);
+    box-shadow: inset -2px 0 0 0 var(--table-sticky-edge), inset 0 -1px 0 0 var(--table-sticky-edge-soft);
     border: none;
     touch-action: pan-y;
 }
@@ -2171,8 +2171,8 @@ body.game-screen-active header {
     position: sticky;
     left: 0;
     z-index: 5;
-    background-color: #fafafa;
-    box-shadow: inset -2px 0 0 0 #888, inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
+    background-color: var(--surface-sticky);
+    box-shadow: inset -2px 0 0 0 var(--table-sticky-edge), inset 1px 0 0 0 var(--table-sticky-edge-soft), inset 0 -1px 0 0 var(--table-sticky-edge-soft);
     border: none;
     touch-action: pan-y;
 }
@@ -2219,13 +2219,16 @@ body.game-screen-active header {
     text-align: center;
 }
 
-/* Gender color coding */
+/* Gender color coding. Inert in practice — css/tables.css sets .player-fmp /
+   .player-mmp with !important so the whole app agrees on one pair of player
+   colors — but kept aligned with those tokens so it stays correct if that
+   !important is ever dropped. */
 .panel-player-table .player-fmp {
-    color: #9c27b0;
+    color: var(--gender-fmp-ink);
 }
 
 .panel-player-table .player-mmp {
-    color: #1976d2;
+    color: var(--gender-mmp-ink);
 }
 
 /* Score cell gender ratio colors */
@@ -2260,7 +2263,7 @@ body.game-screen-active header {
 
 .readonly-badge {
     background: rgba(0, 0, 0, 0.6);
-    color: #fff;
+    color: var(--white);
     padding: 6px 14px;
     border-radius: 16px;
     font-size: 0.8rem;
@@ -2322,7 +2325,7 @@ body.game-screen-active header {
    ============================================================================= */
 
 .panel-game-events {
-    background: #fff;
+    background: var(--surface-card);
 }
 
 
@@ -2331,7 +2334,7 @@ body.game-screen-active header {
    ============================================================================= */
 
 .panel-follow {
-    background: #fff;
+    background: var(--surface-card);
     /* Follow panel's flex is controlled by JS based on state */
     min-height: 80px;
 }
@@ -2361,13 +2364,13 @@ body.game-screen-active header {
     font-size: 0.85rem;
     line-height: 1.5;
     padding: 8px;
-    background: #fafafa;
+    background: var(--surface-sticky);
     border-radius: 4px;
 }
 
 .follow-event-item {
     padding: 4px 0;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--border-lighter);
 }
 
 .follow-event-item:last-child {
@@ -2379,21 +2382,21 @@ body.game-screen-active header {
     justify-content: space-between;
     align-items: center;
     padding: 8px 12px;
-    background: #f8f9fa;
+    background: var(--surface-subtle);
     border-radius: 6px;
     margin-bottom: 12px;
 }
 
 .follow-team-name {
     font-weight: 600;
-    color: #333;
+    color: var(--text-primary);
 }
 
 .follow-score {
     font-family: 'JetBrains Mono', monospace;
     font-weight: 700;
     font-size: 1.1rem;
-    color: #EB8232;
+    color: var(--brand-orange);
 }
 
 /* =============================================================================
@@ -2415,7 +2418,7 @@ body.game-screen-active header {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 0.9rem;
     line-height: 1.5;
-    background: #fff;
+    background: var(--surface-card);
 }
 
 /* Placeholder when no events */
@@ -2425,7 +2428,7 @@ body.game-screen-active header {
     align-items: center;
     justify-content: center;
     height: 100%;
-    color: #adb5bd;
+    color: var(--text-disabled);
     gap: 8px;
 }
 
@@ -2441,7 +2444,7 @@ body.game-screen-active header {
 /* Individual event lines */
 .game-log-line {
     padding: 4px 0;
-    border-bottom: 1px solid #f1f3f5;
+    border-bottom: 1px solid var(--border-lighter);
 }
 
 .game-log-line:last-child {
@@ -2450,7 +2453,7 @@ body.game-screen-active header {
 
 /* Header lines (version, game summary header) */
 .game-log-header {
-    color: #6c757d;
+    color: var(--text-muted);
     font-size: 0.8rem;
     font-style: italic;
 }
@@ -2458,25 +2461,25 @@ body.game-screen-active header {
 /* Point headers */
 .game-log-point-header {
     font-weight: 600;
-    color: #495057;
-    background: #f8f9fa;
+    color: var(--ink-700);
+    background: var(--surface-subtle);
     padding: 6px 8px;
     margin: 8px -12px 4px -12px;
     padding-left: 12px;
     padding-right: 12px;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid var(--border-soft);
 }
 
 /* Roster lines */
 .game-log-roster {
-    color: #6c757d;
+    color: var(--text-muted);
     font-size: 0.85rem;
     padding-left: 8px;
 }
 
 /* Pull events */
 .game-log-pull {
-    color: #6c757d;
+    color: var(--text-muted);
     font-style: italic;
     padding-left: 8px;
 }
@@ -2494,15 +2497,15 @@ body.game-screen-active header {
 }
 
 .game-log-possession-offense {
-    color: #155724;
-    background: #e9f5ec;
-    border: 1px solid #c3e6cb;
+    color: var(--color-success-text);
+    background: var(--color-success-surface-soft);
+    border: 1px solid var(--color-success-border);
 }
 
 .game-log-possession-defense {
-    color: #721c24;
-    background: #fbe7e9;
-    border: 1px solid #f5c6cb;
+    color: var(--color-danger-text);
+    background: var(--color-danger-surface-soft);
+    border: 1px solid var(--color-danger-surface-deep);
 }
 
 /* Score events - highlighted */
@@ -2514,22 +2517,22 @@ body.game-screen-active header {
 }
 
 .game-log-us-scores {
-    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-    color: #155724;
+    background: linear-gradient(135deg, var(--color-success-surface) 0%, var(--color-success-border) 100%);
+    color: var(--color-success-text);
 }
 
 .game-log-them-scores {
-    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-    color: #721c24;
+    background: linear-gradient(135deg, var(--color-danger-surface) 0%, var(--color-danger-surface-deep) 100%);
+    color: var(--color-danger-text);
 }
 
 /* Current score display */
 .game-log-current-score {
     font-weight: 600;
-    color: #495057;
+    color: var(--ink-700);
     text-align: center;
     padding: 4px 8px;
-    background: #e9ecef;
+    background: var(--surface-hover);
     border-radius: 4px;
     margin: 4px 0;
 }
@@ -2673,7 +2676,7 @@ body.game-screen-active header {
 
 .panel-resize-handle {
     height: 8px;
-    background: linear-gradient(to bottom, transparent 0%, #ddd 50%, transparent 100%);
+    background: linear-gradient(to bottom, transparent 0%, var(--surface-dim) 50%, transparent 100%);
     cursor: ns-resize;
     position: relative;
     flex-shrink: 0;
@@ -2687,12 +2690,12 @@ body.game-screen-active header {
     transform: translate(-50%, -50%);
     width: 40px;
     height: 4px;
-    background: #bbb;
+    background: var(--grip);
     border-radius: 2px;
 }
 
 .panel-resize-handle:hover::before {
-    background: #999;
+    background: var(--grip-hover);
 }
 
 /* =============================================================================
@@ -2747,7 +2750,7 @@ body.panel-dragging .panel-content {
     flex: 1;
     background: none;
     border: none;
-    color: #666;
+    color: var(--text-muted);
     font-size: 12px;
     font-weight: 600;
     padding: 3px 0;
@@ -2760,7 +2763,7 @@ body.panel-dragging .panel-content {
 }
 
 .header-seg-control button.active {
-    color: #EB8232;
+    color: var(--brand-orange);
 }
 
 .header-seg-control button.disabled {
@@ -2772,10 +2775,10 @@ body.panel-dragging .panel-content {
     position: absolute;
     top: 2px;
     bottom: 2px;
-    background: #fff;
+    background: var(--surface-card);
     border-radius: 6px;
     transition: left 0.25s ease, width 0.25s ease;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-xs);
 }
 
 /* =============================================================================

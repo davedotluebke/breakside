@@ -40,7 +40,7 @@
     justify-content: center;
 
     font-size: 24px;
-    color: #ffffff;
+    color: var(--white);
     cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
@@ -48,7 +48,7 @@
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
 
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow-lg);
     transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
 }
 
@@ -62,39 +62,39 @@
 
 /* Idle: red, ready to record */
 #narrationMicBtn.mic-idle {
-    background-color: #e74c3c;
+    background-color: var(--mic-record);
 }
 #narrationMicBtn.mic-idle:hover {
-    background-color: #d94432;
+    background-color: var(--mic-record-deep);
 }
 
 /* Connecting: amber transient state while opening session */
 #narrationMicBtn.mic-connecting {
-    background-color: #f39c12;
+    background-color: var(--mic-warn);
     cursor: wait;
 }
 
 /* Recording: green with subtle pulse */
 #narrationMicBtn.mic-recording {
-    background-color: #2ecc71;
+    background-color: var(--mic-ok);
     animation: narrationMicPulse 1.4s ease-in-out infinite;
 }
 #narrationMicBtn.mic-recording:hover {
-    background-color: #28b463;
+    background-color: var(--mic-ok-deep);
 }
 
 @keyframes narrationMicPulse {
     0%, 100% {
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(46, 204, 113, 0.6);
+        box-shadow: var(--shadow-lg), 0 0 0 0 rgba(46, 204, 113, 0.6);
     }
     50% {
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 14px rgba(46, 204, 113, 0);
+        box-shadow: var(--shadow-lg), 0 0 0 14px rgba(46, 204, 113, 0);
     }
 }
 
 /* Disabled: grey, non-interactive */
 #narrationMicBtn.mic-disabled {
-    background-color: #999;
+    background-color: var(--btn-neutral-dim);
     cursor: not-allowed;
     pointer-events: none;
     opacity: 0.7;
@@ -102,7 +102,7 @@
 
 /* Finalizing: brief visual state while the slow pass runs after release */
 #narrationMicBtn.mic-finalizing {
-    background-color: #3498db;
+    background-color: var(--mic-info);
     animation: narrationMicFinalize 0.8s ease-in-out infinite;
 }
 
@@ -129,11 +129,11 @@
     width: min(90vw, 520px);
     max-height: 28vh;
 
-    background: rgba(20, 20, 20, 0.88);
-    color: #f5f5f5;
+    background: var(--overlay-tooltip);
+    color: var(--on-overlay);
     border-radius: 12px;
     padding: 10px 14px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--shadow-lg);
 
     font-family: 'Poppins', sans-serif;
     font-size: 14px;
@@ -157,7 +157,7 @@
     font-weight: 600;
     letter-spacing: 0.05em;
     text-transform: uppercase;
-    color: #aaa;
+    color: var(--text-disabled);
     margin-bottom: 4px;
 }
 
@@ -170,7 +170,7 @@
 
 .narration-transcript-text:empty::before {
     content: 'Speak naturally — your words will appear here.';
-    color: #888;
+    color: var(--text-faint);
     font-style: italic;
 }
 
@@ -182,7 +182,7 @@
 .narration-provisional {
     opacity: 0.6;
     font-style: italic;
-    border-left: 3px solid #f39c12;
+    border-left: 3px solid var(--mic-warn);
     padding-left: 6px;
     transition: opacity 0.4s ease, border-left-color 0.4s ease;
 }
@@ -190,11 +190,11 @@
 .narration-provisional.confirmed {
     opacity: 1;
     font-style: normal;
-    border-left-color: #2ecc71;
+    border-left-color: var(--mic-ok);
 }
 
 .narration-provisional.amended {
-    border-left-color: #3498db;
+    border-left-color: var(--mic-info);
     animation: narrationAmendedFlash 0.8s ease-out;
 }
 
@@ -205,6 +205,6 @@
 
 .narration-provisional.retracted {
     text-decoration: line-through;
-    color: #888;
+    color: var(--text-faint);
     opacity: 0.4;
 }

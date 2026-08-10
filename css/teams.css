@@ -197,7 +197,7 @@
     margin: 10px 15px;
     padding: 10px;
     background: var(--color-success);
-    color: white;
+    color: var(--white);
     border: none;
     border-radius: 6px;
     font-size: 0.95em;
@@ -505,7 +505,7 @@
 
 .game-join-btn {
     background: none;
-    border: 1px solid var(--text-secondary);
+    border: 1px solid var(--border-emphasis);
     color: var(--text-primary);
     padding: 3px 14px;
     border-radius: 4px;
@@ -561,7 +561,7 @@
 
 .unknown-player {
     background-color: var(--border-muted);
-    border: 2px dashed var(--text-placeholder);
+    border: 2px dashed var(--border-strong);
     font-style: italic;
 }
 
@@ -581,7 +581,7 @@
 
 .timer-label {
     font-size: 0.8em;
-    color: white;
+    color: var(--white);
     margin-bottom: 2px;
 }
 

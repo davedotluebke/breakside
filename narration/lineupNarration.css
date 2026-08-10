@@ -14,12 +14,12 @@
     display: none;
     margin: 2px 8px 4px;
     padding: 4px 8px;
-    border-left: 3px solid #2ecc71;
+    border-left: 3px solid var(--mic-ok);
     background: rgba(46, 204, 113, 0.08);
     border-radius: 4px;
     font-size: 12px;
     line-height: 1.35;
-    color: #444;
+    color: var(--text-primary);
     font-style: italic;
     word-break: break-word;
 }

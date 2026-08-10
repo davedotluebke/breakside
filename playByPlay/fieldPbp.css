@@ -7,6 +7,11 @@
  * %-positioned so they don't depend on the pixel size.
  */
 
+/* Field-local palette. Kept here rather than in css/tokens.css because it
+   describes one drawing (the pitch) rather than the app's UI roles.
+   IMPORTANT: the field is a green surface in BOTH themes, so anything drawn
+   ON it — the disc, markers, the pegman halo — is deliberately theme-INVARIANT
+   white/black. Only the chrome around the field follows the theme. */
 :root {
     --fp-field: #3a7d44;
     --fp-field2: #347040;
@@ -16,8 +21,28 @@
     --fp-ez: rgba(255, 255, 255, .13);
     --fp-blue: #2563eb;
     --fp-red: #dc2626;
+    --fp-green: #047857;
     --fp-hold: #e0a64b;
     --fp-holdbg: #fff3d6;
+    --fp-disc-face: #fff;      /* on the green field — never themed */
+    --fp-disc-edge: #111;
+    --fp-halo: #fff;           /* text halo that keeps labels legible on grass */
+}
+
+:root[data-theme="dark"] {
+    /* A dimmer pitch: the field is the largest lit area on the screen, and at
+       full brightness it wipes out the power win from the black chrome. */
+    --fp-field: #24512c;
+    --fp-field2: #1d4224;
+    --fp-line: rgba(255, 255, 255, .72);
+    --fp-guide: rgba(255, 255, 255, .26);
+    --fp-rz: rgba(255, 80, 80, .6);
+    --fp-ez: rgba(255, 255, 255, .1);
+    --fp-blue: #2464d4;
+    --fp-red: #c22525;
+    --fp-green: #0b8f68;
+    --fp-hold: #c08a3c;
+    --fp-holdbg: #33280a;
 }
 
 /* Panel shell — mirrors the Full PBP panel: full-tab-only, no drag resize. */
@@ -43,7 +68,7 @@ body.fp-landscape-takeover .panel-playByPlayField {
     bottom: env(safe-area-inset-bottom, 0px);
     left: env(safe-area-inset-left, 0px);
     z-index: 9999;
-    background: #eef0f2;
+    background: var(--surface-light);
 }
 body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: none; }
 .panel-playByPlayField .panel-content.field-pbp-content {
@@ -53,7 +78,7 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
     min-height: 0;
     padding: 0;
     overflow: hidden;
-    background: #eef0f2;
+    background: var(--surface-light);
 }
 /* Role-disabled fade, matching Full PBP. */
 .panel-playByPlayField.role-disabled .fp-play {
@@ -68,8 +93,8 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
     align-items: center;
     gap: 8px;
     padding: 4px 12px;
-    background: #fff;
-    border-bottom: 1px solid #eee;
+    background: var(--surface-card);
+    border-bottom: 1px solid var(--border-lighter);
 }
 /* Override global button { margin: 10px } — the stray vertical margin was
    padding this row out and stealing room the modifier column needs below. */
@@ -81,10 +106,10 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 .fp-status-inline {
     display: none;
     flex: 1 1 auto; min-width: 0;
-    font-size: 12.5px; color: #444;
+    font-size: 12.5px; color: var(--text-primary);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.fp-status-inline b { color: #111; }
+.fp-status-inline b { color: var(--text-strong); }
 .field-pbp-content[data-o="landscape"] .fp-status-inline { display: block; }
 .field-pbp-content[data-o="landscape"] .fp-actionrow-spacer { display: none; }
 .field-pbp-content[data-o="landscape"] .fp-statusbar { display: none; }
@@ -94,7 +119,7 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
     border-radius: 999px;
     font-weight: 600;
     font-size: 12px;
-    color: #fff;
+    color: var(--white);
 }
 .fp-modepill.offense { background: var(--fp-blue); }
 .fp-modepill.defense { background: var(--fp-red); }
@@ -102,8 +127,8 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 .fp-gameevents {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 7px 13px;
-    border: 1px solid #bbb; border-radius: 7px;
-    background: #fff; color: #333; font-weight: 600; font-size: 12.5px; cursor: pointer;
+    border: 1px solid var(--border-strong); border-radius: 7px;
+    background: var(--surface-card); color: var(--text-primary); font-weight: 600; font-size: 12.5px; cursor: pointer;
 }
 
 /* Play area = field + status + events. */
@@ -120,7 +145,7 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
     display: flex;
     min-height: 0;
     min-width: 0;
-    background: #eef0f2;
+    background: var(--surface-light);
 }
 
 /* Between points: the field + rail show the last point's state but are greyed
@@ -135,14 +160,14 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
     flex: 0 0 152px;
     display: flex; flex-direction: column; gap: 7px;
     padding: 12px 8px; overflow: auto;
-    background: #fff; border-right: 1px solid #e3e3e3;
+    background: var(--surface-card); border-right: 1px solid var(--border-light);
 }
 .field-pbp-content[data-o="landscape"] .fp-prow { flex-direction: column; }
 .field-pbp-content[data-o="landscape"] .fp-sidebar {
     flex: 0 0 auto;
     display: flex; flex-direction: row; flex-wrap: nowrap; gap: 6px;
     padding: 7px 10px; overflow: hidden;
-    background: #fff; border-bottom: 1px solid #ddd;
+    background: var(--surface-card); border-bottom: 1px solid var(--border-light);
 }
 .field-pbp-content[data-o="landscape"] .fp-rail {
     display: flex; flex-direction: row; flex: 1 1 auto; gap: 6px; min-width: 0;
@@ -157,11 +182,11 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 .field-pbp-content[data-o="landscape"] .fp-modcol { display: none; }
 
 .fp-rail { display: flex; flex-direction: column; gap: 7px; }
-.fp-rail-placeholder { color: #888; font-size: 13px; padding: 6px 2px; }
-.fp-modsep { flex: 0 0 auto; height: 1px; background: #e3e3e3; margin: 8px 2px 4px; }
+.fp-rail-placeholder { color: var(--text-faint); font-size: 13px; padding: 6px 2px; }
+.fp-modsep { flex: 0 0 auto; height: 1px; background: var(--surface-mid); margin: 8px 2px 4px; }
 .fp-modcol { display: flex; flex-direction: column; gap: 5px; }
-.fp-modcol-label { font-size: 12.5px; font-weight: 700; color: #333; }
-.fp-modcol-sub { font: 600 11.5px 'JetBrains Mono', monospace; color: #555; }
+.fp-modcol-label { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
+.fp-modcol-sub { font: 600 11.5px 'JetBrains Mono', monospace; color: var(--text-secondary); }
 /* Last-play tag chips wrap two-per-row so a 6-modifier throw doesn't make the
    sidebar tall. (Pull / D-placing mods stay stacked — only 2–3 of them.) */
 .fp-modchips { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -170,8 +195,8 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 /* Player chips. */
 .fp-chip {
     display: flex; align-items: center; gap: 7px;
-    background: #f7f7f7; border: 1px solid #cfcfcf; border-radius: 999px;
-    padding: 8px 14px; font-size: 14px; font-weight: 600; color: #222;
+    background: var(--surface-subtle); border: 1px solid var(--border-default); border-radius: 999px;
+    padding: 8px 14px; font-size: 14px; font-weight: 600; color: var(--text-strong);
     cursor: pointer; user-select: none; white-space: nowrap;
     /* touch-action none so a chip drag becomes a pegman, not a scroll */
     touch-action: none;
@@ -179,13 +204,13 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 }
 /* In pull mode chips aren't draggable, so let the rail scroll vertically. */
 .field-pbp-content[data-mode="pull"] .fp-chip { touch-action: pan-y; }
-.fp-chip .fp-num { font: 700 11px 'JetBrains Mono', monospace; color: #888; }
+.fp-chip .fp-num { font: 700 11px 'JetBrains Mono', monospace; color: var(--text-faint); }
 .fp-chip .fp-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 /* The holder chip is inert on offense (no drag / no tap — can't pass to
    yourself), so it shouldn't advertise interactivity. */
 .fp-chip.holder { background: var(--fp-holdbg); border-color: var(--fp-hold); box-shadow: 0 0 0 2px rgba(224, 166, 75, .3); cursor: default; }
-.fp-chip.unknown { background: #f3f4f6; border: 1px dashed #b9bdc4; color: #6b7280; font-style: italic; }
-.fp-chip .fp-umark { font: 700 12px 'JetBrains Mono', monospace; color: #9aa0a6; }
+.fp-chip.unknown { background: var(--surface-light); border: 1px dashed var(--border-strong); color: var(--text-muted); font-style: italic; }
+.fp-chip .fp-umark { font: 700 12px 'JetBrains Mono', monospace; color: var(--text-placeholder); }
 
 /* Field box. */
 .fp-fieldwrap {
@@ -196,7 +221,7 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 .fp-field {
     position: relative;
     background: linear-gradient(var(--fp-field), var(--fp-field2));
-    border: 2px solid #fff; border-radius: 3px;
+    border: 2px solid var(--white); border-radius: 3px;
     touch-action: none;
     flex: 0 0 auto;
     /* No text selection on the touch surface — long-pressing a label to flip
@@ -246,14 +271,14 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 /* Status + events strips. */
 .fp-statusbar {
     flex: 0 0 auto;
-    background: #fff; border-top: 1px solid #ddd;
-    padding: 7px 12px; font-size: 12.5px; color: #444;
+    background: var(--surface-card); border-top: 1px solid var(--border-light);
+    padding: 7px 12px; font-size: 12.5px; color: var(--text-primary);
     display: flex; align-items: center; gap: 8px; min-height: 34px;
 }
-.fp-statusbar b { color: #111; }
+.fp-statusbar b { color: var(--text-strong); }
 .fp-events {
     flex: 0 0 auto;
-    background: #fff; border-top: 1px solid #ddd;
+    background: var(--surface-card); border-top: 1px solid var(--border-light);
     padding: 8px 72px 8px 8px;   /* right pad keeps clear of the mic FAB */
     display: flex; flex-wrap: nowrap; gap: 6px; min-height: 8px;
 }
@@ -267,17 +292,17 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 }
 
 /* Armed chip (puller picked; later: armed player awaiting placement). */
-.fp-chip.armed { background: var(--fp-blue); border-color: var(--fp-blue); color: #fff; }
-.fp-chip.armed .fp-num { color: #cdd9ff; }
-.fp-chip.unknown.armed { background: var(--fp-blue); border-color: var(--fp-blue); color: #fff; font-style: normal; }
+.fp-chip.armed { background: var(--fp-blue); border-color: var(--fp-blue); color: var(--white); }
+.fp-chip.armed .fp-num { color: var(--pbp-chip-num); }
+.fp-chip.unknown.armed { background: var(--fp-blue); border-color: var(--fp-blue); color: var(--white); font-style: normal; }
 
 /* "Pick Puller:" / slot label. */
-.fp-slotlbl { font-size: 12px; font-weight: 700; color: #555; padding: 2px 4px 5px; }
+.fp-slotlbl { font-size: 12px; font-weight: 700; color: var(--text-secondary); padding: 2px 4px 5px; }
 
 /* PULL mode pill + Start Point button in the action row. */
 .fp-modepill.pull { background: var(--fp-hold); }
 .fp-start-point-btn {
-    border: none; border-radius: 7px; background: var(--fp-blue); color: #fff;
+    border: none; border-radius: 7px; background: var(--fp-blue); color: var(--white);
     padding: 6px 16px; font-size: 13px; font-weight: 700; cursor: pointer;
 }
 
@@ -285,7 +310,7 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 .fp-arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .fp-disc {
     position: absolute; width: 18px; height: 18px; border-radius: 50%;
-    background: #fff; border: 2px solid #111; transform: translate(-50%, -50%);
+    background: var(--fp-disc-face); border: 2px solid var(--fp-disc-edge); transform: translate(-50%, -50%);
     pointer-events: none; z-index: 7; box-shadow: 0 0 0 3px rgba(255, 255, 255, .35);
 }
 .fp-marker {
@@ -293,12 +318,12 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
     font-size: 11px; font-weight: 700;
     display: flex; align-items: center; justify-content: center;
     width: 21px; height: 21px; border-radius: 50%;
-    color: #fff; border: 1.5px solid #fff; pointer-events: none;
+    color: var(--white); border: 1.5px solid var(--white); pointer-events: none;
 }
 .fp-marker.completion { background: rgba(37, 99, 235, .85); }
-.fp-marker.score { background: var(--fp-green, #047857); }
+.fp-marker.score { background: var(--fp-green); }
 .fp-marker.turn { background: var(--fp-red); }
-.fp-marker.block { background: #047857; }
+.fp-marker.block { background: var(--emerald-btn-deeper); }
 .fp-marker.pull { background: rgba(80, 80, 80, .85); }
 /* Rendered markers are draggable for fine-tuning (incl. the fading previous
    possession, so a prior location can still be adjusted during the fade). */
@@ -315,8 +340,8 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
        keeps them on one line; they size to their text and fit the row. */
     flex: 1 1 auto; min-width: 0;
     margin: 0;   /* override global button { margin: 10px } — 4 buttons × 20px was starving the row and overflowing "Throwaway" */
-    border: 1px solid #c8c8c8; border-radius: 6px; background: #f7f7f7;
-    padding: 8px 7px; font-size: 14px; line-height: 1.2; font-weight: 600; color: #333;
+    border: 1px solid var(--border-default); border-radius: 6px; background: var(--surface-subtle);
+    padding: 8px 7px; font-size: 14px; line-height: 1.2; font-weight: 600; color: var(--text-primary);
     cursor: pointer; text-align: center; white-space: nowrap;
     -webkit-tap-highlight-color: transparent;
 }
@@ -332,17 +357,17 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 .field-pbp-content[data-o="portrait"] .fp-events {
     gap: 4px;
 }
-.fp-ebtn.pullhang { flex: 3 1 0; background: #fff7e6; border-color: var(--fp-hold); color: #92600b; font: 700 13px 'JetBrains Mono', monospace; }
-.fp-ebtn.pullbrick { flex: 1 1 0; background: #fff; border-color: var(--fp-hold); color: #92600b; }
+.fp-ebtn.pullhang { flex: 3 1 0; background: var(--color-warning-surface-soft); border-color: var(--fp-hold); color: var(--pbp-amber-ink); font: 700 13px 'JetBrains Mono', monospace; }
+.fp-ebtn.pullbrick { flex: 1 1 0; background: var(--surface-card); border-color: var(--fp-hold); color: var(--pbp-amber-ink); }
 
 /* Modifier-column buttons (pull tags now; throw/D modifiers in Phase 7). */
 .fp-modbtn {
     flex: 0 0 auto; margin: 0;   /* override global button { margin: 10px } */
-    border: 1px solid #cfcfcf; border-radius: 6px; background: #f7f7f7;
-    padding: 7px 8px; font-size: 13px; font-weight: 600; color: #333;
+    border: 1px solid var(--border-default); border-radius: 6px; background: var(--surface-subtle);
+    padding: 7px 8px; font-size: 13px; font-weight: 600; color: var(--text-primary);
     cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent;
 }
-.fp-modbtn.on { background: var(--fp-blue); border-color: var(--fp-blue); color: #fff; }
+.fp-modbtn.on { background: var(--fp-blue); border-color: var(--fp-blue); color: var(--white); }
 
 /* Set picker in the action row, left of Events. Sized like the other
    action-row buttons; the caption is short ("Set: Zone") so it fits beside
@@ -351,14 +376,14 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
    live possession to tag. */
 .fp-setbtn {
     flex: 0 0 auto; margin: 0;   /* override global button { margin: 10px } */
-    border: 1px solid #cfcfcf; border-radius: 6px; background: #f7f7f7;
-    padding: 7px 10px; font-size: 13px; font-weight: 600; color: #333;
+    border: 1px solid var(--border-default); border-radius: 6px; background: var(--surface-subtle);
+    padding: 7px 10px; font-size: 13px; font-weight: 600; color: var(--text-primary);
     cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent;
     max-width: 34vw; overflow: hidden; text-overflow: ellipsis;
     /* Long-press raises our popover, not the OS selection bubble. */
     user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
-.fp-setbtn.on { background: #6d28d9; border-color: #6d28d9; color: #fff; }
+.fp-setbtn.on { background: var(--violet-set); border-color: var(--violet-set); color: var(--white); }
 
 /* Defense: D-action buttons fill the player slot until one is chosen.
    Plain/neutral styling — same look as the other buttons, no color coding.
@@ -368,7 +393,7 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 .fp-dtypebtn {
     display: flex; align-items: center; justify-content: center; gap: 7px;
     border-radius: 8px; padding: 8px 10px; font-size: 14px; font-weight: 700;
-    cursor: pointer; border: 1px solid #cfcfcf; background: #f7f7f7; color: #333;
+    cursor: pointer; border: 1px solid var(--border-default); background: var(--surface-subtle); color: var(--text-primary);
     -webkit-tap-highlight-color: transparent;
 }
 .fp-dtypebtn:active { filter: brightness(.96); }
@@ -378,20 +403,20 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 /* ✕ cancel chip leading the defender picker while placing a D. */
 .fp-dcancel {
     display: flex; align-items: center; justify-content: center; gap: 5px;
-    border: 1px solid #d9534f; color: #d9534f; background: #fff; border-radius: 999px;
+    border: 1px solid var(--pbp-danger-pill); color: var(--pbp-danger-pill); background: var(--surface-card); border-radius: 999px;
     padding: 7px 12px; font-size: 13px; font-weight: 700; cursor: pointer;
     -webkit-tap-highlight-color: transparent;
 }
 
 /* Defense bottom bar action colors. */
-.fp-ebtn.theyturn { color: #047857; }
-.fp-ebtn.theyscore { color: #b91c1c; }
-.fp-ebtn.more { flex: 0 0 auto; min-width: auto; color: #666; }
+.fp-ebtn.theyturn { color: var(--pbp-green-ink); }
+.fp-ebtn.theyscore { color: var(--pbp-red-ink); }
+.fp-ebtn.more { flex: 0 0 auto; min-width: auto; color: var(--text-muted); }
 
 /* Offense bottom bar: Drop / Throwaway / Score toggles. `.on` = armed. */
-.fp-ebtn.drop, .fp-ebtn.throwaway { color: #b91c1c; }
-.fp-ebtn.score { color: #047857; border-color: #86d3b3; background: #e7f7f0; }
-.fp-ebtn.on { background: var(--fp-blue); border-color: var(--fp-blue); color: #fff; }
+.fp-ebtn.drop, .fp-ebtn.throwaway { color: var(--pbp-red-ink); }
+.fp-ebtn.score { color: var(--pbp-green-ink); border-color: var(--pbp-score-border); background: var(--color-success-surface-soft); }
+.fp-ebtn.on { background: var(--fp-blue); border-color: var(--fp-blue); color: var(--white); }
 
 /* Pegman ghost while dragging a player chip onto the field. Google-Maps
    Street-View style: the container is a zero-size anchor pinned at the exact
@@ -411,7 +436,7 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 .fp-peg-x {
     position: absolute; left: 0; top: 0; transform: translate(-50%, -50%);
     font-size: 16px; font-weight: 900; line-height: 1; color: var(--fp-blue);
-    text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;
+    text-shadow: 0 0 3px var(--fp-halo), 0 0 3px var(--fp-halo), 0 0 3px var(--fp-halo);
 }
 /* Player figure standing just above the drop point. */
 .fp-peg-figure {
@@ -425,27 +450,27 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 /* Name pill floating above the figure. */
 .fp-peg-name {
     position: absolute; left: 0; bottom: 62px; transform: translateX(-50%);
-    background: var(--fp-blue); color: #fff; border-radius: 999px;
+    background: var(--fp-blue); color: var(--white); border-radius: 999px;
     padding: 3px 10px; font-size: 12px; font-weight: 600; white-space: nowrap;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, .35);
+    box-shadow: var(--shadow-lg);
 }
 
 /* Field-side popover picker ("Who got the block?"). Positioned in JS (top-left
    corner) with viewport clamping; scrolls if the roster is taller than fits. */
 .fp-picker {
-    position: fixed; z-index: 999; background: #fff; border: 1px solid #bbb;
-    border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+    position: fixed; z-index: 999; background: var(--surface-card); border: 1px solid var(--border-strong);
+    border-radius: 12px; box-shadow: var(--shadow-xl);
     padding: 7px; display: flex; flex-wrap: wrap; gap: 5px; max-width: 250px;
     max-height: 70vh; overflow-y: auto;
 }
-.fp-picker .fp-picker-ttl { flex: 1 1 100%; font-size: 11px; color: #888; text-align: center; margin-bottom: 2px; }
+.fp-picker .fp-picker-ttl { flex: 1 1 100%; font-size: 11px; color: var(--text-faint); text-align: center; margin-bottom: 2px; }
 .fp-picker .fp-chip { padding: 7px 12px; font-size: 14px; }
 
 /* Mic FAB, reserved bottom-right in both layouts. */
 .fp-mic {
     position: absolute; right: 14px; bottom: 12px;
     width: 54px; height: 54px; border-radius: 50%;
-    background: #e0533a; color: #fff; border: none;
+    background: var(--mic-fab); color: var(--white); border: none;
     display: flex; align-items: center; justify-content: center; font-size: 20px;
-    z-index: 20; box-shadow: 0 4px 14px rgba(0, 0, 0, .3); cursor: pointer;
+    z-index: 20; box-shadow: var(--shadow-lg); cursor: pointer;
 }
