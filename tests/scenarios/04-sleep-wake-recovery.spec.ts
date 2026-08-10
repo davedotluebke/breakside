@@ -219,22 +219,30 @@ test.describe('power management', () => {
     const gameId = await getGameId(page);
     await waitForGameOnServer(request, gameId, COACH_A);
 
-    // Count controller pings arriving from the app itself. The ping cadence
-    // while holding a role is 2s, so a 5s window sees at least two.
+    // Count controller pings arriving from the app itself.
     let pings = 0;
     await page.route('**/api/games/*/ping', async (route) => {
       pings++;
       await route.continue();
     });
 
-    await page.waitForTimeout(5_000);
-    const whileVisible = pings;
-    expect(whileVisible, 'app should be pinging while visible').toBeGreaterThan(0);
+    // Poll rather than sleeping a fixed margin: under parallel load the first
+    // ping can land later than any margin we'd pick, which is exactly the
+    // flake G7 root-caused in this suite.
+    await expect.poll(
+      () => pings,
+      { message: 'app should be pinging while visible', timeout: 15_000 },
+    ).toBeGreaterThan(0);
 
-    // Pocket the phone.
+    // Pocket the phone. Let any in-flight request land before snapshotting,
+    // so a ping that was already on the wire isn't counted against the hide.
     await setVisibility(page, 'hidden');
+    await page.waitForTimeout(1_000);
     const atHide = pings;
-    await page.waitForTimeout(5_000);
+
+    // Two full ping cadences (2s each while holding a role) with none arriving
+    // is the assertion — if the interval were still installed, it would fire.
+    await page.waitForTimeout(6_000);
     expect(pings, 'no pings should be sent while the page is hidden').toBe(atHide);
 
     // Take it back out.

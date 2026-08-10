@@ -126,6 +126,11 @@ function createHeaderContent() {
             </div>
         </div>
         
+        <button class="header-wake-lock-btn" id="gameWakeLockBtn" hidden
+                title="Screen is being kept awake — tap to release">
+            <i class="fas fa-sun"></i>
+        </button>
+
         <div class="header-timer-container" id="gameTimerContainer" title="Toggle timer mode">
             <span class="header-timer-value" id="gameTimerValue">0:00</span>
             <span class="header-timer-label" id="gameTimerLabel">point</span>
@@ -133,11 +138,6 @@ function createHeaderContent() {
                 <i class="fas fa-pause"></i>
             </button>
         </div>
-
-        <button class="header-wake-lock-btn" id="gameWakeLockBtn" hidden
-                title="Screen is being kept awake — tap to release">
-            <i class="fas fa-sun"></i>
-        </button>
     `;
     
     return content;

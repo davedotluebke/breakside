@@ -316,6 +316,12 @@ body.game-screen-active header {
     transform: translateY(-50%);
     z-index: 5;
     pointer-events: none;
+    /* Compact so it stops short of the wake-lock indicator to the left of the
+       timer. It still overlaps the timer readout, which has always been
+       acceptable — a 3-character time is readable under it, a 22px icon is
+       not. */
+    font-size: 0.55rem;
+    padding: 2px 6px;
 }
 
 .header-content-row {
@@ -631,7 +637,9 @@ body.game-screen-active header {
     width: 26px;
     height: 26px;
     padding: 0;
-    margin: 0 0 0 6px;
+    /* Sits to the LEFT of the timer, so the staging pill (anchored to the
+       right of the title row) can't cover it. */
+    margin: 0 6px 0 0;
     flex: 0 0 auto;
     border: none;
     border-radius: 50%;
@@ -2643,11 +2651,42 @@ body.game-screen-active header {
         font-size: 0.9rem;
     }
     
+    /* The header row was already at capacity on a phone (menu + logo + score +
+       timer only just fit inside 375px), so the wake-lock indicator as a sixth
+       item pushed the last element clean off the right edge.
+
+       The slack comes from the logo. Its container is a shrinkable flex item,
+       but the wordmark inside kept its intrinsic width and overflowed —
+       the flex `min-width: 0` trap in ARCHITECTURE.md § CSS Styling Gotchas.
+       With min-width: 0 on the container and max-width on the image, the
+       wordmark compresses to whatever is left and everything else keeps its
+       size. No magic numbers, and it scales to narrower screens on its own. */
+    .header-content-row {
+        gap: 4px;
+    }
+
+    .panel-header .header-logo-container {
+        min-width: 0;
+    }
+
+    .panel-header .header-logo-container img {
+        max-width: 100%;
+        max-height: 40px;
+        height: auto;
+    }
+
+    .header-wake-lock-btn {
+        width: 22px;
+        height: 22px;
+        margin-right: 2px;
+        font-size: 0.7rem;
+    }
+
     .header-timer-container {
         min-width: 50px;
         padding: 3px 6px;
     }
-    
+
     .header-timer-value {
         font-size: 0.9rem;
     }
