@@ -998,7 +998,49 @@ Higher-leverage interventions, in roughly priority order:
 
 ### UI/UX
 - [ ] Comprehensive UI redesign
-- [ ] Dark mode support
+- [ ] **Dark mode support** — *in progress in its own session (2026-08-09)*.
+      Note the battery angle: on an OLED phone (iPhone X and later except XR/11,
+      most flagship Androids) a black pixel is simply off, so dark mode is a
+      real power saving for the whole session — no interaction, no gating, no
+      way for it to cost a coach a tap. Our current UI is mostly white, which is
+      the worst case on OLED. It does nothing on an LCD phone (SE, XR, 11),
+      where the backlight is uniform regardless of what's drawn. Worth saying
+      that plainly wherever it's offered rather than implying a universal win.
+- [ ] **Rename "Advanced Settings" → "App Settings", split basic vs advanced.**
+      The screen has grown well past "advanced" (display density, player
+      numbers, field geometry, sync cadence, battery) and the name now
+      discourages coaches from finding settings they'd actually want. Keep one
+      screen, organised into a basic section (the things a normal coach should
+      touch — display, battery, dark mode) and an advanced section (narration
+      A/B knobs, auto-line priority order, field thresholds). Touches
+      `settings/advancedSettings.js` (the declarative `SCHEMA` array already
+      groups fields, so this is mostly regrouping plus a section divider) and
+      the menu label in `game/gameScreenPanels.js` (`#menuSettings`). Pairs
+      naturally with the dark-mode session, since that adds a setting.
+- [ ] **Black standby screen between/during points** (design settled 2026-08-09,
+      not built). The biggest OLED saving available, and a better between-points
+      display than the full UI anyway.
+  - **Trigger:** repurpose the ☀ indicator in the game header (added by the
+    `battery` branch) to enable/disable standby, with a toast confirming the new
+    state on each tap.
+  - **During a point:** show the score and "Tap to return", nothing else. No
+    game clock, no point clock — the less lit area the better, and neither is
+    needed while standing on the line.
+  - **Between points:** also show the countdown timer for starting the next
+    point, which is the one number that matters in that window.
+  - **Tap anywhere returns** to the full UI, and that first tap must be
+    *swallowed* — it exits standby without also firing whatever control sits
+    underneath, or coaches will record phantom events on wake.
+  - Dim toward true black (`#000`), not grey: on OLED the saving scales with how
+    little light is emitted, and a grey scrim over a white UI leaves most of it
+    lit.
+  - **Open question:** what puts it *into* standby — only an explicit tap on the
+    ☀, or an idle timeout once enabled? An idle timeout is the bigger win but
+    needs gating (never for the Active Coach mid-point on offense; fine between
+    points, on defense, or for a Line Coach / viewer). Start with the explicit
+    tap, which has no failure mode, and consider the timeout after field use.
+  - Composes with the wake lock rather than replacing it: the lock keeps the
+    screen alive, standby makes keeping it alive cheap.
 - [x] **Compact / roomy density toggle for Full PBP**
   - Inline icon button in the Full PBP header (between mode pill and Undo) toggles between "roomy" (default — build-207 numbers: min-height 48, margin 6, name padding 8/10, action padding 7/10) and "compact" (build-206: min-height 40, margin 4, name padding 6/8, action padding 5/10).
   - Persisted per-device in localStorage as `breakside_full_pbp_density`, applied as a `density-compact` class on `.panel-playByPlayFull`.
