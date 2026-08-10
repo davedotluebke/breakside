@@ -44,6 +44,12 @@ tests/sweep/shots/
 tests/sweep/test-results/
 tests/test-data-dir/
 
+# Demo-video recording artifacts (playwright.demo.config.ts). The finished mp4s
+# are committed under docs/clips/; the raw webm takes and the throwaway backend
+# data the demo specs create are not.
+tests/demo-results/
+tests/demo-data-dir/
+
 # Per-session local backend data copies (scripts/dev-backend.sh)
 .dev-data/
 
