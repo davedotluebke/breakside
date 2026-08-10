@@ -751,8 +751,12 @@ function stopGameStateRefresh() {
 // *improvement* over the old unconditional poll, not just a battery one —
 // which matters because the Active Coach's pendingNextLine merge depends on
 // seeing Line Coach edits promptly (TODO.md § Multi-Coach Line Selection).
-document.addEventListener('breakside:game-stamp-changed', () => {
+document.addEventListener('breakside:game-stamp-changed', (e) => {
     if (!refreshGameId || !isGameScreenVisible()) return;
+    // A stamp for some other game says nothing about ours. Without this the
+    // mid-switch case would fall through to a pointless /poll for our game —
+    // harmless, but the guard is cheaper than the request.
+    if (e.detail?.gameId !== refreshGameId) return;
     refreshGameStateIfChanged(refreshGameId);
 });
 
