@@ -210,19 +210,32 @@ test('adv-stats-scope', async ({ page }) => {
   await holdEnding(page, 'adv-stats-scope');
 });
 
-test('adv-events-phases', async ({ page }) => {
+/**
+ * Get to the Teams screen with the team's card expanded.
+ *
+ * Both steps are conditional: Leave Game already lands on the Teams screen (so
+ * there's no back button to press), and the card's expanded state persists
+ * across visits (so a second call would collapse what the first opened).
+ */
+async function openTeamCard(page: Page) {
+  const onTeams = await page.locator('#selectTeamScreen').isVisible().catch(() => false);
+  if (!onTeams) await page.locator('#backFromStartGameBtn').click();
+  await expect(page.locator('#selectTeamScreen')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('.team-header').first()).toBeVisible({ timeout: 10_000 });
+
+  const expanded = await page.locator('.new-event-btn').first().isVisible().catch(() => false);
+  if (!expanded) await page.locator('.team-header').first().click();
+  await expect(page.locator('.new-event-btn').first()).toBeVisible({ timeout: 10_000 });
+}
+
+test('adv-events', async ({ page }) => {
   const t0 = Date.now();
   await makeTeamWithRoster(page, 'advev');
-  // Back out to the Teams screen, where each team card offers New Event.
-  await page.locator('#backFromStartGameBtn').click();
-  await expect(page.locator('#selectTeamScreen')).toBeVisible({ timeout: 8_000 });
-  await expect(page.locator('.team-header').first()).toBeVisible({ timeout: 10_000 });
-  await page.waitForTimeout(1200);
+  await openTeamCard(page);
+  await page.waitForTimeout(1000);
   resetCursor();
-  await markTrim(page, t0, 'adv-events-phases');
+  await markTrim(page, t0, 'adv-events');
 
-  // Team cards start collapsed — the New Event button lives inside.
-  await tapLocator(page, page.locator('.team-header').first(), { after: BEAT.notable });
   await tapLocator(page, page.locator('.new-event-btn').first(), { after: BEAT.notable });
   await expect(page.locator('#createEventModal')).toBeVisible({ timeout: 8_000 });
   await page.waitForTimeout(BEAT.action);
@@ -230,9 +243,72 @@ test('adv-events-phases', async ({ page }) => {
   await typeInto(page, '#newEventName', 'Spring Classic', BEAT.action);
   await tap(page, '#createEventBtn', { after: BEAT.notable });
 
+  // The event gets its own card, with its own roster, settings, and games.
+  await expect(page.locator('.event-new-game-btn').first()).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(BEAT.read);
-  await glide(page, 240, 480);
-  await holdEnding(page, 'adv-events-phases');
+  await glide(page, 240, 520);
+  await holdEnding(page, 'adv-events');
+});
+
+test('adv-phases', async ({ page }) => {
+  const t0 = Date.now();
+  await makeTeamWithRoster(page, 'advph2');
+  await openTeamCard(page);
+
+  // Off camera: an event with one game in it, so there's something to file
+  // under a phase once the phases exist.
+  await page.locator('.new-event-btn').first().click();
+  await expect(page.locator('#createEventModal')).toBeVisible({ timeout: 8_000 });
+  await page.fill('#newEventName', 'Spring Classic');
+  await page.locator('#createEventBtn').click();
+  await expect(page.locator('.event-new-game-btn').first()).toBeVisible({ timeout: 10_000 });
+
+  await page.locator('.event-new-game-btn').first().click();
+  await expect(page.locator('#startGameSubscreen')).toBeVisible({ timeout: 10_000 });
+  await beginGame(page, 'offense');
+  page.once('dialog', d => d.accept());
+  await page.locator('#gameMenuBtn').click();
+  await page.locator('#menuLeaveGame').click();
+  await openTeamCard(page);
+  await expect(page.locator('.event-header-btn[title="Event Settings"]').first())
+    .toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(1000);
+  resetCursor();
+  await markTrim(page, t0, 'adv-phases');
+
+  // Phases are named in the event's own settings.
+  await tapLocator(page, page.locator('.event-header-btn[title="Event Settings"]').first(),
+    { after: BEAT.notable });
+  // Wait on the dialog, not on #editEventPhasesList — that <ul> is empty until
+  // the first phase exists, so it has no box and reads as hidden.
+  await expect(page.locator('#eventSettingsModal')).toBeVisible({ timeout: 8_000 });
+  await page.locator('#editEventPhaseInput').scrollIntoViewIfNeeded();
+
+  for (const phase of ['Pool Play', 'Bracket']) {
+    await typeInto(page, '#editEventPhaseInput', phase, 200);
+    await tap(page, '#editEventPhaseAddBtn', { after: BEAT.action });
+  }
+  await tap(page, '#saveEventSettingsBtn', { after: BEAT.notable });
+
+  // Back on the team card, every event game gains a phase picker.
+  const picker = page.locator('.game-phase-select').first();
+  await expect(picker).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(BEAT.action);
+
+  // A native select's popup isn't captured by the screencast, so glide to it
+  // and set the value — what reads on camera is the game re-filing itself under
+  // the phase heading, which is the point.
+  const box = await picker.boundingBox();
+  if (box) await glide(page, box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(BEAT.settle);
+  await picker.selectOption('Pool Play');
+  await page.waitForTimeout(BEAT.notable);
+
+  await expect(page.locator('.event-phase-header').filter({ hasText: 'Pool Play' }))
+    .toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(BEAT.read);
+  await glide(page, 240, 560);
+  await holdEnding(page, 'adv-phases');
 });
 
 /**
@@ -265,18 +341,20 @@ test('adv-multi-coach', async ({ page, request }) => {
   resetCursor();
   await markTrim(page, t0, 'adv-multi-coach');
 
-  // Coach A takes play-by-play control.
-  await tap(page, '#gameActiveCoachBtn', { after: BEAT.notable });
-  await expect(page.locator('#gameActiveCoachHolder')).not.toHaveText(/Available/i, { timeout: 8_000 });
+  // This clip is shot on the Line tab, so the role the coach takes on camera is
+  // the line — taking play-by-play from the Line tab would be showing the wrong
+  // half of the handoff.
+  await tap(page, '#gameLineCoachBtn', { after: BEAT.notable });
+  await expect(page.locator('#gameLineCoachHolder')).not.toHaveText(/Available/i, { timeout: 8_000 });
   await page.waitForTimeout(BEAT.action);
 
-  // A second coach connects and takes the line, off camera.
-  const headers = { 'Content-Type': 'application/json', 'X-Test-User-Id': 'demo-linecoach' };
+  // A second coach connects and takes play-by-play, off camera.
+  const headers = { 'Content-Type': 'application/json', 'X-Test-User-Id': 'demo-pbpcoach' };
   await request.post(`${BACKEND_URL}/api/games/${gameId}/ping`, { headers });
-  await request.post(`${BACKEND_URL}/api/games/${gameId}/claim-line`, { headers });
+  await request.post(`${BACKEND_URL}/api/games/${gameId}/claim-active`, { headers });
 
-  // Coach A's screen picks it up on the next poll.
-  await expect(page.locator('#gameLineCoachHolder')).not.toHaveText(/Available/i, { timeout: 20_000 });
+  // The line coach's screen picks it up on the next poll.
+  await expect(page.locator('#gameActiveCoachHolder')).not.toHaveText(/Available/i, { timeout: 20_000 });
   await page.waitForTimeout(BEAT.read);
 
   await glide(page, 240, 300);

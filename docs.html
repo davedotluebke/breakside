@@ -53,6 +53,7 @@
         <a href="#undo">Undo</a>
         <a href="#field">Field mode</a>
         <a href="#next-line">Next line</a>
+        <a href="#on-deck">On Deck</a>
         <a href="#all-tab">The All tab</a>
 
         <a href="#advanced" class="section">Advanced</a>
@@ -65,7 +66,8 @@
         <a href="#stats-scope">Stats scope</a>
         <a href="#export">Export</a>
         <a href="#multi-coach">Multi-coach</a>
-        <a href="#events-phases">Tournaments</a>
+        <a href="#events">Tournaments</a>
+        <a href="#phases">Phases</a>
         <a href="#narration">Speech narration</a>
     </nav>
 
@@ -177,7 +179,8 @@
                         Open a group — Throws, Turnover, or Defense — pick the play, pick the player.
                     </p>
                     <p>
-                        Use it when most of the game isn't worth recording but one block or one drop is.
+                        Use it when you don't plan to record every throw, but want to capture a great huck,
+                        a layout D, or an egregious throwaway.
                     </p>
                 </div>
                 <div class="docs-clip" data-clip="qs-06-key-play"></div>
@@ -355,12 +358,35 @@
                         point; the current point is unaffected.
                     </p>
                     <p>
-                        The <strong>Mode</strong> control chooses how you plan. <strong>Combined</strong>
-                        keeps a single Next line. <strong>Separate</strong> keeps distinct O and D lines and
-                        fields the right one based on who scored.
+                        The <strong>Mode</strong> control chooses how you plan. <strong>O/D</strong> keeps
+                        a single combined Next line. <strong>O&amp;D</strong> keeps distinct O and D lines
+                        and fields the right one based on who scored; a separate O or D line persists
+                        across points until you change it.
                     </p>
                 </div>
                 <div class="docs-clip" data-clip="line-01-next-line"></div>
+            </article>
+
+            <article class="docs-entry" id="on-deck">
+                <div>
+                    <h3>The On Deck line</h3>
+                    <p>
+                        In <strong>O/D</strong> mode the line toggle flips between <strong>Next</strong>
+                        and <strong>On Deck</strong> — the line for the point <em>after</em> next. Useful
+                        when the line coach has already set the next line and would otherwise be idle.
+                    </p>
+                    <p>
+                        When the next point starts, the On Deck line is promoted to become the Next line
+                        automatically, whether that point turns out to be offense or defense, and the On
+                        Deck view clears so you can plan the one after.
+                    </p>
+                    <p>
+                        The On Deck view adds a read-only <strong>On Deck</strong> column: each player's
+                        projected points-played going into that point, colored by its gender ratio — which
+                        is known in advance — so you can balance playing time and field a legal line.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="line-02-on-deck"></div>
             </article>
 
             <article class="docs-entry" id="all-tab">
@@ -391,8 +417,8 @@
                         <strong>Default line</strong> (O-line / D-line / Crossover). Delete is here too.
                     </p>
                     <p>
-                        Default line is what the Auto line filler reads when it decides who to put on for
-                        an offense or defense point.
+                        The Auto line filler uses each player's <strong>default line</strong>, if set, to help
+                        decide who to put on for an offense or defense point.
                     </p>
                 </div>
                 <div class="docs-clip" data-clip="adv-player-details"></div>
@@ -483,8 +509,8 @@
                         the fact.
                     </p>
                     <p>
-                        One set per possession: switching from zone to man partway through overwrites the
-                        tag rather than recording the change, so that possession reads as man.
+                        One set per possession: switching from zone to person partway through overwrites the
+                        tag rather than recording the change, so that possession reads as person.
                     </p>
                 </div>
                 <div class="docs-clip" data-clip="adv-sets-tagging"></div>
@@ -527,28 +553,54 @@
                         solo and appear once a second coach connects.
                     </p>
                     <p>
+                        The clip is the line coach's phone: they take <strong>Next Line</strong>, and
+                        <strong>Play-by-Play</strong> fills in when the other coach connects.
+                    </p>
+                    <p>
                         The line coach taps <strong>Lineup Ready</strong> to signal the next line is set;
                         the indicator turns green on both screens until the point starts. Lineup edits sync
-                        continuously either way — the ping is a notification, not a commit gate.
+                        continuously either way — the ping is simply a notification; the line coach is not
+                        prevented from making further changes.
                     </p>
                 </div>
                 <div class="docs-clip" data-clip="adv-multi-coach"></div>
             </article>
 
-            <article class="docs-entry" id="events-phases">
+            <article class="docs-entry" id="events">
                 <div>
-                    <h3>Tournaments and phases</h3>
+                    <h3>Tournaments and other events</h3>
                     <p>
-                        Group games under an <strong>event</strong> to get aggregate stats and a shared
-                        event roster across the weekend.
+                        <strong>New Event</strong> on a team card groups a weekend's games together. The
+                        event has its own card with its own settings, its own roster and aggregate stats,
+                        and a <strong>New Event Game</strong> button that starts games inside it.
                     </p>
                     <p>
-                        Tag games with free-form <strong>phases</strong> — Day 1, Pool Play, Bracket —
-                        retroactively, or auto-labelled by day. Stats screens and exports filter and group
-                        by phase.
+                        Event settings carry defaults — players on field, gender ratio, alternating gender
+                        pulls — so each game in the event doesn't need setting up again.
                     </p>
                 </div>
-                <div class="docs-clip" data-clip="adv-events-phases"></div>
+                <div class="docs-clip" data-clip="adv-events"></div>
+            </article>
+
+            <article class="docs-entry" id="phases">
+                <div>
+                    <h3>Phases within an event</h3>
+                    <p>
+                        <strong>Event settings</strong> is where phases are named — Day 1, Pool Play,
+                        Bracket, whatever the format is. <strong>Auto-label phases by day</strong> fills
+                        them in from the games' calendar dates.
+                    </p>
+                    <p>
+                        Once phases exist, every game in the event gains a phase picker, and the event's
+                        game list groups under phase headings. Tagging is retroactive — you can name the
+                        phases after the weekend and file the games then.
+                    </p>
+                    <p>
+                        Stats screens and Excel exports filter and group by phase; the event-roster export
+                        puts each phase on its own sheet.
+                    </p>
+                </div>
+                <div class="docs-clip" data-clip="adv-phases"></div>
             </article>
 
             <article class="docs-entry no-clip" id="narration">

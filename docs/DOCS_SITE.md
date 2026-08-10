@@ -33,9 +33,6 @@ Each of these is a decision, not an oversight. Revisit as they change.
   links need one.
 - **Pre-created Lines** (`Lines…` on the Line tab, sending in a whole line). Untested by
   the author at the time of writing, so not documented.
-- **On Deck line.** Lives on the unmerged `on-deck-line` branch. The Details entry
-  describes Combined vs Separate without it; add On Deck to that entry when the branch
-  merges.
 - **Share links / the public live viewer.** Left out of this pass.
 - **Speech narration** and **Export** are text-only entries — accurate, but no clip.
   Narration needs a real OpenAI + Claude backend and injected audio to record; export

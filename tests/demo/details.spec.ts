@@ -174,6 +174,37 @@ test('line-01-next-line', async ({ page }) => {
   await holdEnding(page, 'line-01-next-line');
 });
 
+test('line-02-on-deck', async ({ page }) => {
+  const t0 = Date.now();
+  await makeTeamWithRoster(page, 'line02');
+  await beginGame(page, 'offense');
+  await checkWholeLine(page);
+  await goToTab(page, 'line');
+  await startPoint(page);
+  await page.waitForTimeout(SYNC_ECHO_WAIT);
+  // Starting the point navigates away from the Line tab; come back so this
+  // clip matches the other Line-tab clips rather than showing the All layout.
+  await goToTab(page, 'line');
+
+  // On Deck only exists in Combined mode, which is the default (Mode: O/D).
+  await expect(page.locator('#panelODToggle')).toHaveText(/Next/i, { timeout: 10_000 });
+  resetCursor();
+  await markTrim(page, t0, 'line-02-on-deck');
+
+  // One tap moves the whole table a point further ahead.
+  await tap(page, '#panelODToggle', { after: BEAT.notable });
+  await expect(page.locator('#panelODToggle')).toHaveText(/On Deck/i, { timeout: 8_000 });
+  await page.waitForTimeout(BEAT.action);
+
+  const rows = page.locator('#panelActivePlayersTable tbody tr');
+  for (const i of [1, 3, 5]) {
+    await tapLocator(page, rows.nth(i).locator('input[type="checkbox"]'), { after: 420 });
+  }
+
+  await glide(page, 240, 640);
+  await holdEnding(page, 'line-02-on-deck');
+});
+
 test('all-01-panels', async ({ page }) => {
   const t0 = Date.now();
   await makeTeamWithRoster(page, 'all01');
