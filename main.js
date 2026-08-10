@@ -70,6 +70,9 @@ import './utils/helpers.js';
 import { currentTeam } from './store/storage.js';
 import './store/sync.js';
 import './settings/advancedSettings.js';
+// After advancedSettings (it reads the same store) and before any UI module,
+// so the resolved theme is in place before anything measures or paints.
+import './utils/theme.js';
 import './utils/statAccumulator.js';
 import './utils/eventStats.js';
 import './utils/gameLogRenderer.js';

@@ -9,15 +9,44 @@
      --border-*    border grays
      --text-*      text grays, darkest (strong) to lightest (disabled)
      --gender-*    FMP purple / MMP green player color coding
+     --shadow-*    elevation presets (see "Shadows" below — they become rings
+                   in dark mode, where a drop shadow is invisible)
    One-off component colors keep descriptive names (--blue-scope, --slate, …).
+
+   ── Two themes ──────────────────────────────────────────────────────────────
+   :root                    is the light palette (the app's original look).
+   :root[data-theme="dark"] overrides it with the dark palette.
+
+   `utils/theme.js` sets data-theme on <html> to a *resolved* value ("light" or
+   "dark") — never "auto" — so this file only ever needs the two blocks. A tiny
+   inline script in index.html applies the same value before first paint so the
+   app never flashes white. Nothing here keys off prefers-color-scheme directly;
+   the Auto setting is resolved in JS so the meta theme-color can follow along.
+
+   ── Rules for adding colors ─────────────────────────────────────────────────
+   1. Never write a raw hex in a component stylesheet. Add a token here.
+   2. Every token added to :root MUST get a dark counterpart below, unless it
+      is deliberately theme-invariant (--white, --black, --overlay-scrim …).
+   3. Pick the token by ROLE, not by value: a background uses --surface-*, text
+      uses --text-*, a rule/edge uses --border-*. The same light-mode hex often
+      maps to different tokens in different roles, and only role-correct tokens
+      survive the theme flip.
+   4. An accent used as *text on the page* uses the --*-ink variant, not the
+      base color. Base accents are tuned as button FILLS (white text on top);
+      inks are tuned for legibility against the page. In dark mode the two
+      diverge sharply — a fill that must stay dark enough for white text can't
+      also be light enough to read as text on black.
    ============================================================================ */
 
 :root {
+    color-scheme: light;
+
     /* Brand */
     --brand-orange: #eb8232;         /* header accent, focus rings, CTAs */
     --brand-orange-soft: #e19049;    /* dialog headers */
     --brand-orange-deep: #d06e1f;    /* orange CTA hover */
     --brand-orange-deeper: #b85a10;  /* orange CTA hover gradient end */
+    --brand-orange-ink: #b8600f;     /* orange as text on the page */
     --brand-purple: #7b68ae;         /* staging pill */
 
     /* Primary (Bootstrap blue family) */
@@ -26,13 +55,19 @@
     --color-primary-active: #0056b3;
     --color-primary-deep: #004085;
     --color-primary-glow: rgba(0, 123, 255, 0.4);
+    --color-primary-surface: #e7f1ff;
+    --color-primary-ink: #0056b3;
+    --color-primary-tint: rgba(0, 123, 255, 0.15);
 
     /* Success */
     --color-success: #28a745;
     --color-success-hover: #218838;
     --color-success-active: #1e7e34;
     --color-success-surface: #d4edda;
+    --color-success-surface-soft: #e9f5ec;
+    --color-success-border: #c3e6cb;
     --color-success-text: #155724;
+    --color-success-ink: #1a7a33;
     --color-success-tint: rgba(40, 167, 69, 0.2);
 
     /* Danger */
@@ -41,39 +76,54 @@
     --color-danger-active: #b02a37;
     --color-danger-deep: #921925;
     --color-danger-surface: #f8d7da;
+    --color-danger-surface-soft: #fbe7e9;
     --color-danger-surface-deep: #f5c6cb;
     --color-danger-text: #721c24;
+    --color-danger-ink: #c02333;
     --color-danger-glow: rgba(220, 53, 69, 0.4);
 
     /* Warning */
     --color-warning: #ffc107;
     --color-warning-hover: #e0a800;
     --color-warning-surface: #fff3cd;
+    --color-warning-surface-soft: #fff7e6;
+    --color-warning-border: #e8a86e;
     --color-warning-text: #856404;
+    --color-warning-ink: #8a5a00;
 
     /* Info */
     --color-info: #17a2b8;
     --color-info-hover: #138496;
     --color-info-active: #117a8b;
+    --color-info-ink: #10707f;
 
     /* Secondary (muted gray-blue buttons) */
     --color-secondary: #6c757d;
     --color-secondary-hover: #5a6268;
     --color-secondary-active: #545b62;
     --color-secondary-deep: #43484d;
+    --color-secondary-ink: #5a6268;
 
     /* Gender color coding (FMP purple / MMP green) */
     --gender-fmp: #7d3c98;
     --gender-fmp-surface: #e8d5f2;
     --gender-fmp-surface-hover: #d4b5e5;
     --gender-fmp-tint: rgba(125, 60, 152, 0.2);
+    --gender-fmp-ink: #7d3c98;
     --gender-mmp: #2d8659;
     --gender-mmp-surface: #d4e8dd;
     --gender-mmp-surface-hover: #b8dcc8;
     --gender-mmp-tint: rgba(45, 134, 89, 0.2);
+    --gender-mmp-ink: #226b46;
 
-    /* Surfaces, lightest to darkest */
-    --white: #fff;
+    /* Surfaces, lightest to darkest.
+       --surface-card is the "sheet" color: panels, dialogs, table bodies —
+       anything that in light mode was a literal white background. It is NOT
+       --white; --white stays literal white in both themes because it is also
+       the foreground on colored buttons. */
+    --white: #fff;                   /* literal white — theme-invariant */
+    --surface-card: #fff;            /* panels/dialogs/table bodies */
+    --surface-inset: #fff;           /* text inputs, selects, wells */
     --surface-sticky: #fafafa;       /* opaque bg for sticky table cells */
     --surface-subtle: #f8f9fa;
     --surface-row-hover: #f5f5f5;
@@ -88,16 +138,17 @@
     --surface-game-active: #e8f5e9;
     --surface-game-active-hover: #c8e6c9;
 
-    /* Borders */
+    /* Borders — "lighter" = least contrast, "strong" = most */
     --border-lighter: #eee;
     --border-soft: #dee2e6;
     --border-light: #ddd;
     --border-muted: #d0d0d0;
     --border-default: #ccc;
     --border-strong: #bbb;
+    --border-contrast: #000;         /* deliberate hard outline (selected chips) */
 
     /* Text tiers + neutrals */
-    --black: #000;
+    --black: #000;                   /* literal black — theme-invariant */
     --text-strong: #222;
     --text-primary: #333;
     --gray-dark: #444;               /* default <button> background */
@@ -107,8 +158,32 @@
     --text-placeholder: #999;
     --text-disabled: #aaa;
     --gray-chrome: #c0c0c0;          /* legacy footer band */
-    --ink-700: #495057;
-    --ink-800: #343a40;
+    --ink-700: #495057;              /* text */
+    --ink-800: #343a40;              /* text */
+    --btn-dark: #495057;             /* dark neutral button fill */
+    --btn-dark-hover: #343a40;
+    --btn-darker: #212529;
+    --btn-darker-hover: #1a1d20;
+
+    /* Overlays — scrims sit over content, so they stay dark in both themes */
+    --overlay-scrim: rgba(0, 0, 0, 0.5);
+    --overlay-scrim-strong: rgba(0, 0, 0, 0.7);
+    --overlay-tooltip: rgba(0, 0, 0, 0.85);
+    --on-overlay: #fff;              /* text on a scrim/tooltip */
+    --on-overlay-muted: rgba(255, 255, 255, 0.75);
+
+    /* Shadows. In dark mode a drop shadow against a black page is invisible,
+       so each preset also carries a hairline ring; the dark block swaps the
+       ring to a light one and keeps a heavier shadow for real depth. */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.25);
+    --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.3);
+    --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+    /* Hairline that separates a surface from what's behind it. Invisible in
+       light mode (shadows already do that job), a visible ring in dark. */
+    --ring-hairline: 0 0 0 0 rgba(0, 0, 0, 0);
 
     /* One-off component colors */
     --blue-action: #0066cc;          /* key-play/pull selected, pause btn */
@@ -129,4 +204,182 @@
     --accent-purple-hover: #5b4bd5;
     --slate: #5a6f8a;                /* roster nav btn */
     --slate-hover: #475a72;
+}
+
+/* ============================================================================
+   DARK THEME
+   Page background is pure #000: on an OLED panel a black pixel is an off
+   pixel, and the play-by-play screens are what a coach stares at for two
+   hours straight. Everything layered on top steps up only as far as it has
+   to, and separation leans on borders/rings rather than luminance so the
+   majority of the screen stays unlit.
+
+   Accent FILLS keep their light-mode values — they are colored surfaces with
+   white text on top, and lightening them would cost that text its contrast.
+   The --*-ink variants are what get lifted, because those are the ones drawn
+   as text/icons directly against the page.
+   ============================================================================ */
+:root[data-theme="dark"] {
+    color-scheme: dark;
+
+    /* Brand — orange already reads well on black; ink is lifted for text. */
+    --brand-orange: #eb8232;
+    --brand-orange-soft: #e19049;
+    --brand-orange-deep: #d06e1f;
+    --brand-orange-deeper: #b85a10;
+    --brand-orange-ink: #f9a35c;
+    --brand-purple: #8f7dc4;
+
+    /* Primary */
+    --color-primary: #0d7ef0;
+    --color-primary-hover: #1a8bff;
+    --color-primary-active: #0a6ccc;
+    --color-primary-deep: #a9d2ff;   /* was dark-on-light text; now light-on-dark */
+    --color-primary-glow: rgba(77, 163, 255, 0.5);
+    --color-primary-surface: #10233d;
+    --color-primary-ink: #5cb0ff;
+    --color-primary-tint: rgba(77, 163, 255, 0.18);
+
+    /* Success */
+    --color-success: #248f3c;
+    --color-success-hover: #2ba449;
+    --color-success-active: #1e7e34;
+    --color-success-surface: #102a19;
+    --color-success-surface-soft: #0d2015;
+    --color-success-border: #235c33;
+    --color-success-text: #6fdd91;
+    --color-success-ink: #4fd074;
+    --color-success-tint: rgba(63, 196, 95, 0.22);
+
+    /* Danger */
+    --color-danger: #c9303f;
+    --color-danger-hover: #d93b4a;
+    --color-danger-active: #b02a37;
+    --color-danger-deep: #ffb3ba;
+    --color-danger-surface: #33131a;
+    --color-danger-surface-soft: #2a1015;
+    --color-danger-surface-deep: #4a1a22;
+    --color-danger-text: #ff96a1;
+    --color-danger-ink: #ff6b78;
+    --color-danger-glow: rgba(255, 107, 120, 0.45);
+
+    /* Warning */
+    --color-warning: #d9a406;
+    --color-warning-hover: #c29305;
+    --color-warning-surface: #33280a;
+    --color-warning-surface-soft: #2a2008;
+    --color-warning-border: #6b5320;
+    --color-warning-text: #f2c94c;
+    --color-warning-ink: #ffcf4d;
+
+    /* Info */
+    --color-info: #148ea1;
+    --color-info-hover: #16a2b8;
+    --color-info-active: #117a8b;
+    --color-info-ink: #3fc9de;
+
+    /* Secondary */
+    --color-secondary: #5c646b;
+    --color-secondary-hover: #6b747c;
+    --color-secondary-active: #545b62;
+    --color-secondary-deep: #3a3f44;
+    --color-secondary-ink: #9aa3ab;
+
+    /* Gender coding — the light purple/green are far too dark to read on
+       black, so the inks lift hard while the fills stay usable under white. */
+    --gender-fmp: #7f4a9c;
+    --gender-fmp-surface: #2a1638;
+    --gender-fmp-surface-hover: #3a1f4d;
+    --gender-fmp-tint: rgba(186, 130, 224, 0.22);
+    --gender-fmp-ink: #c491e8;
+    --gender-mmp: #27754e;
+    --gender-mmp-surface: #10291d;
+    --gender-mmp-surface-hover: #173a29;
+    --gender-mmp-tint: rgba(79, 201, 138, 0.22);
+    --gender-mmp-ink: #5fcf94;
+
+    /* Surfaces — true black page, minimal steps above it */
+    --white: #fff;                   /* unchanged: still literal white */
+    --surface-card: #0d0d0d;
+    --surface-inset: #151515;
+    --surface-sticky: #0d0d0d;       /* must stay opaque over scrolled content */
+    --surface-subtle: #141414;
+    --surface-row-hover: #1c1c1c;
+    --surface-page: #000;            /* true black — OLED pixels off */
+    --surface-header-cell: #161616;
+    --surface-light: #1a1a1a;
+    --surface-hover: #242424;
+    --surface-raised: #262626;
+    --surface-mid: #2b2b2b;
+    --surface-dim: #303030;
+    --surface-sorted: #14263d;
+    --surface-game-active: #0f2a17;
+    --surface-game-active-hover: #17402240;
+
+    /* Borders — the contrast ramp inverts: "lighter" is now the dimmest */
+    --border-lighter: #242424;
+    --border-soft: #2e2e2e;
+    --border-light: #383838;
+    --border-muted: #424242;
+    --border-default: #4d4d4d;
+    --border-strong: #666;
+    --border-contrast: #fff;         /* hard outline flips to white on black */
+
+    /* Text — the ramp inverts end for end */
+    --black: #000;                   /* unchanged: still literal black */
+    --text-strong: #f2f2f2;
+    --text-primary: #e4e4e4;
+    --gray-dark: #3d3d3d;            /* default <button> fill */
+    --text-secondary: #cdcdcd;
+    --text-muted: #b0b0b0;
+    --text-faint: #949494;
+    --text-placeholder: #808080;
+    --text-disabled: #6b6b6b;
+    --gray-chrome: #262626;
+    --ink-700: #cbd1d7;
+    --ink-800: #e2e6ea;
+    --btn-dark: #33383d;
+    --btn-dark-hover: #414851;
+    --btn-darker: #23272b;
+    --btn-darker-hover: #2d3237;
+
+    /* Overlays keep their light-mode values — a scrim over content is dark in
+       both themes — but the tooltip fill needs a rim to separate from black. */
+    --overlay-scrim: rgba(0, 0, 0, 0.66);
+    --overlay-scrim-strong: rgba(0, 0, 0, 0.8);
+    --overlay-tooltip: rgba(38, 38, 38, 0.96);
+    --on-overlay: #fff;
+    --on-overlay-muted: rgba(255, 255, 255, 0.75);
+
+    /* Shadows become rings. A soft black blur over a black page is nothing;
+       a 1px light ring is what actually reads as "this sits above that". */
+    --shadow-xs: 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --shadow-sm: 0 0 0 1px rgba(255, 255, 255, 0.08);
+    --shadow-md: 0 0 0 1px rgba(255, 255, 255, 0.10), 0 2px 8px rgba(0, 0, 0, 0.7);
+    --shadow-lg: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 6px 20px rgba(0, 0, 0, 0.8);
+    --shadow-xl: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 10px 34px rgba(0, 0, 0, 0.85);
+    --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+    --ring-hairline: 0 0 0 1px rgba(255, 255, 255, 0.09);
+
+    /* One-off component colors. These are saturated fills that carry white
+       text; they survive the flip as-is except where they were tuned against
+       a white page. */
+    --blue-action: #0b64c4;
+    --blue-scope: #2d6cdf;
+    --blue-sub-selected: #2669b5;
+    --green-bright: #3f9243;
+    --green-deep: #158c40;
+    --green-phase: #38806a;
+    --red-bright: #d13a2f;
+    --orange-vivid: #e08600;
+    --orange-vivid-deep: #c96b00;
+    --orange-alert: #e07700;
+    --orange-alert-hover: #cc6b00;
+    --orange-cta: #e87722;
+    --orange-cta-deep: #d35400;
+    --orange-cta-deeper: #c0392b;
+    --accent-purple: #6c5ce7;
+    --accent-purple-hover: #5b4bd5;
+    --slate: #46586e;
+    --slate-hover: #55697f;
 }

@@ -80,6 +80,11 @@ const advancedSettings = (function() {
         // --- Sync ---
         'sync.refreshIntervalSec': 10,                   // cloud auto-refresh cadence (applies after reload)
         // --- Display ---
+        // auto | light | dark. Applied by utils/theme.js (and by an inline
+        // copy of its resolve step in index.html, so the first paint is already
+        // the right theme). Dark uses a true-black page background, which on an
+        // OLED phone is a real battery saving over a two-hour game.
+        'display.theme': 'auto',
         'display.showPlayerNumbers': true,               // jersey numbers alongside names everywhere
         // --- Field ---
         'field.endzoneYards': 20,                         // endzone depth drawn on the Field tab (20 = USAU, 25 = some leagues)
@@ -328,6 +333,12 @@ const advancedSettings = (function() {
             group: 'Display',
             fields: [
                 {
+                    key: 'display.theme', label: 'Theme',
+                    help: 'Dark uses a true-black background — on an OLED phone those pixels are switched off, which meaningfully extends battery over a long game. Auto follows your device setting.',
+                    type: 'select',
+                    options: [['auto', 'Auto (match device)'], ['light', 'Light'], ['dark', 'Dark']]
+                },
+                {
                     key: 'display.showPlayerNumbers', label: 'Show player numbers',
                     help: 'Show jersey numbers alongside player names (roster, lines, play-by-play, dialogs). Turn off for a cleaner display when you know your players by name.',
                     type: 'toggle'
@@ -529,6 +540,11 @@ const advancedSettings = (function() {
                 // and for us to re-test new ones. See ui/hints.js.
                 if (key === 'hints.hideAll' && window.hints && typeof window.hints.resetAll === 'function') {
                     window.hints.resetAll();
+                }
+                // Theme is the one setting whose effect must be instant — the
+                // user is looking at the thing they just changed.
+                if (key === 'display.theme' && window.theme) {
+                    window.theme.applyTheme(el.value);
                 }
                 // A toggle flip may unhide a gated row (e.g. flipping the
                 // vocabulary hint on reveals the prompt textarea).
