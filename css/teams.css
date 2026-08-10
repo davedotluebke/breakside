@@ -561,7 +561,7 @@
 
 .unknown-player {
     background-color: var(--btn-disabled-bg);
-    border: 2px dashed var(--border-strong);
+    border: 2px dashed var(--border-heavy);
     font-style: italic;
 }
 

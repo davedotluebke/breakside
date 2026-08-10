@@ -21,6 +21,9 @@ export default defineConfig({
   expect: { timeout: 8_000 },
   fullyParallel: false,
   retries: 0,
+  // Wipe tests/test-data-dir first: the shots are a visual baseline, so a run
+  // must not inherit teams from the previous one (see tests/global-setup.ts).
+  globalSetup: '../global-setup.ts',
   reporter: [['list']],
   outputDir: path.join(__dirname, 'test-results'),
   use: {

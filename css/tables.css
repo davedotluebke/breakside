@@ -63,7 +63,7 @@ th {
     font-size: 0.9em;
     color: var(--text-primary);
     background-color: var(--surface-page);
-    border-left: 3px solid var(--border-strong);
+    border-left: 3px solid var(--border-heavy);
     border-radius: 2px;
     /* Preserve newlines from formatTeamStatsLine() so each stat stays on its own line */
     white-space: pre-line;
@@ -361,7 +361,7 @@ ul {
 #rosterTable th, #rosterTable td,
 #eventRosterTable th, #eventRosterTable td,
 #gameSummaryTable th, #gameSummaryTable td {
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--border-heavy);
     padding: 5px;
     white-space: nowrap;
     background-color: var(--surface-card);  /* opaque so sticky cells don't bleed-through */
@@ -623,7 +623,7 @@ td.player-mmp,
     text-align: left;
     background-color: var(--surface-sticky);
 
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--border-heavy);
 }
 
 /* styles for the names, time, and points-played columns */
@@ -729,7 +729,7 @@ td.player-mmp,
     background-color: var(--surface-card);
     margin: 15% auto; /* 15% from the top and centered */
     padding: 20px;
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--border-heavy);
     width: 80%; /* Could be more or less, depending on screen size */
 }
 

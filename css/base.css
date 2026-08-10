@@ -98,7 +98,7 @@ button.inactive {
 
 
 table {
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--border-heavy);
     margin-left: auto; 
     margin-right: auto;
     border-collapse: collapse;
@@ -128,10 +128,9 @@ select, textarea {
     border: 1px solid var(--border-default);
 }
 
-::placeholder {
-    color: var(--text-placeholder);
-    opacity: 1;   /* Firefox dims placeholders by default; the token already is dim */
-}
+/* Placeholders are deliberately NOT overridden: the UA picks one per
+   color-scheme, and its light-mode grey (#767676) is more legible than
+   --text-placeholder (#999) would be. */
 
 /* Utility classes for JS-generated markup (replaces inline style="" colors) */
 .icon-danger {

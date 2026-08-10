@@ -114,7 +114,7 @@
     --gender-mmp-surface: #d4e8dd;
     --gender-mmp-surface-hover: #b8dcc8;
     --gender-mmp-tint: rgba(45, 134, 89, 0.2);
-    --gender-mmp-ink: #226b46;
+    --gender-mmp-ink: #2d8659;
 
     /* Surfaces, lightest to darkest.
        --surface-card is the "sheet" color: panels, dialogs, table bodies —
@@ -145,6 +145,8 @@
     --border-muted: #d0d0d0;
     --border-default: #ccc;
     --border-strong: #bbb;
+    --border-heavy: #808080;        /* heavier than -strong: stats-table grid,
+                                       modal outlines, dashed placeholders */
     --border-contrast: #000;         /* deliberate hard outline (selected chips) */
 
     /* Text tiers + neutrals */
@@ -450,6 +452,7 @@
     --border-muted: #4d4d4d;
     --border-default: #5a5a5a;
     --border-strong: #707070;
+    --border-heavy: #7d7d7d;
     --border-contrast: #dcdcdc;      /* hard outline flips to near-white; pure
                                         white at 3px glares against a black page */
 

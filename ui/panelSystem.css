@@ -181,7 +181,7 @@ body.game-screen-active header {
 
 .panel-action-btn:hover {
     background: var(--surface-light);
-    border-color: var(--border-strong);
+    border-color: var(--border-heavy);
     color: var(--text-primary);
 }
 
@@ -759,7 +759,7 @@ body.game-screen-active header {
 /* Role is available/unclaimed - grey, claimable */
 .role-claim-btn.role-available {
     background: linear-gradient(135deg, var(--surface-light) 0%, var(--surface-dim) 100%);
-    border-color: var(--border-strong);
+    border-color: var(--border-heavy);
     color: var(--text-muted);
 }
 
@@ -2030,7 +2030,7 @@ body.game-screen-active header {
     /* Double-thick rule to firmly separate the header band from the players.
        !important beats the `border: none` the id-scoped sticky-column rules
        below put on the sticky checkbox/name/time cells. */
-    border-bottom: 3px solid var(--border-strong) !important;
+    border-bottom: 3px solid var(--border-heavy) !important;
 }
 
 .panel-player-table .select-line-controls-row th .select-line-stats-toggle {
