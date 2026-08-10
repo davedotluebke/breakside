@@ -45,3 +45,10 @@ tests/test-data-dir/
 # Claude Code per-session state (agent worktrees, session memory/transcripts)
 .claude/worktrees/
 .claude/projects/
+
+# Per-session dev-server launch configs. Every session that runs the in-IDE
+# preview writes a config here, and tracking it turned routine preview setup
+# into a stream of one-line diffs on main. If a launch config is ever worth
+# sharing across all sessions, add it back deliberately with
+# `git add -f .claude/launch.json`.
+.claude/launch.json

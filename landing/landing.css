@@ -583,6 +583,24 @@ body {
     font-size: 0.95rem;
 }
 
+.feature-link {
+    background: none;
+    border: none;
+    color: var(--brand-orange);
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    margin-top: var(--space-md);
+    display: inline-block;
+}
+
+.feature-link:hover {
+    color: var(--brand-orange-light);
+    text-decoration: underline;
+}
+
 /* =============================================================================
    Install Section
    ============================================================================= */
@@ -749,6 +767,35 @@ body {
 
 .modal-close:hover {
     color: white;
+}
+
+/* Field Mode demo video lightbox — the video sizes itself to the viewport
+   (portrait clip, so height is the constraint) instead of .modal-content's
+   form-width box. */
+.video-modal-content {
+    position: relative;
+    max-width: 92vw;
+    max-height: 92vh;
+}
+
+.video-modal-content video {
+    display: block;
+    height: 86vh;
+    max-width: 92vw;
+    border-radius: var(--radius-lg);
+    background: black;
+}
+
+.video-modal .modal-close {
+    top: -0.5rem;
+    right: -2rem;
+}
+
+@media (max-width: 640px) {
+    .video-modal .modal-close {
+        top: -2.2rem;
+        right: 0;
+    }
 }
 
 .auth-header {

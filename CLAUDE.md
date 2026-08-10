@@ -159,5 +159,5 @@ FastAPI app in `main.py`. File-based JSON storage (no database).
 Key env vars: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_JWT_SECRET`, `ULTISTATS_DATA_DIR`, `ULTISTATS_AUTH_REQUIRED`. See `ultistats_server/config.py` for full list.
 
 ## CI/CD
-- **Production**: GitHub Actions (`.github/workflows/main.yml`) deploys frontend on push to `main`. Skips deploy if changes only touch `ultistats_server/`, `data/`, `scripts/`, `*.py`, or `*.md`.
+- **Production**: GitHub Actions (`.github/workflows/main.yml`) deploys frontend on push to `main`. Skips deploy if changes only touch `ultistats_server/`, `data/`, `scripts/`, `*.py`, `*.md`, `.claude/`, or `.gitignore`. Note `.github/` is deliberately *not* on that list, so a workflow edit still triggers a run and can be verified by pushing it.
 - **Staging**: Manual deploy via `./scripts/deploy-staging.sh` (no CI — deploys working directory directly).

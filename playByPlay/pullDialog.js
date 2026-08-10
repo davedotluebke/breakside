@@ -6,8 +6,9 @@ import { Gender, Pull, Possession, UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData, currentTeam } from '../store/storage.js';
 import {
     currentGame, getLatestPoint, getPlayerFromName, getGenderRatioForPoint,
-    formatPlayerName, buildPointPlayerLookup,
+    formatPlayerName, buildPointPlayerLookup, pointHasPull,
 } from '../utils/helpers.js';
+import { showControllerToast } from '../game/controllerState.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { getCurrentMode } from '../ui/panelSystem.js';
 import { log } from '../utils/logger.js';
@@ -25,32 +26,11 @@ let pullHangMs = null;     // captured hang in ms | null
 let pullHangRunning = false;
 let pullHangTimer = null;  // 100ms label updater while running
 
-// Last defensive set picked in this session — sticky default across points.
-let lastPullSet = '';
-
-/**
- * Show + populate the defensive-set picker for opted-in teams
- * (team.setsEnabled with non-empty sets.defensive); hide otherwise.
- */
-function populatePullSetPicker() {
-    const row = document.getElementById('pullSetRow');
-    const select = document.getElementById('pullSetSelect');
-    if (!row || !select) return;
-
-    const labels = (currentTeam?.setsEnabled && currentTeam.sets?.defensive) || [];
-    if (!labels.length) {
-        row.style.display = 'none';
-        return;
-    }
-
-    select.innerHTML = '<option value="">—</option>' + labels.map(label => {
-        const esc = String(label).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-        return `<option value="${esc}">${esc}</option>`;
-    }).join('');
-    // Sticky default: keep the last-picked set if it still exists
-    select.value = labels.includes(lastPullSet) ? lastPullSet : '';
-    row.style.display = '';
-}
+// Defensive sets are NOT picked here. The picker used to live in this dialog
+// and was removed 2026-08-09: it overflowed the dialog on a phone, and at pull
+// time the coach usually can't know yet what set the D will end up running.
+// Sets are tagged from the Full and Field tabs instead, once play makes it
+// obvious — see the set-cycle control in fullPbp.js / fieldPbp.js.
 
 function pullHangLabel() {
     if (pullHangRunning) return '⏱ ' + ((performance.now() - pullHangStart) / 1000).toFixed(1) + 's — tap on landing';
@@ -167,12 +147,6 @@ function showPullDialog() {
     pullSelectedQuality = null;
     pullSelectedGender = null;
 
-    // Defensive set picker (per-possession set tagging). Rendered only for
-    // teams that opted in AND configured defensive labels; defaults to the
-    // last set picked this session (coaches usually stay in one D for runs
-    // of points), first-ever default is unspecified.
-    populatePullSetPicker();
-    
     // Reset quality buttons - remove selected class from all
     document.querySelectorAll('.pull-quality-btn').forEach(btn => {
         btn.classList.remove('selected');
@@ -476,7 +450,21 @@ function createPullEvent() {
         console.error('Cannot create pull event: no game or point');
         return;
     }
-    
+
+    // One pull per point. Narration can record the pull too, and its slow
+    // pass lands a few seconds after the coach stops talking — so a coach who
+    // narrates the pull and then taps Proceed would otherwise end up with two
+    // Pull events. First one wins, symmetric with applyPull's guard on the
+    // narration side. Normally unreachable: a narrated pull closes this
+    // dialog, so this only catches the race where Proceed beats that by a
+    // hair.
+    if (pointHasPull(point)) {
+        log('Pull already recorded for this point; ignoring dialog entry');
+        showControllerToast('Pull already recorded from narration', 'info');
+        closePullDialog();
+        return;
+    }
+
     // Ensure a player has been selected (including Unknown Player)
     if (pullSelectedPlayer === undefined) {
         console.error('Cannot create pull event: no player selected');
@@ -516,15 +504,6 @@ function createPullEvent() {
         // Create defensive possession for pull
         firstPossession = new Possession(false);
         point.addPossession(firstPossession);
-    }
-
-    // Tag the defensive set (opted-in teams only; '' = unspecified). Also
-    // remember it as the sticky default for the next pull dialog.
-    const setSelect = document.getElementById('pullSetSelect');
-    const setRow = document.getElementById('pullSetRow');
-    if (setSelect && setRow && setRow.style.display !== 'none') {
-        firstPossession.set = setSelect.value || null;
-        lastPullSet = setSelect.value || '';
     }
 
     // Add pull event at the beginning of the event list. Recording a pull is a
@@ -632,6 +611,10 @@ function getExpectedPullGender(game) {
 
 // --- ES-module exports ---
 // showPullDialog is imported by game/pointManagement.js — no shim needed.
-export { initializePullDialog, showPullDialog };
+// closePullDialog is imported by narration/narrationEngine.js: a narrated
+// pull dismisses this dialog, since the coach has already supplied the pull
+// by voice and would otherwise be left staring at a form for an event that
+// is already in the log.
+export { initializePullDialog, showPullDialog, closePullDialog };
 
 

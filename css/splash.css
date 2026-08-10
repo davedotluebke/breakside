@@ -1,0 +1,84 @@
+/* =============================================================================
+ * Boot splash screen
+ *
+ * A full-viewport white panel with the Breakside wordmark, painted before any
+ * app screen is usable. It exists because index.html ships with
+ * #teamRosterScreen visible (no inline display:none — see ui/splashScreen.js),
+ * so the Start Game subscreen flashes on screen until initializeApp() finishes
+ * auth and navigates to the team list. The splash covers that flash, then
+ * retracts upward like a window shade.
+ *
+ * Deliberately an OVERLAY rather than "hide the screens until ready": the app
+ * measures button widths at DOMContentLoaded (matchButtonWidths), and hidden
+ * elements measure zero. A fixed overlay leaves the layout underneath intact.
+ *
+ * Linked early in index.html's <head> (right after tokens.css) so the splash is
+ * fully styled at first paint. Values here are self-contained apart from one
+ * optional staging token, which carries a literal fallback.
+ * ============================================================================= */
+
+#splashScreen {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;          /* above every dialog/overlay (max elsewhere: 10000) */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;      /* matches the wordmark's own white background */
+    transform: translateY(0);
+    will-change: transform;
+    /* Only ever visible against the app during the retract, where it reads as a
+       physical shade lifting off the content below. */
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+}
+
+#splashScreen .splash-logo {
+    /* "Maximum width" on a portrait phone; capped so a wide desktop viewport
+       doesn't blow the wordmark up to absurd size. max-height + contain keeps
+       it whole on short landscape viewports. */
+    width: min(92vw, 900px);
+    max-height: 60vh;
+    object-fit: contain;
+    /* No lazy/async decode games — this is the one image that must be up front. */
+    display: block;
+}
+
+/* Staging only: same visual distinction as the purple header pill, so a splash
+   screenshot can't be mistaken for production. */
+#splashScreen .splash-staging-pill {
+    display: none;
+}
+
+body.staging #splashScreen {
+    flex-direction: column;
+    gap: 18px;
+}
+
+body.staging #splashScreen .splash-staging-pill {
+    display: inline-flex;
+    background: var(--brand-purple, #7b68ae);
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 10px;
+}
+
+/* The retract. Eases in (slow start, fast exit) so it reads as a shade snapping
+   up rather than a uniform slide. Keep the duration in sync with SLIDE_MS in
+   ui/splashScreen.js — that value is the fallback timer for removing the node
+   if transitionend never fires. */
+#splashScreen.splash-retracting {
+    transform: translateY(-100%);
+    transition: transform 520ms cubic-bezier(0.4, 0, 0.9, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #splashScreen.splash-retracting {
+        transform: none;
+        opacity: 0;
+        transition: opacity 200ms linear;
+    }
+}

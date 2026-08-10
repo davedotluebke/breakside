@@ -437,18 +437,27 @@ does the set arithmetic — it structurally cannot pick or fill a line),
 wholesale/everybody-off idiom, additive partial utterances, numbers-in-names
 matching, short delta toasts. Field-verified on production. Remaining:
 
-- [ ] **Make the 18-scenario lineup eval permanent.** The eval matrix that
-      gated every prompt/contract change this round (Wholesale family, clear
-      idioms, corrections/retractions, jersey subs, Team C numbers-in-names,
-      additive cases — run end-to-end: prompt → model → `_derive_players` →
-      the real `lineupResolve.js` matcher under node) lived in session
-      scratchpad and is gone. Port the scenarios into the opt-in
-      `NARRATION_LIVE_TESTS=1` section of
-      `ultistats_server/test_narration_lineup.py` (parametrized over
-      claude-haiku-4-5 + claude-sonnet-4-5-20250929) so future prompt or
-      model changes can re-run the gate. Scenario definitions are
-      reconstructable from the S1/C1-style cases already in that file's live
-      test plus ARCHITECTURE.md § Lineup Narration.
+- [x] **Make the 18-scenario lineup eval permanent.** *(DONE — ported by commit
+      `0eeba34`; this entry was stale. It lives in
+      `ultistats_server/test_narration_lineup.py` as
+      `test_live_lineup_eval_matrix`: all 18 scenarios (W1–W3, C1–C3, S1–S5,
+      A1–A5, M1–M2) parametrized over `claude-haiku-4-5` +
+      `claude-sonnet-4-5-20250929`, each running end-to-end — real prompt →
+      real model → `_derive_players` → the real `narration/lineupResolve.js`
+      matcher under node — behind the `NARRATION_LIVE_TESTS=1` gate. S1 is
+      constraint-graded rather than exact-matched; every other scenario asserts
+      an exact resolved set, and all of them assert no unmatched-name leak.*
+
+      **First actual run 2026-08-06: 36/36 green, twice consecutively, ~80s
+      and a few cents per pass.** The gate had never been executed since it was
+      written, so this is its first confirmation that it both runs and passes.
+      Model coverage checks out against `_lineup_model()`: the built-in default
+      (`claude-sonnet-4-5-20250929`) and production's Haiku override are both in
+      the matrix. Run it before shipping any lineup prompt or model change:
+
+      ```bash
+      cd ultistats_server && NARRATION_LIVE_TESTS=1 python3 -m pytest test_narration_lineup.py -k live -q
+      ```
 - [ ] **Field-watch two deliberate behavior choices** (revisit only if they
       annoy in practice): reciting a full line over a non-empty selection
       UNIONS (e.g. 9/7 warning toast; wholesale first is the intended flow),
@@ -566,9 +575,42 @@ OpenAI re-applies to every VAD-segmented utterance (~2.3 per line call), plus tr
       single-scenario flip across four runs — inherent LLM variance at the F1
       threshold, see test_scenarios.py docstring). ARCHITECTURE.md § AI Narration
       documents the terminology.)*
-- [ ] **Add `record_pull` to the slow-pass schema**
-  - Currently if a coach narrates a pull (e.g. "Alice flicks an OI pull, brick"), it's ignored
-  - Easy add: extend the event schema in `ultistats_server/narration.py` and add an applier in `narration/narrationEngine.js`
+- [x] **Add `record_pull` to the slow-pass schema** *(done 2026-08-06, branch
+      `narration-record-pull`) — `kind: "pull"` in the schema
+      (`puller`, `flick`, `roller`, `io`, `oi`, `brick`, `quality`) plus
+      `applyPull` in `narration/narrationEngine.js`. Three guards make it safe
+      to narrate a pull the dialog already collected: **a named puller is
+      required** (a bare `{"kind":"pull"}` is dropped client-side and the
+      prompt shows it as a WRONG example); **one Pull per point, checked from
+      both sides** via `pointHasPull()` in `utils/helpers.js` — narration skips
+      if the dialog got there first AND the dialog skips (with a toast) if
+      narration did, since the slow pass lands seconds after the coach stops
+      talking and either order is reachable; and **a narrated pull closes the
+      pull dialog**, so the coach isn't left filling in a form for an event
+      already in the log. Rationale: `showPullDialog()` fires automatically at
+      every D-point start, so an unattributed narrated pull is pure duplicate.
+      End-to-end this makes the flow hands-free: Start Point → dialog opens →
+      tap mic, speak, stop → event lands, dialog closes itself.
+      Hardening the puller rule was driven by live probing — Haiku emitted a
+      pullerless pull for "we pulled it" and "they pull" until the rule got
+      an explicit REQUIRED gate; after it, 7/7 probe cases twice consecutively
+      (named pull, named pull after a mid-narration score, named pull with
+      flags, plus the four unattributed/opponent-pull negatives from the
+      corpus). Corpus: 018's expected gains the Daniel pull; 007/010/011/015
+      stay unchanged as the negatives. New deterministic suite
+      `ultistats_server/test_narration_finalize.py` (11 tests) pins the prompt
+      rules and gives `score_events`/`_event_signature` their first coverage
+      in the default run — the live corpus module is entirely
+      `NARRATION_LIVE_TESTS`-gated, so they had none;
+      `tests/unit/pointHasPull.test.mjs` (9 tests) pins the duplicate guard.
+      Suites: backend 346, unit 157, e2e 21/21.*
+  - [ ] **Still needs a human: the mic leg.** Everything up to the microphone
+        is verified, but nobody has confirmed on a real device that the mic
+        button actually takes the tap while the pull dialog is up (it should —
+        `z-index` 2000 over the modal's 1000, and `startRecording` has no
+        dialog gate — but that's read off the CSS, not observed), nor timed
+        how long the dialog lingers while the slow pass runs. Worth folding
+        into the next staging field test.
 - [ ] **Re-evaluate streaming events (fast pass)**
   - Currently disabled via `FAST_PASS_EVENTS_ENABLED = false` in `narrationEngine.js`
   - All code is preserved — flip the flag to re-enable
@@ -581,7 +623,10 @@ Today the mic only narrates plays *during* a point. Two adjacent flows would ext
 
 - [ ] **Speech-driven point start (incl. pull recording)**
   - Tap mic on the pre-point screen and speak: "Alice, Bob, Carol, Dan, Eve, Frank, Grace — Bob hucks a flick OI pull, brick" → app selects those 7 players, transitions to in-point, and records the pull with puller + flags in one shot.
-  - Requires the `record_pull` schema gap to be closed first (see Coverage above) so the pull leg of this flow has somewhere to land.
+  - ~~Requires the `record_pull` schema gap to be closed first~~ — **unblocked
+    2026-08-06**: `kind: "pull"` and `applyPull` exist (see Coverage above), so
+    the pull leg of this flow has somewhere to land. Note the puller-required
+    rule: "Bob hucks a flick OI pull" works, a bare "we pull" records nothing.
   - Touch points: `narration/narrationEngine.js` (new pre-point intent + applier), new pull schema in `ultistats_server/narration.py`, `pointManagement.js` (programmatic line-select + start-point hook), `game/gameScreen.js` (mic surfaced on Line tab when between points).
   - Open question: one mic-tap or two? Single tap that handles "line + pull" feels natural orally but mixes two state transitions; safer to gate the pull narration behind the line being confirmed first.
 
@@ -628,7 +673,14 @@ Remaining work:
 - [ ] **Hand-record 004b / 008b / 015b / 019b / 021** in noisy outdoor conditions; same expected.json, different audio.flac. Built-in regression for outdoor robustness. *(These five are the only scenario dirs still without audio.)*
 - [ ] **Re-record a live-conditions scenario to replace the deleted `022_live_field_point`.** The original was a phone recording of a real game point — wind, sideline chatter, dead-air gaps that fragmented the transcript into subject-less clauses ("Upfield to the handler.Turns it over…"). It caught four prompt gaps clean TTS never did. It was deleted in the name scrub because the recording *speaks real player names*, which no text edit can fix. Narrate a fresh point calling the generic roster (Alice/Bob/Charlie/Dana/Eve/Hank/Iris) and rebuild roster/transcript/expected alongside it.
 - [ ] **Schema gap: opponent unforced turnover.** Several scenarios above (007, 008, 014) gloss over what happens when the opponent throws it away to us — the narration schema in `ultistats_server/narration.py` has no event for "they turnover". The Full-PBP requirements doc models this as `Defense{unforcedError, defender=null}`. Decide whether to add it to the narration schema or handle implicitly via the next throw being from us.
-- [ ] **Schema gap: `record_pull`.** Multiple scenarios start with "they pull" / "we pull" — currently dropped on the floor. Adding `kind: "pull"` (with `puller`, `out_of_bounds?`, `brick?`, `landed_in_endzone?`) would let those narrations carry their first event.
+- [x] **Schema gap: `record_pull`.** *(closed 2026-08-06 — see the Coverage
+      section above.)* Worth knowing how it landed, because the answer was not
+      what this entry assumed: the "they pull" / "we pull" openers **stay**
+      dropped on the floor, deliberately. They name no puller, and an
+      unattributed pull duplicates what the pull dialog already collects at
+      point start. Only a pull that names one of our players becomes an event.
+      So 007/010/011/015 keep their expectations as negative cases, and 018
+      ("Daniel pulls") is the positive one.
 - [ ] **Noise injection** — mix in wind/crowd samples to simulate field conditions, run the same scenarios at varying SNR.
 - [ ] **CI integration** — run on PRs that touch `narration/` or `ultistats_server/narration.py`. Fail on metric regression beyond a threshold. Cost note: ~$0.10 per scenario per run.
 
@@ -637,7 +689,35 @@ Remaining work:
 ## Backlog
 
 - [ ] **Code health: fold duplicated game-screen helpers** (deferred from the `gameScreen.js` split, D1). When `game/gameScreen.js` was split into `gameScreenPanels/Events/Timer/selectLine/gameScreenSync.js`, the split was kept a pure verbatim move for verifiability, so three already-identified, behavior-identical duplications were left in place. Fold them when convenient: `endGameFlow()` (the near-identical `handleEndGame` in `gameScreenEvents.js` vs `handleGameEventEndGame`), `installPollInterval()` (the clear-interval / `setInterval(ping)` idiom repeated ~3× across `controllerState.js`), and `stopPointTimerInto(point)` (the "add elapsed to `totalPointTime`, null `startTimestamp`" block duplicated in both score handlers in `gameScreenEvents.js`). Purely mechanical; do behind the e2e suite.
-- [ ] **Code health: `ui/activePlayersDisplay.js`'s sticky active-players table is dead code** (found during the `teams/` refactor, D2). `updateActivePlayersList` / `createActivePlayersTable` / `makeColumnsSticky` target `#activePlayersTable` / `#tableContainer`, but neither element exists anywhere in `index.html` — the whole codepath is unreachable from any live screen. The live in-game "before point" table is `game/selectLine.js`'s panel-based system (`#panelActivePlayersTable`; its sticky styling is the id-scoped `.active-*` rules in `ui/panelSystem.css` plus the `makePanelColumnsSticky()` width-sync). Either delete the dead table code in `activePlayersDisplay.js`, or confirm there's a reason it's still there and wire it up. If deleting, the *unscoped* `.active-*` rules in `css/tables.css` (formerly main.css) can be pruned — but carefully, not wholesale: they're shared, not dead. `.active-checkbox-column` (text-align/padding) styles the live team-roster table's checkbox cells (`teams/rosterManagement.js`), and `.active-time-column`'s `font-style: italic` styles the live Line-tab time cells. Only the `position: sticky`/background/box-shadow/border/z-index declarations added for the dead table are safe to drop from the unscoped rules; the `#rosterTable`-scoped and `#panelActivePlayersTable`-scoped sticky rules serve live tables and must stay.
+- [x] **Code health: `ui/activePlayersDisplay.js`'s sticky active-players table is dead code** *(DONE 2026-08-06, branch `dead-active-players-table`
+  — deleted; the file went 429 → 53 lines. Confirmed unreachable first: neither
+  `#activePlayersTable` nor `#tableContainer` exists in `index.html` or is built
+  at runtime (the `tableContainer` hits in `game/selectLine.js` are local
+  variables holding `#panelTableContainer`), and every removed function was
+  referenced only from inside the file. `#statsToggle`, which `togglePlayerStats`
+  targeted, is likewise absent. **Two live exports were kept**: `getRunningScores`
+  (used by `game/selectLine.js` for the Line-tab score header) and
+  `clearNextLineSelections` (called by `gameLogic.js`, `pointManagement.js`,
+  `selectLine.js`). **Finding worth acting on:** `clearNextLineSelections` is now
+  provably inert — its variable's only writer was `captureNextLineSelections`,
+  itself dead and deleted, so `nextLineSelections` is permanently null. Removing
+  it plus its four call sites is a safe follow-up, left undone so the deletion
+  stayed contained to one file. **CSS:** only the two provably-dead id-scoped
+  rules went (`#tableContainer`, `#activePlayersTable`). The unscoped `.active-*`
+  rules were deliberately left — see the rewritten comment above them in
+  `css/tables.css`; all six classes are worn by three live tables, and while the
+  Line tab overrides every sticky declaration from `ui/panelSystem.css`,
+  confirming they're inert for `#subPlayersTable` and the roster table needs eyes
+  on those surfaces mid-game. Verified: unit 148/148, e2e 21/21 (covers the Line
+  tab, pull dialog, and line selection). The CSS deletions target ids that exist
+  nowhere, so no visual regression is reachable from them.)*
+
+  <details><summary>Original analysis (kept — the CSS half is still open)</summary>
+
+  (found during the `teams/` refactor, D2). `updateActivePlayersList` / `createActivePlayersTable` / `makeColumnsSticky` target `#activePlayersTable` / `#tableContainer`, but neither element exists anywhere in `index.html` — the whole codepath is unreachable from any live screen. The live in-game "before point" table is `game/selectLine.js`'s panel-based system (`#panelActivePlayersTable`; its sticky styling is the id-scoped `.active-*` rules in `ui/panelSystem.css` plus the `makePanelColumnsSticky()` width-sync). Either delete the dead table code in `activePlayersDisplay.js`, or confirm there's a reason it's still there and wire it up. If deleting, the *unscoped* `.active-*` rules in `css/tables.css` (formerly main.css) can be pruned — but carefully, not wholesale: they're shared, not dead. `.active-checkbox-column` (text-align/padding) styles the live team-roster table's checkbox cells (`teams/rosterManagement.js`), and `.active-time-column`'s `font-style: italic` styles the live Line-tab time cells. Only the `position: sticky`/background/box-shadow/border/z-index declarations added for the dead table are safe to drop from the unscoped rules; the `#rosterTable`-scoped and `#panelActivePlayersTable`-scoped sticky rules serve live tables and must stay.
+
+  </details>
+
 - [x] **Code health: merge the duplicated game-log renderers** *(DONE 2026-07-19, G6: the two frontend copies now delegate to `utils/gameLogRenderer.js` — `buildGameLogText` + `renderGameLogHTML`, pure leaf module, unit-tested in `tests/unit/gameLogRenderer.test.mjs`. Per-surface differences are parameters (version/roster header lines, score badges); the Turnover possession-boundary drift was reconciled, so the post-game summary now shows the O/D delimiters too. The public viewer stays bespoke — separate origin, can't import PWA modules, card layout — with a keep-in-sync header comment at its `renderPossessions`/`renderEvent`. Format changes now land in exactly one place; only `Event.summarize()` phrasing changes still need hand-mirroring in the viewer.)*
 - [ ] **Major refactor (someday, probably not soon): point lifecycle — create the next Point the moment the last one ends.** Technically a new point begins when the previous one ends (that's when between-point timeouts, switch sides, halftime happen), but the code creates a `Point` only at Start Point (`pointManagement.startNextPoint`) because its roster and starting position aren't knowable earlier — the line hasn't been picked and an intervening switch-sides can still flip O/D. Today between-point events therefore attach to the *completed* point's last possession, flagged `betweenPoints: true`, and the log renderers re-order them after the score lines — a display-level fix that works fine. Moving to always-materialized points would mean: placeholder Points with null players/startingPosition that `startNextPoint` fills in; reworking `isPointInProgress()` (its `possessions.length` fallback would misfire on a placeholder holding a timeout); auditing every `getLatestPoint()` consumer (~16 files: undo — including the empty-point double-tap backout — stats, narration, timers, all PBP surfaces) for "real point or placeholder?"; suppressing the phantom per-point column in the Line-tab table and the empty `Point N roster:` header in the log; end-game cleanup of a trailing placeholder; and sync back-compat (older clients and the deployed viewer would render the placeholder as a real point). Sized on 2026-07-05 as days of work with regression risk across the core game flow, versus the shipped render-order fix; revisit only if between-point *timing* data (e.g. actual time between points, timeout durations) becomes a feature goal.
 - [ ] **Low-power / reduced-motion mode** (long-term). A toggle (and/or honoring the OS `prefers-reduced-motion`) that disables non-essential animations to save battery during long sideline sessions. One-shot transitions (e.g. the Field tab's 5s possession-change fade) are cheap, but *continuous/looping* animations and per-frame JS (`requestAnimationFrame`/`setInterval`) keep the GPU/CPU from idling and do drain battery — so the rule of thumb is: avoid always-running animations, and let this mode strip any that exist. Audit current usage (e.g. pull hangtime `setInterval`, any CSS loops) when implementing. Noted while building the Field tab.
@@ -688,17 +768,66 @@ Remaining work:
   - **Stat computation.** `accumulateGameStats` reads the explicit HA attribution instead of walking the possession. **Backwards compat:** games played before this change have no explicit field — decide whether to (a) fall back to the existing auto-derivation for those, or (b) show them as having no HA. Leaning toward (a) so the tournament data already collected keeps its (approximate) HA numbers.
   - **Touch points:** `playByPlay/scoreAttribution.js` (dialog UI + new picker), `store/models.js` (Throw field), `store/storage.js` (serialize/deserialize the field), `utils/eventStats.js` (read explicit field, fall back to derivation), and the AI narration path (`narration/narrationEngine.js` + `ultistats_server/narration.py`) if we want narrated scores to capture HA too.
 
-- [ ] **Feature**: Per-possession defensive/offensive set flag (zone tracking, etc.)
-  - **STATUS 2026-07-23 (branch `possession-sets`): stages 1–5 of the ship
-    order are BUILT + live-verified** — schema/serialization (unit +
+- [x] **Feature**: Per-possession defensive/offensive set flag (zone tracking, etc.)
+  - **STATUS 2026-08-06 (branch `possession-sets-stage6`): COMPLETE through
+    stage 6.** Stages 1–5 shipped 2026-07-26 — schema/serialization (unit +
     API round-trip tests), Team Settings opt-in (toggle + comma-separated
-    lists with dedupe/length caps), pull-dialog defensive picker (sticky
-    session default), Full-PBP offensive cycling chip (`Set: —/Vert/…`,
-    AC-gated, purple checked state), and set tags in the log
+    lists with dedupe/length caps), the set pickers, and set tags in the log
     (`— Team on defense (Zone) —`, renderer tests) + public-viewer
-    possession headers. **Remaining: stage 6 (aggregation filters), the
-    xlsx export column, and a possible per-point set badge** — see the
-    Aggregation hook bullet below.
+    possession headers.
+  - **Stage 6 (2026-08-06): per-set breakdown in team stats.** Landed as a
+    breakdown block rather than a filter dropdown — you see every set at once
+    and compare them side by side, instead of picking one and re-reading:
+
+    ```
+    Breaks: 2/3 D-points (2/5 D-possessions)
+    Holds: 2 clean + 0 dirty / 3 O-points
+    By set:
+    • Zone (D): 2/4 stops, 1 break
+    • Ho (O): 3/5 scored
+    ```
+
+    Reported per possession (sets live on possessions; breaks/holds are
+    per point), so each set is judged on its own terms. Two attribution
+    rules — a defensive possession is a stop unless it's the last one of a
+    point we lost (a won point ending on D is a Callahan, so still a stop),
+    and a break is credited only to the set of the **last** defensive
+    possession of a won D-point, i.e. the stop we actually converted. Both
+    documented in ARCHITECTURE.md § Possession Sets.
+
+    Rides on the team-stats object so both stats screens and all three xlsx
+    exports (game summary, event roster, team roster) pick it up with no
+    call-site changes; the xlsx gets it as footer rows under the existing
+    breaks/holds footer, outside the AutoFilter range. `rosterManagement`'s
+    hand-rolled team-stats re-sum was replaced by the shared
+    `getGamesTeamStats` — a numeric-only merge silently dropped the new
+    field. 13 unit tests in `tests/unit/setStats.test.mjs` (161/161 suite).
+    Emits nothing when no possession is tagged, so opted-out teams are
+    unaffected on every surface.
+  - **Field-test round, 2026-08-09** (same branch). Fixed: Team Settings'
+    Set Tracking fields were white-on-white and unfindable (unscoped
+    `.form-group` rules from `auth/auth.css` — see ARCHITECTURE.md § CSS
+    Styling Gotchas); the game log silently dropped a defensive set tagged
+    mid-point (the inline post-Turnover delimiter has to carry the *next*
+    possession's tag); and the Full chip only rendered on offence, so a
+    defensive-only team saw no control anywhere. Changed: the pull-dialog
+    defensive picker was **removed** (overflowed on a phone, and the set
+    usually isn't knowable at pull time); tagging moved to a `Set:` control
+    on the Full tab's top line and in the Field tab's action row, with a
+    second copy beside "Last turnover was a:" / "Last D was a:" bound to
+    that possession; tap cycles, long-press opens a light anchored popover.
+    Both primary controls key off the **live mode**, not the last
+    possession — those diverge at a change of possession, which is exactly
+    when a coach names the set they're switching into.
+  - **Not built (deliberate):** a per-point set badge in the game log, and
+    the set-vs-phase composition (`{set}` alongside `{phase}` in
+    `filterGames`) — the breakdown block answers the v1 question without
+    either. Revisit if coaches ask to slice a single set across a phase.
+  - **Known limitation: one set per possession.** `Possession.set` is a
+    single label, so a defence that starts in zone and calls "Fire!" partway
+    through can only be re-tagged — the possession then reads as man for its
+    whole length, and the zone that forced the situation gets no credit. See
+    the set-transition item under Backlog.
   - Tag each possession with the set being played (zone, ho-stack, vert-stack, force-middle, junk…). Primary v1 use case is marking which defensive possessions were played in zone, so that "breaks while running zone" type splits become possible later. Must stay invisible for teams that don't opt in.
   - **Data model**:
     - `Team.setsEnabled: boolean` (default `false`) — team-level opt-in.
@@ -708,13 +837,50 @@ Remaining work:
   - **Backwards compat**: missing fields default to `false` / `[]` / `null`; UI hidden everywhere unless `setsEnabled` is on.
   - **UI surfaces** (all guarded by `team.setsEnabled === true`):
     1. **Team settings opt-in** (`teams/teamSettings.js`): toggle + two editable lists (offensive sets, defensive sets).
-    2. **Defensive picker — pull dialog** (`playByPlay/pullDialog.js`): `<select>` populated from `currentTeam.sets.defensive`, only rendered if enabled and non-empty. Thread chosen value through `ensurePossessionExists(false)` (currently at `playByPlay/keyPlayDialog.js:607`).
-    3. **Offensive picker — Full PBP modifier strip** (`playByPlay/fullPbp.js`): small cycling chip on the modifier-chips row; taps advance through `[null, ...currentTeam.sets.offensive]` and write to the current possession. Skip Simple mode for v1.
+    2. ~~**Defensive picker — pull dialog**~~ — built, then **removed 2026-08-09**: it overflowed the dialog on a phone, and at pull time the coach usually can't know yet what set the D will run. Defensive sets are tagged from the Full/Field control instead (see 3).
+    3. **Set picker — Full + Field tabs** (`playByPlay/fullPbp.js`, `playByPlay/fieldPbp.js`): a cycling control that tags the live possession, offering the label list for the side in play (offensive labels on offence, defensive on defence). Shared logic in `utils/possessionSets.js`. Simple mode deliberately not tagged. *Originally offensive-only on Full — that meant a defensive-only team saw no control anywhere; fixed 2026-08-09 along with the pull-dialog removal.*
     4. **Display in event log** (`ui/eventLogDisplay.js` and game summary log): prepend possession blocks with `[Zone]` etc. when `possession.set` is set.
-    5. **Aggregation hook** (later): `getGameTeamStats(game, {set})` / `getEventTeamStats(event, {set})` so set composes with the existing phase filter — "breaks while running zone: 4 of 7".
+    5. **Aggregation** — *shipped 2026-08-06, but as a breakdown block rather than the filter sketched here.* `getGameTeamStats(game).sets` returns per-set records and `formatTeamStatsLine` renders them all at once ("Zone (D): 2/4 stops, 1 break"), so no `{set}` option and no composition with the phase filter was needed. See the stage-6 note at the top of this item.
   - **Undo**: set lives on the possession itself, so existing undo handling needs no changes.
   - **Ship order**: schema + serialization → team settings opt-in → defensive picker (zone use case) → offensive chip → event-log display → aggregation filters.
   - **Cross-cutting**: bump `cacheName` in `service-worker.js` on any deploy touching CSS or top-level files; add a round-trip test for `setsEnabled`/`sets` in the server test suite.
+
+- [ ] **Extension**: Record a *transition* between sets within one possession ("Fire!")
+  - **Problem.** `Possession.set` holds a single label, so a defence that starts
+    in zone and switches to man partway through — the classic "Fire!" call —
+    can only be re-tagged. The possession then reads as man for its whole
+    length: the zone that forced the stall or the panic throw gets no credit,
+    and a coach reviewing "is our zone working?" sees a possession that never
+    mentions it. The same applies on offence (a vert set that breaks into ho).
+  - **UI.** The set control's long-press popover
+    ([ui/setPicker.js](ui/setPicker.js)) is the natural home: alongside the
+    plain list of labels, a checkbox or toggle — "switched to this set" vs
+    "correct the set" — so a tap that means *we changed* is distinguishable
+    from a tap that means *I mistagged it*. Plain tap-to-cycle should keep
+    meaning "correct it" (it's the fast path, used to fix a mis-tap), which
+    means the transition can only be recorded from the popover.
+  - **Model.** Either `Possession.set` becomes a sequence
+    (`[{label, at}]`, first entry = the set it started in) with the current
+    string kept as a read-side alias for back-compat, or a set-change lands on
+    the possession's own event stream like any other event (which gets undo,
+    serialization and log rendering for free — probably the cheaper route).
+    Legacy possessions keep a bare string and must read as a one-entry
+    sequence.
+  - **Stats — the real design question.** `getGameTeamStats().sets` currently
+    credits a whole possession to one label, so the attribution rules
+    (ARCHITECTURE.md § Possession Sets) need a per-segment answer: which
+    segment owns the **stop**, and which owns the **break**? Most defensible
+    is probably "the set in play when the possession ended" for the stop, with
+    earlier segments counted as *played* but not *credited* — otherwise a team
+    that always bails to man would show man doing all the work. Whatever is
+    chosen, `possessions` (denominator) and `stops`/`breaks` (numerator) stop
+    being the same unit, so the display line needs rethinking too.
+  - **Touch points:** [store/models.js](store/models.js) (Possession),
+    [store/storage.js](store/storage.js) (serialize/deserialize),
+    [utils/statAccumulator.js](utils/statAccumulator.js) (per-set records +
+    `formatSetStatsLines`), [utils/gameLogRenderer.js](utils/gameLogRenderer.js)
+    and the viewer's bespoke renderer (a possession header showing one label
+    would need to show the sequence), plus the set control itself.
 
 - [ ] **Extension**: Richer modifier flags on `Turnover` events
   - The Full PBP "Last turnover was a:" panel currently exposes only `huck` and `good D` because those are the only orthogonal flags on the `Turnover` model today. To support "threw it away while attempting a *break* / *hammer* / *dump*" (and `sky` / `layout` for drops, e.g. receiver tried to layout but missed), add `break_flag`, `hammer_flag`, `dump_flag`, `sky_flag`, `layout_flag` to the `Turnover` constructor in `store/models.js` and surface them in `summarize()`.
@@ -860,7 +1026,49 @@ Higher-leverage interventions, in roughly priority order:
 
 ### UI/UX
 - [ ] Comprehensive UI redesign
-- [ ] Dark mode support
+- [ ] **Dark mode support** — *in progress in its own session (2026-08-09)*.
+      Note the battery angle: on an OLED phone (iPhone X and later except XR/11,
+      most flagship Androids) a black pixel is simply off, so dark mode is a
+      real power saving for the whole session — no interaction, no gating, no
+      way for it to cost a coach a tap. Our current UI is mostly white, which is
+      the worst case on OLED. It does nothing on an LCD phone (SE, XR, 11),
+      where the backlight is uniform regardless of what's drawn. Worth saying
+      that plainly wherever it's offered rather than implying a universal win.
+- [ ] **Rename "Advanced Settings" → "App Settings", split basic vs advanced.**
+      The screen has grown well past "advanced" (display density, player
+      numbers, field geometry, sync cadence, battery) and the name now
+      discourages coaches from finding settings they'd actually want. Keep one
+      screen, organised into a basic section (the things a normal coach should
+      touch — display, battery, dark mode) and an advanced section (narration
+      A/B knobs, auto-line priority order, field thresholds). Touches
+      `settings/advancedSettings.js` (the declarative `SCHEMA` array already
+      groups fields, so this is mostly regrouping plus a section divider) and
+      the menu label in `game/gameScreenPanels.js` (`#menuSettings`). Pairs
+      naturally with the dark-mode session, since that adds a setting.
+- [ ] **Black standby screen between/during points** (design settled 2026-08-09,
+      not built). The biggest OLED saving available, and a better between-points
+      display than the full UI anyway.
+  - **Trigger:** repurpose the ☀ indicator in the game header (added by the
+    `battery` branch) to enable/disable standby, with a toast confirming the new
+    state on each tap.
+  - **During a point:** show the score and "Tap to return", nothing else. No
+    game clock, no point clock — the less lit area the better, and neither is
+    needed while standing on the line.
+  - **Between points:** also show the countdown timer for starting the next
+    point, which is the one number that matters in that window.
+  - **Tap anywhere returns** to the full UI, and that first tap must be
+    *swallowed* — it exits standby without also firing whatever control sits
+    underneath, or coaches will record phantom events on wake.
+  - Dim toward true black (`#000`), not grey: on OLED the saving scales with how
+    little light is emitted, and a grey scrim over a white UI leaves most of it
+    lit.
+  - **Open question:** what puts it *into* standby — only an explicit tap on the
+    ☀, or an idle timeout once enabled? An idle timeout is the bigger win but
+    needs gating (never for the Active Coach mid-point on offense; fine between
+    points, on defense, or for a Line Coach / viewer). Start with the explicit
+    tap, which has no failure mode, and consider the timeout after field use.
+  - Composes with the wake lock rather than replacing it: the lock keeps the
+    screen alive, standby makes keeping it alive cheap.
 - [x] **Compact / roomy density toggle for Full PBP**
   - Inline icon button in the Full PBP header (between mode pill and Undo) toggles between "roomy" (default — build-207 numbers: min-height 48, margin 6, name padding 8/10, action padding 7/10) and "compact" (build-206: min-height 40, margin 4, name padding 6/8, action padding 5/10).
   - Persisted per-device in localStorage as `breakside_full_pbp_density`, applied as a `density-compact` class on `.panel-playByPlayFull`.

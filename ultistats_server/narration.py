@@ -376,7 +376,7 @@ Full transcript (what the coach said — note transcription may have errors):
 {review_section}
 
 Event schema for ADD ops — the "event" object must have:
-  - kind: one of "throw" | "turnover" | "defense" | "opponent_score"
+  - kind: one of "throw" | "turnover" | "defense" | "opponent_score" | "pull"
   - For kind=throw: thrower (player name), receiver (player name),
     and any of huck, break_throw, reset, swing, hammer, sky, layout, score
     (booleans). reset = a short backward pass to a handler — coaches say
@@ -415,6 +415,15 @@ Event schema for ADD ops — the "event" object must have:
     defense event with interception=true and callahan=true — the
     opponent did NOT score, so never add an opponent_score event.
   - For kind=opponent_score: no additional fields
+  - For kind=pull: puller (player name), any of flick, roller, io, oi, brick
+    (booleans), and optionally quality (one of "Good Pull", "Okay Pull",
+    "Poor Pull"). io/oi are the two curl directions ("inside-out" / "outside-in")
+    — a coach who says only "flick pull" sets flick alone. roller=true when the
+    pull is deliberately rolled along the ground. brick=true when the pull sails
+    out of bounds or through the back of the endzone and the disc comes to the
+    brick mark — the coach says "brick", "bricked it", or "out the back".
+    Set quality only when the coach explicitly grades the pull ("nice pull",
+    "that's a poor one"); leave it out for a plain factual description.
 
 One completed pass = ONE throw event:
   - A follow-on clause describing the receiver's catch ("...to Ella,
@@ -439,19 +448,41 @@ One completed pass = ONE throw event:
     event — an opponent possession can only yield kind=opponent_score,
     or kind=defense naming OUR defender when we take the disc away.
 
+Pulls:
+  - `puller` is REQUIRED on every pull event and must be a name from the
+    roster above. A pull event without a puller is invalid — if the narration
+    does not say WHO pulled, emit nothing at all for the pull.
+    RIGHT: {{ "kind": "pull", "puller": "Daniel", "flick": true }}
+    WRONG: {{ "kind": "pull" }} — no puller, so this event must not exist.
+  - Most mentions of a pull do NOT name anyone, and those are context, not
+    events. "We pull", "we pulled it", "we're pulling", "here comes the pull",
+    "after the pull" — every one of these is scene-setting for the possession
+    that follows. Emit NOTHING for them and go straight to the first real
+    event. The app already prompts the coach for pull details at point start,
+    so a nameless pull event adds nothing and will be discarded.
+  - The opponent's pull is never our event. "They pull", "their pull was a
+    brick" describes the opponent — emit nothing, no matter how it is
+    described. Never emit a pull whose puller is not on our roster.
+  - A pull is not a throw: never also emit kind=throw for the same act, and a
+    bricked or out-of-bounds pull is NOT a turnover — it stays kind=pull with
+    brick=true. The opponent picking up after our pull is not an event.
+  - A narration can span a point boundary: after we score, the next thing we
+    do is pull. A named pull late in the transcript is normal — emit it in
+    the order it happened.
+
 Player names in ADD events:
   - Use ONLY the player's name itself, e.g. "Alice", NOT the full roster line.
   - The roster lines above include nickname (in quotes) and jersey number (#N) as
     HINTS to help you match what the coach said — never include those in the
-    emitted event. The `thrower`, `receiver`, and `defender` fields must contain
-    just the bare name.
+    emitted event. The `thrower`, `receiver`, `defender`, and `puller` fields
+    must contain just the bare name.
   - Match case and spelling EXACTLY to the name as it appears at the start of a
     roster line (e.g. roster line "- Alice "Ace" #7" → emit `"Alice"`).
   - If a transcribed name is misspelled but clearly corresponds to a roster
     player (e.g. "Karla" → "Carla"), use the corrected roster spelling.
   - Some rosters contain names or nicknames that collide with ultimate jargon
     (e.g. a player named or nicknamed "Sky", "Hammer", or "Huck"). A word in a
-    thrower/receiver/defender position refers to that player; jargon flags
+    thrower/receiver/defender/puller position refers to that player; jargon flags
     apply only when the word describes the throw or catch itself ("throws a
     hammer", "skies her defender"). Transcription may lowercase a nickname
     ("hits hammer for the score" = hits the player nicknamed Hammer). Each

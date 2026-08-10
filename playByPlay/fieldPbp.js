@@ -41,7 +41,10 @@
  * score dialog (6), modifier strip / orientation flips / polish (7).
  */
 import { UNKNOWN_PLAYER } from '../store/models.js';
-import { saveAllTeamsData } from '../store/storage.js';
+import { saveAllTeamsData, currentTeam } from '../store/storage.js';
+import {
+    setLabelsForSide, setControlLabel, taggablePossession,
+} from '../utils/possessionSets.js';
 import {
     currentGame, getLatestPoint, getPlayerFromName, isPointInProgress,
     determineStartingPosition, showPlayerNumbers,
@@ -52,6 +55,8 @@ import { startNextPoint } from '../game/pointManagement.js';
 import { showControllerToast } from '../game/controllerState.js';
 import { ensureDialogVisible, handlePbpTheyScore, handlePbpGameEvents } from '../game/gameScreenEvents.js';
 import { handlePanelStartPoint } from '../game/selectLine.js';
+import { wireSetControl } from '../ui/setPicker.js';
+import { ensurePossessionExists } from './keyPlayDialog.js';
 import { showScoreAttributionDialog } from './scoreAttribution.js';
 
 const fieldPbp = (function() {
@@ -693,7 +698,51 @@ const fieldPbp = (function() {
         return '';
     }
 
-    function modColHTML(state) {
+    /**
+     * Set tagging for the live possession — a button in the action row, just
+     * left of Events, where it's reachable as the possession unfolds. Tap
+     * cycles, long-press opens the full list (ui/setPicker.js, shared with the
+     * Full tab so the two surfaces can't drift).
+     *
+     * Renders only mid-point, and only for teams opted into set tracking that
+     * configured labels for the side currently in possession. Hiding it
+     * between points is deliberate: that's when the action row is tightest
+     * (the O/D pill becomes "Start Point (Offense)"), and there is no live
+     * possession to tag anyway.
+     *
+     * Defensive sets used to be picked in the pull dialog; that was removed
+     * 2026-08-09 (overflowed on a phone, and the set usually isn't known until
+     * the D is actually running).
+     */
+    function liveSetTarget(state) {
+        // Keyed off the LIVE mode, not the last possession — the two diverge at
+        // a change of possession, and the stale possession's side would offer
+        // the wrong list (see utils/possessionSets.js § setLabelsForSide).
+        const wantOffensive = state.mode !== 'defense';
+        const last = taggablePossession(state.point);
+        const matchesSide = !!last && ((last.offensive !== false) === wantOffensive);
+        return {
+            wantOffensive,
+            labels: setLabelsForSide(currentTeam, wantOffensive),
+            possession: matchesSide ? last : null,
+        };
+    }
+
+    function setControlHTML(state, inPoint) {
+        if (!inPoint || !state.point) return '';
+        const { labels, possession } = liveSetTarget(state);
+        if (!labels.length) return '';
+        const caption = setControlLabel(possession)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return `<button class="fp-setbtn${possession && possession.set ? ' on' : ''}" data-setcycle="1" `
+            + `title="Tap to cycle sets, long-press for the full list">${caption}</button>`;
+    }
+
+    function modColHTML(state, inPoint) {
+        return modColBodyHTML(state);
+    }
+
+    function modColBodyHTML(state) {
         if (S.pulling) {
             const sub = S.puller ? S.puller.name : '—';
             return `<div class="fp-modcol-label">This pull:</div><div class="fp-modcol-sub">${sub}</div>`
@@ -839,6 +888,7 @@ const fieldPbp = (function() {
                 ${leftSlot}
                 <span class="fp-actionrow-spacer"></span>
                 <span class="fp-status-inline">${statusText(state, inPoint)}</span>
+                ${setControlHTML(state, inPoint)}
                 <button class="fp-gameevents" id="fpGameEventsBtn" title="Timeout, injury sub, halftime, switch sides, end game"><i class="fas fa-cog"></i><span>Events</span></button>
                 <button class="fp-undo" id="fpUndoBtn" title="Undo last event"><i class="fas fa-undo"></i><span>Undo</span></button>
             </div>
@@ -847,7 +897,7 @@ const fieldPbp = (function() {
                     <div class="fp-sidebar">
                         <div class="fp-rail">${playerRailHTML(state, inPoint)}</div>
                         <div class="fp-modsep"></div>
-                        <div class="fp-modcol">${modColHTML(state)}</div>
+                        <div class="fp-modcol">${modColHTML(state, inPoint)}</div>
                     </div>
                     ${fieldBox}
                 </div>
@@ -1777,6 +1827,21 @@ const fieldPbp = (function() {
         // Last-play tag chips: toggle a flag on the most recent event.
         root.querySelectorAll('.fp-modbtn[data-lastmod]').forEach(b => {
             b.onclick = () => toggleLastMod(b.dataset.lastmod);
+        });
+
+        // Set tag: tap cycles, long-press opens the full list.
+        root.querySelectorAll('[data-setcycle]').forEach(b => {
+            wireSetControl(b, {
+                // Materialize the possession for the side in play if the first
+                // event hasn't created it yet, rather than dropping the pick.
+                getPossession: () => ensurePossessionExists(liveSetTarget(reconstructState()).wantOffensive),
+                getLabels: () => liveSetTarget(reconstructState()).labels,
+                canEdit: () => requireActiveCoach(),
+                onChange: () => {
+                    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+                    render();
+                },
+            });
         });
 
         // During pull, chips are tap-only (drag is disabled so the rail can

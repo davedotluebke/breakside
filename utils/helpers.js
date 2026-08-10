@@ -37,6 +37,23 @@ function getLatestPoint() {
 }
 
 /**
+ * True when `point` already carries a Pull event.
+ *
+ * A point gets exactly one pull, but two independent paths can record it:
+ * the pull dialog (opened automatically by pointManagement when the point
+ * starts on defense) and narration (applyPull in narration/narrationEngine.js).
+ * Both check this before writing so whichever lands first wins, rather than
+ * the point ending up with two pulls. Shared here because the two callers
+ * sit in different feature modules.
+ */
+function pointHasPull(point) {
+    if (!point || !point.possessions) { return false; }
+    return point.possessions.some(poss =>
+        (poss.events || []).some(e => e && e.type === 'Pull')
+    );
+}
+
+/**
  * Get the most recent possession (in most recent point); null if none
  */
 function getLatestPossession() {
@@ -546,7 +563,7 @@ function getExpectedGenderCounts(expectedCount, expectedRatio) {
 // --- ES-module exports ---
 export {
     getPlayerFromName, currentGame, getLatestPoint, getLatestPossession,
-    getLatestEvent, getPossessionOf, getPointOf, isPointInProgress,
+    getLatestEvent, getPossessionOf, getPointOf, isPointInProgress, pointHasPull,
     getActivePossession, getPlayerGameTime, formatPlayTime,
     buildPlayerNameResolver, buildPointMembership, buildPointPlayerLookup, playerStub,
     determineStartingPosition, capitalize, formatPlayerName, formatPlayerNameWithRole, extractPlayerName,

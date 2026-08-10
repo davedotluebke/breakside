@@ -10,6 +10,12 @@ on:
       - 'scripts/**'
       - '*.md'
       - '*.py'
+      # Repo/agent config: never part of the deployed frontend, so a commit
+      # touching only these should not spend a CloudFront invalidation or bump
+      # the build number. (paths-ignore skips the run only when EVERY changed
+      # file matches, so a mixed commit still deploys.)
+      - '.claude/**'
+      - '.gitignore'
   # Manual trigger: lets you deploy without inventing a commit — e.g. after
   # (re)adding the AWS secrets, or to re-push the current main to S3.
   workflow_dispatch:

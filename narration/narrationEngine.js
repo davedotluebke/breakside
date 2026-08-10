@@ -20,16 +20,18 @@
  * When the slow pass returns, its operations (CONFIRM/AMEND/RETRACT/ADD) are
  * applied by mutating the possession's events array and publishing bus events.
  */
-import { Throw, Turnover, Defense, Role } from '../store/models.js';
+import { Throw, Turnover, Defense, Pull, Gender, Role } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
 import { authFetch, API_BASE_URL } from '../store/sync.js';
-import { buildPointPlayerLookup, currentGame, getPlayerFromName } from '../utils/helpers.js';
+import { buildPointPlayerLookup, currentGame, getLatestPoint, getPlayerFromName, pointHasPull } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { showControllerToast } from '../game/controllerState.js';
 import { updateScore } from '../game/gameLogic.js';
 import { moveToNextPoint } from '../game/pointManagement.js';
 import { ensurePossessionExists } from '../playByPlay/keyPlayDialog.js';
+import { closePullDialog } from '../playByPlay/pullDialog.js';
 import { advancedSettings } from '../settings/advancedSettings.js';
+import { summarizeDrops } from './dropReasons.js';
 import { narrationEventBus } from './eventBus.js';
 import { narrationRealtimeSession, mergeCompletedUtterance } from './realtimeSession.js';
 
@@ -64,6 +66,43 @@ const narrationEngine = (function() {
     let provisionalEvents = [];  // { id, event, possession, pointIndex }
     let accumulatedTranscript = '';
     let provisionalIdCounter = 0;
+
+    /**
+     * Why the most recent applier declined to record an event.
+     *
+     * Appliers signal failure by returning null, which used to collapse every
+     * cause into one toast: "couldn't be matched to on-field players". That
+     * message was wrong more often than it was right — a throw the model
+     * emitted without a receiver reported as a roster-matching problem, and a
+     * coach field-testing a narrated pull went looking for a player-name bug
+     * that didn't exist. Set this immediately before returning null so
+     * applySlowPassOperations can say what actually happened.
+     *
+     * Shape: { reason, detail } where reason is one of
+     *   'unmatched-name'  the model named someone not on the field
+     *   'incomplete'      a required field was missing from the event
+     *   'duplicate-pull'  the point already has a pull
+     *   'unsupported'     unknown or missing event kind
+     */
+    let lastDropReason = null;
+
+    /** Record why an event was dropped and return null (appliers' failure return). */
+    function dropWith(reason, detail) {
+        lastDropReason = { reason, detail: detail || '' };
+        return null;
+    }
+
+    /**
+     * Classify a player-resolution failure. `named` is what the model put in
+     * the event; `resolved` is what the matcher made of it. A name the model
+     * supplied but we couldn't match is a genuine matching problem; a name it
+     * never supplied is an incomplete event, and saying so points the coach at
+     * the right thing.
+     */
+    function dropForPlayer(kind, field, named, incompleteDetail) {
+        if (named) return dropWith('unmatched-name', String(named));
+        return dropWith('incomplete', incompleteDetail || `${kind} with no ${field}`);
+    }
 
     /**
      * User-visible narration feedback. Narration failures were historically
@@ -225,7 +264,14 @@ Just listen. Transcription happens automatically.`;
         const receiver = resolvePlayerName(args.receiver, onField);
         if (!thrower || !receiver) {
             console.warn('[narrationEngine] Could not resolve throw players:', args);
-            return null;
+            // A name we couldn't match beats a name never given: report the
+            // unmatched one, since that's the actionable half.
+            if (args.thrower && !thrower) return dropWith('unmatched-name', String(args.thrower));
+            if (args.receiver && !receiver) return dropWith('unmatched-name', String(args.receiver));
+            // Neither side named anyone we can act on. The common case by far
+            // is a throw with a thrower but no receiver — which is what the
+            // model emits for a narrated pull when kind=pull isn't available.
+            return dropWith('incomplete', thrower ? 'throw with no receiver' : 'throw with no thrower');
         }
         const evt = new Throw({
             thrower: thrower,
@@ -299,7 +345,7 @@ Just listen. Transcription happens automatically.`;
         const defender = resolvePlayerName(args.defender, onField);
         if (!defender) {
             console.warn('[narrationEngine] Could not resolve defender:', args);
-            return null;
+            return dropForPlayer('defensive play', 'defender', args.defender);
         }
         const evt = new Defense({
             defender: defender,
@@ -322,6 +368,68 @@ Just listen. Transcription happens automatically.`;
             updateScore(Role.TEAM);
             if (typeof moveToNextPoint === 'function') moveToNextPoint();
         }
+        return evt;
+    }
+
+    // The three grades the pull dialog offers. Anything else the model
+    // invents (e.g. "Brick") is dropped rather than stored — statAccumulator
+    // buckets pulls by exactly these strings, and a bricked pull is carried
+    // by brick_flag instead.
+    const PULL_QUALITIES = ['Good Pull', 'Okay Pull', 'Poor Pull'];
+
+    /**
+     * Record the pull that opened this point. Guarded against duplication:
+     * showPullDialog() fires automatically whenever a point starts on defense
+     * (game/pointManagement.js), so a coach who taps the pull in AND narrates
+     * it would otherwise get two Pull events for the one act. First one wins —
+     * pullDialog's createPullEvent carries the mirror-image guard.
+     */
+    function applyPull(args, onField) {
+        if (typeof ensurePossessionExists !== 'function') return null;
+        if (pointHasPull(getLatestPoint())) {
+            console.warn('[narrationEngine] Point already has a pull; ignoring narrated one:', args);
+            return dropWith('duplicate-pull');
+        }
+
+        // A pull with no puller is dropped, not recorded as "Unknown Player".
+        // The prompt requires `puller`, but live probing showed the model
+        // still emits a bare {kind:'pull'} for scene-setting narration ("we
+        // pulled it", "they pull"). Those carry no information the automatic
+        // pull dialog didn't already collect, so a nameless pull is a model
+        // slip to swallow rather than junk to write into the game.
+        const puller = resolvePlayerName(args.puller, onField);
+        if (!puller) {
+            console.warn('[narrationEngine] Pull with no resolvable puller; ignoring:', args);
+            return dropForPlayer('pull', 'puller', args.puller, 'pull with nobody named');
+        }
+
+        const evt = new Pull({
+            puller: puller,
+            pullerGender: puller.gender || Gender.UNKNOWN,
+            quality: PULL_QUALITIES.includes(args.quality) ? args.quality : null,
+            flick: !!args.flick,
+            roller: !!args.roller,
+            io: !!args.io,
+            oi: !!args.oi,
+            brick: !!args.brick
+        });
+        // A pull lives in a defensive possession — we just pulled, so the
+        // opponent has the disc.
+        const possession = ensurePossessionExists(false);
+        possession.addEvent(evt);
+
+        const provId = nextProvisionalId();
+        provisionalEvents.push({ id: provId, event: evt, possession });
+        if (typeof logEvent === 'function') logEvent(evt.summarize());
+        publishAdded(evt, provId);
+
+        // The pull dialog is almost certainly still open — it opens itself at
+        // point start and nothing has dismissed it. The coach just supplied
+        // the pull by voice, so leaving the form up would ask them to enter
+        // an event that is already in the log. Closing is a no-op when the
+        // dialog isn't showing.
+        if (typeof closePullDialog === 'function') closePullDialog();
+
         return evt;
     }
 
@@ -402,9 +510,15 @@ Just listen. Transcription happens automatically.`;
                     console.warn('[narrationEngine] Finalize degraded:', data.error);
                     toast('Narration processing failed on the server — no events added', 'error');
                 }
-                const { added, dropped } = applySlowPassOperations(data.operations || []);
+                const { added, dropped, dropReasons } = applySlowPassOperations(data.operations || []);
                 if (dropped > 0) {
-                    toast(`Narration: ${added} event${added === 1 ? '' : 's'} added, ${dropped} couldn't be matched to on-field players`, 'warning');
+                    // Say what actually went wrong. The old text claimed every
+                    // drop was a player-matching failure, which sent a coach
+                    // hunting a roster bug when the real cause was a throw the
+                    // model emitted without a receiver.
+                    const why = summarizeDrops(dropReasons);
+                    const lead = `Narration: ${added} event${added === 1 ? '' : 's'} added, ${dropped} not recorded`;
+                    toast(why ? `${lead} — ${why}` : lead, 'warning');
                 } else if (added > 0) {
                     toast(`Narration: ${added} event${added === 1 ? '' : 's'} added`, 'success');
                 } else if (!data.error) {
@@ -433,6 +547,7 @@ Just listen. Transcription happens automatically.`;
         const onField = getOnFieldPlayers();
         let added = 0;
         let dropped = 0;
+        const dropReasons = [];
         for (const op of operations) {
             switch (op.op) {
                 case 'CONFIRM':
@@ -441,17 +556,21 @@ Just listen. Transcription happens automatically.`;
                 case 'RETRACT':
                     retractProvisional(op.provisional_id);
                     break;
-                case 'ADD':
-                    // Appliers return the created event, or null when the
-                    // event couldn't be applied (usually: a player name that
-                    // matched nobody on field). Count both so the caller can
-                    // tell the coach instead of dropping events silently.
+                case 'ADD': {
+                    // Appliers return the created event, or null when the event
+                    // couldn't be applied, leaving the cause in lastDropReason.
+                    // Collect both so the coach gets told what happened instead
+                    // of events vanishing silently — or worse, being blamed on
+                    // player matching when that wasn't it.
+                    lastDropReason = null;
                     if (applySlowPassAdd(op.event, onField)) {
                         added += 1;
                     } else {
                         dropped += 1;
+                        dropReasons.push(lastDropReason || { reason: 'unsupported', detail: '' });
                     }
                     break;
+                }
                 case 'AMEND':
                     // Defensive: prompt says don't emit this. Treat as retract
                     // so at minimum we don't leave a wrong event in the log.
@@ -466,13 +585,14 @@ Just listen. Transcription happens automatically.`;
         provisionalEvents.forEach(p => {
             if (!p._finalized) markProvisionalStatus(p.id, 'confirmed');
         });
-        return { added, dropped };
+        return { added, dropped, dropReasons };
     }
+
 
     /**
      * Add an event the slow pass discovered. The event spec from the backend
      * has shape:
-     *   { kind: 'throw'|'turnover'|'defense'|'opponent_score', <flags & names> }
+     *   { kind: 'throw'|'turnover'|'defense'|'opponent_score'|'pull', <flags & names> }
      *
      * We route through the SAME fast-pass apply functions (applyThrow, etc.)
      * so that event creation, possession handling, stats, logging, and bus
@@ -482,7 +602,7 @@ Just listen. Transcription happens automatically.`;
     function applySlowPassAdd(eventSpec, onField) {
         if (!eventSpec || !eventSpec.kind) {
             console.warn('[narrationEngine] Slow pass ADD missing kind:', eventSpec);
-            return null;
+            return dropWith('unsupported');
         }
         // Translate the backend's snake_case field names to the shape our
         // fast-pass appliers already expect (they mirror the Realtime tool
@@ -497,9 +617,11 @@ Just listen. Transcription happens automatically.`;
             case 'opponent_score':
                 applyOpponentScore();
                 return true;
+            case 'pull':
+                return applyPull(eventSpec, onField);
             default:
                 console.warn('[narrationEngine] Slow pass ADD unknown kind:', eventSpec.kind);
-                return null;
+                return dropWith('unsupported', String(eventSpec.kind));
         }
     }
 

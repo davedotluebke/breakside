@@ -1,291 +1,23 @@
 /*
  * Active Players Display
- * Handles rendering and management of the active players table on the Before Point Screen
+ *
+ * What's left here is two small helpers used by the Line tab. The rest of
+ * this file used to render a sticky "active players" table on a Before Point
+ * Screen that no longer exists — see the note on clearNextLineSelections
+ * below, and ARCHITECTURE.md § Line tab table for where that UI lives now
+ * (game/selectLine.js, #panelActivePlayersTable).
  */
-import { Gender } from '../store/models.js';
-import { currentTeam } from '../store/storage.js';
-import {
-    currentGame, getPlayerFromName, getPlayerGameTime, formatPlayTime,
-    formatPlayerName, getGenderRatioForPoint, buildPointMembership
-} from '../utils/helpers.js';
+import { currentGame } from '../utils/helpers.js';
 import { log } from '../utils/logger.js';
 
-let showingTotalStats = false;
 let nextLineSelections = null;
 
 /**
- * Update the active players list display
- * This is the main entry point for refreshing the table
- */
-function updateActivePlayersList() {
-    log('Updating active players list...');
-
-    // Clear and recreate the table structure
-    createActivePlayersTable();
-
-    // Create player rows and set checkbox states
-    setPlayerCheckboxes();
-
-    // Populate player statistics and point data
-    populatePlayerStats();
-
-    log('Finished updating active players list');
-    // After adding all rows to the tableBody, calculate the widths
-    // Use requestAnimationFrame to ensure DOM is fully laid out
-    requestAnimationFrame(() => {
-        makeColumnsSticky();
-    });
-    
-    // Update gender ratio display
-    // defined nowhere — dead guarded branch (pre-existing); cleanup candidate
-    if (typeof window.updateGenderRatioDisplay === 'function') {
-        window.updateGenderRatioDisplay();
-    }
-}
-
-/**
- * Create the header structure for the active players table
- * Includes score rows showing running scores for team and opponent
- */
-function createActivePlayersTable() {
-    const table = document.getElementById('activePlayersTable');
-    if (!table) return;
-    const tableBody = table.querySelector('tbody');
-    const tableHead = table.querySelector('thead');
-
-    // Clear existing rows in the table body and head
-    tableBody.innerHTML = '';
-    tableHead.innerHTML = '';
-
-    // Create header rows for scores
-    const teamScoreRow = document.createElement('tr');
-    const opponentScoreRow = document.createElement('tr');
-
-    // Add cells to the score rows
-    const addScoreCells = (row, teamName, scores) => {
-        const nameCell = document.createElement('th');
-        nameCell.textContent = teamName;
-        nameCell.setAttribute('colspan', '3');  // merge with checkbox, name, and time columns
-        nameCell.setAttribute('text-align', 'center');
-        nameCell.classList.add('active-header-teams');
-        row.appendChild(nameCell);
-        scores.forEach((score, index) => {
-            const scoreCell = document.createElement('th');
-            scoreCell.textContent = score;
-            
-            // Color score cells based on gender ratio for alternating games
-            const game = currentGame();
-            if (game && game.alternateGenderRatio === 'Alternating' && game.startingGenderRatio) {
-                    const pointIndex = index; 
-                    const genderRatio = getGenderRatioForPoint(game, pointIndex);
-                    if (genderRatio === 'FMP') {
-                        scoreCell.classList.add('score-cell-fmp');
-                    } else if (genderRatio === 'MMP') {
-                        scoreCell.classList.add('score-cell-mmp');
-                    }
-            }
-            
-            row.appendChild(scoreCell);
-        });
-    };
-
-    // Calculate and add score cells using utility function
-    const runningScores = getRunningScores();
-
-    addScoreCells(teamScoreRow, currentGame().team, runningScores.team);
-    addScoreCells(opponentScoreRow, currentGame().opponent, runningScores.opponent);
-
-    // Add score rows to the head
-    tableHead.appendChild(teamScoreRow);
-    tableHead.appendChild(opponentScoreRow);
-}
-
-/**
- * Set up player checkboxes in the table
- */
-function setPlayerCheckboxes() {
-    // Create player rows with checkboxes
-    createPlayerRows();
-
-    // Set checkbox states based on last point players
-    setCheckboxStates();
-}
-
-/**
- * Create player rows with checkboxes and basic info
- */
-function createPlayerRows() {
-    const game = currentGame();
-    const lastPoint = game.points.length > 0
-        ? game.points[game.points.length - 1]
-        : null;
-    // Id-based membership so a mid-game rename doesn't orphan a player's
-    // points history (point.players holds strings frozen at play time).
-    const membership = buildPointMembership(game);
-
-    // Sort roster into 3 alphabetical lists: played the last point, played any points, played no points
-    currentTeam.teamRoster.sort((a, b) => {
-        const aLastPoint = membership.onLine(lastPoint, a);
-        const bLastPoint = membership.onLine(lastPoint, b);
-        const aPlayedAny = game.points.some(p => membership.played(p, a));
-        const bPlayedAny = game.points.some(p => membership.played(p, b));
-
-        if (aLastPoint && !bLastPoint) return -1;
-        if (!aLastPoint && bLastPoint) return 1;
-        if (aPlayedAny && !bPlayedAny) return -1;
-        if (!aPlayedAny && bPlayedAny) return 1;
-
-        return a.name.localeCompare(b.name);
-    });
-
-    // Create player rows with checkboxes
-    const tableEl = document.getElementById('activePlayersTable');
-    if (!tableEl) return;
-    const tableBody = tableEl.querySelector('tbody');
-
-    currentTeam.teamRoster.forEach(player => {
-        const row = document.createElement('tr');
-
-        // Add checkbox column
-        const checkboxCell = document.createElement('td');
-        checkboxCell.classList.add('active-checkbox-column');
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.classList.add('active-checkbox');
-        checkboxCell.appendChild(checkbox);
-        row.appendChild(checkboxCell);
-
-        // Add name column with gender-based styling
-        const nameCell = document.createElement('td');
-        nameCell.classList.add('active-name-column');
-        // Always show numbers if they exist
-        nameCell.textContent = formatPlayerName(player);
-        
-        // Add gender-based color coding
-        if (player.gender === Gender.FMP) {
-            nameCell.classList.add('player-fmp');
-        } else if (player.gender === Gender.MMP) {
-            nameCell.classList.add('player-mmp');
-        }
-        
-        // Make name cell clickable to toggle checkbox (mobile-friendly)
-        nameCell.style.cursor = 'pointer';
-        nameCell.addEventListener('click', function() {
-            checkbox.click();
-        });
-        
-        row.appendChild(nameCell);
-
-        // Add time column using utility function
-        const timeCell = document.createElement('td');
-        timeCell.classList.add('active-time-column');
-        timeCell.textContent = getPlayerDisplayTime(player.name);
-        row.appendChild(timeCell);
-
-        // Add placeholder cells for points data (will be populated by populatePlayerStats)
-        currentGame().points.forEach(() => {
-            const pointCell = document.createElement('td');
-            pointCell.classList.add('active-points-columns');
-            pointCell.textContent = ''; // Will be populated later
-            row.appendChild(pointCell);
-        });
-
-        tableBody.appendChild(row);
-    });
-}
-
-/**
- * Set checkbox states based on which players should be checked
- */
-function setCheckboxStates() {
-    // Get the players to check based on current strategy
-    const playersToCheck = getPlayersToCheck();
-    log('setCheckboxStates() using players:', playersToCheck);
-
-    // Set checkbox states. Id-aware matching: playersToCheck may hold names
-    // frozen before a mid-game rename.
-    const membership = buildPointMembership(currentGame());
-    const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
-    checkboxes.forEach((checkbox, index) => {
-        const player = currentTeam.teamRoster[index];
-        if (player && membership.onList(playersToCheck, player)) {
-            log('Checking checkbox for player:', player.name);
-            checkbox.checked = true;
-        } else {
-            checkbox.checked = false;
-        }
-    });
-}
-
-/**
- * Determine which players should be checked
- * Uses stored next line selections if available, otherwise uses last point players
- */
-function getPlayersToCheck() {
-    // If we have stored next line selections, use those
-    if (nextLineSelections !== null) {
-        log('Using stored next line selections:', nextLineSelections);
-        return nextLineSelections;
-    }
-
-    // Otherwise, use the last point's players
-    const lastPointPlayers = getLastPointPlayers();
-    log('No stored selections, using last point players:', lastPointPlayers);
-
-    // In the future, this could be extended to support:
-    // - Line-based selection
-    // - Rotation-based selection
-    // - Manual pre-selection
-    // - AI-suggested selection
-    return lastPointPlayers;
-}
-
-/**
- * Populate player statistics in the table cells
- */
-function populatePlayerStats() {
-    const tblEl = document.getElementById('activePlayersTable');
-    if (!tblEl) return;
-    const tableBody = tblEl.querySelector('tbody');
-    const rows = tableBody.querySelectorAll('tr');
-
-    // Id-based membership so a mid-game rename doesn't zero the table.
-    const membership = buildPointMembership(currentGame());
-
-    rows.forEach((row, rowIndex) => {
-        const player = currentTeam.teamRoster[rowIndex];
-        if (!player) return;
-
-        // Points data cells
-        // If showing total stats, add points from previous games
-        let runningPointTotal = showingTotalStats ? player.pointsPlayedPreviousGames : 0;
-        const pointCells = row.querySelectorAll('.active-points-columns');
-
-        pointCells.forEach((pointCell, pointIndex) => {
-            const point = currentGame().points[pointIndex];
-            // Include players who were substituted out mid-point
-            const playedPoint = membership.played(point, player);
-            if (playedPoint) {
-                runningPointTotal++;
-                pointCell.textContent = `${runningPointTotal}`;
-            } else {
-                pointCell.textContent = '-';
-            }
-        });
-    });
-}
-
-/**
- * Get players from the last point
- */
-function getLastPointPlayers() {
-    return currentGame().points.length > 0
-        ? currentGame().points[currentGame().points.length - 1].players
-        : [];
-}
-
-/**
- * Calculate running scores for team and opponent
+ * Calculate running scores for team and opponent.
+ *
+ * Returns {team: number[], opponent: number[]}, each starting at 0 and
+ * gaining an entry per point — so index N is the score after N points.
+ * game/selectLine.js uses these for the Line tab's per-point score header.
  */
 function getRunningScores() {
     const runningScores = { team: [0], opponent: [0] };
@@ -296,38 +28,19 @@ function getRunningScores() {
     return runningScores;
 }
 
-
 /**
- * Get display time for a player (either game time or total time)
- */
-function getPlayerDisplayTime(playerName) {
-    if (showingTotalStats) {
-        const player = getPlayerFromName(playerName);
-        return formatPlayTime(player.totalTimePlayed);
-    } else {
-        return formatPlayTime(getPlayerGameTime(playerName));
-    }
-}
-
-/**
- * Capture selected players for next line
- */
-function captureNextLineSelections() {
-    const checkboxes = document.querySelectorAll('#activePlayersTable input[type="checkbox"]');
-    const selectedPlayers = [];
-
-    checkboxes.forEach((checkbox, index) => {
-        if (checkbox.checked && index < currentTeam.teamRoster.length) {
-            selectedPlayers.push(currentTeam.teamRoster[index].name);
-        }
-    });
-
-    nextLineSelections = selectedPlayers;
-    log('Captured next line selections:', nextLineSelections);
-}
-
-/**
- * Clear stored next line selections
+ * Clear stored next line selections.
+ *
+ * NOTE: currently a no-op, and kept only because three modules still call it
+ * (game/gameLogic.js, game/pointManagement.js, game/selectLine.js). The only
+ * writer of `nextLineSelections` was captureNextLineSelections(), part of the
+ * dead Before-Point-Screen table deleted in this file's cleanup — nothing has
+ * called it since that screen went away, so the variable is permanently null
+ * and clearing it changes nothing. Line selection now persists through
+ * `pendingNextLine` on the Game (see game/selectLine.js).
+ *
+ * Removing this function and its four call sites is a safe follow-up; it was
+ * left in place so the dead-table deletion stayed contained to this file.
  */
 function clearNextLineSelections() {
     if (nextLineSelections !== null) {
@@ -336,94 +49,5 @@ function clearNextLineSelections() {
     nextLineSelections = null;
 }
 
-/**
- * Width-sync the sticky checkbox/name/time columns for horizontal scrolling.
- * Position, colors, borders, and z-index are static CSS (see
- * .active-checkbox-column / .active-name-column / .active-time-column /
- * .active-header-teams in css/tables.css) — this only sets the numeric widths and
- * `left` offsets that depend on measured column widths (checkbox width can
- * vary slightly by browser/zoom, and the name column's width varies with
- * player-name length), which CSS can't derive on its own.
- */
-function makeColumnsSticky() {
-    const checkboxCells = document.querySelectorAll('.active-checkbox-column');
-    if (checkboxCells.length === 0) {
-        return;
-    }
-
-    // Get checkbox column width - use getBoundingClientRect which includes padding and border
-    // Use the first data cell (not header) for accurate measurement
-    const firstCheckboxCell = checkboxCells[0];
-    const checkboxRect = firstCheckboxCell.getBoundingClientRect();
-    let checkboxCellWidth = checkboxRect.width;
-
-    // If width is 0 or invalid, try to get computed style width
-    if (checkboxCellWidth <= 0) {
-        const computedStyle = window.getComputedStyle(firstCheckboxCell);
-        checkboxCellWidth = parseFloat(computedStyle.width) || 30; // fallback to 30px
-    }
-
-    // Force consistent checkbox column width
-    checkboxCells.forEach(cell => {
-        cell.style.width = `${checkboxCellWidth}px`;
-        cell.style.minWidth = `${checkboxCellWidth}px`;
-        cell.style.maxWidth = `${checkboxCellWidth}px`;
-    });
-
-    // Get name column cells and width
-    const nameCells = document.querySelectorAll('.active-name-column');
-    const nameCellWidth = nameCells.length > 0 ? nameCells[0].getBoundingClientRect().width : 0;
-
-    // Offset name column to sit right after the checkbox column
-    nameCells.forEach(cell => {
-        cell.style.left = `${checkboxCellWidth}px`;
-    });
-
-    // Offset time column to sit right after the name column
-    const timeCells = document.querySelectorAll('.active-time-column');
-    timeCells.forEach(cell => {
-        cell.style.left = `${checkboxCellWidth + nameCellWidth}px`;
-    });
-
-    // Set the scroll position to the maximum scroll width
-    const tableContainer = document.getElementById('tableContainer');
-    if (tableContainer) {
-        tableContainer.scrollLeft = tableContainer.scrollWidth;
-    }
-}
-
-/**
- * Toggle between showing game stats and total stats
- */
-function togglePlayerStats() {
-    // Store current checkbox states before updating
-    const checkboxStates = {};
-    document.querySelectorAll('#activePlayersTable input[type="checkbox"]').forEach((checkbox, index) => {
-        const playerName = currentTeam.teamRoster[index].name;
-        checkboxStates[playerName] = checkbox.checked;
-    });
-
-    // Toggle stats display
-    showingTotalStats = !showingTotalStats;
-    const statsToggle = document.getElementById('statsToggle');
-    if (statsToggle) statsToggle.textContent = showingTotalStats ? '(Total)' : '(Game)';
-
-    // Update the display
-    updateActivePlayersList();
-
-    // Restore checkbox states
-    document.querySelectorAll('#activePlayersTable input[type="checkbox"]').forEach((checkbox, index) => {
-        const playerName = currentTeam.teamRoster[index].name;
-        checkbox.checked = checkboxStates[playerName];
-    });
-
-    // Make sure the Start Point button state is correct
-    // defined nowhere — dead guarded branch (pre-existing); cleanup candidate
-    if (typeof window.checkPlayerCount === 'function') {
-        window.checkPlayerCount();
-    }
-}
-
 // --- ES-module exports ---
 export { clearNextLineSelections, getRunningScores };
-

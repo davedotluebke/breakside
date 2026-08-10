@@ -37,7 +37,7 @@ import {
 } from '../utils/helpers.js';
 import {
     getGamePlayerStats, getEventPlayerStats, getTeamPlayerStats,
-    accumulateGameStats, getGameTeamStats, sumPlayerStats,
+    accumulateGameStats, getGamesTeamStats, sumPlayerStats,
 } from '../utils/eventStats.js';
 import {
     StatsLevel, columnsForLevel, getStatsLevel, wireStatsLevelSelect,
@@ -788,16 +788,9 @@ async function exportTeamRosterXLSX() {
         const buildSheet = (sheetGames, label) => {
             const playerStats = {};
             sheetGames.forEach(g => accumulateGameStats(g, playerStats));
-            const teamStats = {
-                breaks: 0, opponentBreaks: 0,
-                cleanHolds: 0, dirtyHolds: 0,
-                holdOpps: 0, breakOpps: 0, breakPossOpps: 0,
-                total: 0
-            };
-            sheetGames.forEach(g => {
-                const t = getGameTeamStats(g);
-                Object.keys(teamStats).forEach(k => { teamStats[k] += t[k] || 0; });
-            });
+            // Shared aggregator rather than a local re-sum — it also carries
+            // the per-set breakdown, which a hand-rolled numeric merge drops.
+            const teamStats = getGamesTeamStats(sheetGames);
             const titleRow = `${currentTeam.name} — ${label} (${sheetGames.length} game${sheetGames.length === 1 ? '' : 's'})`;
             const aoa = buildStatsSheetAoA(players, playerStats, teamStats, { titleRow, level });
             return aoaToFormattedSheet(aoa);
