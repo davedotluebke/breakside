@@ -208,11 +208,35 @@ All green on this branch:
 
 - **Unit:** `node --test 'tests/unit/*.test.mjs'` — 230 pass (note the glob
   form; the bare directory form fails on Node 25).
-- **Backend:** `pytest ultistats_server/ -q` — 357 pass.
-- **e2e:** full suite from `tests/` with `CI=1` — 26 pass, including
-  `04-sleep-wake-recovery` (asserts ping behavior directly) and
-  `03-multi-coach-roles`. 03 and 07 re-run in isolation with
-  `--retries=0 --repeat-each=4`: 28/28, no flake.
+- **Backend:** `pytest ultistats_server/ -q` — 372 pass.
+- **e2e:** full suite from `tests/` with `CI=1` — 30 pass, including
+  `04-sleep-wake-recovery` (asserts ping behavior directly),
+  `03-multi-coach-roles`, and the new `11-solo-ping-backoff`. 11 re-run in
+  isolation with `--retries=0 --repeat-each=3`: 12/12, no flake.
+
+### Three e2e traps this created
+
+Each one cost a full test cycle. They are all consequences of cadence no
+longer being a constant, and they will bite anyone touching this again.
+
+1. **A "coach B" driven purely through the API is not a *connected* coach.**
+   Specs 03 and 09 claimed a second coach by calling `/claim` and `/sync`
+   without ever pinging. That was equivalent when cadence was fixed; now the
+   page under test stays backed off, and any assertion about reacting quickly
+   is silently re-measuring discovery latency instead. Ping as B, then
+   synchronize on `waitForMultiCoachSeen()`.
+2. **The harness runs a compressed timescale, and the margins don't compress
+   evenly.** The test backend sets `BREAKSIDE_STALE_TIMEOUT=5`, so
+   production's 10s solo cadence would expire roles every interval there. The
+   cadences are scaled to match in `tests/helpers/constants.ts` — keep the
+   cadence-to-expiry margin generous, because the expiry is compressed 24×
+   while the cadences are compressed 10×.
+3. **Team ids hash from the team name.** Two runs of one test share a team, so
+   the second resumes the first's in-progress game — two live instances of one
+   account, which correctly trips the duplicate-instance guard and hands both
+   the *fast* cadence. A spec about being solo then fails with a baffling
+   "expected 10000, received 2000". Spec 11 suffixes team names per worker and
+   repeat so `--repeat-each` stays usable.
 
 ## Deploying
 
