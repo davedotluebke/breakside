@@ -80,10 +80,19 @@ async function soloCoachInSettledGame(
   request: APIRequestContext,
   teamName: string,
 ) {
+  // Team ids hash from the team NAME, so two runs of one test share a team —
+  // and the second then resumes the first's in-progress game. Both pages are
+  // the same account with different instance ids, which correctly trips the
+  // duplicate-instance guard and hands them the FAST cadence, so a spec about
+  // being solo fails in a thoroughly confusing way. Unique per worker and
+  // repeat so `--repeat-each` stress runs stay isolated.
+  const info = test.info();
+  const unique = `${teamName} ${info.workerIndex}-${info.repeatEachIndex}`;
+
   await page.goto(`/?${TEST_PARAMS}&testUserId=${COACH_A}`);
   await expect(page.locator('#selectTeamScreen')).toBeVisible({ timeout: 10_000 });
   await expect(page.locator('#splashScreen')).toHaveCount(0, { timeout: 10_000 });
-  await setupTeamWithPlayers(page, teamName);
+  await setupTeamWithPlayers(page, unique);
   await startGame(page, 'offense');
 
   const gameId = await getGameId(page);
