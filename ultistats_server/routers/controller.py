@@ -242,8 +242,10 @@ async def ping_controller(
     """
     Ping to keep controller role(s) alive.
 
-    Should be called every 2-5 seconds while holding a role.
-    Roles expire after 30 seconds without a ping.
+    Cadence is server-directed: the response's `pingInterval` (ms) tells the
+    client how long to wait before the next one — fast while a second coach is
+    connected, backed off while solo. Roles expire after STALE_TIMEOUT_SECONDS
+    (120s) without a ping, which is the hard floor under any backoff.
 
     If BOTH roles are unclaimed, auto-assigns both to this user.
     This makes the first coach to enter a game the default holder.
@@ -267,8 +269,9 @@ async def ping_controller(
     # Auto-assign roles if both are unclaimed (first coach to enter gets both)
     state = auto_assign_roles_if_unclaimed(game_id, user["id"], display_name)
 
-    # Record this coach as connected (even if they hold no role)
-    record_coach_ping(game_id, user["id"], display_name)
+    # Record this coach as connected (even if they hold no role). Returns the
+    # cadence this coach should now poll at.
+    ping_interval_ms = record_coach_ping(game_id, user["id"], display_name)
 
     # Ping whichever role(s) the user holds
     pinged = []
@@ -303,6 +306,7 @@ async def ping_controller(
         "hasPendingHandoffForMe": has_pending_for_me,
         "handoffTimeoutSeconds": HANDOFF_EXPIRY_SECONDS,
         "connectedCoaches": get_connected_coaches(game_id),
+        "pingInterval": ping_interval_ms,
         "gameStamp": str(stamp) if stamp is not None else None,
         "serverTime": datetime.now().isoformat()
     }

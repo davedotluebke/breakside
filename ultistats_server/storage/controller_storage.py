@@ -56,8 +56,26 @@ class ControllerState(TypedDict):
 # (manual handoff is the normal release path).
 STALE_TIMEOUT_SECONDS = int(os.getenv("BREAKSIDE_STALE_TIMEOUT", "120"))
 
-# Handoff auto-approves after this time (must match client-side HANDOFF_TIMEOUT_SECONDS)
+# Handoff auto-approves after this time. The client no longer hardcodes a
+# matching value: the ping response carries `handoffTimeoutSeconds`, and each
+# pending handoff carries its own `expiresInSeconds`, because a handoff aimed at
+# a backed-off solo holder gets a WIDER window than this (see
+# _handoff_expiry_for_holder).
 HANDOFF_EXPIRY_SECONDS = int(os.getenv("BREAKSIDE_HANDOFF_EXPIRY", "10"))
+
+# Recommended client ping cadence, returned as `pingInterval` on every ping.
+#
+# A coach alone in a game is pinging 30x/minute to keep a role nobody is
+# contesting and to detect changes nobody is making — since the game change
+# stamp rides on the ping, cadence *is* change-detection latency, and a solo
+# coach has no remote writer to detect. So solo backs off hard; the moment a
+# second coach appears everyone snaps back to the fast cadence.
+#
+# The floor on SOLO is STALE_TIMEOUT_SECONDS (120s): miss enough pings and the
+# server frees your role out from under you. 10s leaves 12x margin, which also
+# absorbs a couple of dropped requests on a bad sideline connection.
+PING_INTERVAL_MULTI_MS = int(os.getenv("BREAKSIDE_PING_INTERVAL_MULTI", "2000"))
+PING_INTERVAL_SOLO_MS = int(os.getenv("BREAKSIDE_PING_INTERVAL_SOLO", "10000"))
 
 # Window for reporting a coach as "active" on game lists (see
 # get_recent_activity). Distinct from STALE_TIMEOUT_SECONDS, which governs
@@ -332,7 +350,9 @@ def request_handoff(
     """
     Request a handoff for an occupied role.
     
-    Creates a pending handoff that expires in HANDOFF_EXPIRY_SECONDS.
+    Creates a pending handoff that expires after at least HANDOFF_EXPIRY_SECONDS
+    — longer if the current holder is on a backed-off ping cadence, so the
+    window always covers their time-to-notice (see _handoff_expiry_for_holder).
     The current holder can accept/deny, or it auto-approves on expiry.
     
     Args:
@@ -373,15 +393,17 @@ def request_handoff(
         if state.get("pendingHandoff"):
             return {"success": False, "reason": "handoff_pending"}
         
-        # Create handoff request
+        # Create handoff request. The window is sized to the *holder's* cadence,
+        # not a fixed constant — a backed-off solo holder needs longer to notice.
         now = datetime.now()
+        expiry_s = _handoff_expiry_for_holder(game_id, current_holder["userId"])
         handoff: PendingHandoff = {
             "role": role,
             "requesterId": requester_id,
             "requesterName": requester_name,
             "currentHolderId": current_holder["userId"],
             "requestedAt": now.isoformat(),
-            "expiresAt": (now + timedelta(seconds=HANDOFF_EXPIRY_SECONDS)).isoformat()
+            "expiresAt": (now + timedelta(seconds=expiry_s)).isoformat()
         }
         
         state["pendingHandoff"] = handoff
@@ -567,15 +589,73 @@ def get_recent_activity(game_id: str, window_seconds: int = ACTIVITY_WINDOW_SECO
     return (max(last_pings) if last_pings else None), active_coaches
 
 
-def record_coach_ping(game_id: str, user_id: str, display_name: str) -> None:
-    """Record that a coach is actively polling this game."""
+def record_coach_ping(game_id: str, user_id: str, display_name: str) -> int:
+    """Record that a coach is actively polling this game; return their cadence.
+
+    Recording presence and choosing the cadence are one atomic step on purpose.
+    Split them and the second coach's *first* ping computes its answer from a
+    coach list it isn't in yet — so the coach who just turned this game
+    multi-coach gets told to poll slowly, which is exactly backwards.
+
+    The chosen cadence is stored alongside the ping so a later handoff can size
+    its expiry against how slowly this coach is checking in
+    (see _handoff_expiry_for_holder).
+    """
     with _lock:
         if game_id not in _connected_coaches:
             _connected_coaches[game_id] = {}
-        _connected_coaches[game_id][user_id] = {
+
+        coaches = _connected_coaches[game_id]
+        coaches[user_id] = {
             "displayName": display_name,
             "lastPing": datetime.now(),
+            # Overwritten below; present so the count sees a complete record.
+            "pingIntervalMs": PING_INTERVAL_MULTI_MS,
         }
+
+        cutoff = datetime.now() - timedelta(seconds=STALE_TIMEOUT_SECONDS)
+        live = sum(1 for info in coaches.values() if info["lastPing"] > cutoff)
+
+        interval = PING_INTERVAL_MULTI_MS if live > 1 else PING_INTERVAL_SOLO_MS
+        coaches[user_id]["pingIntervalMs"] = interval
+        return interval
+
+
+def _coach_ping_interval_locked(game_id: str, user_id: str) -> int:
+    """Caller must hold _lock. See get_coach_ping_interval."""
+    coach = _connected_coaches.get(game_id, {}).get(user_id)
+    if not coach:
+        return PING_INTERVAL_MULTI_MS
+    return coach.get("pingIntervalMs", PING_INTERVAL_MULTI_MS)
+
+
+def get_coach_ping_interval(game_id: str, user_id: str) -> int:
+    """The cadence last assigned to this coach, or the fast default if unknown.
+
+    Unknown means either "never pinged" or "pinged before this field existed";
+    both should assume the fast cadence, since assuming *slow* would inflate
+    handoff windows for coaches who are in fact checking in every 2 seconds.
+    """
+    with _lock:
+        return _coach_ping_interval_locked(game_id, user_id)
+
+
+def _handoff_expiry_for_holder(game_id: str, holder_id: str) -> int:
+    """Seconds a handoff aimed at `holder_id` should stay open. Caller holds _lock.
+
+    A handoff that auto-approves before the holder has even *fetched* it takes
+    the role away from a coach who was never given a chance to decline. With a
+    solo backoff in play that is a live risk: the holder can be up to one full
+    (slow) interval from their next ping when the request lands, and the second
+    coach who triggered this only became visible to them on that same ping.
+
+    So the window has to cover one interval to notice plus one to respond, and
+    never drops below the configured default.
+    """
+    interval_s = _coach_ping_interval_locked(game_id, holder_id) / 1000
+    return max(HANDOFF_EXPIRY_SECONDS, int(2 * interval_s) + 2)
+
+
 
 
 def get_connected_coaches(game_id: str) -> list:
