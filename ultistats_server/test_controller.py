@@ -15,11 +15,17 @@ from storage.controller_storage import (
     respond_to_handoff,
     release_role,
     ping_role,
+    record_coach_ping,
+    get_coach_ping_interval,
     clear_game_state,
     get_active_games,
     STALE_TIMEOUT_SECONDS,
     HANDOFF_EXPIRY_SECONDS,
+    PING_INTERVAL_MULTI_MS,
+    PING_INTERVAL_SOLO_MS,
+    INSTANCE_LIVENESS_FACTOR,
     _controller_states,
+    _connected_coaches,
     _lock,
 )
 
@@ -30,12 +36,19 @@ from storage.controller_storage import (
 
 @pytest.fixture(autouse=True)
 def clear_state():
-    """Clear controller state before and after each test."""
+    """Clear controller state before and after each test.
+
+    Connected coaches are separate module state from role holders, and they
+    decide ping cadence — leaving them behind lets one test's coaches make the
+    next test's game look multi-coach.
+    """
     with _lock:
         _controller_states.clear()
+        _connected_coaches.clear()
     yield
     with _lock:
         _controller_states.clear()
+        _connected_coaches.clear()
 
 
 # =============================================================================
@@ -432,6 +445,154 @@ def test_independent_games():
     
     assert state2["activeCoach"]["userId"] == "user-bob"
     assert state2["lineCoach"]["userId"] == "user-alice"
+
+
+# =============================================================================
+# Ping Cadence (solo backoff)
+# =============================================================================
+
+def test_solo_coach_is_told_to_back_off():
+    result = record_coach_ping("game-1", "user-alice", "Alice", "inst-a")
+
+    assert result["pingIntervalMs"] == PING_INTERVAL_SOLO_MS
+    assert result["duplicateInstance"] is False
+
+
+def test_second_coach_is_fast_on_its_very_first_ping():
+    """The coach who *makes* a game multi-coach must not be told to go slow.
+
+    Regression guard for counting connected coaches before recording the ping
+    that is being answered: Bob isn't in the list yet at that moment, so the
+    game still looks solo and Bob gets the backed-off cadence.
+    """
+    record_coach_ping("game-1", "user-alice", "Alice", "inst-a")
+
+    bob = record_coach_ping("game-1", "user-bob", "Bob", "inst-b")
+
+    assert bob["pingIntervalMs"] == PING_INTERVAL_MULTI_MS
+
+
+def test_incumbent_speeds_up_on_its_next_ping():
+    alice_solo = record_coach_ping("game-1", "user-alice", "Alice", "inst-a")
+    assert alice_solo["pingIntervalMs"] == PING_INTERVAL_SOLO_MS
+
+    record_coach_ping("game-1", "user-bob", "Bob", "inst-b")
+    alice_again = record_coach_ping("game-1", "user-alice", "Alice", "inst-a")
+
+    assert alice_again["pingIntervalMs"] == PING_INTERVAL_MULTI_MS
+
+
+def test_cadence_is_per_game():
+    record_coach_ping("game-1", "user-alice", "Alice", "inst-a")
+    record_coach_ping("game-1", "user-bob", "Bob", "inst-b")
+
+    solo_elsewhere = record_coach_ping("game-2", "user-alice", "Alice", "inst-a")
+
+    assert solo_elsewhere["pingIntervalMs"] == PING_INTERVAL_SOLO_MS
+
+
+# =============================================================================
+# Duplicate Instance Detection
+# =============================================================================
+
+def test_two_instances_of_one_account_are_flagged_and_kept_fast():
+    """One user in two places must not be read as "solo" and backed off."""
+    record_coach_ping("game-1", "user-alice", "Alice", "inst-phone")
+
+    second = record_coach_ping("game-1", "user-alice", "Alice", "inst-tablet")
+
+    assert second["duplicateInstance"] is True
+    assert second["pingIntervalMs"] == PING_INTERVAL_MULTI_MS
+
+
+def test_repeat_pings_from_one_instance_are_not_duplicates():
+    record_coach_ping("game-1", "user-alice", "Alice", "inst-phone")
+    again = record_coach_ping("game-1", "user-alice", "Alice", "inst-phone")
+
+    assert again["duplicateInstance"] is False
+    assert again["pingIntervalMs"] == PING_INTERVAL_SOLO_MS
+
+
+def test_absent_instance_id_never_reports_a_duplicate():
+    """No id means "can't tell" — an old client must not trip the warning."""
+    record_coach_ping("game-1", "user-alice", "Alice", None)
+    again = record_coach_ping("game-1", "user-alice", "Alice", None)
+
+    assert again["duplicateInstance"] is False
+
+
+def test_departed_instance_ages_out_and_solo_backoff_returns():
+    """Closing the second copy should hand the cadence back, not latch fast."""
+    record_coach_ping("game-1", "user-alice", "Alice", "inst-phone")
+    flagged = record_coach_ping("game-1", "user-alice", "Alice", "inst-tablet")
+    assert flagged["duplicateInstance"] is True
+
+    # The tablet goes away: backdate it past its own liveness window, which is
+    # a multiple of the cadence it was last told to use (now the fast one).
+    stale_by = (PING_INTERVAL_MULTI_MS / 1000) * INSTANCE_LIVENESS_FACTOR + 1
+    with _lock:
+        instances = _connected_coaches["game-1"]["user-alice"]["instances"]
+        instances["inst-tablet"] = datetime.now() - timedelta(seconds=stale_by)
+
+    recovered = record_coach_ping("game-1", "user-alice", "Alice", "inst-phone")
+
+    assert recovered["duplicateInstance"] is False
+    assert recovered["pingIntervalMs"] == PING_INTERVAL_SOLO_MS
+
+
+# =============================================================================
+# Handoff Expiry vs Holder Cadence
+# =============================================================================
+
+def test_handoff_window_covers_a_backed_off_holder():
+    """A solo holder must not lose a role to a timer they never saw start.
+
+    Alice is pinging every 10s, so a 10s handoff window could elapse entirely
+    within one of her gaps — auto-approving before she is ever shown the prompt.
+    """
+    claim_role("game-1", "activeCoach", "user-alice", "Alice")
+    record_coach_ping("game-1", "user-alice", "Alice", "inst-a")
+    assert get_coach_ping_interval("game-1", "user-alice") == PING_INTERVAL_SOLO_MS
+
+    result = request_handoff("game-1", "activeCoach", "user-bob", "Bob")
+
+    assert result["success"] is True
+    requested = datetime.fromisoformat(result["handoff"]["requestedAt"])
+    expires = datetime.fromisoformat(result["handoff"]["expiresAt"])
+    window = (expires - requested).total_seconds()
+
+    # One interval to notice, one to respond, plus slack.
+    assert window > HANDOFF_EXPIRY_SECONDS
+    assert window == pytest.approx(2 * (PING_INTERVAL_SOLO_MS / 1000) + 2, abs=1)
+
+
+def test_handoff_window_is_unchanged_for_a_fast_holder():
+    claim_role("game-1", "activeCoach", "user-alice", "Alice")
+    record_coach_ping("game-1", "user-alice", "Alice", "inst-a")
+    record_coach_ping("game-1", "user-bob", "Bob", "inst-b")
+    record_coach_ping("game-1", "user-alice", "Alice", "inst-a")
+    assert get_coach_ping_interval("game-1", "user-alice") == PING_INTERVAL_MULTI_MS
+
+    result = request_handoff("game-1", "activeCoach", "user-bob", "Bob")
+
+    requested = datetime.fromisoformat(result["handoff"]["requestedAt"])
+    expires = datetime.fromisoformat(result["handoff"]["expiresAt"])
+    window = (expires - requested).total_seconds()
+
+    assert window == pytest.approx(HANDOFF_EXPIRY_SECONDS, abs=1)
+
+
+def test_handoff_window_defaults_fast_for_an_unknown_holder():
+    """Never-pinged holder: assume fast, or every handoff inflates."""
+    claim_role("game-1", "activeCoach", "user-alice", "Alice")
+
+    result = request_handoff("game-1", "activeCoach", "user-bob", "Bob")
+
+    requested = datetime.fromisoformat(result["handoff"]["requestedAt"])
+    expires = datetime.fromisoformat(result["handoff"]["expiresAt"])
+    window = (expires - requested).total_seconds()
+
+    assert window == pytest.approx(HANDOFF_EXPIRY_SECONDS, abs=1)
 
 
 # =============================================================================

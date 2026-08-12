@@ -97,13 +97,21 @@ def client(seeded, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def clear_controller_state():
-    """Roles are in-memory and process-wide; don't leak them between tests."""
-    from storage.controller_storage import _controller_states, _lock
+    """Roles are in-memory and process-wide; don't leak them between tests.
+
+    Connected coaches too: they decide ping cadence, so a leftover coach makes
+    the next test's game look contested.
+    """
+    from storage.controller_storage import (
+        _controller_states, _connected_coaches, _lock,
+    )
     with _lock:
         _controller_states.clear()
+        _connected_coaches.clear()
     yield
     with _lock:
         _controller_states.clear()
+        _connected_coaches.clear()
 
 
 def _as(user):
@@ -205,3 +213,52 @@ class TestPingCarriesStamp:
 
         after = client.post(f"/api/games/{GAME_ID}/ping").json()["gameStamp"]
         assert after != before
+
+
+class TestPingNamesTheCadence:
+    """The ping response is what tells a client how often to ping.
+
+    Storage-level cadence rules are covered in test_controller.py; these pin
+    the HTTP surface — the field names a client reads, and the instance header
+    that storage can't see on its own.
+    """
+
+    def test_solo_coach_is_told_to_back_off(self, client, seeded):
+        from storage.controller_storage import PING_INTERVAL_SOLO_MS
+
+        _as(COACH)
+        body = client.post(f"/api/games/{GAME_ID}/ping").json()
+        assert body["pingInterval"] == PING_INTERVAL_SOLO_MS
+
+    def test_no_instance_header_is_not_a_duplicate(self, client, seeded):
+        """Old clients send no header; they must not trip the warning."""
+        _as(COACH)
+        client.post(f"/api/games/{GAME_ID}/ping")
+        body = client.post(f"/api/games/{GAME_ID}/ping").json()
+        assert body["duplicateInstance"] is False
+
+    def test_one_instance_pinging_repeatedly_is_not_a_duplicate(self, client, seeded):
+        _as(COACH)
+        headers = {"X-Breakside-Instance": "inst-phone"}
+        client.post(f"/api/games/{GAME_ID}/ping", headers=headers)
+        body = client.post(f"/api/games/{GAME_ID}/ping", headers=headers).json()
+        assert body["duplicateInstance"] is False
+
+    def test_second_instance_of_one_account_is_flagged_and_kept_fast(
+        self, client, seeded
+    ):
+        """The case the solo backoff would otherwise get wrong: one user in two
+        places looks solo (coaches are keyed by user id), so both would back off
+        while each was in fact a remote writer for the other."""
+        from storage.controller_storage import PING_INTERVAL_MULTI_MS
+
+        _as(COACH)
+        client.post(
+            f"/api/games/{GAME_ID}/ping", headers={"X-Breakside-Instance": "inst-phone"}
+        )
+        body = client.post(
+            f"/api/games/{GAME_ID}/ping", headers={"X-Breakside-Instance": "inst-tablet"}
+        ).json()
+
+        assert body["duplicateInstance"] is True
+        assert body["pingInterval"] == PING_INTERVAL_MULTI_MS
