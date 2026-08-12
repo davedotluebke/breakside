@@ -1857,6 +1857,20 @@ Four things about it are load-bearing:
   an identity: sessionStorage only, never persisted, never keys connected
   coaches, and absent means "can't tell" rather than "duplicate". See TODO.md.
 
+Two things about the instance header that look like problems and aren't. It
+doesn't add a CORS round trip — the ping already carries `Authorization` and a
+JSON content type, so it was never a "simple" request and was being preflighted
+anyway (and Starlette echoes requested headers rather than returning a literal
+`*`, so `allow_headers=["*"]` is still valid alongside `allow_credentials`). And
+sessionStorage is per-tab, which is the point: a reload keeps its id, so
+refreshing doesn't look like a second device.
+
+The residual false positive is a *relaunch* — a killed PWA or a new tab starts a
+new session, so for one liveness window (2.5× the cadence) the departed instance
+still looks live and the coach sees one spurious warning. Bounded,
+self-resolving, and the safe direction to err: a missed duplicate corrupts data,
+a spurious one is a toast.
+
 The cost the backoff buys is discovery latency: a solo coach learns that anyone
 else arrived on its next ping, so up to one slow interval late. That bound is
 asserted directly in `tests/scenarios/11-solo-ping-backoff.spec.ts`; specs about
