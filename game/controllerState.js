@@ -34,12 +34,34 @@ let controllerState = {
     lastUpdate: null
 };
 
-// Polling configuration
+// Polling configuration. These are the *fallback* cadences, used when the
+// server hasn't named one (old server) and whenever multi-coach has been seen.
 const PING_INTERVAL_ACTIVE = 2000;  // 2 seconds when holding a role
 const PING_INTERVAL_IDLE = 5000;    // 5 seconds when not holding a role
 
 let controllerPollIntervalId = null;
 let currentGameIdForPolling = null;
+// Cadence the server last asked for (`pingInterval` on the ping response), or
+// null if it never said. Null means "no opinion" — fall back to role-based.
+let serverPingIntervalMs = null;
+// The interval currently installed, so a ping that doesn't change the cadence
+// doesn't restart the timer (and reset its phase) 30 times a minute.
+let currentPingIntervalMs = null;
+// Sticky for the game: once a second coach has been seen, this client stays on
+// the fast cadence even after the server stops reporting them.
+//
+// Sticky because `connectedCoaches` only decays after the 120s stale window, so
+// an unlatched client would ride out most of a departed coach's absence at the
+// fast rate anyway — and would then be free to flap between cadences every time
+// a coach's phone slept. A coach who joins for one point costs the rest of the
+// game at 2s; that's the deliberate trade. Reset by stopControllerPolling().
+//
+// NOT the same latch as ui/panelSystem's `_multiCoachDetected`, and don't merge
+// them: that one answers "should the role buttons be showing", and the game
+// menu can set it by hand (forceMultiCoachDetected) for a solo coach who wants
+// the buttons anyway. This one is evidence-only — a manual button reveal is no
+// reason to triple our request rate.
+let multiCoachSeen = false;
 
 
 // =============================================================================
@@ -296,6 +318,19 @@ async function pingController(gameId) {
                 connectedCoaches: data.connectedCoaches
             });
 
+            // Adopt the server's cadence. Latch multi-coach first so that the
+            // ping which *reveals* a second coach snaps straight to the fast
+            // rate — that ping is also the one that may be carrying their first
+            // handoff request, and it's the last slow one we get.
+            if ((data.connectedCoaches?.length || 0) > 1) {
+                multiCoachSeen = true;
+            }
+            if (typeof data.pingInterval === 'number' && data.pingInterval > 0) {
+                serverPingIntervalMs = data.pingInterval;
+            }
+            // No-ops unless the effective cadence actually moved.
+            if (controllerPollIntervalId) installPingInterval();
+
             // Stash the game change stamp for the in-game refresh loop. An
             // absent field (old server) stores null, which reads as "no
             // opinion" and keeps that client on unconditional refreshes.
@@ -514,16 +549,37 @@ function startControllerPolling(gameId) {
 }
 
 /**
- * (Re)install the controller ping interval, clearing any existing one.
- * Interval is role-based: faster while holding a role.
- * @returns {number} The interval in ms that was installed
+ * The cadence this client should be pinging at right now.
+ *
+ * Role-based unless the server has asked for something else *and* we're still
+ * solo. Once a second coach has been seen we ignore the server's suggestion
+ * entirely and go back to role-based timing, because that's the cadence the
+ * handoff and change-propagation paths are tuned for.
+ * @returns {number} Interval in ms
  */
-function installPingInterval() {
+function effectivePingInterval() {
+    const hasRole = controllerState.isActiveCoach || controllerState.isLineCoach;
+    const roleBased = hasRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
+    if (multiCoachSeen || serverPingIntervalMs === null) return roleBased;
+    return serverPingIntervalMs;
+}
+
+/**
+ * (Re)install the controller ping interval, clearing any existing one.
+ * @param {boolean} force - Reinstall even if the cadence is unchanged. The wake
+ *   path needs this: after sleep the old interval may be dead while
+ *   controllerPollIntervalId still looks live.
+ * @returns {number} The interval in ms that is now installed
+ */
+function installPingInterval(force = false) {
+    const interval = effectivePingInterval();
+    if (!force && controllerPollIntervalId && interval === currentPingIntervalMs) {
+        return interval;
+    }
     if (controllerPollIntervalId) {
         clearInterval(controllerPollIntervalId);
     }
-    const hasRole = controllerState.isActiveCoach || controllerState.isLineCoach;
-    const interval = hasRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
+    currentPingIntervalMs = interval;
     controllerPollIntervalId = setInterval(() => {
         window.powerLog?.countWakeup?.('controllerPing');
         if (currentGameIdForPolling) {
@@ -591,6 +647,11 @@ function stopControllerPolling() {
     // getPingGameStamp() is game-scoped and would return null for a later
     // game anyway; dropping it here keeps this reset total.
     lastPingGameStamp = null;
+    // Cadence state is per-game too: the next game starts solo-until-proven
+    // otherwise, and must not inherit this game's sticky multi-coach latch.
+    serverPingIntervalMs = null;
+    currentPingIntervalMs = null;
+    multiCoachSeen = false;
     log('🎮 Controller polling stopped');
 }
 
@@ -763,7 +824,7 @@ document.addEventListener('visibilitychange', async () => {
     // Always restart the polling interval unconditionally.
     // After sleep, the browser may have frozen or invalidated the previous
     // interval — checking controllerPollIntervalId is unreliable here.
-    installPingInterval();
+    installPingInterval(true);
 
     // Immediately ping to get fresh server state, with retries.
     // The first ping after wake may fail if the network is still restoring.
