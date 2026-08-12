@@ -43,8 +43,12 @@ const COACH_B = 'backoff-coach-b';
 // measurements take seconds. The *ratio* is what the assertions below rely on;
 // the production values themselves are pinned in the backend unit tests.
 
-// These specs measure elapsed cadence, so they need longer than the 30s default.
-test.describe.configure({ timeout: 90_000 });
+// These specs measure elapsed cadence, so they need longer than the 30s
+// default. The measurements themselves are only a few seconds; the headroom is
+// for setup, because game creation is offline-first and the first sync can lag
+// the UI by 5s+ (see helpers/controllerApi.ts) — considerably more when four
+// workers are competing. A 90s ceiling still lost that race once.
+test.describe.configure({ timeout: 120_000 });
 
 async function getGameId(page: Page): Promise<string> {
   return page.evaluate(() => {

@@ -69,9 +69,16 @@ export const TEST_PARAMS = `testMode=true&api=${BACKEND_URL}`;
  * roles every interval — which is precisely the failure
  * scenarios/11-solo-ping-backoff.spec.ts exists to catch, so it must not be
  * baked into the harness.
+ *
+ * Keep that margin generous. Production runs 10s against a 120s expiry (12x),
+ * but the test backend compresses the expiry 24x while these cadences are only
+ * compressed 10x, so the ratio here is inherently tighter than real life. At
+ * 1000ms vs 5s it takes five consecutive missed pings to lose a role, which
+ * survives the CPU contention of a parallel run; at 1500ms it took three, and
+ * that flaked.
  */
-export const PING_INTERVAL_SOLO_MS = 1500;
-export const PING_INTERVAL_MULTI_MS = 300;
+export const PING_INTERVAL_SOLO_MS = 1000;
+export const PING_INTERVAL_MULTI_MS = 200;
 
 /** Server-side role expiry for the test backend (BREAKSIDE_STALE_TIMEOUT). */
 export const STALE_TIMEOUT_S = 5;

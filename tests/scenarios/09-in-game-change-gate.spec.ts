@@ -22,7 +22,7 @@
  * multi-coach line planning rather than fail loudly.
  */
 import { test, expect, Page, APIRequestContext } from '@playwright/test';
-import { BACKEND_URL, TEST_PARAMS } from '../helpers/constants';
+import { BACKEND_URL, TEST_PARAMS, PING_INTERVAL_SOLO_MS } from '../helpers/constants';
 import { setupTeamWithPlayers, startGame } from '../helpers/app';
 import {
   waitForGameOnServer,
@@ -114,6 +114,11 @@ async function coachInSettledGame(page: Page, request: APIRequestContext, teamNa
   return gameId;
 }
 
+// Proving an idle game stays quiet means sitting through several refresh ticks
+// and a few ping gaps, on top of the game setup — more than the 30s default
+// allows once game creation is slow under a parallel run.
+test.describe.configure({ timeout: 60_000 });
+
 test.describe('in-game change gating', () => {
   test('an idle game stops pulling the whole game payload', async ({ page, request }) => {
     const gameId = await coachInSettledGame(page, request, 'Gate Idle Team');
@@ -125,11 +130,12 @@ test.describe('in-game change gating', () => {
     const fetches = countFullGameFetches(page, gameId);
     const pings = countPings(page, gameId);
 
-    // Long enough to clear several refresh ticks AND to contain at least one
-    // ping: a solo coach is backed off to PING_INTERVAL_SOLO (10s), so the old
-    // 4-tick/12s window could straddle a single ping gap and see zero pings —
-    // failing the liveness check below for no real reason.
-    const windowMs = Math.max(REFRESH_INTERVAL_MS * 4, 25_000);
+    // Long enough to clear several refresh ticks AND to contain several pings:
+    // a solo coach is backed off (POLLING_OPTIMIZATION.md F4), so a window
+    // shorter than a ping gap would see zero pings and fail the liveness check
+    // below for no real reason. Expressed against the cadence rather than a
+    // fixed number so retuning the harness can't silently reintroduce that.
+    const windowMs = Math.max(REFRESH_INTERVAL_MS * 4, PING_INTERVAL_SOLO_MS * 3);
     await page.waitForTimeout(windowMs);
 
     // Before this change the loop pulled unconditionally every 3s, so this
