@@ -10,7 +10,7 @@
 import { test, expect, Page, APIRequestContext } from '@playwright/test';
 import { BACKEND_URL, TEST_PARAMS } from '../helpers/constants';
 import { setupTeamWithPlayers, startGame } from '../helpers/app';
-import { waitForGameOnServer } from '../helpers/controllerApi';
+import { waitForGameOnServer, waitForMultiCoachSeen } from '../helpers/controllerApi';
 
 // ─── API helpers for Coach B ────────────────────────────────────────────────
 
@@ -199,6 +199,13 @@ test.describe('multi-coach roles', () => {
     const gameId = await getGameId(page);
     await waitForGameOnServer(request, gameId, COACH_A);
     expect((await pingAsCoach(request, gameId, COACH_A)).ok()).toBeTruthy();
+
+    // Coach B arrives. A real second coach's app pings on entry, and that ping
+    // is what tells A's client to come off the solo backoff — without it A
+    // stays at the slow cadence and every timing below is really measuring
+    // discovery latency (pinned separately in 11-solo-ping-backoff.spec.ts).
+    expect((await pingAsCoach(request, gameId, COACH_B)).ok()).toBeTruthy();
+    await waitForMultiCoachSeen(page);
 
     // ── 1. Holder prompt appears ──
     const claim1 = await claimRole(request, gameId, COACH_B, 'active');

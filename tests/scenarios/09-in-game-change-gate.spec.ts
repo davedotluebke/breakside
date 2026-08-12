@@ -24,7 +24,11 @@
 import { test, expect, Page, APIRequestContext } from '@playwright/test';
 import { BACKEND_URL, TEST_PARAMS } from '../helpers/constants';
 import { setupTeamWithPlayers, startGame } from '../helpers/app';
-import { waitForGameOnServer, coachHeaders } from '../helpers/controllerApi';
+import {
+  waitForGameOnServer,
+  coachHeaders,
+  waitForMultiCoachSeen,
+} from '../helpers/controllerApi';
 
 const COACH_A = 'gate-coach-a';
 const COACH_B = 'gate-coach-b';
@@ -121,8 +125,11 @@ test.describe('in-game change gating', () => {
     const fetches = countFullGameFetches(page, gameId);
     const pings = countPings(page, gameId);
 
-    // Four refresh ticks' worth of doing nothing.
-    const windowMs = REFRESH_INTERVAL_MS * 4;
+    // Long enough to clear several refresh ticks AND to contain at least one
+    // ping: a solo coach is backed off to PING_INTERVAL_SOLO (10s), so the old
+    // 4-tick/12s window could straddle a single ping gap and see zero pings —
+    // failing the liveness check below for no real reason.
+    const windowMs = Math.max(REFRESH_INTERVAL_MS * 4, 25_000);
     await page.waitForTimeout(windowMs);
 
     // Before this change the loop pulled unconditionally every 3s, so this
@@ -142,6 +149,16 @@ test.describe('in-game change gating', () => {
     request,
   }) => {
     const gameId = await coachInSettledGame(page, request, 'Gate Propagation Team');
+
+    // Coach B arrives and pings, as a real second coach's app does on entry.
+    // Without this B is a writer the server never sees as *connected*, so the
+    // Active Coach stays on the solo backoff and this test would be measuring
+    // that discovery gap rather than propagation. The gap itself is pinned in
+    // 11-solo-ping-backoff.spec.ts.
+    await request.post(`${BACKEND_URL}/api/games/${gameId}/ping`, {
+      headers: coachHeaders(COACH_B),
+    });
+    await waitForMultiCoachSeen(page);
 
     // Coach B plays Line Coach: pull the game, stamp a "lineup ready" ping
     // onto pendingNextLine, push it back. The server merges pendingNextLine

@@ -100,10 +100,7 @@ Scheduling choices and the traps behind them are in ARCHITECTURE.md.
 
 ---
 
-## F4 — idle backoff *(not done; the target moved)*
-
-The brief treated F4 as speculative pending measurement. Measurement has now
-happened, and it says something more specific than "back off when idle".
+## F4 — solo-coach ping backoff *(done)*
 
 **After F1, all remaining in-game traffic is the controller ping.** The measured
 idle minute above is 30 pings and literally nothing else. There is no diffuse
@@ -112,31 +109,71 @@ remainder left to shave — there is one loop.
 Note what that means for the radio, which is the thing that costs battery:
 request *bytes* fell roughly 7× (a real game averages 5.85 KB, so ~136 KB/min →
 ~19 KB/min), but radio *wakes* only went 50/min → 30/min, because the 2s ping
-sets the floor. Everything cheap has been taken.
+set the floor. Everything cheap had been taken.
 
-That loop can't simply be stretched: roles expire server-side after 30 seconds
-without a ping, and since F1 the ping is also the change-detection channel, so
-slowing it slows how fast one coach sees another's edits.
-
-But those constraints both weaken in the case that matters most:
+That loop can't simply be stretched, for two reasons — except that both weaken
+in the case that matters most:
 
 > **A solo coach has no second coach to hand off to and no second coach whose
 > edits to detect.** `PING_INTERVAL_ACTIVE` is 2s because the holder holds a
 > role — but a coach alone in a game is pinging 30×/minute to keep a role
 > nobody is contesting and to detect changes nobody is making.
 
-The app already knows when this is true: role buttons stay hidden until
-multi-coach is detected, and the ping response carries `connectedCoaches`. A
-solo coach could ping at 5–10s (comfortably inside the 30s expiry) and snap back
-to 2s the moment a second coach appears — costing at most one backed-off
-interval of extra latency in the transition, at a moment when nothing is being
-recorded yet.
+### One correction to the brief
 
-That would be a 3–5× cut in the *only* remaining in-game request stream. It is
-also the highest-risk change in this whole sequence — role expiry, handoff
-timing and change propagation all hang off that one interval — which is why it
-was left for a decision rather than done overnight. **Verify against a real
-game's battery report first**, per the brief's own gate.
+The brief (and `ping_controller`'s docstring) said roles expire 30 seconds after
+the last ping. **They expire at 120 seconds** — `STALE_TIMEOUT_SECONDS`, raised
+from 30 deliberately because mobile browsers freeze `setInterval` on hidden
+pages and a pocketed phone was losing roles. Both have been corrected.
+
+This is why F4 turned out to be the best remaining item rather than a
+speculative one: a 10s cadence sits 12× under the expiry, not 3×.
+
+### What landed
+
+The server names the cadence; the client obeys. `POST /ping` returns
+`pingInterval` — 10s solo, 2s once a second coach is connected — and the client
+latches multi-coach stickily, so once it has seen one it returns to role-based
+timing for the rest of the game.
+
+In-game requests while solo: **30/min → 6/min**, in the only loop that was left.
+
+Three things were needed to make it safe, each covered in ARCHITECTURE.md
+§ Power Management and in tests:
+
+1. **Cadence is decided atomically with recording the ping**, or the second
+   coach's first ping is answered from a list it isn't in yet and the coach who
+   just made the game multi-coach is told to poll slowly.
+2. **Handoff expiry is sized to the holder's cadence** (2× their recorded
+   interval), because a fixed 10s window can elapse inside one gap of a
+   backed-off holder — auto-approving a role away from someone never shown the
+   prompt.
+3. **One user on two devices is detected and warned about**, and holds both
+   copies fast. Coaches are keyed by user id, so two instances of one account
+   look solo — the one case where backing off is actively wrong. Supporting it
+   properly is a TODO.md item; this only guards it.
+
+### The cost, stated plainly
+
+A solo coach learns that a second coach arrived **on its next ping — so up to
+10s late**. Nothing is lost in that window (the widened handoff expiry covers
+the one case that could silently take something away), but the first cross-coach
+interaction after a join can feel a beat slow.
+
+That gap is asserted as a bound in `tests/scenarios/11-solo-ping-backoff.spec.ts`
+rather than hidden. It also broke two existing specs, which is worth knowing:
+03 and 09 drove "coach B" purely through the API and never made B a *connected*
+coach, so the page under test stayed backed off. They now ping as B like a real
+second app would and synchronize on `waitForMultiCoachSeen()`.
+
+**If 10s proves too slow in the field, `BREAKSIDE_PING_INTERVAL_SOLO` tunes it
+server-side with no client deploy.** 5s would halve the discovery gap and still
+cut requests 30/min → 12/min, which is most of the win; the step from 12 to 6
+is the smaller half.
+
+**Still worth verifying against a real game's battery report**, per the brief's
+own gate: expect `requests.controller` to fall by ~5× while solo, with
+`requests.games` still near zero.
 
 A second, smaller one deliberately not taken: the client could adopt the change
 stamp from its *own* sync response and skip the refetch that follows each of its

@@ -1811,6 +1811,58 @@ constantly". In a game with nothing being recorded, `requests.games` should now
 sit near zero while `requests.controller` continues at the ping cadence; if it
 doesn't, the change gate isn't working.
 
+### The solo-coach ping backoff
+
+Everything above is about loops the client owns. The controller ping is the
+exception: **the server names its cadence**, and the client obeys.
+
+After the in-game change gate landed, the ping was the only in-game network loop
+left — and it also became the change channel, since the game's change stamp
+rides on the ping response. That makes cadence and change-detection latency the
+same number, which is the argument *against* slowing it down. But it only bites
+when there is a second coach:
+
+> A coach alone in a game pings 30×/minute to keep a role nobody is contesting
+> and to detect changes nobody is making.
+
+So `POST /api/games/{id}/ping` returns `pingInterval`: `PING_INTERVAL_SOLO_MS`
+(10s) while the connected-coach count is 1, `PING_INTERVAL_MULTI_MS` (2s)
+otherwise. The floor is `STALE_TIMEOUT_SECONDS` (120s), after which the server
+frees the role — 10s leaves 12× margin, enough to absorb dropped requests on a
+bad sideline connection.
+
+Four things about it are load-bearing:
+
+- **The decision is server-side and atomic with recording the ping.** Split
+  "record this coach" from "count the coaches" and the second coach's *first*
+  ping is answered from a list it isn't in yet — so the coach who just made the
+  game multi-coach is the one told to poll slowly. `record_coach_ping()` does
+  both under one lock for exactly this reason.
+- **The client's multi-coach latch is sticky, and separate from the UI's.**
+  `game/controllerState.js` keeps `multiCoachSeen`; once set, the client ignores
+  the server's suggestion and returns to role-based timing for the rest of the
+  game. It is *not* `ui/panelSystem.js`'s `_multiCoachDetected`, which answers
+  "should the role buttons show" and can be set by hand from the game menu — a
+  manual button reveal is no reason to triple the request rate.
+- **Handoff expiry is sized to the holder's cadence, not a constant.** A request
+  aimed at a backed-off holder stays open for 2× their recorded interval,
+  because a fixed 10s window can elapse entirely inside one of their gaps —
+  auto-approving a role away from a coach who was never shown the prompt.
+- **One user on two devices is guarded, not supported.** Connected coaches are
+  keyed by user id, so two instances of one account collapse to one entry: each
+  would be told it was solo, both would back off, and each would then be a
+  remote writer the other was slow to see — the one case where backing off is
+  actively wrong. The ping carries a per-tab `X-Breakside-Instance` id used
+  *only* to detect that, hold both copies fast, and warn. It is deliberately not
+  an identity: sessionStorage only, never persisted, never keys connected
+  coaches, and absent means "can't tell" rather than "duplicate". See TODO.md.
+
+The cost the backoff buys is discovery latency: a solo coach learns that anyone
+else arrived on its next ping, so up to one slow interval late. That bound is
+asserted directly in `tests/scenarios/11-solo-ping-backoff.spec.ts`; specs about
+*other* multi-coach timing synchronize past it with `waitForMultiCoachSeen()`
+rather than racing it.
+
 ### Animations
 
 Looping animations are the ones that matter: a one-shot transition is cheap, but

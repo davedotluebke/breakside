@@ -19,8 +19,16 @@
  *    controller endpoint until the role is actually reported vacant
  *    (waitForRolesVacant) is deterministic: GET /controller applies the
  *    stale-claim cleanup server-side on every read.
+ *
+ * 3. Ping cadence is server-directed and depends on how many coaches are
+ *    connected (POLLING_OPTIMIZATION.md F4). A solo coach backs off, so it can
+ *    be a full slow interval behind learning that anyone else arrived. A spec
+ *    that drives "coach B" purely through the API never makes B *connected* at
+ *    all, so the page under test stays backed off and every assertion about
+ *    reacting quickly races that gap. Ping as B like a real second app would,
+ *    then waitForMultiCoachSeen before asserting multi-coach timing.
  */
-import { expect, APIRequestContext } from '@playwright/test';
+import { expect, APIRequestContext, Page } from '@playwright/test';
 import { BACKEND_URL } from './constants';
 
 export function coachHeaders(userId: string) {
