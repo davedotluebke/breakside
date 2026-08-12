@@ -101,3 +101,32 @@ export async function waitForRolesVacant(
     )
     .toBe('vacant');
 }
+
+/**
+ * Wait until the page's client has actually *observed* a second connected coach.
+ *
+ * Synchronization point for any assertion about how fast a multi-coach client
+ * reacts. A backed-off solo coach learns about an arrival on its next ping, so
+ * without this the spec is really measuring discovery latency and will fail
+ * whenever it lands early in the interval.
+ *
+ * This deliberately does NOT hide the discovery cost — that bound is pinned on
+ * purpose in scenarios/11-solo-ping-backoff.spec.ts. It just keeps specs about
+ * *other* behavior from re-measuring it by accident.
+ */
+export async function waitForMultiCoachSeen(page: Page, timeout = 20_000) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const w = window as any;
+          return w.getControllerState?.()?.connectedCoaches?.length ?? 0;
+        }),
+      {
+        message: 'the page never observed a second connected coach',
+        timeout,
+        intervals: [250],
+      },
+    )
+    .toBeGreaterThan(1);
+}

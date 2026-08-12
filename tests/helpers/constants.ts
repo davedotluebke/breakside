@@ -56,3 +56,22 @@ export const BACKEND_PORT = envPort('BREAKSIDE_E2E_BACKEND_PORT') ?? 8200 + SLOT
 export const FRONTEND_URL = `http://localhost:${FRONTEND_PORT}`;
 export const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
 export const TEST_PARAMS = `testMode=true&api=${BACKEND_URL}`;
+
+/**
+ * Controller ping cadences for the TEST backend (BREAKSIDE_PING_INTERVAL_*).
+ *
+ * Scaled down from production's 10s solo / 2s multi so specs can measure a
+ * cadence by counting requests over seconds instead of minutes, while keeping
+ * the same 5:1 ratio that makes the two rates distinguishable.
+ *
+ * The solo value MUST stay well under the test backend's stale timeout below.
+ * Ping slower than the server frees roles and a backed-off coach loses its
+ * roles every interval — which is precisely the failure
+ * scenarios/11-solo-ping-backoff.spec.ts exists to catch, so it must not be
+ * baked into the harness.
+ */
+export const PING_INTERVAL_SOLO_MS = 1500;
+export const PING_INTERVAL_MULTI_MS = 300;
+
+/** Server-side role expiry for the test backend (BREAKSIDE_STALE_TIMEOUT). */
+export const STALE_TIMEOUT_S = 5;

@@ -44,6 +44,11 @@ let currentGameIdForPolling = null;
 // Cadence the server last asked for (`pingInterval` on the ping response), or
 // null if it never said. Null means "no opinion" — fall back to role-based.
 let serverPingIntervalMs = null;
+// Fastest cadence the server has named this game. This is what the sticky
+// multi-coach latch clamps to — we learn the "contested" rate by being told it
+// once, rather than hardcoding a second copy of it here that server-side tuning
+// couldn't reach.
+let fastestServerIntervalMs = null;
 // The interval currently installed, so a ping that doesn't change the cadence
 // doesn't restart the timer (and reset its phase) 30 times a minute.
 let currentPingIntervalMs = null;
@@ -55,6 +60,9 @@ let currentPingIntervalMs = null;
 // fast rate anyway — and would then be free to flap between cadences every time
 // a coach's phone slept. A coach who joins for one point costs the rest of the
 // game at 2s; that's the deliberate trade. Reset by stopControllerPolling().
+//
+// It only ever clamps us FASTER (see effectivePingInterval) — it is a floor on
+// the rate, not a replacement for the server's number.
 //
 // NOT the same latch as ui/panelSystem's `_multiCoachDetected`, and don't merge
 // them: that one answers "should the role buttons be showing", and the game
@@ -385,6 +393,9 @@ async function pingController(gameId) {
             }
             if (typeof data.pingInterval === 'number' && data.pingInterval > 0) {
                 serverPingIntervalMs = data.pingInterval;
+                fastestServerIntervalMs = fastestServerIntervalMs === null
+                    ? data.pingInterval
+                    : Math.min(fastestServerIntervalMs, data.pingInterval);
             }
             // No-ops unless the effective cadence actually moved.
             if (controllerPollIntervalId) installPingInterval();
@@ -611,16 +622,24 @@ function startControllerPolling(gameId) {
 /**
  * The cadence this client should be pinging at right now.
  *
- * Role-based unless the server has asked for something else *and* we're still
- * solo. Once a second coach has been seen we ignore the server's suggestion
- * entirely and go back to role-based timing, because that's the cadence the
- * handoff and change-propagation paths are tuned for.
+ * The server names it; we obey. The role-based constants are the fallback for
+ * an old server that says nothing, not a second opinion — otherwise the cadence
+ * couldn't be tuned server-side, which is the main reason to put it there.
+ *
+ * The sticky latch only ever makes us FASTER: once a second coach has been
+ * seen, we refuse any slower cadence for the rest of the game. That matters
+ * because `connectedCoaches` decays after the server's stale window, so a coach
+ * who is still present but whose phone slept briefly would otherwise have us
+ * called solo again and backed off while they're mid-edit.
  * @returns {number} Interval in ms
  */
 function effectivePingInterval() {
     const hasRole = controllerState.isActiveCoach || controllerState.isLineCoach;
     const roleBased = hasRole ? PING_INTERVAL_ACTIVE : PING_INTERVAL_IDLE;
-    if (multiCoachSeen || serverPingIntervalMs === null) return roleBased;
+    if (serverPingIntervalMs === null) return roleBased;
+    if (multiCoachSeen && fastestServerIntervalMs !== null) {
+        return Math.min(serverPingIntervalMs, fastestServerIntervalMs);
+    }
     return serverPingIntervalMs;
 }
 
@@ -710,6 +729,7 @@ function stopControllerPolling() {
     // Cadence state is per-game too: the next game starts solo-until-proven
     // otherwise, and must not inherit this game's sticky multi-coach latch.
     serverPingIntervalMs = null;
+    fastestServerIntervalMs = null;
     currentPingIntervalMs = null;
     multiCoachSeen = false;
     duplicateInstanceWarned = false;

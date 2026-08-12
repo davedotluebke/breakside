@@ -1838,12 +1838,16 @@ Four things about it are load-bearing:
   ping is answered from a list it isn't in yet — so the coach who just made the
   game multi-coach is the one told to poll slowly. `record_coach_ping()` does
   both under one lock for exactly this reason.
-- **The client's multi-coach latch is sticky, and separate from the UI's.**
-  `game/controllerState.js` keeps `multiCoachSeen`; once set, the client ignores
-  the server's suggestion and returns to role-based timing for the rest of the
-  game. It is *not* `ui/panelSystem.js`'s `_multiCoachDetected`, which answers
-  "should the role buttons show" and can be set by hand from the game menu — a
-  manual button reveal is no reason to triple the request rate.
+- **The client obeys the server; the sticky latch is a floor, not an override.**
+  `game/controllerState.js` keeps `multiCoachSeen`, and once set it refuses any
+  *slower* cadence for the rest of the game — clamping to the fastest the server
+  has named rather than to a hardcoded constant. Hardcoding it there would mean
+  `BREAKSIDE_PING_INTERVAL_MULTI` silently did nothing on the client, which
+  defeats the point of putting cadence server-side. The role-based constants
+  remain only as the fallback for a server that says nothing at all. The latch
+  is *not* `ui/panelSystem.js`'s `_multiCoachDetected`, which answers "should the
+  role buttons show" and can be set by hand from the game menu — a manual button
+  reveal is no reason to triple the request rate.
 - **Handoff expiry is sized to the holder's cadence, not a constant.** A request
   aimed at a backed-off holder stays open for 2× their recorded interval,
   because a fixed 10s window can elapse entirely inside one of their gaps —

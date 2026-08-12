@@ -3,7 +3,13 @@ import path from 'path';
 // Ports are derived per worktree (hash of repo root path) so concurrent
 // worktrees can't reuse each other's servers; see helpers/constants.ts.
 // Override with BREAKSIDE_E2E_FRONTEND_PORT / BREAKSIDE_E2E_BACKEND_PORT.
-import { FRONTEND_PORT, BACKEND_PORT } from './helpers/constants';
+import {
+  FRONTEND_PORT,
+  BACKEND_PORT,
+  PING_INTERVAL_SOLO_MS,
+  PING_INTERVAL_MULTI_MS,
+  STALE_TIMEOUT_S,
+} from './helpers/constants';
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -48,8 +54,13 @@ export default defineConfig({
       env: {
         ULTISTATS_AUTH_REQUIRED: 'false',
         ULTISTATS_DATA_DIR: path.join(ROOT, 'tests', 'test-data-dir'),
-        BREAKSIDE_STALE_TIMEOUT: '5',
+        BREAKSIDE_STALE_TIMEOUT: String(STALE_TIMEOUT_S),
         BREAKSIDE_HANDOFF_EXPIRY: '10',
+        // Cadence is server-directed (POLLING_OPTIMIZATION.md F4). Production's
+        // 10s solo interval would exceed the shrunken stale timeout above and
+        // expire roles every interval, so the whole scale comes down together.
+        BREAKSIDE_PING_INTERVAL_SOLO: String(PING_INTERVAL_SOLO_MS),
+        BREAKSIDE_PING_INTERVAL_MULTI: String(PING_INTERVAL_MULTI_MS),
       },
     },
   ],

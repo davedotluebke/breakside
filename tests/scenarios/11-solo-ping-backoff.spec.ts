@@ -22,7 +22,12 @@
  * 10s cadence) but the whole point of backing off is to spend some of it.
  */
 import { test, expect, Page, APIRequestContext } from '@playwright/test';
-import { BACKEND_URL, TEST_PARAMS } from '../helpers/constants';
+import {
+  BACKEND_URL,
+  TEST_PARAMS,
+  PING_INTERVAL_SOLO_MS,
+  PING_INTERVAL_MULTI_MS,
+} from '../helpers/constants';
 import { setupTeamWithPlayers, startGame } from '../helpers/app';
 import {
   waitForGameOnServer,
@@ -33,9 +38,13 @@ import {
 const COACH_A = 'backoff-coach-a';
 const COACH_B = 'backoff-coach-b';
 
-/** Server-side cadences, from ultistats_server/storage/controller_storage.py. */
-const PING_INTERVAL_SOLO_MS = 10_000;
-const PING_INTERVAL_MULTI_MS = 2_000;
+// Cadences come from the harness (playwright.config.ts sets the backend's
+// BREAKSIDE_PING_INTERVAL_*), scaled down from production's 10s/2s so these
+// measurements take seconds. The *ratio* is what the assertions below rely on;
+// the production values themselves are pinned in the backend unit tests.
+
+// These specs measure elapsed cadence, so they need longer than the 30s default.
+test.describe.configure({ timeout: 90_000 });
 
 async function getGameId(page: Page): Promise<string> {
   return page.evaluate(() => {
@@ -100,11 +109,11 @@ test.describe('solo ping backoff', () => {
     await page.waitForTimeout(PING_INTERVAL_SOLO_MS);
 
     const pings = countPings(page, gameId);
-    const windowMs = 30_000;
+    const windowMs = PING_INTERVAL_SOLO_MS * 4;
     await page.waitForTimeout(windowMs);
 
-    // At 2s this window would hold ~15 pings; at 10s it holds ~3. Assert well
-    // clear of both so the test fails on a real regression, not on jitter.
+    // Assert against the midpoint of the two rates, so the test fails on a
+    // real regression to the fast cadence rather than on scheduling jitter.
     const atFastRate = windowMs / PING_INTERVAL_MULTI_MS;
     expect(
       pings.count,
@@ -130,16 +139,19 @@ test.describe('solo ping backoff', () => {
 
     // Discovery is bounded by the backed-off interval: A finds out on its next
     // ping. This is the latency the backoff costs, stated as a number.
-    await waitForMultiCoachSeen(page, PING_INTERVAL_SOLO_MS * 2);
+    await waitForMultiCoachSeen(page, PING_INTERVAL_SOLO_MS * 4);
     const discoveryMs = Date.now() - t0;
+    // Bounded by roughly one interval — the claim is "one ping late", not "some
+    // unbounded time". Slack covers the poll granularity above, not a second
+    // interval, so a regression to two-intervals-late still fails.
     expect(
       discoveryMs,
-      `a solo coach should notice an arrival within one slow interval; took ${discoveryMs}ms`,
-    ).toBeLessThan(PING_INTERVAL_SOLO_MS * 1.5);
+      `a solo coach should notice an arrival within about one slow interval; took ${discoveryMs}ms`,
+    ).toBeLessThan(PING_INTERVAL_SOLO_MS * 2);
 
     // Having noticed, the client must actually speed back up.
     const pings = countPings(page, gameId);
-    const windowMs = 10_000;
+    const windowMs = PING_INTERVAL_SOLO_MS * 2;
     await page.waitForTimeout(windowMs);
 
     const atSoloRate = windowMs / PING_INTERVAL_SOLO_MS;
@@ -147,6 +159,65 @@ test.describe('solo ping backoff', () => {
       pings.count,
       `expected roughly ${windowMs / PING_INTERVAL_MULTI_MS} pings at the fast cadence, got ${pings.count}`,
     ).toBeGreaterThan(atSoloRate * 2);
+  });
+
+  test('one account open twice is warned about, not silently backed off', async ({
+    page,
+    request,
+  }) => {
+    /**
+     * Connected coaches are keyed by user id, so a second instance of the SAME
+     * account is invisible as a coach — the game still looks solo. Both copies
+     * would back off while each was in fact a remote writer for the other,
+     * which is the one case where the backoff is actively wrong.
+     *
+     * The second instance is simulated with a ping carrying a different
+     * instance header, which is exactly what a second copy of the app sends.
+     */
+    const gameId = await soloCoachInSettledGame(page, request, 'Backoff Duplicate Team');
+
+    const pingAsSecondCopy = () =>
+      request.post(`${BACKEND_URL}/api/games/${gameId}/ping`, {
+        headers: {
+          ...coachHeaders(COACH_A),
+          'X-Breakside-Instance': 'a-second-copy-of-the-app',
+        },
+      });
+
+    const first = await pingAsSecondCopy();
+    expect(first.ok()).toBe(true);
+    expect((await first.json()).duplicateInstance).toBe(true);
+
+    // Keep the second copy alive the way a real one is: it gets told the fast
+    // cadence too, and instance liveness is a multiple of the *current*
+    // cadence — so a copy that pings once and stops correctly ages out within
+    // a fraction of a second once both sides have sped up.
+    let running = true;
+    const secondCopy = (async () => {
+      while (running) {
+        await pingAsSecondCopy().catch(() => {});
+        await new Promise((r) => setTimeout(r, PING_INTERVAL_MULTI_MS));
+      }
+    })();
+
+    try {
+      await expect(
+        page.locator('.toast', { hasText: 'open on another device' }),
+      ).toBeVisible({ timeout: PING_INTERVAL_SOLO_MS * 2 });
+
+      // The guard that matters more than the warning: neither copy is left
+      // backed off, so they can still see each other's writes.
+      const pings = countPings(page, gameId);
+      const windowMs = PING_INTERVAL_SOLO_MS * 2;
+      await page.waitForTimeout(windowMs);
+      expect(
+        pings.count,
+        `a duplicated account must stay on the fast cadence; got ${pings.count} pings`,
+      ).toBeGreaterThan((windowMs / PING_INTERVAL_SOLO_MS) * 2);
+    } finally {
+      running = false;
+      await secondCopy;
+    }
   });
 
   test('a backed-off coach keeps its roles', async ({ page, request }) => {
