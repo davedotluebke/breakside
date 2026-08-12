@@ -62,6 +62,11 @@ let currentPingIntervalMs = null;
 // the buttons anyway. This one is evidence-only — a manual button reveal is no
 // reason to triple our request rate.
 let multiCoachSeen = false;
+// Edge-trigger for the "you're open twice" warning, so it fires on the
+// transition rather than on every ping. Reset by stopControllerPolling().
+let duplicateInstanceWarned = false;
+// Only used when sessionStorage is unavailable; see getInstanceId().
+let instanceIdFallback = null;
 
 
 // =============================================================================
@@ -296,6 +301,58 @@ function getPingGameStamp(gameId) {
 }
 
 /**
+ * Tell the coach once when the server sees this account pinging the same game
+ * from two places. Edge-triggered: warn on the transition into the duplicate
+ * state, and re-arm when it clears, so closing the second copy and reopening it
+ * later warns again but a sustained duplicate doesn't nag every ping.
+ * @param {boolean} isDuplicate
+ */
+function warnOnDuplicateInstance(isDuplicate) {
+    if (isDuplicate === duplicateInstanceWarned) return;
+    duplicateInstanceWarned = isDuplicate;
+    if (!isDuplicate) return;
+
+    showControllerToast(
+        'This account is open on another device or tab. '
+        + 'Breakside tracks one coach per account, so the two copies can '
+        + 'overwrite each other — record from one of them.',
+        'warning',
+        8000
+    );
+    log('🎮 Duplicate instance detected for this account');
+}
+
+/**
+ * Identifier for this running copy of the app, so the server can notice one
+ * user pinging the same game from two places at once (unsupported — see
+ * TODO.md § One user on two devices).
+ *
+ * sessionStorage, deliberately: it survives a reload of *this* tab, so the
+ * common case of a coach refreshing doesn't look like a second device, but it
+ * dies with the tab and is never shared between them. Not localStorage — that
+ * would make it a durable device identity, which is a bigger idea than this
+ * warning needs and isn't what connected coaches are keyed by.
+ * @returns {string}
+ */
+function getInstanceId() {
+    let id = null;
+    try {
+        id = sessionStorage.getItem('breakside:instanceId');
+        if (!id) {
+            id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+            sessionStorage.setItem('breakside:instanceId', id);
+        }
+    } catch {
+        // Private-mode browsers can throw on sessionStorage. A per-call id
+        // would look like a new instance every ping, so fall back to a stable
+        // per-page-load one and accept that a reload looks new.
+        instanceIdFallback ||= `nostore-${Math.random().toString(36).slice(2, 10)}`;
+        id = instanceIdFallback;
+    }
+    return id;
+}
+
+/**
  * Ping server to keep role alive
  * @param {string} gameId - The game ID
  * @returns {Promise<object|null>} Ping result or null on error
@@ -305,7 +362,8 @@ async function pingController(gameId) {
 
     try {
         const response = await authFetch(`${API_BASE_URL}/api/games/${gameId}/ping`, {
-            method: 'POST'
+            method: 'POST',
+            headers: { 'X-Breakside-Instance': getInstanceId() }
         });
 
         if (response.ok) {
@@ -330,6 +388,8 @@ async function pingController(gameId) {
             }
             // No-ops unless the effective cadence actually moved.
             if (controllerPollIntervalId) installPingInterval();
+
+            warnOnDuplicateInstance(data.duplicateInstance === true);
 
             // Stash the game change stamp for the in-game refresh loop. An
             // absent field (old server) stores null, which reads as "no
@@ -652,6 +712,7 @@ function stopControllerPolling() {
     serverPingIntervalMs = null;
     currentPingIntervalMs = null;
     multiCoachSeen = false;
+    duplicateInstanceWarned = false;
     log('🎮 Controller polling stopped');
 }
 

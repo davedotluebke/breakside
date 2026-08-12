@@ -2,9 +2,9 @@
 Game Controller endpoints (Active Coach / Line Coach roles).
 """
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, Header, HTTPException
 
 from ._shared import (
     HANDOFF_EXPIRY_SECONDS,
@@ -237,7 +237,8 @@ async def respond_handoff(
 @router.post("/api/games/{game_id}/ping")
 async def ping_controller(
     game_id: str,
-    user: dict = Depends(require_game_team_coach)
+    user: dict = Depends(require_game_team_coach),
+    instance_id: Optional[str] = Header(None, alias="X-Breakside-Instance"),
 ):
     """
     Ping to keep controller role(s) alive.
@@ -269,9 +270,10 @@ async def ping_controller(
     # Auto-assign roles if both are unclaimed (first coach to enter gets both)
     state = auto_assign_roles_if_unclaimed(game_id, user["id"], display_name)
 
-    # Record this coach as connected (even if they hold no role). Returns the
-    # cadence this coach should now poll at.
-    ping_interval_ms = record_coach_ping(game_id, user["id"], display_name)
+    # Record this coach as connected (even if they hold no role). Decides the
+    # cadence this coach should now poll at, and notices the unsupported case
+    # of one user running two instances against the same game.
+    ping = record_coach_ping(game_id, user["id"], display_name, instance_id)
 
     # Ping whichever role(s) the user holds
     pinged = []
@@ -306,7 +308,8 @@ async def ping_controller(
         "hasPendingHandoffForMe": has_pending_for_me,
         "handoffTimeoutSeconds": HANDOFF_EXPIRY_SECONDS,
         "connectedCoaches": get_connected_coaches(game_id),
-        "pingInterval": ping_interval_ms,
+        "pingInterval": ping["pingIntervalMs"],
+        "duplicateInstance": ping["duplicateInstance"],
         "gameStamp": str(stamp) if stamp is not None else None,
         "serverTime": datetime.now().isoformat()
     }

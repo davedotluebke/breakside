@@ -688,6 +688,26 @@ Remaining work:
 
 ## Backlog
 
+- [ ] **One user on two devices is unsupported — decide whether to support it.**
+  Connected coaches are keyed by *user id* (`_connected_coaches[game_id][user_id]`
+  in `ultistats_server/storage/controller_storage.py`), so one account running
+  the app in two places collapses to a single entry. That was harmless when
+  cadence was fixed, but the solo ping backoff reads that count: two instances of
+  one user would each be told they were solo, both would back off to 10s, and
+  each would then be a remote writer the other was slow to see — the one case
+  where the backoff is actively wrong. Roles would also flip-flop, since both
+  copies satisfy the same holder check.
+  **Currently guarded, not supported:** the ping carries a per-tab
+  `X-Breakside-Instance` id, and the server holds both copies on the fast cadence
+  and returns `duplicateInstance: true`, which the client turns into a one-shot
+  warning toast. That id is deliberately *not* an identity — sessionStorage only,
+  never persisted, never keys connected coaches.
+  To actually support it, connected coaches would need to key on (user, device),
+  role holding would need to name a device, and the "which of my devices is
+  authoritative" question would need an answer. Not obviously worth it: the
+  plausible want is a tablet on the sideline plus a phone in hand, which the
+  existing multi-coach roles already cover if the second one signs in separately.
+
 - [ ] **Code health: fold duplicated game-screen helpers** (deferred from the `gameScreen.js` split, D1). When `game/gameScreen.js` was split into `gameScreenPanels/Events/Timer/selectLine/gameScreenSync.js`, the split was kept a pure verbatim move for verifiability, so three already-identified, behavior-identical duplications were left in place. Fold them when convenient: `endGameFlow()` (the near-identical `handleEndGame` in `gameScreenEvents.js` vs `handleGameEventEndGame`), `installPollInterval()` (the clear-interval / `setInterval(ping)` idiom repeated ~3× across `controllerState.js`), and `stopPointTimerInto(point)` (the "add elapsed to `totalPointTime`, null `startTimestamp`" block duplicated in both score handlers in `gameScreenEvents.js`). Purely mechanical; do behind the e2e suite.
 - [x] **Code health: `ui/activePlayersDisplay.js`'s sticky active-players table is dead code** *(DONE 2026-08-06, branch `dead-active-players-table`
   — deleted; the file went 429 → 53 lines. Confirmed unreachable first: neither

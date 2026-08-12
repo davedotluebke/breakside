@@ -77,6 +77,22 @@ HANDOFF_EXPIRY_SECONDS = int(os.getenv("BREAKSIDE_HANDOFF_EXPIRY", "10"))
 PING_INTERVAL_MULTI_MS = int(os.getenv("BREAKSIDE_PING_INTERVAL_MULTI", "2000"))
 PING_INTERVAL_SOLO_MS = int(os.getenv("BREAKSIDE_PING_INTERVAL_SOLO", "10000"))
 
+# One user running the app in two places at once is NOT supported (see TODO.md).
+# It matters here because connected coaches are keyed by user id, so two
+# instances of one user collapse to a single entry: each would be told it was
+# solo, both would back off, and each would then be a remote writer the other
+# was slow to notice — the one case where the solo backoff is actively wrong.
+#
+# So instances are counted separately, purely to detect that case, warn, and
+# hold both on the fast cadence. An instance id is per browser-tab-session and
+# is deliberately NOT an identity: it is never persisted, never keys connected
+# coaches, and an absent one just means "can't tell", never "duplicate".
+#
+# Liveness is a multiple of the instance's own cadence rather than a fixed
+# window, so detection stays proportional at either rate. 2.5x tolerates one
+# dropped ping without letting an instance that has genuinely gone away linger.
+INSTANCE_LIVENESS_FACTOR = 2.5
+
 # Window for reporting a coach as "active" on game lists (see
 # get_recent_activity). Distinct from STALE_TIMEOUT_SECONDS, which governs
 # when a role claim expires. Previously duplicated as a literal 5 minutes in
@@ -589,8 +605,13 @@ def get_recent_activity(game_id: str, window_seconds: int = ACTIVITY_WINDOW_SECO
     return (max(last_pings) if last_pings else None), active_coaches
 
 
-def record_coach_ping(game_id: str, user_id: str, display_name: str) -> int:
-    """Record that a coach is actively polling this game; return their cadence.
+def record_coach_ping(
+    game_id: str,
+    user_id: str,
+    display_name: str,
+    instance_id: Optional[str] = None,
+) -> Dict:
+    """Record that a coach is actively polling this game; decide their cadence.
 
     Recording presence and choosing the cadence are one atomic step on purpose.
     Split them and the second coach's *first* ping computes its answer from a
@@ -600,25 +621,51 @@ def record_coach_ping(game_id: str, user_id: str, display_name: str) -> int:
     The chosen cadence is stored alongside the ping so a later handoff can size
     its expiry against how slowly this coach is checking in
     (see _handoff_expiry_for_holder).
+
+    Returns:
+        {"pingIntervalMs": int, "duplicateInstance": bool}
     """
     with _lock:
+        now = datetime.now()
         if game_id not in _connected_coaches:
             _connected_coaches[game_id] = {}
 
         coaches = _connected_coaches[game_id]
+        previous = coaches.get(user_id) or {}
+
+        # Age out instances that have stopped checking in, relative to the
+        # cadence they were last told to use.
+        previous_interval = previous.get("pingIntervalMs", PING_INTERVAL_MULTI_MS)
+        liveness = timedelta(
+            seconds=(previous_interval / 1000) * INSTANCE_LIVENESS_FACTOR
+        )
+        instances = {
+            iid: seen
+            for iid, seen in (previous.get("instances") or {}).items()
+            if now - seen <= liveness
+        }
+        if instance_id:
+            instances[instance_id] = now
+        duplicate = len(instances) > 1
+
         coaches[user_id] = {
             "displayName": display_name,
-            "lastPing": datetime.now(),
+            "lastPing": now,
+            "instances": instances,
             # Overwritten below; present so the count sees a complete record.
             "pingIntervalMs": PING_INTERVAL_MULTI_MS,
         }
 
-        cutoff = datetime.now() - timedelta(seconds=STALE_TIMEOUT_SECONDS)
+        cutoff = now - timedelta(seconds=STALE_TIMEOUT_SECONDS)
         live = sum(1 for info in coaches.values() if info["lastPing"] > cutoff)
 
-        interval = PING_INTERVAL_MULTI_MS if live > 1 else PING_INTERVAL_SOLO_MS
+        # A duplicate instance counts as contention: both copies are writing,
+        # so neither may back off, even though they share one user id.
+        solo = live <= 1 and not duplicate
+        interval = PING_INTERVAL_SOLO_MS if solo else PING_INTERVAL_MULTI_MS
         coaches[user_id]["pingIntervalMs"] = interval
-        return interval
+
+        return {"pingIntervalMs": interval, "duplicateInstance": duplicate}
 
 
 def _coach_ping_interval_locked(game_id: str, user_id: str) -> int:
