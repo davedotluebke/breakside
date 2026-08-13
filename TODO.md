@@ -917,8 +917,11 @@ Bigger asks, deferred until current themes settle.
         on white. Fixing it means a darker orange for text specifically —
         `--brand-orange-ink` existed for this and was pruned as unused.
       - the in-game point-timer warning colors are 2.52:1 (`--timer-warning`)
-        and 3.83:1 (`--timer-danger`) on the white header — the one place a
-        coach glances at mid-point.
+        and 3.84:1 (`--timer-danger`) on the white header — the one place a
+        coach glances at mid-point. (`--timer-negative` clears 4.5 at rest;
+        note both danger and negative *pulse*, so they spend part of every
+        second below their measured value. The auditor freezes animations, so
+        these numbers are the best case.)
       - MMP green on its pastel surface is 3.51:1 app-wide (the FMP/MMP
         buttons in edit-player and the roster, and the select-line ratio
         badge, which was migrated onto that pair in Aug 2026). FMP purple is

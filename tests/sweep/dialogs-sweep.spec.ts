@@ -116,6 +116,16 @@ test('swatch the state-gated components', async ({ page }) => {
       <span class="header-timer-value timer-danger">-0:05</span>
       <span class="header-timer-value timer-negative">+0:20</span>
       <div class="warning-box">Warning box copy</div>
+      <div class="full-pbp-row-actions" style="display:flex;gap:4px">
+        <span class="full-pbp-row-action full-pbp-row-action-drop">Drop</span>
+        <span class="full-pbp-row-action full-pbp-row-action-throwaway">Throwaway</span>
+        <span class="full-pbp-row-action full-pbp-row-action-score">Score</span>
+        <span class="full-pbp-row-action full-pbp-row-action-break">Break</span>
+        <span class="full-pbp-row-action full-pbp-row-action-block">Block</span>
+        <span class="full-pbp-row-action full-pbp-row-action-interception">Interception</span>
+        <span class="full-pbp-row-action full-pbp-row-action-more">More</span>
+        <span class="full-pbp-row-action armed">Armed</span>
+      </div>
       <table><tbody><tr>
         <td class="score-cell-fmp">4:3</td><td class="score-cell-mmp">3:4</td>
         <td class="player-fmp">Alice</td><td class="player-mmp">Bob</td>

@@ -34,6 +34,21 @@ export type Finding = {
 };
 
 export async function auditContrast(page: Page, screen: string): Promise<Finding[]> {
+  // Freeze animations first. The in-game point timer pulses (timerPulse on
+  // .timer-danger / .timer-negative), so sampling it live returns whatever
+  // opacity the pulse happened to be at — the same token measured 4.42 on one
+  // run and 3.23 on the next. Pinning every animation to its first frame makes
+  // the numbers reproducible and measures the token at full opacity, which is
+  // the best case: what fails here fails harder mid-pulse.
+  // (Pausing rather than removing is not enough: an `infinite` animation
+  // pinned to its iteration boundary still resolves to 0% or 100% depending
+  // on sub-frame rounding, which flapped 2.77 / 3.80 / 3.36 across runs.)
+  await page.addStyleTag({
+    content: `*, *::before, *::after {
+      animation: none !important;
+      transition: none !important;
+    }`,
+  });
   const found = await page.evaluate(() => {
     const parse = (c: string): [number, number, number, number] | null => {
       const m = c.match(/rgba?\(([^)]+)\)/);

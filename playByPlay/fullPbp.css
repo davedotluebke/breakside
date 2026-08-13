@@ -378,7 +378,7 @@
 .full-pbp-row-action-drop         { color: var(--pbp-red-ink); }   /* red — receiver error */
 .full-pbp-row-action-throwaway    { color: var(--pbp-red-ink); }   /* red — thrower error */
 .full-pbp-row-action-score        { color: var(--pbp-green-ink); }   /* green — goal */
-.full-pbp-row-action-break        { color: var(--pbp-blue-deep); }   /* blue — modifier */
+.full-pbp-row-action-break        { color: var(--pbp-blue-ink); }   /* blue — modifier */
 .full-pbp-row-action-block        { color: var(--pbp-green-ink); }   /* green — defender win */
 .full-pbp-row-action-interception { color: var(--pbp-green-ink); font-weight: 700; }
 

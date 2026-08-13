@@ -297,6 +297,7 @@
     --pbp-green-ink: #047857;
     --pbp-red-ink: #b91c1c;
     --pbp-amber-ink: #92600b;
+    --pbp-blue-ink: #1d4ed8;
     --pbp-hold: #e0a64b;             /* pull hang/brick amber */
     --pbp-chip-num: #cdd9ff;         /* jersey number on an armed blue chip */
     --pbp-score-border: #86d3b3;
@@ -404,15 +405,21 @@
 
     /* Gender coding — the light purple/green are far too dark to read on
        black, so the inks lift hard while the fills stay usable under white. */
-    --gender-fmp: #7f4a9c;
-    --gender-fmp-surface: #2a1638;
-    --gender-fmp-surface-hover: #3a1f4d;
-    --gender-fmp-tint: rgba(186, 130, 224, 0.22);
+    /* Chips have to survive being a small colored block on near-black: the
+       first cut sat 1.2-1.5:1 off the card with the chroma washed out of it,
+       which reads as "dark and grey", not "purple" and "green". These lift
+       ~1.65:1 and roughly double the chroma, with the ink still >= 4.5:1 on
+       its own chip. The tints carry inherited body text rather than the ink,
+       so they can push further than the surfaces. */
+    --gender-fmp: #9159b3;
+    --gender-fmp-surface: #452a5e;
+    --gender-fmp-surface-hover: #553872;
+    --gender-fmp-tint: rgba(186, 130, 224, 0.34);
     --gender-fmp-ink: #c491e8;
-    --gender-mmp: #27754e;
-    --gender-mmp-surface: #10291d;
-    --gender-mmp-surface-hover: #173a29;
-    --gender-mmp-tint: rgba(79, 201, 138, 0.22);
+    --gender-mmp: #2f8f60;
+    --gender-mmp-surface: #16402c;
+    --gender-mmp-surface-hover: #1d5539;
+    --gender-mmp-tint: rgba(79, 201, 138, 0.32);
     --gender-mmp-ink: #5fcf94;
 
     /* Surfaces — true black page, minimal steps above it */
@@ -595,6 +602,7 @@
     --pbp-green-ink: #45c99b;        /* emerald-700 is unreadable on black */
     --pbp-red-ink: #ff7f75;
     --pbp-amber-ink: #e5ab52;
+    --pbp-blue-ink: #8ab4ff;         /* the -deep fill is 2.65:1 as text */
     --pbp-hold: #c08a3c;
     --pbp-chip-num: #cdd9ff;         /* still sits on a blue fill */
     --pbp-score-border: #2e6b52;
