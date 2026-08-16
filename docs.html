@@ -712,10 +712,19 @@
             slot.remove();
         });
 
+        // The shade is what makes a restart read as a restart rather than as a
+        // glitch: the clip rests on its payoff, the screen dips to black, and it
+        // comes back at the top. Black rather than the page colour, because the
+        // thing going dark is a phone screen — which is also why it works
+        // unchanged in both themes.
+        var shade = document.createElement('div');
+        shade.className = 'device-shade';
+
         screen.appendChild(video);
+        screen.appendChild(shade);
         frame.appendChild(screen);
         slot.appendChild(frame);
-        built.push({ slot: slot, video: video });
+        built.push({ slot: slot, video: video, shade: shade });
     });
 
     // Swap both sources if the OS flips light/dark while the page is open.
@@ -745,7 +754,8 @@
      * costs about one video at a time no matter how many are on it. Under
      * prefers-reduced-motion nothing plays at all and the posters stand in.
      */
-    var REST_MS = 2500;
+    var REST_MS = 1600;    // how long the payoff frame holds before the dip
+    var FADE_MS = 320;     // must match .device-shade's transition in docs.css
 
     var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!reduce && 'IntersectionObserver' in window) {
@@ -765,17 +775,36 @@
         }, { threshold: 0.55 });
 
         built.forEach(function (b) {
-            var v = b.video;
+            var v = b.video, shade = b.shade, timers = [];
+
+            function cancel() {
+                timers.forEach(clearTimeout);
+                timers = [];
+                v.dataset.resting = '';
+                shade.classList.remove('on');
+            }
+
+            // rest on the last frame -> dip to black -> rewind unseen -> come back up
             v.addEventListener('ended', function () {
+                cancel();
                 v.dataset.resting = 'true';
-                setTimeout(function () {
-                    v.dataset.resting = '';
-                    if (v.dataset.onScreen === 'true') {
+                timers.push(setTimeout(function () {
+                    if (v.dataset.onScreen !== 'true') return cancel();
+                    shade.classList.add('on');
+                    timers.push(setTimeout(function () {
                         v.currentTime = 0;
-                        v.play().catch(function () {});
-                    }
-                }, REST_MS);
+                        shade.classList.remove('on');
+                        v.dataset.resting = '';
+                        if (v.dataset.onScreen === 'true') v.play().catch(function () {});
+                    }, FADE_MS));
+                }, REST_MS));
             });
+
+            // Scrolling away mid-dip would otherwise leave the screen black.
+            v.addEventListener('pause', function () {
+                if (v.dataset.onScreen !== 'true') cancel();
+            });
+
             io.observe(v);
         });
     }

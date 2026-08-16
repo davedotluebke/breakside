@@ -9,7 +9,10 @@
  *   ./scripts/record-demos.sh field
  */
 import { test, expect, Page } from '@playwright/test';
-import { BEAT, SYNC_ECHO_WAIT, glide, holdEnding, markTrim, resetCursor, tapAt, tapLocator } from './cinema';
+import {
+  BEAT, DRAG_LIFT_PX, SYNC_ECHO_WAIT, dragLocatorTo, glide, holdEnding, markTrim,
+  resetCursor, tapAt, tapLocator,
+} from './cinema';
 import { beginGame, checkWholeLine, goToTab, makeTeamWithRoster, startPoint } from './setup';
 
 /** A player's chip in the left rail. */
@@ -29,13 +32,37 @@ async function tapField(page: Page, fx: number, fy: number, after = BEAT.action)
   await tapAt(page, box.x + box.width * fx, box.y + box.height * fy, { after });
 }
 
-/** Chip, then spot — the two-tap gesture every field event is made of. */
-async function pass(page: Page, name: string, fx: number, fy: number, after = BEAT.action) {
+/** Verify rather than hope: a swallowed gesture plays the rest of the point one
+ *  player off and the video still renders. DEMO_VIDEOS.md lesson #1. */
+async function expectHolder(page: Page, name: string) {
+  await expect(page.locator('.fp-statusbar')).toContainText(name, { timeout: 8_000 });
+}
+
+/** Chip, then spot — the two-tap gesture. */
+async function tapPass(page: Page, name: string, fx: number, fy: number, after = BEAT.action) {
   await tapLocator(page, chip(page, name), { after: 420 });
   await tapField(page, fx, fy, after);
-  // Verify rather than hope: a swallowed tap plays the rest of the point one
-  // player off, and the video still renders. This is DEMO_VIDEOS.md lesson #1.
-  await expect(page.locator('.fp-statusbar')).toContainText(name, { timeout: 8_000 });
+  await expectHolder(page, name);
+}
+
+/**
+ * Drag the chip onto the spot — the same event in one gesture.
+ *
+ * The app records the drop at the pegman's ✕, which floats DRAG_LIFT_PX above
+ * the pointer so your finger isn't covering the spot you're aiming at. So the
+ * mouse has to finish that far BELOW the intended location (DEMO_VIDEOS.md #3).
+ */
+async function dragPass(page: Page, name: string, fx: number, fy: number, after = BEAT.action) {
+  const box = await page.locator('#fpField').boundingBox();
+  if (!box) throw new Error('no #fpField box');
+  await dragLocatorTo(
+    page,
+    chip(page, name),
+    box.x + box.width * fx,
+    box.y + box.height * fy + DRAG_LIFT_PX,
+    after,
+  );
+  await expectHolder(page, name);
 }
 
 test('field-01-offense', async ({ page }) => {
@@ -60,11 +87,15 @@ test('field-01-offense', async ({ page }) => {
   // threshold is ~32% of it. Dave→Eve covers 38%, comfortably over. Eve catches
   // at 0.22 — outside the endzone, since a catch inside it is a score and this
   // clip is about entry, not scoring.
-  await pass(page, 'Alice', 0.50, 0.76);
-  await pass(page, 'Bob', 0.24, 0.68, BEAT.notable);
-  await pass(page, 'Carol', 0.72, 0.64, BEAT.notable);
-  await pass(page, 'Dave', 0.40, 0.60);
-  await pass(page, 'Eve', 0.55, 0.22, BEAT.notable);
+  //
+  // Both gestures appear, because both are worth knowing: the drag shows the
+  // pegman and where the disc is going in one motion, the two-tap is quicker
+  // once you know the rail. They record identical events.
+  await dragPass(page, 'Alice', 0.50, 0.76, BEAT.notable);
+  await tapPass(page, 'Bob', 0.24, 0.68, BEAT.notable);
+  await dragPass(page, 'Carol', 0.72, 0.64, BEAT.notable);
+  await tapPass(page, 'Dave', 0.40, 0.60);
+  await dragPass(page, 'Eve', 0.55, 0.22, BEAT.notable);
 
   // Assert the classification rather than assuming it — if a threshold moves,
   // this clip should fail rather than quietly stop demonstrating its subject.

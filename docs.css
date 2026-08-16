@@ -257,6 +257,7 @@ body.docs-body {
 }
 
 .docs-clip .device-screen {
+    position: relative;   /* containing block for .device-shade */
     width: 100%;
     height: 100%;
     border-radius: 22px;
@@ -264,6 +265,21 @@ body.docs-body {
     background: var(--gray-900);
     cursor: pointer;
 }
+
+/* Restart transition. A fade through black, not a wipe: a wipe is directional
+   and competes with the app's own motion inside the frame, and a dip to white
+   is harsh against the dark theme. What goes dark here reads as the phone's
+   screen, which is why the same treatment works in both palettes. */
+.docs-clip .device-shade {
+    position: absolute;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 320ms ease;   /* must match FADE_MS in docs.html */
+}
+
+.docs-clip .device-shade.on { opacity: 1; }
 
 .docs-clip video {
     width: 100%;

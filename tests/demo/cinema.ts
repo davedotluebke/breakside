@@ -309,8 +309,29 @@ export async function longPress(page: Page, selector: string, ms = 700, after = 
 
 /** Drag from a selector to raw coordinates, with a hold before release. */
 export async function dragTo(page: Page, selector: string, x: number, y: number, after = BEAT.action) {
-  const from = await centerOf(page, selector);
-  await glide(page, from.x, from.y);
+  await dragLocatorTo(page, page.locator(selector).first(), x, y, after);
+}
+
+/**
+ * Drag a Locator to raw coordinates.
+ *
+ * Raw mouse events rather than locator.dragTo(): these drags are the gesture
+ * being demonstrated, so the pointer has to travel visibly and at human speed,
+ * and the app's own drag layer (a pointerdown/pointermove/pointerup handler on
+ * the panel root) needs the intermediate moves to fire at all.
+ */
+export async function dragLocatorTo(
+  page: Page,
+  locator: ReturnType<Page['locator']>,
+  x: number,
+  y: number,
+  after = BEAT.action,
+) {
+  await expect(locator).toBeVisible({ timeout: 10_000 });
+  await locator.scrollIntoViewIfNeeded();
+  const box = await locator.boundingBox();
+  if (!box) throw new Error('no bounding box for locator');
+  await glide(page, box.x + box.width / 2, box.y + box.height / 2);
   await page.waitForTimeout(BEAT.settle);
   await page.mouse.down();
   await page.waitForTimeout(BEAT.press);

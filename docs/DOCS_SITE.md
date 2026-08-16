@@ -29,9 +29,17 @@ matching pair of palettes — dark phone screenshots on a white page is the mism
 two passes exist to avoid. The phone bezel and the screen behind the video stay dark in
 both themes; they're a physical object, not page furniture.
 
-**Playback.** Clips loop while they're on screen, resting ~2.5s on the final frame
-between passes — that frame is the payoff each clip was choreographed to end on. Only
-on-screen clips play, so the page costs about one video at a time. There's no replay
+**Playback.** Clips loop while they're on screen: rest ~1.6s on the final frame (the
+payoff each clip was choreographed to end on), dip to black over 320ms, rewind unseen,
+and come back up at the top. The dip is what makes a restart read as a restart instead of
+a glitch — black rather than the page colour, because what's going dark is a phone
+screen, which is also why the same treatment works in both palettes. A wipe was the other
+candidate and lost for being directional: it competes with the app's own motion inside
+the frame.
+
+`FADE_MS` in docs.html and `.device-shade`'s transition in docs.css have to agree.
+
+Only on-screen clips play, so the page costs about one video at a time. There's no replay
 control because looping makes one unnecessary, and `prefers-reduced-motion` leaves the
 posters up instead.
 
