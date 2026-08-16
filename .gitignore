@@ -65,3 +65,8 @@ tests/.demo-record*.log
 # sharing across all sessions, add it back deliberately with
 # `git add -f .claude/launch.json`.
 .claude/launch.json
+
+# Session scratch (scout screenshots, working files). Never shipped — note
+# that deploy-excludes.txt does not cover it, so a tracked scratchpad/ would
+# sync straight to the S3 bucket.
+scratchpad/
