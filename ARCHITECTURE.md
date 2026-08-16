@@ -235,11 +235,19 @@ allowed to contain a raw color. It has exactly two blocks:
 - `:root` — the light palette (the app's original look)
 - `:root[data-theme="dark"]` — the dark overrides
 
-Every component stylesheet references `var(--token)` and nothing else. Two
-scripts keep that honest and are worth re-running after any color work:
-a role lint (a `--surface-*` in a `color:` is invisible in light mode by
-accident and gone in dark) and a token-parity check (every `:root` token needs
-a dark counterpart, and unused tokens get pruned).
+Every component stylesheet references `var(--token)` and nothing else.
+[scripts/lint-css-tokens.py](scripts/lint-css-tokens.py) keeps that honest and
+is worth re-running after any color work. It makes three checks, each catching
+a class of bug that light mode hides and dark mode exposes: a **raw color**
+outside tokens.css (it cannot flip with the theme), a **role mismatch** (a
+`--surface-*` in a `color:` is fine in light mode by accident and gone in
+dark), and a **parity** break (a `:root` token with no dark counterpart keeps
+its light value on a black page; it also flags dark-only and unreferenced
+tokens).
+
+```bash
+./scripts/lint-css-tokens.py
+```
 
 **How a theme is chosen.** [utils/theme.js](utils/theme.js) resolves the
 `display.theme` setting (`auto` | `light` | `dark`, stored in the same
@@ -268,6 +276,22 @@ move the setting, move both.
    inks are tuned for legibility against the page. The two must diverge in
    dark, because a fill dark enough to carry white text cannot also be light
    enough to read as text on black.
+   *Worked example:* the Full PBP "Break" action drew in `--pbp-blue-deep` —
+   the fill behind an armed chip. In light that reads fine and nobody notices;
+   in dark it is 2.65:1 while every sibling action, all on `-ink` tokens, sits
+   at 7.9–9.5. The family simply had no blue ink in it. If you reach for a
+   base accent in a `color:` and there is no matching `-ink`, that is the bug,
+   not the workaround — add the ink.
+
+**Gender coding is one purple/green pair, everywhere.** `--gender-fmp-*` is
+purple and `--gender-mmp-*` is green, in the app and in the public viewer.
+Deliberately *not* blue/pink, and not the Material purple/blue the select-line
+ratio badge used until Aug 2026 — blue reads as a gendered signal. A gender
+control takes `--gender-*-surface` as its fill and `--gender-*-ink` as its
+text; the `-tint` variants are for cells that carry inherited body text. Chips
+on near-black need real chroma to survive: the first dark cut lifted only
+1.2–1.5:1 off the card and read as grey blocks rather than purple and green
+ones.
 
 **Things that are deliberately theme-invariant**, and why:
 
@@ -322,6 +346,22 @@ cd tests
 BREAKSIDE_THEME=dark  ./node_modules/.bin/playwright test --config sweep/sweep.config.ts
 BREAKSIDE_THEME=light ./node_modules/.bin/playwright test --config sweep/sweep.config.ts
 ```
+
+Two things about that harness are load-bearing:
+
+- **A walk only measures what it can reach.** Components gated behind unusual
+  game state — an alternating gender ratio, a held coach role, a Start Point
+  in its warning state, a negative point timer — never render, so they are
+  never measured, and both dark-mode color bugs found by eye after the sweep
+  came back clean were in exactly that blind spot. The **swatch board** at the
+  end of `dialogs-sweep.spec.ts` mounts those from their real class names
+  against the real stylesheets. When you add a state-gated component, add it
+  there; it is cheaper than teaching the walk to reach it.
+- **The auditor freezes animations before sampling.** The point timer pulses,
+  so a live sample returns whatever opacity the pulse was mid-way through —
+  the same token measured 4.42, then 3.23, then 3.80. Findings are now
+  reproducible run to run, and pulsing elements are scored at full opacity,
+  i.e. their best case.
 
 ### CSS Styling Gotchas
 

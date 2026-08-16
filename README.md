@@ -94,7 +94,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 - **Responsive Design** - Optimized for both mobile and desktop use
 - **Touch-Optimized** - Large buttons and gestures designed for sideline use
 - **Offline Capability** - Full functionality without internet connection
-- **Dark Theme** - Easy-to-read interface in various lighting conditions
+- **Dark Theme** - Light, Dark, or Auto (follows the phone) in Advanced Settings. Dark is true black, so on an OLED phone the unlit pixels draw no power — it is a battery strategy as much as a look
 
 </details>
 
