@@ -270,11 +270,12 @@ body {
     gap: var(--space-sm);
 }
 
-/* Plain text link under the hero note — deliberately undecorated, so it reads
-   as a quiet third option rather than a third call to action. */
+/* Plain sentence under the hero note — deliberately undecorated, so it reads as
+   a quiet third option rather than a third call to action. */
 .hero-docs-link {
     margin-top: var(--space-sm);
     font-size: 0.875rem;
+    color: var(--gray-500);
 }
 
 .hero-docs-link a {
