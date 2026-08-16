@@ -24,12 +24,19 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #ffffff;      /* matches the wordmark's own white background */
+    /* Matches the wordmark's own background: white in light mode (the artwork
+       has white baked in), true black in dark (index.html swaps in the
+       transparent light-lettering variant). */
+    background: var(--surface-card);
     transform: translateY(0);
     will-change: transform;
     /* Only ever visible against the app during the retract, where it reads as a
        physical shade lifting off the content below. */
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+    box-shadow: var(--shadow-xl);
+}
+
+:root[data-theme="dark"] #splashScreen {
+    background: var(--surface-page);   /* true black, same as the app behind it */
 }
 
 #splashScreen .splash-logo {
@@ -57,7 +64,7 @@ body.staging #splashScreen {
 body.staging #splashScreen .splash-staging-pill {
     display: inline-flex;
     background: var(--brand-purple, #7b68ae);
-    color: #ffffff;
+    color: var(--white, #ffffff);
     font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 1px;

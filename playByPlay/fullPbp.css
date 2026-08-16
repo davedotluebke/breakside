@@ -60,7 +60,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 6px 10px;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--border-light);
     gap: 8px;
 }
 
@@ -70,15 +70,15 @@
     border-radius: 999px;
     font-weight: 600;
     font-size: 0.95em;
-    color: #fff;
-    background: #888;
+    color: var(--white);
+    background: var(--btn-neutral-dim);
     cursor: pointer;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
 }
 
-.full-pbp-mode-pill.mode-offense { background: #2563eb; }   /* blue */
-.full-pbp-mode-pill.mode-defense { background: #dc2626; }   /* red  */
+.full-pbp-mode-pill.mode-offense { background: var(--pbp-blue); }   /* blue */
+.full-pbp-mode-pill.mode-defense { background: var(--pbp-red); }   /* red  */
 
 .full-pbp-mode-pill:hover  { filter: brightness(1.08); }
 .full-pbp-mode-pill:active { filter: brightness(0.92); }
@@ -91,39 +91,39 @@
     padding: 6px 16px;
     border-radius: 999px;
     border: none;
-    background: #16a34a;        /* green — go */
-    color: #fff;
+    background: var(--green-deep);        /* green — go */
+    color: var(--white);
     font-weight: 600;
     font-size: 0.95em;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
 }
-.full-pbp-start-point-btn:hover  { background: #15803d; }
-.full-pbp-start-point-btn:active { background: #166534; }
+.full-pbp-start-point-btn:hover  { background: var(--green-deep-hover); }
+.full-pbp-start-point-btn:active { background: var(--green-deep-active); }
 /* Feedback colors — match the Select Line / PBP panel palette
    (panelSystem.css ~1285) so the same lineup state reads the same way
    wherever the Start Point button appears. count-warning was previously
    collapsed with `.inactive` (both grey) which made a real wrong-count
    warning look like a disabled button to the AC. */
-.full-pbp-start-point-btn.feedback-count-warning  { background: #dc3545; color: #fff; }
-.full-pbp-start-point-btn.feedback-gender-warning { background: #f59e0b; color: #fff; }
-.full-pbp-start-point-btn.feedback-ok             { background: #16a34a; color: #fff; }
+.full-pbp-start-point-btn.feedback-count-warning  { background: var(--color-danger); color: var(--white); }
+.full-pbp-start-point-btn.feedback-gender-warning { background: var(--amber-btn); color: var(--white); }
+.full-pbp-start-point-btn.feedback-ok             { background: var(--green-deep); color: var(--white); }
 .full-pbp-start-point-btn.inactive {
-    background: #d6d6d6;
-    color: #888;
+    background: var(--surface-dim);
+    color: var(--text-faint);
     cursor: not-allowed;
 }
 /* Inactive + feedback combos: dimmed but the warning hue still shows
    through, so a non-Active-Coach can read the lineup state without
    acting on it (pure grey would erase the warning info). */
-.full-pbp-start-point-btn.inactive.feedback-ok             { background: #6fae7d; color: #fff; opacity: 0.85; }
-.full-pbp-start-point-btn.inactive.feedback-count-warning  { background: #b97a82; color: #fff; opacity: 0.85; }
-.full-pbp-start-point-btn.inactive.feedback-gender-warning { background: #d29a55; color: #fff; opacity: 0.85; }
+.full-pbp-start-point-btn.inactive.feedback-ok             { background: var(--muted-green); color: var(--white); opacity: 0.85; }
+.full-pbp-start-point-btn.inactive.feedback-count-warning  { background: var(--muted-red); color: var(--white); opacity: 0.85; }
+.full-pbp-start-point-btn.inactive.feedback-gender-warning { background: var(--muted-orange); color: var(--white); opacity: 0.85; }
 
 .full-pbp-no-point-msg {
     flex: 1 1 auto;
     text-align: center;
-    color: #777;
+    color: var(--text-muted);
     font-style: italic;
     font-size: 0.95em;
 }
@@ -133,16 +133,16 @@
     align-items: center;
     gap: 6px;
     padding: 6px 14px;
-    border: 1px solid #bbb;
+    border: 1px solid var(--border-strong);
     border-radius: 6px;
-    background: #fff;
+    background: var(--surface-card);
     cursor: pointer;
     font-weight: 600;
     font-size: 0.95em;
-    color: #333;
+    color: var(--text-primary);
 }
-.full-pbp-undo-btn:hover  { background: #f4f4f4; }
-.full-pbp-undo-btn:active { background: #ececec; }
+.full-pbp-undo-btn:hover  { background: var(--surface-page); }
+.full-pbp-undo-btn:active { background: var(--surface-mid); }
 .full-pbp-undo-btn i      { font-size: 0.9em; }
 
 /* Player rows: size to content (8 rows × ~44px ≈ 352px on phone).
@@ -163,8 +163,8 @@
  * chips fill in blue to match Simple mode's "armed" look. */
 .full-pbp-modifier-row {
     flex: 0 0 auto;
-    background: #fff;
-    border-top: 1px solid #ddd;
+    background: var(--surface-card);
+    border-top: 1px solid var(--border-light);
     padding: 6px 8px;
     display: flex;
     align-items: center;
@@ -176,7 +176,7 @@
     flex: 0 0 auto;
     font-size: 0.78em;
     font-weight: 600;
-    color: #555;
+    color: var(--text-secondary);
     white-space: nowrap;
 }
 
@@ -193,10 +193,10 @@
     align-items: center;
     gap: 4px;
     padding: 4px 10px;
-    border: 1px solid #cfcfcf;
+    border: 1px solid var(--border-default);
     border-radius: 999px;
-    background: #f7f7f7;
-    color: #333;
+    background: var(--surface-subtle);
+    color: var(--text-primary);
     font-size: 0.82em;
     cursor: pointer;
     user-select: none;
@@ -205,9 +205,9 @@
 }
 .full-pbp-modifier-chip input[type="checkbox"] { display: none; }
 .full-pbp-modifier-chip.checked {
-    background: #1d4ed8;
-    border-color: #1d4ed8;
-    color: #fff;
+    background: var(--pbp-blue-deep);
+    border-color: var(--pbp-blue-deep);
+    color: var(--white);
 }
 
 /* Bottom action row — full-width strip below the modifier row.
@@ -222,8 +222,8 @@
     display: grid;
     gap: 6px;
     padding: 8px 12px;
-    background: #fff;
-    border-top: 1px solid #ddd;
+    background: var(--surface-card);
+    border-top: 1px solid var(--border-light);
 }
 .full-pbp-bottom-actions.mode-defense {
     grid-template-columns: 1fr auto 1fr;
@@ -244,28 +244,28 @@
     -webkit-tap-highlight-color: transparent;
 }
 .full-pbp-bottom-actions .full-pbp-they-turnover-btn {
-    border: 1px solid #16a34a;
-    background: #dcfce7;
-    color: #166534;
+    border: 1px solid var(--green-deep);
+    background: var(--color-success-surface);
+    color: var(--color-success-text);
 }
-.full-pbp-bottom-actions .full-pbp-they-turnover-btn:hover  { background: #bbf7d0; }
-.full-pbp-bottom-actions .full-pbp-they-turnover-btn:active { background: #86efac; }
+.full-pbp-bottom-actions .full-pbp-they-turnover-btn:hover  { background: var(--color-success-surface-hover); }
+.full-pbp-bottom-actions .full-pbp-they-turnover-btn:active { background: var(--color-success-surface-active); }
 
 .full-pbp-bottom-actions .full-pbp-they-score-btn {
-    border: 1px solid #dc2626;
-    background: #fee2e2;
-    color: #991b1b;
+    border: 1px solid var(--color-danger);
+    background: var(--color-danger-surface);
+    color: var(--color-danger-text);
 }
-.full-pbp-bottom-actions .full-pbp-they-score-btn:hover  { background: #fecaca; }
-.full-pbp-bottom-actions .full-pbp-they-score-btn:active { background: #fca5a5; }
+.full-pbp-bottom-actions .full-pbp-they-score-btn:hover  { background: var(--color-danger-surface-hover); }
+.full-pbp-bottom-actions .full-pbp-they-score-btn:active { background: var(--color-danger-surface-active); }
 
 .full-pbp-bottom-actions .full-pbp-game-events-btn {
-    border: 1px solid #aaa;
-    background: #f4f4f4;
-    color: #555;
+    border: 1px solid var(--border-strong);
+    background: var(--surface-page);
+    color: var(--text-secondary);
 }
-.full-pbp-bottom-actions .full-pbp-game-events-btn:hover  { background: #e8e8e8; }
-.full-pbp-bottom-actions .full-pbp-game-events-btn:active { background: #d8d8d8; }
+.full-pbp-bottom-actions .full-pbp-game-events-btn:hover  { background: var(--surface-raised); }
+.full-pbp-bottom-actions .full-pbp-game-events-btn:active { background: var(--surface-dim); }
 .full-pbp-bottom-actions .full-pbp-game-events-btn i { margin-right: 4px; opacity: 0.8; }
 
 /* Player row — grid `1fr auto`: name stretches to fill all available
@@ -277,28 +277,28 @@
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: stretch;
     margin-bottom: 6px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-light);
     border-radius: 6px;
-    background: #fff;
+    background: var(--surface-card);
     overflow: hidden;
     min-height: 48px;
 }
 
 .full-pbp-player-row.is-holder {
-    background: #fff3d6;       /* warm yellow — current holder */
-    border-color: #e0a64b;
-    box-shadow: 0 0 0 2px rgba(224, 166, 75, 0.25);
+    background: var(--color-warning-surface-soft);       /* warm yellow — current holder */
+    border-color: var(--pbp-hold);
+    box-shadow: 0 0 0 2px var(--pbp-hold-tint);
 }
 
 /* Unknown player row — visually distinct so it's easy to skip past when
  * scanning, but still tappable. */
 .full-pbp-player-row.is-unknown {
-    background: #f3f4f6;
+    background: var(--surface-light);
     border-style: dashed;
-    border-color: #c0c0c0;
+    border-color: var(--border-strong);
 }
 .full-pbp-player-row.is-unknown .full-pbp-name-btn {
-    color: #6b7280;
+    color: var(--text-muted);
     font-style: italic;
     font-weight: 500;
 }
@@ -323,13 +323,13 @@
     text-align: left;
     padding: 8px 10px;
     cursor: pointer;
-    color: #222;
+    color: var(--text-strong);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     -webkit-tap-highlight-color: transparent;
 }
-.full-pbp-name-btn:active { background: rgba(0, 0, 0, 0.05); }
+.full-pbp-name-btn:active { background: var(--wash-subtle); }
 
 /* Actions: every button is content-sized via auto columns. "Block"
  * (~50px) and "D!" (~30px) no longer waste the same area as
@@ -350,14 +350,14 @@
 .full-pbp-row-action {
     min-width: 0;
     margin: 0;
-    border: 1px solid #c8c8c8;
+    border: 1px solid var(--border-default);
     border-radius: 2px;
-    background: #f7f7f7;
+    background: var(--surface-subtle);
     font-size: 0.95em;
     font-weight: 500;
     cursor: pointer;
     padding: 7px 10px;
-    color: #333;
+    color: var(--text-primary);
     line-height: 1.15;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -369,28 +369,28 @@
  * three dots so the tap target stays usable on phone. */
 .full-pbp-row-action-more {
     padding: 7px 8px;
-    color: #555;
+    color: var(--text-secondary);
     font-weight: 700;
 }
-.full-pbp-row-action:hover  { background: #ebebeb; }
-.full-pbp-row-action:active { background: #dcdcdc; }
+.full-pbp-row-action:hover  { background: var(--surface-mid); }
+.full-pbp-row-action:active { background: var(--surface-dim); }
 
-.full-pbp-row-action-drop         { color: #b91c1c; }   /* red — receiver error */
-.full-pbp-row-action-throwaway    { color: #b91c1c; }   /* red — thrower error */
-.full-pbp-row-action-score        { color: #047857; }   /* green — goal */
-.full-pbp-row-action-break        { color: #1d4ed8; }   /* blue — modifier */
-.full-pbp-row-action-block        { color: #047857; }   /* green — defender win */
-.full-pbp-row-action-interception { color: #047857; font-weight: 700; }
+.full-pbp-row-action-drop         { color: var(--pbp-red-ink); }   /* red — receiver error */
+.full-pbp-row-action-throwaway    { color: var(--pbp-red-ink); }   /* red — thrower error */
+.full-pbp-row-action-score        { color: var(--pbp-green-ink); }   /* green — goal */
+.full-pbp-row-action-break        { color: var(--pbp-blue-ink); }   /* blue — modifier */
+.full-pbp-row-action-block        { color: var(--pbp-green-ink); }   /* green — defender win */
+.full-pbp-row-action-interception { color: var(--pbp-green-ink); font-weight: 700; }
 
 .full-pbp-row-action.armed {
-    background: #1d4ed8;
-    color: #fff;
-    border-color: #1d4ed8;
+    background: var(--pbp-blue-deep);
+    color: var(--white);
+    border-color: var(--pbp-blue-deep);
 }
 
 /* Modifier column placeholder — fleshed out in phase 4. */
 .full-pbp-placeholder {
-    color: #aaa;
+    color: var(--text-disabled);
     font-style: italic;
     text-align: center;
     padding: 12px 8px;
@@ -426,15 +426,15 @@
     width: 32px;
     height: 32px;
     padding: 0;
-    border: 1px solid #bbb;
+    border: 1px solid var(--border-strong);
     border-radius: 6px;
-    background: #fff;
-    color: #555;
+    background: var(--surface-card);
+    color: var(--text-secondary);
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
 }
-.full-pbp-density-btn:hover  { background: #f4f4f4; }
-.full-pbp-density-btn:active { background: #ececec; }
+.full-pbp-density-btn:hover  { background: var(--surface-page); }
+.full-pbp-density-btn:active { background: var(--surface-mid); }
 .full-pbp-density-btn i { font-size: 0.9em; }
 
 /* Mini event log — flexes to absorb whatever vertical slack is left
@@ -452,8 +452,8 @@
 .full-pbp-log-reserve {
     flex: 1 1 0;
     min-height: 110px;
-    border-top: 1px solid #ddd;
-    background: #fafafa;
+    border-top: 1px solid var(--border-light);
+    background: var(--surface-sticky);
     overflow: hidden;
 }
 
@@ -469,7 +469,7 @@
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.78em;
     line-height: 1.35;
-    color: #333;
+    color: var(--text-primary);
     text-align: left;
     white-space: pre-wrap;
     word-break: break-word;
@@ -485,8 +485,8 @@
 }
 
 .full-pbp-set-chip.checked {
-    background: #6d28d9;
-    border-color: #6d28d9;
+    background: var(--violet-set);
+    border-color: var(--violet-set);
 }
 
 /* Header copy of the set chip — the primary control, on the top line with the

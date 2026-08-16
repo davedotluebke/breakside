@@ -47,6 +47,30 @@
         })();
     </script>
     <script>window._isStaging = location.hostname === 'staging.breakside.pro';</script>
+    <!-- Theme boot. Must run BEFORE the stylesheets are applied, because the
+         dark palette is keyed on this attribute — set it any later and the app
+         paints white and then snaps to black. utils/theme.js owns everything
+         after this point (OS-change tracking, the settings control, image
+         swapping); this is deliberately the smallest possible duplicate of its
+         read-and-resolve step, and the two must agree on the storage key. -->
+    <script>
+        (function () {
+            var pref = 'dark';   // default; see getPreference() in utils/theme.js
+            try {
+                var s = JSON.parse(localStorage.getItem('breakside_advanced_settings') || '{}') || {};
+                if (s['display.theme'] === 'light' || s['display.theme'] === 'dark' || s['display.theme'] === 'auto') {
+                    pref = s['display.theme'];
+                }
+            } catch (e) { /* private mode / corrupt JSON: fall back to the default */ }
+            var dark = pref === 'dark' || (pref === 'auto'
+                && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+            // The two-tone wordmark needs its dark variant preloaded instead of
+            // the light one; the <link rel="preload"> below is rewritten by the
+            // same flag so the boot image fetch starts on the right file.
+            window._darkTheme = dark;
+        })();
+    </script>
     <meta name="apple-mobile-web-app-title" id="appTitle" content="Breakside">
     <meta name="msapplication-TileColor" content="#ffffff">
     <meta name="msapplication-config" content="browserconfig.xml">
@@ -75,8 +99,13 @@
     <!-- The boot splash's wordmark. Preloaded so its fetch starts at parse time,
          in parallel with the render-blocking CSS, instead of waiting for the
          splash <img> to be discovered. Same file as the header logo, so this
-         costs no extra bytes. -->
-    <link rel="preload" as="image" href="images/logo.wordmark.png">
+         costs no extra bytes. Written by script rather than a static tag so the
+         dark theme preloads its own variant (light lettering, transparent bg)
+         instead of fetching the light one and discarding it. -->
+    <script>
+        document.write('<link rel="preload" as="image" href="images/logo.wordmark'
+            + (window._darkTheme ? '.dark' : '') + '.png">');
+    </script>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -116,9 +145,22 @@
     <!-- Boot splash: covers the Start Game flash while initializeApp() runs,
          then retracts upward. Removed from the DOM by ui/splashScreen.js. -->
     <div id="splashScreen" role="presentation">
-        <img class="splash-logo" src="images/logo.wordmark.png" alt="Breakside">
+        <img class="splash-logo" src="images/logo.wordmark.png"
+             data-dark-src="images/logo.wordmark.dark.png" alt="Breakside">
         <span class="splash-staging-pill">Staging</span>
     </div>
+    <!-- Swap the two-tone images to their dark variants here, inline, rather
+         than waiting for utils/theme.js: this runs during parse, before the
+         first paint, so the splash never flashes black lettering on black.
+         theme.js re-runs the same pass (idempotent) and owns later changes. -->
+    <script>
+        if (window._darkTheme) {
+            document.querySelectorAll('[data-dark-src]').forEach(function (img) {
+                img.setAttribute('data-light-src', img.getAttribute('src'));
+                img.src = img.getAttribute('data-dark-src');
+            });
+        }
+    </script>
 
     <!-- Auth Screen (shown when not logged in) -->
     <section id="authScreen" class="auth-screen" style="display: none;">
@@ -258,7 +300,8 @@
                 </div>
             </div>
             <div class="header-logo-container">
-                <img src="images/logo.wordmark.png" alt="Breakside" id="headerLogo">
+                <img src="images/logo.wordmark.png" data-dark-src="images/logo.wordmark.dark.png"
+                     alt="Breakside" id="headerLogo">
                 <div id="versionOverlay" class="version-overlay" style="display: none;"></div>
             </div>
             <span class="header-staging-pill">Staging</span>
@@ -632,7 +675,7 @@
                 <h2>Pending Updates</h2>
                 <span id="pendingSyncCloseX" class="close">&times;</span>
             </div>
-            <p style="margin: 0 0 1rem; font-size: 0.9rem; color: #555;">
+            <p style="margin: 0 0 1rem; font-size: 0.9rem; color: var(--text-secondary);">
                 These changes were made while offline or failed to sync. They'll be sent to the server automatically when you're back online.
             </p>
             <div id="pendingSyncList" style="margin-bottom: 1rem;"></div>

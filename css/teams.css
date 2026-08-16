@@ -19,7 +19,7 @@
     border-radius: 8px;
     margin-bottom: 7px;
     overflow: hidden;
-    background: var(--white);
+    background: var(--surface-card);
 }
 
 .team-section.has-active-games {
@@ -123,12 +123,12 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    color: var(--color-secondary);
+    color: var(--color-secondary-ink);
     font-size: 0.95em;
 }
 
 .team-header .role-badge.viewer-badge i {
-    color: var(--color-secondary);
+    color: var(--color-secondary-ink);
 }
 
 /* On very narrow screens, hide the "Coach" text and show only the icon */
@@ -153,7 +153,7 @@
 }
 
 .team-header-bottom .text-icon-button:hover {
-    background: rgba(0, 0, 0, 0.08);
+    background: var(--wash);
 }
 
 .team-header .icon-button {
@@ -163,7 +163,7 @@
 }
 
 .team-header .icon-button:hover {
-    background: rgba(0, 0, 0, 0.08);
+    background: var(--wash);
 }
 
 /* Team settings button: gear icon with a responsive text label. */
@@ -188,7 +188,7 @@
 
 .team-games-container {
     border-top: 1px solid var(--border-light);
-    background: var(--white);
+    background: var(--surface-card);
 }
 
 .new-game-btn {
@@ -197,7 +197,7 @@
     margin: 10px 15px;
     padding: 10px;
     background: var(--color-success);
-    color: white;
+    color: var(--white);
     border: none;
     border-radius: 6px;
     font-size: 0.95em;
@@ -282,7 +282,7 @@
 }
 
 .event-header-btn:hover {
-    background: rgba(0, 0, 0, 0.08);
+    background: var(--wash);
 }
 
 /* Responsive label collapse. Widest: "Event roster" + "Event settings".
@@ -368,7 +368,7 @@
     margin-bottom: 0.75rem;
     font-size: 1rem;
     color: var(--text-primary);
-    background: var(--white);
+    background: var(--surface-inset);
     border: 1px solid var(--border-default);
     border-radius: 5px;
     box-sizing: border-box;
@@ -379,7 +379,7 @@
     padding: 6px;
     font-size: 1rem;
     color: var(--text-primary);
-    background: var(--white);
+    background: var(--surface-inset);
     border: 1px solid var(--border-default);
     border-radius: 5px;
     text-align: center;
@@ -389,7 +389,7 @@
     padding: 6px;
     font-size: 0.95rem;
     color: var(--text-primary);
-    background: var(--white);
+    background: var(--surface-inset);
     border: 1px solid var(--border-default);
     border-radius: 5px;
 }
@@ -505,7 +505,7 @@
 
 .game-join-btn {
     background: none;
-    border: 1px solid var(--text-secondary);
+    border: 1px solid var(--border-emphasis);
     color: var(--text-primary);
     padding: 3px 14px;
     border-radius: 4px;
@@ -560,8 +560,8 @@
 }
 
 .unknown-player {
-    background-color: var(--border-muted);
-    border: 2px dashed var(--text-placeholder);
+    background-color: var(--btn-disabled-bg);
+    border: 2px dashed var(--border-heavy);
     font-style: italic;
 }
 
@@ -570,7 +570,7 @@
     top: 10px;
     right: 10px;
     z-index: 1000;
-    background-color: rgba(0, 0, 0, 0.7);
+    background-color: var(--overlay-scrim-strong);
     padding: 5px 10px;
     border-radius: 5px;
     display: flex;
@@ -581,7 +581,7 @@
 
 .timer-label {
     font-size: 0.8em;
-    color: white;
+    color: var(--white);
     margin-bottom: 2px;
 }
 

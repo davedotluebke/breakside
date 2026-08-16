@@ -218,7 +218,158 @@ Two decisions worth knowing before changing it:
 
 The wordmark is `<link rel="preload" as="image">`ed in `<head>` (same file the
 header logo uses, so no extra bytes) and the module waits briefly for it, so the
-shade never flies up as an empty white panel on a cold load.
+shade never flies up as an empty white panel on a cold load. In dark mode the
+panel is `--surface-page` (true black) and the preload is rewritten to the dark
+wordmark — see § Theming below.
+
+### Theming (light / dark)
+
+The app ships two palettes. Dark is not only a preference: `--surface-page` is
+**pure `#000`**, and on the OLED phone propped on a sideline for two hours a
+black pixel is an unlit pixel. That is why the dark palette steps up from black
+as little as it can and leans on borders rather than luminance for separation.
+
+**Where the colors live.** [css/tokens.css](css/tokens.css) is the only file
+allowed to contain a raw color. It has exactly two blocks:
+
+- `:root` — the light palette (the app's original look)
+- `:root[data-theme="dark"]` — the dark overrides
+
+Every component stylesheet references `var(--token)` and nothing else.
+[scripts/lint-css-tokens.py](scripts/lint-css-tokens.py) keeps that honest and
+is worth re-running after any color work. It makes three checks, each catching
+a class of bug that light mode hides and dark mode exposes: a **raw color**
+outside tokens.css (it cannot flip with the theme), a **role mismatch** (a
+`--surface-*` in a `color:` is fine in light mode by accident and gone in
+dark), and a **parity** break (a `:root` token with no dark counterpart keeps
+its light value on a black page; it also flags dark-only and unreferenced
+tokens).
+
+```bash
+./scripts/lint-css-tokens.py
+```
+
+**How a theme is chosen.** [utils/theme.js](utils/theme.js) resolves the
+`display.theme` setting (`auto` | `light` | `dark`, stored in the same
+`breakside_advanced_settings` blob as every other Advanced Setting) against
+`prefers-color-scheme` and writes the **resolved** value — never `auto` — to
+`data-theme` on `<html>`.
+
+The default is **`dark`**, not `auto`: the app is used outdoors on a phone for
+hours at a stretch, so the battery argument wins even for a user whose device
+is set to light. That default is written in *three* places that must agree —
+`getPreference()` in theme.js, the pre-paint copy in `index.html`, and the
+`DEFAULTS` map in [settings/advancedSettings.js](settings/advancedSettings.js).
+A user who has explicitly chosen a theme is unaffected; only "never touched it"
+resolves to the default. Resolving in JS rather than wrapping the dark block in
+a media query means the palette is defined once, and the `<meta name="theme-color">`
+/ iOS status-bar style can be kept in agreement with whatever CSS decided.
+
+`index.html` carries a deliberately duplicated, minimal copy of the read-and-
+resolve step **inline in `<head>`**. Without it the app paints white and snaps
+to black. The duplicate and `theme.js` must agree on the storage key; if you
+move the setting, move both.
+
+**Four rules for adding a color** (also stated at the top of tokens.css):
+
+1. No raw hex in a component stylesheet — add a token.
+2. Every `:root` token gets a dark counterpart, unless it is deliberately
+   theme-invariant (`--white`, `--black`, the `--overlay-scrim` family).
+3. Pick the token by **role**, not by value. The same light-mode hex is often
+   three different tokens: `#ddd` is `--surface-dim` in a `background`,
+   `--border-light` in a `border`, and neither in a `color`. Only the
+   role-correct one survives the flip.
+4. An accent drawn as **text on the page** uses the `--*-ink` variant, not the
+   base. Base accents are tuned as button *fills* with white labels on top;
+   inks are tuned for legibility against the page. The two must diverge in
+   dark, because a fill dark enough to carry white text cannot also be light
+   enough to read as text on black.
+   *Worked example:* the Full PBP "Break" action drew in `--pbp-blue-deep` —
+   the fill behind an armed chip. In light that reads fine and nobody notices;
+   in dark it is 2.65:1 while every sibling action, all on `-ink` tokens, sits
+   at 7.9–9.5. The family simply had no blue ink in it. If you reach for a
+   base accent in a `color:` and there is no matching `-ink`, that is the bug,
+   not the workaround — add the ink.
+
+**Gender coding is one purple/green pair, everywhere.** `--gender-fmp-*` is
+purple and `--gender-mmp-*` is green, in the app and in the public viewer.
+Deliberately *not* blue/pink, and not the Material purple/blue the select-line
+ratio badge used until Aug 2026 — blue reads as a gendered signal. A gender
+control takes `--gender-*-surface` as its fill and `--gender-*-ink` as its
+text; the `-tint` variants are for cells that carry inherited body text. Chips
+on near-black need real chroma to survive: the first dark cut lifted only
+1.2–1.5:1 off the card and read as grey blocks rather than purple and green
+ones.
+
+**Things that are deliberately theme-invariant**, and why:
+
+- `--white` / `--black`. `--white` is the label color on every colored button,
+  so it stays `#fff` in both themes. The *sheet* color that used to be white is
+  a separate token, `--surface-card`, and that one goes near-black. Confusing
+  the two is how the app header ended up white with a dark-mode wordmark on it.
+- Everything drawn **on the Field-mode pitch** — the disc, event markers, the
+  pegman halo. The pitch is green in both themes, so those follow the pitch,
+  not the page. See the `--fp-*` block in
+  [playByPlay/fieldPbp.css](playByPlay/fieldPbp.css), which keeps its own light
+  and dark palettes next to each other for the same reason.
+- Modal scrims. A scrim sits *over* content in both themes, so it is dark in
+  both. Translucent **washes** (`--wash-*`) are the opposite case: they flip
+  polarity, because a black wash reads as "slightly recessed" on a light
+  surface and as nothing at all on a dark one.
+
+**Shadows become rings.** A soft black blur over a black page renders as
+nothing, so the `--shadow-*` presets carry a hairline light ring in dark mode
+instead. Use the presets rather than writing a `box-shadow` literal — a raw
+one silently disappears in dark.
+
+**Borders are pitched brighter than a literal inversion.** `#eee` on white is a
+1.24:1 hairline the eye still resolves; the same ratio near black is not,
+because contrast sensitivity falls with luminance. The dark ramp lands at
+roughly 1.5–3.8:1 against `--surface-card`.
+
+**The two-tone wordmark.** `images/logo.wordmark.png` is black-and-orange
+lettering on a baked white background, so on a dark surface the black half
+vanishes and the white block shows. `images/logo.wordmark.dark.png` is derived
+from it (un-composited off the white, neutral ink flipped, orange kept). An
+element opts in with `data-dark-src`; `theme.js` swaps `src` on every theme
+change. Markup **built at runtime** must call `refreshThemedImages(root)` after
+building — pass the subtree, since `document.querySelectorAll` cannot see a node
+that has not been inserted yet. `game/gameScreenPanels.js` is the live example.
+
+**Not themed** (all self-contained, none of them load `css/tokens.css`): the
+marketing landing page, the invite join page, and the public game viewer. The
+in-app auth screen has always drawn its own dark blue gradient and looks the
+same in both themes.
+
+**Verifying a change.** [tests/sweep](tests/sweep) runs the app through 27
+screens and 22 dialogs per theme, screenshotting each and measuring WCAG
+contrast for every visible text run and border against its real composited
+backdrop (opacity folded in, so a deliberately dimmed control scores the way it
+actually looks). Run it once per theme and diff the two result sets — what
+matters is findings that are *dark-only* or *worse in dark*, since the app
+carries plenty of pre-existing light-mode ones:
+
+```bash
+cd tests
+BREAKSIDE_THEME=dark  ./node_modules/.bin/playwright test --config sweep/sweep.config.ts
+BREAKSIDE_THEME=light ./node_modules/.bin/playwright test --config sweep/sweep.config.ts
+```
+
+Two things about that harness are load-bearing:
+
+- **A walk only measures what it can reach.** Components gated behind unusual
+  game state — an alternating gender ratio, a held coach role, a Start Point
+  in its warning state, a negative point timer — never render, so they are
+  never measured, and both dark-mode color bugs found by eye after the sweep
+  came back clean were in exactly that blind spot. The **swatch board** at the
+  end of `dialogs-sweep.spec.ts` mounts those from their real class names
+  against the real stylesheets. When you add a state-gated component, add it
+  there; it is cheaper than teaching the walk to reach it.
+- **The auditor freezes animations before sampling.** The point timer pulses,
+  so a live sample returns whatever opacity the pulse was mid-way through —
+  the same token measured 4.42, then 3.23, then 3.80. Findings are now
+  reproducible run to run, and pulsing elements are scored at full opacity,
+  i.e. their best case.
 
 ### CSS Styling Gotchas
 
@@ -1653,7 +1804,7 @@ property that emerges from a dozen independent `setInterval` calls.
 | Module | Role |
 |---|---|
 | `utils/powerPolicy.js` | Pure rules. No DOM, no timers, no imports. Answers "which loops should run" and "should the wake lock be held". Unit-tested in `tests/unit/powerPolicy.test.mjs`. |
-| `utils/powerManager.js` | The app's **only** `visibilitychange` listener. Feeds context into the policy and broadcasts the plan. |
+| `utils/powerManager.js` | The **only** `visibilitychange` listener that decides what may run. Feeds context into the policy and broadcasts the plan. |
 | `utils/wakeLockManager.js` | Owns the screen wake lock sentinel. |
 | `utils/powerLog.js` | Counts what actually happened, for field measurement. |
 
@@ -1671,6 +1822,14 @@ An event rather than a registry because listeners live at every layer —
 `store/sync.js` (data) through `ui/` — and a data-layer module cannot import
 upward into `utils/` (see § Module Loading). The event carries the entire plan,
 not just the delta, so a listener that missed an edge still converges.
+
+Two other modules do listen to `visibilitychange` directly, and both are
+deliberate rather than leaks: `game/controllerState.js` runs its sleep/wake
+role-recovery there (it relies on `powerManager` being registered first, via
+`main.js` import order, so polling is back up before recovery runs), and
+`utils/theme.js` re-resolves an `auto` theme that the OS may have flipped while
+we were backgrounded. Neither starts or stops a loop — that decision stays with
+the plan. Anything that *does* control a loop belongs in `loopPlan()`.
 
 **Adding a new recurring loop:** add its id to `LOOPS` in `powerPolicy.js`, give
 it a rule in `loopPlan()`, and have its owner listen for the flag. Do not add a

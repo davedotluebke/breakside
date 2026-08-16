@@ -85,6 +85,11 @@ const advancedSettings = (function() {
         // which is the single biggest battery saving available.
         'power.keepScreenAwake': true,
         // --- Display ---
+        // auto | light | dark. Applied by utils/theme.js (and by an inline
+        // copy of its resolve step in index.html, so the first paint is already
+        // the right theme). Dark uses a true-black page background, which on an
+        // OLED phone is a real battery saving over a two-hour game.
+        'display.theme': 'dark',
         'display.showPlayerNumbers': true,               // jersey numbers alongside names everywhere
         // --- Field ---
         'field.endzoneYards': 20,                         // endzone depth drawn on the Field tab (20 = USAU, 25 = some leagues)
@@ -344,6 +349,12 @@ const advancedSettings = (function() {
             group: 'Display',
             fields: [
                 {
+                    key: 'display.theme', label: 'Theme',
+                    help: 'Dark is the default: it uses a true-black background, and on an OLED phone those pixels are switched off, which meaningfully extends battery over a long game. Auto follows your device setting instead.',
+                    type: 'select',
+                    options: [['auto', 'Auto (match device)'], ['light', 'Light'], ['dark', 'Dark']]
+                },
+                {
                     key: 'display.showPlayerNumbers', label: 'Show player numbers',
                     help: 'Show jersey numbers alongside player names (roster, lines, play-by-play, dialogs). Turn off for a cleaner display when you know your players by name.',
                     type: 'toggle'
@@ -546,10 +557,15 @@ const advancedSettings = (function() {
                 if (key === 'hints.hideAll' && window.hints && typeof window.hints.resetAll === 'function') {
                     window.hints.resetAll();
                 }
-                // The wake lock is the one setting that acts immediately —
+                // The wake lock is one of two settings that act immediately —
                 // the coach may well be mid-game with the modal open.
                 if (key === 'power.keepScreenAwake') {
                     window.wakeLockManager?.reconcile?.();
+                }
+                // Theme is the other: the user is looking at the thing they
+                // just changed.
+                if (key === 'display.theme' && window.theme) {
+                    window.theme.applyTheme(el.value);
                 }
                 // A toggle flip may unhide a gated row (e.g. flipping the
                 // vocabulary hint on reveals the prompt textarea).

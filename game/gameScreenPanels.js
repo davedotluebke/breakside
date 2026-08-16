@@ -24,6 +24,7 @@ import { currentGame } from '../utils/helpers.js';
 import { createPanelTitleBar } from '../ui/panelSystem.js';
 import { isLineCoach } from './controllerState.js';
 import { wireGameScreenEvents } from './gameScreenEvents.js';
+import { refreshThemedImages } from '../utils/theme.js';
 import { log } from '../utils/logger.js';
 
 // =============================================================================
@@ -109,7 +110,8 @@ function createHeaderContent() {
         </div>
         
         <div class="header-logo-container">
-            <img src="images/logo.wordmark.png" alt="Breakside" class="header-logo" id="gameScreenLogo">
+            <img src="images/logo.wordmark.png" data-dark-src="images/logo.wordmark.dark.png"
+                 alt="Breakside" class="header-logo" id="gameScreenLogo">
             <span class="header-version-overlay" id="gameVersionOverlay"></span>
         </div>
         <span class="header-staging-pill header-staging-pill--game">Staging</span>
@@ -235,6 +237,11 @@ function createHeaderPanel() {
     titleBar.className = 'panel-title-bar';
     titleBar.appendChild(createHeaderContent());
     panel.appendChild(titleBar);
+    // The header wordmark is two-tone: its template hardcodes the light file,
+    // so point it at the dark variant if that's the active theme. Scoped to
+    // `panel` because it isn't in the document yet. (Later theme changes are
+    // handled by theme.js's own pass over [data-dark-src].)
+    refreshThemedImages(panel);
 
     // Segmented tab control
     const segRow = document.createElement('div');

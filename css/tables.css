@@ -20,7 +20,7 @@ th {
     padding: 8px;
     font-size: 0.85rem;
     background: var(--surface-sticky);
-    border: 1px solid var(--surface-dim);
+    border: 1px solid var(--border-light);
     border-radius: 4px;
 }
 
@@ -34,7 +34,7 @@ th {
 
 /* Styling for team aggregate row in game summary */
 .team-aggregate-row {
-    border-top: 2px solid var(--text-primary);
+    border-top: 2px solid var(--border-emphasis);
     font-weight: 600;
 }
 
@@ -63,7 +63,7 @@ th {
     font-size: 0.9em;
     color: var(--text-primary);
     background-color: var(--surface-page);
-    border-left: 3px solid var(--text-faint);
+    border-left: 3px solid var(--border-heavy);
     border-radius: 2px;
     /* Preserve newlines from formatTeamStatsLine() so each stat stays on its own line */
     white-space: pre-line;
@@ -89,7 +89,7 @@ th {
 
 .event-roster-filter-row label {
     font-weight: 600;
-    color: var(--gray-dark);
+    color: var(--text-primary);
 }
 
 /* The scope menu can hold long game labels; let it shrink instead of
@@ -165,7 +165,7 @@ th {
 .event-phase-add-btn {
     padding: 6px 12px;
     background: var(--green-phase);
-    color: white;
+    color: var(--white);
     border: none;
     border-radius: 4px;
     cursor: pointer;
@@ -202,7 +202,7 @@ th {
 }
 
 .sortable-header:active {
-    background-color: rgba(0, 0, 0, 0.08);
+    background-color: var(--wash);
 }
 
 .sortable-header::after {
@@ -232,7 +232,7 @@ th {
 }
 
 .sub-action-btn.inactive {
-    background-color: var(--text-faint); /* Or any other style to indicate selection */
+    background-color: var(--btn-neutral-dim); /* Or any other style to indicate selection */
 }
 
 .action-buttons {
@@ -272,7 +272,7 @@ th {
     padding: 2px 5px; /* Smaller padding */
     margin: 2px; /* Smaller margin between buttons */
     font-size: 0.8rem; /* You can adjust the font size as needed */
-    background-color: var(--text-muted);
+    background-color: var(--btn-neutral);
     /* Other styles as needed */
 }
 
@@ -314,7 +314,7 @@ th {
     padding: 5px;
     box-sizing: border-box;
     border: 1px solid var(--border-default);
-    background-color: white;
+    background-color: var(--surface-card);
     resize: none;
     overflow-y: auto;
 }
@@ -361,10 +361,10 @@ ul {
 #rosterTable th, #rosterTable td,
 #eventRosterTable th, #eventRosterTable td,
 #gameSummaryTable th, #gameSummaryTable td {
-    border: 1px solid grey;
+    border: 1px solid var(--border-heavy);
     padding: 5px;
     white-space: nowrap;
-    background-color: white;  /* opaque so sticky cells don't bleed-through */
+    background-color: var(--surface-card);  /* opaque so sticky cells don't bleed-through */
 }
 
 /* Roster stats scope toggle (All-time / Event / Game) */
@@ -414,7 +414,7 @@ ul {
     user-select: none;
 }
 .roster-sortable:hover {
-    background-color: var(--border-lighter);
+    background-color: var(--surface-hover);
 }
 .roster-sorted {
     background-color: var(--surface-sorted);
@@ -490,7 +490,7 @@ ul {
     left: 0;
     z-index: 4;
     background-color: var(--surface-sticky);
-    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
+    box-shadow: inset -2px 0 0 0 var(--table-sticky-edge), inset 1px 0 0 0 var(--table-sticky-edge-soft), inset 0 -1px 0 0 var(--table-sticky-edge-soft);
     border-left: none;
     border-right: none;
     border-top: none;
@@ -502,7 +502,7 @@ ul {
     left: 30px; /* overwritten dynamically to the measured checkbox column width */
     z-index: 3;
     background-color: var(--surface-sticky);
-    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 0 -1px 0 0 grey;
+    box-shadow: inset -2px 0 0 0 var(--table-sticky-edge), inset 0 -1px 0 0 var(--table-sticky-edge-soft);
     border-left: none;
     border-right: none;
     border-top: none;
@@ -516,7 +516,7 @@ ul {
     position: sticky;
     left: 0;
     z-index: 5;
-    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
+    box-shadow: inset -2px 0 0 0 var(--table-sticky-edge), inset 1px 0 0 0 var(--table-sticky-edge-soft), inset 0 -1px 0 0 var(--table-sticky-edge-soft);
     border-left: none;
     border-right: none;
     border-top: none;
@@ -528,7 +528,7 @@ ul {
 td.player-fmp,
 .active-name-column.player-fmp,
 .roster-name-column.player-fmp {
-    color: var(--gender-fmp) !important; /* kept: applies across 4 tables incl. id-scoped sticky cells in ui/panelSystem.css */
+    color: var(--gender-fmp-ink) !important; /* kept: applies across 4 tables incl. id-scoped sticky cells in ui/panelSystem.css */
     font-weight: bold;
 }
 
@@ -536,18 +536,18 @@ td.player-fmp,
 td.player-mmp,
 .active-name-column.player-mmp,
 .roster-name-column.player-mmp {
-    color: var(--gender-mmp) !important; /* kept: same reason as .player-fmp above */
+    color: var(--gender-mmp-ink) !important; /* kept: same reason as .player-fmp above */
     font-weight: bold;
 }
 
 /* Gender ratio warning styling - matches player colors */
 #genderRatioText.gender-ratio-fmp-warning {
-    color: var(--gender-fmp); /* Darker purple - matches FMP player color */
+    color: var(--gender-fmp-ink); /* Darker purple - matches FMP player color */
     font-weight: bold;
 }
 
 #genderRatioText.gender-ratio-mmp-warning {
-    color: var(--gender-mmp); /* Darker green - matches MMP player color */
+    color: var(--gender-mmp-ink); /* Darker green - matches MMP player color */
     font-weight: bold;
 }
 
@@ -561,13 +561,13 @@ td.player-mmp,
 /* Score cell coloring for alternating gender ratio games */
 .score-cell-fmp {
     background-color: var(--gender-fmp-tint); /* Light darker purple background */
-    color: var(--black); /* Black text for better contrast */
+    color: var(--text-strong); /* Max contrast against the tint, in either theme */
     font-weight: bold;
 }
 
 .score-cell-mmp {
     background-color: var(--gender-mmp-tint); /* Light darker green background */
-    color: var(--black); /* Black text for better contrast */
+    color: var(--text-strong); /* Max contrast against the tint, in either theme */
     font-weight: bold;
 }
 
@@ -609,7 +609,7 @@ td.player-mmp,
     font-style: italic;
     z-index: 3;
     background-color: var(--surface-sticky);
-    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 0 -1px 0 0 grey;
+    box-shadow: inset -2px 0 0 0 var(--table-sticky-edge), inset 0 -1px 0 0 var(--table-sticky-edge-soft);
     border-left: none;
     border-right: none;
     border-top: none;
@@ -623,7 +623,7 @@ td.player-mmp,
     text-align: left;
     background-color: var(--surface-sticky);
 
-    border: 1px solid grey;
+    border: 1px solid var(--border-heavy);
 }
 
 /* styles for the names, time, and points-played columns */
@@ -648,7 +648,7 @@ td.player-mmp,
     left: 0;
     z-index: 4;
     background-color: var(--surface-sticky);
-    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 1px 0 0 0 grey, inset 0 -1px 0 0 grey;
+    box-shadow: inset -2px 0 0 0 var(--table-sticky-edge), inset 1px 0 0 0 var(--table-sticky-edge-soft), inset 0 -1px 0 0 var(--table-sticky-edge-soft);
     border-left: none;
     border-right: none;
     border-top: none;
@@ -663,7 +663,7 @@ td.player-mmp,
     left: 30px; /* overwritten dynamically to the measured checkbox column width */
     z-index: 3;
     background-color: var(--surface-sticky);
-    box-shadow: inset -2px 0 0 0 var(--text-faint), inset 0 -1px 0 0 grey;
+    box-shadow: inset -2px 0 0 0 var(--table-sticky-edge), inset 0 -1px 0 0 var(--table-sticky-edge-soft);
     border-left: none;
     border-right: none;
     border-top: none;
@@ -721,15 +721,15 @@ td.player-mmp,
     width: 100%; /* Full width */
     height: 100%; /* Full height */
     overflow: auto; /* Enable scroll if needed */
-    background-color: rgb(0,0,0); /* Fallback color */
-    background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+    background-color: var(--black); /* Fallback color */
+    background-color: var(--overlay-scrim); /* Black w/ opacity */
 }
 
 .modal-content {
-    background-color: var(--white);
+    background-color: var(--surface-card);
     margin: 15% auto; /* 15% from the top and centered */
     padding: 20px;
-    border: 1px solid var(--text-faint);
+    border: 1px solid var(--border-heavy);
     width: 80%; /* Could be more or less, depending on screen size */
 }
 
