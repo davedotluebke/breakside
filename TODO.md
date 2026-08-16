@@ -688,6 +688,28 @@ Remaining work:
 
 ## Backlog
 
+### Docs site (`/docs.html`) — nice-someday clips
+
+Both were considered during the 2026-08 build and deliberately skipped; the page
+covers each in text today. See `docs/DOCS_SITE.md` for what else is uncovered
+and why, and DEMO_VIDEOS.md for how to record.
+
+- [ ] **Field mode in landscape.** The Field entry's clip is portrait; the text
+      describes the landscape takeover (full-screen field, app chrome gone,
+      long-press the attack/defend/home/away labels to flip perspective) without
+      showing it. Needs a second viewport in `tests/playwright.demo.config.ts` —
+      the demo config is portrait 480×960 throughout, and the docs page frames
+      every clip as a 1:2 phone, so a landscape clip needs its own frame styling
+      in `docs.css` too. Both themes, as with everything else there.
+- [ ] **Speech narration.** The only Advanced entry with no clip. Recording it
+      needs a live OpenAI Realtime + Claude backend and audio injected into the
+      page (Chromium's `--use-file-for-fake-audio-capture`, plus a Playwright
+      launch arg the demo config doesn't currently set), and the transcription
+      round-trip makes the take slow and non-deterministic in a way the rest of
+      the series isn't. Worth doing when narration itself is stable enough that
+      a scripted phrase reliably produces the same events twice.
+
+
 - [ ] **Code health: fold duplicated game-screen helpers** (deferred from the `gameScreen.js` split, D1). When `game/gameScreen.js` was split into `gameScreenPanels/Events/Timer/selectLine/gameScreenSync.js`, the split was kept a pure verbatim move for verifiability, so three already-identified, behavior-identical duplications were left in place. Fold them when convenient: `endGameFlow()` (the near-identical `handleEndGame` in `gameScreenEvents.js` vs `handleGameEventEndGame`), `installPollInterval()` (the clear-interval / `setInterval(ping)` idiom repeated ~3× across `controllerState.js`), and `stopPointTimerInto(point)` (the "add elapsed to `totalPointTime`, null `startTimestamp`" block duplicated in both score handlers in `gameScreenEvents.js`). Purely mechanical; do behind the e2e suite.
 - [x] **Code health: `ui/activePlayersDisplay.js`'s sticky active-players table is dead code** *(DONE 2026-08-06, branch `dead-active-players-table`
   — deleted; the file went 429 → 53 lines. Confirmed unreachable first: neither
