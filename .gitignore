@@ -49,6 +49,8 @@ tests/test-data-dir/
 # data the demo specs create are not.
 tests/demo-results/
 tests/demo-data-dir/
+# The recorder's own transcript — the cutter reads it, nobody else needs it.
+tests/.demo-record*.log
 
 # Per-session local backend data copies (scripts/dev-backend.sh)
 .dev-data/
