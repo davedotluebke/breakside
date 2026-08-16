@@ -314,6 +314,142 @@ The multi-user push is mostly done. A few items linger:
 
 </details>
 
+### Offline reliability, and account-free solo use
+
+Both items below came out of the 2026-08-16 audit in
+**[docs/offline-no-account-audit.md](docs/offline-no-account-audit.md)** — which
+was prompted by a docs draft claiming "you can use Breakside without an account".
+That claim is false today, and checking it turned up several things that hurt
+*signed-in* offline users too. The audit has the full evidence (code refs plus a
+browser test against a local dev server); this is the actionable summary.
+
+The two are separable — the first is bug-fixing, the second is a feature — but
+items 1a and 1b below are prerequisites for the second either way.
+
+#### 1. Make offline (with an account) as reliable as practical
+
+README currently promises "Full functionality without internet connection" and
+"Works fully offline, syncs when connected" (lines 96, 190). The sync layer
+mostly earns that; the app *shell* does not. Four problems, roughly by severity:
+
+- [ ] **1a. Sign Out silently destroys unsynced local data.** `handleSignOut()`
+      (`teams/syncStatusUI.js:165`) → `signOut()` → `clearLocalData()`
+      (`auth/auth.js:368`) removes `teamsData`, `ultistats_sync_queue`, and the
+      three `ultistats_local_*` keys — **with no confirmation dialog and no
+      `getPendingSyncCount()` check**. A coach who recorded a tournament with no
+      signal and then taps Sign Out loses the games *and* the queue that would
+      have uploaded them. The wipe exists for a good reason (don't leak one
+      account's data to the next), so the fix isn't to delete it:
+      *Suggested:* block on a confirm when `getPendingSyncCount() > 0`, naming
+      what's at stake ("3 games haven't synced yet — signing out will discard
+      them"), with a "Sync now, then sign out" primary action. Consider stashing
+      the wiped payload under a timestamped `breakside_signout_backup_*` key for
+      one session as a safety net. Small, self-contained, worth doing on its own.
+
+- [ ] **1b. The Supabase CDN is a single point of failure for offline launches.**
+      `index.html:141` loads supabase-js from `cdn.jsdelivr.net`, and
+      `service-worker.js:67` caches only *same-origin* responses with
+      `networkResponse.ok` — so that script is **never** in the SW cache (an
+      opaque cross-origin response has `ok === false` regardless). If it fails to
+      load, `initializeAuth()` bails at `auth/auth.js:47`, `isAuthenticated()`
+      returns false, and `main.js:356` redirects to `/landing/` — *regardless of
+      what's in localStorage*. Verified in the audit: a device seeded with a team
+      and a pending queue still got bounced, data intact but unreachable. The only
+      thing preventing this in the wild is the browser HTTP cache holding the CDN
+      script (the SW uses a plain `fetch` for cross-origin, so the HTTP cache
+      still applies) — a finite, unverified, evictable window.
+      *Suggested:* vendor supabase-js next to `vendor/xlsx.mini.min.js` so it's
+      same-origin and SW-cacheable. Small change, removes the whole failure mode,
+      and makes the README claim true. Pin the version and note the update
+      procedure alongside it.
+
+- [ ] **1c. Nothing requests persistent storage.** No `navigator.storage.persist()`
+      call exists anywhere in the codebase, so all local data is best-effort and
+      evictable — and on iOS Safari a non-installed PWA's storage is subject to
+      ITP's 7-day eviction. This is the quiet one: it costs nothing until a coach
+      opens the app after a two-week gap and finds an empty roster.
+      *Suggested:* call `navigator.storage.persist()` on first data write (not on
+      load — the prompt lands better once the user has something to lose), and
+      surface `navigator.storage.persisted()` in the Online/About toast so the
+      state is diagnosable. Trivial to add.
+
+- [ ] **1d. The manual update button can reload mid-game.** The *automatic*
+      service-worker reload is correctly gated on `isReloadUnsafe()`
+      (`main.js:190`), which defers while a game is on screen or narration is
+      recording. `forceAppUpdate()` (`main.js:268`), reached from About →
+      "Update Now", has **no such guard**, and `confirmAppUpdate()`
+      (`syncStatusUI.js:250`) deliberately skips confirmation. Committed events
+      survive (game state is persisted on every change — 53 `saveAllTeamsData()`
+      call sites), but in-memory uncommitted point state doesn't.
+      *Suggested:* have `forceAppUpdate()` consult `isReloadUnsafe()` and, when
+      unsafe, warn rather than silently reload — the automatic path's deferral
+      logic and `window.__breaksideUpdatePending` already exist to build on.
+
+  **Worth knowing about the upgrade path generally:** upgrading does *not* itself
+  delete data. `forceAppUpdate()` clears Cache Storage only, and the SW's
+  `activate` handler deletes stale *caches*, never localStorage. The risk is
+  indirect: the reload re-runs `initializeApp()`, and if the session can't be
+  restored at that moment (1b, or an expired refresh token), the user lands on
+  `/landing/` with data stranded — and 1a is then one tap away.
+
+#### 2. Solo, offline, no account
+
+- [ ] **Problem: there is no anonymous path into the app at all.** Three
+      independent gates, any one of which blocks it:
+      (i) `main.js:356` redirects a sessionless visitor to `/landing/`, and its
+      two "running in offline mode" fallbacks (lines 374, 379) are **dead code** —
+      `initializeAuth()` catches every failure internally and never throws, and
+      `auth/auth.js` is a static import so `window.breakside.auth` is always
+      defined;
+      (ii) `/landing/` has no non-auth entry — `loginBtn`, `getStartedBtn` and
+      `quickstartBtn` all open the sign-in modal (`landing/landing.js:66-68`);
+      (iii) `showSelectTeamScreen()` logs `"(cloud-only mode)"` and early-returns
+      with "Please sign in to access your teams and games" (`teams/teamList.js:34-54`).
+
+  The good news is that the hard part already exists. The offline
+  create-and-queue path is built and exercised (`createTeamOffline`,
+  `addToSyncQueue`, `processSyncQueue`), and `syncUserTeams()` (`store/sync.js:1309`)
+  **merges rather than clobbers** — so a locally-created team already survives a
+  later sign-in, and its queued entry uploads. What's missing is a way to *reach*
+  any of it without a session. Sub-items, in dependency order:
+
+  - [ ] **2a. An entry point.** A "Continue without an account" affordance on the
+        landing page setting a `breakside_local_mode` flag, and a `main.js` check
+        for it (or for existing local data) before the redirect. Deliberately
+        *not* a reuse of `canActOffline()` (`auth/auth.js:175`) — that predicate
+        means "we can't confirm your auth state", which is a different question
+        from "this user chose to work locally". Needs a real `isLocalMode()`.
+  - [ ] **2b. A local team list.** Restore a local-teams renderer behind
+        `showSelectTeamScreen()`'s early return and as a branch in
+        `populateCloudTeamsAndGames()`. This is the bulk of the work — the
+        cloud-only rewrite removed the path that used to exist, so check the
+        history before rebuilding it from scratch.
+  - [ ] **2c. Gate by capability, not by session.** The scattered "Please sign in"
+        checks in `teams/teamSettings.js` (invites, members),
+        `teams/activeGamePolling.js`, `game/shareGame.js` and
+        `game/controllerState.js` should read "needs an account" and hide
+        cleanly. This is exactly where the docs claim's second half — *"cloud
+        sync, multi-coach, and share links need one"* — stops being aspirational.
+  - [ ] **2d. Don't burn the sync queue while anonymous.** `processSyncQueue()`
+        (`store/sync.js:314`) is gated on `isOnline` but **not** on
+        `isAuthenticated()`. An anonymous-but-online user's queued items would
+        401, retry five times at 5s intervals (`MAX_SYNC_RETRIES`, line 255), and
+        be quarantined into `syncDeadLetter` — destroying precisely the data
+        they'd want uploaded at sign-up. Add an auth check so the queue holds
+        instead. Small, but a hard prerequisite for 2a.
+  - [ ] **2e. Sign-in migration.** When a local user signs in, do their local
+        teams get adopted by the new account? The client-side merge is already
+        additive; what's missing is the prompt and the server-side ownership
+        handoff. This is a product decision before it's code.
+
+  Sizing: 2a and 2d are each an afternoon. 2b and 2c are the real project. 2e
+  needs a decision first.
+
+  **Until this ships, the docs should say an account is required.** Suggested
+  wording, accurate today subject to 1b: *"Breakside needs a free account. Once
+  you're signed in it works offline — record a whole tournament with no signal
+  and it syncs when you're back."*
+
 ---
 
 ## Multi-Coach Line Selection: Intent Rule & LC-Viewing Label — ✅ SHIPPED
