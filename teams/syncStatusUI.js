@@ -160,11 +160,84 @@ async function doFullRefresh(silent = false) {
 }
 
 /**
+ * Restore the sign-out button to its resting label.
+ * Its markup lives in buildSyncStatusHTML(); this keeps the three places that
+ * temporarily relabel it from each hard-coding the same string.
+ */
+function resetSignOutButton() {
+    const btn = document.getElementById('signOutBtn');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sign-out-alt"></i> Sign Out';
+    }
+}
+
+/**
+ * Gate sign-out on not silently destroying unsynced work.
+ *
+ * signOut() → clearLocalData() wipes teamsData and the sync queue, so a coach
+ * who recorded a tournament with no signal and then tapped Sign Out lost the
+ * games *and* the queue that would have uploaded them — no prompt, no warning.
+ * (docs/offline-no-account-audit.md § 6.)
+ *
+ * When items are pending we first try to drain the queue, which is what the
+ * user actually wants and usually resolves it silently. Only if changes are
+ * still stranded afterwards do we ask — and then the prompt names the count and
+ * says plainly that they'll be erased.
+ *
+ * @returns {Promise<boolean>} true if it's safe to proceed with signing out.
+ */
+async function confirmSignOutWithPending() {
+    let pending = getSyncStatus().pendingCount || 0;
+    if (pending === 0) return true;
+
+    const isOnline = navigator.onLine;
+
+    // Online: push first. processSyncQueue() attempts every queued item once
+    // before returning (its 5s timer only re-tries what's left), so the count
+    // immediately after is an honest "what's genuinely stuck".
+    if (isOnline) {
+        const btn = document.getElementById('signOutBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Syncing ${pending}...`;
+        }
+        try {
+            await processSyncQueue();
+        } catch (e) {
+            console.warn('Pre-sign-out sync failed:', e);
+        }
+        resetSignOutButton();
+
+        pending = getSyncStatus().pendingCount || 0;
+        if (pending === 0) return true;
+    }
+
+    const noun = pending === 1 ? 'change has' : 'changes have';
+    const reason = isOnline
+        ? 'Syncing them just now didn\'t clear them — tap the Online status and use "View / Clear…" to see why.'
+        : 'You\'re offline. Reconnecting first would let them sync.';
+
+    return confirm(
+        `${pending} ${noun} not synced to the cloud yet.\n\n` +
+        `${reason}\n\n` +
+        'Signing out erases all local data on this device, including these ' +
+        'unsynced changes. This cannot be undone.\n\n' +
+        'Sign out anyway?'
+    );
+}
+
+/**
  * Handle sign out - clears auth state and shows login screen
  */
 async function handleSignOut() {
     if (!window.breakside?.auth?.signOut) {
         alert('Sign out not available');
+        return;
+    }
+
+    if (!(await confirmSignOutWithPending())) {
+        resetSignOutButton();
         return;
     }
 
@@ -189,10 +262,7 @@ async function handleSignOut() {
         console.error('Sign out failed:', error);
         alert('Sign out failed: ' + error.message);
 
-        if (signOutBtn) {
-            signOutBtn.disabled = false;
-            signOutBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i> Sign Out';
-        }
+        resetSignOutButton();
     }
 }
 

@@ -332,7 +332,29 @@ README currently promises "Full functionality without internet connection" and
 "Works fully offline, syncs when connected" (lines 96, 190). The sync layer
 mostly earns that; the app *shell* does not. Four problems, roughly by severity:
 
-- [ ] **1a. Sign Out silently destroys unsynced local data.** `handleSignOut()`
+- [x] **1a. Sign Out silently destroys unsynced local data.** ***(DONE 2026-08-16,
+      branch `claude/breakside-offline-audit-8ux2js`.*** `handleSignOut()` now goes
+      through a new `confirmSignOutWithPending()` in `teams/syncStatusUI.js`: with
+      nothing pending it's unchanged (no new nagging); with items pending **and
+      online** it drains the queue first — `processSyncQueue()` attempts every item
+      once before returning, so the count immediately after is an honest "what's
+      genuinely stuck" — and signs out silently if that clears it; only if changes
+      are *still* stranded does it `confirm()`, naming the count and saying plainly
+      they'll be erased, with a reason tailored to online ("check View / Clear… for
+      why") vs offline ("reconnecting first would let them sync"). Cancel restores
+      the button and touches nothing. `clearLocalData()` (`auth/auth.js`) now
+      snapshots to `breakside_signout_backup` before wiping — best-effort,
+      never throws, drops the prior backup before writing so two snapshots can't
+      stack against the quota — and its five keys moved into one `LOCAL_DATA_KEYS`
+      list so the backup can't drift from the removals. Verified in a browser
+      across four cases (offline+pending cancel/accept, online+pending, empty
+      queue); suites green: 198 unit, 21 e2e. **Follow-up left open:** there is no
+      restore *UI* — recovery is currently by hand from devtools. Worth adding an
+      offer-to-restore at sign-in if this ever fires in the wild.)*
+
+      <details><summary>Original problem statement</summary>
+
+      `handleSignOut()`
       (`teams/syncStatusUI.js:165`) → `signOut()` → `clearLocalData()`
       (`auth/auth.js:368`) removes `teamsData`, `ultistats_sync_queue`, and the
       three `ultistats_local_*` keys — **with no confirmation dialog and no
@@ -346,7 +368,25 @@ mostly earns that; the app *shell* does not. Four problems, roughly by severity:
       the wiped payload under a timestamped `breakside_signout_backup_*` key for
       one session as a safety net. Small, self-contained, worth doing on its own.
 
-- [ ] **1b. The Supabase CDN is a single point of failure for offline launches.**
+      </details>
+
+- [x] **1b. The Supabase CDN is a single point of failure for offline launches.**
+      ***(DONE 2026-08-16, same branch.*** supabase-js v2.112.3 is now vendored at
+      `vendor/supabase-js.min.js` — the package's own `jsdelivr` entry point
+      (`dist/umd/supabase.js`), byte-identical to what the CDN served, so this
+      pins rather than upgrades. All three consumers switched:
+      `index.html`, `landing/index.html`, `landing/join.html`. `vendor/` is not in
+      `scripts/deploy-excludes.txt`, so it ships with both deploys, and being
+      same-origin it now lands in the service-worker cache like any other asset.
+      The file's header carries provenance, the `npm pack` update recipe, and a
+      "do not revert to the CDN" note with the reason. Verified in a browser with
+      `cdn.jsdelivr.net` hard-blocked: `window.supabase` present on all three
+      pages, zero jsdelivr requests, and — the actual payoff — **a device with a
+      session and local data now stays in the app instead of being bounced to
+      `/landing/`** (`isAuthenticated() === true` with both the CDN and
+      `supabase.co` unreachable). That was the §4 failure mode.)*
+
+      <details><summary>Original problem statement</summary>
       `index.html:141` loads supabase-js from `cdn.jsdelivr.net`, and
       `service-worker.js:67` caches only *same-origin* responses with
       `networkResponse.ok` — so that script is **never** in the SW cache (an
@@ -362,6 +402,8 @@ mostly earns that; the app *shell* does not. Four problems, roughly by severity:
       same-origin and SW-cacheable. Small change, removes the whole failure mode,
       and makes the README claim true. Pin the version and note the update
       procedure alongside it.
+
+      </details>
 
 - [ ] **1c. Nothing requests persistent storage.** No `navigator.storage.persist()`
       call exists anywhere in the codebase, so all local data is best-effort and

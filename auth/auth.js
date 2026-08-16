@@ -361,32 +361,85 @@ async function getAccessToken() {
 // Sign Out
 // =============================================================================
 
+// The localStorage keys clearLocalData() wipes. One list so the backup below
+// can never drift out of step with the removals.
+const LOCAL_DATA_KEYS = [
+    'teamsData',
+    'ultistats_sync_queue',
+    'ultistats_local_players',
+    'ultistats_local_teams',
+    'ultistats_local_games',
+];
+
+const SIGNOUT_BACKUP_KEY = 'breakside_signout_backup';
+
+/**
+ * Best-effort snapshot of what clearLocalData() is about to delete.
+ *
+ * The real protection against losing unsynced work is the prompt in
+ * teams/syncStatusUI.js's confirmSignOutWithPending() — this is only the net
+ * under it, for the mis-tap and the user who clicks through. There is
+ * deliberately NO restore UI yet (see TODO.md § Offline reliability, 1a): to
+ * recover by hand, read `breakside_signout_backup` from localStorage and write
+ * each entry of its `data` object back under its own key.
+ *
+ * Never throws — a failed backup must not block signing out.
+ */
+function stashLocalDataBackup() {
+    try {
+        const data = {};
+        let anyFound = false;
+        for (const key of LOCAL_DATA_KEYS) {
+            const value = localStorage.getItem(key);
+            if (value !== null) {
+                data[key] = value;
+                anyFound = true;
+            }
+        }
+        if (!anyFound) return;
+
+        // Drop any previous backup BEFORE writing the new one. A snapshot is
+        // about the size of the live data, so holding two of them plus the
+        // originals is the most likely way to hit the storage quota.
+        localStorage.removeItem(SIGNOUT_BACKUP_KEY);
+        localStorage.setItem(SIGNOUT_BACKUP_KEY, JSON.stringify({
+            savedAt: new Date().toISOString(),
+            data,
+        }));
+        log('Stashed a sign-out backup under', SIGNOUT_BACKUP_KEY);
+    } catch (e) {
+        // Quota exceeded, or storage unavailable. Log and carry on.
+        console.warn('Could not stash a sign-out backup:', e);
+    }
+}
+
 /**
  * Clear all locally stored game/team data.
  * Called on sign out to prevent data leaking between accounts.
+ *
+ * Destructive by design — but callers must give the user a way out first when
+ * anything is unsynced; see confirmSignOutWithPending() in teams/syncStatusUI.js.
  */
 function clearLocalData() {
     log('Clearing local data on sign out...');
-    
-    // Clear main teams/games data
-    localStorage.removeItem('teamsData');
-    
-    // Clear sync-related data (also cleared by clearSyncData, but ensure it's done)
-    localStorage.removeItem('ultistats_sync_queue');
-    localStorage.removeItem('ultistats_local_players');
-    localStorage.removeItem('ultistats_local_teams');
-    localStorage.removeItem('ultistats_local_games');
-    
+
+    // Snapshot first — see stashLocalDataBackup().
+    stashLocalDataBackup();
+
+    // Clear main teams/games data, and the sync-related keys (also cleared by
+    // clearSyncData, but ensure it's done).
+    LOCAL_DATA_KEYS.forEach(key => localStorage.removeItem(key));
+
     // Clear any in-memory state in the store module
     if (typeof window.clearAllTeamsData === 'function') {
         window.clearAllTeamsData();
     }
-    
+
     // Clear sync module's in-memory caches
     if (typeof window.clearSyncData === 'function') {
         window.clearSyncData();
     }
-    
+
     log('Local data cleared');
 }
 

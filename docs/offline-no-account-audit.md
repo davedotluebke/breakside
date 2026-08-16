@@ -2,6 +2,13 @@
 
 **Date:** 2026-08-16 · **Branch:** `claude/breakside-offline-audit-8ux2js` · **Commit audited:** `9cdf054`
 
+> **Status update (same day):** the two highest-severity findings below have been
+> fixed on this branch — **§6** (Sign Out destroying unsynced data) and **§4**
+> (the Supabase CDN as an offline single point of failure). §5's `forceAppUpdate`
+> guard and §7's persistent-storage request are still open, as is all of §1–§2.
+> The findings are left below as written, describing the code *as audited*; see
+> TODO.md § "Offline reliability, and account-free solo use" for what shipped.
+
 Claim under test, from a docs draft:
 
 > You can use Breakside without an account — data stays on the device. Cloud sync,
