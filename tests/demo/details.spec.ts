@@ -7,7 +7,8 @@
  */
 import { test, expect, Page } from '@playwright/test';
 import {
-  BEAT, SYNC_ECHO_WAIT, glide, holdEnding, markTrim, resetCursor, tap, tapLocator,
+  BEAT, SYNC_ECHO_WAIT, centerOf, dragTo, glide, holdEnding, markTrim, resetCursor,
+  tap, tapLocator,
 } from './cinema';
 import {
   beginGame, checkWholeLine, completePull, goToTab, makeTeamWithRoster, scoreFor, startPoint,
@@ -128,27 +129,49 @@ test('full-03-od-pill', async ({ page }) => {
   await holdEnding(page, 'full-03-od-pill');
 });
 
-test('full-04-mini-log', async ({ page }) => {
-  const t0 = Date.now();
-  await fullOffensePoint(page, 'full04');
+/** Five completed passes, so there's a possession to walk back or compress. */
+async function fullPossession(page: Page, user: string) {
+  await fullOffensePoint(page, user);
   await nameBtn(page, 'Alice').click();
   await page.waitForTimeout(300);
   for (const n of ['Bob', 'Carol', 'Dave', 'Eve']) {
     await nameBtn(page, n).click();
     await page.waitForTimeout(300);
   }
-  resetCursor();
-  await markTrim(page, t0, 'full-04-mini-log');
+}
 
-  // Undo walks the possession back one event at a time.
-  await tap(page, '#fullPbpUndoBtn', { after: BEAT.action });
+test('full-04-undo', async ({ page }) => {
+  const t0 = Date.now();
+  await fullPossession(page, 'full04');
+  resetCursor();
+  await markTrim(page, t0, 'full-04-undo');
+
+  // Undo walks the possession back one event at a time — the holder moves back
+  // up the chain and the mini log loses its last line on each tap.
+  await tap(page, '#fullPbpUndoBtn', { after: BEAT.notable });
+  await expect(row(page, 'Dave')).toHaveClass(/is-holder/, { timeout: 8_000 });
   await tap(page, '#fullPbpUndoBtn', { after: BEAT.notable });
   await expect(row(page, 'Carol')).toHaveClass(/is-holder/, { timeout: 8_000 });
 
-  // The density toggle trades row height for more of the mini log.
-  await tap(page, '#fullPbpDensityBtn', { after: BEAT.notable });
   await glide(page, 240, 800);
-  await holdEnding(page, 'full-04-mini-log');
+  await holdEnding(page, 'full-04-undo');
+});
+
+test('full-05-density', async ({ page }) => {
+  const t0 = Date.now();
+  await fullPossession(page, 'full05');
+  resetCursor();
+  await markTrim(page, t0, 'full-05-density');
+
+  // One tap trades row height for more of the mini log.
+  await tap(page, '#fullPbpDensityBtn', { after: BEAT.notable });
+  await page.waitForTimeout(BEAT.action);
+  await tap(page, '#fullPbpDensityBtn', { after: BEAT.notable });
+  await page.waitForTimeout(BEAT.action);
+  await tap(page, '#fullPbpDensityBtn', { after: BEAT.notable });
+
+  await glide(page, 240, 800);
+  await holdEnding(page, 'full-05-density');
 });
 
 test('line-01-next-line', async ({ page }) => {
@@ -220,6 +243,14 @@ test('all-01-panels', async ({ page }) => {
   await markTrim(page, t0, 'all-01-panels');
 
   await tap(page, '#headerSegControl button[data-tab="all"]', { after: BEAT.read });
+
+  // The dividers are the panels' own title bars: drag one and it resizes
+  // itself and the panel above. Take the game log up, then give some back.
+  const bar = '#panel-follow .panel-title-bar';
+  const start = await centerOf(page, bar);
+  await dragTo(page, bar, start.x, start.y - 150, BEAT.notable);
+  await dragTo(page, bar, start.x, start.y - 60, BEAT.notable);
+
   await glide(page, 240, 500);
   await holdEnding(page, 'all-01-panels');
 });

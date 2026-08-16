@@ -7,7 +7,7 @@
  */
 import { test, expect } from '@playwright/test';
 import {
-  BEAT, SYNC_ECHO_WAIT, glide, holdEnding, markTrim, resetCursor, tap, tapLocator, typeInto,
+  BEAT, SYNC_ECHO_WAIT, glide, holdEnding, markTrim, resetCursor, scrollLine, tap, tapCheck, tapLocator, typeInto,
 } from './cinema';
 import {
   OPPONENT, ROSTER, TEAM_NAME,
@@ -67,17 +67,45 @@ test('qs-03-pick-line', async ({ page }) => {
   resetCursor();
   await markTrim(page, t0, 'qs-03-pick-line');
 
-  const rows = page.locator('#panelActivePlayersTable tbody tr');
-  const count = await rows.count();
-  for (let i = 0; i < count; i++) {
-    await tapLocator(page, rows.nth(i).locator('input[type="checkbox"]'), { after: 380 });
+  // Picking a line out of a full roster, not ticking every row: four, then a
+  // look up and down the list, then three more who aren't next to the first
+  // four. That's what choosing a line actually looks like.
+  const box = (name: string) =>
+    page.locator('#panelActivePlayersTable tbody tr').filter({ hasText: name })
+      .locator('input[type="checkbox"]');
+
+  for (const name of ['Alice', 'Bob', 'Carol', 'Dave']) {
+    await tapCheck(page, box(name), { after: 380 });
   }
   await page.waitForTimeout(BEAT.action);
+
+  // Down to the bottom of the roster for two more, then back up the list for
+  // the last one — so the three are nowhere near the first four, and the
+  // scrolling is doing real work rather than decorating.
+  await scrollLine(page, 'down', 4);
+  await page.waitForTimeout(BEAT.action);
+  for (const name of ['Oscar', 'Trudy']) {
+    await tapCheck(page, box(name), { after: 420 });
+  }
+  await page.waitForTimeout(BEAT.action);
+
+  await scrollLine(page, 'up', 2);
+  await page.waitForTimeout(BEAT.action);
+  await tapCheck(page, box('Peggy'), { after: 420 });
+  await page.waitForTimeout(BEAT.action);
+
+  // Seven checked, which is what the Start Point button is waiting for.
+  await expect(page.locator('#panelActivePlayersTable tbody input[type="checkbox"]:checked'))
+    .toHaveCount(7, { timeout: 8_000 });
 
   // The Line tab has its own Start Point button (#lineTabStartPointBtn) —
   // #pbpStartPointBtn belongs to Simple/All and is hidden here.
   await tap(page, '#lineTabStartPointBtn', { after: BEAT.notable });
   await expect(page.locator('#lineTabStartPointBtn')).toBeHidden({ timeout: 8_000 });
+
+  // End on Simple, not All: Simple is where most of a game is actually run,
+  // and All is treated as an advanced layout throughout these docs.
+  await tap(page, '#headerSegControl button[data-tab="simple"]', { after: BEAT.read });
   await holdEnding(page, 'qs-03-pick-line');
 });
 

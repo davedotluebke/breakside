@@ -104,7 +104,23 @@ const CURSOR_SCRIPT = `
 `;
 
 /**
- * Quiet the two things that interrupt a take.
+ * The theme this run records in. Every clip ships in both, and the page picks
+ * one at runtime from `prefers-color-scheme`, so a take must never be left to
+ * inherit whatever the app's default happens to be — that default has already
+ * changed once (light → dark) mid-project.
+ */
+export type DemoTheme = 'light' | 'dark';
+
+export function demoTheme(): DemoTheme {
+  return process.env.DEMO_THEME === 'dark' ? 'dark' : 'light';
+}
+
+/**
+ * Quiet the things that interrupt a take, and pin the theme.
+ *
+ * `display.theme` is written explicitly (see DemoTheme above). The app resolves
+ * 'auto' in JS and stamps `data-theme` on <html> before first paint, so setting
+ * the stored preference here — before the first navigation — is enough.
  *
  * `hints.hideAll` stops the new-user hint toasts popping mid-clip.
  *
@@ -115,24 +131,36 @@ const CURSOR_SCRIPT = `
  * more than ~10s of choreography eventually eats one. 120 is the setting's
  * clamped maximum, which is longer than any clip.
  */
-const QUIET_SCRIPT = `
+function quietScript(theme: DemoTheme) {
+  return `
 (() => {
   try {
     const k = 'breakside_advanced_settings';
     const s = JSON.parse(localStorage.getItem(k) || '{}');
     s['hints.hideAll'] = true;
     s['sync.refreshIntervalSec'] = 120;
+    s['display.theme'] = ${JSON.stringify(theme)};
     localStorage.setItem(k, JSON.stringify(s));
   } catch (_) {}
 })();
 `;
+}
 
 /**
- * Install the cursor + hint suppression. Call once, before page.goto().
+ * Install the cursor, hint suppression, and theme pin. Call before page.goto().
  */
 export async function setupCinema(page: Page) {
   await page.addInitScript(CURSOR_SCRIPT);
-  await page.addInitScript(QUIET_SCRIPT);
+  await page.addInitScript(quietScript(demoTheme()));
+}
+
+/**
+ * Fail the take if the app didn't come up in the theme we're recording.
+ * A whole pass rendered in the wrong palette looks fine in isolation and is
+ * only obvious once it's next to the other one on the page.
+ */
+export async function expectTheme(page: Page) {
+  await expect(page.locator('html')).toHaveAttribute('data-theme', demoTheme(), { timeout: 10_000 });
 }
 
 // ─── Motion ─────────────────────────────────────────────────────────────────
@@ -217,6 +245,27 @@ export async function tapLocator(
   await page.waitForTimeout(opts.after ?? BEAT.action);
 }
 
+/**
+ * Tap a checkbox and make sure it took, retrying once.
+ *
+ * A tap that lands while the list is still settling from a scroll gets eaten,
+ * and the only symptom is a line one player short several seconds later. One
+ * extra press on camera is a much smaller cost than a lost take, and it reads
+ * as a person tapping again — which is what a person would do.
+ */
+export async function tapCheck(
+  page: Page,
+  checkbox: ReturnType<Page['locator']>,
+  opts: { after?: number } = {},
+) {
+  await tapLocator(page, checkbox, opts);
+  if (!(await checkbox.isChecked().catch(() => false))) {
+    await page.waitForTimeout(BEAT.settle);
+    await tapLocator(page, checkbox, opts);
+  }
+  await expect(checkbox).toBeChecked({ timeout: 5_000 });
+}
+
 /** Tap at raw viewport coordinates (Field mode). */
 export async function tapAt(page: Page, x: number, y: number, opts: { settle?: number; after?: number } = {}) {
   await glide(page, x, y);
@@ -225,6 +274,26 @@ export async function tapAt(page: Page, x: number, y: number, opts: { settle?: n
   await page.waitForTimeout(BEAT.press);
   await page.mouse.up();
   await page.waitForTimeout(opts.after ?? BEAT.action);
+}
+
+/**
+ * Scroll the line table, visibly.
+ *
+ * `mouse.wheel` at a point over the table, not `scrollIntoView` — the cursor
+ * has to be somewhere plausible for the motion to read as a person scrolling
+ * rather than the page jumping on its own.
+ */
+export async function scrollLine(page: Page, dir: 'up' | 'down', notches = 3) {
+  const table = page.locator('#panelActivePlayersTable').first();
+  const box = await table.boundingBox();
+  const x = box ? box.x + box.width / 2 : 240;
+  const y = box ? Math.min(box.y + 120, 700) : 500;
+  await glide(page, x, y);
+  await page.waitForTimeout(BEAT.settle);
+  for (let i = 0; i < notches; i++) {
+    await page.mouse.wheel(0, dir === 'down' ? 190 : -190);
+    await page.waitForTimeout(260);
+  }
 }
 
 /** Press and hold — long-press menus (possession set list, field side flip). */

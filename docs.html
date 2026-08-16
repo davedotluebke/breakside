@@ -51,6 +51,7 @@
         <a href="#modifiers">Modifier chips</a>
         <a href="#od-pill">The O/D pill</a>
         <a href="#undo">Undo</a>
+        <a href="#density">Row density</a>
         <a href="#field">Field mode</a>
         <a href="#next-line">Next line</a>
         <a href="#on-deck">On Deck</a>
@@ -81,7 +82,7 @@
             <p>
                 <strong>Quickstart</strong> is enough to run a game. <strong>Details</strong> covers
                 each tab. <strong>Advanced</strong> covers the features you turn on when you need them.
-                Every clip is a silent screen recording of the app, and plays as you scroll past it.
+                Every clip is a silent screen recording of the app, and loops as you scroll past it.
             </p>
             <p class="docs-note">
                 You can use Breakside without an account — data stays on the device.
@@ -152,7 +153,7 @@
                         the right. Picking both records the point and closes the dialog.
                     </p>
                     <p>
-                        <strong>Unknown Player</strong> covers the ones you didn't catch. The chips
+                        Use <strong>Unknown Player</strong> if you couldn't see somebody. The chips
                         (Huck, Break, Sky, Layout, Hammer) tag the scoring throw, and
                         <strong>Not a score — continue possession</strong> backs out of a mistaken tap.
                     </p>
@@ -192,7 +193,7 @@
                     <p>
                         The <strong>Log</strong> tab lists each point in order: its roster, the events inside
                         it, the score line, and a break/hold badge. Between-point events — timeouts,
-                        halftime, subs — appear in real-world order after the score line.
+                        halftime, subs — appear in order after the score line.
                     </p>
                 </div>
                 <div class="docs-clip" data-clip="qs-07-log"></div>
@@ -234,7 +235,7 @@
                     </ul>
                     <p>
                         Simple, Full, and Field share one possession model, so you can switch tabs
-                        mid-point and they agree on who has the disc. Timeout, halftime, and End Game are
+                        mid-point and they agree on who has the disc. Timeout, Halftime, and End Game are
                         reachable from all of them.
                     </p>
                 </div>
@@ -244,9 +245,9 @@
                 <div>
                     <h3>Full play-by-play: offense</h3>
                     <p>
-                        One row per player on the field. Your first tap on a name says who has the disc —
-                        no event is recorded for it. Every tap after that records a completed pass to the
-                        player you tapped, and they become the holder.
+                        One row per player on the field. After a pull or a turnover, your first tap on a
+                        name indicates who picks up the disc. Every tap after that records a completed
+                        pass to the player you tapped, and they become the holder.
                     </p>
                     <p>
                         The holder's row offers <strong>Throwaway</strong> and <strong>Break</strong>;
@@ -311,18 +312,25 @@
 
             <article class="docs-entry" id="undo">
                 <div>
-                    <h3>Undo and row density</h3>
+                    <h3>Undo</h3>
                     <p>
                         <strong>Undo</strong> removes the last event. Repeated taps walk back through the
                         possession and across a point boundary; a double-tap backs out a point you started
                         by accident. Undo is on the Full, Field, and Line tabs.
                     </p>
+                </div>
+                <div class="docs-clip" data-clip="full-04-undo"></div>
+            </article>
+
+            <article class="docs-entry" id="density">
+                <div>
+                    <h3>Row density</h3>
                     <p>
-                        The compress button toggles row density, trading row height for more of the mini
-                        log at the bottom of the Full tab.
+                        The compress button cycles row density on the Full tab, trading row height for more
+                        of the mini log at the bottom.
                     </p>
                 </div>
-                <div class="docs-clip" data-clip="full-04-mini-log"></div>
+                <div class="docs-clip" data-clip="full-05-density"></div>
             </article>
 
             <article class="docs-entry" id="field">
@@ -340,8 +348,12 @@
                         Advanced Settings → Field, and dragging a placed marker re-derives them.
                     </p>
                     <p>
-                        Rotating the phone to landscape drops the app chrome for a full-screen field. The
-                        attacking direction flips automatically each point.
+                        Rotating the phone to landscape shows a full-screen field.
+                    </p>
+                    <p>
+                        The attacking direction switches automatically each point. Long-press the
+                        attack/defend/home/away labels to flip the perspective to match your view from the
+                        sideline.
                     </p>
                 </div>
                 <div class="docs-clip" data-clip="field-mode"
@@ -353,13 +365,13 @@
                 <div>
                     <h3>Setting the next line during a point</h3>
                     <p>
-                        The Line tab works while the current point is running, with its own Start Point and
+                        The Line tab also works while the current point is running, with its own Start Point and
                         Lineup Ready buttons. Checking players there sets the line for the <em>next</em>
                         point; the current point is unaffected.
                     </p>
                     <p>
                         The <strong>Mode</strong> control chooses how you plan. <strong>O/D</strong> keeps
-                        a single combined Next line. <strong>O&amp;D</strong> keeps distinct O and D lines
+                        a single combined Next line. <strong>O&amp;D</strong> lets you prepare distinct O and D lines
                         and fields the right one based on who scored; a separate O or D line persists
                         across points until you change it.
                     </p>
@@ -382,8 +394,7 @@
                     </p>
                     <p>
                         The On Deck view adds a read-only <strong>On Deck</strong> column: each player's
-                        projected points-played going into that point, colored by its gender ratio — which
-                        is known in advance — so you can balance playing time and field a legal line.
+                        projected points-played going into that point.
                     </p>
                 </div>
                 <div class="docs-clip" data-clip="line-02-on-deck"></div>
@@ -393,8 +404,8 @@
                 <div>
                     <h3>The All tab</h3>
                     <p>
-                        All shows play-by-play, next line, and the game log at once, with drag-to-resize
-                        dividers between the panels. It's the layout for a tablet, or a phone in a stand.
+                        <strong>All</strong> shows simple-mode play-by-play, next line, and the game log at
+                        once, with drag-to-resize dividers between the panels.
                     </p>
                 </div>
                 <div class="docs-clip" data-clip="all-01-panels"></div>
@@ -417,8 +428,8 @@
                         <strong>Default line</strong> (O-line / D-line / Crossover). Delete is here too.
                     </p>
                     <p>
-                        The Auto line filler uses each player's <strong>default line</strong>, if set, to help
-                        decide who to put on for an offense or defense point.
+                        The Auto line selection (see below) uses each player's position and
+                        <strong>default line</strong>, if set, to help pick a line.
                     </p>
                 </div>
                 <div class="docs-clip" data-clip="adv-player-details"></div>
@@ -434,8 +445,13 @@
                         respecting the gender ratio.
                     </p>
                     <p>
-                        Check your handlers first, then tap Auto to round out the line. Auto on a line
+                        Uncheck any players you are rotating out, or tap <strong>Wholesale</strong> to start
+                        from scratch, then tap <strong>Auto</strong> to round out the line. Auto on a line
                         that's already full warns instead of replacing your picks.
+                    </p>
+                    <p>
+                        Set the priorities used by Auto to select players under
+                        <strong>Advanced Settings</strong>.
                     </p>
                 </div>
                 <div class="docs-clip" data-clip="adv-wholesale-auto"></div>
@@ -453,7 +469,7 @@
                         <li><strong>Correct Lineup</strong> — replace a mistakenly entered player and reassign that point's stats.</li>
                         <li><strong>Half Time</strong> — records the break, flips the drawn field's ends, and applies the opening-puller-receives rule to the next point.</li>
                         <li><strong>Swap O &amp; D</strong> — force-swap which team pulls next. A correction, for stats started mid-game or a game entered on the wrong side; not a substitute for halftime.</li>
-                        <li><strong>End Game</strong>.</li>
+                        <li><strong>End Game</strong> — ends the game and shows the stats.</li>
                     </ul>
                 </div>
                 <div class="docs-clip" data-clip="adv-game-events"></div>
@@ -467,8 +483,8 @@
                         (Good / Okay / Poor / Brick), and optional flags — Flick, Roller, IO, OI.
                     </p>
                     <p>
-                        The stopwatch is optional. Tap it on release, tap again on landing; the hang time
-                        rides the event and shows up in the log as
+                        The stopwatch is optional. Tap it on release, tap again on landing; the hang time,
+                        if recorded, shows up in the log as
                         <code>Pull by Frank (1.9s hang)</code>. Field mode has the same flow, timed against
                         the spot you tap for the landing.
                     </p>
@@ -486,7 +502,7 @@
                     </p>
                     <p>
                         The stats screens and every Excel export then gain a <strong>By set</strong>
-                        breakdown, each side judged on its own terms —
+                        breakdown —
                         <code>Zone (D): 8/12 stops, 4 breaks</code>,
                         <code>Ho-stack (O): 5/8 scored</code>.
                     </p>
@@ -509,7 +525,7 @@
                         the fact.
                     </p>
                     <p>
-                        One set per possession: switching from zone to person partway through overwrites the
+                        Only one set per possession (for now): switching from zone to person partway through overwrites the
                         tag rather than recording the change, so that possession reads as person.
                     </p>
                 </div>
@@ -522,7 +538,7 @@
                     <p>
                         The roster screen's <strong>Scope</strong> control switches between All-time, Event,
                         and Game numbers. <strong>Stats</strong> next to it picks how many columns to show.
-                        Column headers sort.
+                        Tapping a column header sorts by that column; tapping twice sorts the other direction.
                     </p>
                 </div>
                 <div class="docs-clip" data-clip="adv-stats-scope"></div>
@@ -550,10 +566,11 @@
                     <p>
                         Two coaches on the same game claim different roles: <strong>Play-by-Play</strong>
                         and <strong>Next Line</strong>. The role buttons stay hidden while you're coaching
-                        solo and appear once a second coach connects.
+                        solo and appear once a second coach connects. You can always show or hide the role
+                        buttons from the menu. Tap a button to claim or release a role.
                     </p>
                     <p>
-                        The clip is the line coach's phone: they take <strong>Next Line</strong>, and
+                        The video clip is the line coach's phone: they take <strong>Next Line</strong>, and
                         <strong>Play-by-Play</strong> fills in when the other coach connects.
                     </p>
                     <p>
@@ -570,9 +587,11 @@
                 <div>
                     <h3>Tournaments and other events</h3>
                     <p>
-                        <strong>New Event</strong> on a team card groups a weekend's games together. The
+                        <strong>New Event</strong> on a team card creates a grouping of games, such as a tournament or league season. The
                         event has its own card with its own settings, its own roster and aggregate stats,
-                        and a <strong>New Event Game</strong> button that starts games inside it.
+                        and a <strong>New Event Game</strong> button that starts games inside it. Event rosters
+                        can leave players off of the team roster, or include "pickup players" without
+                        adding them permanently to the team roster.
                     </p>
                     <p>
                         Event settings carry defaults — players on field, gender ratio, alternating gender
@@ -607,9 +626,10 @@
                 <div>
                     <h3>Speech narration</h3>
                     <p>
-                        Tap the mic and describe plays out loud — "Alice to Bob, huck to Carol for the
+                        Tap the mic and describe plays out loud: "Alice to Bob, huck to Carol for the
                         score". Speech is transcribed live and converted into structured events when you
-                        stop. Between points, the same mic takes the next line ("Alice, Bob, Carol…").
+                        tap the mic again to stop. Between points, the same mic takes the next line
+                        ("Wholesale, then put in Alice, Bob, Carol…" or "Drew goes in for Frank").
                     </p>
                     <p>
                         Opt-in per session, and it needs a connection. Events it can't place are reported
@@ -637,32 +657,46 @@
  * Clips are built from the data-clip slugs rather than written out inline, so
  * adding a clip is one attribute and the markup can't drift from the file names.
  * A slug with no recorded mp4 leaves an empty slot, which collapses to a
- * text-only entry — see the 404 handler below.
+ * text-only entry — see the error handler below.
+ *
+ * Every clip is recorded twice, light and dark (see DEMO_VIDEOS.md), and the
+ * pair lives at /docs/clips/<theme>/<slug>.mp4. The theme is chosen here at
+ * runtime from prefers-color-scheme and re-chosen if the OS setting changes
+ * while the page is open, so the phone in the frame matches the app the reader
+ * will actually see.
  */
 (function () {
-    var slots = document.querySelectorAll('.docs-clip[data-clip]');
+    var darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
-    slots.forEach(function (slot) {
-        var slug = slot.dataset.clip;
+    function themeDir() {
+        return darkQuery.matches ? 'dark' : 'light';
+    }
+
+    function clipUrl(slot, ext) {
+        var override = ext === 'mp4' ? slot.dataset.src : slot.dataset.poster;
+        if (override) return override.replace('{theme}', themeDir());
+        return '/docs/clips/' + themeDir() + '/' + slot.dataset.clip + '.' + ext;
+    }
+
+    var built = [];
+
+    document.querySelectorAll('.docs-clip[data-clip]').forEach(function (slot) {
         var frame = document.createElement('div');
         frame.className = 'device-frame';
         var screen = document.createElement('div');
         screen.className = 'device-screen';
 
         var video = document.createElement('video');
-        // data-src lets an entry reuse a clip that already ships elsewhere —
-        // the Field-mode demo is the landing page's carousel finale, and
-        // copying it here would duplicate 760KB for no reason.
-        video.src = slot.dataset.src || '/docs/clips/' + slug + '.mp4';
-        video.poster = slot.dataset.poster || '/docs/clips/' + slug + '.jpg';
+        video.src = clipUrl(slot, 'mp4');
+        video.poster = clipUrl(slot, 'jpg');
         video.muted = true;              // property AND attribute — autoplay policies want both
         video.setAttribute('muted', '');
         video.playsInline = true;
         video.setAttribute('playsinline', '');
         video.preload = 'metadata';
         // No native controls: the bar sits over the bottom of the phone screen
-        // and hides the very UI the clip is about. Tapping the clip replays it.
-        video.setAttribute('aria-label', slug.replace(/-/g, ' '));
+        // and hides the very UI the clip is about.
+        video.setAttribute('aria-label', slot.dataset.clip.replace(/-/g, ' '));
 
         // A missing clip shouldn't leave a broken-media box: drop the slot and
         // let the entry reflow to full width.
@@ -675,41 +709,67 @@
         screen.appendChild(video);
         frame.appendChild(screen);
         slot.appendChild(frame);
-
-        var caption = document.createElement('button');
-        caption.type = 'button';
-        caption.className = 'docs-clip-caption';
-        caption.textContent = 'Replay';
-        var replay = function () {
-            video.currentTime = 0;
-            video.dataset.played = '';
-            video.play().catch(function () { /* nothing more to do */ });
-        };
-        caption.addEventListener('click', replay);
-        screen.addEventListener('click', replay);
-        slot.appendChild(caption);
+        built.push({ slot: slot, video: video });
     });
 
-    // Play a clip when it scrolls into view, pause when it leaves. One clip is
-    // ~20s and ~300KB, so this stays cheap; reduced-motion users get stills.
+    // Swap both sources if the OS flips light/dark while the page is open.
+    var onThemeChange = function () {
+        built.forEach(function (b) {
+            var wasPlaying = !b.video.paused;
+            b.video.poster = clipUrl(b.slot, 'jpg');
+            b.video.src = clipUrl(b.slot, 'mp4');
+            if (wasPlaying) b.video.play().catch(function () {});
+        });
+    };
+    if (typeof darkQuery.addEventListener === 'function') {
+        darkQuery.addEventListener('change', onThemeChange);
+    } else if (typeof darkQuery.addListener === 'function') {
+        darkQuery.addListener(onThemeChange);   // Safari < 14
+    }
+
+    /*
+     * Playback: loop while on screen, resting on the last frame between passes.
+     *
+     * The rest matters — the last frame is the payoff each clip was choreographed
+     * to end on, and a clip that snaps straight back to the start reads as a
+     * glitch. Looping means a reader who arrives mid-clip doesn't have to hunt
+     * for a replay control, which is why there isn't one.
+     *
+     * Only clips actually on screen play; everything else is paused, so the page
+     * costs about one video at a time no matter how many are on it. Under
+     * prefers-reduced-motion nothing plays at all and the posters stand in.
+     */
+    var REST_MS = 2500;
+
     var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!reduce && 'IntersectionObserver' in window) {
         var io = new IntersectionObserver(function (entries) {
             entries.forEach(function (e) {
                 var v = e.target;
                 if (e.isIntersecting) {
-                    if (v.dataset.played !== 'true') {
-                        v.play().catch(function () { /* autoplay refused — controls still work */ });
+                    v.dataset.onScreen = 'true';
+                    if (v.paused && !v.dataset.resting) {
+                        v.play().catch(function () { /* autoplay refused — poster stands in */ });
                     }
                 } else {
+                    v.dataset.onScreen = '';
                     v.pause();
                 }
             });
-        }, { threshold: 0.6 });
+        }, { threshold: 0.55 });
 
-        document.querySelectorAll('.docs-clip video').forEach(function (v) {
-            // Don't restart a clip every time it scrolls back through view.
-            v.addEventListener('ended', function () { v.dataset.played = 'true'; });
+        built.forEach(function (b) {
+            var v = b.video;
+            v.addEventListener('ended', function () {
+                v.dataset.resting = 'true';
+                setTimeout(function () {
+                    v.dataset.resting = '';
+                    if (v.dataset.onScreen === 'true') {
+                        v.currentTime = 0;
+                        v.play().catch(function () {});
+                    }
+                }, REST_MS);
+            });
             io.observe(v);
         });
     }

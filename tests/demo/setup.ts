@@ -12,18 +12,57 @@
  */
 import { expect, Page } from '@playwright/test';
 import { BACKEND_URL } from '../helpers/constants';
-import { setupCinema } from './cinema';
+import { expectTheme, setupCinema } from './cinema';
 
-/** The fictional roster. Never a real player name — see DEMO_VIDEOS.md. */
+/**
+ * The fictional roster. Never a real player name — see DEMO_VIDEOS.md.
+ *
+ * Twenty-six, not seven: the Line-tab clips are about *choosing* a line out of
+ * a squad, and the scroll beat in qs-03-pick-line needs a list that actually
+ * overflows. Sizing this took measuring rather than guessing — #panelTableContainer
+ * is the scroller (overflow-y: auto) and rows are 33px, so 14 players fit with
+ * room to spare and 22 overflow by 26px, which is less than one row and reads
+ * as a twitch. 26 overflows by ~4 rows, which reads as scrolling. 13 FMP + 13
+ * MMP, so any gender ratio the app can enforce is satisfiable. Names continue
+ * the cryptography-textbook convention the first seven came from.
+ *
+ * Array order keeps the original seven first, so STARTING_SEVEN and every clip
+ * that names Frank or Grace still works. Jersey numbers instead run in
+ * ALPHABETICAL order, because that's how the roster renders — numbered in array
+ * order they came out shuffled on screen (…3 Carol, 23 Craig, 4 Dave…), which
+ * reads as a bug in the app rather than as a squad list.
+ */
 export const ROSTER = [
   { name: 'Alice', number: '1', gender: 'FMP' as const },
   { name: 'Bob', number: '2', gender: 'MMP' as const },
   { name: 'Carol', number: '3', gender: 'FMP' as const },
-  { name: 'Dave', number: '4', gender: 'MMP' as const },
-  { name: 'Eve', number: '5', gender: 'FMP' as const },
-  { name: 'Frank', number: '6', gender: 'MMP' as const },
-  { name: 'Grace', number: '7', gender: 'FMP' as const },
+  { name: 'Dave', number: '5', gender: 'MMP' as const },
+  { name: 'Eve', number: '6', gender: 'FMP' as const },
+  { name: 'Frank', number: '8', gender: 'MMP' as const },
+  { name: 'Grace', number: '9', gender: 'FMP' as const },
+  { name: 'Heidi', number: '10', gender: 'FMP' as const },
+  { name: 'Ivan', number: '11', gender: 'MMP' as const },
+  { name: 'Judy', number: '12', gender: 'FMP' as const },
+  { name: 'Karl', number: '13', gender: 'MMP' as const },
+  { name: 'Liv', number: '14', gender: 'FMP' as const },
+  { name: 'Mallory', number: '15', gender: 'MMP' as const },
+  { name: 'Niaj', number: '16', gender: 'MMP' as const },
+  { name: 'Olivia', number: '17', gender: 'FMP' as const },
+  { name: 'Peggy', number: '19', gender: 'FMP' as const },
+  { name: 'Rupert', number: '20', gender: 'MMP' as const },
+  { name: 'Sybil', number: '21', gender: 'FMP' as const },
+  { name: 'Trent', number: '22', gender: 'MMP' as const },
+  { name: 'Victor', number: '24', gender: 'MMP' as const },
+  { name: 'Wendy', number: '26', gender: 'FMP' as const },
+  { name: 'Walter', number: '25', gender: 'MMP' as const },
+  { name: 'Craig', number: '4', gender: 'MMP' as const },
+  { name: 'Faythe', number: '7', gender: 'FMP' as const },
+  { name: 'Oscar', number: '18', gender: 'MMP' as const },
+  { name: 'Trudy', number: '23', gender: 'FMP' as const },
 ];
+
+/** The seven who take the field in clips that don't care about line selection. */
+export const STARTING_SEVEN = ROSTER.slice(0, 7).map(p => p.name);
 
 export const TEAM_NAME = 'Breakside Demo';
 export const OPPONENT = 'Rivals';
@@ -34,6 +73,7 @@ export async function openApp(page: Page, user: string) {
   await page.goto(`/?testMode=true&testUserId=demo-${user}&api=${BACKEND_URL}`);
   await expect(page.locator('#selectTeamScreen')).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('#splashScreen')).toHaveCount(0, { timeout: 10_000 });
+  await expectTheme(page);
 }
 
 /** Create the demo team (fast path). Leaves us on the Start Game subscreen. */
@@ -73,15 +113,25 @@ export async function beginGame(page: Page, side: 'offense' | 'defense', opponen
   await expect(page.locator('.game-screen-container')).toBeVisible({ timeout: 10_000 });
 }
 
-/** Check every player in the line table (fast path). */
-export async function checkWholeLine(page: Page) {
+/**
+ * Put a legal line on the field (fast path).
+ *
+ * Named for what it used to do — check every row — which stopped being the
+ * same thing when the roster grew past a line's worth. It now checks the
+ * starting seven and clears anyone else, so a clip that just needs a point
+ * running gets 7 players on, not 14.
+ */
+export async function checkWholeLine(page: Page, names: string[] = STARTING_SEVEN) {
   const table = page.locator('#panelActivePlayersTable');
   await expect(table).toBeVisible({ timeout: 10_000 });
   const rows = table.locator('tbody tr');
   const count = await rows.count();
   for (let i = 0; i < count; i++) {
-    const box = rows.nth(i).locator('input[type="checkbox"]');
-    if (!(await box.isChecked())) await box.click();
+    const row = rows.nth(i);
+    const text = (await row.innerText()).trim();
+    const wanted = names.some(n => new RegExp(`\\b${n}\\b`).test(text));
+    const box = row.locator('input[type="checkbox"]');
+    if ((await box.isChecked()) !== wanted) await box.click();
   }
 }
 

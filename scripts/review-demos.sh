@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build review sheets for the recorded demo clips.
 #
-#   ./scripts/review-demos.sh            # all clips in docs/clips
+#   ./scripts/review-demos.sh            # all clips (DEMO_THEME=light|dark, default light)
 #   ./scripts/review-demos.sh qs-04      # one clip, as a per-clip contact sheet
 #
 # Two questions get a clip rejected, and both are answered by looking rather
@@ -16,7 +16,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CLIPS="$ROOT/docs/clips"
+THEME="${DEMO_THEME:-light}"
+CLIPS="$ROOT/docs/clips/$THEME"
 OUT="${DEMO_REVIEW_DIR:-/tmp/breakside-demo-review}"
 ONE="${1:-}"
 
