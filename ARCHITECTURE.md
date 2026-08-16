@@ -1966,9 +1966,19 @@ correct. The role keepalive lives at `/api/games/{id}/ping` but counts as
 game poll inside a bucket three times its size, which is the one number the log
 existed to expose. Change-stamp polls get their own `gamePoll` class for the
 same reason: ~30 bytes against ~6 KB shouldn't read as "we still poll
-constantly". In a game with nothing being recorded, `requests.games` should now
-sit near zero while `requests.controller` continues at the ping cadence; if it
-doesn't, the change gate isn't working.
+constantly". Pushing our own writes is split out as `gameSync` on the same
+principle, and that one was learned the hard way: the first field report after
+F1 shipped was unreadable because the coach had recorded a few events, and a
+coach recording generates syncs whether or not the change gate works — so a
+healthy idle game and a completely broken gate produce the same `games` number.
+
+`games` now means "we pulled the whole game" and nothing else. In a game with
+nothing being recorded it should sit near zero while `requests.controller`
+continues at the ping cadence; if it doesn't, the change gate isn't working.
+**Measure it by sitting in a game and touching nothing** — any recording you do
+during the window lands in `gameSync`, but each of your own writes also triggers
+one legitimate refetch (see POLLING_OPTIMIZATION.md on why that refetch was
+deliberately kept), so an active window still can't isolate the gate.
 
 ### The solo-coach ping backoff
 

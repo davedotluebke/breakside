@@ -134,6 +134,12 @@ function classifyRequest(url) {
     // lumping them in with 'games' would read as "we still poll constantly"
     // when the expensive part is what went away.
     if (path.endsWith('/poll')) return 'gamePoll';
+    // Pushing our own writes is not polling, and counting it as 'games' makes
+    // the one number this log exists for unreadable: a coach recording a point
+    // generates syncs either way, so a healthy idle game and a broken change
+    // gate look identical. Separate, so 'games' means "we pulled the whole
+    // game" and nothing else.
+    if (path.endsWith('/sync')) return 'gameSync';
     if (path.includes('/games')) return 'games';
     if (path.includes('/teams')) return 'teams';
     if (path.includes('/players') || path.includes('/memberships')) return 'roster';
