@@ -23,7 +23,15 @@
 
 <header class="docs-header">
     <div class="docs-header-inner">
-        <a href="/landing/"><img src="/images/logo.wordmark.png" alt="Breakside" class="docs-header-logo"></a>
+        <a href="/landing/" class="docs-header-home">
+            <!-- The wordmark is black-and-orange lettering; on a dark header the
+                 black half disappears, so swap to the light-lettering variant the
+                 app uses (see utils/theme.js). <picture> does it without JS. -->
+            <picture>
+                <source srcset="/images/logo.wordmark.dark.png" media="(prefers-color-scheme: dark)">
+                <img src="/images/logo.wordmark.png" alt="Breakside" class="docs-header-logo">
+            </picture>
+        </a>
         <span class="docs-header-spacer"></span>
         <a href="/landing/" class="docs-header-link">Home</a>
         <a href="/" class="docs-header-link primary">Open app</a>
@@ -356,9 +364,7 @@
                         sideline.
                     </p>
                 </div>
-                <div class="docs-clip" data-clip="field-mode"
-                     data-src="/landing/screens/field-mode-demo.mp4"
-                     data-poster="/landing/screens/field-mode-demo-poster.png"></div>
+                <div class="docs-clip" data-clip="field-01-offense"></div>
             </article>
 
             <article class="docs-entry" id="next-line">

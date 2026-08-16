@@ -7,9 +7,43 @@
    the phone-framed clips.
    ============================================================================= */
 
+/* --- Theme ---------------------------------------------------------------
+   The clips ship in light and dark and the page picks a pair at runtime
+   (see docs.html), so the page itself has to move with them — dark phone
+   screenshots on a white page is the mismatch this whole exercise is about.
+
+   One set of semantic names, defined light and redefined under
+   prefers-color-scheme: dark. The phone bezel and the screen behind the video
+   are deliberately NOT in here: they're a physical object and stay dark in
+   both themes. */
+
+:root {
+    --docs-page: var(--gray-50);
+    --docs-surface: #fff;
+    --docs-line: var(--gray-200);
+    --docs-code-bg: var(--gray-100);
+    --docs-text-strong: var(--gray-900);
+    --docs-text: var(--gray-800);
+    --docs-text-soft: var(--gray-600);
+    --docs-text-faint: var(--gray-500);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --docs-page: #0a0a0a;
+        --docs-surface: #161616;
+        --docs-line: #2a2a2a;
+        --docs-code-bg: #1d1d1d;
+        --docs-text-strong: #f2f2f2;
+        --docs-text: #dcdcdc;
+        --docs-text-soft: #b0b0b0;
+        --docs-text-faint: #8a8a8a;
+    }
+}
+
 body.docs-body {
-    background: var(--gray-50);
-    color: var(--gray-800);
+    background: var(--docs-page);
+    color: var(--docs-text);
     font-family: var(--font-display);
 }
 
@@ -19,8 +53,8 @@ body.docs-body {
     position: sticky;
     top: 0;
     z-index: 50;
-    background: #fff;
-    border-bottom: 1px solid var(--gray-200);
+    background: var(--docs-surface);
+    border-bottom: 1px solid var(--docs-line);
 }
 
 .docs-header-inner {
@@ -43,13 +77,13 @@ body.docs-body {
 .docs-header-link {
     font-size: 0.9rem;
     font-weight: 600;
-    color: var(--gray-600);
+    color: var(--docs-text-soft);
     text-decoration: none;
     padding: var(--space-xs) var(--space-sm);
     border-radius: var(--radius-md);
 }
 
-.docs-header-link:hover { color: var(--brand-orange); background: var(--gray-50); }
+.docs-header-link:hover { color: var(--brand-orange); background: var(--docs-page); }
 
 .docs-header-link.primary {
     color: #fff;
@@ -80,21 +114,21 @@ body.docs-body {
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-size: 0.7rem;
-    color: var(--gray-400);
+    color: var(--docs-text-faint);
     margin-bottom: var(--space-sm);
 }
 
 .docs-rail a {
     display: block;
     padding: 4px 0 4px 10px;
-    color: var(--gray-600);
+    color: var(--docs-text-soft);
     text-decoration: none;
-    border-left: 2px solid var(--gray-200);
+    border-left: 2px solid var(--docs-line);
     line-height: 1.4;
 }
 
 .docs-rail a:hover { color: var(--brand-orange); border-left-color: var(--brand-orange-light); }
-.docs-rail a.section { font-weight: 700; color: var(--gray-800); margin-top: var(--space-md); }
+.docs-rail a.section { font-weight: 700; color: var(--docs-text); margin-top: var(--space-md); }
 .docs-rail a.section:first-child { margin-top: 0; }
 
 /* --- Intro -------------------------------------------------------------- */
@@ -105,11 +139,11 @@ body.docs-body {
     font-size: 2rem;
     line-height: 1.15;
     margin-bottom: var(--space-sm);
-    color: var(--gray-900);
+    color: var(--docs-text-strong);
 }
 
 .docs-intro p {
-    color: var(--gray-600);
+    color: var(--docs-text-soft);
     max-width: 62ch;
     line-height: 1.6;
 }
@@ -128,11 +162,11 @@ body.docs-body {
 
 .docs-section-head h2 {
     font-size: 1.5rem;
-    color: var(--gray-900);
+    color: var(--docs-text-strong);
 }
 
 .docs-section-head p {
-    color: var(--gray-500);
+    color: var(--docs-text-faint);
     font-size: 0.95rem;
     margin-top: 2px;
 }
@@ -144,7 +178,7 @@ body.docs-body {
     grid-template-columns: minmax(0, 1fr) 200px;
     gap: var(--space-xl);
     padding: var(--space-lg) 0;
-    border-top: 1px solid var(--gray-200);
+    border-top: 1px solid var(--docs-line);
     /* Centered, not top-aligned: a short paragraph pinned to the top of a
        380px phone reads as a layout bug rather than as a caption. */
     align-items: center;
@@ -158,13 +192,13 @@ body.docs-body {
 
 .docs-entry h3 {
     font-size: 1.1rem;
-    color: var(--gray-900);
+    color: var(--docs-text-strong);
     margin-bottom: var(--space-sm);
 }
 
 .docs-entry p,
 .docs-entry li {
-    color: var(--gray-600);
+    color: var(--docs-text-soft);
     line-height: 1.65;
     max-width: 60ch;
 }
@@ -177,23 +211,27 @@ body.docs-body {
     gap: 4px;
 }
 
-.docs-entry strong { color: var(--gray-800); font-weight: 600; }
+.docs-entry strong { color: var(--docs-text); font-weight: 600; }
+
+.docs-entry a, .docs-intro a { color: var(--brand-orange); }
 
 .docs-entry code {
     font-family: var(--font-mono);
     font-size: 0.85em;
-    background: var(--gray-100);
-    border: 1px solid var(--gray-200);
+    background: var(--docs-code-bg);
+    border: 1px solid var(--docs-line);
     border-radius: var(--radius-sm);
     padding: 1px 5px;
-    color: var(--gray-700);
+    color: var(--docs-text);
 }
+
+.docs-note a { color: var(--brand-orange); }
 
 .docs-note {
     margin-top: var(--space-md);
     padding: var(--space-sm) var(--space-md);
-    background: #fff;
-    border: 1px solid var(--gray-200);
+    background: var(--docs-surface);
+    border: 1px solid var(--docs-line);
     border-left: 3px solid var(--accent-purple);
     border-radius: var(--radius-md);
     font-size: 0.9rem;
@@ -235,29 +273,11 @@ body.docs-body {
     display: block;
 }
 
-/* Replay affordance — a real button, since the clips carry no native controls. */
-.docs-clip-caption {
-    display: block;
-    width: 100%;
-    margin-top: var(--space-xs);
-    padding: 2px;
-    border: none;
-    background: none;
-    text-align: center;
-    font-family: inherit;
-    font-size: 0.75rem;
-    color: var(--gray-400);
-    cursor: pointer;
-    user-select: none;
-}
-
-.docs-clip-caption:hover { color: var(--brand-orange); }
-
 /* --- Footer ------------------------------------------------------------- */
 
 .docs-footer {
-    border-top: 1px solid var(--gray-200);
-    background: #fff;
+    border-top: 1px solid var(--docs-line);
+    background: var(--docs-surface);
 }
 
 .docs-footer-inner {
@@ -269,10 +289,10 @@ body.docs-body {
     gap: var(--space-md);
     align-items: center;
     font-size: 0.875rem;
-    color: var(--gray-500);
+    color: var(--docs-text-faint);
 }
 
-.docs-footer a { color: var(--gray-600); text-decoration: none; }
+.docs-footer a { color: var(--docs-text-soft); text-decoration: none; }
 .docs-footer a:hover { color: var(--brand-orange); }
 
 /* --- Responsive --------------------------------------------------------- */
@@ -293,8 +313,8 @@ body.docs-body {
     .docs-rail {
         position: sticky;
         top: 0;
-        background: var(--gray-50);
-        border-bottom: 1px solid var(--gray-200);
+        background: var(--docs-page);
+        border-bottom: 1px solid var(--docs-line);
         margin: 0 calc(-1 * var(--space-md));
         padding: var(--space-sm) var(--space-md);
         display: flex;
@@ -311,8 +331,8 @@ body.docs-body {
         white-space: nowrap;
         padding: 4px 10px;
         border-radius: var(--radius-full);
-        background: #fff;
-        border: 1px solid var(--gray-200);
+        background: var(--docs-surface);
+        border: 1px solid var(--docs-line);
     }
 
     .docs-entry {

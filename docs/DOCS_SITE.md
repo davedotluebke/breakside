@@ -11,7 +11,7 @@ stays about the game).
 |------|------|
 | `docs.html` | The page. Copy lives here; clips are built from `data-clip` slugs by the inline script. |
 | `docs.css` | Page layout. Design tokens come from `landing/landing.css`, which the page also loads. |
-| `docs/clips/*.mp4` + `.jpg` | The clips and their posters, produced by `scripts/record-demos.sh`. |
+| `docs/clips/<theme>/*.mp4` + `.jpg` | The clips and their posters, produced by `scripts/record-demos.sh`. Every clip exists in `light/` and `dark/`. |
 | `tests/demo/*.spec.ts` | The choreography that produces them — see DEMO_VIDEOS.md. |
 
 Adding an entry is: write the `<article class="docs-entry">`, give its `.docs-clip` a
@@ -20,9 +20,20 @@ recorded mp4 degrades to a text-only entry at runtime (the `error` handler drops
 slot and the entry reflows to full width), so a half-recorded page is never broken —
 just less illustrated.
 
-`data-src` / `data-poster` on a slot override the path, for reusing a clip that already
-ships elsewhere. The Field-mode entry uses this to point at the landing page's carousel
-video instead of duplicating 760KB.
+`data-src` / `data-poster` on a slot override the path; a `{theme}` placeholder in either
+is substituted at runtime.
+
+**Theme.** The page reads `prefers-color-scheme` to choose `light/` or `dark/`, and swaps
+both sources if the OS setting changes while the page is open. `docs.css` carries a
+matching pair of palettes — dark phone screenshots on a white page is the mismatch the
+two passes exist to avoid. The phone bezel and the screen behind the video stay dark in
+both themes; they're a physical object, not page furniture.
+
+**Playback.** Clips loop while they're on screen, resting ~2.5s on the final frame
+between passes — that frame is the payoff each clip was choreographed to end on. Only
+on-screen clips play, so the page costs about one video at a time. There's no replay
+control because looping makes one unnecessary, and `prefers-reduced-motion` leaves the
+posters up instead.
 
 ## Deliberately not covered
 
@@ -37,7 +48,9 @@ Each of these is a decision, not an oversight. Revisit as they change.
 - **Speech narration** and **Export** are text-only entries — accurate, but no clip.
   Narration needs a real OpenAI + Claude backend and injected audio to record; export
   ends in a file download, which doesn't read as anything on screen.
-- **Field mode in landscape.** Described in text; the clip is the existing portrait
-  landing-page demo. A landscape clip needs a second viewport in the demo config.
+- **Field mode in landscape.** Described in text; the clip is portrait. A landscape clip
+  needs a second viewport in the demo config. (The Field entry used to borrow the landing
+  page's carousel video, which exists only in light — it now has its own clip in both
+  themes, recorded by `tests/demo/field.spec.ts`.)
 - **Scoring from the Full tab** is described but not filmed — `qs-04-we-score` already
   shows the attribution dialog it opens, and the Full-tab clip is about pass entry.

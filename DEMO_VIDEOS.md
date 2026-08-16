@@ -16,16 +16,22 @@ The one-off scaffolding is now permanent:
 | File | What it is |
 |------|-----------|
 | `tests/playwright.demo.config.ts` | Portrait 480×960, `video: 'on'`, `retries: 0`, its own `demo-data-dir`. `testDir: ./demo`, which the default config never looks at. |
+| `DEMO_THEME` | `light` or `dark`, read by `cinema.ts`. Every clip ships in both; the docs page picks a set at runtime from `prefers-color-scheme`. |
 | `tests/demo/cinema.ts` | The style, as code: the orange touch cursor, eased glides, the pacing beats, trim/OK markers. |
 | `tests/demo/setup.ts` | Off-camera setup (team, roster, game, line, pull) — the fast path that gets trimmed out. |
 | `tests/demo/*.spec.ts` | One `test()` per clip. |
 | `scripts/record-demos.sh` | Record, then trim + encode + poster each take into `docs/clips/`. |
 
 ```bash
-./scripts/record-demos.sh                    # everything
-./scripts/record-demos.sh quickstart         # one spec
-./scripts/record-demos.sh details full-02    # one clip (second arg is a -g regex)
+./scripts/record-demos.sh                              # everything, both themes
+./scripts/record-demos.sh quickstart                   # one spec
+./scripts/record-demos.sh details full-02              # one clip (second arg is a -g regex)
+DEMO_THEMES=light ./scripts/record-demos.sh details    # one theme, while iterating
 ```
+
+Output is `docs/clips/<theme>/<clip>.mp4` plus a `.jpg` poster. Both passes run by
+default, so a full re-record is ~40 minutes; while you're getting choreography right,
+record light only and pick up dark at the end.
 
 A clip is a `test()` that ends with `holdEnding(page, '<clip-name>')`. Anatomy:
 
@@ -85,9 +91,11 @@ much cheaper than discovering a renamed selector one failed take at a time.
 These are the elements that make the clips read as a series:
 
 - **Portrait 480×960**, matching the phone-frame presentation on the landing page.
-- **Fictional roster only**: `DEFAULT_PLAYERS` from `tests/helpers/app.ts`
-  (Alice/Bob/Carol/Dave/Eve/Frank/Grace, numbers 1–7), team **"Breakside Demo"**,
-  opponent **"Rivals"**. Never a real player name — see ARCHITECTURE.md's
+- **Fictional roster only**: `ROSTER` in `tests/demo/setup.ts` — 26 players on the
+  cryptography-textbook naming convention (Alice, Bob, Carol, … Trudy), team
+  **"Breakside Demo"**, opponent **"Rivals"**. Twenty-six because the Line-tab clips are
+  about *choosing* a line and need a list that overflows; see the comment on `ROSTER`
+  for why fourteen and twenty-two weren't enough. Never a real player name — see ARCHITECTURE.md's
   fictional-roster convention; the git history was scrubbed of real names and nothing
   may reintroduce one (in text, filenames, commit messages, *or pixels*).
 - **Fake touch cursor**: Playwright videos have no cursor, so inject one via
@@ -200,3 +208,13 @@ will be 200–500KB each, fine for the repo and S3.
 - Staging gets overwritten by sibling sessions constantly — always deploy with a fresh
   `deployLabel` and expect to redeploy. Production (merge to main) is the only stable home.
 - Frontend-only changes need no EC2 restart; the pre-merge hook runs the full e2e suite.
+
+13. **The app's default theme is not a safe thing to inherit.** It changed from light to
+   dark partway through this project, which would have silently re-themed every
+   re-recorded clip. `cinema.ts` writes `display.theme` explicitly and `openApp` asserts
+   `data-theme` on `<html>` matches, so a pass in the wrong palette fails rather than
+   renders.
+14. **The Line table fits the roster; it does not compress it.** `#panelTableContainer` is
+   the scroller and rows are a fixed 33px, so "will it scroll?" is purely a question of
+   how many players there are. Measure before choreographing a scroll — 14 players fit
+   with room to spare and 22 overflow by less than one row.
