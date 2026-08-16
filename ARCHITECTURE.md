@@ -253,7 +253,15 @@ tokens).
 `display.theme` setting (`auto` | `light` | `dark`, stored in the same
 `breakside_advanced_settings` blob as every other Advanced Setting) against
 `prefers-color-scheme` and writes the **resolved** value — never `auto` — to
-`data-theme` on `<html>`. Resolving in JS rather than wrapping the dark block in
+`data-theme` on `<html>`.
+
+The default is **`dark`**, not `auto`: the app is used outdoors on a phone for
+hours at a stretch, so the battery argument wins even for a user whose device
+is set to light. That default is written in *three* places that must agree —
+`getPreference()` in theme.js, the pre-paint copy in `index.html`, and the
+`DEFAULTS` map in [settings/advancedSettings.js](settings/advancedSettings.js).
+A user who has explicitly chosen a theme is unaffected; only "never touched it"
+resolves to the default. Resolving in JS rather than wrapping the dark block in
 a media query means the palette is defined once, and the `<meta name="theme-color">`
 / iOS status-bar style can be kept in agreement with whatever CSS decided.
 

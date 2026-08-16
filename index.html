@@ -55,13 +55,13 @@
          read-and-resolve step, and the two must agree on the storage key. -->
     <script>
         (function () {
-            var pref = 'auto';
+            var pref = 'dark';   // default; see getPreference() in utils/theme.js
             try {
                 var s = JSON.parse(localStorage.getItem('breakside_advanced_settings') || '{}') || {};
                 if (s['display.theme'] === 'light' || s['display.theme'] === 'dark' || s['display.theme'] === 'auto') {
                     pref = s['display.theme'];
                 }
-            } catch (e) { /* private mode / corrupt JSON: fall back to auto */ }
+            } catch (e) { /* private mode / corrupt JSON: fall back to the default */ }
             var dark = pref === 'dark' || (pref === 'auto'
                 && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
             document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');

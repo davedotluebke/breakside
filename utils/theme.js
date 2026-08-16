@@ -49,14 +49,20 @@ const darkQuery = typeof window.matchMedia === 'function'
     ? window.matchMedia('(prefers-color-scheme: dark)')
     : null;
 
-/** The stored preference: 'auto' | 'light' | 'dark'. Defaults to 'auto'. */
+/**
+ * The stored preference: 'auto' | 'light' | 'dark'. Defaults to 'dark' —
+ * the app is used outdoors on a phone for hours at a stretch, and true black
+ * is the battery-cheapest thing to show on an OLED panel, so dark is the
+ * better default even for a user whose device is set to light. Changing this
+ * means changing the pre-paint copy in index.html too.
+ */
 function getPreference() {
     try {
         const store = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {};
         const v = store[SETTING_KEY];
-        return VALID.includes(v) ? v : 'auto';
+        return VALID.includes(v) ? v : 'dark';
     } catch (e) {
-        return 'auto';
+        return 'dark';
     }
 }
 
