@@ -10,6 +10,7 @@ import {
 import { populateCloudTeamsAndGames } from './teamList.js';
 import { showControllerToast } from '../game/controllerState.js';
 import { escapeHtml } from '../utils/gameLogRenderer.js';
+import { isDiagnosticHost } from '../utils/diagnosticSurface.js';
 import { log } from '../utils/logger.js';
 
 function showSetServerDialog() {
@@ -241,7 +242,10 @@ async function showConnectionInfo() {
     // Battery report — what this session actually did. Lives here rather than
     // in its own screen because this overlay is already the "what's going on
     // under the hood" surface, and it's reachable mid-game.
-    const powerLine = window.powerLog
+    //
+    // Developer surfaces only: it's a wall of counters aimed at whoever is
+    // tuning the polling loops, not at a coach on a sideline.
+    const powerLine = (window.powerLog && isDiagnosticSurface())
         ? '<br><button onclick="showPowerReport()" class="update-now-btn">Battery report…</button>'
         : '';
 
@@ -255,6 +259,20 @@ async function showConnectionInfo() {
 }
 
 /**
+ * Is this a surface where developer diagnostics may be shown at all?
+ *
+ * Rules live in utils/diagnosticSurface.js (pure, unit-tested against every
+ * origin including production). This just supplies the two live inputs:
+ * `window._isStaging` is set inline by index.html before any module loads, so
+ * it is already settled by the time this runs.
+ *
+ * @returns {boolean}
+ */
+function isDiagnosticSurface() {
+    return isDiagnosticHost(location.hostname, window._isStaging === true);
+}
+
+/**
  * Show the power/battery report for this session as a copyable toast.
  *
  * The copy button matters more than the display: the useful version of this
@@ -262,6 +280,10 @@ async function showConnectionInfo() {
  * at on a sideline.
  */
 function showPowerReport() {
+    // Re-checked rather than trusting the hidden button: this is reachable as
+    // a global (the button uses an inline onclick), and a stale cached toast
+    // could still carry one after a deploy.
+    if (!isDiagnosticSurface()) return;
     const report = window.powerLog?.formatReport?.();
     if (!report) return;
 
@@ -277,6 +299,7 @@ function showPowerReport() {
 
 /** Copy the power report to the clipboard for pasting into a field report. */
 function copyPowerReport() {
+    if (!isDiagnosticSurface()) return;
     const report = window.powerLog?.formatReport?.();
     if (!report) return;
     const done = () => showControllerToast?.('Battery report copied', 'success', 2000);
