@@ -270,6 +270,20 @@ body {
     gap: var(--space-sm);
 }
 
+/* Plain text link under the hero note — deliberately undecorated, so it reads
+   as a quiet third option rather than a third call to action. */
+.hero-docs-link {
+    margin-top: var(--space-sm);
+    font-size: 0.875rem;
+}
+
+.hero-docs-link a {
+    color: var(--brand-orange-light);
+    text-decoration: none;
+}
+
+.hero-docs-link a:hover { text-decoration: underline; }
+
 .beta-badge {
     background: var(--accent-purple);
     color: white;
@@ -1090,6 +1104,10 @@ body {
 
     .hero-note {
         justify-content: center;
+    }
+
+    .hero-docs-link {
+        text-align: center;
     }
 }
 

@@ -755,7 +755,11 @@
      * prefers-reduced-motion nothing plays at all and the posters stand in.
      */
     var REST_MS = 1600;    // how long the payoff frame holds before the dip
-    var FADE_MS = 320;     // must match .device-shade's transition in docs.css
+    var FADE_MS = 640;     // must match .device-shade's transition in docs.css
+    // Time held at FULL black, between the fade finishing and the fade back up.
+    // The first version had none — it faded down and immediately back up, so
+    // "black" was one instant at the crossover. The rewind happens in here.
+    var BLACK_MS = 640;
 
     var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!reduce && 'IntersectionObserver' in window) {
@@ -792,10 +796,12 @@
                     if (v.dataset.onScreen !== 'true') return cancel();
                     shade.classList.add('on');
                     timers.push(setTimeout(function () {
-                        v.currentTime = 0;
-                        shade.classList.remove('on');
-                        v.dataset.resting = '';
-                        if (v.dataset.onScreen === 'true') v.play().catch(function () {});
+                        v.currentTime = 0;      // rewind while nothing is visible
+                        timers.push(setTimeout(function () {
+                            shade.classList.remove('on');
+                            v.dataset.resting = '';
+                            if (v.dataset.onScreen === 'true') v.play().catch(function () {});
+                        }, BLACK_MS));
                     }, FADE_MS));
                 }, REST_MS));
             });
