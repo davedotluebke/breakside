@@ -826,11 +826,16 @@ document.addEventListener('visibilitychange', async () => {
     // --- Check for ended or stale game before attempting recovery ---
     const game = typeof currentGame === 'function' ? currentGame() : null;
 
+    // Stamp of the payload the recovery pull below applies, handed to the
+    // refresh loop once it has been restarted (see the end of this handler).
+    let recoveredStamp = null;
+
     if (game) {
         // Refresh game data from cloud to detect if another coach ended the game
         if (typeof refreshGameStateFromCloud === 'function') {
             try {
-                await refreshGameStateFromCloud(gameId);
+                const result = await refreshGameStateFromCloud(gameId);
+                if (result?.refreshed) recoveredStamp = result.stamp ?? null;
             } catch (e) {
                 console.warn('🎮 Failed to refresh game state on wake:', e);
             }
@@ -967,6 +972,15 @@ document.addEventListener('visibilitychange', async () => {
     // Restart game state refresh now that recovery is complete
     if (typeof window.startGameStateRefresh === 'function') {
         window.startGameStateRefresh(); // late-bound back-edge (owner game/gameScreenSync.js keeps the shim; import would cycle)
+    }
+
+    // Hand the loop the state we already pulled above, so its first tick
+    // doesn't fetch the identical game again 3 seconds from now. This has to
+    // come AFTER the restart: startGameStateRefresh() clears the stamp on
+    // purpose (a stamp from before a sleep is untrustworthy), so seeding
+    // earlier would simply be wiped.
+    if (recoveredStamp && typeof window.noteGameStateRefreshed === 'function') {
+        window.noteGameStateRefreshed(gameId, recoveredStamp); // late-bound back-edge (owner game/gameScreenSync.js keeps the shim; import would cycle)
     }
 });
 

@@ -185,6 +185,41 @@ whether it stored the body verbatim.
 
 ---
 
+## F5 — one resume, one pull *(done)*
+
+Found by field-testing F1–F4, not by reading the code, and worth recording
+because the *measurement* was what misled us first.
+
+The first two field reports showed `games` climbing ~6/min while the coach sat
+idle, which reads as "the change gate isn't working". It was working. Both
+readings had been taken by backgrounding the app to copy the report to the
+clipboard — and taking a reading is itself an event that generates traffic. A
+local probe settled it: an idle minute with no backgrounding is **59 pings and
+nothing else**; the same minute with one background/restore adds two full-game
+pulls and a controller fetch.
+
+Two, not one, and the second was pure waste. Wake recovery re-fetches the game,
+then restarts the refresh loop; the restart clears the loop's stamp on purpose
+(a stamp from before a sleep is untrustworthy), so its first tick re-pulled the
+identical payload three seconds later.
+
+`GET /api/games/{id}` now carries `X-Game-Stamp`, and recovery hands it to
+`noteGameStateRefreshed()`. See ARCHITECTURE.md § One resume, one pull for the
+four details that make it safe — chiefly that the server stats *before* reading
+(so a race costs a redundant pull, never a missed update) and that the seed must
+come from the same response as the payload.
+
+**Two lessons for the next person measuring this:**
+
+1. **Read the battery report without leaving the app,** and discard any delta
+   that spans a `Backgrounded` increment. The instrument perturbs what it
+   measures.
+2. **`games` vs `gameSync` matters.** They were one bucket at first, so a coach
+   recording a point looked identical to a broken gate. If a report predates
+   that split, it can't answer the question.
+
+---
+
 ## Measuring
 
 `utils/powerLog.js` counts wakeups per loop and requests per subsystem. Read it

@@ -74,6 +74,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Response headers are NOT symmetric with request headers: `allow_headers`
+    # governs what the browser may *send*, and JS can only read a response
+    # header if it is CORS-safelisted or named here. X-Game-Stamp is neither
+    # safelisted nor covered by the wildcard above, so without this the header
+    # arrives on the wire and reads back as null in fetch().
+    expose_headers=["X-Game-Stamp"],
 )
 
 

@@ -262,3 +262,44 @@ class TestPingNamesTheCadence:
 
         assert body["duplicateInstance"] is True
         assert body["pingInterval"] == PING_INTERVAL_MULTI_MS
+
+
+class TestFullGameCarriesItsStamp:
+    """A caller that pulled the whole game shouldn't have to pull it again.
+
+    The wake-recovery path re-fetches the game itself and then restarts the
+    refresh loop, which clears its stamp on purpose — so the loop's first tick
+    used to re-pull the identical payload. The header lets recovery hand over
+    what it already holds.
+    """
+
+    def test_get_game_carries_the_stamp_header(self, client, seeded):
+        _as(COACH)
+        r = client.get(f"/api/games/{GAME_ID}")
+        assert r.status_code == 200
+        assert r.headers.get("X-Game-Stamp")
+
+    def test_header_matches_the_ping_and_poll_stamps(self, client, seeded):
+        """All three have to agree, or seeding from one and comparing against
+        another makes the client refetch forever."""
+        _as(COACH)
+        header = client.get(f"/api/games/{GAME_ID}").headers["X-Game-Stamp"]
+        ping = client.post(f"/api/games/{GAME_ID}/ping").json()["gameStamp"]
+        poll = client.get(f"/api/games/{GAME_ID}/poll").json()["version"]
+        assert header == ping == poll
+
+    def test_header_moves_when_the_game_changes(self, client, seeded):
+        _as(COACH)
+        before = client.get(f"/api/games/{GAME_ID}").headers["X-Game-Stamp"]
+        _touch_game()
+        after = client.get(f"/api/games/{GAME_ID}").headers["X-Game-Stamp"]
+        assert after != before
+
+    def test_body_is_unchanged_by_the_header(self, client, seeded):
+        """The stamp rides in a header precisely so it never becomes part of
+        the game object the client persists and syncs back."""
+        _as(COACH)
+        body = client.get(f"/api/games/{GAME_ID}").json()
+        assert body["id"] == GAME_ID
+        assert "X-Game-Stamp" not in body
+        assert "stamp" not in body

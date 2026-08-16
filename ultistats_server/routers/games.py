@@ -11,6 +11,8 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 
 from ._shared import (
     add_game_to_event,
@@ -107,13 +109,31 @@ async def get_game(game_id: str, user: dict = Depends(require_game_team_access))
     """
     Get current game state.
 
+    Carries the change stamp as `X-Game-Stamp`, so a caller that has just
+    pulled the whole game can tell the in-game refresh loop what it now holds
+    instead of the loop pulling the identical payload again a tick later (the
+    wake-recovery path did exactly that). Same token as the ping's `gameStamp`
+    and the share poll's `version`.
+
+    It's a header rather than a body field on purpose: the body IS the game
+    object, which the client persists and syncs back, so a stamp in there would
+    become part of the game model and eventually be echoed to the server.
+
     Requires: Coach or Viewer access to the game's team.
     """
     if not game_exists(game_id):
         raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
 
+    # Stat BEFORE reading, never after. A write landing in between then makes
+    # the stamp OLDER than the payload we return, so the client re-pulls
+    # needlessly — wasteful but correct. Stat afterwards and the stamp would be
+    # NEWER than the payload, and the client would skip the very update it
+    # describes.
+    stamp = get_game_current_mtime_ns(game_id)
     game_data = get_game_current(game_id)
-    return game_data
+
+    headers = {"X-Game-Stamp": str(stamp)} if stamp is not None else {}
+    return JSONResponse(content=jsonable_encoder(game_data), headers=headers)
 
 
 @router.get("/api/games/{game_id}/poll")

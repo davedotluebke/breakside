@@ -1285,6 +1285,8 @@ async function refreshGameStateFromCloud(gameId) {
     // (offline, fetch failed, or the current game doesn't match gameId).
     const notRefreshed = {
         refreshed: false, scoreChanged: false, pointCountChanged: false, gameJustEnded: false,
+        // No payload was applied, so we hold no stamp to claim.
+        stamp: null,
     };
     if (!isOnline || !gameId) {
         return notRefreshed;
@@ -1296,6 +1298,13 @@ async function refreshGameStateFromCloud(gameId) {
             console.warn('Failed to refresh game state from cloud');
             return notRefreshed;
         }
+
+        // The stamp this payload corresponds to. Returned to the caller so a
+        // wake-recovery pull can tell the refresh loop what it now holds,
+        // instead of the loop pulling the identical game a tick later. Null on
+        // an old server, which reads as "no claim" — the loop then behaves
+        // exactly as it did before.
+        const stamp = response.headers.get('X-Game-Stamp');
 
         const gameData = await response.json();
 
@@ -1349,7 +1358,7 @@ async function refreshGameStateFromCloud(gameId) {
         }
 
         // Return change details so callers can react (e.g. show a toast)
-        return { refreshed: true, scoreChanged, pointCountChanged, gameJustEnded };
+        return { refreshed: true, scoreChanged, pointCountChanged, gameJustEnded, stamp };
 
     } catch (error) {
         console.error('Error refreshing game state:', error);

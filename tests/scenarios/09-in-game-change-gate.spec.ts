@@ -216,4 +216,48 @@ test.describe('in-game change gating', () => {
     expect(elapsed, `propagation took ${elapsed}ms`).toBeLessThan(10_000);
   });
 
+  test('coming back from the background costs ONE full pull, not two', async ({
+    page,
+    request,
+  }) => {
+    /**
+     * Wake recovery re-fetches the game itself, then restarts the refresh
+     * loop — and the restart clears the loop's stamp on purpose, because a
+     * stamp from before a sleep can't be trusted. That used to mean the first
+     * tick pulled the identical payload again ~3s later: two full pulls per
+     * resume, on a phone that gets pocketed all game.
+     *
+     * Recovery now hands over the stamp that came back with its own pull
+     * (the X-Game-Stamp header), so the tick can skip.
+     */
+    const gameId = await coachInSettledGame(page, request, 'Gate Resume Team');
+    await page.waitForTimeout(2_000);
+
+    const fetches = countFullGameFetches(page, gameId);
+
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'hidden', configurable: true,
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await page.waitForTimeout(2_000);
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible', configurable: true,
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    // Long enough for recovery to finish AND for several refresh ticks to run.
+    await page.waitForTimeout(REFRESH_INTERVAL_MS * 4);
+
+    // Exactly one: recovery's own. Nothing changed on the server while we were
+    // away, so no tick has any reason to pull.
+    expect(
+      fetches.count,
+      `resume should cost one full pull; got ${fetches.count}: ${fetches.urls.join(', ')}`,
+    ).toBe(1);
+  });
+
 });

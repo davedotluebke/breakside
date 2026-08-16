@@ -1980,6 +1980,41 @@ during the window lands in `gameSync`, but each of your own writes also triggers
 one legitimate refetch (see POLLING_OPTIMIZATION.md on why that refetch was
 deliberately kept), so an active window still can't isolate the gate.
 
+### One resume, one pull
+
+Wake recovery (`game/controllerState.js`'s `visibilitychange` handler) stops the
+refresh loop, re-fetches the game itself, does role recovery, and restarts the
+loop. The restart clears `lastRefreshedStamp` deliberately — a stamp from before
+a sleep can't be trusted — which meant the loop's first tick pulled the *identical*
+payload again three seconds later. Two full pulls per resume, on a device that
+gets pocketed all game.
+
+`GET /api/games/{id}` now returns its change stamp as **`X-Game-Stamp`**, and
+recovery hands that to `noteGameStateRefreshed()` so the tick can skip. Four
+details are load-bearing:
+
+- **The server stats the file BEFORE reading it.** A write landing in between
+  then makes the stamp older than the payload, so the client re-pulls
+  needlessly — wasteful but correct. Stat *after* the read and the stamp would
+  be newer than the payload, and the client would skip the very update it
+  describes.
+- **The seed must come from the same response as the payload.** Seeding from a
+  later source — the next ping's stamp, say — claims state we never applied and
+  silently drops anything written in between. That is why this needed a server
+  change rather than a client-side variable.
+- **It's a header, not a body field.** The body *is* the game object, which the
+  client persists and syncs back; a stamp in there would become part of the game
+  model and eventually be echoed to the server.
+- **`expose_headers` is required.** Request and response headers are not
+  symmetric in CORS: `allow_headers=["*"]` governs what the browser may *send*,
+  and JS can only read a response header if it is CORS-safelisted or named in
+  `expose_headers`. Without it the header arrives on the wire and reads back as
+  `null` in `fetch()`.
+
+Seeding also has to happen *after* the restart, since `startGameStateRefresh()`
+clears the stamp; seeding before it is simply wiped. `tests/scenarios/09` pins
+the whole thing at one pull per resume.
+
 ### The solo-coach ping backoff
 
 Everything above is about loops the client owns. The controller ping is the

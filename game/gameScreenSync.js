@@ -526,6 +526,29 @@ async function gameStateChanged(gameId) {
 }
 
 /**
+ * Record that someone outside this loop already pulled the whole game, and
+ * which stamp that payload carried.
+ *
+ * Exists for wake recovery. That path deliberately stops the loop, re-fetches
+ * the game itself, and restarts it — and the restart clears the stamp, because
+ * a stamp from before a sleep can't be trusted. The result was two full pulls
+ * of an identical payload per resume: recovery's, then the first tick's. This
+ * lets recovery hand over what it fetched so the tick can skip.
+ *
+ * Only accepts a stamp that came back with the payload it describes (the
+ * `X-Game-Stamp` header). Seeding from a *later* source — the next ping, say —
+ * would claim state we never actually applied, and silently skip any write
+ * that landed in between.
+ *
+ * @param {string} gameId - Game the payload was for; ignored if we've moved on
+ * @param {string|null} stamp - Stamp from the same response, or null to no-op
+ */
+function noteGameStateRefreshed(gameId, stamp) {
+    if (!stamp || !gameId || gameId !== refreshGameId) return;
+    lastRefreshedStamp = normalizeStamp(stamp);
+}
+
+/**
  * Start periodic refresh of game state from cloud.
  * - Active Coach: Only refresh pending line (they push game data, not pull)
  * - Everyone else: Refresh full game state (scores, points, events)
@@ -834,7 +857,7 @@ document.addEventListener('breakside:controller-ui-updated', (e) => {
 export {
     enterGameScreen, exitGameScreen,
     updateGameScreenScore, updateGameLogEvents,
-    startGameStateRefresh, stopGameStateRefresh,
+    startGameStateRefresh, stopGameStateRefresh, noteGameStateRefreshed,
 };
 // window survivor: late-bound back-edge hook (called by game/gameLogic.js,
 // game/pointManagement.js, screens/navigation.js, teams/rosterManagement.js,
@@ -853,6 +876,9 @@ window.startGameStateRefresh = startGameStateRefresh;
 // window survivor: late-bound back-edge hook (called window-qualified by
 // game/controllerState.js)
 window.stopGameStateRefresh = stopGameStateRefresh;
+// window survivor: late-bound back-edge hook (called window-qualified by
+// game/controllerState.js's wake handler, right after it restarts the loop)
+window.noteGameStateRefreshed = noteGameStateRefreshed;
 // Dropped shims (zero external references found): updateGameScreenRoleButtons,
 // updateGameLogPanel, updateGameLogStatus. window.escapeHtml dropped with the
 // G6 renderer merge: escapeHtml now lives in utils/gameLogRenderer.js, which
