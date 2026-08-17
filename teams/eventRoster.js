@@ -7,23 +7,25 @@ import { Gender, generateShortId } from '../store/models.js';
 import {
     currentTeam, currentEvent, setCurrentEvent, deserializeTournamentEvent,
 } from '../store/storage.js';
-import { formatPlayerName, formatPlayTime } from '../utils/helpers.js';
+import { formatPlayerName } from '../utils/helpers.js';
 import {
     loadEventGames, filterGames, getGamesPlayerStats, getGamesRecord,
     getGamesTeamStats, formatGameLabel, sumPlayerStats, formatTeamStatsLine,
 } from '../utils/eventStats.js';
 import { createTableSortController } from '../utils/tableSort.js';
 import { attachStatsColumnHelp } from '../utils/statsHelp.js';
-import {
-    StatsLevel, columnsForLevel, getStatsLevel, wireStatsLevelSelect,
-} from '../utils/statsLevel.js';
+import { getStatsLevel, wireStatsLevelSelect } from '../utils/statsLevel.js';
+import { screenStatsColumns } from '../utils/statsColumns.js';
 import {
     buildStatsSheetAoA, aoaToFormattedSheet, downloadWorkbook,
     uniqueSheetName, safeFilename,
 } from '../utils/xlsxExport.js';
 import { updateEventOnCloud } from '../store/sync.js';
 import { showScreen } from '../screens/navigation.js';
-import { buildRosterRow, formatSigned, formatPercentOrDash } from './rosterRowHelpers.js';
+import { buildRosterRow } from './rosterRowHelpers.js';
+import {
+    wireExportPlayerSelect, exportSelection, exportTitle, exportFilename,
+} from './exportPlayerPicker.js';
 import {
     showEditPlayerDialog, closeEditPlayerDialog, validateJerseyNumber,
 } from './rosterManagement.js';
@@ -44,65 +46,32 @@ let eventRosterSortState = null; // persists sort across re-renders
 // Current scope: {} = everything, {phase} = one phase, {gameId} = one game.
 let eventRosterFilter = {};
 
-/*
- * Stats columns, in table order. `level` matches the Stats menu (see
- * utils/statsLevel.js); `value(ps)` renders a cell from an accumulateGameStats
- * stats object (the Team row passes the summed object, so rates recompute
- * correctly rather than averaging).
+/**
+ * The stats columns the active Stats level shows. The column set itself lives
+ * in utils/statsColumns.js, shared with the Review screen (teams/gameSummary.js)
+ * so the two tables always show the same stats in the same order.
  */
-const EVENT_ROSTER_COLUMNS = [
-    { key: 'pts',      label: 'Pts',      level: StatsLevel.BASIC,    type: 'number',
-      value: ps => ps.pointsPlayed || 0 },
-    { key: 'time',     label: 'Time',     level: StatsLevel.BASIC,    type: 'time',
-      value: ps => (typeof formatPlayTime === 'function' ? formatPlayTime(ps.timePlayed || 0) : '0:00') },
-    { key: 'goals',    label: 'Goals',    level: StatsLevel.BASIC,    type: 'number',
-      value: ps => ps.goals || 0 },
-    { key: 'assists',  label: 'Assists',  level: StatsLevel.BASIC,    type: 'number',
-      value: ps => ps.assists || 0 },
-    { key: 'ha',       label: 'HA',       level: StatsLevel.ADVANCED, type: 'number',
-      value: ps => ps.hockeyAssists || 0 },
-    { key: 'huckHa',   label: 'Huck HA',  level: StatsLevel.ADVANCED, type: 'number',
-      value: ps => ps.huckHockeyAssists || 0 },
-    { key: 'throws',   label: 'Throws',   level: StatsLevel.FULL,     type: 'number',
-      value: ps => ps.totalThrows || 0 },
-    { key: 'compPct',  label: 'Comp%',    level: StatsLevel.ADVANCED, type: 'percentage',
-      value: ps => formatPercentOrDash(ps.completions || 0, ps.totalThrows || 0) },
-    { key: 'huckPct',  label: 'Huck%',    level: StatsLevel.ADVANCED, type: 'percentage',
-      value: ps => formatPercentOrDash(ps.huckCompletions || 0, ps.totalHucks || 0) },
-    { key: 'ds',       label: 'Ds',       level: StatsLevel.ADVANCED, type: 'number',
-      value: ps => ps.dPlays || 0 },
-    { key: 'tos',      label: 'TOs',      level: StatsLevel.ADVANCED, type: 'number',
-      value: ps => ps.turnovers || 0 },
-    { key: 'tas',      label: 'TAs',      level: StatsLevel.FULL,     type: 'number',
-      value: ps => ps.throwaways || 0 },
-    { key: 'drops',    label: 'Drops',    level: StatsLevel.FULL,     type: 'number',
-      value: ps => ps.drops || 0 },
-    { key: 'plusMinus', label: '+/-',     level: StatsLevel.ADVANCED, type: 'number',
-      value: ps => formatSigned(ps.plusMinus || 0) },
-    { key: 'pmPerPt',  label: '..per pt', level: StatsLevel.ADVANCED, type: 'number',
-      value: ps => formatSigned(formatPerPoint(ps)) },
-    { key: 'pulls',    label: 'Pulls',    level: StatsLevel.FULL,     type: 'number',
-      value: ps => ps.pulls || 0 },
-    { key: 'pullQuality', label: 'G/O/P/B', level: StatsLevel.FULL,   type: 'string',
-      value: ps => formatPullQuality(ps) }
-];
-
-/** "+0.33" / "0.0" — +/- per point, preserving the historical zero-point text. */
-function formatPerPoint(ps) {
-    const pts = ps.pointsPlayed || 0;
-    return pts > 0 ? ((ps.plusMinus || 0) / pts).toFixed(2) : '0.0';
-}
-
-/** "3/1/0/1" — good/okay/poor/brick pull counts, or "-" when nothing to show. */
-function formatPullQuality(ps) {
-    const rated = (ps.pullsGood || 0) + (ps.pullsOkay || 0) + (ps.pullsPoor || 0) + (ps.pullsBrick || 0);
-    if (!rated) return '-';
-    return `${ps.pullsGood || 0}/${ps.pullsOkay || 0}/${ps.pullsPoor || 0}/${ps.pullsBrick || 0}`;
-}
-
-/** The stats columns the active Stats level shows. */
 function activeEventRosterColumns() {
-    return columnsForLevel(EVENT_ROSTER_COLUMNS);
+    return screenStatsColumns();
+}
+
+/**
+ * Who the export covers: the checked team players plus every pickup. Pickups
+ * are always in — they were only ever added because they showed up.
+ */
+function attendingEventPlayers() {
+    const roster = currentTeam ? currentTeam.teamRoster : [];
+    return [...roster.filter(p => eventRosterPlayerIds.has(p.id)), ...eventRosterPickups];
+}
+
+/**
+ * Re-populate the export player menu. Called on render and again whenever an
+ * attendance checkbox flips, since that changes who the export would cover
+ * without otherwise redrawing the table.
+ */
+function refreshEventExportPlayers() {
+    wireExportPlayerSelect(
+        document.getElementById('eventRosterExportPlayer'), attendingEventPlayers());
 }
 
 /**
@@ -284,9 +253,12 @@ async function renderEventRosterTable() {
     const hasStats = Object.keys(eventPlayerStats).length > 0;
     const statsColumns = activeEventRosterColumns();
 
-    // Show/hide export button
+    // Show/hide the export button and its player menu
     const exportBtn = document.getElementById('exportEventRosterBtn');
     if (exportBtn) exportBtn.style.display = hasStats ? '' : 'none';
+    const exportPlayerGroup = document.getElementById('eventRosterExportGroup');
+    if (exportPlayerGroup) exportPlayerGroup.style.display = hasStats ? '' : 'none';
+    refreshEventExportPlayers();
 
     // Clear and rebuild after async load
     tbody.innerHTML = '';
@@ -346,6 +318,7 @@ async function renderEventRosterTable() {
             onCheckChange: (checked) => {
                 if (checked) eventRosterPlayerIds.add(player.id);
                 else eventRosterPlayerIds.delete(player.id);
+                refreshEventExportPlayers();
             }
         });
         tbody.appendChild(row);
@@ -609,7 +582,9 @@ function backFromEventRoster() {
  * Export event roster stats to an .xlsx workbook: an "All games" sheet, then
  * one per declared phase, then one per individual game ("v. <opponent>").
  * Only checked team players are included; pickups always export. Columns
- * follow whatever the Stats menu is set to at export time.
+ * follow whatever the Stats menu is set to at export time, and the player menu
+ * beside the button can narrow every sheet to a single player's row (the Team
+ * totals and breaks/holds footers still cover the whole squad).
  */
 async function exportEventRosterXLSX() {
     const event = currentEventRosterEvent;
@@ -619,10 +594,8 @@ async function exportEventRosterXLSX() {
     if (exportBtn) { exportBtn.disabled = true; exportBtn.textContent = 'Building…'; }
 
     try {
-        // Build the attending-players list once (checked team + pickups)
-        const roster = currentTeam ? currentTeam.teamRoster : [];
-        const attendingTeamPlayers = roster.filter(p => eventRosterPlayerIds.has(p.id));
-        const players = [...attendingTeamPlayers, ...eventRosterPickups];
+        const { player, sheetPlayers, totalsPlayers } = exportSelection(
+            document.getElementById('eventRosterExportPlayer'), attendingEventPlayers());
 
         // Reuse the games the screen already loaded when they're for this event.
         const allGames = (cachedEventGames && cachedEventGames.eventId === event.id)
@@ -644,13 +617,14 @@ async function exportEventRosterXLSX() {
             if (spec.skipIfEmpty && teamStats.total === 0) continue;
 
             const playerStats = getGamesPlayerStats(games);
-            const title = `${event.name} — ${spec.label}`;
-            const aoa = buildStatsSheetAoA(players, playerStats, teamStats, { titleRow: title, level });
+            const titleRow = exportTitle(player, `${event.name} — ${spec.label}`);
+            const aoa = buildStatsSheetAoA(sheetPlayers, playerStats, teamStats,
+                { titleRow, level, totalsPlayers });
             const ws = aoaToFormattedSheet(aoa);
             XLSX.utils.book_append_sheet(wb, ws, uniqueSheetName(spec.label, usedSheetNames));
         }
 
-        downloadWorkbook(wb, `${safeFilename(event.name)}-stats.xlsx`);
+        downloadWorkbook(wb, `${safeFilename(exportFilename(player, event.name))}-stats.xlsx`);
     } catch (e) {
         console.error('Event xlsx export failed:', e);
         alert('Export failed: ' + e.message);
