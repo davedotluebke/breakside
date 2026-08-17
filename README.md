@@ -25,6 +25,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 
 * [Install Breakside](#installation) by navigating to the Breakside website on a phone and choosing `Add to home screen`
 * Launch Breakside from the icon on the home screen
+* Sign up for a free account (email/password or Google). Breakside requires an account — teams and games live in your account so they survive a lost phone and can be shared with your other coaches
 * Create a new team and give it a name
 * Add a bunch of players (tap the `Add player` box and enter their name, then hit enter or tap the `+` button)
 * Start a game! Enter the opponent name and indicate whether your team is starting on Offense or Defense
@@ -93,7 +94,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 - **Resizable Panel Layout** - In the All tab, drag-to-resize panels let you balance Play-by-Play, Next Line, and Game Log to your preference
 - **Responsive Design** - Optimized for both mobile and desktop use
 - **Touch-Optimized** - Large buttons and gestures designed for sideline use
-- **Offline Capability** - Full functionality without internet connection
+- **Offline Capability** - Once you're signed in, record a whole tournament with no signal; everything syncs when you reconnect. Signing in itself needs a connection
 - **Dark Theme** - The default. True black, so on an OLED phone the unlit pixels draw no power — a battery strategy as much as a look. Switch to Light, or to Auto to follow the phone, in Advanced Settings
 
 </details>
@@ -187,7 +188,7 @@ The app uses a hierarchical data model to track comprehensive game statistics:
 - **Network-First Strategy** - Optimized loading with fallback to cached content
 - **Automatic Updates** - Service worker checks for updates on load and every 5 minutes; tap Online status to see version and manually trigger update
 - **Responsive CSS** - Mobile-first design with touch-optimized interactions
-- **Offline-First** - Works fully offline, syncs when connected
+- **Offline-First** - Games record to local storage first and sync when connected, so a dropped signal never interrupts recording. Requires a signed-in account; there is currently no account-free local mode
 - **Sleep/Wake Recovery** - Seamless game session recovery when the phone sleeps, the user switches apps, or takes a phone call. Uses the Page Visibility API to detect wake events, re-claim expired controller roles, and refresh game state automatically. Detects if the game was ended by another coach while away, or if the game has been idle for 6+ hours.
 
 ### Browser Support

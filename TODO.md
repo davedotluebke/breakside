@@ -921,6 +921,27 @@ Remaining work:
 
 ---
 
+### Docs site (`/docs.html`) — nice-someday clips
+
+Both were considered during the 2026-08 build and deliberately skipped; the page
+covers each in text today. See `docs/DOCS_SITE.md` for what else is uncovered
+and why, and DEMO_VIDEOS.md for how to record.
+
+- [ ] **Field mode in landscape.** The Field entry's clip is portrait; the text
+      describes the landscape takeover (full-screen field, app chrome gone,
+      long-press the attack/defend/home/away labels to flip perspective) without
+      showing it. Needs a second viewport in `tests/playwright.demo.config.ts` —
+      the demo config is portrait 480×960 throughout, and the docs page frames
+      every clip as a 1:2 phone, so a landscape clip needs its own frame styling
+      in `docs.css` too. Both themes, as with everything else there.
+- [ ] **Speech narration.** The only Advanced entry with no clip. Recording it
+      needs a live OpenAI Realtime + Claude backend and audio injected into the
+      page (Chromium's `--use-file-for-fake-audio-capture`, plus a Playwright
+      launch arg the demo config doesn't currently set), and the transcription
+      round-trip makes the take slow and non-deterministic in a way the rest of
+      the series isn't. Worth doing when narration itself is stable enough that
+      a scripted phrase reliably produces the same events twice.
+
 ## Future Enhancements
 
 Bigger asks, deferred until current themes settle.

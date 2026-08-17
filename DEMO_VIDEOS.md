@@ -1,13 +1,63 @@
 # Demo / Tutorial Videos — Production Recipe
 
-How the Field-mode demo video (`landing/screens/field-mode-demo.mp4`, the hero-carousel
-finale and the "Watch a point unfold" lightbox) was made, written as a handoff so future
-sessions can produce more videos in the **same style** — e.g. a series of short
-per-feature tutorial clips for a documentation site.
+How the demo and tutorial clips are made, in the **same style** across the series: the
+Field-mode demo (`landing/screens/field-mode-demo.mp4`, the hero-carousel finale and the
+"Watch a point unfold" lightbox) and the per-feature clips on the docs page
+(`docs/clips/*.mp4`, shown at `/docs.html`).
 
-The original was produced 2026-08 in a single session, two takes. It shows one offense
-point in Field mode: pickup, swing, cross-field swing, reset, swing, huck, endzone score
-with attribution, ending on the field with the score at 1–0.
+The Field-mode original was produced 2026-08 in a single session, two takes. It shows one
+offense point in Field mode: pickup, swing, cross-field swing, reset, swing, huck, endzone
+score with attribution, ending on the field with the score at 1–0.
+
+## Making a new clip (the short version)
+
+The one-off scaffolding is now permanent:
+
+| File | What it is |
+|------|-----------|
+| `tests/playwright.demo.config.ts` | Portrait 480×960, `video: 'on'`, `retries: 0`, its own `demo-data-dir`. `testDir: ./demo`, which the default config never looks at. |
+| `DEMO_THEME` | `light` or `dark`, read by `cinema.ts`. Every clip ships in both; the docs page picks a set at runtime from `prefers-color-scheme`. |
+| `tests/demo/cinema.ts` | The style, as code: the orange touch cursor, eased glides, the pacing beats, trim/OK markers. |
+| `tests/demo/setup.ts` | Off-camera setup (team, roster, game, line, pull) — the fast path that gets trimmed out. |
+| `tests/demo/*.spec.ts` | One `test()` per clip. |
+| `scripts/record-demos.sh` | Record, then trim + encode + poster each take into `docs/clips/`. |
+
+```bash
+./scripts/record-demos.sh                              # everything, both themes
+./scripts/record-demos.sh quickstart                   # one spec
+./scripts/record-demos.sh details full-02              # one clip (second arg is a -g regex)
+DEMO_THEMES=light ./scripts/record-demos.sh details    # one theme, while iterating
+```
+
+Output is `docs/clips/<theme>/<clip>.mp4` plus a `.jpg` poster. Both passes run by
+default, so a full re-record is ~40 minutes; while you're getting choreography right,
+record light only and pick up dark at the end.
+
+A clip is a `test()` that ends with `holdEnding(page, '<clip-name>')`. Anatomy:
+
+```ts
+test('qs-04-we-score', async ({ page }) => {
+  const t0 = Date.now();
+  await makeTeamWithRoster(page, 'qs04');       // off camera
+  await beginGame(page, 'offense');
+  await checkWholeLine(page);
+  await goToTab(page, 'simple');
+  await startPoint(page);
+  await page.waitForTimeout(SYNC_ECHO_WAIT);
+  resetCursor();
+  await markTrim(page, t0, 'qs-04-we-score');   // ← everything above is cut
+
+  await tap(page, '#pbpWeScoreBtn', { after: BEAT.notable });
+  await expect(page.locator('#scoreAttributionDialog')).toBeVisible();
+  // ...
+  await holdEnding(page, 'qs-04-we-score');     // hold the payoff, mark the take good
+});
+```
+
+`markTrim` prints `DEMO_TRIM_MS[<clip>]=<ms>`; `holdEnding` prints `DEMO_OK[<clip>]`. The
+cutter needs **both** — a take that died halfway still leaves a `video.webm` and a trim
+line behind, and cutting that ships truncated footage from a run that looked green.
+Without a `DEMO_OK` the previous `docs/clips/<clip>.mp4` is left alone.
 
 ## Pipeline overview
 
@@ -28,19 +78,24 @@ auto-started frontend + auth-disabled backend (ports derive per worktree), a wip
    the choreography with human pacing (details below).
 3. **Post-production** — trim the setup, encode mp4, extract a poster, review frames.
 
-For the original one-off, both files were temporary and deleted after. **For a tutorial
-series, promote them to permanent files in a worktree** (e.g. `tests/demo/` + a committed
-`playwright.demo.config.ts`), parameterized per video — but keep them excluded from the
-default config's `testDir`/`testMatch` so the e2e suite and pre-merge hook never run them.
+For the original one-off, both files were temporary and deleted after. They are now
+committed (`tests/demo/`, `tests/playwright.demo.config.ts`) and stay outside the default
+config's `testDir`, so the e2e suite and the pre-merge hook never run them.
+
+`tests/demo/_scout.spec.ts` is not a clip — it's a screenshot sweep of every screen the
+clips visit, at the recording viewport. Re-run it when the UI moves; reading its output is
+much cheaper than discovering a renamed selector one failed take at a time.
 
 ## The style (consistency checklist)
 
 These are the elements that make the clips read as a series:
 
 - **Portrait 480×960**, matching the phone-frame presentation on the landing page.
-- **Fictional roster only**: `DEFAULT_PLAYERS` from `tests/helpers/app.ts`
-  (Alice/Bob/Carol/Dave/Eve/Frank/Grace, numbers 1–7), team **"Breakside Demo"**,
-  opponent **"Rivals"**. Never a real player name — see ARCHITECTURE.md's
+- **Fictional roster only**: `ROSTER` in `tests/demo/setup.ts` — 26 players on the
+  cryptography-textbook naming convention (Alice, Bob, Carol, … Trudy), team
+  **"Breakside Demo"**, opponent **"Rivals"**. Twenty-six because the Line-tab clips are
+  about *choosing* a line and need a list that overflows; see the comment on `ROSTER`
+  for why fourteen and twenty-two weren't enough. Never a real player name — see ARCHITECTURE.md's
   fictional-roster convention; the git history was scrubbed of real names and nothing
   may reintroduce one (in text, filenames, commit messages, *or pixels*).
 - **Fake touch cursor**: Playwright videos have no cursor, so inject one via
@@ -91,10 +146,15 @@ will be 200–500KB each, fine for the repo and S3.
    played out one player off. Assert the app's own feedback after each action (Field mode:
    `.fp-statusbar` shows `"<name> has the disc"`) so a broken take **fails fast** instead
    of rendering. This is the single most important lesson.
-2. **The post-Start-Point sync echo eats the first gesture.** ~3–5s after starting a
-   point, a cloud-sync refresh ("Another coach updated the game" toast) replaces
-   `game.points` and discards in-flight entry state. Wait ~4.5s after Start Point before
-   the first gesture (also lets the toast clear the frame).
+2. **The cloud refresh eats gestures — and it recurs.** ~3–5s after starting a point, a
+   sync refresh ("Another coach updated the game" toast) replaces `game.points` and
+   discards in-flight entry state. Wait ~4.5s after Start Point (`SYNC_ECHO_WAIT`) before
+   the first gesture — but note this is not a one-off: the refresh runs on
+   `sync.refreshIntervalSec` (default **10s**), so any clip with more than ~10s of
+   choreography will eventually land a tap inside one and lose it. It presents as a tap
+   that visibly happened and did nothing, one clip in several, in a different place each
+   time. `cinema.ts` pins the interval to 120s (the setting's clamped maximum) in its init
+   script; don't remove that.
 3. **Field-mode drags record above the finger.** A chip drop lands `DRAG_LIFT_PX` (56px)
    *above* the pointer (the pegman's ✕). End the mouse 56px below the intended spot.
 4. **Field-mode modifiers are geometry-driven.** Huck/Reset/Swing chips light automatically
@@ -109,6 +169,30 @@ will be 200–500KB each, fine for the repo and S3.
 7. Portrait Field-mode orientation: first point attacks **up** (top of screen); attack
    direction flips each point. Endzone boundaries for a 20yd endzone on a 110yd field:
    goal lines at 18.2% and 81.8% of field height.
+8. **Every tab has its own Start Point button.** `#pbpStartPointBtn` (Simple/All),
+   `#fullPbpStartPointBtn`, `#lineTabStartPointBtn`, `#fpStartPointBtn` (Field). Clicking
+   the wrong one waits on a hidden element until the test times out — minutes of nothing,
+   with no error until the end. `setup.ts`'s `startPoint()` picks whichever is visible;
+   use it off-camera. On camera, name the one that belongs to the tab you're filming.
+9. **`playwright.demo.config.ts` sets `outputDir: demo-results`, and Playwright wipes that
+   directory at the start of every run.** Anything you want to survive the run (the
+   recording log the cutter parses) has to live outside it.
+10. **Parsing `DEMO_TRIM_MS[clip]=ms` in bash:** `${line#DEMO_TRIM_MS[}` reads the bracket
+   as a glob character class and eats a wrong-length prefix — silently, and differently on
+   each line, so the first clip cuts fine and later ones "have no take". Use `sed -nE`. Then
+   strip ANSI first: the list reporter's cursor escapes interleave with the tests' stdout
+   *mid-line*, so the extracted name can have an escape sequence buried inside it.
+11. **`ffmpeg -ss` must come AFTER `-i` for these takes.** Playwright's VP8 webm has no
+   duration header and sparse keyframes; input-side seeking makes ffmpeg stop early and
+   the encoded clip ends several seconds before the payoff — a clean-looking mp4 that is
+   simply missing its ending. Output-side seeking decodes from the start and is
+   frame-accurate; at 30s that costs nothing.
+12. **A tap can land and do nothing.** The game screen re-renders on a 3s timer
+   (`startGameStateRefresh`). If that fires between a manual `mouse.down()` and
+   `mouse.up()`, the two events have different targets, the browser dispatches no `click`,
+   and the handler never runs — the video shows a press with no result, in a different
+   place each take. Glide the cursor by hand, but press with `locator.click({delay})`,
+   which re-resolves and retries when the DOM moves under it.
 
 ## Publishing lessons (landing-page integration)
 
@@ -124,3 +208,13 @@ will be 200–500KB each, fine for the repo and S3.
 - Staging gets overwritten by sibling sessions constantly — always deploy with a fresh
   `deployLabel` and expect to redeploy. Production (merge to main) is the only stable home.
 - Frontend-only changes need no EC2 restart; the pre-merge hook runs the full e2e suite.
+
+13. **The app's default theme is not a safe thing to inherit.** It changed from light to
+   dark partway through this project, which would have silently re-themed every
+   re-recorded clip. `cinema.ts` writes `display.theme` explicitly and `openApp` asserts
+   `data-theme` on `<html>` matches, so a pass in the wrong palette fails rather than
+   renders.
+14. **The Line table fits the roster; it does not compress it.** `#panelTableContainer` is
+   the scroller and rows are a fixed 33px, so "will it scroll?" is purely a question of
+   how many players there are. Measure before choreographing a scroll — 14 players fit
+   with room to spare and 22 overflow by less than one row.

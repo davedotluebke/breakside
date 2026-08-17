@@ -270,6 +270,21 @@ body {
     gap: var(--space-sm);
 }
 
+/* Plain sentence under the hero note — deliberately undecorated, so it reads as
+   a quiet third option rather than a third call to action. */
+.hero-docs-link {
+    margin-top: var(--space-sm);
+    font-size: 0.875rem;
+    color: var(--gray-500);
+}
+
+.hero-docs-link a {
+    color: var(--brand-orange-light);
+    text-decoration: none;
+}
+
+.hero-docs-link a:hover { text-decoration: underline; }
+
 .beta-badge {
     background: var(--accent-purple);
     color: white;
@@ -715,6 +730,28 @@ body {
     margin-top: var(--space-xl);
     padding-top: var(--space-lg);
     border-top: 1px solid var(--gray-700);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    justify-content: center;
+    align-items: center;
+}
+
+/* Pointer to /docs.html, under the CTA row. */
+.quickstart-docs-note {
+    margin-top: var(--space-md);
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--gray-400);
+}
+
+.quickstart-docs-note a {
+    color: var(--brand-orange-light);
+    text-decoration: none;
+}
+
+.quickstart-docs-note a:hover {
+    text-decoration: underline;
 }
 
 /* =============================================================================
@@ -1068,6 +1105,10 @@ body {
 
     .hero-note {
         justify-content: center;
+    }
+
+    .hero-docs-link {
+        text-align: center;
     }
 }
 

@@ -44,6 +44,14 @@ tests/sweep/shots/
 tests/sweep/test-results/
 tests/test-data-dir/
 
+# Demo-video recording artifacts (playwright.demo.config.ts). The finished mp4s
+# are committed under docs/clips/; the raw webm takes and the throwaway backend
+# data the demo specs create are not.
+tests/demo-results/
+tests/demo-data-dir/
+# The recorder's own transcript — the cutter reads it, nobody else needs it.
+tests/.demo-record*.log
+
 # Per-session local backend data copies (scripts/dev-backend.sh)
 .dev-data/
 
@@ -57,3 +65,8 @@ tests/test-data-dir/
 # sharing across all sessions, add it back deliberately with
 # `git add -f .claude/launch.json`.
 .claude/launch.json
+
+# Session scratch (scout screenshots, working files). Never shipped — note
+# that deploy-excludes.txt does not cover it, so a tracked scratchpad/ would
+# sync straight to the S3 bucket.
+scratchpad/
