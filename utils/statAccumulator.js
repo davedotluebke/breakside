@@ -35,6 +35,17 @@ function accumulateGameStats(game, stats) {
                 plusMinus: 0,
                 pointsWon: 0,
                 pointsLost: 0,
+                // +/- split by which line the point started on, so an O-line
+                // player's rating isn't diluted by their D-line points (and
+                // vice versa). O/D is the point's startingPosition, read the
+                // same way classifyPoint reads it — anything not 'offense'
+                // counts as a D point — so pointsPlayedO + pointsPlayedD
+                // always equals pointsPlayed and the per-point rates below
+                // have exact denominators.
+                pointsPlayedO: 0,
+                pointsPlayedD: 0,
+                plusMinusO: 0,
+                plusMinusD: 0,
                 completions: 0,
                 huckCompletions: 0,
                 totalThrows: 0,
@@ -74,6 +85,7 @@ function accumulateGameStats(game, stats) {
         const pointPlayers = point.players || [];
         const pointDuration = point.totalPointTime || 0;
         const isWin = point.winner === 'team' || point.winner === Role.TEAM;
+        const startedOnO = point.startingPosition === 'offense';
 
         pointPlayers.forEach(playerName => {
             const id = resolveName(playerName);
@@ -82,12 +94,18 @@ function accumulateGameStats(game, stats) {
             const s = ensurePlayer(id, resolveName.nameOf(id) || playerName);
             s.pointsPlayed++;
             s.timePlayed += pointDuration;
+            if (startedOnO) s.pointsPlayedO++;
+            else s.pointsPlayedD++;
             if (isWin) {
                 s.pointsWon++;
                 s.plusMinus++;
+                if (startedOnO) s.plusMinusO++;
+                else s.plusMinusD++;
             } else {
                 s.pointsLost++;
                 s.plusMinus--;
+                if (startedOnO) s.plusMinusO--;
+                else s.plusMinusD--;
             }
         });
 
@@ -180,6 +198,7 @@ const SUMMABLE_STAT_FIELDS = [
     'hockeyAssists', 'huckHockeyAssists',
     'completions', 'totalThrows', 'huckCompletions', 'totalHucks',
     'dPlays', 'turnovers', 'throwaways', 'drops', 'plusMinus',
+    'pointsPlayedO', 'pointsPlayedD', 'plusMinusO', 'plusMinusD',
     'pointsWon', 'pointsLost',
     'pulls', 'pullsGood', 'pullsOkay', 'pullsPoor', 'pullsBrick'
 ];

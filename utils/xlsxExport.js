@@ -7,45 +7,16 @@
  */
 
 import { formatTeamStatsLine, sumPlayerStats } from './eventStats.js';
-import { getStatsLevel, columnsForLevel, StatsLevel } from './statsLevel.js';
+import { getStatsLevel } from './statsLevel.js';
+import { sheetStatsColumns } from './statsColumns.js';
 
-/*
- * Column descriptors, in sheet order. `level` mirrors the on-screen stats
- * menu (see utils/statsLevel.js) — columns with no level always export.
- * `width` feeds !cols; `fmt` drives the Excel number format ('pct', 'dec2').
- * `value(ps)` pulls the cell out of an accumulateGameStats stats object.
+/**
+ * The column specs a sheet exports, honouring the active stats level. The
+ * specs themselves live in utils/statsColumns.js beside the on-screen column
+ * list, so the two can't drift unnoticed.
  */
-const STATS_COLUMN_SPECS = [
-    { label: 'Name',       width: 22, value: (ps, name) => name },
-    { label: 'Pts',        width: 6,  level: StatsLevel.BASIC,    value: ps => ps.pointsPlayed || 0 },
-    { label: 'Minutes',    width: 9,  level: StatsLevel.BASIC,    fmt: 'dec2',
-      value: ps => (ps.timePlayed || 0) > 0 ? +((ps.timePlayed || 0) / 60000).toFixed(2) : 0 },
-    { label: 'Goals',      width: 7,  level: StatsLevel.BASIC,    value: ps => ps.goals || 0 },
-    { label: 'Assists',    width: 8,  level: StatsLevel.BASIC,    value: ps => ps.assists || 0 },
-    { label: 'HA',         width: 5,  level: StatsLevel.ADVANCED, value: ps => ps.hockeyAssists || 0 },
-    { label: 'Huck HA',    width: 9,  level: StatsLevel.ADVANCED, value: ps => ps.huckHockeyAssists || 0 },
-    { label: 'Throws',     width: 8,  level: StatsLevel.FULL,     value: ps => ps.totalThrows || 0 },
-    { label: 'Comp%',      width: 8,  level: StatsLevel.ADVANCED, fmt: 'pct',
-      value: ps => (ps.totalThrows || 0) > 0 ? +((ps.completions || 0) / ps.totalThrows).toFixed(4) : null },
-    { label: 'Huck%',      width: 8,  level: StatsLevel.ADVANCED, fmt: 'pct',
-      value: ps => (ps.totalHucks || 0) > 0 ? +((ps.huckCompletions || 0) / ps.totalHucks).toFixed(4) : null },
-    { label: 'Ds',         width: 5,  level: StatsLevel.ADVANCED, value: ps => ps.dPlays || 0 },
-    { label: 'TOs',        width: 5,  level: StatsLevel.ADVANCED, value: ps => ps.turnovers || 0 },
-    { label: 'Throwaways', width: 11, level: StatsLevel.FULL,     value: ps => ps.throwaways || 0 },
-    { label: 'Drops',      width: 7,  level: StatsLevel.FULL,     value: ps => ps.drops || 0 },
-    { label: '+/-',        width: 6,  level: StatsLevel.ADVANCED, value: ps => ps.plusMinus || 0 },
-    { label: '+/- per pt', width: 11, level: StatsLevel.ADVANCED,
-      value: ps => (ps.pointsPlayed || 0) > 0 ? +((ps.plusMinus || 0) / ps.pointsPlayed).toFixed(3) : 0 },
-    { label: 'Pulls',      width: 7,  level: StatsLevel.FULL,     value: ps => ps.pulls || 0 },
-    { label: 'Good',       width: 6,  level: StatsLevel.FULL,     value: ps => ps.pullsGood || 0 },
-    { label: 'Okay',       width: 6,  level: StatsLevel.FULL,     value: ps => ps.pullsOkay || 0 },
-    { label: 'Poor',       width: 6,  level: StatsLevel.FULL,     value: ps => ps.pullsPoor || 0 },
-    { label: 'Brick',      width: 6,  level: StatsLevel.FULL,     value: ps => ps.pullsBrick || 0 }
-];
-
-/** The column specs a sheet exports, honouring the active stats level. */
 function statsColumnsFor(level) {
-    return columnsForLevel(STATS_COLUMN_SPECS, level || getStatsLevel());
+    return sheetStatsColumns(level || getStatsLevel());
 }
 
 /**
@@ -67,13 +38,17 @@ function aggregateTotalsRow(label, perPlayerPs, cols) {
  * Build a 2D array for one stats sheet: header row, one row per player,
  * Team aggregate row, optional blank + footer block (e.g., team-stats line).
  *
- * @param {Array<object>} players - roster: {id, name, gender?, number?}
+ * @param {Array<object>} players - the rows to write: {id, name, gender?, number?}
  * @param {object} playerStats - map of playerId → ps
  * @param {object} [teamStats] - output of getGameTeamStats (drives footer)
  * @param {object} [opts]
  * @param {string} [opts.titleRow] - optional title above the table
  * @param {string} [opts.level] - stats level ('basic'|'advanced'|'full');
  *   defaults to whatever the roster screens' Stats menu is set to
+ * @param {Array<object>} [opts.totalsPlayers] - the roster the Team row sums,
+ *   when it differs from the rows written. A single-player export passes one
+ *   player as `players` and the whole roster here, so the sheet a coach hands
+ *   to one player still shows what the team did — without listing anyone else.
  * @returns {{aoa: Array<Array>, autofilterRef: string, cols: Array<object>}}
  *   the 2D array, the A1-style range covering the header row + player rows (so
  *   the caller can scope an AutoFilter to just the sortable table, excluding
@@ -88,17 +63,15 @@ function buildStatsSheetAoA(players, playerStats, teamStats, opts = {}) {
     const headerRowIdx = aoa.length;   // 0-based row of the column headers
     aoa.push(cols.map(c => c.label));
 
-    const psList = [];
     players.forEach(p => {
-        const ps = playerStats[p.id] || {};
-        psList.push(ps);
-        aoa.push(buildPlayerStatsRow(p.name, ps, cols));
+        aoa.push(buildPlayerStatsRow(p.name, playerStats[p.id] || {}, cols));
     });
     const lastPlayerRowIdx = aoa.length - 1; // 0-based; == headerRowIdx if no players
 
     // Team aggregate row (kept OUTSIDE the autofilter range so it stays put
     // when the user sorts the player rows)
-    aoa.push(aggregateTotalsRow('Team', psList, cols));
+    const totalsRoster = opts.totalsPlayers || players;
+    aoa.push(aggregateTotalsRow('Team', totalsRoster.map(p => playerStats[p.id] || {}), cols));
 
     // Team-stats footer (breaks/holds)
     if (teamStats && teamStats.total > 0) {

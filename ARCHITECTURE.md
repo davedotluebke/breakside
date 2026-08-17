@@ -82,6 +82,9 @@ ultistats/
 │   ├── eventStats.js       # Player + team stat aggregation (goals, assists,
 │   │                       # hockey assists, breaks/holds), event/phase filters
 │   ├── statsHelp.js        # Long-press column-header help modal for stats tables
+│   ├── statsLevel.js       # Basic/Advanced/Full stats menu (persisted setting)
+│   ├── statsColumns.js     # The stats columns — one definition, every table
+│   │                       # and every .xlsx export
 │   ├── tableSort.js        # Click-to-sort controller for on-screen stats tables
 │   └── xlsxExport.js       # Excel (.xlsx) export builders (SheetJS-backed)
 │
@@ -1131,17 +1134,70 @@ The whole feature is **invisible until a team opts in**.
 - **Silent for everyone else.** Nothing is emitted when no possession carries a
   set, so a team that never opted in sees byte-identical output everywhere.
 
+### Stats Columns (one definition, every table)
+
+Three screens show a roster + stats table, and each can export the same table to
+.xlsx:
+
+| Screen | Reached from |
+|--------|--------------|
+| Event Roster + Stats | the **Event roster + stats** button on an event header |
+| Review | the **Review** button on a completed game in the team/event list |
+| Team Roster + Stats | Edit Roster |
+
+Each pairs its table with a toolbar row holding the **Stats:** level menu and an
+**Export:** player menu (see Single-player exports below).
+
+They all read their columns from **`utils/statsColumns.js`**, which holds two
+lists side by side: `STATS_COLUMNS` (what the tables render — display strings
+like `12:30`, `67%`, `+3`, each with a `type` for the sort controller) and
+`SHEET_STATS_COLUMNS` (what the exports write — real Excel values, so the
+spreadsheet can do arithmetic). The two differ on purpose: the sheet writes
+decimal `Minutes` instead of `Time`, spells out `Throwaways`, splits pull
+quality into four sortable columns instead of one `G/O/P/B` string, and carries
+the `O pts` / `D pts` denominators that the screen leaves implicit. Keeping both
+lists in one file is what makes any *un*intended difference visible.
+
+Every column carries a `level` from `utils/statsLevel.js`, so the Basic /
+Advanced / Full menu filters all three tables and all three exports from one
+persisted setting (`localStorage.rosterStatsLevel`). Column indices are derived
+from the filtered list at render time — nothing hard-codes a position.
+
+The Team aggregate row passes the **summed** stats object back through the same
+`value(ps)` functions, so rate columns (Comp%, `..per pt`) recompute from the
+totals instead of averaging per-player rates. One deliberate exception: the team
+roster's `+/-` totals are the game **scoreline** rather than the sum of player
++/- (which would be ~7× the scoreline); `teamGameLinePlusMinus` in
+`teams/rosterManagement.js` splits that scoreline by O/D point the same way.
+
+**The O/D split.** `accumulateGameStats` tracks `pointsPlayedO/D` and
+`plusMinusO/D` alongside the overall figures, reading a point as offensive when
+`startingPosition === 'offense'` — the same reading `classifyPoint` uses, so the
+two halves always add back up to the whole. They surface at the Full level as
+`O +/-`, `..per O pt`, `D +/-`, `..per D pt`, which separate an O-line player's
+rating from the D-line points they also took. The team roster screen only shows
+its scoreline-based O/D totals in Game scope; in Event/All-time scope those
+cells read `—`, matching what the plain `+/-` total does there.
+
 ### Statistics Export (.xlsx)
 
 `utils/xlsxExport.js` builds Excel workbooks via the vendored SheetJS (`vendor/xlsx.mini.min.js`, precached by the service worker for offline use). Three entry points:
 
 | Screen | Workbook layout |
 |--------|-----------------|
-| Game Summary | One sheet (titled by opponent) |
+| Game Summary / Review | One sheet (titled by opponent) |
 | Event Roster | "All phases" sheet + one sheet per phase; only attending players; team-stats footer per sheet |
 | Team Roster (Edit Roster) | "All games" sheet + one sheet per event the team played + a "Standalone" sheet |
 
 Each sheet is a header + player rows + a Team aggregate row + a breaks/holds footer. Numbers are written as real Excel types (percentages, decimal minutes), and an `!autofilter` scoped to just the header+player rows gives click-to-sort/filter column dropdowns without dragging the title or footer into the sort. Honored by Google Sheets on import.
+
+#### Single-player exports
+
+Every export screen carries an **Export:** menu (`teams/exportPlayerPicker.js`) in its toolbar row — default "All players", or any one player. Picking a player narrows the *rows* of every sheet in the workbook to that player, while `buildStatsSheetAoA`'s `opts.totalsPlayers` keeps the Team row summing the whole roster, and the breaks/holds footer is unchanged. The title row and filename gain the player's name.
+
+The point is privacy. A coach who wants to give a player (or a parent) their numbers shouldn't have to hand over the whole team's playing time and error counts, which is what invites comparison — but the numbers are meaningless without team context, so the Team row and footer stay.
+
+The menu lives in the toolbar row rather than beside the Export button: those header bars already carry a back button, a title and one or two icon buttons, and a fifth control overflows a phone. The event roster's menu also refreshes when an attendance checkbox flips, since that changes who the export covers without redrawing the table.
 
 ---
 
