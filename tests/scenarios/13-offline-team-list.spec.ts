@@ -89,3 +89,43 @@ test.describe('offline team list', () => {
     ).not.toContainText('showing games saved on this device');
   });
 });
+
+test.describe('the sign-in screen', () => {
+  test('offers no account-free path while it would dead-end', async ({ page }) => {
+    /**
+     * "Continue without an account" is hidden until audit §1 ships. Tapping it
+     * calls showSelectTeamScreen(), which is hard-gated on a session and
+     * answers "Please sign in" — so the app promised local-only use and then
+     * refused it, two taps apart.
+     *
+     * Checked as *rendered*, not as markup: the block is hidden by the
+     * `hidden` attribute, which only works while nothing gives .auth-skip a
+     * `display` of its own. A CSS change is exactly how this would come back.
+     */
+    await page.goto(`/?${TEST_PARAMS}&testUserId=auth-screen-coach`);
+    await expect(page.locator('#selectTeamScreen')).toBeVisible({ timeout: 10_000 });
+
+    // The real route to this screen is signing out.
+    await page.evaluate(async () => {
+      const w = window as any;
+      try { await w.breakside?.auth?.signOut?.(); } catch { /* fake session */ }
+      w.breakside?.loginScreen?.showAuthScreen?.();
+    });
+    await expect(page.locator('#authScreen')).toBeVisible({ timeout: 10_000 });
+
+    await expect(
+      page.locator('#continueWithoutAccountBtn'),
+      'the button must not be visible while it dead-ends at "Please sign in"',
+    ).toBeHidden();
+    await expect(
+      page.locator('.auth-skip-note'),
+      '"Data will only be stored locally on this device" is not true yet',
+    ).toBeHidden();
+
+    // Kept, not deleted — unhiding should be the last step of §1, not a rebuild.
+    expect(
+      await page.locator('#continueWithoutAccountBtn').count(),
+      'the markup should still be there for §1 to switch on',
+    ).toBe(1);
+  });
+});

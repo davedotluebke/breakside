@@ -235,6 +235,15 @@
     text-align: center;
 }
 
+/* The block carries `hidden` in index.html until account-free mode actually
+   works — see the comment there. This rule is belt-and-braces: `hidden` only
+   hides via the UA sheet's `display: none`, so the day someone gives
+   `.auth-skip` a `display` of its own, the author rule would win and quietly
+   put the button back on screen. */
+.auth-skip[hidden] {
+    display: none;
+}
+
 .auth-link-subtle {
     background: none;
     border: none;

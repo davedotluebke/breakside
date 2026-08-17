@@ -257,8 +257,28 @@
                 </div>
             </div>
             
-            <!-- Continue without account (for demo/offline) -->
-            <div class="auth-skip">
+            <!--
+              Continue without an account — HIDDEN, and kept rather than deleted.
+
+              It promises something the app refuses to do. Tapping it calls
+              showSelectTeamScreen(), which is hard-gated on a Supabase session
+              and answers "Please sign in to access your teams and games." So the
+              app contradicted itself in two taps: an offer of local-only use,
+              then a demand to sign in. (docs/offline-no-account-audit.md § 1.)
+
+              WHAT UNBLOCKS IT: audit item 1 — a real `isLocalMode()` (a
+              `breakside_local_mode` flag this button would set), plus the local
+              team list behind showSelectTeamScreen()'s early return. Half of
+              that already exists: store/localTeamView.js renders teams and games
+              with no server, it just isn't reachable while signed out. Do NOT
+              reuse canActOffline() for the check — it means "auth state
+              unknown", which is a different thing.
+
+              Markup and handler are intact so unhiding is the last step, not
+              the first. Reachable only via Sign Out (a signed-out visit
+              redirects to /landing/), so hiding it costs no discoverability.
+            -->
+            <div class="auth-skip" hidden>
                 <button type="button" id="continueWithoutAccountBtn" class="auth-link-subtle">
                     Continue without an account
                 </button>
