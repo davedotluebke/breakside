@@ -11,6 +11,26 @@
 > out to test is still false. The findings are left below as written, describing
 > the code *as audited*; see TODO.md § "Offline reliability, and account-free solo
 > use" for what shipped.
+>
+> **Update (2026-08-17, branch `polling-opt`):** two follow-ups from field-testing
+> §4 on a real phone.
+>
+> **§4 was necessary but not sufficient.** Vendoring supabase-js removed the CDN
+> as a single point of failure, but the service worker had no precache at all —
+> it cached only what you happened to request while online, and every deploy
+> changes `cacheName` and deletes the previous cache. A cold offline launch
+> could still find the module graph half-present: `index.html` paints because it
+> is markup, `main.js` never runs, and the splash never retracts. The worker now
+> precaches the app shell from a manifest generated at deploy time. See
+> ARCHITECTURE.md § Power Management's neighbours and
+> `ultistats_server/test_precache_manifest.py`.
+>
+> **§2 is now half-closed.** A *signed-in* coach who loses the network gets
+> their teams and games rendered from localStorage instead of "Error loading
+> teams", with a banner saying the list is local
+> (`store/localTeamView.js`, pinned by `tests/scenarios/13-offline-team-list.spec.ts`).
+> The other half of §2 — reaching that list with **no account at all** — is
+> unchanged and still blocked behind §1.
 
 Claim under test, from a docs draft:
 

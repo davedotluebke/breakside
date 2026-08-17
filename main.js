@@ -66,6 +66,7 @@ import './store/models.js';
 import './store/pendingLineLogic.js';
 import './store/authFetchLogic.js';
 import './store/pointTimerNormalizer.js';
+import './store/localTeamView.js';
 import './utils/helpers.js';
 import './utils/changeStamp.js';
 import './utils/diagnosticSurface.js';

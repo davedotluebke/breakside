@@ -8,6 +8,7 @@
  * active-game polling, activeGamePolling.js.
  */
 import { Team, isTestTeam } from '../store/models.js';
+import { buildLocalTeamData } from '../store/localTeamView.js';
 import {
     teams, currentTeam, setCurrentTeam, setCurrentEvent, setCurrentTeamRole,
     saveAllTeamsData, serializeTeam, deserializeTeams, deserializePlayer,
@@ -172,38 +173,57 @@ async function populateCloudTeamsAndGames() {
     }
 
     try {
-        // Fetch teams the user has access to
-        const response = await authFetch(`${API_BASE_URL}/api/auth/teams`);
-        if (!response.ok) {
-            if (response.status === 401) {
-                listElement.innerHTML = '<p>Session expired. Please sign in again.</p>';
-                return;
-            }
-            throw new Error(`Failed to fetch teams: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        const userTeams = data.teams || [];
-        _cloudTeamsCache = userTeams;
-
-        // Also fetch games and events
+        let userTeams;
         let allGames = [];
-        if (typeof listServerGames === 'function') {
-            allGames = await listServerGames();
-        }
+        let eventsByTeamId = {};
+        let servedFromLocal = false;
 
-        // Fetch events for all teams
-        const eventsByTeamId = {};
-        await Promise.all(userTeams.map(async ({ team }) => {
-            try {
-                if (typeof listTeamEvents === 'function') {
-                    eventsByTeamId[team.id] = await listTeamEvents(team.id);
+        try {
+            // Fetch teams the user has access to
+            const response = await authFetch(`${API_BASE_URL}/api/auth/teams`);
+            if (!response.ok) {
+                if (response.status === 401) {
+                    listElement.innerHTML = '<p>Session expired. Please sign in again.</p>';
+                    return;
                 }
-            } catch (e) {
-                console.warn(`Failed to fetch events for team ${team.id}:`, e);
-                eventsByTeamId[team.id] = [];
+                throw new Error(`Failed to fetch teams: ${response.statusText}`);
             }
-        }));
+
+            const data = await response.json();
+            userTeams = data.teams || [];
+            _cloudTeamsCache = userTeams;
+
+            // Also fetch games and events
+            if (typeof listServerGames === 'function') {
+                allGames = await listServerGames();
+            }
+
+            // Fetch events for all teams
+            await Promise.all(userTeams.map(async ({ team }) => {
+                try {
+                    if (typeof listTeamEvents === 'function') {
+                        eventsByTeamId[team.id] = await listTeamEvents(team.id);
+                    }
+                } catch (e) {
+                    console.warn(`Failed to fetch events for team ${team.id}:`, e);
+                    eventsByTeamId[team.id] = [];
+                }
+            }));
+        } catch (networkError) {
+            // The server is unreachable (offline, DNS, 5xx). Everything the
+            // coach recorded is still in localStorage, so draw THAT rather than
+            // an error — this list being cloud-only is what made a whole
+            // tournament's work look lost the moment the signal dropped.
+            // (docs/offline-no-account-audit.md § 2.)
+            const local = buildLocalTeamData(teams);
+            if (!local.userTeams.length) {
+                // Nothing cached either: the original error is the honest answer.
+                throw networkError;
+            }
+            ({ userTeams, allGames, eventsByTeamId } = local);
+            servedFromLocal = true;
+            log(`📴 Team list served from local storage (${userTeams.length} teams)`);
+        }
 
         if (userTeams.length === 0) {
             listElement.innerHTML = `
@@ -246,6 +266,17 @@ async function populateCloudTeamsAndGames() {
         // Build the collapsible team list
         const container = document.createElement('div');
         container.className = 'teams-list-container';
+
+        // Say so, rather than letting a local list pass for a synced one. The
+        // difference matters: another coach's games won't be here, and neither
+        // will anything this device hasn't recorded itself.
+        if (servedFromLocal) {
+            const notice = document.createElement('p');
+            notice.className = 'text-hint offline-list-notice';
+            notice.textContent =
+                "Offline — showing games saved on this device. They'll sync when you're back online.";
+            container.appendChild(notice);
+        }
 
         sortedTeams.forEach(({ team, role }) => {
             const teamGames = gamesByTeamId[team.id] || [];

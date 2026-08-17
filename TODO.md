@@ -465,6 +465,27 @@ mostly earns that; the app *shell* does not. Four problems, roughly by severity:
   are "no prompt appeared", which looks like success until someone loses a
   tournament, so they're worth pinning. Suites: 27 e2e, 198 unit, 339 backend.
 
+  **1e — service-worker precache (done 2026-08-17, branch `polling-opt`).**
+  Field-testing 1b/§4 on a phone showed offline launch still failing: stuck
+  splash, broken logo. Vendoring supabase-js removed the CDN dependency but the
+  worker had *no precache*, so offline only worked if you happened to have
+  fetched every asset online since the last deploy — and each deploy wipes the
+  previous cache. The app shell is now precached from a manifest generated at
+  deploy time by `increment-version.py stamp` (same exclude list as the S3 sync,
+  so it can't list an unshipped file or rot as modules are added). Pinned by
+  `ultistats_server/test_precache_manifest.py`, including that every module
+  `main.js` imports is in the manifest.
+
+  **1f — offline team list (done 2026-08-17, same branch).** Closes the
+  *signed-in* half of §2. `populateCloudTeamsAndGames()` falls back to
+  `buildLocalTeamData(teams)` (`store/localTeamView.js`) when the server is
+  unreachable, translating stored teams/games into the shape the existing
+  renderer already reads rather than growing a second renderer that would
+  drift. A banner says the list is local. `activeCoaches` is empty and events
+  aren't grouped — neither is knowable offline. Pinned by
+  `tests/scenarios/13-offline-team-list.spec.ts`, which goes genuinely offline
+  and also checks the fallback doesn't latch once the server answers again.
+
   **Worth knowing about the upgrade path generally:** upgrading does *not* itself
   delete data. `forceAppUpdate()` clears Cache Storage only, and the SW's
   `activate` handler deletes stale *caches*, never localStorage. The risk is
