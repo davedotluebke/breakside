@@ -92,6 +92,7 @@ import { matchButtonWidths } from './ui/buttonLayout.js';
 import { isGameScreenVisible } from './ui/panelSystem.js';
 import { showScreen, showEditRosterScreen, showEditRosterSubscreen } from './screens/navigation.js';
 import './teams/rosterRowHelpers.js';
+import './teams/exportPlayerPicker.js';
 import { updateTeamRosterDisplay } from './teams/rosterManagement.js';
 import { showSelectTeamScreen } from './teams/teamList.js';
 import './teams/eventDialogs.js';

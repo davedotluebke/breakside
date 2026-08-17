@@ -1145,6 +1145,9 @@ Three screens show a roster + stats table, and each can export the same table to
 | Review | the **Review** button on a completed game in the team/event list |
 | Team Roster + Stats | Edit Roster |
 
+Each pairs its table with a toolbar row holding the **Stats:** level menu and an
+**Export:** player menu (see Single-player exports below).
+
 They all read their columns from **`utils/statsColumns.js`**, which holds two
 lists side by side: `STATS_COLUMNS` (what the tables render — display strings
 like `12:30`, `67%`, `+3`, each with a `type` for the sort controller) and
@@ -1187,6 +1190,14 @@ cells read `—`, matching what the plain `+/-` total does there.
 | Team Roster (Edit Roster) | "All games" sheet + one sheet per event the team played + a "Standalone" sheet |
 
 Each sheet is a header + player rows + a Team aggregate row + a breaks/holds footer. Numbers are written as real Excel types (percentages, decimal minutes), and an `!autofilter` scoped to just the header+player rows gives click-to-sort/filter column dropdowns without dragging the title or footer into the sort. Honored by Google Sheets on import.
+
+#### Single-player exports
+
+Every export screen carries an **Export:** menu (`teams/exportPlayerPicker.js`) in its toolbar row — default "All players", or any one player. Picking a player narrows the *rows* of every sheet in the workbook to that player, while `buildStatsSheetAoA`'s `opts.totalsPlayers` keeps the Team row summing the whole roster, and the breaks/holds footer is unchanged. The title row and filename gain the player's name.
+
+The point is privacy. A coach who wants to give a player (or a parent) their numbers shouldn't have to hand over the whole team's playing time and error counts, which is what invites comparison — but the numbers are meaningless without team context, so the Team row and footer stay.
+
+The menu lives in the toolbar row rather than beside the Export button: those header bars already carry a back button, a title and one or two icon buttons, and a fifth control overflows a phone. The event roster's menu also refreshes when an attendance checkbox flips, since that changes who the export covers without redrawing the table.
 
 ---
 

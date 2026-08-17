@@ -69,6 +69,23 @@ th {
     white-space: pre-line;
 }
 
+/* The "All players" / single-player export menu. It lives in the toolbar row
+   under the Export button rather than beside it: the header bars already carry
+   a back button, a title and one or two icon buttons, and a fifth item there
+   overflows a phone. Capped so a long player name shrinks the menu instead of
+   pushing the rest of the row off-screen. */
+.export-player-select {
+    max-width: 45vw;
+    font-size: 0.85em;
+    padding: 3px 4px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: var(--surface-light);
+    color: var(--text-primary);
+    flex-shrink: 1;
+    min-width: 0;
+}
+
 /* Filter row above a stats table: the event roster's scope + Stats menus, and
    the Review screen's Stats menu. */
 .stats-filter-row {

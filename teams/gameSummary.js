@@ -24,6 +24,9 @@ import { wireStatsLevelSelect } from '../utils/statsLevel.js';
 import { screenStatsColumns } from '../utils/statsColumns.js';
 import { buildRosterRow } from './rosterRowHelpers.js';
 import {
+    wireExportPlayerSelect, exportSelection, exportTitle, exportFilename,
+} from './exportPlayerPicker.js';
+import {
     buildStatsSheetAoA, aoaToFormattedSheet, downloadWorkbook,
     safeSheetName, safeFilename,
 } from '../utils/xlsxExport.js';
@@ -89,12 +92,12 @@ function renderGameSummary(game) {
     renderGameSummaryTeamStats(game);
     renderGameSummaryEventLog(game);
 
-    // Show CSV export button if there are stats
+    // Show the export button (and its player menu) if there are stats
     const exportBtn = document.getElementById('exportGameSummaryBtn');
-    if (exportBtn) {
-        const hasStats = game.points && game.points.some(p => p.winner);
-        exportBtn.style.display = hasStats ? '' : 'none';
-    }
+    const exportPlayerGroup = document.getElementById('gameSummaryExportGroup');
+    const hasStats = !!(game.points && game.points.some(p => p.winner));
+    if (exportBtn) exportBtn.style.display = hasStats ? '' : 'none';
+    if (exportPlayerGroup) exportPlayerGroup.style.display = hasStats ? '' : 'none';
 
     // Share button: any game with a server id can be shared (the dialog
     // handles the never-synced case with a friendly nudge).
@@ -133,26 +136,8 @@ function renderGameSummaryStatsTable(game) {
     const hasStats = Object.keys(playerStats).length > 0;
     const statsColumns = screenStatsColumns();
 
-    // Determine players to display: rosterSnapshot for historical accuracy.
-    // Some games saved an *empty* rosterSnapshot.players (the snapshot object
-    // exists but captured nobody); guard on length so we don't render a blank
-    // table when getGamePlayerStats actually has data. When the snapshot is
-    // empty, show the live team roster (so bench players still appear as
-    // zeros) unioned with anyone who actually has stats — so whoever played
-    // is always listed even if currentTeam isn't this game's team.
-    let players = [];
-    if (game.rosterSnapshot && game.rosterSnapshot.players
-            && game.rosterSnapshot.players.length > 0) {
-        players = game.rosterSnapshot.players;
-    } else {
-        const base = (typeof currentTeam !== 'undefined' && currentTeam
-            && currentTeam.teamRoster) ? currentTeam.teamRoster : [];
-        const haveIds = new Set(base.map(p => p.id));
-        const fromStats = Object.entries(playerStats)
-            .filter(([id]) => !haveIds.has(id))
-            .map(([id, s]) => ({ id, name: s.name || id }));
-        players = [...base, ...fromStats];
-    }
+    const players = resolveSummaryPlayers(game, playerStats);
+    wireExportPlayerSelect(document.getElementById('gameSummaryExportPlayer'), players);
 
     // Header row
     const headerRow = document.createElement('tr');
@@ -206,6 +191,32 @@ function renderGameSummaryStatsTable(game) {
     if (typeof attachStatsColumnHelp === 'function') {
         attachStatsColumnHelp(tbody.querySelector('tr:first-child'));
     }
+}
+
+/**
+ * The roster this game's table and export both list: rosterSnapshot for
+ * historical accuracy. Some games saved an *empty* rosterSnapshot.players (the
+ * snapshot object exists but captured nobody); guard on length so we don't
+ * render a blank table when getGamePlayerStats actually has data. When the
+ * snapshot is empty, show the live team roster (so bench players still appear
+ * as zeros) unioned with anyone who actually has stats — so whoever played is
+ * always listed even if currentTeam isn't this game's team.
+ * @param {object} game
+ * @param {object} playerStats - map of playerId → ps for this game
+ * @returns {Array<object>}
+ */
+function resolveSummaryPlayers(game, playerStats) {
+    if (game.rosterSnapshot && game.rosterSnapshot.players
+            && game.rosterSnapshot.players.length > 0) {
+        return game.rosterSnapshot.players;
+    }
+    const base = (typeof currentTeam !== 'undefined' && currentTeam
+        && currentTeam.teamRoster) ? currentTeam.teamRoster : [];
+    const haveIds = new Set(base.map(p => p.id));
+    const fromStats = Object.entries(playerStats || {})
+        .filter(([id]) => !haveIds.has(id))
+        .map(([id, s]) => ({ id, name: s.name || id }));
+    return [...base, ...fromStats];
 }
 
 /**
@@ -294,6 +305,8 @@ function renderGameSummaryEventLog(game) {
  * Export game summary stats to an .xlsx workbook (single sheet) and
  * trigger download. Builds the same player table + team-stats footer
  * shown on screen, with proper Excel number / percent / time types.
+ * The player menu beside the button narrows the sheet to one player's row
+ * while leaving the Team total and footer intact.
  */
 function exportGameSummaryXLSX() {
     const game = _lastRenderedGame || (typeof currentGame === 'function' ? currentGame() : null);
@@ -304,24 +317,23 @@ function exportGameSummaryXLSX() {
     const teamStats = typeof getGameTeamStats === 'function'
         ? getGameTeamStats(game) : null;
 
-    let players = [];
-    if (game.rosterSnapshot && game.rosterSnapshot.players) {
-        players = game.rosterSnapshot.players;
-    } else if (typeof currentTeam !== 'undefined' && currentTeam) {
-        players = currentTeam.teamRoster || [];
-    }
+    // Same roster resolution the on-screen table uses, so the workbook can
+    // never list a different set of players than the screen does.
+    const players = resolveSummaryPlayers(game, playerStats);
+    const { player, sheetPlayers, totalsPlayers } = exportSelection(
+        document.getElementById('gameSummaryExportPlayer'), players);
 
     const teamName = game.team || 'Team';
     const opponent = game.opponent || 'Opponent';
     const teamScore = game.scores?.[Role.TEAM] || game.scores?.team || 0;
     const oppScore = game.scores?.[Role.OPPONENT] || game.scores?.opponent || 0;
-    const titleRow = `${teamName} ${teamScore} — ${oppScore} ${opponent}`;
+    const titleRow = exportTitle(player, `${teamName} ${teamScore} — ${oppScore} ${opponent}`);
 
-    const aoa = buildStatsSheetAoA(players, playerStats, teamStats, { titleRow });
+    const aoa = buildStatsSheetAoA(sheetPlayers, playerStats, teamStats, { titleRow, totalsPlayers });
     const ws = aoaToFormattedSheet(aoa);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, safeSheetName(opponent));
-    downloadWorkbook(wb, `${safeFilename(opponent)}-stats.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, safeSheetName(player ? player.name : opponent));
+    downloadWorkbook(wb, `${safeFilename(exportFilename(player, opponent))}-stats.xlsx`);
 }
 
 /**

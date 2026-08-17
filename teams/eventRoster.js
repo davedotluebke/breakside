@@ -24,6 +24,9 @@ import { updateEventOnCloud } from '../store/sync.js';
 import { showScreen } from '../screens/navigation.js';
 import { buildRosterRow } from './rosterRowHelpers.js';
 import {
+    wireExportPlayerSelect, exportSelection, exportTitle, exportFilename,
+} from './exportPlayerPicker.js';
+import {
     showEditPlayerDialog, closeEditPlayerDialog, validateJerseyNumber,
 } from './rosterManagement.js';
 
@@ -50,6 +53,25 @@ let eventRosterFilter = {};
  */
 function activeEventRosterColumns() {
     return screenStatsColumns();
+}
+
+/**
+ * Who the export covers: the checked team players plus every pickup. Pickups
+ * are always in — they were only ever added because they showed up.
+ */
+function attendingEventPlayers() {
+    const roster = currentTeam ? currentTeam.teamRoster : [];
+    return [...roster.filter(p => eventRosterPlayerIds.has(p.id)), ...eventRosterPickups];
+}
+
+/**
+ * Re-populate the export player menu. Called on render and again whenever an
+ * attendance checkbox flips, since that changes who the export would cover
+ * without otherwise redrawing the table.
+ */
+function refreshEventExportPlayers() {
+    wireExportPlayerSelect(
+        document.getElementById('eventRosterExportPlayer'), attendingEventPlayers());
 }
 
 /**
@@ -231,9 +253,12 @@ async function renderEventRosterTable() {
     const hasStats = Object.keys(eventPlayerStats).length > 0;
     const statsColumns = activeEventRosterColumns();
 
-    // Show/hide export button
+    // Show/hide the export button and its player menu
     const exportBtn = document.getElementById('exportEventRosterBtn');
     if (exportBtn) exportBtn.style.display = hasStats ? '' : 'none';
+    const exportPlayerGroup = document.getElementById('eventRosterExportGroup');
+    if (exportPlayerGroup) exportPlayerGroup.style.display = hasStats ? '' : 'none';
+    refreshEventExportPlayers();
 
     // Clear and rebuild after async load
     tbody.innerHTML = '';
@@ -293,6 +318,7 @@ async function renderEventRosterTable() {
             onCheckChange: (checked) => {
                 if (checked) eventRosterPlayerIds.add(player.id);
                 else eventRosterPlayerIds.delete(player.id);
+                refreshEventExportPlayers();
             }
         });
         tbody.appendChild(row);
@@ -556,7 +582,9 @@ function backFromEventRoster() {
  * Export event roster stats to an .xlsx workbook: an "All games" sheet, then
  * one per declared phase, then one per individual game ("v. <opponent>").
  * Only checked team players are included; pickups always export. Columns
- * follow whatever the Stats menu is set to at export time.
+ * follow whatever the Stats menu is set to at export time, and the player menu
+ * beside the button can narrow every sheet to a single player's row (the Team
+ * totals and breaks/holds footers still cover the whole squad).
  */
 async function exportEventRosterXLSX() {
     const event = currentEventRosterEvent;
@@ -566,10 +594,8 @@ async function exportEventRosterXLSX() {
     if (exportBtn) { exportBtn.disabled = true; exportBtn.textContent = 'Building…'; }
 
     try {
-        // Build the attending-players list once (checked team + pickups)
-        const roster = currentTeam ? currentTeam.teamRoster : [];
-        const attendingTeamPlayers = roster.filter(p => eventRosterPlayerIds.has(p.id));
-        const players = [...attendingTeamPlayers, ...eventRosterPickups];
+        const { player, sheetPlayers, totalsPlayers } = exportSelection(
+            document.getElementById('eventRosterExportPlayer'), attendingEventPlayers());
 
         // Reuse the games the screen already loaded when they're for this event.
         const allGames = (cachedEventGames && cachedEventGames.eventId === event.id)
@@ -591,13 +617,14 @@ async function exportEventRosterXLSX() {
             if (spec.skipIfEmpty && teamStats.total === 0) continue;
 
             const playerStats = getGamesPlayerStats(games);
-            const title = `${event.name} — ${spec.label}`;
-            const aoa = buildStatsSheetAoA(players, playerStats, teamStats, { titleRow: title, level });
+            const titleRow = exportTitle(player, `${event.name} — ${spec.label}`);
+            const aoa = buildStatsSheetAoA(sheetPlayers, playerStats, teamStats,
+                { titleRow, level, totalsPlayers });
             const ws = aoaToFormattedSheet(aoa);
             XLSX.utils.book_append_sheet(wb, ws, uniqueSheetName(spec.label, usedSheetNames));
         }
 
-        downloadWorkbook(wb, `${safeFilename(event.name)}-stats.xlsx`);
+        downloadWorkbook(wb, `${safeFilename(exportFilename(player, event.name))}-stats.xlsx`);
     } catch (e) {
         console.error('Event xlsx export failed:', e);
         alert('Export failed: ' + e.message);

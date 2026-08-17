@@ -38,13 +38,17 @@ function aggregateTotalsRow(label, perPlayerPs, cols) {
  * Build a 2D array for one stats sheet: header row, one row per player,
  * Team aggregate row, optional blank + footer block (e.g., team-stats line).
  *
- * @param {Array<object>} players - roster: {id, name, gender?, number?}
+ * @param {Array<object>} players - the rows to write: {id, name, gender?, number?}
  * @param {object} playerStats - map of playerId → ps
  * @param {object} [teamStats] - output of getGameTeamStats (drives footer)
  * @param {object} [opts]
  * @param {string} [opts.titleRow] - optional title above the table
  * @param {string} [opts.level] - stats level ('basic'|'advanced'|'full');
  *   defaults to whatever the roster screens' Stats menu is set to
+ * @param {Array<object>} [opts.totalsPlayers] - the roster the Team row sums,
+ *   when it differs from the rows written. A single-player export passes one
+ *   player as `players` and the whole roster here, so the sheet a coach hands
+ *   to one player still shows what the team did — without listing anyone else.
  * @returns {{aoa: Array<Array>, autofilterRef: string, cols: Array<object>}}
  *   the 2D array, the A1-style range covering the header row + player rows (so
  *   the caller can scope an AutoFilter to just the sortable table, excluding
@@ -59,17 +63,15 @@ function buildStatsSheetAoA(players, playerStats, teamStats, opts = {}) {
     const headerRowIdx = aoa.length;   // 0-based row of the column headers
     aoa.push(cols.map(c => c.label));
 
-    const psList = [];
     players.forEach(p => {
-        const ps = playerStats[p.id] || {};
-        psList.push(ps);
-        aoa.push(buildPlayerStatsRow(p.name, ps, cols));
+        aoa.push(buildPlayerStatsRow(p.name, playerStats[p.id] || {}, cols));
     });
     const lastPlayerRowIdx = aoa.length - 1; // 0-based; == headerRowIdx if no players
 
     // Team aggregate row (kept OUTSIDE the autofilter range so it stays put
     // when the user sorts the player rows)
-    aoa.push(aggregateTotalsRow('Team', psList, cols));
+    const totalsRoster = opts.totalsPlayers || players;
+    aoa.push(aggregateTotalsRow('Team', totalsRoster.map(p => playerStats[p.id] || {}), cols));
 
     // Team-stats footer (breaks/holds)
     if (teamStats && teamStats.total > 0) {

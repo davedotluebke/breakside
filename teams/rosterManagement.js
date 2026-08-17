@@ -53,6 +53,9 @@ import {
 } from '../utils/xlsxExport.js';
 import { appendRosterCell, buildRosterRow } from './rosterRowHelpers.js';
 import {
+    wireExportPlayerSelect, exportSelection, exportTitle, exportFilename,
+} from './exportPlayerPicker.js';
+import {
     formatSigned, formatSignedFixed, formatPercentOrDash, formatPullQuality,
 } from '../utils/statsColumns.js';
 import { showScreen } from '../screens/navigation.js';
@@ -392,6 +395,7 @@ function renderRosterTable(scope, statsById, loading) {
     rosterElement.innerHTML = '';
 
     const roster = currentTeam ? currentTeam.teamRoster.slice() : [];
+    wireExportPlayerSelect(document.getElementById('teamRosterExportPlayer'), roster);
     const visibleColumns = columnsForLevel(ROSTER_COLUMNS);
     // Narrowing the stats level can hide the column being sorted on; fall
     // back to Name rather than sorting by an invisible column.
@@ -799,6 +803,9 @@ function validateJerseyNumber(input) {
  * Sheets: "All games" first, then one per TournamentEvent the team has
  * played in (using its full event-level stats), then an "Other" sheet
  * for any games not attached to an event (if any exist).
+ *
+ * The player menu beside the button narrows every sheet to one player's row;
+ * the Team totals and breaks/holds footers still describe the whole team.
  */
 async function exportTeamRosterXLSX() {
     if (!currentTeam) { alert('No team selected.'); return; }
@@ -808,7 +815,8 @@ async function exportTeamRosterXLSX() {
 
     try {
         // Roster = current team players (no pickups in the team-level view)
-        const players = currentTeam.teamRoster || [];
+        const { player, sheetPlayers, totalsPlayers } = exportSelection(
+            document.getElementById('teamRosterExportPlayer'), currentTeam.teamRoster || []);
 
         // Load all team games (cloud list) and all team events in parallel
         const [allCloudGames, teamEvents] = await Promise.all([
@@ -849,8 +857,10 @@ async function exportTeamRosterXLSX() {
             // Shared aggregator rather than a local re-sum — it also carries
             // the per-set breakdown, which a hand-rolled numeric merge drops.
             const teamStats = getGamesTeamStats(sheetGames);
-            const titleRow = `${currentTeam.name} — ${label} (${sheetGames.length} game${sheetGames.length === 1 ? '' : 's'})`;
-            const aoa = buildStatsSheetAoA(players, playerStats, teamStats, { titleRow, level });
+            const titleRow = exportTitle(player,
+                `${currentTeam.name} — ${label} (${sheetGames.length} game${sheetGames.length === 1 ? '' : 's'})`);
+            const aoa = buildStatsSheetAoA(sheetPlayers, playerStats, teamStats,
+                { titleRow, level, totalsPlayers });
             return aoaToFormattedSheet(aoa);
         };
 
@@ -873,7 +883,7 @@ async function exportTeamRosterXLSX() {
             XLSX.utils.book_append_sheet(wb, buildSheet(orphans, 'Standalone games'), safeSheetName('Standalone'));
         }
 
-        downloadWorkbook(wb, `${safeFilename(currentTeam.name)}-stats.xlsx`);
+        downloadWorkbook(wb, `${safeFilename(exportFilename(player, currentTeam.name))}-stats.xlsx`);
     } catch (e) {
         console.error('Team xlsx export failed:', e);
         alert('Export failed: ' + e.message);
