@@ -32,6 +32,14 @@
 > The other half of §2 — reaching that list with **no account at all** — is
 > unchanged and still blocked behind §1.
 
+> **Closed out (2026-08-17, v2.0.0).** Everything above that was going to ship
+> has shipped and is live in production. **§1, the account-free half of §2, and
+> §3 are SHELVED** — see TODO.md § Backlog, "Account-free operation". Whether
+> Breakside should work with no account at all is an open product question, so
+> the remaining findings are parked rather than queued. Nothing user-facing
+> claims otherwise: the README, the docs page, and the "Continue without an
+> account" button (hidden) all now say an account is required.
+
 Claim under test, from a docs draft:
 
 > You can use Breakside without an account — data stays on the device. Cloud sync,
