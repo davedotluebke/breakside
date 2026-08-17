@@ -2,12 +2,15 @@
 
 **Date:** 2026-08-16 · **Branch:** `claude/breakside-offline-audit-8ux2js` · **Commit audited:** `9cdf054`
 
-> **Status update (same day):** the two highest-severity findings below have been
-> fixed on this branch — **§6** (Sign Out destroying unsynced data) and **§4**
-> (the Supabase CDN as an offline single point of failure). §5's `forceAppUpdate`
-> guard and §7's persistent-storage request are still open, as is all of §1–§2.
-> The findings are left below as written, describing the code *as audited*; see
-> TODO.md § "Offline reliability, and account-free solo use" for what shipped.
+> **Status update (same day):** every §4–§7 finding has been fixed on this branch
+> — the CDN single point of failure (§4), the unguarded manual update (§5), Sign
+> Out destroying unsynced data (§6), and the missing persistent-storage request
+> (§7). The two guards are pinned by a new e2e spec
+> (`tests/scenarios/09-data-loss-guards.spec.ts`). **§1–§3 remain open**: there is
+> still no way to use the app without an account, so the claim this document set
+> out to test is still false. The findings are left below as written, describing
+> the code *as audited*; see TODO.md § "Offline reliability, and account-free solo
+> use" for what shipped.
 
 Claim under test, from a docs draft:
 

@@ -308,8 +308,23 @@ async function showConnectionInfo() {
           `<button onclick="showPendingSyncDialog()" class="update-now-btn">View / Clear…</button>`
         : '';
 
+    // Storage durability — the "where did my data go?" diagnostic. localStorage
+    // is evictable unless the browser granted persistence (requested on first
+    // write in store/storage.js), and there's otherwise no way to tell from the
+    // app which tier you're on.
+    let storageLine = '';
+    try {
+        if (navigator.storage?.persisted) {
+            storageLine = (await navigator.storage.persisted())
+                ? '<br>Storage: durable'
+                : '<br>Storage: best-effort (may be evicted)';
+        }
+    } catch (e) {
+        log('Storage persistence check failed:', e);
+    }
+
     const message = `${isOnline ? 'Online' : 'Offline'}<br>` +
-        `<span style="font-size:0.9em;">${versionLine}<br>User: ${userEmail}<br>Server: ${serverUrl}${pendingLine}${updateButton}</span>`;
+        `<span style="font-size:0.9em;">${versionLine}<br>User: ${userEmail}<br>Server: ${serverUrl}${storageLine}${pendingLine}${updateButton}</span>`;
 
     if (typeof showControllerToast === 'function') {
         // Longer duration if update is available or pending items need action

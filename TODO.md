@@ -405,7 +405,23 @@ mostly earns that; the app *shell* does not. Four problems, roughly by severity:
 
       </details>
 
-- [ ] **1c. Nothing requests persistent storage.** No `navigator.storage.persist()`
+- [x] **1c. Nothing requests persistent storage.** ***(DONE 2026-08-16, same
+      branch.*** `requestPersistentStorage()` in `store/storage.js`, called from
+      `saveAllTeamsData()` — so it fires on the **first real data write**, not at
+      load: browsers weigh site engagement when deciding (Firefox prompts
+      outright), so asking at the moment the user first has something to lose both
+      scores better and reads better. Once per session, no-ops when already
+      persisted, never throws — a failed request must not disturb a save. The
+      Online/About toast now also reports the tier ("Storage: durable" vs
+      "Storage: best-effort (may be evicted)"), which is the diagnostic you want
+      when someone says their data vanished. Verified in a browser: not requested
+      on load, requested exactly once on the first team creation, not re-requested
+      on later writes, and the toast reflects the real state. Headless Chromium
+      denies the grant, which the log reports honestly rather than glossing.)*
+
+      <details><summary>Original problem statement</summary>
+
+      No `navigator.storage.persist()`
       call exists anywhere in the codebase, so all local data is best-effort and
       evictable — and on iOS Safari a non-installed PWA's storage is subject to
       ITP's 7-day eviction. This is the quiet one: it costs nothing until a coach
@@ -415,7 +431,22 @@ mostly earns that; the app *shell* does not. Four problems, roughly by severity:
       surface `navigator.storage.persisted()` in the Online/About toast so the
       state is diagnosable. Trivial to add.
 
-- [ ] **1d. The manual update button can reload mid-game.** The *automatic*
+      </details>
+
+- [x] **1d. The manual update button can reload mid-game.** ***(DONE 2026-08-16,
+      same branch.*** `forceAppUpdate()` (`main.js`) now consults the same
+      `isReloadUnsafe()` the automatic path uses, and raises a confirm rather than
+      reloading silently. **Note the wording deliberately does not promise an
+      automatic later install:** `__breaksideUpdatePending` is set by the
+      automatic deferral but **read nowhere**, so nothing re-tries the reload when
+      the game ends — the honest promise is "applied next time you open the app",
+      which is true because the new worker has already claimed the clients.
+      (Wiring that flag up to actually re-try on game end is a possible follow-up;
+      it isn't a correctness gap, just an unused signal.))*
+
+      <details><summary>Original problem statement</summary>
+
+      The *automatic*
       service-worker reload is correctly gated on `isReloadUnsafe()`
       (`main.js:190`), which defers while a game is on screen or narration is
       recording. `forceAppUpdate()` (`main.js:268`), reached from About →
@@ -426,6 +457,13 @@ mostly earns that; the app *shell* does not. Four problems, roughly by severity:
       *Suggested:* have `forceAppUpdate()` consult `isReloadUnsafe()` and, when
       unsafe, warn rather than silently reload — the automatic path's deferral
       logic and `window.__breaksideUpdatePending` already exist to build on.
+
+      </details>
+
+  **All four of 1a–1d are now done**, with the guards covered by a new e2e spec
+  (`tests/scenarios/09-data-loss-guards.spec.ts`, 6 tests) — both failure modes
+  are "no prompt appeared", which looks like success until someone loses a
+  tournament, so they're worth pinning. Suites: 27 e2e, 198 unit, 339 backend.
 
   **Worth knowing about the upgrade path generally:** upgrading does *not* itself
   delete data. `forceAppUpdate()` clears Cache Storage only, and the SW's

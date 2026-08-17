@@ -270,7 +270,29 @@ async function forceAppUpdate() {
         alert('Service worker not available. Try refreshing the page.');
         return;
     }
-    
+
+    // The *automatic* service-worker reload defers while a game is on screen or
+    // narration is recording (see the controllerchange handler above). This
+    // manual path had no such guard and would reload mid-point. Recorded events
+    // are already on disk (saveAllTeamsData runs on every change), but the
+    // reload still drops uncommitted in-memory state and the narration socket —
+    // so ask rather than act.
+    //
+    // Note the wording: nothing re-tries the reload when the game ends
+    // (__breaksideUpdatePending is set but never read), so the honest promise is
+    // "next time you open the app", not "automatically later".
+    if (isReloadUnsafe()) {
+        const proceed = confirm(
+            'A game is in progress (or narration is recording).\n\n' +
+            'Updating reloads the app. Recorded events are saved, but anything ' +
+            'not yet committed in the current point will be lost, and you\'ll ' +
+            'need to rejoin the game from the Teams screen.\n\n' +
+            'The update will be applied next time you open the app.\n\n' +
+            'Update now anyway?'
+        );
+        if (!proceed) return;
+    }
+
     try {
         // Force the service worker to check for updates
         await window.swRegistration.update();
