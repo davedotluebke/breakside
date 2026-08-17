@@ -495,6 +495,10 @@ mostly earns that; the app *shell* does not. Four problems, roughly by severity:
 
 #### 2. Solo, offline, no account
 
+> **SHELVED 2026-08-17** — see the Backlog entry "Account-free operation".
+> Whether to support this at all is an open product question. The analysis below
+> is kept because it is still accurate; it just isn't queued work.
+
 - [ ] **Problem: there is no anonymous path into the app at all.** Three
       independent gates, any one of which blocks it:
       (i) `main.js:356` redirects a sessionless visitor to `/landing/`, and its
@@ -924,6 +928,30 @@ Remaining work:
 ---
 
 ## Backlog
+
+- [ ] **Account-free operation — SHELVED 2026-08-17, and it's a product question
+  before it's an engineering one.** Whether Breakside should work with no account
+  at all is undecided; it is parked here rather than dropped so the analysis
+  isn't re-done from scratch if the answer turns out to be yes.
+
+  This covers the rest of `docs/offline-no-account-audit.md`:
+  **§1** (entry is hard-gated on a Supabase session — three independent gates,
+  detailed above under *Offline reliability, and account-free solo use* § 2 with
+  sub-items 2a–2e), the **account-free half of §2** (the signed-in half shipped
+  — `store/localTeamView.js` already renders teams and games with no server, it
+  just isn't reachable while signed out), and **§3**, which is that audit's
+  empirical retest and only means anything once §1 lands.
+
+  What's already paid for, if it's ever picked up: the offline create-and-queue
+  path exists and is exercised, `syncUserTeams()` merges rather than clobbers so
+  a local-only team survives a later sign-in, the local list renderer exists, and
+  the "Continue without an account" button is still in `index.html` — hidden,
+  with a comment naming exactly what unblocks it.
+
+  Everything user-facing currently says an account is required (README, the docs
+  page, and the hidden button), so nothing is promising this in the meantime.
+  The open product question is 8 in the audit's list: when a local user signs in,
+  do their local teams get adopted by the new account?
 
 - [ ] **One user on two devices is unsupported — decide whether to support it.**
   Connected coaches are keyed by *user id* (`_connected_coaches[game_id][user_id]`
