@@ -137,8 +137,11 @@
     <link rel="stylesheet" href="narration/lineupNarration.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
     
-    <!-- Supabase JS Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Supabase JS Client — vendored, NOT a CDN: the service worker caches only
+         same-origin responses, so a CDN copy is never available offline and its
+         absence bounces even a signed-in user to /landing/. See the header of
+         vendor/supabase-js.min.js. -->
+    <script src="vendor/supabase-js.min.js"></script>
 </head>
 <body>
 <script>if(window._isStaging) document.body.classList.add('staging');</script>

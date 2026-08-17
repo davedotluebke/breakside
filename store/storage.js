@@ -228,6 +228,41 @@ function logTeamData(team) {
     log(serializeTeam(team));
 }
 
+// Durable-storage request. localStorage is "best-effort" by default: a browser
+// under storage pressure may evict it, and on iOS Safari a *non-installed* PWA's
+// storage is dropped after 7 days without interaction — so a coach who opens the
+// app after a two-week gap can find an empty roster.
+// navigator.storage.persist() asks for the durable tier instead.
+//
+// Deliberately fired on the first real data write rather than at load: browsers
+// weigh site engagement when deciding (and Firefox prompts outright), so asking
+// at the moment the user first has something to lose both scores better and
+// reads better. Attempted once per session; never throws.
+let persistenceRequested = false;
+
+async function requestPersistentStorage() {
+    if (persistenceRequested) return;
+    persistenceRequested = true;
+
+    try {
+        if (!navigator.storage?.persist || !navigator.storage?.persisted) {
+            log('Storage: persistence API unavailable; local data is evictable');
+            return;
+        }
+        if (await navigator.storage.persisted()) {
+            log('Storage: already persistent');
+            return;
+        }
+        const granted = await navigator.storage.persist();
+        log(granted
+            ? 'Storage: persistence granted — local data is durable'
+            : 'Storage: persistence denied — local data may be evicted under pressure');
+    } catch (e) {
+        // Diagnostic only — a failed request must never disturb a save.
+        console.warn('Storage: persistence request failed:', e);
+    }
+}
+
 /**
  * Save all teams' data to local storage
  */
@@ -237,6 +272,10 @@ function saveAllTeamsData() {
 
     // Save the serialized array to local storage
     localStorage.setItem('teamsData', JSON.stringify(serializedTeams));
+
+    // First write of the session — ask the browser to keep this durably.
+    // Fire-and-forget: it must not delay or fail the save above.
+    requestPersistentStorage();
 
     // Note: Team data logging disabled to reduce console noise
     // Uncomment for debugging: teams.forEach(team => logTeamData(team));
