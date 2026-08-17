@@ -51,10 +51,10 @@ import {
     buildStatsSheetAoA, aoaToFormattedSheet, downloadWorkbook,
     safeSheetName, safeFilename,
 } from '../utils/xlsxExport.js';
+import { appendRosterCell, buildRosterRow } from './rosterRowHelpers.js';
 import {
-    appendRosterCell, buildRosterRow,
-    formatSigned, formatSignedFixed, formatPercentOrDash,
-} from './rosterRowHelpers.js';
+    formatSigned, formatSignedFixed, formatPercentOrDash, formatPullQuality,
+} from '../utils/statsColumns.js';
 import { showScreen } from '../screens/navigation.js';
 import { showSelectTeamScreen } from './teamList.js';
 import { initializeGenderRatioDropdown } from '../game/genderRatioDropdown.js';
@@ -185,6 +185,47 @@ const ROSTER_COLUMNS = [
             return formatSignedFixed(tp > 0 ? teamGamePlusMinus(ctx.game) / tp : 0, 2);
         }
     },
+    // The O/D split of the two columns above: the same numbers restricted to
+    // points that started on offense / on defense, so a player who takes both
+    // lines has each contribution read separately.
+    {
+        key: 'plusminuso', label: 'O +/-', cls: 'roster-plusminus-header',
+        colCls: 'roster-plusminus-column',
+        num: true, level: StatsLevel.FULL,
+        cell: s => formatSigned(s.plusMinusO || 0),
+        total: ctx => (ctx.scope === 'game' && ctx.game)
+            ? formatSigned(teamGameLinePlusMinus(ctx.game, true).plusMinus) : ctx.dash
+    },
+    {
+        key: 'perpointo', label: '..per O pt', cls: 'roster-plusminus-per-point-header',
+        colCls: 'roster-plusminus-per-point-column',
+        num: true, level: StatsLevel.FULL,
+        cell: s => formatSignedFixed((s.pointsPlayedO > 0) ? (s.plusMinusO || 0) / s.pointsPlayedO : 0, 2),
+        total: ctx => {
+            if (!(ctx.scope === 'game' && ctx.game)) return ctx.dash;
+            const { plusMinus, points } = teamGameLinePlusMinus(ctx.game, true);
+            return formatSignedFixed(points > 0 ? plusMinus / points : 0, 2);
+        }
+    },
+    {
+        key: 'plusminusd', label: 'D +/-', cls: 'roster-plusminus-header',
+        colCls: 'roster-plusminus-column',
+        num: true, level: StatsLevel.FULL,
+        cell: s => formatSigned(s.plusMinusD || 0),
+        total: ctx => (ctx.scope === 'game' && ctx.game)
+            ? formatSigned(teamGameLinePlusMinus(ctx.game, false).plusMinus) : ctx.dash
+    },
+    {
+        key: 'perpointd', label: '..per D pt', cls: 'roster-plusminus-per-point-header',
+        colCls: 'roster-plusminus-per-point-column',
+        num: true, level: StatsLevel.FULL,
+        cell: s => formatSignedFixed((s.pointsPlayedD > 0) ? (s.plusMinusD || 0) / s.pointsPlayedD : 0, 2),
+        total: ctx => {
+            if (!(ctx.scope === 'game' && ctx.game)) return ctx.dash;
+            const { plusMinus, points } = teamGameLinePlusMinus(ctx.game, false);
+            return formatSignedFixed(points > 0 ? plusMinus / points : 0, 2);
+        }
+    },
     {
         key: 'pulls', label: 'Pulls', cls: 'roster-pulls-header', colCls: 'roster-pulls-column',
         num: true, level: StatsLevel.FULL,
@@ -205,11 +246,24 @@ function teamGamePlusMinus(game) {
     return (game.scores[Role.TEAM] || 0) - (game.scores[Role.OPPONENT] || 0);
 }
 
-/** "3/1/0/1" — good/okay/poor/brick pull counts, or `dash` when none rated. */
-function formatPullQuality(s, dash) {
-    const rated = (s.pullsGood || 0) + (s.pullsOkay || 0) + (s.pullsPoor || 0) + (s.pullsBrick || 0);
-    if (!rated) return dash;
-    return `${s.pullsGood || 0}/${s.pullsOkay || 0}/${s.pullsPoor || 0}/${s.pullsBrick || 0}`;
+/**
+ * The scoreline restricted to one line: +1 per completed point that started on
+ * that side and we won, -1 per one we lost. The O/D team totals can't come off
+ * `scores` the way teamGamePlusMinus does, so they're counted from the points.
+ * @param {object} game
+ * @param {boolean} offense - true for O points, false for D points
+ * @returns {{plusMinus: number, points: number}}
+ */
+function teamGameLinePlusMinus(game, offense) {
+    let plusMinus = 0;
+    let points = 0;
+    (game.points || []).forEach(point => {
+        if (!point.winner) return; // skip in-progress points
+        if ((point.startingPosition === 'offense') !== offense) return;
+        points++;
+        plusMinus += (point.winner === 'team' || point.winner === Role.TEAM) ? 1 : -1;
+    });
+    return { plusMinus, points };
 }
 
 function genderLabel(player) {
@@ -366,6 +420,10 @@ function renderRosterTable(scope, statsById, loading) {
             case 'drops': return s.drops == null ? -1 : s.drops;
             case 'plusminus': return s.plusMinus || 0;
             case 'perpoint': return (s.pointsPlayed > 0) ? (s.plusMinus || 0) / s.pointsPlayed : 0;
+            case 'plusminuso': return s.plusMinusO || 0;
+            case 'perpointo': return (s.pointsPlayedO > 0) ? (s.plusMinusO || 0) / s.pointsPlayedO : 0;
+            case 'plusminusd': return s.plusMinusD || 0;
+            case 'perpointd': return (s.pointsPlayedD > 0) ? (s.plusMinusD || 0) / s.pointsPlayedD : 0;
             case 'pulls': return s.pulls == null ? -1 : s.pulls;
             case 'pullquality': return formatPullQuality(s, '');
             default: return 0;

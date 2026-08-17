@@ -80,6 +80,7 @@ import './utils/possessionSets.js';
 import './utils/tableSort.js';
 import './utils/statsHelp.js';
 import './utils/statsLevel.js';
+import './utils/statsColumns.js';
 import './utils/xlsxExport.js';
 // Evaluated before anything can show a screen, so its breakside:screen-shown
 // listener never misses the first navigation.

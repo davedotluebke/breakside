@@ -69,8 +69,9 @@ th {
     white-space: pre-line;
 }
 
-/* Phase filter row above the event roster stats table */
-.event-roster-filter-row {
+/* Filter row above a stats table: the event roster's scope + Stats menus, and
+   the Review screen's Stats menu. */
+.stats-filter-row {
     display: flex;
     align-items: center;
     gap: 8px 14px;
@@ -80,14 +81,14 @@ th {
 }
 
 /* Each label + <select> pair travels together when the row wraps. */
-.event-roster-filter-group {
+.stats-filter-group {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     min-width: 0;
 }
 
-.event-roster-filter-row label {
+.stats-filter-row label {
     font-weight: 600;
     color: var(--text-primary);
 }

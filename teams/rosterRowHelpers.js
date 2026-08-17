@@ -1,14 +1,12 @@
 /*
- * Shared roster-stat-table row/cell building helpers.
+ * Shared roster-stat-table row/cell building helpers — the DOM half.
  *
- * Used by rosterManagement.js (renderRosterTable) and eventRoster.js
- * (createEventRosterPlayerRow) — renderers that build near-identical
- * Name/Pts/Time/Goals/Assists/Comp%/Ds/TOs/+/- rows with subtly different
- * formatting per caller (dash vs em-dash for "no data", "0.0" vs "0.00" for
- * zero-points +/-per-point, etc). This module extracts only the parts that
- * were genuinely identical across the callers; the per-caller formatting
- * quirks are preserved as-is at each call site rather than unified, to avoid
- * changing what's displayed.
+ * Used by rosterManagement.js (renderRosterTable), eventRoster.js and
+ * gameSummary.js, which build near-identical Name/Pts/Time/.../+/- rows.
+ * *What* goes in those cells is defined once in utils/statsColumns.js (which
+ * also owns the shared value formatters); this module only assembles the
+ * <tr>/<td> around them. The remaining per-caller differences are the identity
+ * columns — a checkbox, gender styling, click handlers — which stay local.
  */
 
 /**
@@ -54,25 +52,6 @@ function buildRosterRow(cells) {
     return row;
 }
 
-/** "+3" / "0" / "-2" — leading "+" for positive values, used by every +/- column. */
-function formatSigned(value) {
-    return value > 0 ? `+${value}` : `${value}`;
-}
-
-/** Same as formatSigned, but for values that need a fixed decimal count (e.g. per-point +/-). */
-function formatSignedFixed(value, digits) {
-    const fixed = value.toFixed(digits);
-    return value > 0 ? `+${fixed}` : fixed;
-}
-
-/** "67%" when attempts were made, otherwise `dash`. Shared Comp%/Huck% formatting. */
-function formatPercentOrDash(made, attempted, dash = '-') {
-    return attempted > 0 ? `${((made / attempted) * 100).toFixed(0)}%` : dash;
-}
-
 // --- ES-module exports; consumed only by other teams/ modules (all converted),
 // --- so no window.* shims are needed.
-export {
-    appendRosterCell, buildRosterRow,
-    formatSigned, formatSignedFixed, formatPercentOrDash,
-};
+export { appendRosterCell, buildRosterRow };
