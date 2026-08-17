@@ -159,5 +159,5 @@ FastAPI app in `main.py`. File-based JSON storage (no database).
 Key env vars: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_JWT_SECRET`, `ULTISTATS_DATA_DIR`, `ULTISTATS_AUTH_REQUIRED`. See `ultistats_server/config.py` for full list.
 
 ## CI/CD
-- **Production**: GitHub Actions (`.github/workflows/main.yml`) deploys frontend on push to `main`. Skips deploy if changes only touch `ultistats_server/`, `data/`, `scripts/`, `*.py`, `*.md`, `.claude/`, or `.gitignore`. Note `.github/` is deliberately *not* on that list, so a workflow edit still triggers a run and can be verified by pushing it.
+- **Production**: GitHub Actions (`.github/workflows/main.yml`) deploys frontend on push to `main`. Skips deploy if changes only touch `ultistats_server/`, `data/`, `scripts/`, `**.py`, `**.md`, `.claude/`, or `.gitignore`. The double star matters: GitHub path filters don't let `*` match `/`, so `*.md` covered only root-level docs and every edit under `docs/` deployed production for nothing (fixed 2026-08-17). Note `.github/` is deliberately *not* on that list, so a workflow edit still triggers a run and can be verified by pushing it. `docs/**` is also deliberately absent — the tutorial clips under `docs/clips/` *are* deployed.
 - **Staging**: Manual deploy via `./scripts/deploy-staging.sh` (no CI — deploys working directory directly).

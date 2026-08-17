@@ -8,8 +8,15 @@ on:
       - 'ultistats_server/**'
       - 'data/**'
       - 'scripts/**'
-      - '*.md'
-      - '*.py'
+      # `**.md`, NOT `*.md`. In GitHub's path filters `*` does not match `/`, so
+      # `*.md` covers only root-level files (README, TODO, ARCHITECTURE) and
+      # every doc under docs/ slipped through — deleting one .md there deployed
+      # production, spent an invalidation, bumped the build, and prompted every
+      # user to update for a file that isn't even on S3 (deploy-excludes.txt
+      # drops it, and the AWS CLI's `*` DOES match `/` — the two glob dialects
+      # disagreeing is what hid this).
+      - '**.md'
+      - '**.py'
       # Repo/agent config: never part of the deployed frontend, so a commit
       # touching only these should not spend a CloudFront invalidation or bump
       # the build number. (paths-ignore skips the run only when EVERY changed
