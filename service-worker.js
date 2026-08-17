@@ -1,9 +1,52 @@
 const cacheName = 'build-dev';
 
+// The app shell, injected at deploy time by `increment-version.py stamp` from
+// the files actually being uploaded — see VERSIONING.md. Empty in the committed
+// file, which is correct for local dev (main.js doesn't register a SW on
+// localhost at all) and means a stamped deploy is the only way this is non-empty.
+//
+// Generated rather than hand-listed on purpose. Everything below this line used
+// to be populated purely by runtime caching, which meant "does the app work
+// offline" depended on whether the user happened to request every asset during
+// some online session AFTER the current deploy — each deploy changes cacheName
+// and `activate` deletes the old cache. A cold launch could therefore find the
+// module graph half-present: index.html paints (it's markup) but main.js never
+// runs, so the splash never retracts. That is a real failure that was observed
+// on staging, not a hypothetical.
+const PRECACHE_URLS = [];
+
 self.addEventListener('install', (e) => {
     console.log('Service Worker: Installed');
     self.skipWaiting(); // Force activation
+    e.waitUntil(precacheAppShell());
 });
+
+/**
+ * Populate the new cache with the app shell before this worker takes over.
+ *
+ * Deliberately NOT cache.addAll(): that is all-or-nothing, so a single 404 —
+ * a CloudFront edge that hasn't caught up with the deploy yet, one stale entry
+ * in a generated manifest — would reject the whole install and leave the app
+ * with NO precache at all. Per-URL adds degrade instead: whatever fetched is
+ * cached, the rest falls back to runtime caching, and the count is logged so a
+ * systematically broken manifest is visible rather than silent.
+ *
+ * `cache: 'reload'` so we store what the server has right now rather than
+ * whatever the browser's HTTP cache is still holding from the previous build.
+ */
+async function precacheAppShell() {
+    if (!PRECACHE_URLS.length) return;
+    const cache = await caches.open(cacheName);
+    const results = await Promise.allSettled(
+        PRECACHE_URLS.map(url => cache.add(new Request(url, { cache: 'reload' })))
+    );
+    const failed = results
+        .map((r, i) => (r.status === 'rejected' ? PRECACHE_URLS[i] : null))
+        .filter(Boolean);
+    console.log(
+        `Service Worker: precached ${results.length - failed.length}/${results.length}`,
+        failed.length ? `— failed: ${failed.join(', ')}` : '');
+}
 
 self.addEventListener('activate', (e) => {
     console.log('Service Worker: Activated');
