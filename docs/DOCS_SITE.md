@@ -48,8 +48,11 @@ posters up instead.
 Each of these is a decision, not an oversight. Revisit as they change.
 
 - **Signing in / creating an account.** Skipped on request. The page carries a one-line
-  note that the app works without an account and that cloud sync, multi-coach, and share
-  links need one.
+  note that an account is required and that the app works offline once signed in.
+  It previously said the opposite — "you can use Breakside without an account" — which
+  was never true: entry is hard-gated on a Supabase session. That claim is what
+  prompted `docs/offline-no-account-audit.md`. Don't reinstate it unless §1 of that
+  audit actually ships.
 - **Pre-created Lines** (`Lines…` on the Line tab, sending in a whole line). Untested by
   the author at the time of writing, so not documented.
 - **Share links / the public live viewer.** Left out of this pass.
