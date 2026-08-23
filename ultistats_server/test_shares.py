@@ -317,3 +317,172 @@ class TestViewShortLink:
         # the not-found/expired state from the API's 404/410.
         r = client.get("/view/ffffffffffff", follow_redirects=False)
         assert r.status_code == 302
+
+
+# =============================================================================
+# Public game projection
+# =============================================================================
+
+RICH_GAME_ID = "2026-07-03_Share-Test-Team_vs_Privacy_pr1v"
+
+
+def _seed_rich_game(seeded):
+    """A game carrying every field the raw document used to leak publicly."""
+    from storage import game_storage
+    game_storage.save_game_version(RICH_GAME_ID, {
+        "id": RICH_GAME_ID,
+        "teamId": seeded["team_id"],
+        "eventId": "tournament-xyz",
+        "phase": "pool-play",
+        "team": "Share Test Team",
+        "opponent": "Privacy FC",
+        "scores": {"team": 1, "opponent": 0},
+        "gameStartTimestamp": "2026-07-03T18:00:00Z",
+        "gameEndTimestamp": None,
+        "startingPosition": "offense",
+        "alternateGenderRatio": True,
+        "startingGenderRatio": "4-3",
+        "lastLineUsed": ["Played-1111"],
+        # The line the coach has queued but not yet called, plus who set it.
+        "pendingNextLine": {
+            "oLine": ["Played-1111", "Benched-2222"],
+            "lineupReadyBy": "Coach Real Name",
+            "lineCoachViewing": "Coach Real Name",
+        },
+        "rosterSnapshot": {"players": [
+            {"id": "Played-1111", "name": "Played Player", "nickname": "Pip",
+             "number": 7, "gender": "FMP", "position": "handler",
+             "defaultLine": "O"},
+            # Never appears in the play-by-play — should not be published at all.
+            {"id": "Benched-2222", "name": "Benched Player", "nickname": "Benchy",
+             "number": 99, "gender": "MMP"},
+        ]},
+        "points": [{
+            "players": ["Played-1111"],
+            "winner": "team",
+            "totalPointTime": 42000,
+            "startTimestamp": "2026-07-03T18:01:00Z",
+            "endTimestamp": "2026-07-03T18:01:42Z",
+            "lastPauseTime": 1234,
+            "startingPosition": "offense",
+            "substitutedOutPlayers": ["Benched-2222"],
+            "possessions": [{
+                "offensive": True,
+                "set": "vert stack",
+                "events": [
+                    {"type": "Pull", "puller": "Played Player",
+                     "pullerId": "Played-1111", "pullerGender": "FMP",
+                     "quality": "good", "io_flag": True,
+                     "from": [0, 0], "to": [40, 60]},
+                    {"type": "Throw", "thrower": "Played Player",
+                     "throwerId": "Played-1111", "receiver": "Played Player",
+                     "receiverId": "Played-1111", "score_flag": True,
+                     "huck_flag": False},
+                    {"type": "Other", "injury_flag": True,
+                     "description": "Sub: Played Player in for Benched Player",
+                     "calledBy": "coach-uid", "calledByName": "Coach Real Name"},
+                ],
+            }],
+        }],
+    })
+
+
+def _shared_game(client, seeded):
+    _seed_rich_game(seeded)
+    share = _mint(game_id=RICH_GAME_ID)
+    _anon()
+    r = client.get(f"/api/share/{share['hash']}")
+    assert r.status_code == 200
+    return r.json()["game"]
+
+
+class TestPublicGameProjection:
+    """GET /api/share/{hash} is anonymous — it must publish only what the
+    viewer renders, not the stored document."""
+
+    def test_top_level_keys_are_exactly_the_allowlist(self, client, seeded):
+        game = _shared_game(client, seeded)
+        assert set(game) == {
+            "team", "opponent", "scores",
+            "gameStartTimestamp", "gameEndTimestamp",
+            "points", "rosterSnapshot",
+        }
+
+    def test_internal_and_coaching_fields_are_gone(self, client, seeded):
+        game = _shared_game(client, seeded)
+        for leaked in ("pendingNextLine", "teamId", "id", "eventId", "phase",
+                       "lastLineUsed", "startingGenderRatio",
+                       "alternateGenderRatio", "startingPosition"):
+            assert leaked not in game, leaked
+
+    def test_roster_drops_gender_jersey_and_coaching_metadata(self, client, seeded):
+        game = _shared_game(client, seeded)
+        players = game["rosterSnapshot"]["players"]
+        assert players, "the player who appeared should still be published"
+        for p in players:
+            assert set(p) <= {"id", "name", "nickname"}, p
+            for leaked in ("gender", "number", "position", "defaultLine"):
+                assert leaked not in p, leaked
+
+    def test_players_who_never_appeared_are_not_published(self, client, seeded):
+        game = _shared_game(client, seeded)
+        names = {p.get("name") for p in game["rosterSnapshot"]["players"]}
+        assert "Played Player" in names
+        assert "Benched Player" not in names
+
+    def test_event_pii_is_stripped(self, client, seeded):
+        game = _shared_game(client, seeded)
+        events = game["points"][0]["possessions"][0]["events"]
+        for ev in events:
+            for leaked in ("pullerGender", "description",
+                           "calledBy", "calledByName", "from", "to"):
+                assert leaked not in ev, f"{leaked} in {ev}"
+
+    def test_point_level_extras_are_stripped(self, client, seeded):
+        game = _shared_game(client, seeded)
+        point = game["points"][0]
+        assert set(point) == {"players", "winner", "totalPointTime", "possessions"}
+        assert "substitutedOutPlayers" not in point
+
+    def test_the_viewer_still_gets_what_it_renders(self, client, seeded):
+        """The projection must not break the play-by-play."""
+        game = _shared_game(client, seeded)
+        assert game["team"] == "Share Test Team"
+        assert game["opponent"] == "Privacy FC"
+        assert game["scores"] == {"team": 1, "opponent": 0}
+
+        point = game["points"][0]
+        assert point["winner"] == "team"
+        assert point["totalPointTime"] == 42000
+        assert point["players"] == ["Played-1111"]
+
+        possession = point["possessions"][0]
+        assert possession["offensive"] is True
+        assert possession["set"] == "vert stack"
+
+        pull, throw, other = possession["events"]
+        assert pull["type"] == "Pull"
+        assert pull["puller"] == "Played Player"
+        assert pull["quality"] == "good"
+        assert pull["io_flag"] is True          # boolean flags survive
+        assert throw["score_flag"] is True
+        assert throw["huck_flag"] is False      # False is kept, not dropped
+        assert throw["receiver"] == "Played Player"
+        # The injury event still renders as play-by-play; only the naming goes.
+        assert other["injury_flag"] is True
+
+        # Name lookup still resolves: the id the point references is published.
+        roster_ids = {p["id"] for p in game["rosterSnapshot"]["players"]}
+        assert "Played-1111" in roster_ids
+
+    def test_non_boolean_flag_lookalike_is_not_carried(self, client, seeded):
+        """`*_flag` is carried by pattern, so pin the isinstance guard."""
+        from routers.shares import _public_event
+        out = _public_event({"type": "Other", "note_flag": {"nested": "object"},
+                             "real_flag": True})
+        assert out == {"type": "Other", "real_flag": True}
+
+    def test_legacy_game_without_roster_snapshot_stays_legacy(self, client, seeded):
+        from routers.shares import _public_game_view
+        view = _public_game_view({"team": "A", "opponent": "B", "points": []})
+        assert "rosterSnapshot" not in view

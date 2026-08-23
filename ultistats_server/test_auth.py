@@ -609,7 +609,14 @@ class TestShareLinks:
         assert response.status_code == 200
         data = response.json()
         assert "game" in data
-        assert data["game"]["id"] == self.game_id
+        # Identify the game by its public fields, not by "id": the anonymous
+        # share payload is projected (routers/shares.py _public_game_view) and
+        # deliberately omits internal plumbing like id/teamId/eventId. The
+        # viewer never uses the game id in share mode either.
+        assert data["game"]["team"] == "Test Share Team"
+        assert data["game"]["opponent"] == "Opponent"
+        assert "id" not in data["game"]
+        assert "teamId" not in data["game"]
     
     def test_invalid_share_returns_404(self):
         """Invalid share hash returns 404."""
