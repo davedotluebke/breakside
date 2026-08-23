@@ -4,10 +4,16 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - 'ultistats_server/**'
-      - 'data/**'
-      - 'scripts/**'
+    # `paths` with negations rather than `paths-ignore`: GitHub allows only one
+    # of the two per event, and the public viewer has to be RE-included after
+    # the `ultistats_server/**` exclusion, which `paths-ignore` cannot express.
+    # Patterns are evaluated in order and the last match wins. The run happens
+    # when any changed file survives the list, so a MIXED commit still deploys.
+    paths:
+      - '**'
+      - '!ultistats_server/**'
+      - '!data/**'
+      - '!scripts/**'
       # `**.md`, NOT `*.md`. In GitHub's path filters `*` does not match `/`, so
       # `*.md` covers only root-level files (README, TODO, ARCHITECTURE) and
       # every doc under docs/ slipped through — deleting one .md there deployed
@@ -15,14 +21,25 @@ on:
       # user to update for a file that isn't even on S3 (deploy-excludes.txt
       # drops it, and the AWS CLI's `*` DOES match `/` — the two glob dialects
       # disagreeing is what hid this).
-      - '**.md'
-      - '**.py'
+      - '!**.md'
+      - '!**.py'
       # Repo/agent config: never part of the deployed frontend, so a commit
       # touching only these should not spend a CloudFront invalidation or bump
-      # the build number. (paths-ignore skips the run only when EVERY changed
-      # file matches, so a mixed commit still deploys.)
-      - '.claude/**'
-      - '.gitignore'
+      # the build number.
+      - '!.claude/**'
+      - '!.gitignore'
+      # ...but the PUBLIC VIEWER is frontend that happens to live under
+      # ultistats_server/ (the API serves the same files at /static/viewer/,
+      # and the "Sync viewer to S3" step below publishes them to
+      # s3://breakside.pro/viewer/, which is where /view/{hash} lands).
+      # Re-include it AFTER the `!ultistats_server/**` line above — without
+      # this, a viewer-only commit matches nothing and the whole run is
+      # skipped, so the change never reaches S3. Three commits have already
+      # been silently dropped this way (they only shipped because a later
+      # mixed commit swept them along), and the next one was a security fix.
+      # `.github/**` is deliberately absent from the exclusions, so a workflow
+      # edit still triggers a run and can be verified by pushing it.
+      - 'ultistats_server/static/viewer/**'
   # Manual trigger: lets you deploy without inventing a commit — e.g. after
   # (re)adding the AWS secrets, or to re-push the current main to S3.
   workflow_dispatch:
