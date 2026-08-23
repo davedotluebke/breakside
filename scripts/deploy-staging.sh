@@ -7,12 +7,14 @@
 # Usage: ./scripts/deploy-staging.sh ["optional label"]
 #
 # Prerequisites:
-#   - AWS CLI configured with appropriate credentials
+#   - AWS CLI with a "breakside-deploy" profile that can write the bucket and
+#     invalidate CloudFront (see AWS_PROFILE below)
 #   - S3 bucket: staging.breakside.pro
 #
 # Optional env vars:
 #   STAGING_BUCKET    - S3 bucket name (default: staging.breakside.pro)
 #   STAGING_CF_DIST   - CloudFront distribution ID for invalidation (optional)
+#   AWS_PROFILE       - AWS profile to deploy as (default: breakside-deploy)
 
 # Ensure full PATH is available (Claude Desktop strips shell PATH)
 [[ -f "$HOME/.zshenv" ]] && source "$HOME/.zshenv"
@@ -22,6 +24,18 @@ set -euo pipefail
 BUCKET="${STAGING_BUCKET:-staging.breakside.pro}"
 CF_DIST="${STAGING_CF_DIST:-E12N2STN9MM8FA}"
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Deploy credentials live in a named AWS profile, not the ambient environment,
+# so the shell default can stay an interactive/admin identity. Sourcing
+# ~/.zshenv above used to supply the keys; it deliberately no longer does.
+# Fail fast with a clear message instead of a confusing S3 error mid-sync.
+export AWS_PROFILE="${AWS_PROFILE:-breakside-deploy}"
+if ! aws sts get-caller-identity >/dev/null 2>&1; then
+  echo "error: AWS profile '$AWS_PROFILE' has no usable credentials." >&2
+  echo "       Add it to ~/.aws/credentials, or set AWS_PROFILE to an identity" >&2
+  echo "       that can write s3://$BUCKET and invalidate CloudFront $CF_DIST." >&2
+  exit 1
+fi
 
 LABEL="${1:-}"
 STAMP=$(date -u +%Y%m%d%H%M%S)
