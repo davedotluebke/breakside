@@ -13,9 +13,18 @@
 // breakside domains → api.breakside.pro; localhost → :8000 (with a
 // transient ?api= override for dev backends on other ports); anything else
 // (e.g. the api host itself) → same origin.
+//
+// The ?api= override is allowlisted (landing/apiOrigin.js, loaded before this
+// script). This page sends the user's Supabase bearer token to API_BASE on
+// load, so an unchecked override here leaks it before the user touches
+// anything — and `redirectTo: window.location.href` on the OAuth round trip
+// would carry the hostile parameter back afterwards.
 const API_BASE = (() => {
     const apiParam = new URLSearchParams(window.location.search).get('api');
-    if (apiParam && apiParam !== 'reset') return apiParam;
+    if (apiParam && apiParam !== 'reset') {
+        if (window.BREAKSIDE_IS_ALLOWED_API_BASE(apiParam)) return apiParam;
+        console.warn(`[join] Ignoring disallowed ?api= override: ${apiParam}`);
+    }
 
     const host = window.location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:8000';

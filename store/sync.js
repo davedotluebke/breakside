@@ -22,6 +22,7 @@ import { showControllerToast } from '../game/controllerState.js';
 import { mergePendingNextLine } from './pendingLineLogic.js';
 import { makeAuthFetch } from './authFetchLogic.js';
 import { log } from '../utils/logger.js';
+import { isAllowedApiBase } from '../utils/apiOrigin.js';
 
 // =============================================================================
 // Configuration
@@ -29,6 +30,11 @@ import { log } from '../utils/logger.js';
 
 // API_BASE_URL can be set via localStorage for multi-device testing
 // e.g., localStorage.setItem('ultistats_api_url', 'http://192.168.1.100:8000')
+//
+// Both the ?api= parameter and the stored value are checked against
+// isAllowedApiBase() — this base URL is what authFetch attaches the Supabase
+// bearer token to, so an unvalidated override is a token-exfiltration primitive.
+// See utils/apiOrigin.js for the threat and the allowlist's shape.
 function getApiBaseUrl() {
     // Check for ?api= URL parameter override
     const params = new URLSearchParams(window.location.search);
@@ -37,9 +43,14 @@ function getApiBaseUrl() {
         if (apiParam === 'reset') {
             localStorage.removeItem('ultistats_api_url');
             log('API override cleared');
-        } else {
+        } else if (isAllowedApiBase(apiParam)) {
             localStorage.setItem('ultistats_api_url', apiParam);
             log(`API override set: ${apiParam}`);
+        } else {
+            // Refused, and deliberately NOT stored. console.warn rather than
+            // log() so it is visible without the ?debug=1 opt-in — if this
+            // fires, someone was handed a hostile link.
+            console.warn(`[sync] Ignoring disallowed ?api= override: ${apiParam}`);
         }
         // Clean the URL
         params.delete('api');
@@ -48,10 +59,18 @@ function getApiBaseUrl() {
         window.history.replaceState({}, '', newUrl);
     }
 
-    // Check localStorage override (for testing)
+    // Check localStorage override (for testing). Re-validated on every read,
+    // not just at write time: a browser poisoned before this guard existed
+    // would otherwise keep honoring the hostile value forever. Dropping it
+    // here is what remediates an already-affected user on their next load.
     const storedUrl = localStorage.getItem('ultistats_api_url');
-    if (storedUrl) return storedUrl;
-    
+    if (storedUrl) {
+        if (isAllowedApiBase(storedUrl)) return storedUrl;
+        localStorage.removeItem('ultistats_api_url');
+        console.warn(`[sync] Dropped disallowed stored API override: ${storedUrl}`);
+    }
+
+
     // Check if config is available (auth/config.js)
     if (BREAKSIDE_AUTH?.API_BASE_URL) {
         // In production, use the configured API URL

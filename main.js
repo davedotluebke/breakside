@@ -70,6 +70,7 @@ import './store/localTeamView.js';
 import './utils/helpers.js';
 import './utils/changeStamp.js';
 import './utils/diagnosticSurface.js';
+import './utils/apiOrigin.js';
 import { currentTeam } from './store/storage.js';
 import './store/sync.js';
 import './settings/advancedSettings.js';

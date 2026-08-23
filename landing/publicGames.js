@@ -14,9 +14,17 @@
 
     // Same hostname → API mapping as landing/join.js (the static origins
     // have no /api/*; the API lives at api.breakside.pro).
+    // ?api= is allowlisted (landing/apiOrigin.js, loaded before this script).
+    // Besides the token-exfiltration risk it carries elsewhere, API_BASE is
+    // interpolated into a card's href below, where — unlike the game fields —
+    // it was not escaped, so an unchecked value was also an HTML-injection
+    // sink on the landing page.
     var API_BASE = (function () {
         var apiParam = new URLSearchParams(window.location.search).get('api');
-        if (apiParam && apiParam !== 'reset') return apiParam;
+        if (apiParam && apiParam !== 'reset') {
+            if (window.BREAKSIDE_IS_ALLOWED_API_BASE(apiParam)) return apiParam;
+            console.warn('[publicGames] Ignoring disallowed ?api= override: ' + apiParam);
+        }
 
         var host = window.location.hostname;
         if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:8000';
@@ -35,7 +43,11 @@
     function esc(s) {
         var div = document.createElement('div');
         div.textContent = s == null ? '' : String(s);
-        return div.innerHTML;
+        // textContent→innerHTML escapes & < >, but NOT quotes, so its output is
+        // only safe inside an attribute once we finish the job here. Both
+        // contexts are used below — the card's href is an attribute. Escaping
+        // quotes is inert in text content, so one helper covers both.
+        return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function gameDateLabel(iso) {
@@ -53,7 +65,7 @@
             : '<span class="pg-date">' + esc(gameDateLabel(game.gameStartTimestamp)) + '</span>';
         var scores = game.scores || {};
         var viewerUrl = API_BASE + '/view/' + encodeURIComponent(game.hash);
-        return '<a class="pg-card" href="' + viewerUrl + '">' +
+        return '<a class="pg-card" href="' + esc(viewerUrl) + '">' +
             '<div class="pg-card-top">' + badge + '</div>' +
             '<div class="pg-teams">' +
                 '<span class="pg-team">' + esc(game.team) + '</span>' +

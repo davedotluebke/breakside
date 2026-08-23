@@ -13,47 +13,6 @@ import { escapeHtml } from '../utils/gameLogRenderer.js';
 import { isDiagnosticHost } from '../utils/diagnosticSurface.js';
 import { log } from '../utils/logger.js';
 
-function showSetServerDialog() {
-    const currentUrl = localStorage.getItem('ultistats_api_url') ||
-        (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'http://localhost:8000');
-
-    const newUrl = prompt(
-        'Enter the server address:\n\n' +
-        'Examples:\n' +
-        '• https://api.breakside.pro (production)\n' +
-        '• http://192.168.1.100:8000 (local network)\n' +
-        '• http://localhost:8000 (same device)\n\n' +
-        'Leave empty to use auto-detection.',
-        currentUrl
-    );
-
-    if (newUrl === null) {
-        // User cancelled
-        return;
-    }
-
-    if (newUrl.trim() === '') {
-        // Clear stored URL - will use auto-detection
-        localStorage.removeItem('ultistats_api_url');
-        alert('Server URL cleared. The app will auto-detect the server on next reload.');
-    } else {
-        // Validate URL format
-        try {
-            new URL(newUrl.trim());
-            localStorage.setItem('ultistats_api_url', newUrl.trim());
-            alert('Server URL updated. Reload the app to apply changes.');
-        } catch (e) {
-            alert('Invalid URL format. Please enter a valid URL (e.g., http://192.168.1.100:8000)');
-            return;
-        }
-    }
-
-    // Offer to reload
-    if (confirm('Reload the app now to apply changes?')) {
-        window.location.reload();
-    }
-}
-
 /**
  * Build the HTML for the sync status indicator
  */
