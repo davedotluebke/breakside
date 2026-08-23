@@ -7,8 +7,10 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from ._shared import (
+    assert_team_edit_access,
     create_membership,
     delete_membership,
+    get_current_user,
     get_game_current,
     get_optional_user,
     get_team,
@@ -26,6 +28,7 @@ from ._shared import (
     save_team,
     team_exists,
     update_team,
+    validate_id,
 )
 from ._shared import delete_team as delete_team_storage
 from .games import _enrich_game_with_activity
@@ -116,41 +119,55 @@ async def remove_team_member(
 @router.post("/api/teams")
 async def create_team(
     team_data: Dict[str, Any] = Body(...),
-    user: Optional[dict] = Depends(get_optional_user)
+    user: dict = Depends(get_current_user)
 ):
     """
-    Create a new team.
+    Create a new team, or overwrite an existing one the caller coaches.
 
     If 'id' is provided in the body, it will be used (for offline-created teams).
     Otherwise, an ID will be generated from the name.
 
-    If authenticated, the creator automatically becomes a Coach for the team.
+    The creator automatically becomes a Coach for the team.
+
+    Requires authentication. This endpoint doubles as the offline-sync upsert,
+    so a body ``id`` naming an EXISTING team REPLACES that team's document
+    (``update_team`` is a full-document write, not a merge) — that branch
+    therefore also requires Coach access to the team being overwritten, the
+    same shape as ``POST /api/players``.
+
+    ``provided_id`` is validated before it reaches storage because it becomes
+    a filesystem path. Unlike a path parameter — which Starlette matches as a
+    single segment and uvicorn percent-decodes before routing — a body field
+    passes through unnormalized, so ``../`` in it would otherwise escape
+    TEAMS_DIR and write anywhere under the data dir.
     """
     if "name" not in team_data:
         raise HTTPException(status_code=400, detail="Team name is required")
 
     # Check if client provided an ID (offline creation)
     provided_id = team_data.get('id')
+    if provided_id:
+        validate_id(provided_id, "team id")
 
     # If ID was provided and already exists, this is an update/sync
     if provided_id and team_exists(provided_id):
+        assert_team_edit_access(user, provided_id)
         update_team(provided_id, team_data)
         return {"status": "updated", "team_id": provided_id, "team": get_team(provided_id)}
 
     # Create new team
     team_id = save_team(team_data, provided_id)
 
-    # If authenticated, make creator a Coach
-    if user:
-        try:
-            create_membership(
-                team_id=team_id,
-                user_id=user["id"],
-                role="coach",
-                invited_by=None  # Creator, not invited
-            )
-        except ValueError:
-            pass  # Membership already exists (shouldn't happen for new teams)
+    # Make the creator a Coach
+    try:
+        create_membership(
+            team_id=team_id,
+            user_id=user["id"],
+            role="coach",
+            invited_by=None  # Creator, not invited
+        )
+    except ValueError:
+        pass  # Membership already exists (shouldn't happen for new teams)
 
     return {"status": "created", "team_id": team_id, "team": get_team(team_id)}
 

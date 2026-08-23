@@ -60,6 +60,7 @@ require_body_team_coach = auth.require_body_team_coach
 require_player_edit_access = auth.require_player_edit_access
 require_player_read_access = auth.require_player_read_access
 assert_player_edit_access = auth.assert_player_edit_access
+assert_team_edit_access = auth.assert_team_edit_access
 
 # Validation + config helpers
 validate_id = validation.validate_id

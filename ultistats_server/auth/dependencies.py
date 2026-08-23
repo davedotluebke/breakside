@@ -170,10 +170,38 @@ def require_team_access(team_id_param: str = "team_id") -> Callable:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have access to this team"
             )
-        
+
         return user
-    
+
     return dependency
+
+
+def assert_team_edit_access(user: dict, team_id: str) -> None:
+    """Raise HTTP 403 unless ``user`` may overwrite the EXISTING team ``team_id``.
+
+    The team counterpart to ``assert_player_edit_access``, and it exists for
+    the same reason: ``POST /api/teams`` doubles as the offline-sync upsert,
+    so a body carrying an ``id`` that already exists REPLACES that team's
+    document. That branch must require Coach access to the team being
+    overwritten. ``require_team_coach`` can't be used — it reads
+    ``request.path_params``, and here the id arrives in the request body.
+
+    Admins always pass. When AUTH_REQUIRED is false (local dev / test
+    backends) the membership check is skipped, matching every other
+    ``require_*``/``assert_*`` helper — otherwise a synthetic dev user with no
+    memberships could never sync an offline-created team.
+    """
+    if not auth_required():
+        return
+
+    if is_admin(user["id"]):
+        return
+
+    if get_user_team_role(user["id"], team_id) != "coach":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Coach access required for this team"
+        )
 
 
 async def require_game_team_coach(

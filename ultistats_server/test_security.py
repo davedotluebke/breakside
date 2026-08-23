@@ -304,6 +304,125 @@ class TestPlayerOverwriteHole:
         assert r.json()["player"]["name"] == "Renamed By Coach"
 
 
+class TestTeamOverwriteHole:
+    """POST /api/teams was anonymous AND skipped validate_id on the body's `id`.
+
+    Because the id came from the body it was never path-normalized, so `../`
+    escaped TEAMS_DIR: writing `data/users/<uuid>.json` with `isAdmin: true`
+    granted global admin to any caller, with no credentials at all.
+    """
+
+    def test_anonymous_cannot_overwrite_team(self, client, seeded):
+        # No _as() override -> real dependency -> auth required (default true).
+        r = client.post("/api/teams", json={"id": seeded["team_id"], "name": "HIJACKED"})
+        assert r.status_code == 401
+        _as(MOCK_COACH)
+        assert client.get(f"/api/teams/{seeded['team_id']}").json()["name"] == "Sec Team"
+
+    def test_anonymous_cannot_plant_admin_user_via_traversal(self, client, seeded):
+        victim = "attacker-uuid"
+        r = client.post("/api/teams", json={
+            "id": f"../users/{victim}",
+            "name": "x",
+            "isAdmin": True,
+        })
+        assert r.status_code == 401
+        assert not (seeded["data_dir"] / "users" / f"{victim}.json").exists()
+
+    def test_authenticated_traversal_id_is_rejected(self, client, seeded):
+        _as(MOCK_OUTSIDER)
+        victim = "escalated-uuid"
+        r = client.post("/api/teams", json={
+            "id": f"../users/{victim}",
+            "name": "x",
+            "isAdmin": True,
+        })
+        assert r.status_code == 400
+        assert not (seeded["data_dir"] / "users" / f"{victim}.json").exists()
+
+    def test_non_string_id_is_a_clean_400(self, client, seeded):
+        _as(MOCK_OUTSIDER)
+        r = client.post("/api/teams", json={"id": 123, "name": "x"})
+        assert r.status_code == 400
+
+    def test_outsider_cannot_overwrite_existing_team(self, client, seeded):
+        _as(MOCK_OUTSIDER)
+        r = client.post("/api/teams", json={"id": seeded["team_id"], "name": "HIJACKED"})
+        assert r.status_code == 403
+        # Team document — including its roster — is untouched.
+        _as(MOCK_COACH)
+        team = client.get(f"/api/teams/{seeded['team_id']}").json()
+        assert team["name"] == "Sec Team"
+        assert team["playerIds"] == [seeded["player_id"]]
+
+    def test_coach_can_still_upsert_own_team(self, client, seeded):
+        """The offline-sync path (POST doubling as update) must keep working."""
+        _as(MOCK_COACH)
+        r = client.post("/api/teams", json={
+            "id": seeded["team_id"],
+            "name": "Renamed By Coach",
+            "playerIds": [seeded["player_id"]],
+        })
+        assert r.status_code == 200
+        assert r.json()["team"]["name"] == "Renamed By Coach"
+        # Restore so later tests see the seeded name.
+        client.post("/api/teams", json={
+            "id": seeded["team_id"],
+            "name": "Sec Team",
+            "playerIds": [seeded["player_id"]],
+        })
+
+    def test_creating_a_new_team_makes_creator_coach(self, client, seeded):
+        _as(MOCK_OUTSIDER)
+        r = client.post("/api/teams", json={"name": "Outsider Own Team"})
+        assert r.status_code == 200
+        new_id = r.json()["team_id"]
+        # Creator got coach access; the seeded team is still off-limits to them.
+        assert client.get(f"/api/teams/{new_id}").status_code == 200
+        assert client.get(f"/api/teams/{seeded['team_id']}").status_code == 403
+
+
+class TestEntityStoreContainment:
+    """Storage-layer backstop: JsonEntityStore must refuse an escaping id even
+    if an API-layer validate_id is ever missed again."""
+
+    @pytest.fixture
+    def store(self, tmp_path):
+        from storage.entity_store import JsonEntityStore
+        d = tmp_path / "things"
+        d.mkdir()
+        return JsonEntityStore(kind="Thing", dir_getter=lambda: d,
+                               sort_key=lambda t: t.get("name", "")), tmp_path
+
+    @pytest.mark.parametrize("bad_id", [
+        "../escape", "../../escape", "sub/nested", "/absolute",
+        "_index", "_anything", 123, None,
+    ])
+    def test_file_rejects_unsafe_ids(self, store, bad_id):
+        s, _ = store
+        with pytest.raises(ValueError):
+            s._file(bad_id)
+
+    def test_exists_reports_unsafe_id_as_absent(self, store):
+        s, _ = store
+        assert s.exists("../escape") is False
+        assert s.exists("_index") is False
+
+    def test_save_cannot_write_outside_the_store_dir(self, store):
+        s, tmp_path = store
+        with pytest.raises(ValueError):
+            s.save({"name": "pwn", "isAdmin": True}, "../../pwned")
+        assert not (tmp_path / "pwned.json").exists()
+        assert not (tmp_path.parent / "pwned.json").exists()
+
+    def test_normal_ids_still_work(self, store):
+        s, _ = store
+        eid = s.save({"name": "Fine"}, "Team-ab12")
+        assert eid == "Team-ab12"
+        assert s.exists("Team-ab12")
+        assert s.get("Team-ab12")["name"] == "Fine"
+
+
 class TestProxyImageSSRF:
     def test_requires_auth(self, client, seeded):
         # No override → auth required (default true) → 401

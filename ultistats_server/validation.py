@@ -25,8 +25,13 @@ _ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def is_valid_id(value: str) -> bool:
-    """Return True if ``value`` is a safe ``[A-Za-z0-9_-]+`` identifier."""
-    return bool(value) and _ID_RE.match(value) is not None
+    """Return True if ``value`` is a safe ``[A-Za-z0-9_-]+`` identifier.
+
+    Non-string input is invalid rather than an error: IDs pulled from a JSON
+    request body can be any JSON type, and ``{"id": 123}`` should read as a
+    clean 400 from ``validate_id``, not a TypeError inside ``re.match``.
+    """
+    return isinstance(value, str) and bool(value) and _ID_RE.match(value) is not None
 
 
 def validate_id(value: str, name: str = "id") -> str:

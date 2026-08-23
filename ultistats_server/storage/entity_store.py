@@ -48,11 +48,42 @@ class JsonEntityStore:
         self._apply_defaults = apply_defaults
 
     def _file(self, entity_id: str) -> Path:
-        return self._dir() / f"{entity_id}.json"
+        """Resolve an entity's JSON path, confirming it stays inside the store dir.
+
+        Defense-in-depth against path traversal, mirroring
+        ``game_storage._safe_game_dir``. The API layer validates IDs against
+        ``^[A-Za-z0-9_-]+$``, but an ID arriving in a request *body* is not
+        normalized the way a path parameter is — Starlette matches a path param
+        as a single segment and uvicorn percent-decodes before routing, whereas
+        a body field passes through untouched. So a validation missed at one
+        call site must not be able to write outside this directory; exactly
+        that gap made ``POST /api/teams`` an arbitrary-file-write. Every store
+        built on this class (teams, players, users, events, invites, shares,
+        memberships) inherits the check.
+
+        Leading-underscore IDs are refused too: ``_index.json`` is the sibling
+        index some of these directories keep (see ``json_index``), and a
+        generated ID can never start with ``_`` because ``id_utils`` strips it.
+
+        Raises:
+            ValueError: If ``entity_id`` would escape the directory, collide
+                with an index file, or isn't a string.
+        """
+        if not isinstance(entity_id, str) or entity_id.startswith("_"):
+            raise ValueError(f"Invalid {self.key} id: {entity_id!r}")
+
+        base = self._dir().resolve()
+        candidate = (base / f"{entity_id}.json").resolve()
+        if candidate.parent != base:
+            raise ValueError(f"Invalid {self.key} id: {entity_id!r}")
+        return candidate
 
     def exists(self, entity_id: str) -> bool:
-        """Check if an entity exists."""
-        return self._file(entity_id).exists()
+        """Check if an entity exists. An ID that can't name one reads as absent."""
+        try:
+            return self._file(entity_id).exists()
+        except ValueError:
+            return False
 
     def generate_unique_id(self, name: str) -> str:
         """Generate a collision-free ID from a display name."""

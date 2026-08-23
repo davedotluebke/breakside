@@ -39,6 +39,7 @@ from .dependencies import (
     require_player_edit_access,
     require_player_read_access,
     assert_player_edit_access,
+    assert_team_edit_access,
 )
 
 __all__ = [
@@ -59,5 +60,6 @@ __all__ = [
     "require_player_edit_access",
     "require_player_read_access",
     "assert_player_edit_access",
+    "assert_team_edit_access",
 ]
 
