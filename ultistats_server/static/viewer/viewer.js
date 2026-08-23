@@ -90,6 +90,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup navigation tabs
     setupNavigation();
 
+    // Delegated handler for the entity/detail links rendered by the list
+    // views. These used to carry inline `onclick="showXDetail('${id}')"`,
+    // which put an attacker-controlled id inside a JS string inside an HTML
+    // attribute — a context HTML-escaping cannot make safe, because entities
+    // are decoded before the JS is parsed. Routing through data-* attributes
+    // removes the script context entirely; the id arrives via getAttribute as
+    // inert text.
+    document.addEventListener('click', (e) => {
+        const link = e.target.closest('a[data-detail]');
+        if (!link) return;
+        e.preventDefault();
+        const id = link.getAttribute('data-detail-id');
+        if (!id) return;
+        switch (link.getAttribute('data-detail')) {
+            case 'player': showPlayerDetail(id); break;
+            case 'team': showTeamDetail(id); break;
+            case 'game': showGameDetail(id); break;
+        }
+    });
+
     // Setup info toggle for game detail view
     const infoToggle = document.getElementById('info-toggle');
     if (infoToggle) {
@@ -242,7 +262,7 @@ async function loadGames() {
         updateConnectionStatus('connected');
     } catch (error) {
         console.error('Failed to load games:', error);
-        container.innerHTML = `<div class="error-message">Failed to load games: ${error.message}</div>`;
+        container.innerHTML = `<div class="error-message">Failed to load games: ${escapeHtmlViewer(error.message)}</div>`;
         updateConnectionStatus('disconnected');
     }
 }
@@ -260,7 +280,7 @@ async function loadTeams() {
         updateConnectionStatus('connected');
     } catch (error) {
         console.error('Failed to load teams:', error);
-        container.innerHTML = `<div class="error-message">Failed to load teams: ${error.message}</div>`;
+        container.innerHTML = `<div class="error-message">Failed to load teams: ${escapeHtmlViewer(error.message)}</div>`;
         updateConnectionStatus('disconnected');
     }
 }
@@ -278,7 +298,7 @@ async function loadPlayers() {
         updateConnectionStatus('connected');
     } catch (error) {
         console.error('Failed to load players:', error);
-        container.innerHTML = `<div class="error-message">Failed to load players: ${error.message}</div>`;
+        container.innerHTML = `<div class="error-message">Failed to load players: ${escapeHtmlViewer(error.message)}</div>`;
         updateConnectionStatus('disconnected');
     }
 }
@@ -311,9 +331,9 @@ async function loadTeamDetail(teamId) {
             playersContainer.innerHTML = playersData.players.map(p => {
                 const genderClass = p.gender === 'FMP' ? 'gender-fmp' : p.gender === 'MMP' ? 'gender-mmp' : '';
                 return `
-                    <a href="?player_id=${p.id}" class="mini-item ${genderClass}" onclick="event.preventDefault(); showPlayerDetail('${p.id}')">
-                        <span class="mini-name">${p.name}</span>
-                        <span class="mini-badge">#${p.number || '-'}</span>
+                    <a href="?player_id=${encodeURIComponent(p.id)}" class="mini-item ${genderClass}" data-detail="player" data-detail-id="${escapeHtmlViewer(p.id)}">
+                        <span class="mini-name">${escapeHtmlViewer(p.name)}</span>
+                        <span class="mini-badge">#${escapeHtmlViewer(p.number || '-')}</span>
                     </a>
                 `;
             }).join('');
@@ -325,8 +345,8 @@ async function loadTeamDetail(teamId) {
         const gamesContainer = document.getElementById('team-games-list');
         if (gamesData.game_ids && gamesData.game_ids.length > 0) {
             gamesContainer.innerHTML = gamesData.game_ids.map(gameId => `
-                <a href="?game_id=${gameId}" class="mini-item" onclick="event.preventDefault(); showGameDetail('${gameId}')">
-                    <span class="mini-name">${formatGameId(gameId)}</span>
+                <a href="?game_id=${encodeURIComponent(gameId)}" class="mini-item" data-detail="game" data-detail-id="${escapeHtmlViewer(gameId)}">
+                    <span class="mini-name">${escapeHtmlViewer(formatGameId(gameId))}</span>
                 </a>
             `).join('');
         } else {
@@ -378,8 +398,8 @@ async function loadPlayerDetail(playerId) {
         const teamsContainer = document.getElementById('player-teams-list');
         if (teamsData.teams && teamsData.teams.length > 0) {
             teamsContainer.innerHTML = teamsData.teams.map(team => `
-                <a href="?team_id=${team.id}" class="mini-item" onclick="event.preventDefault(); showTeamDetail('${team.id}')">
-                    <span class="mini-name">${team.name}</span>
+                <a href="?team_id=${encodeURIComponent(team.id)}" class="mini-item" data-detail="team" data-detail-id="${escapeHtmlViewer(team.id)}">
+                    <span class="mini-name">${escapeHtmlViewer(team.name)}</span>
                 </a>
             `).join('');
         } else {
@@ -390,8 +410,8 @@ async function loadPlayerDetail(playerId) {
         const gamesContainer = document.getElementById('player-games-list');
         if (gamesData.game_ids && gamesData.game_ids.length > 0) {
             gamesContainer.innerHTML = gamesData.game_ids.map(gameId => `
-                <a href="?game_id=${gameId}" class="mini-item" onclick="event.preventDefault(); showGameDetail('${gameId}')">
-                    <span class="mini-name">${formatGameId(gameId)}</span>
+                <a href="?game_id=${encodeURIComponent(gameId)}" class="mini-item" data-detail="game" data-detail-id="${escapeHtmlViewer(gameId)}">
+                    <span class="mini-name">${escapeHtmlViewer(formatGameId(gameId))}</span>
                 </a>
             `).join('');
         } else {
@@ -434,16 +454,16 @@ function renderGamesList(games, container) {
         const localOnlyClass = isPending ? 'local-only' : '';
         
         return `
-            <a href="?game_id=${game.game_id}" class="entity-card game-card ${localOnlyClass}" onclick="event.preventDefault(); showGameDetail('${game.game_id}')">
+            <a href="?game_id=${encodeURIComponent(game.game_id)}" class="entity-card game-card ${localOnlyClass}" data-detail="game" data-detail-id="${escapeHtmlViewer(game.game_id)}">
                 <div class="card-header">
-                    <span class="card-title">${game.team} vs ${game.opponent}</span>
+                    <span class="card-title">${escapeHtmlViewer(game.team)} vs ${escapeHtmlViewer(game.opponent)}</span>
                     ${isInProgress ? '<span class="live-badge">LIVE</span>' : ''}
                     ${isPending ? '<span class="pending-sync-badge"><span class="pending-icon">⏳</span>Pending</span>' : ''}
                 </div>
                 <div class="card-meta">
-                    <span class="card-date">${dateStr}</span>
-                    <span class="card-score">${teamScore} - ${oppScore}</span>
-                    <span class="card-points">${game.points_count || 0} pts</span>
+                    <span class="card-date">${escapeHtmlViewer(dateStr)}</span>
+                    <span class="card-score">${escapeHtmlViewer(teamScore)} - ${escapeHtmlViewer(oppScore)}</span>
+                    <span class="card-points">${escapeHtmlViewer(game.points_count || 0)} pts</span>
                 </div>
             </a>
         `;
@@ -462,13 +482,13 @@ function renderTeamsList(teams, container) {
         const localOnlyClass = isPending ? 'local-only' : '';
         
         return `
-            <a href="?team_id=${team.id}" class="entity-card team-card ${localOnlyClass}" onclick="event.preventDefault(); showTeamDetail('${team.id}')">
+            <a href="?team_id=${encodeURIComponent(team.id)}" class="entity-card team-card ${localOnlyClass}" data-detail="team" data-detail-id="${escapeHtmlViewer(team.id)}">
                 <div class="card-header">
-                    <span class="card-title">${team.name}</span>
+                    <span class="card-title">${escapeHtmlViewer(team.name)}</span>
                     ${isPending ? '<span class="pending-sync-badge"><span class="pending-icon">⏳</span>Pending</span>' : ''}
                 </div>
                 <div class="card-meta">
-                    <span class="card-id">${team.id}</span>
+                    <span class="card-id">${escapeHtmlViewer(team.id)}</span>
                     <span class="card-count">${playerCount} players</span>
                 </div>
             </a>
@@ -488,15 +508,15 @@ function renderPlayersList(players, container) {
         const localOnlyClass = isPending ? 'local-only' : '';
         
         return `
-            <a href="?player_id=${player.id}" class="entity-card player-card ${genderClass} ${localOnlyClass}" onclick="event.preventDefault(); showPlayerDetail('${player.id}')">
+            <a href="?player_id=${encodeURIComponent(player.id)}" class="entity-card player-card ${genderClass} ${localOnlyClass}" data-detail="player" data-detail-id="${escapeHtmlViewer(player.id)}">
                 <div class="card-header">
-                    <span class="card-title">${player.name}</span>
-                    ${player.number ? `<span class="player-number">#${player.number}</span>` : ''}
+                    <span class="card-title">${escapeHtmlViewer(player.name)}</span>
+                    ${player.number ? `<span class="player-number">#${escapeHtmlViewer(player.number)}</span>` : ''}
                     ${isPending ? '<span class="pending-sync-badge"><span class="pending-icon">⏳</span>Pending</span>' : ''}
                 </div>
                 <div class="card-meta">
-                    <span class="card-id">${player.id}</span>
-                    ${player.gender ? `<span class="card-gender">${player.gender}</span>` : ''}
+                    <span class="card-id">${escapeHtmlViewer(player.id)}</span>
+                    ${player.gender ? `<span class="card-gender">${escapeHtmlViewer(player.gender)}</span>` : ''}
                 </div>
             </a>
         `;
@@ -912,13 +932,17 @@ function createPointElement(point, pointNumber, teamName, opponentName) {
     // Resolve player IDs to names
     const rosterList = (point.players || []).map(p => resolvePlayerName(p)).join(', ');
 
+    // rosterList is player names; resultText embeds the team/opponent name.
+    // Both are coach-entered and reach anonymous share-link visitors, so both
+    // are escaped. pointNumber is a loop index and resultClass is one of two
+    // literals, so neither is attacker-controlled.
     div.innerHTML = `
         <div class="point-header" onclick="togglePoint(this)">
             <div class="point-title">
-                <span>Point ${pointNumber}: ${rosterList}</span>
-                <span class="point-score-summary">${summary}</span>
+                <span>Point ${pointNumber}: ${escapeHtmlViewer(rosterList)}</span>
+                <span class="point-score-summary">${escapeHtmlViewer(summary)}</span>
             </div>
-            <span class="point-result ${resultClass}">${resultText}</span>
+            <span class="point-result ${resultClass}">${escapeHtmlViewer(resultText)}</span>
         </div>
         <div class="point-content">
             ${renderPossessions(point.possessions)}
@@ -941,12 +965,33 @@ function createPointElement(point, pointNumber, teamName, opponentName) {
 // possession-boundary semantics change there or in gameLogRenderer, mirror
 // the change here by hand.
 // ─────────────────────────────────────────────────────────────────────────────
-// Minimal HTML escape for coach-entered strings interpolated into innerHTML
-// (currently just the possession set label).
+// HTML-escape for EVERY non-literal string interpolated into innerHTML in this
+// file. Game data reaches the viewer straight from storage with no validation
+// on the way in — routers/games.py checks only that `team` and `opponent`
+// exist, and player creation only that `name` does — so player names, team
+// names, opponent names and every event field are attacker-controlled text.
+//
+// This viewer is served from s3://breakside.pro/viewer/, i.e. the SAME ORIGIN
+// as the PWA, where the Supabase access *and refresh* tokens live in
+// localStorage. Script execution here is therefore durable account takeover,
+// not a contained defacement. Escape everything; there is no "safe" field.
+//
+// Escapes ' as well as " so the output is also safe inside an attribute value.
+// It is deliberately NOT relied on for a JS-string-inside-attribute context
+// (`onclick="f('...')"`), because HTML entities are decoded before the JS is
+// parsed — the detail links below use data-* attributes and one delegated
+// listener instead of inline handlers, which removes that context entirely.
 function escapeHtmlViewer(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+
+// Event types this viewer knows how to style. `event.type` is attacker-
+// controlled, and it is interpolated into a class attribute — escaping alone
+// would still let it inject extra space-separated classes, so the class comes
+// from this allowlist while the displayed text is escaped separately.
+const KNOWN_EVENT_TYPES = ['Throw', 'Turnover', 'Defense', 'Pull', 'Violation', 'Other'];
 
 function renderPossessions(possessions) {
     if (!possessions || possessions.length === 0) return '<div class="possession">No possessions yet</div>';
@@ -1049,10 +1094,16 @@ function renderEvent(event) {
         desc = type;
     }
 
+    // `desc` is assembled above from literal phrasing plus attacker-controlled
+    // names (thrower/receiver/defender/puller/quality). None of the literal
+    // parts contain markup, so escaping the finished string once here is both
+    // correct and far less error-prone than escaping at each of the ~15
+    // concatenation sites.
+    const typeClass = KNOWN_EVENT_TYPES.includes(type) ? type : 'Unknown';
     return `
         <div class="event-item">
-            <span class="event-type ${type}">${type}</span>
-            <span class="event-desc">${desc}</span>
+            <span class="event-type ${typeClass}">${escapeHtmlViewer(type)}</span>
+            <span class="event-desc">${escapeHtmlViewer(desc)}</span>
         </div>
     `;
 }
