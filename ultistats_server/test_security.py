@@ -928,3 +928,86 @@ class TestInteractiveDocsDisabled:
         assert app.openapi_url is None
         assert app.docs_url is None
         assert app.redoc_url is None
+
+
+# =============================================================================
+# Team member emails are not roster-wide
+# =============================================================================
+
+VIEWER_MEMBER = {"id": "member-viewer", "email": "viewer@test", "role": "authenticated"}
+
+
+class TestTeamMemberEmailExposure:
+    """GET /api/teams/{id}/members is gated by require_team_access, which
+    admits viewers — and it emitted every member's email address regardless.
+    On a youth team the viewers are the players and their parents; a coach
+    signing up to run stats never agreed to publish their address to the whole
+    roster. Coaches administer the roster and still see addresses; everyone
+    sees their own; viewers see nobody else's.
+    """
+
+    @pytest.fixture
+    def members_env(self, seeded, monkeypatch):
+        from storage import membership_storage, user_storage
+
+        # seeded patches config.USERS_DIR but not the constant user_storage
+        # snapshotted at import; without this, save_user writes to real data/.
+        users_dir = seeded["data_dir"] / "users"
+        users_dir.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(user_storage, "USERS_DIR", users_dir)
+
+        user_storage.save_user({
+            "id": MOCK_COACH["id"], "email": MOCK_COACH["email"],
+            "displayName": "Coach A"})
+        user_storage.save_user({
+            "id": VIEWER_MEMBER["id"], "email": VIEWER_MEMBER["email"],
+            "displayName": "Viewer V"})
+
+        membership = membership_storage.create_membership(
+            team_id=seeded["team_id"], user_id=VIEWER_MEMBER["id"], role="viewer")
+        yield seeded
+        membership_storage.delete_membership(membership["id"])
+
+    @staticmethod
+    def _by_id(payload):
+        return {m["userId"]: m for m in payload["members"]}
+
+    def test_viewer_does_not_receive_other_members_emails(self, client, members_env):
+        _as(VIEWER_MEMBER)
+        r = client.get(f"/api/teams/{members_env['team_id']}/members")
+        assert r.status_code == 200
+        coach_row = self._by_id(r.json())[MOCK_COACH["id"]]
+        # Absent entirely — not present-but-null, which still confirms nothing.
+        assert "email" not in coach_row
+        assert MOCK_COACH["email"] not in r.text
+        # The rest of the row is unchanged; a viewer can still see who is on
+        # the team and in what role.
+        assert coach_row["displayName"] == "Coach A"
+        assert coach_row["role"] == "coach"
+
+    def test_viewer_still_sees_their_own_email(self, client, members_env):
+        _as(VIEWER_MEMBER)
+        r = client.get(f"/api/teams/{members_env['team_id']}/members")
+        assert r.status_code == 200
+        own_row = self._by_id(r.json())[VIEWER_MEMBER["id"]]
+        assert own_row["email"] == VIEWER_MEMBER["email"]
+
+    def test_coach_receives_every_members_email(self, client, members_env):
+        _as(MOCK_COACH)
+        r = client.get(f"/api/teams/{members_env['team_id']}/members")
+        assert r.status_code == 200
+        rows = self._by_id(r.json())
+        assert rows[VIEWER_MEMBER["id"]]["email"] == VIEWER_MEMBER["email"]
+        assert rows[MOCK_COACH["id"]]["email"] == MOCK_COACH["email"]
+
+    def test_admin_receives_every_members_email(self, client, members_env, monkeypatch):
+        import auth.dependencies as deps
+        import routers.teams as teams_router
+        # Two call sites: the require_team_access gate and the email decision.
+        monkeypatch.setattr(deps, "is_admin", lambda uid: uid == "admin-u")
+        monkeypatch.setattr(teams_router, "is_admin", lambda uid: uid == "admin-u")
+        admin = {"id": "admin-u", "email": "admin@test", "role": "authenticated"}
+        _as(admin)
+        r = client.get(f"/api/teams/{members_env['team_id']}/members")
+        assert r.status_code == 200
+        assert self._by_id(r.json())[MOCK_COACH["id"]]["email"] == MOCK_COACH["email"]

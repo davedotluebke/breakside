@@ -20,6 +20,7 @@ from ._shared import (
     get_team_players,
     get_user,
     get_user_team_membership,
+    get_user_team_role,
     get_user_teams,
     is_admin,
     list_teams,
@@ -49,24 +50,38 @@ async def list_team_members(
     List all members of a team with their roles.
 
     Requires: Coach or Viewer access to the team.
+
+    Email addresses are only included for callers who are a coach of this team
+    (or an admin), plus the caller's own row. Viewers on a youth team are the
+    players and their parents; the coaches never agreed to publish their
+    address to the whole roster, and a viewer has no need for anyone else's.
     """
     if not team_exists(team_id):
         raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
 
     memberships = get_team_memberships(team_id)
 
+    # Coaches administer the roster (they invite and remove people), so they
+    # see addresses. Everyone always sees their own.
+    may_see_all_emails = (
+        get_user_team_role(user["id"], team_id) == "coach"
+        or is_admin(user["id"])
+    )
+
     # Enrich with user info
     members = []
     for membership in memberships:
         user_info = get_user(membership["userId"])
-        members.append({
+        member = {
             "userId": membership["userId"],
             "membershipId": membership["id"],
             "role": membership["role"],
             "joinedAt": membership["joinedAt"],
             "displayName": user_info.get("displayName") if user_info else None,
-            "email": user_info.get("email") if user_info else None,
-        })
+        }
+        if may_see_all_emails or membership["userId"] == user["id"]:
+            member["email"] = user_info.get("email") if user_info else None
+        members.append(member)
 
     return {"members": members, "count": len(members)}
 
