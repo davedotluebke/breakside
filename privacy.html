@@ -43,6 +43,7 @@
         <div class="docs-rail-title">Contents</div>
         <a href="#short" class="section">The short version</a>
         <a href="#players">Players on a roster</a>
+        <a href="#naming">Choosing player names</a>
         <a href="#accounts">Coaches and accounts</a>
         <a href="#where">Where the data lives</a>
         <a href="#others">Who else sees it</a>
@@ -83,6 +84,11 @@
                             signed up for anything — their coach added them.
                         </li>
                         <li>
+                            <strong>You don't have to use full names.</strong> First names, initials,
+                            or nicknames work fine, and are a good default for kids — see
+                            <a href="#naming">Choosing player names</a>.
+                        </li>
+                        <li>
                             <strong>No ads, no analytics, no trackers.</strong> Nothing is sold or
                             shared for marketing.
                         </li>
@@ -96,8 +102,9 @@
                             the game, with no sign-in.
                         </li>
                         <li>
-                            <strong>Deletion is currently partial and manual.</strong> Read
-                            <a href="#deletion">Deleting things</a> before you rely on it.
+                            <strong>Deleting really deletes, and there is no undo.</strong> A coach can
+                            erase a player or a whole team; you can delete your own account. Read
+                            <a href="#deletion">Deleting things</a> before you use any of it.
                         </li>
                     </ul>
                 </div>
@@ -126,9 +133,8 @@
                     <div class="docs-note">
                         Internal player IDs are built from the player's name — for example
                         <code>Alice-7f3a</code>. The name therefore also appears inside IDs, file
-                        names, and exported spreadsheets. Breakside does not require a legal name:
-                        a first name, initials, or a nickname works fine, and is a reasonable choice
-                        for a youth roster.
+                        names, and exported spreadsheets. Breakside does not require a legal name —
+                        see <a href="#naming">Choosing player names</a>.
                     </div>
                 </div>
             </article>
@@ -153,6 +159,51 @@
                         someone to a roster, <strong>you</strong> are the person who decided to keep
                         that record about them.
                     </p>
+                </div>
+            </article>
+        </section>
+
+        <section class="docs-section" id="naming">
+            <div class="docs-section-head">
+                <h2>Choosing player names</h2>
+                <p>Short names work fine</p>
+            </div>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <h3>You don't have to use full names</h3>
+                    <p>
+                        Breakside never asks for a legal name and never checks one. A first name, a
+                        first name and a last initial, plain initials, or the nickname everyone shouts
+                        on the sideline all work exactly the same — stats, lines, the play-by-play and
+                        the exports don't care. All the app needs is something you and your other
+                        coaches can tell apart. Two Alexes? <code>Alex M.</code> and
+                        <code>Alex T.</code> is plenty.
+                    </p>
+                    <p>
+                        The reason to prefer the shorter version is simple: <strong>a roster that
+                        identifies people less is a roster that matters less if it ends up somewhere
+                        you didn't intend.</strong> A share link forwarded into a group chat, a
+                        spreadsheet emailed on to a tournament director, a phone left in a car — none
+                        of those are good, but "Alex T. had four assists" travels a lot better than a
+                        full name does. The details you never entered are the ones you never have to
+                        worry about.
+                    </p>
+                    <p>
+                        <strong>This matters most for players under 18.</strong> If you coach a youth
+                        team, first names or initials are a sensible default, and an easy thing to
+                        mention to parents — see <a href="#youth">Youth teams</a>.
+                    </p>
+                    <p>
+                        It is worth getting right when you first build the roster, which is why the app
+                        suggests it there. Renaming a player later changes what you see on screen, but
+                        a name that has already been used is also sitting in that player's internal ID
+                        and in the games already played. Taking it out of those means
+                        <a href="#deletion">erasing the player</a>, not renaming them.
+                    </p>
+                    <!-- TODO(owner): "which is why the app suggests it there" assumes the roster
+                         screen actually carries that hint. It is not in this branch — confirm the
+                         roster-side change has shipped before this page goes live, or cut the clause. -->
                 </div>
             </article>
         </section>
@@ -419,8 +470,9 @@
             <article class="docs-entry no-clip">
                 <div>
                     <p>
-                        <strong>There is no automatic expiry in Breakside today.</strong> Data is
-                        kept until someone deletes it.
+                        <strong>There is no automatic expiry in Breakside.</strong> Data is kept until
+                        someone deletes it — and when someone does, it really goes (see
+                        <a href="#deletion">Deleting things</a>).
                     </p>
                     <ul>
                         <li>
@@ -428,19 +480,23 @@
                             saves a complete snapshot of it. The 200 most recent snapshots per game
                             are kept in full; older ones are thinned to one per calendar day, and
                             those daily snapshots are kept indefinitely. Each snapshot contains the
-                            full roster and play-by-play, so a snapshot can hold a player's name even
-                            after later edits removed it.
+                            full roster and play-by-play, so simply taking a player off a roster today
+                            doesn't change what an old snapshot says about them. Erasing that player
+                            does — an erasure rewrites the snapshots too.
                         </li>
                         <li>
-                            <strong>Players, teams, and games</strong> are kept until deleted.
+                            <strong>Players, teams, and games</strong> are kept until someone erases
+                            them.
                         </li>
                         <li>
                             <strong>Your account record</strong> (email, display name, memberships) is
-                            kept for as long as the account exists.
+                            kept for as long as the account exists, and you can delete the account
+                            yourself.
                         </li>
                         <li>
                             <strong>Invite records</strong> are kept after an invite is revoked, so
-                            there is a record of who joined a team and when.
+                            there is a record of who joined a team and when. Erasing the team deletes
+                            them.
                         </li>
                         <li>
                             <strong>Who currently holds a coaching role in a live game</strong> is
@@ -454,52 +510,136 @@
         <section class="docs-section" id="deletion">
             <div class="docs-section-head">
                 <h2>Deleting things</h2>
-                <p>What the buttons actually do today</p>
+                <p>What each button actually removes</p>
             </div>
 
             <article class="docs-entry no-clip">
                 <div>
-                    <h3>Be aware of the limits</h3>
+                    <h3>Erasing a player</h3>
                     <p>
-                        Breakside is honest about this rather than reassuring: the in-app delete
-                        actions are incomplete, and none of them is a full erasure.
+                        A coach can erase a player from the roster. That <strong>deletes the player's
+                        record</strong> — name, nickname, number, all of it — takes them off the roster
+                        and out of any saved lines, and then goes back through every game the team has
+                        already played, including the older snapshots of those games, and replaces
+                        their name everywhere it appears.
                     </p>
-                    <ul>
-                        <li>
-                            <strong>Deleting a player</strong> removes them from that roster. It does
-                            not erase the player record, and it does not remove their name from games
-                            already recorded — those games still show who threw, caught, and scored.
-                        </li>
-                        <li>
-                            <strong>Deleting a team</strong> removes the team. It does not currently
-                            delete that team's games, its memberships, its invites, or its share
-                            links. (The confirmation message in the app currently claims more than
-                            this; the behaviour described here is what actually happens.)
-                        </li>
-                        <li>
-                            <strong>Deleting a game</strong> does remove the game and its whole
-                            snapshot history.
-                        </li>
-                        <li>
-                            <strong>There is no self-service account deletion</strong> in the app yet.
-                        </li>
-                    </ul>
+                    <p>
+                        The games themselves survive, because other people's stats depend on them: the
+                        score, the points, and the play-by-play are all still there. What changes is
+                        that the plays which used to carry that player's name now read
+                        <strong>Removed Player</strong> instead. The play stays; the person doesn't.
+                    </p>
                 </div>
             </article>
 
             <article class="docs-entry no-clip">
                 <div>
-                    <h3>Asking for something to be removed</h3>
+                    <h3>Erasing a team</h3>
                     <p>
-                        Until the in-app tools catch up, deletion requests are handled by hand.
-                        Get in touch (see <a href="#contact">Contact</a>) and say what you want
-                        removed — your account, a team, a game, or a particular player's name and
-                        history. Please include enough detail to find it: the team name, and the
-                        player's name as it appears in the app.
+                        Deleting a team deletes <strong>the team and its games</strong> — every game,
+                        with its whole snapshot history — along with the team's memberships, its
+                        invite codes, and its share links. Any share link for one of those games stops
+                        working immediately. Deleting a single game works the same way: the game and
+                        all of its snapshots go.
                     </p>
                     <p>
-                        You can ask for this whether or not you have an account. A parent can ask for
-                        a child's name to be removed without signing up for anything.
+                        Players who are also on another team keep their record there. Players who were
+                        on <em>only</em> that team would be left with no team at all, so Breakside
+                        counts them and asks you what you'd like to do rather than quietly erasing
+                        people.
+                    </p>
+                </div>
+            </article>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <h3>Deleting your account</h3>
+                    <p>
+                        You can delete your own account from within the app. That removes your
+                        <strong>sign-in</strong>, your account record — email address, display name —
+                        and your membership of every team. You can only do this to your own account;
+                        there is no way to delete somebody else's.
+                    </p>
+                    <p>
+                        Teams you share with other coaches carry on without you. A team where you are
+                        the <strong>only</strong> coach is treated as a decision rather than a side
+                        effect: Breakside shows you which ones those are before you confirm, so you can
+                        either erase them along with the account or hand the team to another coach
+                        first.
+                    </p>
+                </div>
+            </article>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <h3>It's permanent</h3>
+                    <p>
+                        Before any of these, Breakside shows you what is about to go — how many games,
+                        how many snapshots, whether any of them are shared publicly right now — so you
+                        can look at it and back out.
+                    </p>
+                    <p>
+                        <strong>Once you confirm, it's gone.</strong> There is no undo and no trash
+                        can, and Breakside cannot put it back for you. Export anything you want to keep
+                        <em>before</em> you erase it.
+                    </p>
+                    <!-- TODO(owner): the off-instance backup work (scripts/backup-data.sh, on the
+                         ops-backup-headers branch) syncs data/ to S3 *without* --delete and with
+                         bucket versioning, so a file erased on the live server still exists in the
+                         backup bucket until a lifecycle rule ages it out. Once that backup is
+                         actually running, this paragraph needs a sentence about it — and a retention
+                         window to put in that sentence. Left unwritten rather than guessed. -->
+                </div>
+            </article>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <h3>Files that have already left</h3>
+                    <p>
+                        An erasure reaches what Breakside holds. It cannot reach what has already been
+                        downloaded.
+                    </p>
+                    <p>
+                        <strong>Spreadsheets and JSON files exported before an erasure still contain
+                        the original name.</strong> They are on somebody's laptop, in an email, or in a
+                        shared drive, and Breakside has no way to find them, change them, or ask for
+                        them back. The same goes for a screenshot, or a stat sheet printed out for a
+                        tournament.
+                    </p>
+                    <p>
+                        So if you have exported a roster or a game and you're later asked to take a
+                        name out, deleting those files is a step you have to do yourself.
+                    </p>
+                    <!-- TODO(owner): decide whether to say anything here about offline copies on
+                         other coaches' devices. Breakside is offline-first, so a teammate's browser
+                         holds a full local copy of the roster until that device next syncs; whether
+                         an erasure propagates cleanly to it was not verified. -->
+                </div>
+            </article>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <h3>If you can't do it yourself</h3>
+                    <p>
+                        The three actions above cover most of it, and they don't need anyone's
+                        permission but yours. Get in touch (see <a href="#contact">Contact</a>) for the
+                        cases they don't cover — for example:
+                    </p>
+                    <ul>
+                        <li>
+                            you're a <strong>parent</strong> and you'd rather not go through the coach,
+                            or the coach can't be reached;
+                        </li>
+                        <li>the data is on a team you aren't a coach of;</li>
+                        <li>
+                            something still looks wrong after an erasure — a name showing up somewhere
+                            you didn't expect.
+                        </li>
+                    </ul>
+                    <p>
+                        You can ask whether or not you have an account; a parent doesn't need to sign
+                        up for anything. Please include enough detail to find it: the team name, and
+                        the player's name as it appears in the app.
                     </p>
                     <p>
                         You can also ask for a copy of what's stored about you or your team.
@@ -533,7 +673,8 @@
                             fits under that.
                         </li>
                         <li>
-                            You can use first names, initials, or nicknames instead of full names.
+                            You can use first names, initials, or nicknames instead of full names —
+                            see <a href="#naming">Choosing player names</a>.
                         </li>
                         <li>
                             Think before you share. A share link forwarded into a public group chat
@@ -542,9 +683,11 @@
                     </ul>
                     <p>
                         <strong>If you're a parent</strong> and you'd rather your child's name not be
-                        in Breakside, ask their coach to remove them — or
+                        in Breakside, ask their coach: they can erase the player themselves, which
+                        takes the name off the roster and out of the games already recorded. If that
+                        isn't possible — the season is over, the coach has moved on —
                         <a href="#contact">contact us</a> directly and we'll take the name out. You
-                        don't need an account to ask.
+                        don't need an account either way.
                     </p>
                 </div>
             </article>
@@ -558,8 +701,10 @@
             <article class="docs-entry no-clip">
                 <div>
                     <p>
-                        Breakside is maintained by one person. For anything on this page — a deletion
-                        request, a question about what's stored, or a concern about a player's name:
+                        Breakside is maintained by one person. Most deletion requests are now something
+                        you can do yourself in the app (see <a href="#deletion">Deleting things</a>).
+                        For anything that leaves over — something you can't remove yourself, a question
+                        about what's stored, or a concern about a player's name:
                     </p>
                     <p>
                         <strong>TODO(owner): add a contact email address here before publishing.</strong>
