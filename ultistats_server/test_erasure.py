@@ -30,6 +30,18 @@ ADMIN = {"id": "erase-admin", "email": "admin@test", "role": "authenticated"}
 
 GAME_ID = "2026-08-24_Erase-Team_vs_Rivals_1756000000000"
 
+# A second game, written directly to disk, whose ONLY trace of the erased
+# player is their nickname — no ID, no name, and no entry in the index. It
+# exists to prove the byte pre-filter in _iter_candidate_files actually opens
+# such a file. If the nickname is not a needle, this game is never read and the
+# name survives silently, which is the worst failure this module can have.
+LEGACY_GAME_ID = "2019-05-04_Old-Squad_vs_Ancients_1556000000000"
+
+# Deliberately not a substring of the player's name, so a grep for it cannot
+# pass by accident. The app renders `nickname || name`, so this is what an
+# old ID-less event most likely stored.
+ALICE_NICKNAME = "Sparrow"
+
 
 # =============================================================================
 # The assertion that matters: does this string survive anywhere on disk?
@@ -106,8 +118,8 @@ def _game_document(team_id, alice, bob, cara):
         "rosterSnapshot": {
             "capturedAt": "2026-08-24T09:59:00",
             "players": [
-                {"id": alice["id"], "name": alice["name"], "nickname": "Al",
-                 "number": "7", "gender": "FMP"},
+                {"id": alice["id"], "name": alice["name"],
+                 "nickname": ALICE_NICKNAME, "number": "7", "gender": "FMP"},
                 {"id": bob["id"], "name": bob["name"], "nickname": "",
                  "number": "12", "gender": "MMP"},
                 {"id": cara["id"], "name": cara["name"], "nickname": "",
@@ -120,6 +132,9 @@ def _game_document(team_id, alice, bob, cara):
             "odLine": [cara["name"]],
             "odOnDeckLine": [alice["name"]],
             "oLineModifiedAt": "2026-08-24T10:05:00",
+            # Scalar fields beside the arrays that carry a bare display name.
+            "lineupReadyBy": alice["name"],
+            "lineCoachViewing": alice["name"],
         },
         "points": [
             {
@@ -160,6 +175,11 @@ def _game_document(team_id, alice, bob, cara):
                             # Legacy: names only, no *Id fields anywhere.
                             {"type": "Throw", "thrower": alice["name"],
                              "receiver": bob["name"], "huck_flag": True},
+                            # Legacy again, but storing the NICKNAME — which is
+                            # what `nickname || name` rendering makes the
+                            # likelier of the two in old data.
+                            {"type": "Throw", "thrower": ALICE_NICKNAME,
+                             "receiver": bob["name"], "swing_flag": True},
                         ],
                     },
                 ],
@@ -220,13 +240,15 @@ def env(tmp_path, monkeypatch):
     # Players. "Álvaro Núñez" is deliberately non-ASCII: json.dump escapes it
     # on disk, so it proves the scan's escaped-form needle actually works.
     alice_id = player_storage.save_player(
-        {"name": "Álvaro Núñez", "nickname": "Al", "number": "7", "gender": "FMP",
-         "position": "handler", "defaultLine": "O", "createdBy": COACH["id"]}
+        {"name": "Álvaro Núñez", "nickname": ALICE_NICKNAME, "number": "7",
+         "gender": "FMP", "position": "handler", "defaultLine": "O",
+         "createdBy": COACH["id"]}
     )
     bob_id = player_storage.save_player(
         {"name": "Bob Smith", "number": "12", "gender": "MMP"}
     )
     cara_id = player_storage.save_player({"name": "Cara", "number": "3", "gender": "FMP"})
+    env_cara_name = "Cara"
     alice = {"id": alice_id, "name": "Álvaro Núñez"}
     bob = {"id": bob_id, "name": "Bob Smith"}
     cara = {"id": cara_id, "name": "Cara"}
@@ -234,8 +256,13 @@ def env(tmp_path, monkeypatch):
     team_id = team_storage.save_team({
         "name": "Erase Team",
         "playerIds": [alice_id, bob_id, cara_id],
-        "lines": [{"name": "Main O", "players": [alice["name"], bob["name"]],
-                   "lastUsed": None}],
+        "lines": [
+            {"name": "Main O", "players": [alice["name"], bob["name"]],
+             "lastUsed": None},
+            # Lines are built from displayed text, so one holds the nickname.
+            {"name": "Zone D", "players": [ALICE_NICKNAME, env_cara_name],
+             "lastUsed": None},
+        ],
     })
     # A second team that also rosters Bob, so team erasure has a survivor.
     other_team_id = team_storage.save_team({
@@ -259,6 +286,34 @@ def env(tmp_path, monkeypatch):
     document["scores"]["team"] = 2
     game_storage.save_game_version(GAME_ID, json.loads(json.dumps(document)))
 
+    # The nickname-only legacy game. Written directly rather than through
+    # save_game_version so its exact bytes are controlled, and given no teamId
+    # so team erasure ignores it — which also proves player erasure scans the
+    # games on disk rather than trusting the index.
+    legacy = {
+        "team": "Old Squad", "opponent": "Ancients",
+        "gameStartTimestamp": "2019-05-04T10:00:00",
+        "points": [{
+            "players": [ALICE_NICKNAME, "Someone Else"],
+            "winner": "team", "startingPosition": "offense",
+            "possessions": [{"offensive": True, "events": [
+                {"type": "Throw", "thrower": ALICE_NICKNAME,
+                 "receiver": "Someone Else", "score_flag": True},
+            ]}],
+        }],
+    }
+    legacy_dir = tmp_path / "games" / LEGACY_GAME_ID
+    (legacy_dir / "versions").mkdir(parents=True, exist_ok=True)
+    legacy_body = json.dumps(legacy, indent=2)
+    (legacy_dir / "current.json").write_text(legacy_body)
+    (legacy_dir / "versions" / "2019-05-04T10-30-00-000000.json").write_text(legacy_body)
+    for probe in (legacy_dir / "current.json",
+                  legacy_dir / "versions" / "2019-05-04T10-30-00-000000.json"):
+        blob = probe.read_bytes()
+        assert alice_id.encode() not in blob and "Álvaro".encode() not in blob, (
+            "the legacy game must trace the player by nickname ALONE"
+        )
+
     membership_storage.create_membership(team_id, COACH["id"], "coach")
     membership_storage.create_membership(team_id, VIEWER["id"], "viewer")
     membership_storage.create_membership(other_team_id, OTHER_COACH["id"], "coach")
@@ -271,6 +326,7 @@ def env(tmp_path, monkeypatch):
     return {
         "root": tmp_path, "team_id": team_id, "other_team_id": other_team_id,
         "event_id": event_id, "game_id": GAME_ID,
+        "legacy_game_id": LEGACY_GAME_ID, "nickname": ALICE_NICKNAME,
         "alice": alice, "bob": bob, "cara": cara,
     }
 
@@ -382,8 +438,10 @@ class TestPlayerErasure:
         alice = env["alice"]
 
         result = erase_player(alice["id"])
-        assert result["counts"]["versions"] == 2
-        assert result["counts"]["games"] == 1
+        # Two games: the main one and the nickname-only legacy one, each with
+        # its current.json, plus 2 + 1 version backups.
+        assert result["counts"]["versions"] == 3
+        assert result["counts"]["games"] == 2
 
         for timestamp in list_game_versions(env["game_id"]):
             blob = json.dumps(get_game_version(env["game_id"], timestamp))
@@ -401,6 +459,51 @@ class TestPlayerErasure:
         assert "throwerId" not in legacy
         assert any("matched by name alone" in w for w in result["warnings"])
 
+    def test_the_nickname_is_gone_from_the_whole_tree(self, env):
+        """The app renders `nickname || name`, so the nickname is a display
+        name and has to be erased as thoroughly as the name itself."""
+        from storage import erase_player
+        erase_player(env["alice"]["id"])
+        assert_absent(env["root"], env["nickname"], "nickname")
+
+    def test_a_file_traced_only_by_nickname_is_opened_and_scrubbed(self, env):
+        """The pre-filter must open a file whose sole trace is the nickname.
+
+        This is the silent-miss case: if the nickname is not among the byte
+        needles, _iter_candidate_files never reads the file, the structural
+        scrub is never given the chance to decide, and the erasure reports
+        success while the name sits on disk.
+        """
+        from storage import erase_player, get_game_current, TOMBSTONE_NAME
+        legacy_dir = env["root"] / "games" / env["legacy_game_id"]
+
+        erase_player(env["alice"]["id"])
+
+        legacy = get_game_current(env["legacy_game_id"])
+        assert legacy["points"][0]["possessions"][0]["events"][0]["thrower"] == \
+            TOMBSTONE_NAME
+        assert env["nickname"] not in json.dumps(legacy)
+        # The version backup beside it, too.
+        version = next((legacy_dir / "versions").glob("*.json"))
+        assert env["nickname"].encode() not in version.read_bytes()
+        # ...and the teammate in that game is untouched.
+        assert "Someone Else" in version.read_text()
+
+    def test_a_nickname_only_legacy_event_is_scrubbed(self, env):
+        from storage import erase_player, get_game_current, TOMBSTONE_NAME
+        erase_player(env["alice"]["id"])
+        event = get_game_current(env["game_id"])["points"][0]["possessions"][1]["events"][3]
+        assert event["thrower"] == TOMBSTONE_NAME
+        assert event["receiver"] == env["bob"]["name"]
+
+    def test_pending_line_scalar_fields_are_anonymised(self, env):
+        """lineupReadyBy and lineCoachViewing hold a bare display name."""
+        from storage import erase_player, get_game_current
+        erase_player(env["alice"]["id"])
+        pending = get_game_current(env["game_id"])["pendingNextLine"]
+        assert pending["lineupReadyBy"] is None
+        assert pending["lineCoachViewing"] is None
+
     def test_rosters_and_lines_lose_the_player(self, env):
         from storage import erase_player, get_team, get_event
         alice = env["alice"]
@@ -410,6 +513,8 @@ class TestPlayerErasure:
         team = get_team(env["team_id"])
         assert alice["id"] not in team["playerIds"]
         assert alice["name"] not in team["lines"][0]["players"]
+        # The line that named them by nickname loses them too.
+        assert team["lines"][1]["players"] == [env["cara"]["name"]]
         # Rosters are membership, not history: no tombstone is left behind.
         assert len(team["playerIds"]) == 2
 
@@ -550,6 +655,8 @@ class TestTeamErasure:
         assert not player_exists(env["cara"]["id"])
         assert player_exists(env["bob"]["id"]), "a player on another team must survive"
         assert_absent(env["root"], env["alice"]["name"], "orphan name")
+        # Including out of a game this team never owned, traced only by nickname.
+        assert_absent(env["root"], env["nickname"], "orphan nickname")
 
     def test_the_other_team_is_untouched(self, env):
         from storage import erase_team, get_team
@@ -703,7 +810,7 @@ class TestErasureAuthorization:
         before = snapshot_tree(env["root"])
         response = client.get(f"/api/players/{env['alice']['id']}/erase-preview")
         assert response.status_code == 200
-        assert response.json()["willErase"]["versions"] == 2
+        assert response.json()["willErase"]["versions"] == 3
         assert snapshot_tree(env["root"]) == before
 
     def test_erase_endpoint_is_idempotent_for_the_same_coach(self, env, client):
@@ -817,3 +924,103 @@ class TestTombstoneMinting:
         assert result["tombstoneId"] == "Removed-abcd1234"
         roster = get_game_current(env["game_id"])["rosterSnapshot"]["players"]
         assert any(p["id"] == "Removed-abcd1234" for p in roster)
+
+
+class TestNicknameMatching:
+    """The nickname is a display name, not decoration.
+
+    Both the PWA (helpers.js formatPlayerName) and the viewer
+    (viewer.js resolvePlayerName) render ``nickname || name``, so a stored
+    display field holds the NICKNAME whenever the player has one — which makes
+    an ID-less legacy reference more likely to carry the nickname than the name.
+    """
+
+    def test_the_nickname_is_a_byte_needle(self):
+        """Not just a matcher: a needle. Omit it and _iter_candidate_files
+        never opens a file whose only trace is the nickname."""
+        from storage import PlayerScrubber
+        scrubber = PlayerScrubber("Persephone-7f3a", "Persephone",
+                                  "Removed-aaaa1111", player_nickname="Seph")
+        needles = {n.decode() for n in scrubber.needles()}
+        assert "Seph" in needles
+        assert "Persephone" in needles
+        assert "Persephone-7f3a" in needles
+
+    def test_a_nickname_only_legacy_event_is_matched(self):
+        from storage import PlayerScrubber, TOMBSTONE_NAME
+        scrubber = PlayerScrubber("Persephone-7f3a", "Persephone",
+                                  "Removed-aaaa1111", player_nickname="Seph")
+        event = {"type": "Throw", "thrower": "Seph"}
+        assert scrubber.scrub_event(event) is True
+        assert event["thrower"] == TOMBSTONE_NAME
+        assert scrubber.name_only_matches == 1
+
+    def test_the_id_gate_still_protects_a_same_nicknamed_teammate(self):
+        from storage import PlayerScrubber
+        scrubber = PlayerScrubber("Persephone-7f3a", "Persephone",
+                                  "Removed-aaaa1111", player_nickname="Seph")
+        event = {"type": "Throw", "thrower": "Seph", "throwerId": "Sephora-2222"}
+        assert scrubber.scrub_event(event) is False
+        assert event["thrower"] == "Seph"
+        assert scrubber.name_only_matches == 0
+
+    def test_an_id_less_roster_entry_is_matched_by_nickname(self):
+        from storage import PlayerScrubber, TOMBSTONE_NAME
+        scrubber = PlayerScrubber("Persephone-7f3a", "Persephone",
+                                  "Removed-aaaa1111", player_nickname="Seph")
+        snapshot = {"players": [{"name": "P.", "nickname": "Seph", "number": "4"}]}
+        assert scrubber.scrub_roster_snapshot(snapshot) is True
+        entry = snapshot["players"][0]
+        assert entry["name"] == TOMBSTONE_NAME
+        assert entry["nickname"] is None and entry["number"] is None
+
+    def test_an_empty_nickname_never_matches(self):
+        from storage import PlayerScrubber
+        scrubber = PlayerScrubber("Ghost-1111", "Ghost", "Removed-bbbb2222",
+                                  player_nickname="")
+        event = {"type": "Throw", "thrower": "", "receiver": "Bob"}
+        assert scrubber.scrub_event(event) is False
+
+    def test_a_stale_client_cannot_resurrect_via_the_nickname(self, env, client):
+        """The deny-list has to recognise a nickname-only inbound reference."""
+        from storage import erase_player, get_game_current
+        alice = env["alice"]
+        cached = {
+            "team": "Erase Team", "opponent": "Rivals", "teamId": env["team_id"],
+            "points": [{"players": [env["nickname"]], "winner": "team",
+                        "startingPosition": "offense",
+                        "possessions": [{"offensive": True, "events": [
+                            {"type": "Throw", "thrower": env["nickname"],
+                             "receiver": env["bob"]["name"]}]}]}],
+        }
+        erase_player(alice["id"])
+
+        _as(COACH)
+        response = client.post(f"/api/games/{env['game_id']}/sync", json=cached)
+        assert response.status_code == 200
+
+        stored = json.dumps(get_game_current(env["game_id"]))
+        assert env["nickname"] not in stored
+        assert_absent(env["root"], env["nickname"], "resurrected nickname")
+
+
+class TestPendingScalarFields:
+
+    def test_an_unrelated_value_is_left_alone(self):
+        """lineCoachViewing normally holds a line type, not a name."""
+        from storage import PlayerScrubber
+        scrubber = PlayerScrubber("Alex-1111", "Alex", "Removed-cccc3333")
+        pending = {"lineCoachViewing": "od", "lineupReadyBy": "Jordan"}
+        game = {"pendingNextLine": dict(pending)}
+        assert scrubber.scrub_game(game) is False
+        assert game["pendingNextLine"] == pending
+
+    def test_the_scalar_match_is_not_counted_as_a_teammate_collision(self):
+        """These hold COACH identity, so they must not inflate the warning
+        about a same-named teammate being caught."""
+        from storage import PlayerScrubber
+        scrubber = PlayerScrubber("Alex-1111", "Alex", "Removed-cccc3333")
+        game = {"pendingNextLine": {"lineupReadyBy": "Alex"}}
+        assert scrubber.scrub_game(game) is True
+        assert game["pendingNextLine"]["lineupReadyBy"] is None
+        assert scrubber.name_only_matches == 0

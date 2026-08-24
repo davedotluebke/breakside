@@ -42,10 +42,11 @@ needs to be stronger, key the HMAC from an environment secret held outside the
 data directory (``SUPABASE_JWT_SECRET`` is already loaded that way), which
 makes filesystem access alone insufficient.
 
-Display names are hashed alongside IDs, and only when the name was known at
-erasure time. It is what lets a name-only legacy reference — a line entry, an
-old event with no ``*Id`` field — be recognized in an incoming write. A name
-hash is weaker than an ID hash (one guess to test, rather than a guess plus the
+Display names — the name AND the nickname, since the app renders ``nickname ||
+name`` — are hashed alongside IDs, and only when they were known at erasure
+time. That is what lets a name-only legacy reference — a line entry, an old
+event with no ``*Id`` field — be recognized in an incoming write. A name hash
+is weaker than an ID hash (one guess to test, rather than a guess plus the
 4-character suffix), but the ID hash is already a name oracle for anyone
 willing to spend 1.7M hashes, so this changes the practical threat model very
 little and closes a real durability hole.
@@ -115,12 +116,16 @@ def _digest(data: dict, domain: str, value: str) -> str:
 
 
 def record_player_erasure(player_id: str, tombstone_id: str,
-                          player_name: Optional[str] = None) -> None:
+                          player_name: Optional[str] = None,
+                          player_nickname: Optional[str] = None) -> None:
     """Remember that ``player_id`` was erased, so it can never be recreated.
 
-    ``player_name`` is optional and only present when the record still existed
-    at erasure time; it is what lets name-only legacy references be recognized
-    later. Idempotent.
+    ``player_name`` and ``player_nickname`` are optional and only present when
+    the record still existed at erasure time; they are what let name-only
+    legacy references be recognized in a later inbound write. The nickname
+    matters as much as the name: the app renders ``nickname || name``, so a
+    stale client's cached document is *more* likely to carry the nickname in a
+    display field. Idempotent.
     """
     with entity_lock(_LOCK_KEY):
         data = _load()
@@ -128,8 +133,9 @@ def record_player_erasure(player_id: str, tombstone_id: str,
             "tombstoneId": tombstone_id,
             "erasedAt": datetime.now().isoformat(),
         }
-        if player_name:
-            data["playerNames"][_digest(data, "name", player_name)] = tombstone_id
+        for display_name in (player_name, player_nickname):
+            if display_name:
+                data["playerNames"][_digest(data, "name", display_name)] = tombstone_id
         atomic_write_json(Path(ERASED_FILE), data)
 
 

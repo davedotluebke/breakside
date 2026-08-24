@@ -147,6 +147,10 @@ _POINT_REF_LISTS = ("players", "substitutedOutPlayers", "substitutedInPlayers")
 # pendingNextLine holds the *plan* for upcoming points, not history.
 _PENDING_LINE_KEYS = ("oLine", "dLine", "odLine", "odOnDeckLine")
 
+# ...and two scalar fields beside those arrays that carry a bare display name.
+# See PlayerScrubber._scrub_pending_scalars.
+_PENDING_SCALAR_KEYS = ("lineupReadyBy", "lineCoachViewing")
+
 # Per-person attributes on a roster-snapshot entry, nulled on erasure. A
 # tombstone keeps its ID and "Removed Player" and nothing else.
 #
@@ -239,14 +243,33 @@ class PlayerScrubber:
     ``name_only_matches`` and surfaced as a warning, because that is precisely
     the case where two people called "Alex" are indistinguishable and privacy
     has to win over the small risk of over-scrubbing.
+
+    **The nickname is a display name, not decoration.** Both the PWA
+    (``utils/helpers.js`` formatPlayerName) and the public viewer
+    (``static/viewer/viewer.js`` resolvePlayerName) render ``nickname ||
+    name``, so a stored display-name field holds the NICKNAME whenever the
+    player has one. A legacy ID-less event is therefore *more* likely to carry
+    "Seph" than "Persephone", which makes the nickname the common case for
+    name-only matching rather than an exotic one. It is matched everywhere the
+    name is, and — critically — it is a byte needle too: leaving it out of
+    ``needles`` meant a file whose only trace was the nickname was never even
+    opened by ``_iter_candidate_files``. That is a silent miss, not a partial
+    scrub, which is the worst failure mode this module can have.
     """
 
     def __init__(self, player_id: str, player_name: Optional[str],
-                 tombstone_id: str, tombstone_name: str = TOMBSTONE_NAME):
+                 tombstone_id: str, tombstone_name: str = TOMBSTONE_NAME,
+                 player_nickname: Optional[str] = None):
         self.player_id = player_id
         # Empty/None disables name matching entirely — matching "" would hit
         # every blank field in the corpus.
         self.player_name = player_name or None
+        self.player_nickname = player_nickname or None
+        # Every string this person is displayed as. Both are matched by the
+        # same rules; the ID gate still protects a teammate who shares one.
+        self._display_names = {
+            n for n in (self.player_name, self.player_nickname) if n
+        }
         self.tombstone_id = tombstone_id
         self.tombstone_name = tombstone_name
         self.name_only_matches = 0
@@ -257,17 +280,27 @@ class PlayerScrubber:
         return isinstance(value, str) and value == self.player_id
 
     def _is_name(self, value: Any) -> bool:
-        return (
-            self.player_name is not None
-            and isinstance(value, str)
-            and value == self.player_name
-        )
+        """True for any string this player is displayed as (name or nickname)."""
+        return isinstance(value, str) and value in self._display_names
 
     def needles(self) -> List[bytes]:
-        """Byte needles for the cheap pre-parse file filter."""
+        """Byte needles for the cheap pre-parse file filter.
+
+        Must cover every string that could be this player's only trace in a
+        file, nickname included — a needle omitted here is a file never opened.
+
+        A short nickname matches broadly and costs extra parses. Measured on a
+        production-shaped corpus (6,834 files, 370MB): a scan finding nothing
+        takes ~1.8s with no nickname, ~2.0s for "Sparrow", ~2.3s for "Al", and
+        a pathological one-character nickname makes every file a candidate and
+        degrades to the cost of parsing the whole corpus. That is a performance
+        cliff, never a correctness one: a false-positive needle costs one parse
+        and ZERO mutations, because the structural scrub decides on fields
+        rather than substrings.
+        """
         forms = _needles(self.player_id)
-        if self.player_name:
-            forms.extend(_needles(self.player_name))
+        for display_name in sorted(self._display_names):
+            forms.extend(_needles(display_name))
         return forms
 
     # -- reference lists ---------------------------------------------------
@@ -376,8 +409,10 @@ class PlayerScrubber:
             if not isinstance(player, dict):
                 continue
             matched_by_id = self._is_id(player.get("id"))
-            matched_by_name = (
-                not player.get("id") and self._is_name(player.get("name"))
+            # An ID-less legacy entry is identified by either display string.
+            matched_by_name = not player.get("id") and (
+                self._is_name(player.get("name"))
+                or self._is_name(player.get("nickname"))
             )
             if not (matched_by_id or matched_by_name):
                 continue
@@ -411,7 +446,38 @@ class PlayerScrubber:
         if isinstance(pending, dict):
             for key in _PENDING_LINE_KEYS:
                 changed |= self._scrub_ref_list(pending, key, remove=True)
+            changed |= self._scrub_pending_scalars(pending)
 
+        return changed
+
+    def _scrub_pending_scalars(self, pending: dict) -> bool:
+        """Anonymise the two pendingNextLine fields that hold a bare name.
+
+        ``lineupReadyBy`` is the Line Coach's display name on the "lineup is
+        ready" ping (game/gameScreenEvents.js), and ``lineCoachViewing``
+        normally holds a line type but is not guaranteed to. Both are COACH
+        identity rather than player identity, which is why the field table
+        missed them — but a player is often also a coach, and the guarantee
+        being sold is that this person's name appears nowhere.
+
+        Matched on name equality with no ID gate, because there is no ID
+        alongside them to gate on. That can catch a same-named coach who was
+        not erased; the cost is a stale planning ping losing its attribution,
+        which is nothing. For the same reason these are NOT counted in
+        ``name_only_matches``: that counter drives a warning about a *teammate*
+        being caught by a shared display name, and a coach ping is not that.
+
+        Set to None rather than the tombstone name: this is transient plan
+        state, and null is the unset value both consumers already handle
+        (``lineupReadyBy || null`` and the null-lcView branch in
+        store/pendingLineLogic.js). "Removed Player says the lineup is ready"
+        would be a worse thing to render than no ping at all.
+        """
+        changed = False
+        for key in _PENDING_SCALAR_KEYS:
+            if self._is_name(pending.get(key)):
+                pending[key] = None
+                changed = True
         return changed
 
     # -- team documents ----------------------------------------------------
@@ -594,8 +660,11 @@ def _collect_player_refs(game: dict) -> Tuple[set, set]:
             if isinstance(player, dict):
                 if isinstance(player.get("id"), str):
                     ids.add(player["id"])
-                if isinstance(player.get("name"), str):
-                    names.add(player["name"])
+                # Nickname as well as name: the app displays `nickname || name`,
+                # so a stale client's document may carry only the nickname.
+                for key in ("name", "nickname"):
+                    if isinstance(player.get(key), str):
+                        names.add(player[key])
 
     for point in game.get("points") or []:
         if not isinstance(point, dict):
@@ -626,6 +695,9 @@ def _collect_player_refs(game: dict) -> Tuple[set, set]:
                 if isinstance(value, str):
                     ids.add(value)
                     names.add(value)
+        for key in _PENDING_SCALAR_KEYS:
+            if isinstance(pending.get(key), str):
+                names.add(pending[key])
 
     return ids, names
 
@@ -779,6 +851,10 @@ def erase_player(player_id: str, *, dry_run: bool = False,
             stored = None
 
     player_name = (stored or {}).get("name")
+    # The nickname is a display name in its own right — the app renders
+    # `nickname || name` — so it has to be matched and pre-filtered on exactly
+    # like the name. See PlayerScrubber.
+    player_nickname = (stored or {}).get("nickname")
     # A retry reuses the tombstone the first attempt already wrote into the
     # documents it reached, so a partially-failed erasure doesn't split one
     # person across two tombstone rows in historical stats. The deny-list is
@@ -788,7 +864,8 @@ def erase_player(player_id: str, *, dry_run: bool = False,
         or tombstones.player_tombstone(player_id)
         or mint_tombstone_id()
     )
-    scrubber = PlayerScrubber(player_id, player_name, tombstone)
+    scrubber = PlayerScrubber(player_id, player_name, tombstone,
+                              player_nickname=player_nickname)
 
     counts = _empty_counts()
     warnings: List[str] = []
@@ -823,7 +900,8 @@ def erase_player(player_id: str, *, dry_run: bool = False,
     # reconnects mid-operation would otherwise be able to re-POST the player
     # and undo everything above (see storage/tombstones.py).
     if not dry_run:
-        tombstones.record_player_erasure(player_id, tombstone, player_name)
+        tombstones.record_player_erasure(player_id, tombstone, player_name,
+                                         player_nickname)
 
     # Index buckets. Done after the documents so that a rebuild would produce
     # exactly this state: the tombstone now appears in the scrubbed games, so
