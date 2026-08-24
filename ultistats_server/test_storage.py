@@ -29,12 +29,19 @@ def isolate_test_data(tmp_path):
     import config
     importlib.reload(config)
     
-    # Reload storage modules to pick up new config
+    # Reload storage modules to pick up new config.
+    #
+    # ORDER MATTERS: index_storage snapshots INDEX_FILE/TEAMS_DIR/etc. at
+    # import time, and team_storage/game_storage bind update_index_for_* BY
+    # VALUE at import time. Reloading index_storage last would leave those two
+    # holding the pre-reload function, which still writes the REAL
+    # data/index.json — tests then silently mutate the developer's data dir.
+    # Reload the dependency first, then its dependents.
     from storage import player_storage, team_storage, game_storage, index_storage
+    importlib.reload(index_storage)
     importlib.reload(player_storage)
     importlib.reload(team_storage)
     importlib.reload(game_storage)
-    importlib.reload(index_storage)
     
     yield test_data_dir
 

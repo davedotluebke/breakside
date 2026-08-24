@@ -12,10 +12,13 @@ We verify the signature using Supabase's JWT secret.
 """
 
 import jwt
+import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Set, Tuple
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+logger = logging.getLogger(__name__)
 
 # Import config - handle both relative and absolute imports
 try:
@@ -127,6 +130,56 @@ def verify_supabase_token(token: str) -> dict:
         )
 
 
+# (user_id, email) pairs already mirrored into local storage this process
+# lifetime. Without it every authenticated request — including the 2-second
+# poll loop of a live game — would take the user entity lock and read a file.
+# Keyed on the email too, so a Supabase-side address change still re-syncs.
+# A restart just means one upsert per active user.
+_synced_users: Set[Tuple[str, str]] = set()
+
+
+def _mirror_user_record(payload: dict) -> None:
+    """Ensure the authenticated user has a local record, best-effort.
+
+    Supabase owns identity; ``data/users/`` is our mirror of it, and it is what
+    ``is_admin()`` and the team-members endpoint read. Nothing used to populate
+    it except ``GET /api/auth/me`` — so a user who signed up and went straight
+    to creating a team or redeeming an invite never got a record, while their
+    membership referenced them anyway. An August 2026 audit found 13 such
+    users, including coaches on live teams, whose entries in
+    ``GET /api/teams/{team_id}/members`` therefore rendered with a null email.
+
+    Deliberately swallows storage errors: the caller is already authenticated,
+    and a full disk or a permissions problem must not escalate into a total
+    auth outage. Worst case the mirror stays stale, which is the status quo.
+    """
+    user_id = payload.get("id")
+    email = payload.get("email")
+    if not user_id:
+        return
+
+    key = (user_id, email or "")
+    if key in _synced_users:
+        return
+
+    try:
+        # Imported lazily so this module stays importable during early startup
+        # (main.py pulls in assert_auth_configured before the routers load).
+        try:
+            from storage.user_storage import create_or_update_user
+        except ImportError:
+            from ultistats_server.storage.user_storage import create_or_update_user
+
+        create_or_update_user(
+            user_id,
+            email or f"{user_id}@unknown.invalid",
+            (payload.get("user_metadata") or {}).get("full_name"),
+        )
+        _synced_users.add(key)
+    except Exception:
+        logger.warning("Could not mirror user record for %s", user_id, exc_info=True)
+
+
 async def get_current_user(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
@@ -165,7 +218,9 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return verify_supabase_token(credentials.credentials)
+    payload = verify_supabase_token(credentials.credentials)
+    _mirror_user_record(payload)
+    return payload
 
 
 async def get_optional_user(
@@ -201,10 +256,13 @@ async def get_optional_user(
         return None
     
     try:
-        return verify_supabase_token(credentials.credentials)
+        payload = verify_supabase_token(credentials.credentials)
     except HTTPException:
         # Token was provided but invalid - for optional auth, treat as anonymous
         # You could also choose to raise the exception here if you want to
         # reject requests with invalid tokens
         return None
+
+    _mirror_user_record(payload)
+    return payload
 
