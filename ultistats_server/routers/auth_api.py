@@ -1,11 +1,11 @@
 """
 Authentication endpoints: current-user info, profile updates, sync check,
-and the user's teams.
+the user's teams, and self-service account deletion.
 """
 from datetime import datetime
 from typing import Any, Dict
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from ._shared import (
     create_or_update_user,
@@ -13,8 +13,13 @@ from ._shared import (
     get_player,
     get_team,
     get_user_memberships,
+    import_server_module,
 )
 from ._shared import update_user as update_user_storage
+
+# Policy for the two deletion routes below. Kept out of the router so the
+# ordering rules and the sole-coach decision are testable without HTTP.
+account_deletion = import_server_module("account_deletion")
 
 router = APIRouter()
 
@@ -79,6 +84,83 @@ async def update_current_user(
             "displayName": updated_user["displayName"],
         }
     }
+
+
+@router.get("/api/auth/me/delete-preview")
+async def preview_account_deletion(user: dict = Depends(get_current_user)):
+    """
+    What deleting this account would destroy. Mutates nothing.
+
+    Self only — like every route in this pair, the user id comes from the
+    validated JWT and there is no path or body parameter that could name
+    somebody else.
+
+    Returns the shared preview shape (``willErase`` + ``warnings``) plus the
+    fields the confirm dialog needs: ``blockingTeams`` (teams this user is the
+    last coach of that other people still belong to — deletion refuses until
+    those are handed over) and ``teamsToErase`` (teams this account is the
+    only member of, which the cascade destroys once confirmed).
+    """
+    return account_deletion.plan_account_deletion(user["id"])
+
+
+@router.delete("/api/auth/me")
+async def delete_current_user(
+    confirm_erase_teams: bool = Query(
+        False,
+        description=(
+            "Set once the user has seen the preview and accepted that teams "
+            "they are the only member of will be permanently erased."
+        ),
+    ),
+    user: dict = Depends(get_current_user),
+):
+    """
+    Permanently delete the current user's account. Irreversible, no undo.
+
+    Self only. Order of operations and the failure rule live in
+    ``account_deletion`` — in short, the Supabase auth identity is deleted
+    first and any failure there aborts before a single local file is touched,
+    so a user can never end up with their data gone and a login that still
+    works.
+    """
+    try:
+        result = await account_deletion.execute_account_deletion(
+            user["id"], confirm_erase_teams=confirm_erase_teams
+        )
+    except account_deletion.TeamHandoverRequired as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "reason": "team_handover_required",
+                "message": str(exc),
+                "teams": exc.teams,
+            },
+        )
+    except account_deletion.TeamCascadeNotConfirmed as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "reason": "team_cascade_not_confirmed",
+                "message": str(exc),
+                "teams": exc.teams,
+            },
+        )
+    except account_deletion.AuthIdentityDeletionFailed as exc:
+        # 503 = this deployment cannot delete Supabase accounts at all;
+        # 502 = the call was made and the auth service refused or was
+        # unreachable. Either way nothing local was deleted, which the
+        # message says out loud so the client does not sign the user out.
+        raise HTTPException(
+            status_code=503 if not exc.configured else 502,
+            detail={
+                "reason": "auth_identity_deletion_failed",
+                "message": str(exc),
+                "deletedAnything": False,
+            },
+        )
+
+    return {"status": "deleted", **result}
 
 
 @router.get("/api/auth/sync-check")
