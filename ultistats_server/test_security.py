@@ -580,3 +580,95 @@ class TestPlayerTeamIndexAuthorization:
 
         team_storage.update_team(team_id, {"name": "Test Team", "playerIds": []})
         assert index_storage.get_player_teams("Alice-1111") == []
+
+
+# =============================================================================
+# Local user mirror: a membership must never reference a nonexistent user
+# =============================================================================
+
+class TestUserRecordMirror:
+    """Regression tests for the 2026-08 ghost-user finding.
+
+    ``data/users/`` is our mirror of Supabase identity and is what
+    ``is_admin()`` and ``GET /api/teams/{team_id}/members`` read. It used to be
+    populated ONLY by ``GET /api/auth/me``, so anyone who signed up and went
+    straight to creating a team or redeeming an invite never got a record —
+    while their membership referenced them regardless. Production had 13 such
+    users, including coaches of live teams, whose member-list entries rendered
+    with a null email.
+    """
+
+    @pytest.fixture(autouse=True)
+    def clear_mirror_cache(self):
+        from auth import jwt_validation
+        jwt_validation._synced_users.clear()
+        yield
+        jwt_validation._synced_users.clear()
+
+    @pytest.fixture
+    def users_dir(self, tmp_path, monkeypatch):
+        from storage import user_storage
+        d = tmp_path / "users"
+        d.mkdir()
+        monkeypatch.setattr(user_storage, "USERS_DIR", d)
+        return d
+
+    def test_authenticated_user_gets_a_local_record(self, users_dir):
+        from auth import jwt_validation
+        from storage.user_storage import user_exists
+
+        uid = "18e21435-7fe9-47cf-bda4-e1d9bf86451c"
+        assert not user_exists(uid)
+
+        jwt_validation._mirror_user_record(
+            {"id": uid, "email": "coach@example.test",
+             "user_metadata": {"full_name": "A Coach"}}
+        )
+
+        assert user_exists(uid)
+        from storage.user_storage import get_user
+        rec = get_user(uid)
+        assert rec["email"] == "coach@example.test"
+        assert rec["displayName"] == "A Coach"
+        # Never self-elevating: the mirror must not confer admin.
+        assert rec.get("isAdmin") is False
+
+    def test_repeat_calls_do_not_rewrite_the_record(self, users_dir):
+        from auth import jwt_validation
+        from storage.user_storage import get_user
+
+        uid = "u-repeat"
+        payload = {"id": uid, "email": "a@example.test"}
+        jwt_validation._mirror_user_record(payload)
+        first = get_user(uid)["updatedAt"] if "updatedAt" in get_user(uid) else None
+        for _ in range(5):
+            jwt_validation._mirror_user_record(payload)
+        assert get_user(uid).get("updatedAt") == first
+        assert (uid, "a@example.test") in jwt_validation._synced_users
+
+    def test_email_change_resyncs(self, users_dir):
+        from auth import jwt_validation
+        from storage.user_storage import get_user
+
+        uid = "u-change"
+        jwt_validation._mirror_user_record({"id": uid, "email": "old@example.test"})
+        assert get_user(uid)["email"] == "old@example.test"
+
+        jwt_validation._mirror_user_record({"id": uid, "email": "new@example.test"})
+        assert get_user(uid)["email"] == "new@example.test"
+
+    def test_storage_failure_does_not_break_authentication(self, users_dir, monkeypatch):
+        """A broken user store must not escalate into an auth outage."""
+        from auth import jwt_validation
+
+        def boom(*a, **kw):
+            raise OSError("disk full")
+
+        monkeypatch.setattr("storage.user_storage.create_or_update_user", boom)
+        # Must not raise.
+        jwt_validation._mirror_user_record({"id": "u-fail", "email": "x@example.test"})
+
+    def test_payload_without_id_is_ignored(self, users_dir):
+        from auth import jwt_validation
+        jwt_validation._mirror_user_record({"email": "no-id@example.test"})
+        assert list(users_dir.glob("*.json")) == []
