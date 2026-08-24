@@ -223,17 +223,31 @@ def get_team_eraser():
     return _team_eraser or _fallback_erase_team
 
 
-def _team_game_ids(team_id: str) -> List[str]:
+def _games_by_team() -> Dict[str, List[str]]:
+    """One pass over every stored game, grouped by ``teamId``.
+
+    Callers that ask about several teams must build this once and pass it in;
+    a scan per team is a full re-read of every game document on the server.
+    """
+    grouped: Dict[str, List[str]] = {}
+    for meta in list_all_games():
+        team_id = meta.get("teamId")
+        if team_id:
+            grouped.setdefault(team_id, []).append(meta["game_id"])
+    return grouped
+
+
+def _team_game_ids(team_id: str, grouped: Optional[Dict[str, List[str]]] = None) -> List[str]:
     """Every game belonging to ``team_id``.
 
-    Union of the index bucket and a full scan of stored games: the index is a
-    cache and a stale entry here means a game survives an "erasure", which is
-    exactly the failure this feature exists to prevent.
+    Union of the index bucket and a scan of stored games: the index is a cache
+    and a stale entry here means a game survives an "erasure", which is exactly
+    the failure this feature exists to prevent.
     """
+    if grouped is None:
+        grouped = _games_by_team()
     ids = set(get_team_games(team_id) or [])
-    for meta in list_all_games():
-        if meta.get("teamId") == team_id:
-            ids.add(meta["game_id"])
+    ids.update(grouped.get(team_id, []))
     return sorted(ids)
 
 
@@ -584,8 +598,9 @@ def _surviving_share_count(team_ids: List[str], user_id: str) -> int:
     the share exposes the *team's* game rather than this user's identity.
     """
     count = 0
+    grouped = _games_by_team()   # one scan for all of team_ids, not one each
     for team_id in team_ids:
-        for game_id in _team_game_ids(team_id):
+        for game_id in _team_game_ids(team_id, grouped):
             for share in list_game_shares(game_id):
                 if share.get("createdBy") == user_id and not share.get("revokedAt"):
                     count += 1
