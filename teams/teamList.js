@@ -22,6 +22,7 @@ import {
 import { getPlayerFromName, isPointInProgress } from '../utils/helpers.js';
 import { showScreen, showEditRosterScreen, showStartGameScreen } from '../screens/navigation.js';
 import { buildSyncStatusHTML } from './syncStatusUI.js';
+import { buildAccountSectionHTML } from './accountDeletion.js';
 import {
     showCreateEventDialog, showEventSettingsDialog, startNewEventGame,
     showEventRosterScreen,
@@ -102,6 +103,13 @@ function showSelectTeamScreen(firsttime = false) {
     teamsContainer.appendChild(teamsList);
 
     teamListElement.appendChild(teamsContainer);
+
+    // Account actions last, below the teams. Deliberately not up in the sync
+    // bar next to Sign Out — see teams/accountDeletion.js.
+    const accountSection = document.createElement('div');
+    accountSection.id = 'accountSectionContainer';
+    accountSection.innerHTML = buildAccountSectionHTML();
+    teamListElement.appendChild(accountSection);
 
     // Populate teams and games asynchronously
     populateCloudTeamsAndGames();
