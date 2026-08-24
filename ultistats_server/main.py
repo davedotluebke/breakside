@@ -57,12 +57,23 @@ async def lifespan(app: FastAPI):
     yield
 
 
-# Create FastAPI app
+# Create FastAPI app.
+#
+# The interactive docs are development-only. FastAPI serves /docs, /redoc and
+# /openapi.json unauthenticated by default, and the schema is a complete map of
+# every route, path parameter and request body — a free reconnaissance document
+# for anyone probing api.breakside.pro, and a standing hint whenever a new
+# endpoint ships before its authorization does. Nothing in the app consumes the
+# schema at runtime (the PWA calls fixed URLs), so gating on DEBUG costs local
+# development nothing and removes the endpoint map from production.
 app = FastAPI(
     title="Ultistats API",
     description="API for the Ultistats PWA - Ultimate Frisbee Statistics Tracker",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url="/docs" if DEBUG else None,
+    redoc_url="/redoc" if DEBUG else None,
+    openapi_url="/openapi.json" if DEBUG else None,
 )
 
 # CORS middleware.

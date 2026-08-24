@@ -903,3 +903,28 @@ class TestAnonymousListShortCircuit:
         r = client.get("/api/teams")
         assert r.status_code == 200
         assert seeded["team_id"] in [t["id"] for t in r.json()["teams"]]
+
+
+# =============================================================================
+# Interactive API docs are development-only
+# =============================================================================
+
+class TestInteractiveDocsDisabled:
+    """/docs, /redoc and /openapi.json publish a complete map of every route,
+    path parameter and body schema, unauthenticated. FastAPI serves them by
+    default, so production was handing that map to anyone who asked. They are
+    now gated on DEBUG, which is false unless ULTISTATS_DEBUG=true — as it is
+    under pytest, hence 404 here.
+    """
+
+    @pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
+    def test_docs_routes_are_absent(self, client, path):
+        assert client.get(path).status_code == 404
+
+    def test_app_is_configured_with_no_schema_url(self):
+        """Belt and braces: the 404 above could also come from the static
+        catch-all, so assert the app itself never registered the routes."""
+        from main import app
+        assert app.openapi_url is None
+        assert app.docs_url is None
+        assert app.redoc_url is None

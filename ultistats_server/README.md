@@ -24,8 +24,17 @@ Server runs at http://localhost:8000
 
 ### API Documentation
 
+The interactive docs are development-only — they are served only when
+`ULTISTATS_DEBUG=true`, and return 404 otherwise (production must not publish
+a map of every endpoint). Start the server with the flag to use them:
+
+```bash
+ULTISTATS_DEBUG=true python main.py
+```
+
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
+- OpenAPI schema: http://localhost:8000/openapi.json
 
 ## Configuration
 
