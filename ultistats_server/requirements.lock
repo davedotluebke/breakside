@@ -1,0 +1,51 @@
+# Production dependency lock — the exact set running on EC2.
+#
+# Captured 2026-08-23 from the live venv (/opt/breakside/venv) via `pip freeze`,
+# BEFORE the Amazon Linux 2023 / Python 3.12 migration, so there is a known-good
+# "before" set to compare against. requirements.txt pins only floors (>=) with no
+# upper bounds, so installing from it resolves to whatever PyPI serves that day —
+# a set nobody has tested. Install from THIS file first, confirm the app runs,
+# then upgrade deliberately.
+#
+# Captured under Python 3.8.20, which caps several packages below their current
+# releases (PyJWT 2.9.0 and Pillow 10.4.0 both require >=3.9 to go further).
+# Expect and re-pin those after the migration.
+#
+# Note: `soundfile` is absent by design — it is a test-only dep (narration audio
+# scenarios) and is not installed in production.
+#
+# Regenerate:  ssh breakside 'sudo -u breakside /opt/breakside/venv/bin/pip freeze'
+annotated-doc==0.0.4
+annotated-types==0.7.0
+anyio==4.5.2
+certifi==2025.11.12
+cffi==1.17.1
+click==8.1.8
+cryptography==46.0.3
+exceptiongroup==1.3.1
+fastapi==0.124.2
+h11==0.16.0
+httpcore==1.0.9
+httptools==0.6.4
+httpx==0.28.1
+idna==3.11
+iniconfig==2.1.0
+packaging==25.0
+pillow==10.4.0
+pluggy==1.5.0
+pycparser==2.23
+pydantic==2.10.6
+pydantic_core==2.27.2
+PyJWT==2.9.0
+pytest==8.3.5
+python-dotenv==1.0.1
+python-multipart==0.0.20
+PyYAML==6.0.3
+sniffio==1.3.1
+starlette==0.44.0
+tomli==2.3.0
+typing_extensions==4.13.2
+uvicorn==0.33.0
+uvloop==0.22.1
+watchfiles==0.24.0
+websockets==13.1
