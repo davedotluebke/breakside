@@ -17,7 +17,6 @@ Run: cd ultistats_server && python -m pytest test_erasure.py -v
 """
 import json
 import os
-import shutil
 from pathlib import Path
 
 import pytest
@@ -794,3 +793,27 @@ class TestPreviewSymmetry:
             params={"erase_orphaned_players": "true"},
         ).json()
         assert preview["willErase"] == actual["erased"]
+
+
+class TestTombstoneMinting:
+
+    def test_minted_ids_carry_no_name_and_do_not_repeat(self):
+        from storage import mint_tombstone_id
+        from storage.erasure import TOMBSTONE_RE
+        minted = {mint_tombstone_id() for _ in range(200)}
+        assert len(minted) == 200, "tombstones must not collide in normal use"
+        assert all(TOMBSTONE_RE.match(t) for t in minted)
+
+    def test_a_caller_supplied_tombstone_must_look_like_one(self, env):
+        """The retry parameter must not double as a way to inject an arbitrary
+        string into every stored document."""
+        from storage import erase_player
+        with pytest.raises(ValueError):
+            erase_player(env["alice"]["id"], tombstone_id="../../etc/passwd")
+
+    def test_a_valid_supplied_tombstone_is_used(self, env):
+        from storage import erase_player, get_game_current
+        result = erase_player(env["alice"]["id"], tombstone_id="Removed-abcd1234")
+        assert result["tombstoneId"] == "Removed-abcd1234"
+        roster = get_game_current(env["game_id"])["rosterSnapshot"]["players"]
+        assert any(p["id"] == "Removed-abcd1234" for p in roster)

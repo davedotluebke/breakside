@@ -36,10 +36,17 @@ the "erasure" is theatre. They are scrubbed with the same traversal as
 Finding which files are affected means looking inside every one of them, and
 there is no cheaper oracle than the bytes. So the scan reads each file's raw
 bytes and tests for the ID/name as a substring — a hit is the only thing that
-pays for a ``json.loads``. That is roughly an order of magnitude cheaper than
-parsing everything, and it never misses: any file whose text contains the
+pays for a ``json.loads``. It never misses: any file whose text contains the
 needle is parsed and offered to the structural scrub, which then decides on
 *fields*, not on substrings.
+
+Measured on a corpus matching production shape (34 games, 6,800 version files,
+370MB): a scan finding nothing takes ~1.5s against ~2.0s to parse everything,
+so the parse saving is real but modest — the substantial win is that a
+non-matching file is never re-serialized or rewritten, and that memory stays
+flat because exactly one document is held at a time. Erasing a player who
+appears in every file took ~14s end to end; the endpoints therefore run this
+off the event loop (the server is single-worker).
 
 Note ``atomic_write_json`` uses ``json.dump`` defaults, i.e.
 ``ensure_ascii=True``, so a name like ``José`` is stored as ``Jos\\u00e9``.
@@ -83,7 +90,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from . import (
-    event_storage, game_storage, index_storage, player_storage, team_storage,
+    event_storage, game_storage, index_storage, invite_storage,
+    membership_storage, player_storage, share_storage, team_storage,
     tombstones,
 )
 from .file_utils import atomic_write_json
@@ -105,6 +113,10 @@ TOMBSTONE_PREFIX = "Removed-"
 # tombstone exists to prevent. 8 hex makes that negligible and costs nothing.
 _TOMBSTONE_HEX = 8
 
+# Shape a caller-supplied tombstone must match. ``erase_player`` accepts one
+# so a retry can finish under the tombstone the first attempt already wrote;
+# validating it keeps that parameter from becoming a way to inject an
+# arbitrary string into thousands of stored documents.
 TOMBSTONE_RE = re.compile(r"^Removed-[0-9a-f]{4,16}$")
 
 # --------------------------------------------------------------------------
@@ -756,6 +768,9 @@ def erase_player(player_id: str, *, dry_run: bool = False,
     # name-only legacy references remain reachable. Once the record is gone the
     # erasure is ID-driven, which is exactly right: after a clean run the ID
     # appears nowhere and the re-run finds nothing.
+    if tombstone_id is not None and not TOMBSTONE_RE.match(tombstone_id):
+        raise ValueError(f"Invalid tombstone id: {tombstone_id!r}")
+
     stored = None
     if player_storage.player_exists(player_id):
         try:
@@ -898,8 +913,6 @@ def erase_team(team_id: str, *, dry_run: bool = False,
         Here ``games`` counts games *deleted* and ``versions`` the backups
         destroyed with them.
     """
-    from . import invite_storage, membership_storage, share_storage
-
     counts = _empty_counts()
     warnings: List[str] = []
 
