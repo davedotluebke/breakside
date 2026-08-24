@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Breakside — Privacy</title>
+    <meta name="description" content="What Breakside stores, who else sees it, and how to get it removed.">
+
+    <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/images/favicon-192x192.png">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+    <!-- Same chrome as /docs.html: landing.css supplies the design tokens,
+         docs.css is the page layout. No new stylesheet for this page. -->
+    <link rel="stylesheet" href="/landing/landing.css">
+    <link rel="stylesheet" href="/docs.css">
+</head>
+<body class="docs-body">
+
+<header class="docs-header">
+    <div class="docs-header-inner">
+        <a href="/landing/" class="docs-header-home">
+            <picture>
+                <source srcset="/images/logo.wordmark.dark.png" media="(prefers-color-scheme: dark)">
+                <img src="/images/logo.wordmark.png" alt="Breakside" class="docs-header-logo">
+            </picture>
+        </a>
+        <span class="docs-header-spacer"></span>
+        <a href="/landing/" class="docs-header-link">Home</a>
+        <a href="/docs.html" class="docs-header-link">Docs</a>
+        <a href="/" class="docs-header-link primary">Open app</a>
+    </div>
+</header>
+
+<div class="docs-layout">
+
+    <nav class="docs-rail" aria-label="Contents">
+        <div class="docs-rail-title">Contents</div>
+        <a href="#short" class="section">The short version</a>
+        <a href="#players">Players on a roster</a>
+        <a href="#accounts">Coaches and accounts</a>
+        <a href="#where">Where the data lives</a>
+        <a href="#others">Who else sees it</a>
+        <a href="#shares">Share links</a>
+        <a href="#narration">Voice narration</a>
+        <a href="#never">What Breakside doesn't do</a>
+        <a href="#retention">How long it's kept</a>
+        <a href="#deletion">Deleting things</a>
+        <a href="#youth">Youth teams</a>
+        <a href="#contact">Contact</a>
+    </nav>
+
+    <main>
+        <div class="docs-intro">
+            <h1>Privacy</h1>
+            <p>
+                Breakside is a free ultimate frisbee stats app run by one person as a side
+                project. This page says, in plain language, what it stores, who else gets to
+                see it, and what you can do about it. It should take about two minutes to read.
+            </p>
+            <p>
+                <strong>Last updated: 24 August 2026.</strong> Breakside is beta software and
+                changes often; this page describes it as of that date.
+            </p>
+        </div>
+
+        <section class="docs-section" id="short">
+            <div class="docs-section-head">
+                <h2>The short version</h2>
+            </div>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <ul>
+                        <li>
+                            The thing Breakside mostly stores is <strong>a list of players' names
+                            and what they did on the field.</strong> Most of those people never
+                            signed up for anything — their coach added them.
+                        </li>
+                        <li>
+                            <strong>No ads, no analytics, no trackers.</strong> Nothing is sold or
+                            shared for marketing.
+                        </li>
+                        <li>
+                            <strong>Voice narration sends live microphone audio to OpenAI</strong>
+                            and the resulting transcript to Anthropic. It only runs while you hold
+                            or tap the mic button.
+                        </li>
+                        <li>
+                            <strong>Share links are public.</strong> Anyone with the link can watch
+                            the game, with no sign-in.
+                        </li>
+                        <li>
+                            <strong>Deletion is currently partial and manual.</strong> Read
+                            <a href="#deletion">Deleting things</a> before you rely on it.
+                        </li>
+                    </ul>
+                </div>
+            </article>
+        </section>
+
+        <section class="docs-section" id="players">
+            <div class="docs-section-head">
+                <h2>Players on a roster</h2>
+                <p>People who are not users of the app</p>
+            </div>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <h3>What a player record holds</h3>
+                    <p>
+                        When a coach adds a player, Breakside stores a <strong>name</strong>, and
+                        optionally a <strong>nickname</strong>, a <strong>jersey number</strong>, a
+                        <strong>gender-division marker</strong> (used for gender-ratio rules), a
+                        position, and a default line. That's the whole record.
+                    </p>
+                    <p>
+                        It does <em>not</em> collect a date of birth, address, phone number, email
+                        address, photo, or any medical information about a player.
+                    </p>
+                    <div class="docs-note">
+                        Internal player IDs are built from the player's name — for example
+                        <code>Alice-7f3a</code>. The name therefore also appears inside IDs, file
+                        names, and exported spreadsheets. Breakside does not require a legal name:
+                        a first name, initials, or a nickname works fine, and is a reasonable choice
+                        for a youth roster.
+                    </div>
+                </div>
+            </article>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <h3>What a game records about them</h3>
+                    <p>
+                        For each point, Breakside stores who was on the field, and — depending on
+                        how much detail the coach is tracking — every action attributed to a named
+                        player: throws and completions, drops, throwaways, stalls, blocks, pulls,
+                        goals and assists, plus substitutions. Field positions are recorded when a
+                        coach uses the field diagram.
+                    </p>
+                    <p>
+                        A point stopped for an injury substitution is flagged as such. That is the
+                        only health-adjacent thing Breakside records, and it is not tied to any
+                        detail about the injury.
+                    </p>
+                    <p>
+                        Put plainly: a Breakside game is a per-player performance record. If you add
+                        someone to a roster, <strong>you</strong> are the person who decided to keep
+                        that record about them.
+                    </p>
+                </div>
+            </article>
+        </section>
+
+        <section class="docs-section" id="accounts">
+            <div class="docs-section-head">
+                <h2>Coaches and accounts</h2>
+            </div>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <h3>If you sign in</h3>
+                    <p>Breakside stores:</p>
+                    <ul>
+                        <li>your <strong>email address</strong> and an account ID</li>
+                        <li>
+                            a <strong>display name</strong> — taken from your Google profile if you
+                            sign in with Google, otherwise the part of your email before the
+                            <code>@</code>, and editable
+                        </li>
+                        <li>
+                            which <strong>teams</strong> you belong to, your role on each (coach or
+                            viewer), who invited you, and when you joined
+                        </li>
+                        <li>
+                            <strong>invite codes</strong> you create or redeem, including a record of
+                            which accounts used a code
+                        </li>
+                    </ul>
+                    <p>
+                        Your display name is visible to other people on the same team — for example
+                        as the person who called a line during a game. <strong>Coaches of a team can
+                        see the email addresses of that team's members</strong> in the team settings
+                        screen, since they are the ones who invite and remove people.
+                    </p>
+                    <p>
+                        <strong>Breakside never sees your password.</strong> Sign-in is handled by
+                        Supabase (see below); passwords and Google sign-in go to them, not to
+                        Breakside.
+                    </p>
+                </div>
+            </article>
+        </section>
+
+        <section class="docs-section" id="where">
+            <div class="docs-section-head">
+                <h2>Where the data lives</h2>
+            </div>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <h3>On your device</h3>
+                    <p>
+                        Breakside is offline-first, so your browser keeps a full local copy of your
+                        teams, rosters, and games. That's what lets you track a game on a field with
+                        no signal.
+                    </p>
+                    <div class="docs-note">
+                        When you sign out, that local copy is moved into a backup entry in your
+                        browser's storage rather than erased, so an accidental sign-out can't lose an
+                        unsynced game. It stays there until the next sign-out overwrites it. Clearing
+                        the site's data in your browser settings removes it.
+                    </div>
+                </div>
+            </article>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <h3>On the server</h3>
+                    <p>
+                        Synced teams, players, and games are stored as plain JSON files on a server
+                        run by the maintainer, hosted on Amazon Web Services. The app itself is
+                        served from AWS storage and CDN.
+                    </p>
+                    <!-- TODO(owner): if you want to name the hosting region/country
+                         (e.g. "in the United States"), confirm the EC2 region first.
+                         The repo only pins us-east-1 for the S3/CloudFront deploy step,
+                         so the API's region is not verifiable from source. -->
+                </div>
+            </article>
+        </section>
+
+        <section class="docs-section" id="others">
+            <div class="docs-section-head">
+                <h2>Who else sees it</h2>
+                <p>The complete list of third parties</p>
+            </div>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <ul>
+                        <li>
+                            <strong>Supabase</strong> — sign-in. Receives your email address and
+                            password, or your Google sign-in. No team, player, or game data is ever
+                            stored with them.
+                        </li>
+                        <li>
+                            <strong>Google</strong> — only if you choose "Sign in with Google", in
+                            which case Google handles that sign-in.
+                        </li>
+                        <li>
+                            <strong>OpenAI</strong> — only while voice narration is recording.
+                            Receives live microphone audio, plus player names and nicknames as a
+                            spelling hint. See <a href="#narration">Voice narration</a>.
+                        </li>
+                        <li>
+                            <strong>Anthropic</strong> — only after you stop narrating. Receives the
+                            transcript, the names, nicknames and jersey numbers of the relevant
+                            players, and the current score. This request is made by Breakside's
+                            server, not by your browser.
+                        </li>
+                        <li>
+                            <strong>Amazon Web Services</strong> — hosting. Handles every request to
+                            the site and holds the stored data.
+                        </li>
+                        <li>
+                            <strong>Google Fonts</strong> — every Breakside page, including the
+                            public game viewer, loads fonts from Google, which means Google sees the
+                            visitor's IP address and browser on each page load.
+                        </li>
+                        <li>
+                            <strong>Cloudflare (cdnjs)</strong> — the app loads its icon font from
+                            cdnjs, so Cloudflare sees the same thing on app page loads.
+                        </li>
+                    </ul>
+                    <p>
+                        That's the full list. What Supabase, Google, OpenAI, Anthropic, Amazon and
+                        Cloudflare do with what they receive is governed by their own privacy
+                        policies, not by this one.
+                    </p>
+                    <!-- TODO(owner): consider linking each processor's privacy policy here.
+                         Left out rather than guessed at, since the URLs weren't verified. -->
+                </div>
+            </article>
+        </section>
+
+        <section class="docs-section" id="shares">
+            <div class="docs-section-head">
+                <h2>Share links</h2>
+                <p>Public to anyone holding the URL</p>
+            </div>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <h3>How they work</h3>
+                    <p>
+                        A coach can create a share link so parents and spectators can follow a game
+                        live. The link looks like
+                        <code>https://www.breakside.pro/view/&lt;code&gt;</code>. The code is
+                        unguessable, but the page behind it is <strong>public</strong>: there is no
+                        password and no sign-in. Anyone the link is forwarded to can open it, and it
+                        would be readable by anyone who found it posted somewhere public.
+                    </p>
+                    <p>
+                        Links expire — the coach picks between 1 and 365 days, and the default is 7 —
+                        and a coach can revoke a link at any time from the app.
+                    </p>
+                </div>
+            </article>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <h3>What a share link shows</h3>
+                    <p>
+                        Team and opponent names, the score, when the game started and ended, who was
+                        on the field for each point, and the play-by-play with the names of the
+                        players involved in each play. Players who appeared in the game are listed
+                        by name and nickname.
+                    </p>
+                    <p>
+                        It deliberately leaves out: jersey numbers, the gender-division marker, field
+                        position coordinates, players who never took the field in that game, lines a
+                        coach has queued but not yet called, coaches' names, and the free-text
+                        descriptions attached to events.
+                    </p>
+                    <div class="docs-note">
+                        A coach can additionally tick <strong>listed</strong> when creating a share
+                        link, which puts the game on Breakside's public "recent games" list on the
+                        home page — team names and score, with a link to the same public viewer.
+                        This is off by default; a share link on its own stays unlisted.
+                    </div>
+                </div>
+            </article>
+        </section>
+
+        <section class="docs-section" id="narration">
+            <div class="docs-section-head">
+                <h2>Voice narration</h2>
+                <p>What happens to the audio</p>
+            </div>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <h3>Only while the mic is on</h3>
+                    <p>
+                        Narration lets a coach describe plays out loud instead of tapping. Nothing is
+                        recorded unless you tap or hold the mic button, and the app shows a green,
+                        pulsing mic button and a live transcript panel the whole time it is
+                        listening.
+                    </p>
+                    <p>While it is recording:</p>
+                    <ul>
+                        <li>
+                            your microphone audio is streamed live from your browser to
+                            <strong>OpenAI</strong> to be turned into text, along with the names and
+                            nicknames of players you might mention, so it spells them correctly;
+                        </li>
+                        <li>
+                            when you stop, Breakside's server sends the transcript, the relevant
+                            players' names, nicknames and jersey numbers, and the current score to
+                            <strong>Anthropic</strong>, which works out which game events you
+                            described.
+                        </li>
+                    </ul>
+                    <p>
+                        Breakside does not store the audio, and does not keep a copy of the
+                        transcript on its server — only the game events that come out of it are saved
+                        into the game.
+                    </p>
+                    <div class="docs-note">
+                        A microphone on a sideline picks up whoever is nearby: your players, the
+                        other team, spectators, parents. Please don't use narration anywhere you'd be
+                        uncomfortable recording, and tell people if you use it regularly.
+                    </div>
+                </div>
+            </article>
+        </section>
+
+        <section class="docs-section" id="never">
+            <div class="docs-section-head">
+                <h2>What Breakside doesn't do</h2>
+            </div>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <ul>
+                        <li>
+                            <strong>No analytics or telemetry.</strong> There is no Google Analytics,
+                            no product-analytics tool, no crash or error reporting service, no
+                            session recording, and no tracking pixels — none of it, anywhere in the
+                            app, the home page, or the public viewer.
+                        </li>
+                        <li><strong>No advertising</strong> and no third-party advertising cookies.</li>
+                        <li><strong>Nothing is sold, rented, or shared for marketing.</strong></li>
+                        <li>
+                            <strong>No profiling.</strong> Nothing is used to build a profile of you
+                            or of a player beyond the ultimate stats you are deliberately keeping.
+                        </li>
+                    </ul>
+                    <p>
+                        Breakside is <a href="https://github.com/davedotluebke/ultistats" target="_blank" rel="noopener">open
+                        source</a>, so all of this is checkable rather than something you have to
+                        take on trust.
+                    </p>
+                </div>
+            </article>
+        </section>
+
+        <section class="docs-section" id="retention">
+            <div class="docs-section-head">
+                <h2>How long it's kept</h2>
+            </div>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <p>
+                        <strong>There is no automatic expiry in Breakside today.</strong> Data is
+                        kept until someone deletes it.
+                    </p>
+                    <ul>
+                        <li>
+                            <strong>Game version history.</strong> Every time a game syncs, the server
+                            saves a complete snapshot of it. The 200 most recent snapshots per game
+                            are kept in full; older ones are thinned to one per calendar day, and
+                            those daily snapshots are kept indefinitely. Each snapshot contains the
+                            full roster and play-by-play, so a snapshot can hold a player's name even
+                            after later edits removed it.
+                        </li>
+                        <li>
+                            <strong>Players, teams, and games</strong> are kept until deleted.
+                        </li>
+                        <li>
+                            <strong>Your account record</strong> (email, display name, memberships) is
+                            kept for as long as the account exists.
+                        </li>
+                        <li>
+                            <strong>Invite records</strong> are kept after an invite is revoked, so
+                            there is a record of who joined a team and when.
+                        </li>
+                        <li>
+                            <strong>Who currently holds a coaching role in a live game</strong> is
+                            held in memory only and disappears when the server restarts.
+                        </li>
+                    </ul>
+                </div>
+            </article>
+        </section>
+
+        <section class="docs-section" id="deletion">
+            <div class="docs-section-head">
+                <h2>Deleting things</h2>
+                <p>What the buttons actually do today</p>
+            </div>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <h3>Be aware of the limits</h3>
+                    <p>
+                        Breakside is honest about this rather than reassuring: the in-app delete
+                        actions are incomplete, and none of them is a full erasure.
+                    </p>
+                    <ul>
+                        <li>
+                            <strong>Deleting a player</strong> removes them from that roster. It does
+                            not erase the player record, and it does not remove their name from games
+                            already recorded — those games still show who threw, caught, and scored.
+                        </li>
+                        <li>
+                            <strong>Deleting a team</strong> removes the team. It does not currently
+                            delete that team's games, its memberships, its invites, or its share
+                            links. (The confirmation message in the app currently claims more than
+                            this; the behaviour described here is what actually happens.)
+                        </li>
+                        <li>
+                            <strong>Deleting a game</strong> does remove the game and its whole
+                            snapshot history.
+                        </li>
+                        <li>
+                            <strong>There is no self-service account deletion</strong> in the app yet.
+                        </li>
+                    </ul>
+                </div>
+            </article>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <h3>Asking for something to be removed</h3>
+                    <p>
+                        Until the in-app tools catch up, deletion requests are handled by hand.
+                        Get in touch (see <a href="#contact">Contact</a>) and say what you want
+                        removed — your account, a team, a game, or a particular player's name and
+                        history. Please include enough detail to find it: the team name, and the
+                        player's name as it appears in the app.
+                    </p>
+                    <p>
+                        You can ask for this whether or not you have an account. A parent can ask for
+                        a child's name to be removed without signing up for anything.
+                    </p>
+                    <p>
+                        You can also ask for a copy of what's stored about you or your team.
+                        Coaches can mostly do this themselves: the app exports the team roster and
+                        game summaries to a spreadsheet, and a complete game — every event — to a
+                        JSON file.
+                    </p>
+                </div>
+            </article>
+        </section>
+
+        <section class="docs-section" id="youth">
+            <div class="docs-section-head">
+                <h2>Youth teams</h2>
+            </div>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <p>
+                        Breakside is used by youth teams, so a lot of the names in it belong to
+                        children. The app is a coach's tool — it is not designed for, marketed to, or
+                        used by children directly — but that doesn't change what a youth roster is: a
+                        list of kids' names and how they played.
+                    </p>
+                    <p><strong>If you're a coach:</strong></p>
+                    <ul>
+                        <li>Only add players whose team has agreed to stats being tracked.</li>
+                        <li>
+                            For players under 18, make sure a parent or guardian knows. Many clubs
+                            already handle this with a season media or data consent form; Breakside
+                            fits under that.
+                        </li>
+                        <li>
+                            You can use first names, initials, or nicknames instead of full names.
+                        </li>
+                        <li>
+                            Think before you share. A share link forwarded into a public group chat
+                            is public.
+                        </li>
+                    </ul>
+                    <p>
+                        <strong>If you're a parent</strong> and you'd rather your child's name not be
+                        in Breakside, ask their coach to remove them — or
+                        <a href="#contact">contact us</a> directly and we'll take the name out. You
+                        don't need an account to ask.
+                    </p>
+                </div>
+            </article>
+        </section>
+
+        <section class="docs-section" id="contact">
+            <div class="docs-section-head">
+                <h2>Contact</h2>
+            </div>
+
+            <article class="docs-entry no-clip">
+                <div>
+                    <p>
+                        Breakside is maintained by one person. For anything on this page — a deletion
+                        request, a question about what's stored, or a concern about a player's name:
+                    </p>
+                    <p>
+                        <strong>TODO(owner): add a contact email address here before publishing.</strong>
+                        A monitored address that you are willing to see on a public page. Do not
+                        reuse an address only because it appears in the commit history.
+                    </p>
+                    <p>
+                        For bugs and feature requests, the
+                        <a href="https://github.com/davedotluebke/ultistats/issues/new?labels=beta_feedback" target="_blank" rel="noopener">issue
+                        tracker</a> works well — but note that issues there are <em>public</em>, so
+                        please don't put player names or personal details in one.
+                    </p>
+                    <p>
+                        Found a security problem? Please report it privately rather than in a public
+                        issue — see
+                        <a href="https://github.com/davedotluebke/ultistats/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.
+                    </p>
+                    <div class="docs-note">
+                        Breakside is beta software and it is free. It comes with no warranty, and you
+                        should export your team data regularly rather than treat this as the only
+                        copy.
+                    </div>
+                </div>
+            </article>
+        </section>
+
+    </main>
+</div>
+
+<footer class="docs-footer">
+    <div class="docs-footer-inner">
+        <span>Breakside is beta software. Export your team data regularly.</span>
+        <span class="docs-header-spacer"></span>
+        <a href="/landing/">Home</a>
+        <a href="/docs.html">Docs</a>
+        <a href="/">Open app</a>
+        <a href="https://github.com/davedotluebke/ultistats" target="_blank" rel="noopener">GitHub</a>
+    </div>
+</footer>
+
+</body>
+</html>

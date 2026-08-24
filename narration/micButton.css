@@ -208,3 +208,53 @@
     color: var(--text-faint);
     opacity: 0.4;
 }
+
+/* =============================================================================
+   Narration first-use disclosure modal
+   =============================================================================
+   Markup lives in index.html (#narrationDisclosureModal); micButton.js shows it
+   once before the first narration session and remembers the answer.
+
+   Reuses the app's .modal / .modal-content / .modal-buttons shell (see
+   css/teams-manage.css) — everything here is just the body typography, which
+   is left-aligned prose rather than the centred one-liners the shell assumes.
+   ========================================================================== */
+
+.narration-disclosure-modal {
+    max-width: 420px;
+}
+
+.narration-disclosure-icon {
+    font-size: 2.5rem;
+    line-height: 1;
+    margin-bottom: 10px;
+}
+
+.narration-disclosure-body {
+    text-align: left;
+    margin-bottom: 15px;
+}
+
+.narration-disclosure-body p {
+    margin: 0 0 10px 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
+.narration-disclosure-body p:last-child {
+    margin-bottom: 0;
+}
+
+.narration-disclosure-body strong {
+    color: var(--text-primary);
+}
+
+.narration-disclosure-more {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.narration-disclosure-more a {
+    color: var(--brand-orange);
+}

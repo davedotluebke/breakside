@@ -457,6 +457,12 @@
                                 </button>
                             </div>
                         </div>
+                        <!-- Inside the management-row so it hides for viewers along
+                             with the add-player controls it belongs to. -->
+                        <p class="text-hint roster-consent-hint">
+                            Only add players whose team has agreed to stats tracking. For players
+                            under 18, make sure a parent or guardian is aware.
+                        </p>
                     </div>
                 </div>
 
@@ -695,6 +701,39 @@
                 <button id="pwaInstallBtn" class="primary-btn" style="display: none;">Install App</button>
                 <a id="pwaInstructionsLink" href="/landing/#install" class="btn btn-secondary" style="display: none;">Installation Instructions</a>
                 <button id="pwaContinueBrowserBtn" class="secondary-btn">Continue in Browser</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Narration First-Use Disclosure -->
+    <!-- Shown once, before the first narration session ever started on this
+         device. Acknowledgement is remembered in localStorage
+         (breakside_narration_disclosure_ack) by narration/micButton.js. -->
+    <div id="narrationDisclosureModal" class="modal" style="display: none;">
+        <div class="modal-content narration-disclosure-modal">
+            <div class="narration-disclosure-icon">🎙️</div>
+            <h3>Before you use voice narration</h3>
+            <div class="narration-disclosure-body">
+                <p>
+                    While you narrate, your microphone audio is streamed live to
+                    <strong>OpenAI</strong> to be turned into text, along with the names
+                    and nicknames of the players you might mention.
+                </p>
+                <p>
+                    When you stop, the transcript and your roster are sent to
+                    <strong>Anthropic</strong> to work out which events you described.
+                </p>
+                <p>
+                    Anyone near you may be recorded. Don't use narration anywhere you
+                    would be uncomfortable recording.
+                </p>
+            </div>
+            <p class="narration-disclosure-more">
+                <a href="/privacy.html" target="_blank" rel="noopener">Learn more</a>
+            </p>
+            <div class="modal-buttons">
+                <button id="narrationDisclosureCancelBtn" class="secondary-btn">Cancel</button>
+                <button id="narrationDisclosureEnableBtn" class="primary-btn">Enable</button>
             </div>
         </div>
     </div>

@@ -276,6 +276,79 @@ const narrationMicButton = (function() {
     }
 
     // ---------------------------------------------------------------------
+    // First-use disclosure
+    //
+    // Narration streams live mic audio to OpenAI and hands the transcript to
+    // Anthropic, and neither of those is guessable from a mic icon. Shown once
+    // per device, before the first session of either kind, and remembered in
+    // localStorage. Markup: #narrationDisclosureModal in index.html.
+    // ---------------------------------------------------------------------
+
+    const DISCLOSURE_ACK_KEY = 'breakside_narration_disclosure_ack';
+    const DISCLOSURE_MODAL_ID = 'narrationDisclosureModal';
+
+    // Set while the modal is open so Enable can resume the press that opened
+    // it. Cleared by either button.
+    let disclosureOnAccept = null;
+
+    function hasAcknowledgedDisclosure() {
+        try {
+            return localStorage.getItem(DISCLOSURE_ACK_KEY) === 'true';
+        } catch (_) {
+            // Storage unavailable (Safari private browsing). Show it every
+            // time rather than skip it — repetitive beats undisclosed.
+            return false;
+        }
+    }
+
+    function closeDisclosure() {
+        const modal = document.getElementById(DISCLOSURE_MODAL_ID);
+        if (modal) modal.style.display = 'none';
+        disclosureOnAccept = null;
+    }
+
+    function showDisclosure(onAccept) {
+        const modal = document.getElementById(DISCLOSURE_MODAL_ID);
+        if (!modal) {
+            // Markup missing — realistically a stale cached index.html paired
+            // with a fresh module during an update. Deliberately fails OPEN:
+            // a dead mic mid-game is a worse failure than a missed one-time
+            // dialog, and the next shell load restores it. Change this to a
+            // bare `return;` to fail closed instead.
+            console.warn('[micButton] narration disclosure markup missing — proceeding');
+            onAccept();
+            return;
+        }
+        disclosureOnAccept = onAccept;
+        modal.style.display = 'flex';
+    }
+
+    function initDisclosure() {
+        const cancelBtn = document.getElementById('narrationDisclosureCancelBtn');
+        const enableBtn = document.getElementById('narrationDisclosureEnableBtn');
+
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                // Not remembered: declining once should not be read as a
+                // permanent answer, and they get asked again next tap.
+                closeDisclosure();
+                refreshButtonState();
+            });
+        }
+
+        if (enableBtn) {
+            enableBtn.addEventListener('click', () => {
+                try {
+                    localStorage.setItem(DISCLOSURE_ACK_KEY, 'true');
+                } catch (_) { /* storage disabled — they will see this again */ }
+                const resume = disclosureOnAccept;
+                closeDisclosure();
+                if (resume) resume();
+            });
+        }
+    }
+
+    // ---------------------------------------------------------------------
     // Recording actions — delegate to the active target
     // ---------------------------------------------------------------------
 
@@ -291,6 +364,18 @@ const narrationMicButton = (function() {
             }
             return;
         }
+        // First narration session on this device: say where the audio goes
+        // before any of it leaves the browser. Gate here rather than inside
+        // the two targets so both event and lineup narration are covered by
+        // the one prompt, and so nothing has been opened yet if they cancel.
+        if (!hasAcknowledgedDisclosure()) {
+            showDisclosure(() => beginRecording(target));
+            return;
+        }
+        beginRecording(target);
+    }
+
+    function beginRecording(target) {
         refreshButtonState();  // Show connecting state immediately
         Promise.resolve(target.start())
             .then(() => refreshButtonState())
@@ -350,6 +435,7 @@ const narrationMicButton = (function() {
 
     function init() {
         btn = createButton();
+        initDisclosure();
         refreshVisibility();
         refreshButtonState();
 
