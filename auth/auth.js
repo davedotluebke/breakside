@@ -18,7 +18,8 @@
  *   // Sign out
  *   await signOut();
  */
-import { authFetch } from '../store/sync.js';
+import { authFetch, getSyncStatus, getDeadLetterCount, DEAD_LETTER_KEY } from '../store/sync.js';
+import { makeSignOutBackup } from './signOutBackup.js';
 import { log } from '../utils/logger.js';
 
 // =============================================================================
@@ -41,6 +42,11 @@ let authStateListeners = [];
  */
 async function initializeAuth() {
     if (authInitialized) return;
+
+    // Boot sweep: a sign-out snapshot past its retention window is a copy of
+    // someone's rosters that nobody is coming back for. Runs before the
+    // Supabase checks below so it still happens when auth can't come up at all.
+    signOutBackup.expireIfStale();
 
     // Check if Supabase is available
     // supabase: classic CDN script global (index.html)
@@ -86,6 +92,11 @@ async function initializeAuth() {
             currentUser = session.user;
             log('Auth: Restored session for', currentUser.email);
 
+            // Explicit rather than relying on the INITIAL_SESSION event the
+            // subscription below happens to fire — this is a data-destruction
+            // decision and shouldn't hang on supabase-js emission order.
+            signOutBackup.reconcileSignIn(currentUser?.id || null);
+
             // Sync user's teams from server on session restore. Run immediately
             // (no blocking await of initializeAuth, no magic 500ms delay) and
             // signal completion via a 'breakside:teams-synced' event so the UI
@@ -122,6 +133,12 @@ async function initializeAuth() {
             if (session) {
                 currentSession = session;
                 currentUser = session.user || null;
+                // Any active session — password sign-in, the OAuth redirect
+                // landing back on /app/, or a restore on boot — settles who
+                // this device belongs to now. A snapshot left by anyone else
+                // goes here; one left by this same account survives, because
+                // that's the mis-tap it exists to undo.
+                signOutBackup.reconcileSignIn(currentUser?.id || null);
             } else if (event === 'SIGNED_OUT') {
                 currentSession = null;
                 currentUser = null;
@@ -361,70 +378,72 @@ async function getAccessToken() {
 // Sign Out
 // =============================================================================
 
-// The localStorage keys clearLocalData() wipes. One list so the backup below
-// can never drift out of step with the removals.
+// The localStorage keys clearLocalData() wipes. One list, and the single
+// source of truth for "everything on this device that belongs to a coach":
+// the snapshot below is taken from it, teams/teamList.js's Clear Cache button
+// goes through the same clearLocalData() rather than keeping its own list, and
+// the two used to disagree — Clear Cache removed a key nothing had ever
+// written and left every roster in place.
 const LOCAL_DATA_KEYS = [
     'teamsData',
     'ultistats_sync_queue',
     'ultistats_local_players',
     'ultistats_local_teams',
     'ultistats_local_games',
+    DEAD_LETTER_KEY,
 ];
 
-const SIGNOUT_BACKUP_KEY = 'breakside_signout_backup';
+// The snapshot's whole lifecycle — when it may be written, and the two events
+// that destroy it — lives in ./signOutBackup.js.
+const signOutBackup = makeSignOutBackup({
+    storage: localStorage,
+    log,
+    warn: (...args) => console.warn(...args),
+});
 
 /**
- * Best-effort snapshot of what clearLocalData() is about to delete.
+ * Is there work on this device that the cloud does not have?
  *
- * The real protection against losing unsynced work is the prompt in
- * teams/syncStatusUI.js's confirmSignOutWithPending() — this is only the net
- * under it, for the mis-tap and the user who clicks through. There is
- * deliberately NO restore UI yet (see TODO.md § Offline reliability, 1a): to
- * recover by hand, read `breakside_signout_backup` from localStorage and write
- * each entry of its `data` object back under its own key.
+ * Gates the sign-out snapshot: with nothing stranded there is nothing to
+ * protect, and taking a copy of every roster and game log anyway is pure
+ * exposure. Both stranded-work stores count — the live queue, and the
+ * quarantined items that gave up retrying.
  *
- * Never throws — a failed backup must not block signing out.
+ * Errs towards true when it cannot tell: losing a coach's tournament is worse
+ * than a snapshot, which the retention window and the sign-in reconcile in
+ * signOutBackup.js will clean up regardless.
  */
-function stashLocalDataBackup() {
+function hasUnsyncedWork() {
     try {
-        const data = {};
-        let anyFound = false;
-        for (const key of LOCAL_DATA_KEYS) {
-            const value = localStorage.getItem(key);
-            if (value !== null) {
-                data[key] = value;
-                anyFound = true;
-            }
-        }
-        if (!anyFound) return;
-
-        // Drop any previous backup BEFORE writing the new one. A snapshot is
-        // about the size of the live data, so holding two of them plus the
-        // originals is the most likely way to hit the storage quota.
-        localStorage.removeItem(SIGNOUT_BACKUP_KEY);
-        localStorage.setItem(SIGNOUT_BACKUP_KEY, JSON.stringify({
-            savedAt: new Date().toISOString(),
-            data,
-        }));
-        log('Stashed a sign-out backup under', SIGNOUT_BACKUP_KEY);
+        if ((getSyncStatus().pendingCount || 0) > 0) return true;
+        return getDeadLetterCount() > 0;
     } catch (e) {
-        // Quota exceeded, or storage unavailable. Log and carry on.
-        console.warn('Could not stash a sign-out backup:', e);
+        console.warn('Could not determine pending sync state; assuming unsynced work:', e);
+        return true;
     }
 }
 
 /**
  * Clear all locally stored game/team data.
- * Called on sign out to prevent data leaking between accounts.
+ *
+ * Called on sign out to prevent data leaking between accounts, and by the
+ * Clear Cache button on the teams screen (teams/teamList.js) — sharing this
+ * one implementation is deliberate, see LOCAL_DATA_KEYS above.
  *
  * Destructive by design — but callers must give the user a way out first when
  * anything is unsynced; see confirmSignOutWithPending() in teams/syncStatusUI.js.
  */
 function clearLocalData() {
-    log('Clearing local data on sign out...');
+    log('Clearing local data...');
 
-    // Snapshot first — see stashLocalDataBackup().
-    stashLocalDataBackup();
+    // Snapshot first, but only when there is stranded work worth a net.
+    // Otherwise drop whatever snapshot is there: a previous coach's copy must
+    // not survive this wipe just because this one had nothing to save.
+    if (hasUnsyncedWork()) {
+        signOutBackup.stash(LOCAL_DATA_KEYS, { userId: currentUser?.id || null });
+    } else {
+        signOutBackup.discard('nothing was unsynced when local data was cleared');
+    }
 
     // Clear main teams/games data, and the sync-related keys (also cleared by
     // clearSyncData, but ensure it's done).
@@ -568,7 +587,12 @@ async function signIn(email, password) {
         
         currentSession = data.session;
         currentUser = data.user;
-        
+
+        // Settle the previous coach's sign-out snapshot before any of the
+        // sync work below can fail and leave it sitting there. Same account →
+        // kept; anyone else → destroyed. See ./signOutBackup.js.
+        signOutBackup.reconcileSignIn(currentUser?.id || null);
+
         // Sync user to backend
         await syncUserToBackend();
         
@@ -716,6 +740,12 @@ const breaksideAuth = {
     signIn,
     signUp,
     signOut,
+    // Exposed for the Clear Cache button on the teams screen
+    // (teams/teamList.js), which needs exactly this wipe without the sign-out.
+    // Window-qualified there rather than imported: auth is upstream of
+    // teamList in the module graph (auth → sync → controllerState → teamList),
+    // so a static import would close that cycle.
+    clearLocalData,
     resetPassword,
     signInWithGoogle,
 

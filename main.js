@@ -60,6 +60,7 @@
 // imports.
 import { log } from './utils/logger.js';
 import './auth/config.js';
+import './auth/signOutBackup.js';
 import './auth/auth.js';
 import './auth/loginScreen.js';
 import './store/models.js';

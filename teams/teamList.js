@@ -17,7 +17,7 @@ import {
 import {
     authFetch, API_BASE_URL, listServerGames, listTeamEvents, updateGamePhase,
     deleteGameFromCloud, deleteTeamFromCloud, loadGameFromCloud, syncUserTeams,
-    createTeamOffline, clearSyncData,
+    createTeamOffline, getSyncStatus,
 } from '../store/sync.js';
 import { getPlayerFromName, isPointInProgress } from '../utils/helpers.js';
 import { showScreen, showEditRosterScreen, showStartGameScreen } from '../screens/navigation.js';
@@ -1039,24 +1039,46 @@ function initializeTeamSelection() {
     const clearGamesBtn = document.getElementById('clearGamesBtn');
     if (clearGamesBtn) {
         clearGamesBtn.addEventListener('click', () => {
-            if (confirm('Clear local cache? This will remove all locally cached data. Your data on the cloud will NOT be affected.\n\nYou will need to re-sync from the cloud after clearing.')) {
-                // Clear local teams array
-                teams.length = 0;
-                setCurrentTeam(null);
-
-                // Clear local storage caches
-                if (typeof clearSyncData === 'function') {
-                    clearSyncData();
-                }
-
-                // Clear teams from localStorage
-                localStorage.removeItem('ultistats_teams');
-
-                // Refresh the display
-                showSelectTeamScreen();
-
-                alert('Local cache cleared. Use "Re-sync" or refresh the page to reload data from the cloud.');
+            // One wipe, shared with sign-out: auth/auth.js clearLocalData()
+            // owns the list of keys that hold a coach's data. This button used
+            // to keep its own — `clearSyncData()` plus
+            // `localStorage.removeItem('ultistats_teams')`, a key nothing has
+            // ever written — so it destroyed the sync queue while leaving
+            // 'teamsData' (every roster, every game log) fully intact, exactly
+            // opposite to what the dialog promised. Reached window-qualified
+            // because auth is upstream of this module in the import graph.
+            const clearLocalData = window.breakside?.auth?.clearLocalData;
+            if (typeof clearLocalData !== 'function') {
+                alert('Clear Cache is unavailable right now. Please reload the page and try again.');
+                return;
             }
+
+            // Now that this genuinely erases local data, say so when some of
+            // it has nowhere else to live. clearLocalData() takes a recovery
+            // snapshot in that case, but there is no restore UI for it.
+            const pending = getSyncStatus().pendingCount || 0;
+            const warning = pending > 0
+                ? `${pending} change${pending === 1 ? '' : 's'} on this device ` +
+                  `${pending === 1 ? 'has' : 'have'} not synced to the cloud yet and will be erased.\n\n`
+                : '';
+
+            if (!confirm(
+                `${warning}Clear local cache? This will remove all locally cached data on ` +
+                'this device, including teams, rosters and game history. Your data on ' +
+                'the cloud will NOT be affected.\n\n' +
+                'You will need to re-sync from the cloud after clearing.'
+            )) {
+                return;
+            }
+
+            // Wipes localStorage and the in-memory teams/sync caches, so the
+            // `teams` and `currentTeam` live bindings are reset for us.
+            clearLocalData();
+
+            // Refresh the display
+            showSelectTeamScreen();
+
+            alert('Local cache cleared. Use "Re-sync" or refresh the page to reload data from the cloud.');
         });
 
         // Update button text to reflect cloud-only model
