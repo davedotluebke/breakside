@@ -22,6 +22,7 @@
  *   │   ├── eventDialogs.js     # Event creation/settings dialogs, event-game start flow
  *   │   ├── syncStatusUI.js     # Sync status indicator, full-refresh, pending-sync dialog
  *   │   ├── activeGamePolling.js # Active-game polling and teams-screen auto-refresh
+ *   │   ├── accountDeletion.js  # Account section + delete-account preview/confirm dialog
  *   │   └── rosterManagement.js # Roster display, player management, and line management
  *   │
  *   ├── game/                    # Game core logic
@@ -102,6 +103,7 @@ import { showScreen, showEditRosterScreen, showEditRosterSubscreen } from './scr
 import './teams/rosterRowHelpers.js';
 import './teams/exportPlayerPicker.js';
 import { updateTeamRosterDisplay } from './teams/rosterManagement.js';
+import './teams/accountDeletion.js';
 import { showSelectTeamScreen } from './teams/teamList.js';
 import './teams/eventDialogs.js';
 import { showConnectionInfo } from './teams/syncStatusUI.js';
