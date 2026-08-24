@@ -963,6 +963,11 @@ def erase_team(team_id: str, *, dry_run: bool = False,
     )
 
     if dry_run:
+        # Count the orphans only when the caller says they intend to erase
+        # them, so the preview describes the operation that is actually about
+        # to run rather than a different one.
+        if erase_orphaned_players:
+            counts["players"] = len(orphans)
         return {
             "teamId": team_id,
             "dryRun": True,

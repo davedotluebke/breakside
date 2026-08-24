@@ -767,3 +767,30 @@ class TestScrubberPrecision:
         scrubber = PlayerScrubber("Nobody-0000", "Nobody", "Removed-dddd4444")
         game = {"points": [{"players": ["Bob-1234"], "possessions": []}]}
         assert scrubber.scrub_game(game) is False
+
+
+class TestPreviewSymmetry:
+
+    def test_team_preview_counts_orphans_only_when_they_will_be_erased(self, env, client):
+        _as(COACH)
+        default = client.get(f"/api/teams/{env['team_id']}/erase-preview").json()
+        assert default["willErase"]["players"] == 0
+        assert len(default["orphanedPlayerIds"]) == 2
+
+        opted_in = client.get(
+            f"/api/teams/{env['team_id']}/erase-preview",
+            params={"erase_orphaned_players": "true"},
+        ).json()
+        assert opted_in["willErase"]["players"] == 2
+
+    def test_team_preview_counts_match_the_erasure(self, env, client):
+        _as(COACH)
+        preview = client.get(
+            f"/api/teams/{env['team_id']}/erase-preview",
+            params={"erase_orphaned_players": "true"},
+        ).json()
+        actual = client.post(
+            f"/api/teams/{env['team_id']}/erase",
+            params={"erase_orphaned_players": "true"},
+        ).json()
+        assert preview["willErase"] == actual["erased"]

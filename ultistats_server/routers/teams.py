@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 
 from ._shared import (
     assert_team_edit_access,
@@ -395,6 +396,7 @@ def _team_erasure_response(result: dict, key: str) -> dict:
 @router.get("/api/teams/{team_id}/erase-preview")
 async def preview_erase_team(
     team_id: str,
+    erase_orphaned_players: bool = False,
     user: dict = Depends(require_team_erase_access)
 ):
     """
@@ -402,11 +404,16 @@ async def preview_erase_team(
 
     ``orphanedPlayerIds`` are players who are on no other team. They are NOT
     erased by default — a person is not a side effect of deleting a team — so
-    the caller has to opt in explicitly.
+    the caller has to opt in explicitly. Pass the same
+    ``erase_orphaned_players`` value the erase call will use, so the preview
+    counts what is actually about to happen.
 
     Requires: Coach access to the team.
     """
-    result = erase_team(team_id, dry_run=True)
+    result = await run_in_threadpool(
+        erase_team, team_id, dry_run=True,
+        erase_orphaned_players=erase_orphaned_players,
+    )
     return _team_erasure_response(result, "willErase")
 
 
@@ -431,6 +438,8 @@ async def erase_team_endpoint(
 
     Requires: Coach access to the team.
     """
-    result = erase_team(team_id, erase_orphaned_players=erase_orphaned_players)
+    result = await run_in_threadpool(
+        erase_team, team_id, erase_orphaned_players=erase_orphaned_players,
+    )
     logger.info("ERASED team %s: %s", team_id, result["counts"])
     return _team_erasure_response(result, "erased")
