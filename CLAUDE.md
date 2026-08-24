@@ -57,10 +57,11 @@ Deploys current working directory (not committed state) to S3 + CloudFront inval
 
 ### Production deployment
 - **Frontend**: Push to `main` triggers GitHub Actions → S3 sync → CloudFront invalidation. No server restart needed.
-- **Backend**: After push, manually SSH to EC2 and restart:
+- **Backend**: After push, manually SSH to EC2 and restart. `breakside` is a
+  local `~/.ssh/config` alias (tunnels over AWS SSM; `breakside-direct` is the
+  port-22 fallback). This works directly from Bash — no tmux needed:
   ```bash
-  ssh ec2-user@3.212.138.180
-  cd /opt/breakside && sudo git pull && sudo systemctl restart breakside
+  ssh breakside 'cd /opt/breakside && sudo git pull && sudo systemctl restart breakside'
   ```
 - Only remind about server restart when changes touch `ultistats_server/` files.
 

@@ -1812,8 +1812,11 @@ copy is gitignored and disposable.
 ### EC2 / API
 
 ```bash
-# SSH
-ssh -i ~/.ssh/your-key.pem ec2-user@3.212.138.180
+# SSH. `breakside` is a local ~/.ssh/config alias that tunnels over AWS SSM
+# (ProxyCommand + AWS-StartSSHSession), so it keeps working with inbound port
+# 22 closed. `breakside-direct` is the same host straight over port 22, kept
+# as a fallback. Both authenticate with the usual key as ec2-user.
+ssh breakside
 
 # Service management
 sudo systemctl status breakside
