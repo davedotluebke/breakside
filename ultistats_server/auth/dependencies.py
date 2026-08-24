@@ -72,6 +72,17 @@ def is_admin(user_id: str) -> bool:
     return user_data.get("isAdmin", False)
 
 
+def coach_team_ids(user_id: str) -> set:
+    """Return the set of team ids where ``user_id`` holds the Coach role.
+
+    Lifted out of ``assert_player_edit_access`` so ``require_any_coach`` can
+    ask the same question without duplicating the membership scan.
+    """
+    return set(
+        m["teamId"] for m in get_user_memberships(user_id) if m["role"] == "coach"
+    )
+
+
 async def require_admin(user: dict = Depends(get_current_user)) -> dict:
     """
     Dependency that requires the user to be a global admin.
@@ -527,6 +538,107 @@ async def require_body_team_coach(
     return user
 
 
+async def require_body_game_coach(
+    body: Dict[str, Any] = Depends(get_json_body),
+    user: dict = Depends(get_current_user)
+) -> dict:
+    """
+    Dependency for endpoints that name an EXISTING game in their request body
+    rather than in the path (the narration routes: POST
+    /api/narration/finalize and POST /api/narration/lineup, which spend the
+    operator's LLM budget on behalf of one game's coaching staff).
+
+    ``require_game_team_coach`` can't be used — it reads
+    ``request.path_params``. Like it, this authorizes against the STORED
+    game's teamId; the body's only say is *which* game, never which team.
+    The body arrives via ``get_json_body`` so FastAPI parses it once and the
+    handler is handed the very same dict (see ``require_game_sync_coach``).
+
+    Requires Coach access to the game's team.
+    When AUTH_REQUIRED is false, skips the membership check.
+
+    Raises:
+        HTTPException 400: If the body has no game_id, or the game has no teamId
+        HTTPException 404: If the game doesn't exist
+        HTTPException 403: If user is not a coach for the game's team
+    """
+    game_id = body.get("game_id")
+    # Validate before the auth short-circuit so traversal is rejected even
+    # when auth is disabled for local dev.
+    if game_id is not None:
+        validate_id(game_id, "game_id")
+
+    if not auth_required():
+        return user
+
+    if not game_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="game_id is required"
+        )
+
+    if not game_exists(game_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Game {game_id} not found"
+        )
+
+    team_id = get_game_current(game_id).get("teamId")
+    if not team_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Game has no teamId"
+        )
+
+    # Admin bypass
+    if is_admin(user["id"]):
+        return user
+
+    role = get_user_team_role(user["id"], team_id)
+    if role != "coach":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Coach access required for this team"
+        )
+
+    return user
+
+
+async def require_any_coach(user: dict = Depends(get_current_user)) -> dict:
+    """
+    Dependency for endpoints that spend a server-side resource on a caller's
+    behalf but have no specific game to authorize against — POST
+    /api/narration/token, which mints a live OpenAI credential against the
+    operator's key and is legitimately called before any game exists (the
+    practice-narration flow).
+
+    Requires the caller to coach at least one team. That is weaker than
+    coach-of-this-game, but it is the strongest question this endpoint can
+    ask, and it is what keeps a drive-by Supabase signup (self-signup is
+    open) from spending the operator's OpenAI budget.
+
+    When AUTH_REQUIRED is false, skips the membership check — a synthetic dev
+    user holds no memberships.
+
+    Raises:
+        HTTPException 403: If the user coaches no team at all
+    """
+    if not auth_required():
+        return user
+
+    # Admin bypass
+    if is_admin(user["id"]):
+        return user
+
+    if not coach_team_ids(user["id"]):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Coach access required"
+        )
+
+    return user
+
+
 def assert_player_edit_access(
     user: dict,
     player_id: Optional[str],
@@ -567,9 +679,7 @@ def assert_player_edit_access(
     if is_admin(user["id"]):
         return
 
-    user_coach_teams = set(
-        m["teamId"] for m in get_user_memberships(user["id"]) if m["role"] == "coach"
-    )
+    user_coach_teams = coach_team_ids(user["id"])
 
     # Case 1: brand-new record.
     if not player_id:

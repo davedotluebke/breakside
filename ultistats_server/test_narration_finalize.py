@@ -14,10 +14,19 @@ dialog wouldn't have. Live probing showed the model will happily emit a bare
 {"kind": "pull"} for scene-setting narration ("we pulled it", "they pull") if
 the required-puller gate is ever softened, so that gate is pinned here.
 
+The endpoint sections at the bottom cover the two routes in narration.py as
+HTTP surfaces rather than as prompt builders: who may call them (both used to
+take any authenticated user and never look at the game_id they were handed),
+what they will accept into a prompt billed to the operator, and — for /token —
+which OpenAI session a request may ask for. The provider calls are always
+mocked; nothing here reaches a real API.
+
 Run with: cd ultistats_server && python -m pytest test_narration_finalize.py -v
 """
 import pytest
+from fastapi.testclient import TestClient
 
+import narration
 from narration import (
     FinalizeRequest,
     GameContext,
@@ -25,6 +34,14 @@ from narration import (
     _build_finalize_prompt,
 )
 from tests.narration.runner import _event_signature, score_events
+
+from conftest import (
+    NARRATION_COACH,
+    NARRATION_GAME_ID,
+    NARRATION_OTHER_COACH,
+    NARRATION_OUTSIDER,
+    NARRATION_VIEWER,
+)
 
 
 def build_prompt(offense=True, transcript="Alice throws to Bob."):

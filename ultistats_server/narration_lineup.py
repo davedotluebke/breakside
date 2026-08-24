@@ -10,6 +10,10 @@ POST /api/narration/lineup
     (_apply_changes), so the model structurally cannot pick, complete, or
     trim a line.
 
+    Requires Coach access to the ``game_id`` in the body, and caps the
+    transcript and roster: the request is forwarded to Anthropic on the
+    operator's key.
+
 This is a SEPARATE layer from the in-point narration pipeline in
 narration.py (token minting + play-by-play finalize). It deliberately
 lives in its own module with its own router so lineup work and in-point
@@ -32,21 +36,27 @@ import re
 from typing import Any, Dict, List, Optional
 
 import httpx
-from fastapi import APIRouter, Body, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 # Dual-import pattern, mirroring narration.py / the rest of the backend.
 try:
-    from auth import get_current_user  # type: ignore
+    from auth import get_json_body, require_body_game_coach  # type: ignore
 except ImportError:
-    from ultistats_server.auth import get_current_user  # type: ignore
+    from ultistats_server.auth import (  # type: ignore
+        get_json_body,
+        require_body_game_coach,
+    )
 
 try:
-    from narration import _last_json_object  # type: ignore
+    from narration import _last_json_object, parse_body  # type: ignore
 except ImportError:
-    from ultistats_server.narration import _last_json_object  # type: ignore
+    from ultistats_server.narration import (  # type: ignore
+        _last_json_object,
+        parse_body,
+    )
 
 
 router = APIRouter(prefix="/api/narration", tags=["narration-lineup"])
@@ -81,12 +91,17 @@ class LineupRosterPlayer(BaseModel):
 
 
 class LineupRequest(BaseModel):
-    # For auth/audit context; lineup extraction itself is stateless.
-    game_id: Optional[str] = None
-    transcript: str
+    # Required: the route authorizes Coach access against THIS game's team
+    # (require_body_game_coach). It used to be optional and unread, which
+    # made the endpoint a free Anthropic proxy for any signed-up account.
+    game_id: str
+    # Capped for the same reason as FinalizeRequest.transcript — it is pasted
+    # into a prompt billed to the operator's key. A called line is one or two
+    # sentences; 8000 is far past any honest client.
+    transcript: str = Field(max_length=8000)
     # FULL active roster — not just on-field players. The whole point of
     # calling a line is naming players coming OFF the bench.
-    roster: List[LineupRosterPlayer]
+    roster: List[LineupRosterPlayer] = Field(max_length=40)
     expected_count: int = 7
     # Who played the last point (or is on the field right now). Basis for
     # substitution phrasing: "X in for Y", "same line", "X is coming off".
@@ -115,10 +130,19 @@ class LineupResponse(BaseModel):
 # Endpoint
 # =============================================================================
 
+async def _lineup_request(
+    body: Dict[str, Any] = Depends(get_json_body)
+) -> LineupRequest:
+    """Typed view of the same parsed body the authorization dependency read."""
+    return parse_body(LineupRequest, body)
+
+
 @router.post("/lineup", response_model=LineupResponse)
 async def extract_lineup(
-    req: LineupRequest = Body(...),
-    user: dict = Depends(get_current_user),
+    # Authorization first, deliberately: an unauthorized caller should not be
+    # able to probe the request schema through validation errors.
+    user: dict = Depends(require_body_game_coach),
+    req: LineupRequest = Depends(_lineup_request),
 ):
     """
     Extract the intended lineup from a coach's spoken narration.

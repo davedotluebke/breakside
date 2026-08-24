@@ -8,7 +8,11 @@ via set arithmetic. The model structurally cannot pick, complete, or trim
 a lineup.
 
 Prompt-content, parsing, and set-arithmetic tests are pure. Endpoint tests
-use TestClient with auth overridden and the Claude call mocked.
+use TestClient with the Claude call mocked; only ``get_current_user`` is
+overridden (a test can't mint a Supabase JWT), so ``require_body_game_coach``
+runs for real against the seeded storage of the ``narration_data`` fixture.
+Overriding the authorization dependency itself would let the behavior tests
+sail past the very check TestLineupAuthorization pins.
 
 An opt-in live test (NARRATION_LIVE_TESTS=1) runs the canonical messy
 utterance through the real model as a prompt-quality eval.
@@ -33,7 +37,13 @@ from narration_lineup import (
     _parse_lineup_json,
 )
 
-MOCK_USER = {"id": "test-user", "email": "coach@test.com", "role": "authenticated"}
+from conftest import (
+    NARRATION_COACH,
+    NARRATION_GAME_ID,
+    NARRATION_OTHER_COACH,
+    NARRATION_OUTSIDER,
+    NARRATION_VIEWER,
+)
 
 
 def make_request(**overrides):
@@ -276,18 +286,19 @@ class TestModelSelection:
 # =============================================================================
 
 @pytest.fixture()
-def client():
+def client(narration_data):
+    """TestClient authenticated as a real coach of the seeded game's team."""
     from main import app
     from auth.jwt_validation import get_current_user
 
-    app.dependency_overrides[get_current_user] = lambda: MOCK_USER
+    app.dependency_overrides[get_current_user] = lambda: NARRATION_COACH
     yield TestClient(app)
     app.dependency_overrides.clear()
 
 
 def request_body(**overrides):
     body = {
-        "game_id": "game-1",
+        "game_id": NARRATION_GAME_ID,
         "transcript": "Kris goes in for Wes",
         "roster": [
             {"name": "Kris", "nickname": None, "number": "12"},
@@ -506,7 +517,107 @@ class TestLineupEndpoint:
         assert not app.dependency_overrides
         unauth_client = TestClient(app)
         resp = unauth_client.post("/api/narration/lineup", json=request_body())
-        assert resp.status_code in (401, 403)
+        assert resp.status_code == 401
+
+
+# =============================================================================
+# Authorization — the endpoint used to accept ANY authenticated user
+# =============================================================================
+#
+# /lineup takes a game_id and forwards the transcript to Anthropic on the
+# operator's key. It used to read only `Depends(get_current_user)` and never
+# look at game_id at all, so any Supabase signup (self-signup is open) could
+# spend the budget. These tests drive the REAL require_body_game_coach — only
+# get_current_user is overridden, because a test can't mint a Supabase JWT.
+
+def _as(user):
+    from main import app
+    from auth.jwt_validation import get_current_user
+    app.dependency_overrides[get_current_user] = lambda: user
+
+
+@pytest.fixture()
+def authz_client(narration_data, monkeypatch):
+    """Client with no user bound yet — each test picks one with _as()."""
+    from main import app
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(narration_lineup, "_call_claude_lineup",
+                        fake_model(["Kris"], []))
+    app.dependency_overrides.clear()
+    yield TestClient(app)
+    app.dependency_overrides.clear()
+
+
+class TestLineupAuthorization:
+    def test_unauthenticated_is_401(self, authz_client):
+        resp = authz_client.post("/api/narration/lineup", json=request_body())
+        assert resp.status_code == 401
+
+    def test_authenticated_non_coach_is_403(self, authz_client):
+        _as(NARRATION_OUTSIDER)
+        resp = authz_client.post("/api/narration/lineup", json=request_body())
+        assert resp.status_code == 403
+
+    def test_viewer_on_the_games_team_is_403(self, authz_client):
+        """Viewer access to a game is not permission to spend LLM budget."""
+        _as(NARRATION_VIEWER)
+        resp = authz_client.post("/api/narration/lineup", json=request_body())
+        assert resp.status_code == 403
+
+    def test_coach_of_a_different_team_is_403(self, authz_client):
+        _as(NARRATION_OTHER_COACH)
+        resp = authz_client.post("/api/narration/lineup", json=request_body())
+        assert resp.status_code == 403
+
+    def test_coach_of_the_games_team_passes(self, authz_client):
+        _as(NARRATION_COACH)
+        resp = authz_client.post("/api/narration/lineup", json=request_body())
+        assert resp.status_code == 200
+
+    def test_unknown_game_is_404(self, authz_client):
+        _as(NARRATION_COACH)
+        resp = authz_client.post("/api/narration/lineup",
+                                 json=request_body(game_id="no-such-game"))
+        assert resp.status_code == 404
+
+    def test_missing_game_id_is_rejected(self, authz_client):
+        """game_id is required now — it used to be Optional and unread."""
+        body = request_body()
+        del body["game_id"]
+        _as(NARRATION_COACH)
+        resp = authz_client.post("/api/narration/lineup", json=body)
+        assert resp.status_code == 400
+
+    def test_traversal_game_id_is_400(self, authz_client):
+        _as(NARRATION_COACH)
+        resp = authz_client.post("/api/narration/lineup",
+                                 json=request_body(game_id="../../etc/passwd"))
+        assert resp.status_code == 400
+
+
+class TestLineupInputCaps:
+    """Oversize inputs are rejected, not truncated: a client that overruns
+    these has a bug, and silently trimming would hide it while still paying
+    for the call."""
+
+    def test_oversize_transcript_is_422(self, client):
+        resp = client.post("/api/narration/lineup",
+                           json=request_body(transcript="x" * 8001))
+        assert resp.status_code == 422
+
+    def test_transcript_at_the_cap_is_accepted(self, client, monkeypatch):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+        monkeypatch.setattr(narration_lineup, "_call_claude_lineup",
+                            fake_model(["Kris"], []))
+        resp = client.post("/api/narration/lineup",
+                           json=request_body(transcript="x" * 8000))
+        assert resp.status_code == 200
+
+    def test_oversize_roster_is_422(self, client):
+        roster = [{"name": f"P{i}", "nickname": None, "number": None}
+                  for i in range(41)]
+        resp = client.post("/api/narration/lineup", json=request_body(roster=roster))
+        assert resp.status_code == 422
 
 
 # =============================================================================

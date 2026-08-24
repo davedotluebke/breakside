@@ -13,26 +13,46 @@ Two endpoints support the two-pass hybrid narration pipeline:
     and asks a higher-quality model (Claude Sonnet) to review and issue
     corrections as a list of operations (CONFIRM / AMEND / RETRACT / ADD).
 
-Both endpoints require coach-level access to the referenced game.
+Authorization differs between the two, because only one of them names a game:
+
+  - /finalize carries a ``game_id``, so it requires Coach access to THAT
+    game's team (``require_body_game_coach``).
+  - /token is issued before a game exists (the practice-narration flow), so
+    the strongest question it can ask is whether the caller coaches any team
+    at all (``require_any_coach``). Both are strictly narrower than "any
+    authenticated user": Supabase self-signup is open, so that was anyone.
+
+Request bodies are also bounded — see the ``Field(max_length=...)`` caps on
+the transcript and list inputs, and the ``Literal`` model allowlists — since
+every one of these fields is forwarded to a metered third-party API on the
+operator's own key.
 """
 from __future__ import annotations
 
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError
 
 logger = logging.getLogger(__name__)
 
 # Import auth helpers — mirror the dual-import pattern used elsewhere in the codebase.
 try:
-    from auth import get_current_user  # type: ignore
+    from auth import (  # type: ignore
+        get_json_body,
+        require_any_coach,
+        require_body_game_coach,
+    )
 except ImportError:
-    from ultistats_server.auth import get_current_user  # type: ignore
+    from ultistats_server.auth import (  # type: ignore
+        get_json_body,
+        require_any_coach,
+        require_body_game_coach,
+    )
 
 
 router = APIRouter(prefix="/api/narration", tags=["narration"])
@@ -53,60 +73,84 @@ def _anthropic_key() -> Optional[str]:
     return os.getenv("ANTHROPIC_API_KEY", "") or None
 
 
+def parse_body(model_cls, body: Dict[str, Any]):
+    """Validate a raw request body against ``model_cls``, as FastAPI would.
+
+    The narration routes that name a game authorize on ``game_id``, so the
+    authorization dependency needs the body — and takes it through the shared
+    ``get_json_body`` dependency, which FastAPI parses once and caches (the
+    same arrangement as ``require_game_sync_coach``). That leaves the route
+    with a single, untyped body param, so the Pydantic model has to be applied
+    here rather than by FastAPI.
+
+    Declaring BOTH ``Depends(get_json_body)`` and a ``Model = Body(...)``
+    param is not an alternative: FastAPI then sees two body fields with
+    different names, switches to embedded-body mode, and every existing client
+    starts getting 422s because their JSON is no longer nested under a key.
+
+    Raises ``HTTPException`` 422 carrying the same ``detail`` shape FastAPI's
+    own request validation produces, so callers can't tell the difference.
+    """
+    try:
+        return model_cls.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=json.loads(exc.json())) from exc
+
+
 # =============================================================================
 # POST /api/narration/token
 # =============================================================================
 
 class TokenRequest(BaseModel):
-    # `mode` selects which kind of Realtime session we mint a token for:
-    #   - "transcription"  -> dedicated transcription-only session (no LLM
-    #                         in the loop). This is the default and what
-    #                         the narration UI uses today: it kills the
-    #                         "Transcription complete." text spam from
-    #                         gpt-realtime acks and is cheaper (no output
-    #                         tokens). See `/v1/realtime/client_secrets`
-    #                         with session.type=transcription.
-    #   - "conversation"   -> classic gpt-realtime session with tools +
-    #                         function calls. Kept reachable for if/when
-    #                         we re-enable the fast-pass event extractor
-    #                         (FAST_PASS_EVENTS_ENABLED in narrationEngine).
-    mode: str = "transcription"
-    # Only meaningful for mode="conversation". Ignored for transcription
-    # (transcription-session tokens are model-agnostic; the actual ASR
-    # model is selected via session.update from the client).
-    model: str = "gpt-realtime"
-    transcription_model: str = "gpt-4o-mini-transcribe"
-    # Game id lets us authenticate the requester against the game team.
-    # Sent in body rather than path because this token is issued, not tied to
-    # a specific persistent resource.
-    game_id: Optional[str] = None
+    # Every field here is forwarded to OpenAI on the operator's key, so each
+    # one is a closed set rather than a free-form string.
+    #
+    # `mode` used to select the session kind, and "conversation" reached
+    # `_mint_legacy_session_token` — a full conversational gpt-realtime
+    # session, 10-20x the transcription rate (ARCHITECTURE.md § narration
+    # costs). It is now pinned to the one value the deployed client sends;
+    # NARRATION_USE_LEGACY_SESSIONS is the only remaining route to the
+    # conversational path, which is what it was always documented to be.
+    # Kept (rather than dropped) so a request that explicitly asks for
+    # "conversation" is refused out loud instead of silently downgraded.
+    mode: Literal["transcription"] = "transcription"
+    # Only meaningful for the legacy conversational session. Ignored for
+    # transcription (transcription-session tokens are model-agnostic; the
+    # actual ASR model is selected via session.update from the client).
+    model: Literal["gpt-realtime"] = "gpt-realtime"
+    # The two models offered by Advanced Settings ("Mini" / "Full") —
+    # settings/advancedSettings.js is the client-side source of this list.
+    transcription_model: Literal[
+        "gpt-4o-mini-transcribe", "gpt-4o-transcribe"
+    ] = "gpt-4o-mini-transcribe"
+    # NOTE: no game_id. The field used to exist here, unread, above a comment
+    # claiming it authenticated the requester against the game team. It never
+    # did, and it can't: this endpoint is called before a game exists.
+    # Authorization is `require_any_coach` on the route instead.
 
 
 @router.post("/token")
 async def create_ephemeral_token(
+    # Coach of *some* team. The practice-narration flow has no game to check
+    # against, so coach-of-this-game is not available here — but minting a
+    # live OpenAI credential must not be reachable by a drive-by signup.
+    user: dict = Depends(require_any_coach),
     req: TokenRequest = Body(...),
-    # Any authenticated user with game access may request a token. The token
-    # itself is short-lived and scoped to the OpenAI session. We deliberately
-    # don't require coach-of-this-team here because tokens are also useful
-    # during a "practice narration" flow that has no game_id yet.
-    user: dict = Depends(get_current_user),
 ):
     """
     Create an ephemeral OpenAI Realtime API session token.
 
-    By default (mode="transcription") this hits the GA `client_secrets`
-    endpoint with `session.type=transcription` to mint a token for a
-    transcription-only Realtime session. The legacy `/v1/realtime/sessions`
-    path (which mints a conversational gpt-realtime session) is kept
-    reachable via NARRATION_USE_LEGACY_SESSIONS=1 in case we need to roll
-    back, and is also used when the client explicitly asks for
-    mode="conversation".
+    Hits the GA `client_secrets` endpoint with `session.type=transcription`
+    to mint a token for a transcription-only Realtime session. The legacy
+    `/v1/realtime/sessions` path (which mints a far pricier conversational
+    gpt-realtime session) is kept reachable via
+    NARRATION_USE_LEGACY_SESSIONS=1 in case we need to roll back — that env
+    flag is the only way to reach it; the request body cannot select it.
     """
     api_key = _openai_key()
 
     use_legacy = os.getenv("NARRATION_USE_LEGACY_SESSIONS", "").strip() in ("1", "true", "yes")
-    mode = (req.mode or "transcription").lower()
-    if use_legacy or mode == "conversation":
+    if use_legacy:
         return await _mint_legacy_session_token(api_key, req)
     return await _mint_transcription_session_token(api_key, req)
 
@@ -175,8 +219,8 @@ async def _mint_transcription_session_token(api_key: str, req: TokenRequest) -> 
 async def _mint_legacy_session_token(api_key: str, req: TokenRequest) -> Dict[str, Any]:
     """
     Mint a token for a conversational gpt-realtime session (tools + function
-    calling). Used when mode="conversation" or when
-    NARRATION_USE_LEGACY_SESSIONS=1.
+    calling). Reachable only via NARRATION_USE_LEGACY_SESSIONS=1 — the
+    request body can no longer select it.
 
     Uses the GA `client_secrets` endpoint with `session.type=realtime`. The old
     beta path (`POST /v1/realtime/sessions` + `OpenAI-Beta: realtime=v1`, flat
@@ -256,9 +300,16 @@ class GameContext(BaseModel):
 
 class FinalizeRequest(BaseModel):
     game_id: str
-    transcript: str
-    roster: List[RosterPlayer]
-    provisional_events: List[ProvisionalEventRef]
+    # Bounds, not truncation: every one of these is pasted verbatim into a
+    # prompt billed to the operator's Anthropic key, and a client that
+    # overruns a cap has a bug we want to see rather than silently trim.
+    # One possession's narration is a few hundred characters; 8000 is
+    # already ~20x a realistic worst case.
+    transcript: str = Field(max_length=8000)
+    # On-field players for one point — seven a side, plus slack.
+    roster: List[RosterPlayer] = Field(max_length=40)
+    # Fast-pass events for one possession; a busy point is a handful.
+    provisional_events: List[ProvisionalEventRef] = Field(max_length=100)
     game_context: GameContext
 
 
@@ -268,10 +319,19 @@ class FinalizeOperation(BaseModel):
     event: Optional[Dict[str, Any]] = None
 
 
+async def _finalize_request(
+    body: Dict[str, Any] = Depends(get_json_body)
+) -> FinalizeRequest:
+    """Typed view of the same parsed body the authorization dependency read."""
+    return parse_body(FinalizeRequest, body)
+
+
 @router.post("/finalize")
 async def finalize_narration(
-    req: FinalizeRequest = Body(...),
-    user: dict = Depends(get_current_user),
+    # Authorization first, deliberately: an unauthorized caller should not be
+    # able to probe the request schema through validation errors.
+    user: dict = Depends(require_body_game_coach),
+    req: FinalizeRequest = Depends(_finalize_request),
 ):
     """
     Run the slow-pass review over the full transcript.
