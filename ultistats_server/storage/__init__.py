@@ -126,6 +126,13 @@ from .erasure import (
     erase_player,
     erase_team,
     mint_tombstone_id,
+    scrub_erased_from_game,
+    strip_erased_from_team,
+)
+
+from .tombstones import (
+    is_player_erased,
+    is_team_erased,
 )
 
 from .controller_storage import (
@@ -199,6 +206,10 @@ __all__ = [
     "erase_player",
     "erase_team",
     "mint_tombstone_id",
+    "scrub_erased_from_game",
+    "strip_erased_from_team",
+    "is_player_erased",
+    "is_team_erased",
     # User storage
     "user_exists",
     "get_user",

@@ -82,7 +82,10 @@ import secrets
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from . import event_storage, game_storage, index_storage, player_storage, team_storage
+from . import (
+    event_storage, game_storage, index_storage, player_storage, team_storage,
+    tombstones,
+)
 from .file_utils import atomic_write_json
 
 logger = logging.getLogger(__name__)
@@ -131,6 +134,34 @@ _POINT_REF_LISTS = ("players", "substitutedOutPlayers", "substitutedInPlayers")
 
 # pendingNextLine holds the *plan* for upcoming points, not history.
 _PENDING_LINE_KEYS = ("oLine", "dLine", "odLine", "odOnDeckLine")
+
+# Per-person attributes on a roster-snapshot entry, nulled on erasure. A
+# tombstone keeps its ID and "Removed Player" and nothing else.
+#
+# The jersey number is the one that matters most and is the least obvious:
+# "Removed Player, #7" re-identifies the person to anyone who knows the team,
+# which is everyone the share link reached. Gender is a per-person attribute by
+# the same argument, and there is no reason an erased entry keeps a position or
+# a default-line preference. This costs real historical fidelity — after an
+# erasure nobody can tell who wore #7 in that game — and that is the intended
+# trade: the record must stop pointing at a person.
+#
+# ``None`` specifically, not ``""``. utils/helpers.js formatPlayerName tests
+# ``number !== null && number !== undefined``, so a null number renders as just
+# the name while an empty string would render "Removed Player ()". Every other
+# consumer (viewer.js ``|| '-'``, the ``=== 'FMP'`` gender comparisons,
+# formatPlayerNameWithRole's ``|| null``) already degrades correctly on null.
+_ROSTER_PERSON_ATTRS = ("nickname", "number", "gender", "position", "defaultLine")
+
+# A Pull event records the puller's gender inline, so nulling the roster
+# entry's gender is not enough on its own — an erased player's pulls would
+# still publish it. ``Gender.UNKNOWN`` is the model's own "we don't know"
+# sentinel (store/models.js), and playByPlay/pullDialog.js already skips
+# events carrying it when tracking alternating-gender pulls, so this degrades
+# along a path the client already handles. (The public share projection
+# strips pullerGender entirely — see routers/shares.py — so this closes the
+# authenticated surfaces.)
+_UNKNOWN_GENDER = "Unknown"
 
 
 class ErasureBlocked(Exception):
@@ -292,15 +323,28 @@ class PlayerScrubber:
                     event[id_field] = self.tombstone_id
                     if name_field in event:
                         event[name_field] = self.tombstone_name
+                    self._scrub_event_attrs(event, name_field)
                     changed = True
                 # A present, non-matching ID settles it: the name belongs to
                 # somebody else, even if the string is identical.
                 continue
             if self._is_name(event.get(name_field)):
                 event[name_field] = self.tombstone_name
+                self._scrub_event_attrs(event, name_field)
                 self.name_only_matches += 1
                 changed = True
         return changed
+
+    @staticmethod
+    def _scrub_event_attrs(event: dict, name_field: str) -> None:
+        """Clear per-person attributes an event records inline about the player.
+
+        Only ``pullerGender`` today. Nulling the roster snapshot's gender is
+        not enough on its own: a Pull event carries the puller's gender in the
+        event itself, so an erased player's pulls would still publish it.
+        """
+        if name_field == "puller" and "pullerGender" in event:
+            event["pullerGender"] = _UNKNOWN_GENDER
 
     def scrub_point(self, point: dict) -> bool:
         changed = False
@@ -330,13 +374,9 @@ class PlayerScrubber:
             if "id" in player:
                 player["id"] = self.tombstone_id
             player["name"] = self.tombstone_name
-            if "nickname" in player:
-                # "" rather than null: that is what the stored corpus uses for
-                # "no nickname", and the client reads it with `||` fallbacks.
-                player["nickname"] = ""
-            # gender / number are deliberately kept. They carry no name and
-            # the game needs them (gender-ratio rules, jersey display); losing
-            # them would corrupt the history this tombstone exists to preserve.
+            for attribute in _ROSTER_PERSON_ATTRS:
+                if attribute in player:
+                    player[attribute] = None
             changed = True
         return changed
 
@@ -516,6 +556,155 @@ def _iter_candidate_files(needles: List[bytes]) -> Iterable[Tuple[Path, str]]:
                 yield event_file, "event"
 
 
+# ==========================================================================
+# Write-path guards — what stops a stale client from undoing an erasure.
+#
+# Breakside's sync queue re-POSTs whole entities, so a device that has not
+# synced since an erasure will happily push back the player record, the roster
+# that lists them, and a game whose event log names them. These run on the
+# INBOUND body, before it is stored. See storage/tombstones.py.
+# ==========================================================================
+
+def _collect_player_refs(game: dict) -> Tuple[set, set]:
+    """Every string in a game document that could name a player: (ids, names).
+
+    Deliberately over-collects. A value is only a candidate for a deny-list
+    lookup; it is the structural scrub that decides what actually gets
+    rewritten, so a wrong guess here costs one hash and nothing else.
+    """
+    ids, names = set(), set()
+    if not isinstance(game, dict):
+        return ids, names
+
+    snapshot = game.get("rosterSnapshot")
+    if isinstance(snapshot, dict):
+        for player in snapshot.get("players") or []:
+            if isinstance(player, dict):
+                if isinstance(player.get("id"), str):
+                    ids.add(player["id"])
+                if isinstance(player.get("name"), str):
+                    names.add(player["name"])
+
+    for point in game.get("points") or []:
+        if not isinstance(point, dict):
+            continue
+        for key in _POINT_REF_LISTS:
+            for value in point.get(key) or []:
+                if isinstance(value, str):
+                    # These lists hold IDs in current data and display names in
+                    # older data, so every entry is both candidates.
+                    ids.add(value)
+                    names.add(value)
+        for possession in point.get("possessions") or []:
+            if not isinstance(possession, dict):
+                continue
+            for event in possession.get("events") or []:
+                if not isinstance(event, dict):
+                    continue
+                for id_field, name_field in _EVENT_ID_TO_NAME.items():
+                    if isinstance(event.get(id_field), str):
+                        ids.add(event[id_field])
+                    if isinstance(event.get(name_field), str):
+                        names.add(event[name_field])
+
+    pending = game.get("pendingNextLine")
+    if isinstance(pending, dict):
+        for key in _PENDING_LINE_KEYS:
+            for value in pending.get(key) or []:
+                if isinstance(value, str):
+                    ids.add(value)
+                    names.add(value)
+
+    return ids, names
+
+
+def _scrubbers_for(hits: Dict[str, str]) -> List[PlayerScrubber]:
+    """One scrubber per erased reference found in an inbound body.
+
+    Each hit string is passed as BOTH the ID and the name: the same value can
+    appear as an ID in ``throwerId`` and as a display name in ``thrower``, and
+    the scrubber's own field rules decide which role applies where. An ID can
+    never be mistaken for a name in practice — IDs always carry a ``-hash``
+    suffix.
+    """
+    return [
+        PlayerScrubber(value, value, tombstone)
+        for value, tombstone in hits.items()
+        if tombstone
+    ]
+
+
+def scrub_erased_from_game(game_data: dict) -> int:
+    """Rewrite references to already-erased players in an INBOUND game sync.
+
+    Mutates ``game_data`` in place and returns how many erased people were
+    found. Returns 0 immediately when nothing has ever been erased, so the
+    normal sync path pays one small file read.
+
+    Without this, ``POST /api/games/{id}/sync`` from a phone holding a cached
+    copy of the game silently reinstates the name in the event log and the
+    roster snapshot — and, because every sync writes a version backup, in a
+    fresh permanent file too.
+    """
+    if not isinstance(game_data, dict) or not tombstones.any_erased_players():
+        return 0
+
+    ids, names = _collect_player_refs(game_data)
+    hits = tombstones.lookup(ids, names)
+    if not hits:
+        return 0
+
+    for scrubber in _scrubbers_for(hits):
+        scrubber.scrub_game(game_data)
+
+    logger.warning(
+        "ERASURE GUARD: an inbound game sync carried %d erased player "
+        "reference(s); they were scrubbed before storage. A client still "
+        "holds pre-erasure data.", len(hits),
+    )
+    return len(hits)
+
+
+def strip_erased_from_team(team_data: dict) -> int:
+    """Remove already-erased players from an INBOUND team document.
+
+    Mutates ``team_data`` in place and returns how many were removed. The rest
+    of the update is legitimate — a coach editing a roster on a stale device is
+    doing normal work — so the team write proceeds; only the erased entries are
+    dropped from ``playerIds`` and ``lines[].players``.
+    """
+    if not isinstance(team_data, dict) or not tombstones.any_erased_players():
+        return 0
+
+    candidates = set()
+    for value in team_data.get("playerIds") or []:
+        if isinstance(value, str):
+            candidates.add(value)
+    for line in team_data.get("lines") or []:
+        if isinstance(line, dict):
+            for value in line.get("players") or []:
+                if isinstance(value, str):
+                    candidates.add(value)
+    for player in team_data.get("teamRoster") or []:
+        if isinstance(player, dict):
+            for key in ("id", "name"):
+                if isinstance(player.get(key), str):
+                    candidates.add(player[key])
+
+    hits = tombstones.lookup(candidates, candidates)
+    if not hits:
+        return 0
+
+    for scrubber in _scrubbers_for(hits):
+        scrubber.scrub_team(team_data)
+
+    logger.warning(
+        "ERASURE GUARD: an inbound team write carried %d erased player "
+        "reference(s); they were stripped before storage.", len(hits),
+    )
+    return len(hits)
+
+
 def _empty_counts() -> Dict[str, int]:
     return {
         "players": 0,
@@ -575,7 +764,15 @@ def erase_player(player_id: str, *, dry_run: bool = False,
             stored = None
 
     player_name = (stored or {}).get("name")
-    tombstone = tombstone_id or mint_tombstone_id()
+    # A retry reuses the tombstone the first attempt already wrote into the
+    # documents it reached, so a partially-failed erasure doesn't split one
+    # person across two tombstone rows in historical stats. The deny-list is
+    # where that mapping lives (keyed by a hash of the ID, never the ID).
+    tombstone = (
+        tombstone_id
+        or tombstones.player_tombstone(player_id)
+        or mint_tombstone_id()
+    )
     scrubber = PlayerScrubber(player_id, player_name, tombstone)
 
     counts = _empty_counts()
@@ -606,6 +803,12 @@ def erase_player(player_id: str, *, dry_run: bool = False,
             counts["rosters"] += 1
         elif kind == "event":
             counts["events"] += 1
+
+    # Record the erasure BEFORE deleting the record. An offline client that
+    # reconnects mid-operation would otherwise be able to re-POST the player
+    # and undo everything above (see storage/tombstones.py).
+    if not dry_run:
+        tombstones.record_player_erasure(player_id, tombstone, player_name)
 
     # Index buckets. Done after the documents so that a rebuild would produce
     # exactly this state: the tombstone now appears in the scrubbed games, so
@@ -788,6 +991,10 @@ def erase_team(team_id: str, *, dry_run: bool = False,
 
     for membership in memberships:
         membership_storage.delete_membership(membership["id"])
+
+    # Before the record goes, so a client reconnecting mid-cascade cannot
+    # re-POST the team and undo it.
+    tombstones.record_team_erasure(team_id)
 
     if exists:
         team_storage.delete_team(team_id)

@@ -1,6 +1,7 @@
 """
 Team endpoints: CRUD, members, roster, games, and active-game lookup.
 """
+import logging
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -8,6 +9,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 
 from ._shared import (
     assert_team_edit_access,
+    erase_team,
     create_membership,
     delete_membership,
     get_current_user,
@@ -23,9 +25,12 @@ from ._shared import (
     get_user_team_role,
     get_user_teams,
     is_admin,
+    is_team_erased,
     list_teams,
+    strip_erased_from_team,
     require_team_access,
     require_team_coach,
+    require_team_erase_access,
     save_team,
     team_exists,
     update_team,
@@ -33,6 +38,8 @@ from ._shared import (
 )
 from ._shared import delete_team as delete_team_storage
 from .games import _enrich_game_with_activity
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -164,6 +171,20 @@ async def create_team(
     if provided_id:
         validate_id(provided_id, "team id")
 
+    # Erasure guards, both for the same reason: the offline sync queue re-POSTs
+    # whole entities, so a stale device would otherwise undo an erasure here.
+    #
+    # An erased TEAM is refused outright (410 Gone) — there is nothing left of
+    # it to update. Erased PLAYERS are only stripped from the incoming roster,
+    # not rejected: a coach editing the roster on a stale device is doing
+    # legitimate work, and failing the whole write would lose it.
+    if provided_id and is_team_erased(provided_id):
+        raise HTTPException(
+            status_code=410,
+            detail="This team was permanently erased and cannot be recreated."
+        )
+    strip_erased_from_team(team_data)
+
     # If ID was provided and already exists, this is an update/sync
     if provided_id and team_exists(provided_id):
         assert_team_edit_access(user, provided_id)
@@ -238,6 +259,7 @@ async def update_team_endpoint(
     if not team_exists(team_id):
         raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
 
+    strip_erased_from_team(team_data)
     update_team(team_id, team_data)
     return {"status": "updated", "team_id": team_id, "team": get_team(team_id)}
 
@@ -348,3 +370,67 @@ async def get_team_active_game(team_id: str, user: dict = Depends(require_team_a
     # Return the most recently started game
     active_games.sort(key=lambda g: g.get("game_start_timestamp", ""), reverse=True)
     return active_games[0]
+
+
+# =============================================================================
+# Erasure — true deletion, as opposed to DELETE above
+# =============================================================================
+#
+# DELETE /api/teams/{id} deletes one JSON file. Its games, shares, invites,
+# memberships and tournament events are all left behind, unreachable through
+# the UI but complete on disk, roster snapshots and player names included.
+# These two endpoints erase the team and everything that only existed because
+# of it. See storage/erasure.py.
+
+
+def _team_erasure_response(result: dict, key: str) -> dict:
+    return {
+        key: result["counts"],
+        "warnings": result["warnings"],
+        "teamId": result["teamId"],
+        "orphanedPlayerIds": result["orphanedPlayerIds"],
+    }
+
+
+@router.get("/api/teams/{team_id}/erase-preview")
+async def preview_erase_team(
+    team_id: str,
+    user: dict = Depends(require_team_erase_access)
+):
+    """
+    Report exactly what erasing this team would destroy. Mutates nothing.
+
+    ``orphanedPlayerIds`` are players who are on no other team. They are NOT
+    erased by default — a person is not a side effect of deleting a team — so
+    the caller has to opt in explicitly.
+
+    Requires: Coach access to the team.
+    """
+    result = erase_team(team_id, dry_run=True)
+    return _team_erasure_response(result, "willErase")
+
+
+@router.post("/api/teams/{team_id}/erase")
+async def erase_team_endpoint(
+    team_id: str,
+    erase_orphaned_players: bool = False,
+    user: dict = Depends(require_team_erase_access)
+):
+    """
+    Permanently erase a team and its cascade. **Irreversible — there is no undo.**
+
+    Deletes every game whose teamId is this team (directory and all version
+    backups), the shares pointing at those games, the team's invites and
+    tournament events, its memberships, and the team record itself.
+
+    Players survive by default. Pass ``erase_orphaned_players=true`` to also
+    erase those left on no other team — the count is in the preview so that
+    choice can be made with the number in view.
+
+    Idempotent: re-running returns zero counts rather than an error.
+
+    Requires: Coach access to the team.
+    """
+    result = erase_team(team_id, erase_orphaned_players=erase_orphaned_players)
+    logger.info("ERASED team %s: %s", team_id, result["counts"])
+    return _team_erasure_response(result, "erased")

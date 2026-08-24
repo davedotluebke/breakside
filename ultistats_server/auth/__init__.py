@@ -40,6 +40,8 @@ from .dependencies import (
     require_any_coach,
     require_player_edit_access,
     require_player_read_access,
+    require_player_erase_access,
+    require_team_erase_access,
     assert_player_edit_access,
     assert_team_edit_access,
 )
@@ -63,6 +65,8 @@ __all__ = [
     "require_any_coach",
     "require_player_edit_access",
     "require_player_read_access",
+    "require_player_erase_access",
+    "require_team_erase_access",
     "assert_player_edit_access",
     "assert_team_edit_access",
 ]

@@ -34,6 +34,7 @@ from ._shared import (
     require_game_team_access,
     require_game_team_coach,
     save_game_version,
+    scrub_erased_from_game,
     update_game_metadata,
     validate_id,
 )
@@ -60,6 +61,14 @@ async def sync_game(
     """
     if "team" not in game_data or "opponent" not in game_data:
         raise HTTPException(status_code=400, detail="Invalid game data: missing team or opponent")
+
+    # Erasure guard. This body is a whole game document from a client that may
+    # not have synced since a player was erased — its event log and roster
+    # snapshot would otherwise reinstate the name, and since every sync writes
+    # a version backup, into a brand-new permanent file as well. Scrub before
+    # storing rather than rejecting: the rest of the sync is legitimate play
+    # data, and refusing it would lose a live game's points.
+    scrub_erased_from_game(game_data)
 
     # If game has an eventId, add game to event's gameIds (idempotent)
     event_id = game_data.get('eventId')
