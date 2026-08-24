@@ -10,6 +10,7 @@ from typing import List, Optional
 from ._config import config
 from .entity_store import JsonEntityStore
 from .id_utils import generate_entity_id
+from .index_storage import update_index_for_team
 from .player_storage import get_player
 
 TEAMS_DIR = config.TEAMS_DIR
@@ -51,7 +52,12 @@ def save_team(team_data: dict, team_id: Optional[str] = None) -> str:
     Returns:
         The team ID
     """
-    return _store.save(team_data, team_id)
+    saved_id = _store.save(team_data, team_id)
+    # Keep playerTeams current on every roster write, mirroring how
+    # game_storage calls update_index_for_game. Without this the index only
+    # moves on an admin rebuild, and authorization reads a stale cache.
+    update_index_for_team(saved_id, team_data)
+    return saved_id
 
 
 def get_team(team_id: str) -> dict:
@@ -76,7 +82,9 @@ def update_team(team_id: str, team_data: dict) -> str:
     Raises:
         FileNotFoundError: If team doesn't exist
     """
-    return _store.update(team_id, team_data)
+    result = _store.update(team_id, team_data)
+    update_index_for_team(team_id, team_data)
+    return result
 
 
 def delete_team(team_id: str) -> bool:

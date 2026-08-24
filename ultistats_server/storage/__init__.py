@@ -42,6 +42,7 @@ from .index_storage import (
     get_team_games,
     get_game_players,
     get_player_teams,
+    get_player_teams_verified,
     update_index_for_game,
     update_index_for_team,
 )
@@ -169,6 +170,7 @@ __all__ = [
     "get_team_games",
     "get_game_players",
     "get_player_teams",
+    "get_player_teams_verified",
     "update_index_for_game",
     "update_index_for_team",
     # User storage

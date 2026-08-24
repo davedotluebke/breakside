@@ -459,3 +459,124 @@ class TestStaticTraversal:
     def test_legit_static_served(self, client, seeded):
         r = client.get("/ultistats/version.json")
         assert r.status_code == 200
+
+
+# =============================================================================
+# Player-team index: authorization must not fail open on a stale cache
+# =============================================================================
+
+class TestPlayerTeamIndexAuthorization:
+    """Regression tests for the 2026-08 stale-index finding.
+
+    ``playerTeams`` is a cache, and ``auth/dependencies.py`` reads "player has
+    no teams" as "orphaned player — any Coach may read/edit/delete it". So a
+    cache MISS fails OPEN. In production the index had gone eight months
+    without a rebuild and 298 of 316 player records (206 of them on live
+    rosters) were reachable by any account that created a throwaway team.
+
+    The authorization path therefore uses ``get_player_teams_verified``, which
+    confirms an empty index answer against the team rosters on disk.
+    """
+
+    @pytest.fixture
+    def index_env(self, tmp_path, monkeypatch):
+        from storage import index_storage
+        teams_dir = tmp_path / "teams"
+        teams_dir.mkdir()
+        index_file = tmp_path / "index.json"
+        monkeypatch.setattr(index_storage, "TEAMS_DIR", teams_dir)
+        monkeypatch.setattr(index_storage, "INDEX_FILE", index_file)
+        return teams_dir, index_file
+
+    @staticmethod
+    def _write_team(teams_dir, team_id, player_ids):
+        (teams_dir / f"{team_id}.json").write_text(
+            json.dumps({"id": team_id, "name": team_id, "playerIds": player_ids})
+        )
+
+    @staticmethod
+    def _write_index(index_file, player_teams):
+        index_file.write_text(json.dumps({
+            "lastRebuilt": "2025-01-01T00:00:00",
+            "playerGames": {}, "teamGames": {}, "gameRoster": {},
+            "playerTeams": player_teams,
+        }))
+
+    def test_stale_index_miss_does_not_read_as_orphan(self, index_env):
+        """The regression: a rostered player absent from the index."""
+        teams_dir, index_file = index_env
+        from storage import index_storage
+
+        self._write_team(teams_dir, "Team-aaaa", ["Alice-1111"])
+        self._write_index(index_file, {})  # stale — nothing indexed
+
+        # The raw cache read is what failed open...
+        assert index_storage.get_player_teams("Alice-1111") == []
+        # ...the authorization read must not.
+        assert index_storage.get_player_teams_verified("Alice-1111") == ["Team-aaaa"]
+
+    def test_genuinely_unrostered_player_resolves_empty(self, index_env):
+        teams_dir, index_file = index_env
+        from storage import index_storage
+
+        self._write_team(teams_dir, "Team-aaaa", ["Alice-1111"])
+        self._write_index(index_file, {})
+
+        assert index_storage.get_player_teams_verified("Nobody-9999") == []
+
+    def test_index_hit_does_not_need_the_roster_scan(self, index_env):
+        """A fresh index answers without touching disk — no team files exist."""
+        teams_dir, index_file = index_env
+        from storage import index_storage
+
+        self._write_index(index_file, {"Alice-1111": ["Team-aaaa"]})
+
+        assert index_storage.get_player_teams_verified("Alice-1111") == ["Team-aaaa"]
+
+    def test_update_index_for_team_adds_and_removes_links(self, index_env):
+        teams_dir, index_file = index_env
+        from storage import index_storage
+
+        self._write_index(index_file, {})
+        index_storage.update_index_for_team(
+            "Team-aaaa", {"id": "Team-aaaa", "playerIds": ["Alice-1111", "Bob-2222"]}
+        )
+        assert index_storage.get_player_teams("Alice-1111") == ["Team-aaaa"]
+        assert index_storage.get_player_teams("Bob-2222") == ["Team-aaaa"]
+
+        # Bob is dropped from the roster: an add-only update would leave his
+        # link behind, which authorization reads as continued Coach access.
+        index_storage.update_index_for_team(
+            "Team-aaaa", {"id": "Team-aaaa", "playerIds": ["Alice-1111"]}
+        )
+        assert index_storage.get_player_teams("Alice-1111") == ["Team-aaaa"]
+        assert index_storage.get_player_teams("Bob-2222") == []
+
+    def test_removal_preserves_memberships_on_other_teams(self, index_env):
+        teams_dir, index_file = index_env
+        from storage import index_storage
+
+        self._write_index(index_file, {"Alice-1111": ["Team-aaaa", "Team-bbbb"]})
+        index_storage.update_index_for_team("Team-aaaa", {"id": "Team-aaaa", "playerIds": []})
+
+        assert index_storage.get_player_teams("Alice-1111") == ["Team-bbbb"]
+
+    def test_saving_a_team_keeps_the_index_current(self, tmp_path, monkeypatch):
+        """save_team/update_team must refresh playerTeams, not wait for a rebuild."""
+        from storage import index_storage, team_storage
+
+        teams_dir = tmp_path / "teams"
+        teams_dir.mkdir()
+        index_file = tmp_path / "index.json"
+        monkeypatch.setattr(index_storage, "TEAMS_DIR", teams_dir)
+        monkeypatch.setattr(index_storage, "INDEX_FILE", index_file)
+        monkeypatch.setattr(team_storage, "TEAMS_DIR", teams_dir)
+        self._write_index(index_file, {})
+
+        team_id = team_storage.save_team(
+            {"name": "Test Team", "playerIds": ["Alice-1111"]}, "Team-aaaa"
+        )
+        assert index_storage.get_player_teams("Alice-1111") == [team_id]
+
+        team_storage.update_team(team_id, {"name": "Test Team", "playerIds": []})
+        assert index_storage.get_player_teams("Alice-1111") == []

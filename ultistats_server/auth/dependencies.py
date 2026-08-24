@@ -32,13 +32,13 @@ try:
     from storage.membership_storage import get_user_team_role, get_user_memberships, get_user_teams
     from storage.game_storage import game_exists, get_game_current
     from storage.event_storage import event_exists, get_event
-    from storage.index_storage import get_player_teams
+    from storage.index_storage import get_player_teams_verified
 except ImportError:
     from ultistats_server.storage.user_storage import get_user, user_exists
     from ultistats_server.storage.membership_storage import get_user_team_role, get_user_memberships, get_user_teams
     from ultistats_server.storage.game_storage import game_exists, get_game_current
     from ultistats_server.storage.event_storage import event_exists, get_event
-    from ultistats_server.storage.index_storage import get_player_teams
+    from ultistats_server.storage.index_storage import get_player_teams_verified
 
 
 async def get_json_body(body: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
@@ -551,7 +551,7 @@ def assert_player_edit_access(user: dict, player_id: Optional[str]) -> None:
         m["teamId"] for m in get_user_memberships(user["id"]) if m["role"] == "coach"
     )
 
-    player_teams = set(get_player_teams(player_id)) if player_id else set()
+    player_teams = set(get_player_teams_verified(player_id)) if player_id else set()
 
     if not player_teams:
         # Orphaned / brand-new player: any coach may create or edit it.
@@ -635,7 +635,7 @@ async def require_player_read_access(
     if is_admin(user["id"]):
         return user
 
-    player_teams = set(get_player_teams(player_id))
+    player_teams = set(get_player_teams_verified(player_id))
 
     if not player_teams:
         # Orphaned / newly-created player not yet on any roster. Mirror the

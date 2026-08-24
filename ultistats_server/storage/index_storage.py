@@ -284,10 +284,57 @@ def update_index_for_game(game_id: str, game_data: dict) -> None:
         _save_index(index)
 
 
+def _scan_rosters_for_player(player_id: str) -> List[str]:
+    """Team IDs whose stored roster contains ``player_id``, read from disk.
+
+    Source of truth, bypassing the index entirely. O(number of teams).
+    """
+    found: List[str] = []
+    if not TEAMS_DIR.exists():
+        return found
+
+    for team_file in TEAMS_DIR.glob("*.json"):
+        try:
+            with open(team_file, 'r') as f:
+                team_data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+        if player_id in (team_data.get('playerIds') or []):
+            found.append(team_data.get('id', team_file.stem))
+
+    return found
+
+
+def get_player_teams_verified(player_id: str) -> List[str]:
+    """A player's team IDs, confirming an empty index answer against disk.
+
+    Use this for AUTHORIZATION; ``get_player_teams`` is fine for display.
+
+    ``playerTeams`` is a cache, and a miss is not evidence that a player is
+    unrostered. The callers in ``auth/dependencies.py`` treat "no teams" as
+    "orphaned player, any Coach may read/edit/delete it", so a stale miss
+    fails OPEN. That is not hypothetical: an August 2026 audit of production
+    found the index had not been rebuilt in eight months, leaving 298 of 316
+    player records — 206 of them on live rosters — reachable by any account
+    that created a throwaway team.
+
+    Only a miss pays for the disk scan, so the hot path is unchanged.
+    """
+    teams = get_player_teams(player_id)
+    if teams:
+        return teams
+    return _scan_rosters_for_player(player_id)
+
+
 def update_index_for_team(team_id: str, team_data: dict) -> None:
     """
     Update the index for a specific team (incremental update).
-    
+
+    Reconciles ``playerTeams`` in BOTH directions: players on the roster gain
+    the link, and players no longer on it lose it. An add-only update would
+    leave a removed player still indexed against this team, which the
+    authorization layer reads as continued Coach access to that player.
+
     Args:
         team_id: The team's ID
         team_data: The team data
@@ -298,14 +345,23 @@ def update_index_for_team(team_id: str, team_data: dict) -> None:
             rebuild_index()
             return
 
-        player_ids = team_data.get('playerIds') or []
+        player_ids = set(team_data.get('playerIds') or [])
+        player_teams = index.setdefault("playerTeams", {})
 
-        # Update playerTeams
+        # Link every player currently on the roster.
         for player_id in player_ids:
-            if player_id not in index["playerTeams"]:
-                index["playerTeams"][player_id] = []
-            if team_id not in index["playerTeams"][player_id]:
-                index["playerTeams"][player_id].append(team_id)
+            teams = player_teams.setdefault(player_id, [])
+            if team_id not in teams:
+                teams.append(team_id)
+
+        # Unlink players dropped from this roster since the last write.
+        for player_id, teams in list(player_teams.items()):
+            if player_id in player_ids:
+                continue
+            if team_id in teams:
+                teams.remove(team_id)
+            if not teams:
+                del player_teams[player_id]
 
         _save_index(index)
 
