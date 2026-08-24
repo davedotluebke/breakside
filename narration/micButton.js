@@ -284,16 +284,28 @@ const narrationMicButton = (function() {
     // localStorage. Markup: #narrationDisclosureModal in index.html.
     // ---------------------------------------------------------------------
 
-    const DISCLOSURE_ACK_KEY = 'breakside_narration_disclosure_ack';
+    const DISCLOSURE_ACK_PREFIX = 'breakside_narration_disclosure_ack';
     const DISCLOSURE_MODAL_ID = 'narrationDisclosureModal';
 
     // Set while the modal is open so Enable can resume the press that opened
     // it. Cleared by either button.
     let disclosureOnAccept = null;
 
+    // Keyed per user, not per device. A club tablet passes between coaches —
+    // the same reason the sign-out backup is bounded (auth/signOutBackup.js) —
+    // and one coach's consent is not another's. Signed-out narration falls back
+    // to a shared key rather than asking on every tap.
+    function disclosureAckKey() {
+        let userId = null;
+        try {
+            userId = window.breakside?.auth?.getCurrentUser?.()?.id || null;
+        } catch (_) { /* auth not initialized yet */ }
+        return userId ? `${DISCLOSURE_ACK_PREFIX}:${userId}` : DISCLOSURE_ACK_PREFIX;
+    }
+
     function hasAcknowledgedDisclosure() {
         try {
-            return localStorage.getItem(DISCLOSURE_ACK_KEY) === 'true';
+            return localStorage.getItem(disclosureAckKey()) === 'true';
         } catch (_) {
             // Storage unavailable (Safari private browsing). Show it every
             // time rather than skip it — repetitive beats undisclosed.
@@ -307,16 +319,44 @@ const narrationMicButton = (function() {
         disclosureOnAccept = null;
     }
 
+    // Plain-text twin of the modal copy in index.html, for the confirm()
+    // fallback below. Keep the two in step.
+    const DISCLOSURE_FALLBACK_TEXT =
+        'Voice narration sends live audio from your microphone to OpenAI, and '
+        + 'the transcript plus your roster to Anthropic, to turn what you say '
+        + 'into game events.\n\n'
+        + 'Anyone near the microphone may be recorded. Do not use it where you '
+        + 'would be uncomfortable recording.\n\n'
+        + 'See the privacy notice at /privacy.html for details.\n\n'
+        + 'Enable voice narration?';
+
     function showDisclosure(onAccept) {
         const modal = document.getElementById(DISCLOSURE_MODAL_ID);
         if (!modal) {
             // Markup missing — realistically a stale cached index.html paired
-            // with a fresh module during an update. Deliberately fails OPEN:
-            // a dead mic mid-game is a worse failure than a missed one-time
-            // dialog, and the next shell load restores it. Change this to a
-            // bare `return;` to fail closed instead.
-            console.warn('[micButton] narration disclosure markup missing — proceeding');
-            onAccept();
+            // with a fresh module during an update. Degrade to confirm()
+            // rather than failing either way: failing closed kills the mic
+            // mid-game, and failing open would send audio to a third party
+            // with no disclosure at all, which is the one outcome this gate
+            // exists to prevent. confirm() needs no markup, so it always works.
+            console.warn('[micButton] narration disclosure markup missing — using confirm() fallback');
+            let accepted = false;
+            try {
+                accepted = window.confirm(DISCLOSURE_FALLBACK_TEXT);
+            } catch (_) {
+                // confirm() suppressed (some embedded webviews). Nothing left
+                // that can disclose, so decline — undisclosed audio capture is
+                // not an acceptable default.
+                accepted = false;
+            }
+            if (accepted) {
+                try {
+                    localStorage.setItem(disclosureAckKey(), 'true');
+                } catch (_) { /* storage disabled — they will see this again */ }
+                onAccept();
+            } else {
+                refreshButtonState();
+            }
             return;
         }
         disclosureOnAccept = onAccept;
@@ -339,7 +379,7 @@ const narrationMicButton = (function() {
         if (enableBtn) {
             enableBtn.addEventListener('click', () => {
                 try {
-                    localStorage.setItem(DISCLOSURE_ACK_KEY, 'true');
+                    localStorage.setItem(disclosureAckKey(), 'true');
                 } catch (_) { /* storage disabled — they will see this again */ }
                 const resume = disclosureOnAccept;
                 closeDisclosure();
