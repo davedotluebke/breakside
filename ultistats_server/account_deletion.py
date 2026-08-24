@@ -338,12 +338,23 @@ def _scrub_json_file(path, user_id: str, tombstone: str, dry_run: bool) -> int:
     return changed
 
 
-def _scrub_user_references(user_id: str, tombstone: str, dry_run: bool) -> int:
+def _scrub_user_references(
+    user_id: str,
+    tombstone: str,
+    dry_run: bool,
+    skip_team_ids=(),
+) -> int:
     """Redact ``user_id`` from every surviving record that names them.
+
+    ``skip_team_ids`` exists for the dry run only: at preview time the records
+    belonging to a team the cascade is about to erase are still on disk, and
+    counting them would warn the user that references "on teams that continue
+    without you" will be redacted when in fact nothing is going to survive.
 
     Directories are read off the storage modules at call time (not captured at
     import) so a patched test data dir is honoured.
     """
+    doomed = set(skip_team_ids)
     changed = 0
     dirs = [
         getattr(player_storage, "PLAYERS_DIR", None),
@@ -357,8 +368,20 @@ def _scrub_user_references(user_id: str, tombstone: str, dry_run: bool) -> int:
         for path in directory.glob("*.json"):
             if path.name.startswith("_"):  # index files, not entities
                 continue
+            if doomed and _entity_team_id(path) in doomed:
+                continue
             changed += _scrub_json_file(path, user_id, tombstone, dry_run)
     return changed
+
+
+def _entity_team_id(path) -> Optional[str]:
+    """The ``teamId`` of a share/invite/membership file, or None."""
+    try:
+        with open(path, "r") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data.get("teamId") if isinstance(data, dict) else None
 
 
 def _memberships_dir():
@@ -497,10 +520,13 @@ def plan_account_deletion(user_id: str) -> Dict[str, Any]:
             f"{counts['versions']} stored version{'s' if counts['versions'] != 1 else ''} "
             "will be permanently deleted."
         )
-    # Deliberately unnumbered: the dry run cannot tell which of these records
-    # the team cascade is about to delete anyway, so a count here would be an
-    # over-estimate. The real number comes back on the delete.
-    if _scrub_user_references(user_id, "", dry_run=True):
+    # Deliberately unnumbered — the exact figure is only knowable after the
+    # cascade has run, and it comes back on the delete. Records on doomed
+    # teams are excluded so this does not promise a redaction on data that is
+    # about to be deleted outright.
+    if _scrub_user_references(
+        user_id, "", dry_run=True, skip_team_ids=cascade_team_ids
+    ):
         warnings.append(
             "Records on teams that continue without you (share and invite "
             "history) will have your account ID replaced with an anonymous "

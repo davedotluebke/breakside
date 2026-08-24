@@ -288,6 +288,26 @@ class TestPreview:
         assert "player record" in warnings
         assert "share link" in warnings
 
+    def test_preview_excludes_records_the_cascade_will_delete(self, seeded):
+        """The redaction warning must not promise anything about doomed data.
+
+        At preview time the solo team's own share and invite are still on disk
+        and still name the user, so an unfiltered dry run counts them — and
+        then tells a solo coach with no surviving teams that their ID will be
+        replaced on "teams that continue without you". It won't; those files
+        are about to be deleted outright.
+        """
+        import account_deletion
+
+        before = _snapshot(seeded["data_dir"])
+        everything = account_deletion._scrub_user_references(
+            SOLO["id"], "", dry_run=True)
+        survivors = account_deletion._scrub_user_references(
+            SOLO["id"], "", dry_run=True, skip_team_ids=[seeded["solo_team"]])
+
+        assert everything > survivors
+        assert _snapshot(seeded["data_dir"]) == before, "a dry run must not write"
+
     def test_preview_blocks_the_sole_coach_of_a_shared_team(self, client, seeded):
         _as(SHARED_COACH)
         body = client.get("/api/auth/me/delete-preview").json()

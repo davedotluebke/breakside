@@ -1080,12 +1080,16 @@
     color: var(--text-primary);
 }
 
+/* css/tables.css resets `ul` to list-style-type: none globally; these are
+   genuine lists of what is about to be destroyed and read as prose without
+   their markers, so put them back. */
 .delete-account-summary,
 .delete-account-teams,
 .delete-account-warnings,
 .delete-account-blockers {
     margin: 0 0 8px 0;
     padding-left: 20px;
+    list-style: disc;
 }
 
 .delete-account-summary li,

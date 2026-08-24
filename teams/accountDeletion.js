@@ -186,9 +186,9 @@ function renderPreview(preview) {
     dialogEl('deleteAccountConfirm').style.display = 'block';
     if (preview.requiresTeamCascadeConfirmation) {
         const teamCount = (preview.teamsToErase || []).length;
-        dialogEl('deleteAccountCascadeLabel').textContent =
-            `I understand ${teamCount === 1 ? 'this team' : `these ${teamCount} teams`} ` +
-            'and all of their games will be permanently erased.';
+        dialogEl('deleteAccountCascadeLabel').textContent = teamCount === 1
+            ? 'I understand this team and all of its games will be permanently erased.'
+            : `I understand these ${teamCount} teams and all of their games will be permanently erased.`;
         dialogEl('deleteAccountCascadeRow').style.display = 'flex';
     }
     updateConfirmEnabled();
