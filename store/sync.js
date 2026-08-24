@@ -628,13 +628,23 @@ function createPlayerOffline(playerData) {
         updatedAt: now,
         _localOnly: true  // Mark as offline-created
     };
-    
+
     // Save to local cache
     localPlayers[id] = player;
     saveLocalPlayers();
-    
-    // Queue for sync
-    addToSyncQueue('player', 'create', id, player);
+
+    // Queue for sync. teamId is a create-time hint for the SERVER — which
+    // team this player is being added to — so it can authorize against that
+    // team and link the player immediately, closing the window where the
+    // record exists with no team (which authorization reads as an orphan)
+    // until the separate team sync lands. It rides on the queued payload
+    // only, deliberately NOT on the cached player: persisting it locally
+    // would resend a stale team on every later update and re-link a player
+    // to a roster they had moved off.
+    const syncPayload = playerData.teamId
+        ? { ...player, teamId: playerData.teamId }
+        : player;
+    addToSyncQueue('player', 'create', id, syncPayload);
     
     // Try to sync immediately if online
     if (isOnline) {

@@ -18,7 +18,9 @@ _store = JsonEntityStore(
     kind="Player",
     dir_getter=lambda: PLAYERS_DIR,
     sort_key=lambda p: p.get('name', '').lower(),
-    strip_fields=('_localOnly',),
+    # teamId is a create-time hint for authorization/indexing, not part
+    # of the player document — roster membership lives on the team.
+    strip_fields=('_localOnly', 'teamId'),
 )
 
 

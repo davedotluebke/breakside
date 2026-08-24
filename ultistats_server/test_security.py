@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 
@@ -672,3 +673,170 @@ class TestUserRecordMirror:
         from auth import jwt_validation
         jwt_validation._mirror_user_record({"email": "no-id@example.test"})
         assert list(users_dir.glob("*.json")) == []
+
+
+# =============================================================================
+# Orphan scoping: a teamless player is reachable only by its creator
+# =============================================================================
+
+class TestOrphanPlayerScoping:
+    """The 2026-08 fail-open rule was: player resolves to no team -> ANY Coach
+    may read/edit/delete it. That made every unrostered record reachable by
+    anyone who created a throwaway team. Now:
+
+      - brand-new record            -> any Coach (harmless), or the Coach of
+                                       the claimed teamId when one is given
+      - existing, on a roster       -> Coach of that roster (unchanged)
+      - existing, teamless          -> creator only
+    """
+
+    @pytest.fixture
+    def env(self, tmp_path, monkeypatch):
+        from storage import index_storage
+        import auth.dependencies as deps
+
+        teams = tmp_path / "teams"
+        teams.mkdir()
+        index = tmp_path / "index.json"
+        index.write_text(json.dumps({
+            "lastRebuilt": "2025-01-01T00:00:00", "playerGames": {},
+            "teamGames": {}, "gameRoster": {}, "playerTeams": {},
+        }))
+        monkeypatch.setattr(index_storage, "TEAMS_DIR", teams)
+        monkeypatch.setattr(index_storage, "INDEX_FILE", index)
+        monkeypatch.setattr(deps, "is_admin", lambda uid: uid == "admin")
+
+        def memberships(uid):
+            return {
+                "coach-a": [{"teamId": "Team-aaaa", "role": "coach"}],
+                "coach-b": [{"teamId": "Team-bbbb", "role": "coach"}],
+                "viewer":  [{"teamId": "Team-aaaa", "role": "viewer"}],
+                "nobody":  [],
+            }.get(uid, [])
+        monkeypatch.setattr(deps, "get_user_memberships", memberships)
+        return teams, index
+
+    @staticmethod
+    def _u(uid):
+        return {"id": uid, "email": uid + "@test"}
+
+    def test_brand_new_player_any_coach(self, env):
+        from auth.dependencies import assert_player_edit_access
+        assert_player_edit_access(self._u("coach-a"), None)          # no raise
+
+    def test_brand_new_player_rejects_non_coach(self, env):
+        from auth.dependencies import assert_player_edit_access
+        with pytest.raises(HTTPException) as e:
+            assert_player_edit_access(self._u("nobody"), None)
+        assert e.value.status_code == 403
+
+    def test_claimed_team_must_be_coached_by_caller(self, env):
+        from auth.dependencies import assert_player_edit_access
+        assert_player_edit_access(self._u("coach-a"), None, claimed_team_id="Team-aaaa")
+        with pytest.raises(HTTPException) as e:
+            assert_player_edit_access(self._u("coach-b"), None, claimed_team_id="Team-aaaa")
+        assert e.value.status_code == 403
+
+    def test_teamless_player_is_NOT_reachable_by_an_unrelated_coach(self, env):
+        """The regression. coach-b coaches a team; that must not grant access
+        to a teamless record they did not create."""
+        from auth.dependencies import assert_player_edit_access
+        with pytest.raises(HTTPException) as e:
+            assert_player_edit_access(
+                self._u("coach-b"), "Alice-1111", created_by="coach-a")
+        assert e.value.status_code == 403
+
+    def test_teamless_player_reachable_by_its_creator(self, env):
+        """Keeps the offline create -> sync player -> sync team retry working."""
+        from auth.dependencies import assert_player_edit_access
+        assert_player_edit_access(
+            self._u("coach-a"), "Alice-1111", created_by="coach-a")
+
+    def test_teamless_player_with_no_creator_recorded_is_denied(self, env):
+        """Legacy records predating createdBy fail closed, not open."""
+        from auth.dependencies import assert_player_edit_access
+        with pytest.raises(HTTPException) as e:
+            assert_player_edit_access(self._u("coach-a"), "Legacy-9999")
+        assert e.value.status_code == 403
+
+    def test_admin_still_passes_everywhere(self, env):
+        from auth.dependencies import assert_player_edit_access
+        assert_player_edit_access(self._u("admin"), "Alice-1111")
+
+    def test_rostered_player_requires_coaching_that_team(self, env):
+        from auth.dependencies import assert_player_edit_access
+        teams, _ = env
+        (teams / "Team-aaaa.json").write_text(json.dumps(
+            {"id": "Team-aaaa", "name": "A", "playerIds": ["Alice-1111"]}))
+        assert_player_edit_access(self._u("coach-a"), "Alice-1111")
+        with pytest.raises(HTTPException) as e:
+            assert_player_edit_access(self._u("coach-b"), "Alice-1111")
+        assert e.value.status_code == 403
+
+    def test_link_player_to_team_closes_the_orphan_window(self, env):
+        from storage import index_storage
+        assert index_storage.get_player_teams("Alice-1111") == []
+        index_storage.link_player_to_team("Alice-1111", "Team-aaaa")
+        assert index_storage.get_player_teams("Alice-1111") == ["Team-aaaa"]
+        index_storage.link_player_to_team("Alice-1111", "Team-aaaa")   # idempotent
+        assert index_storage.get_player_teams("Alice-1111") == ["Team-aaaa"]
+
+
+class TestPlayerCreateTeamIdWiring:
+    """End-to-end through POST /api/players — router, dependency and index
+    wiring, not just the authorization predicate in isolation."""
+
+    def test_create_with_teamId_links_immediately_and_records_creator(self, client, seeded):
+        from storage import index_storage, player_storage
+        _as(MOCK_COACH)
+        r = client.post("/api/players", json={
+            "id": "Newbie-1234", "name": "Newbie", "teamId": seeded["team_id"],
+        })
+        assert r.status_code == 200, r.text
+
+        # linked right away — never a teamless record
+        assert index_storage.get_player_teams("Newbie-1234") == [seeded["team_id"]]
+        stored = player_storage.get_player("Newbie-1234")
+        # createdBy is recorded server-side...
+        assert stored["createdBy"] == "coach-a"
+        # ...and teamId is a hint, not part of the player document
+        assert "teamId" not in stored
+
+    def test_create_with_a_team_you_do_not_coach_is_refused(self, client, seeded):
+        _as(MOCK_OUTSIDER)
+        r = client.post("/api/players", json={
+            "id": "Sneaky-1234", "name": "Sneaky", "teamId": seeded["team_id"],
+        })
+        assert r.status_code == 403
+
+    def test_teamless_player_not_editable_by_an_unrelated_coach(self, client, seeded):
+        """The end-to-end form of the fail-open regression."""
+        from storage import player_storage
+        player_storage.save_player({"name": "Teamless", "createdBy": "coach-a"}, "Teamless-1111")
+
+        _as(MOCK_OUTSIDER)
+        assert client.post("/api/players", json={
+            "id": "Teamless-1111", "name": "Hijacked"}).status_code == 403
+        assert client.get("/api/players/Teamless-1111").status_code == 403
+        assert client.delete("/api/players/Teamless-1111").status_code == 403
+
+        # ...but its creator still reaches it (the offline-retry window)
+        _as(MOCK_COACH)
+        assert client.get("/api/players/Teamless-1111").status_code == 200
+
+    def test_body_cannot_forge_createdBy(self, client, seeded):
+        from storage import player_storage
+        player_storage.save_player({"name": "Owned", "createdBy": "coach-a"}, "Owned-1111")
+        _as(MOCK_COACH)
+        r = client.post("/api/players", json={
+            "id": "Owned-1111", "name": "Owned", "createdBy": "outsider"})
+        assert r.status_code == 200
+        assert player_storage.get_player("Owned-1111")["createdBy"] == "coach-a"
+
+    def test_old_client_without_teamId_still_works(self, client, seeded):
+        """Backward compatibility: a stale cached PWA omits teamId."""
+        _as(MOCK_COACH)
+        r = client.post("/api/players", json={"id": "Legacy-5678", "name": "Legacy"})
+        assert r.status_code == 200
+        from storage import player_storage
+        assert player_storage.get_player("Legacy-5678")["createdBy"] == "coach-a"

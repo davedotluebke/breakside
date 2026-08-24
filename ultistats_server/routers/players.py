@@ -19,6 +19,7 @@ from ._shared import (
     get_team_players,
     get_user_teams,
     is_admin,
+    link_player_to_team,
     list_players,
     player_exists,
     require_player_edit_access,
@@ -46,6 +47,13 @@ async def create_player(
     Requires: Coach access. Supplying an existing player's `id` overwrites
     that player, so the caller must be a Coach of a team that player is on
     (closing the hole where any authed user could overwrite any player).
+
+    An optional `teamId` names the team the player is being added to. When
+    present the caller must Coach it, and the player is linked to it
+    immediately — otherwise the record sits with no team until the separate
+    team sync lands, and anything teamless reads as an orphan to the
+    authorization layer. Older clients omit it and still work; they fall back
+    to `createdBy` scoping.
     """
     if "name" not in player_data:
         raise HTTPException(status_code=400, detail="Player name is required")
@@ -55,19 +63,39 @@ async def create_player(
     if provided_id:
         validate_id(provided_id, "player id")
 
+    claimed_team_id = player_data.get('teamId')
+    if claimed_team_id:
+        validate_id(claimed_team_id, "team id")
+
+    is_update = bool(provided_id and player_exists(provided_id))
+    existing = get_player(provided_id) if is_update else None
+
     # Authorize: overwriting an existing player requires edit access to it;
-    # creating a brand-new player requires being a coach of some team.
+    # creating a brand-new player requires being a coach of the claimed team
+    # (or, with no teamId, of some team).
     assert_player_edit_access(
         user,
-        provided_id if (provided_id and player_exists(provided_id)) else None,
+        provided_id if is_update else None,
+        claimed_team_id=claimed_team_id if not is_update else None,
+        created_by=(existing or {}).get("createdBy"),
     )
 
-    # If ID was provided and already exists, this is an update/sync
-    if provided_id and player_exists(provided_id):
+    if is_update:
+        # createdBy is server-owned: never let a body rewrite who created a
+        # record, since that is what grants access to a teamless one.
+        if existing.get("createdBy"):
+            player_data["createdBy"] = existing["createdBy"]
+        else:
+            player_data.pop("createdBy", None)
         update_player(provided_id, player_data)
+        if claimed_team_id:
+            link_player_to_team(provided_id, claimed_team_id)
         return {"status": "updated", "player_id": provided_id, "player": get_player(provided_id)}
 
+    player_data["createdBy"] = user["id"]
     player_id = save_player(player_data, provided_id)
+    if claimed_team_id:
+        link_player_to_team(player_id, claimed_team_id)
     return {"status": "created", "player_id": player_id, "player": get_player(player_id)}
 
 

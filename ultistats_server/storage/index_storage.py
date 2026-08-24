@@ -326,6 +326,28 @@ def get_player_teams_verified(player_id: str) -> List[str]:
     return _scan_rosters_for_player(player_id)
 
 
+def link_player_to_team(player_id: str, team_id: str) -> None:
+    """Record that ``player_id`` belongs to ``team_id``, immediately.
+
+    Player creation and the team sync that adds them to a roster are two
+    separate requests. Between them the player exists with no team, and the
+    authorization layer reads "no team" as "orphan". Calling this at creation
+    closes that window, so a player is never teamless even briefly.
+
+    The next ``update_index_for_team`` reconciles the roster authoritatively,
+    so a link written here is corrected if the team sync disagrees.
+    """
+    with entity_lock(_INDEX_LOCK_KEY):
+        index = _load_index()
+        if index.get("lastRebuilt") is None:
+            rebuild_index()
+            index = _load_index()
+        teams = index.setdefault("playerTeams", {}).setdefault(player_id, [])
+        if team_id not in teams:
+            teams.append(team_id)
+            _save_index(index)
+
+
 def update_index_for_team(team_id: str, team_data: dict) -> None:
     """
     Update the index for a specific team (incremental update).

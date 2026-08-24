@@ -661,7 +661,12 @@ function validateJerseyNumber(input) {
                     gender: newPlayer.gender,
                     number: newPlayer.number,
                     createdAt: newPlayer.createdAt,
-                    updatedAt: newPlayer.updatedAt
+                    updatedAt: newPlayer.updatedAt,
+                    // The team sync below is a separate request that lands
+                    // later. Naming the team here lets the server link the
+                    // player immediately, so it is never a teamless record
+                    // that authorization has to treat as an orphan.
+                    teamId: currentTeam.id
                 });
             }
             

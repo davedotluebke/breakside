@@ -33,12 +33,14 @@ try:
     from storage.game_storage import game_exists, get_game_current
     from storage.event_storage import event_exists, get_event
     from storage.index_storage import get_player_teams_verified
+    from storage.player_storage import get_player, player_exists
 except ImportError:
     from ultistats_server.storage.user_storage import get_user, user_exists
     from ultistats_server.storage.membership_storage import get_user_team_role, get_user_memberships, get_user_teams
     from ultistats_server.storage.game_storage import game_exists, get_game_current
     from ultistats_server.storage.event_storage import event_exists, get_event
     from ultistats_server.storage.index_storage import get_player_teams_verified
+    from ultistats_server.storage.player_storage import get_player, player_exists
 
 
 async def get_json_body(body: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
@@ -525,16 +527,34 @@ async def require_body_team_coach(
     return user
 
 
-def assert_player_edit_access(user: dict, player_id: Optional[str]) -> None:
+def assert_player_edit_access(
+    user: dict,
+    player_id: Optional[str],
+    claimed_team_id: Optional[str] = None,
+    created_by: Optional[str] = None,
+) -> None:
     """Raise HTTP 403 unless ``user`` may create/edit/delete ``player_id``.
 
     Authorization model: the user must be a Coach of a team that has this
-    player on its roster. A player not on any team yet (orphan / brand-new,
-    including ``player_id is None`` for a fresh create) is editable by any
-    Coach. Admins always pass.
+    player on its roster. Admins always pass.
 
-    Shared by ``require_player_edit_access`` (PUT/DELETE, player_id from path)
-    and the ``POST /api/players`` create/overwrite handler (id from the body).
+    Three distinct cases, deliberately separated — they used to share one
+    permissive branch:
+
+    1. ``player_id is None`` — creating a brand-new record. Harmless to anyone
+       else, so any Coach may. If ``claimed_team_id`` is given the caller must
+       coach *that* team, which is what lets the caller be linked immediately
+       and skip the orphan state entirely.
+    2. Player exists AND resolves to teams — caller must coach one of them.
+    3. Player exists but resolves to NO team. This is the dangerous case: it
+       used to permit any Coach, which in August 2026 meant 298 of 316 real
+       records were readable, overwritable and deletable by anyone who created
+       a throwaway team. Now only the record's creator (or an admin) passes.
+
+    Case 3 still has a legitimate occurrence: the offline flow creates a
+    player, syncs it, then syncs the team, and a retry in that window touches
+    a record that is briefly teamless. ``created_by`` is what keeps that
+    working — the creator gets through, nobody else does.
 
     When AUTH_REQUIRED is false (local dev / test backends), the coach-
     membership check is skipped, matching ``require_game_edit_access`` and
@@ -551,10 +571,15 @@ def assert_player_edit_access(user: dict, player_id: Optional[str]) -> None:
         m["teamId"] for m in get_user_memberships(user["id"]) if m["role"] == "coach"
     )
 
-    player_teams = set(get_player_teams_verified(player_id)) if player_id else set()
-
-    if not player_teams:
-        # Orphaned / brand-new player: any coach may create or edit it.
+    # Case 1: brand-new record.
+    if not player_id:
+        if claimed_team_id is not None:
+            if claimed_team_id not in user_coach_teams:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Coach access required for this team"
+                )
+            return
         if user_coach_teams:
             return
         raise HTTPException(
@@ -562,6 +587,18 @@ def assert_player_edit_access(user: dict, player_id: Optional[str]) -> None:
             detail="Coach access required to edit players"
         )
 
+    player_teams = set(get_player_teams_verified(player_id))
+
+    # Case 3: existing record with no team — creator only.
+    if not player_teams:
+        if created_by and created_by == user["id"]:
+            return
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must be a Coach of a team with this player"
+        )
+
+    # Case 2: existing record on a roster.
     if not (player_teams & user_coach_teams):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -595,7 +632,12 @@ async def require_player_edit_access(
         )
     validate_id(player_id, "player_id")
 
-    assert_player_edit_access(user, player_id)
+    # created_by lets the creator still reach a record that is briefly
+    # teamless between the player sync and the team sync that rosters them.
+    stored = get_player(player_id) if player_exists(player_id) else None
+    assert_player_edit_access(
+        user, player_id, created_by=(stored or {}).get("createdBy")
+    )
     return user
 
 
@@ -638,11 +680,13 @@ async def require_player_read_access(
     player_teams = set(get_player_teams_verified(player_id))
 
     if not player_teams:
-        # Orphaned / newly-created player not yet on any roster. Mirror the
-        # edit-access fallback: any coach may read it (so a coach who just
-        # created a player can read it back before the team sync lands).
-        user_memberships = get_user_memberships(user["id"])
-        if any(m["role"] == "coach" for m in user_memberships):
+        # Existing record that resolves to no team. This used to admit ANY
+        # coach, which made every unrostered player world-readable to anyone
+        # who created a throwaway team. Only the creator may read it back —
+        # which is what the offline create-then-sync-team flow needs, and
+        # nothing more.
+        stored = get_player(player_id) if player_exists(player_id) else None
+        if stored and stored.get("createdBy") == user["id"]:
             return user
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
