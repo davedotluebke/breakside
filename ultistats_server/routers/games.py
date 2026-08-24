@@ -181,10 +181,10 @@ async def list_games_endpoint(user: Optional[dict] = Depends(get_optional_user))
     Includes activity info: lastActivity timestamp and activeCoaches list
     for games with recent controller activity (within 5 minutes).
     """
-    all_games = list_all_games()
-
     if not user:
         return {"games": [], "count": 0}
+
+    all_games = list_all_games()
 
     # Enrich games with activity info from controller state
     for game in all_games:

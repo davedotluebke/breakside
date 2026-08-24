@@ -180,10 +180,10 @@ async def list_teams_endpoint(user: Optional[dict] = Depends(get_optional_user))
     Returns only teams the user has access to.
     Anonymous users get an empty list.
     """
-    all_teams = list_teams()
-
     if not user:
         return {"teams": [], "count": 0}
+
+    all_teams = list_teams()
 
     # Admin sees all
     if is_admin(user["id"]):

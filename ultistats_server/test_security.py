@@ -840,3 +840,66 @@ class TestPlayerCreateTeamIdWiring:
         assert r.status_code == 200
         from storage import player_storage
         assert player_storage.get_player("Legacy-5678")["createdBy"] == "coach-a"
+
+
+# =============================================================================
+# Anonymous list endpoints must not touch the data set at all
+# =============================================================================
+
+class TestAnonymousListShortCircuit:
+    """GET /api/games and /api/teams answered anonymous callers with an empty
+    list — but only *after* list_all_games() / list_teams() had opened and
+    JSON-parsed every record on disk. The result was thrown away, so an
+    unauthenticated request bought a full-dataset scan for nothing: free
+    amplification for anyone wanting to load the box, and it grows with the
+    data. The guard now runs first; these pin the ordering, not just the
+    (unchanged) response body.
+    """
+
+    def _forbid(self, monkeypatch, module_name, func_name):
+        """Replace a listing function with one that fails if it is called."""
+        from routers import games as games_router, teams as teams_router
+        module = {"games": games_router, "teams": teams_router}[module_name]
+        called = []
+
+        def tripwire(*args, **kwargs):
+            called.append(True)
+            raise AssertionError(
+                f"{func_name}() ran for an anonymous caller — the auth guard "
+                "must short-circuit before the scan")
+
+        monkeypatch.setattr(module, func_name, tripwire)
+        return called
+
+    def test_anonymous_games_list_is_empty(self, client, seeded):
+        r = client.get("/api/games")
+        assert r.status_code == 200
+        assert r.json() == {"games": [], "count": 0}
+
+    def test_anonymous_teams_list_is_empty(self, client, seeded):
+        r = client.get("/api/teams")
+        assert r.status_code == 200
+        assert r.json() == {"teams": [], "count": 0}
+
+    def test_anonymous_games_list_does_not_scan_every_game(
+            self, client, seeded, monkeypatch):
+        called = self._forbid(monkeypatch, "games", "list_all_games")
+        r = client.get("/api/games")
+        assert r.status_code == 200
+        assert r.json() == {"games": [], "count": 0}
+        assert called == []
+
+    def test_anonymous_teams_list_does_not_scan_every_team(
+            self, client, seeded, monkeypatch):
+        called = self._forbid(monkeypatch, "teams", "list_teams")
+        r = client.get("/api/teams")
+        assert r.status_code == 200
+        assert r.json() == {"teams": [], "count": 0}
+        assert called == []
+
+    def test_authenticated_caller_still_gets_the_scan(self, client, seeded):
+        """The reorder must not have short-circuited real callers too."""
+        _as(MOCK_COACH)
+        r = client.get("/api/teams")
+        assert r.status_code == 200
+        assert seeded["team_id"] in [t["id"] for t in r.json()["teams"]]
