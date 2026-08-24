@@ -1076,8 +1076,10 @@ async function handleJoinCodeFromTeamsScreen() {
     if (!input) return;
 
     const code = input.value.trim().toUpperCase();
-    if (code.length !== 5) {
-        alert('Please enter a 5-character invite code');
+    // Codes are 8 characters; 5-character codes minted before 2026-08 are
+    // still redeemable until they expire, so accept the whole range.
+    if (code.length < 5 || code.length > 8) {
+        alert('Please enter your invite code (8 characters)');
         return;
     }
 

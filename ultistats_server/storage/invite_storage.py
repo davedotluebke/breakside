@@ -6,7 +6,7 @@ Manages invite codes that allow users to join teams as coaches or viewers.
 Invite data structure:
 {
     "id": "inv_abc123def456",
-    "code": "X7K2M",                   # 5-char human-friendly code
+    "code": "X7K2MP4R",               # 8-char human-friendly code
     "teamId": "Sample-Team-b2c4",
     "role": "coach",                   # "coach" | "viewer"
     "createdBy": "user-uuid",
@@ -41,7 +41,18 @@ INVITES_DIR = config.INVITES_DIR
 
 # Human-friendly alphabet (no 0/O/1/I/L)
 INVITE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
-INVITE_CODE_LENGTH = 5
+
+# 8 characters over a 32-symbol alphabet = 40 bits (~1.1e12 codes). The
+# previous length of 5 was only 32^5 = 33.5 million, and GET /api/invites/
+# {code}/info is an unauthenticated, unthrottled oracle that answers whether a
+# code is real — so the whole keyspace was walkable, and a hit joins the
+# attacker to somebody's team. Lengthening the code is what makes the search
+# infeasible; it does not depend on rate limiting arriving later.
+#
+# This is generation-only. Lookup is a dict hit on the byCode index and never
+# checks length, so the 5-character codes already in circulation keep working
+# until they expire.
+INVITE_CODE_LENGTH = 8
 
 # Index file for fast lookups
 INDEX_FILE = INVITES_DIR / "_index.json"
@@ -66,9 +77,9 @@ def _generate_invite_id() -> str:
 
 def generate_invite_code() -> str:
     """
-    Generate a 5-character human-friendly invite code.
+    Generate an 8-character human-friendly invite code.
 
-    Uses a 32-character alphabet, giving 32^5 ≈ 33 million possible codes.
+    Uses a 32-character alphabet, giving 32^8 ≈ 1.1 trillion possible codes.
     Codes are case-insensitive but generated uppercase.
     """
     return ''.join(secrets.choice(INVITE_ALPHABET) for _ in range(INVITE_CODE_LENGTH))
@@ -113,7 +124,8 @@ def get_invite_by_code(code: str) -> Optional[Dict[str, Any]]:
     Look up an invite by its shareable code (case-insensitive).
 
     Args:
-        code: The 5-character invite code
+        code: The invite code (8 characters; 5 for codes minted before
+            2026-08, which still resolve)
 
     Returns:
         Invite dict or None if not found

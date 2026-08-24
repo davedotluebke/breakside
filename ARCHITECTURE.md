@@ -1536,7 +1536,12 @@ Role claim buttons (Play-by-Play / Next Line) are hidden when only one coach is 
 
 ### Invite Codes
 
-Invites are 5-character codes (alphabet excludes 0/O/1/I/L; case-insensitive).
+Invites are 8-character codes (alphabet excludes 0/O/1/I/L; case-insensitive)
+— 40 bits, because `GET /api/invites/{code}/info` is an unauthenticated,
+unthrottled validity oracle and the previous 5-character keyspace (33.5M) was
+brute-forceable. Length applies to *generation* only: lookup is a dict hit on
+the `byCode` index, so 5-character codes minted earlier still redeem until
+they expire. The join inputs accept 5–8 characters for that reason.
 Coach invites are single-use with 7-day expiry; viewer invites are multi-use
 with 30-day expiry (both revocable). The share URL minted by the API is
 `https://www.breakside.pro/join/{code}`.

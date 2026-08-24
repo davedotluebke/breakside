@@ -98,7 +98,7 @@ class TestCreateInviteUrl:
         assert r.status_code == 200
         body = r.json()
         assert body["url"] == f"https://www.breakside.pro/join/{body['code']}"
-        assert len(body["code"]) == 5
+        assert len(body["code"]) == 8
         assert body["invite"]["maxUses"] == 1  # coach invites are single-use
 
 
@@ -133,7 +133,7 @@ class TestRedeem:
 
     def test_unknown_code_404(self, client, seeded):
         _as(JOINER_A)
-        assert client.post("/api/invites/QQQQQ/redeem").status_code == 404
+        assert client.post("/api/invites/QQQQQQQQ/redeem").status_code == 404
 
     def test_code_is_case_insensitive(self, client, seeded):
         from storage.membership_storage import get_user_team_membership
@@ -202,3 +202,63 @@ class TestJoinShortLink:
         r = client.get("/landing/join.html")
         assert r.status_code == 200
         assert "You've been invited" in r.text
+
+
+class TestCodeLength:
+    """Codes went from 5 characters to 8 (32^5 = 33.5M -> 32^8 = 1.1e12).
+
+    GET /api/invites/{code}/info is an unauthenticated, unthrottled oracle
+    that says whether a code is real, so the old keyspace was walkable and a
+    hit joins the attacker to a stranger's team. Length is the fix.
+
+    Nothing validates length on the way *in*: lookup is a dict hit on the
+    byCode index and the routers only run validate_id (a charset regex with no
+    length bound). Codes minted at the old length therefore keep redeeming
+    until they expire, which these tests pin — a length check added later
+    would silently strand every invite already in circulation.
+    """
+
+    def test_generated_code_is_eight_chars_from_the_safe_alphabet(self):
+        from storage import invite_storage
+        for _ in range(20):
+            code = invite_storage.generate_invite_code()
+            assert len(code) == 8
+            assert set(code) <= set(invite_storage.INVITE_ALPHABET)
+
+    def test_eight_char_code_round_trips_create_info_redeem(self, client, seeded):
+        invite = _mint(seeded, role="viewer")
+        assert len(invite["code"]) == 8
+
+        joiner = {"id": "len-joiner-8", "email": "8@test", "role": "authenticated"}
+        _as(joiner)
+
+        info = client.get(f"/api/invites/{invite['code']}/info")
+        assert info.status_code == 200
+        assert info.json()["teamName"] == "Redeem Test Team"
+
+        r = client.post(f"/api/invites/{invite['code']}/redeem")
+        assert r.status_code == 200
+        assert r.json()["membership"]["role"] == "viewer"
+
+    def test_legacy_five_char_code_still_redeems(self, client, seeded):
+        """Backward compatibility: invites minted before the lengthening are
+        live in people's inboxes and text messages."""
+        from storage import invite_storage
+
+        legacy = invite_storage.create_invite(
+            team_id=seeded["team_id"], role="viewer", created_by=OWNER["id"])
+        # Re-mint the record under a 5-character code, the way it would have
+        # been stored before the change.
+        invite_storage._update_index_remove(legacy)
+        legacy["code"] = "X7K2M"
+        invite_storage.atomic_write_json(
+            invite_storage._invite_file(legacy["id"]), legacy)
+        invite_storage._update_index_add(legacy)
+
+        joiner = {"id": "len-joiner-5", "email": "5@test", "role": "authenticated"}
+        _as(joiner)
+
+        assert client.get("/api/invites/X7K2M/info").status_code == 200
+        r = client.post("/api/invites/X7K2M/redeem")
+        assert r.status_code == 200
+        assert r.json()["membership"]["role"] == "viewer"
