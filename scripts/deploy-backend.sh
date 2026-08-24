@@ -30,6 +30,22 @@ fail() { red "ERROR: $*"; exit 1; }
 
 cd "$REPO"
 
+# --------------------------------------------------------------- drift ------
+# The ownership model everything below depends on: root owns the tree, so the
+# app cannot modify its own source, and root builds the bytecode the app then
+# reads. Checked BEFORE the up-to-date early exit, so running this script is
+# always a valid state check even when there is nothing to deploy —
+# ownership drift's only symptom is otherwise "mysteriously slower".
+NOT_ROOT=$(find "$REPO" -not -user root -print -quit 2>/dev/null | wc -l)
+if [[ "$NOT_ROOT" -ne 0 ]]; then
+    red "=============================================================="
+    red " WARNING: $REPO contains files not owned by root."
+    red " The app user may be able to rewrite its own source, and root"
+    red " may not be able to refresh the bytecode cache."
+    red " Restore with: sudo chown -R root:root $REPO"
+    red "=============================================================="
+fi
+
 # ---------------------------------------------------------------- pull ------
 BEFORE=$(git rev-parse --short HEAD)
 bold "current : $BEFORE  $(git log -1 --format=%s)"
@@ -74,17 +90,6 @@ if [[ "$FRESH" -eq 0 ]]; then
     red   "=============================================================="
 else
     bold "bytecode: $FRESH .pyc files refreshed"
-fi
-
-# --------------------------------------------------------------- drift ------
-# The ownership model this depends on: root owns the tree so the app cannot
-# modify its own code, and root builds the bytecode the app then reads.
-# Warn if someone has changed it, since the symptom otherwise is just
-# "mysteriously slower".
-NOT_ROOT=$(find "$REPO" -not -user root -print -quit 2>/dev/null | wc -l)
-if [[ "$NOT_ROOT" -ne 0 ]]; then
-    red "WARNING: $REPO contains files not owned by root — expected root:root."
-    red "         Restore with: sudo chown -R root:root $REPO"
 fi
 
 # ------------------------------------------------------------- restart ------
