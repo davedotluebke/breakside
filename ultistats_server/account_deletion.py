@@ -23,11 +23,15 @@ Three rules shape everything here:
 3. **A team is not one person's to destroy.** See ``plan_account_deletion``.
 """
 
+import json
 import logging
+import secrets
 from typing import Any, Dict, List, Optional
 
 try:  # Both import modes — see routers/_shared.py.
     import config
+    from storage import invite_storage, player_storage, share_storage
+    from storage.file_utils import atomic_write_json
     from storage.event_storage import delete_event, list_team_events
     from storage.game_storage import delete_game, list_all_games, list_game_versions
     from storage.index_storage import get_team_games, rebuild_index
@@ -42,6 +46,8 @@ try:  # Both import modes — see routers/_shared.py.
     from storage.user_storage import delete_user, get_user
 except ImportError:  # pragma: no cover - exercised by the package import mode
     from ultistats_server import config
+    from ultistats_server.storage import invite_storage, player_storage, share_storage
+    from ultistats_server.storage.file_utils import atomic_write_json
     from ultistats_server.storage.event_storage import delete_event, list_team_events
     from ultistats_server.storage.game_storage import (
         delete_game,
@@ -270,6 +276,100 @@ def _fallback_erase_team(team_id: str, *, dry_run: bool = False) -> Dict[str, in
 
 
 # =============================================================================
+# Scrubbing the user id out of records that survive
+# =============================================================================
+#
+# Deleting the user's own files is not enough. A user id is written into other
+# people's records as an audit field — who created this share, who invited this
+# member, who redeemed this invite — and every one of those is a live reference
+# to an account that is supposed to be gone. Erasing the referring record
+# instead would destroy somebody else's data (a share the team's parents are
+# still watching, a membership that is not ours to revoke), so the reference is
+# replaced with an opaque per-erasure tombstone and the record itself is left
+# alone. Same reasoning as the player tombstones in spec § A.
+#
+# Every persisted field that holds a user id (grep for the names below):
+#     players/*.json       createdBy
+#     shares/*.json        createdBy, revokedBy
+#     invites/*.json       createdBy, revokedBy, usedBy[].userId
+#     memberships/*.json   userId, invitedBy   <- userId records are deleted
+#                                                 outright; invitedBy is scrubbed
+# Controller state (roles, coach pings) is in-memory only and dies with the
+# process, so there is nothing to scrub there.
+
+def _mint_user_tombstone() -> str:
+    """Per-erasure opaque stand-in, e.g. ``deleted-user-9f2c``.
+
+    Per-erasure rather than one global sentinel for the same reason § A mints
+    one per player: two different deleted accounts must not collapse into a
+    single apparent actor in an audit trail.
+    """
+    return f"deleted-user-{secrets.token_hex(2)}"
+
+
+def _scrub_json_file(path, user_id: str, tombstone: str, dry_run: bool) -> int:
+    """Replace ``user_id`` with ``tombstone`` in one entity file.
+
+    Returns the number of fields that changed (0 if the file did not mention
+    the user). Raw read/modify/write rather than the storage modules' save()
+    helpers deliberately: this must not bump ``updatedAt``, re-run defaults, or
+    re-index somebody else's record just to redact one audit field.
+    """
+    try:
+        with open(path, "r") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return 0
+    if not isinstance(data, dict):
+        return 0
+
+    changed = 0
+    for field in ("createdBy", "revokedBy", "invitedBy"):
+        if data.get(field) == user_id:
+            data[field] = tombstone
+            changed += 1
+    for entry in data.get("usedBy") or []:
+        if isinstance(entry, dict) and entry.get("userId") == user_id:
+            entry["userId"] = tombstone
+            changed += 1
+
+    if changed and not dry_run:
+        atomic_write_json(path, data)
+    return changed
+
+
+def _scrub_user_references(user_id: str, tombstone: str, dry_run: bool) -> int:
+    """Redact ``user_id`` from every surviving record that names them.
+
+    Directories are read off the storage modules at call time (not captured at
+    import) so a patched test data dir is honoured.
+    """
+    changed = 0
+    dirs = [
+        getattr(player_storage, "PLAYERS_DIR", None),
+        getattr(share_storage, "SHARES_DIR", None),
+        getattr(invite_storage, "INVITES_DIR", None),
+        _memberships_dir(),
+    ]
+    for directory in dirs:
+        if not directory or not directory.exists():
+            continue
+        for path in directory.glob("*.json"):
+            if path.name.startswith("_"):  # index files, not entities
+                continue
+            changed += _scrub_json_file(path, user_id, tombstone, dry_run)
+    return changed
+
+
+def _memberships_dir():
+    try:
+        from storage import membership_storage
+    except ImportError:  # pragma: no cover
+        from ultistats_server.storage import membership_storage
+    return getattr(membership_storage, "MEMBERSHIPS_DIR", None)
+
+
+# =============================================================================
 # Planning (drives both the preview and the guard rails on the real delete)
 # =============================================================================
 
@@ -397,6 +497,15 @@ def plan_account_deletion(user_id: str) -> Dict[str, Any]:
             f"{counts['versions']} stored version{'s' if counts['versions'] != 1 else ''} "
             "will be permanently deleted."
         )
+    # Deliberately unnumbered: the dry run cannot tell which of these records
+    # the team cascade is about to delete anyway, so a count here would be an
+    # over-estimate. The real number comes back on the delete.
+    if _scrub_user_references(user_id, "", dry_run=True):
+        warnings.append(
+            "Records on teams that continue without you (share and invite "
+            "history) will have your account ID replaced with an anonymous "
+            "placeholder."
+        )
 
     return {
         "willErase": counts,
@@ -507,7 +616,13 @@ async def execute_account_deletion(
         if delete_membership(membership["id"]):
             erased["memberships"] += 1
 
-    # Step 5 — the user record itself. Last, so a crash before here leaves a
+    # Step 5 — redact the user id from records that legitimately survive.
+    # After the deletions above, so nothing is rewritten on its way to the bin.
+    references_scrubbed = _scrub_user_references(
+        user_id, _mint_user_tombstone(), dry_run=False
+    )
+
+    # Step 6 — the user record itself. Last, so a crash before here leaves a
     # user whose memberships are gone rather than memberships pointing at a
     # user who isn't there. Reported outside ``erased``, which keeps exactly
     # the spec's counter keys.
@@ -527,4 +642,5 @@ async def execute_account_deletion(
         "erased": erased,
         "warnings": plan["warnings"],
         "userRecordDeleted": user_record_deleted,
+        "referencesScrubbed": references_scrubbed,
     }
