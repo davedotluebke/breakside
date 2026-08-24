@@ -80,16 +80,31 @@ if ! "$VENV_PY" -m compileall -q "$SERVER_DIR"; then
     exit 1
 fi
 
-FRESH=$(find "$SERVER_DIR" -name '*.pyc' -newermt '-5 minutes' | wc -l)
-if [[ "$FRESH" -eq 0 ]]; then
+# Verify the cache is WARM, not that files were freshly written. compileall
+# legitimately writes nothing when no .py changed (e.g. a docs- or
+# script-only deploy), so "wrote 0 files" is not evidence of a problem — a
+# warning that cries wolf on every such deploy is one people learn to ignore.
+# What actually matters is whether every source file has a current .pyc.
+UNCACHED=0
+while IFS= read -r src; do
+    cache="$(dirname "$src")/__pycache__/$(basename "$src" .py).cpython-*.pyc"
+    # shellcheck disable=SC2086
+    newest=$(ls -1t $cache 2>/dev/null | head -1)
+    if [[ -z "$newest" || "$src" -nt "$newest" ]]; then
+        UNCACHED=$((UNCACHED + 1))
+    fi
+done < <(find "$SERVER_DIR" -name '*.py' -not -path '*/__pycache__/*')
+
+if [[ "$UNCACHED" -ne 0 ]]; then
     red   "=============================================================="
-    red   " WARNING: compileall reported success but wrote NO .pyc files."
-    red   " Every import will be compiled from source on demand — including"
-    red   " lazy imports that run mid-request. Check ownership/permissions:"
+    red   " WARNING: $UNCACHED source file(s) have no current .pyc."
+    red   " Those imports compile from source on demand — including lazy"
+    red   " imports that run mid-REQUEST, so a live user pays the cost."
+    red   " Check ownership/permissions:"
     red   "   ls -ld $SERVER_DIR $SERVER_DIR/__pycache__"
     red   "=============================================================="
 else
-    bold "bytecode: $FRESH .pyc files refreshed"
+    bold "bytecode: cache warm (every source file has a current .pyc)"
 fi
 
 # ------------------------------------------------------------- restart ------
