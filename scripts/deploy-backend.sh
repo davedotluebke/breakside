@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Deploy the backend to EC2: pull, byte-compile, restart, verify.
+#
+# Usage — from a dev machine, piping THIS file to the server:
+#
+#   ssh breakside 'sudo bash -s' < scripts/deploy-backend.sh
+#
+# It is piped rather than executed in place on purpose. The script lives in
+# the repo it updates, and bash reads a script file incrementally — a `git
+# pull` that rewrites the file mid-run can make bash resume at a garbage
+# offset. Piping means the copy being executed is the local one, which is
+# also the version you are deploying.
+#
+# Safe to re-run: if HEAD does not move it reports "already current" and
+# leaves the service alone rather than restarting for nothing.
+set -euo pipefail
+
+REPO=/opt/breakside
+UNIT=breakside
+SERVER_DIR="$REPO/ultistats_server"
+VENV_PY="$REPO/venv/bin/python"
+
+red()  { printf '\033[31m%s\033[0m\n' "$*"; }
+bold() { printf '\033[1m%s\033[0m\n' "$*"; }
+fail() { red "ERROR: $*"; exit 1; }
+
+[[ $EUID -eq 0 ]] || fail "must run as root — use: ssh breakside 'sudo bash -s' < scripts/deploy-backend.sh"
+[[ -d "$REPO/.git" ]] || fail "$REPO is not a git checkout"
+[[ -x "$VENV_PY" ]]   || fail "no interpreter at $VENV_PY"
+
+cd "$REPO"
+
+# ---------------------------------------------------------------- pull ------
+BEFORE=$(git rev-parse --short HEAD)
+bold "current : $BEFORE  $(git log -1 --format=%s)"
+
+git pull --ff-only origin main
+AFTER=$(git rev-parse --short HEAD)
+
+if [[ "$BEFORE" == "$AFTER" ]]; then
+    bold "already current — nothing to deploy, service left running"
+    exit 0
+fi
+bold "pulled  : $AFTER  $(git log -1 --format=%s)"
+
+# ------------------------------------------------------------ bytecode ------
+# The runtime user cannot write into $REPO (it is root-owned so the app can
+# never rewrite its own source), so it cannot build its own .pyc cache. We
+# build it here as root instead. This is not just a startup optimisation:
+# parts of the code import lazily at REQUEST time, so a cold cache costs a
+# live user, not the boot sequence.
+#
+# compileall also doubles as a syntax gate — a file that will not compile
+# aborts the deploy BEFORE the restart, so a bad push cannot take the API
+# down.
+bold "compiling bytecode..."
+if ! "$VENV_PY" -m compileall -q "$SERVER_DIR"; then
+    red   "=============================================================="
+    red   " BYTECODE COMPILATION FAILED — NOT RESTARTING"
+    red   " The working tree is at $AFTER but the service still runs the"
+    red   " old code. Fix the syntax error and re-run, or roll back with:"
+    red   "   sudo git -C $REPO reset --hard $BEFORE"
+    red   "=============================================================="
+    exit 1
+fi
+
+FRESH=$(find "$SERVER_DIR" -name '*.pyc' -newermt '-5 minutes' | wc -l)
+if [[ "$FRESH" -eq 0 ]]; then
+    red   "=============================================================="
+    red   " WARNING: compileall reported success but wrote NO .pyc files."
+    red   " Every import will be compiled from source on demand — including"
+    red   " lazy imports that run mid-request. Check ownership/permissions:"
+    red   "   ls -ld $SERVER_DIR $SERVER_DIR/__pycache__"
+    red   "=============================================================="
+else
+    bold "bytecode: $FRESH .pyc files refreshed"
+fi
+
+# --------------------------------------------------------------- drift ------
+# The ownership model this depends on: root owns the tree so the app cannot
+# modify its own code, and root builds the bytecode the app then reads.
+# Warn if someone has changed it, since the symptom otherwise is just
+# "mysteriously slower".
+NOT_ROOT=$(find "$REPO" -not -user root -print -quit 2>/dev/null | wc -l)
+if [[ "$NOT_ROOT" -ne 0 ]]; then
+    red "WARNING: $REPO contains files not owned by root — expected root:root."
+    red "         Restore with: sudo chown -R root:root $REPO"
+fi
+
+# ------------------------------------------------------------- restart ------
+bold "restarting $UNIT..."
+systemctl restart "$UNIT"
+sleep 5
+
+ACTIVE=$(systemctl is-active "$UNIT" || true)
+[[ "$ACTIVE" == "active" ]] || fail "$UNIT is '$ACTIVE' after restart — check: journalctl -u $UNIT -n 50"
+
+CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:8000/health || true)
+[[ "$CODE" == "200" ]] || fail "health check returned HTTP ${CODE:-none} — check: journalctl -u $UNIT -n 50"
+
+ERRS=$(journalctl -u "$UNIT" --since '2 minutes ago' --no-pager 2>/dev/null | grep -ciE 'error|traceback' || true)
+[[ "$ERRS" -eq 0 ]] || red "note: $ERRS error-ish log lines since restart — worth a look"
+
+bold "deployed $BEFORE -> $AFTER, service active, health 200"

@@ -57,12 +57,26 @@ Deploys current working directory (not committed state) to S3 + CloudFront inval
 
 ### Production deployment
 - **Frontend**: Push to `main` triggers GitHub Actions → S3 sync → CloudFront invalidation. No server restart needed.
-- **Backend**: After push, manually SSH to EC2 and restart. `breakside` is a
-  local `~/.ssh/config` alias (tunnels over AWS SSM; `breakside-direct` is the
-  port-22 fallback). This works directly from Bash — no tmux needed:
+- **Backend**: After push, run the deploy script. `breakside` is a local
+  `~/.ssh/config` alias (tunnels over AWS SSM; `breakside-direct` is the
+  port-22 fallback). Works directly from Bash — no tmux needed:
   ```bash
-  ssh breakside 'cd /opt/breakside && sudo git pull && sudo systemctl restart breakside'
+  ssh breakside 'sudo bash -s' < scripts/deploy-backend.sh
   ```
+  It pulls, byte-compiles, restarts, and health-checks — aborting **before**
+  the restart if anything fails, so a bad push can't take the API down. Note
+  it is *piped* rather than run in place: the script lives in the repo it
+  updates, and bash reads script files incrementally, so a `git pull` that
+  rewrote it mid-run could make bash resume at a garbage offset.
+
+  Don't hand-chain `git pull && systemctl restart` any more. Two traps that
+  cost real time: `/opt/breakside` is **root-owned** (so the app can never
+  rewrite its own source), which means the runtime user cannot build its own
+  `.pyc` cache — the script compiles it as root, and the code has *lazy*
+  imports, so a cold cache is paid by a live request rather than at boot. And
+  piping the pull through anything (`git pull | tail`) makes `set -e` blind to
+  its exit status, so a failed pull still reaches the restart and "succeeds"
+  against the old code.
 - Only remind about server restart when changes touch `ultistats_server/` files.
 
 ### Version tracking
