@@ -563,12 +563,13 @@
                         can, and Breakside cannot put it back for you. Export anything you want to keep
                         <em>before</em> you erase it.
                     </p>
-                    <!-- TODO(owner): the off-instance backup work (scripts/backup-data.sh, on the
-                         ops-backup-headers branch) syncs data/ to S3 *without* --delete and with
-                         bucket versioning, so a file erased on the live server still exists in the
-                         backup bucket until a lifecycle rule ages it out. Once that backup is
-                         actually running, this paragraph needs a sentence about it — and a retention
-                         window to put in that sentence. Left unwritten rather than guessed. -->
+                    <p>
+                        Breakside keeps a backup copy of its data so a server failure doesn't lose
+                        everyone's season. Erasing something removes it from that backup too, within
+                        <strong>30 days</strong> &mdash; the copy is kept that long only so a mistaken
+                        erasure can be reversed by the maintainer if you ask promptly, and after that
+                        no copy exists anywhere Breakside can reach.
+                    </p>
                 </div>
             </article>
 
