@@ -288,7 +288,10 @@ function renderPreview(preview) {
     // Every warning the server returns, verbatim. They are the things it
     // knows and this device cannot: a shared-publicly game, a same-named
     // teammate who would be caught by a legacy name-only reference, the
-    // irreversibility of rewriting version backups in place.
+    // irreversibility of rewriting version backups in place — and, always
+    // last, that already-exported spreadsheets keep the name. That one is not
+    // repeated in our own words below; the server says it on every preview,
+    // and saying it twice in one dialog reads as padding rather than emphasis.
     if ((preview.warnings || []).length) {
         parts.push('<ul class="erase-warnings">');
         for (const warning of preview.warnings) {
@@ -296,12 +299,6 @@ function renderPreview(preview) {
         }
         parts.push('</ul>');
     }
-
-    parts.push(
-        '<p class="erase-exports">Spreadsheets and JSON files already exported ' +
-        'are on their own devices and still contain the original name. Nothing ' +
-        'here can reach them.</p>'
-    );
 
     body.innerHTML = parts.join('');
 
@@ -438,10 +435,11 @@ function renderReceipt(receipt, cleanup) {
         );
     }
     if (cleanup && cleanup.queuedGames) {
+        const n = cleanup.queuedGames;
         parts.push(
-            '<p class="erase-note">This device still has ' +
-            `${cleanup.queuedGames} unsynced game${cleanup.queuedGames === 1 ? '' : 's'} ` +
-            'waiting to upload. They will be scrubbed by the server as they arrive.</p>'
+            `<p class="erase-note">This device still has ${n} unsynced ` +
+            `game${n === 1 ? '' : 's'} waiting to upload. ` +
+            `${n === 1 ? 'It' : 'They'} will be scrubbed by the server on arrival.</p>`
         );
     }
     parts.push(
@@ -527,6 +525,11 @@ async function readErrorDetail(response, stage) {
     } catch (e) {
         /* no body, or not JSON — fall through to the status-based wording */
     }
+    // The server's sentence runs straight into ours. Not every detail string
+    // ends in punctuation, and "Not a coach of this team Nothing was erased"
+    // reads as one broken sentence.
+    serverDetail = serverDetail.trim();
+    if (serverDetail && !/[.!?]$/.test(serverDetail)) serverDetail += '.';
 
     switch (response.status) {
         case 401:
