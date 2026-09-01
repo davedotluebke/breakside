@@ -151,7 +151,11 @@ aws s3api put-bucket-lifecycle-configuration \
 >   design — each is a point in time, never overwritten — so `Days: 30` is
 >   safe there and nowhere else. On a versioned bucket that expiry writes a
 >   delete marker, hence the 1-day noncurrent purge behind it: a tarball is
->   gone after ~31 days, not 60.
+>   gone after ~31 days, not 60. **The script prunes the local copies on the
+>   same schedule** (`SNAPSHOT_RETENTION_DAYS`, default 30), and only after a
+>   successful ship — so `/var/backups/breakside/` stays bounded and the
+>   promise holds on the box as well as in the bucket. The two numbers, the
+>   script's and this rule's, must agree.
 >
 > The two rules use non-overlapping prefixes on purpose. S3 rejects some
 > combinations of overlapping filters with conflicting `Expiration` actions,

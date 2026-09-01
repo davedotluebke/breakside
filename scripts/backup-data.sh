@@ -37,6 +37,11 @@ LOG_TAG=breakside-backup
 BUCKET="${BACKUP_BUCKET:-}"
 DATA_DIR="${ULTISTATS_DATA_DIR:-/var/lib/breakside/data}"
 LOCAL_SNAPSHOT_DIR="${BACKUP_SNAPSHOT_DIR:-/var/backups/breakside}"
+# Local tarballs older than this are pruned after a successful ship. Must match
+# the bucket's snapshots/ lifecycle expiry AND the figure in privacy.html —
+# a tarball is a pre-erasure copy with names in it, so it has to age out on the
+# box as well as in S3 or the "gone within 30 days" promise fails locally.
+SNAPSHOT_RETENTION_DAYS="${BACKUP_SNAPSHOT_RETENTION_DAYS:-30}"
 STATE_DIR=/var/lib/breakside/backup-state
 LOCK_FILE=/var/run/breakside-backup.lock
 ALERT_EMAIL="${BACKUP_ALERT_EMAIL:-dave@luebke.us}"
@@ -218,8 +223,25 @@ if [[ -d "$LOCAL_SNAPSHOT_DIR" ]] && compgen -G "$LOCAL_SNAPSHOT_DIR/*.tgz" >/de
     [[ $DRY_RUN -eq 1 ]] && SNAP_ARGS+=(--dryrun)
     if aws s3 sync "${SNAP_ARGS[@]}" >/dev/null 2>&1; then
         log "snapshot tarballs synced to s3://$BUCKET/snapshots/"
+
+        # Prune local tarballs past the retention window — but only here, in
+        # the success branch, so nothing is ever deleted locally before it is
+        # known to be in the bucket. A tarball written mid-run is by definition
+        # newer than the window, so it cannot be caught. On the first run an
+        # old tarball is shipped and then pruned locally, and S3 keeps it for
+        # a further 30 days from upload: there is always a grace period.
+        PRUNE_ARGS=("$LOCAL_SNAPSHOT_DIR" -maxdepth 1 -type f -name '*.tgz' -mtime "+$SNAPSHOT_RETENTION_DAYS")
+        if [[ $DRY_RUN -eq 1 ]]; then
+            WOULD_PRUNE=$(find "${PRUNE_ARGS[@]}" -print | wc -l | tr -d ' ')
+            log "dry run: would prune $WOULD_PRUNE local snapshot(s) older than ${SNAPSHOT_RETENTION_DAYS} days"
+        else
+            PRUNED=$(find "${PRUNE_ARGS[@]}" -print -delete | wc -l | tr -d ' ')
+            if [[ $PRUNED -gt 0 ]]; then
+                log "pruned $PRUNED local snapshot(s) older than ${SNAPSHOT_RETENTION_DAYS} days (still in S3 for ${SNAPSHOT_RETENTION_DAYS} days from upload)"
+            fi
+        fi
     else
-        warn "snapshot tarball sync failed (the main data sync succeeded)"
+        warn "snapshot tarball sync failed (the main data sync succeeded); local snapshots NOT pruned"
     fi
 fi
 
