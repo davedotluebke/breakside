@@ -204,6 +204,10 @@ const SYNC_QUEUE_KEY = 'ultistats_sync_queue';
 const LOCAL_PLAYERS_KEY = 'ultistats_local_players';
 const LOCAL_TEAMS_KEY = 'ultistats_local_teams';
 const LOCAL_GAMES_KEY = 'ultistats_local_games';
+// Quarantined queue items — see quarantineSyncItem(). Each entry is a whole
+// team/player/game payload, so this is user data and is cleared alongside the
+// rest of it on sign-out (auth/auth.js LOCAL_DATA_KEYS).
+const DEAD_LETTER_KEY = 'syncDeadLetter';
 
 // =============================================================================
 // State
@@ -339,11 +343,11 @@ function isOfflineError(error) {
  */
 function quarantineSyncItem(item) {
     try {
-        const deadLetter = JSON.parse(localStorage.getItem('syncDeadLetter') || '[]');
+        const deadLetter = JSON.parse(localStorage.getItem(DEAD_LETTER_KEY) || '[]');
         deadLetter.push({ ...item, quarantinedAt: new Date().toISOString() });
         // Bound the dead-letter list so it can't grow without limit.
         while (deadLetter.length > 50) deadLetter.shift();
-        localStorage.setItem('syncDeadLetter', JSON.stringify(deadLetter));
+        localStorage.setItem(DEAD_LETTER_KEY, JSON.stringify(deadLetter));
     } catch (e) {
         console.error('Failed to persist quarantined sync item:', e);
     }
@@ -1969,6 +1973,25 @@ function checkIsOnline() {
     return isOnline;
 }
 
+/**
+ * How many sync items are currently quarantined (see quarantineSyncItem).
+ *
+ * Deliberately not folded into getSyncStatus(): that runs on every sync-status
+ * render, and this parses up to 50 whole entity payloads out of localStorage.
+ * The callers are the sign-out / clear-cache paths, which ask once.
+ *
+ * @returns {number} 0 when the list is absent, empty, or unreadable.
+ */
+function getDeadLetterCount() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(DEAD_LETTER_KEY) || '[]');
+        return Array.isArray(parsed) ? parsed.length : 0;
+    } catch (e) {
+        console.warn('Failed to read the quarantined sync list:', e);
+        return 0;
+    }
+}
+
 // =============================================================================
 // Clear Local Sync Data (for sign out)
 // =============================================================================
@@ -1986,12 +2009,16 @@ function clearSyncData() {
     localTeams = {};
     localGames = {};
     
-    // Clear from localStorage
+    // Clear from localStorage. The dead-letter list is part of this: each
+    // quarantined entry is a full team/player/game payload — precisely the
+    // data a coach believed never reached the cloud — and leaving it behind
+    // made "sign out" a lie on a shared device.
     localStorage.removeItem(SYNC_QUEUE_KEY);
     localStorage.removeItem(LOCAL_PLAYERS_KEY);
     localStorage.removeItem(LOCAL_TEAMS_KEY);
     localStorage.removeItem(LOCAL_GAMES_KEY);
-    
+    localStorage.removeItem(DEAD_LETTER_KEY);
+
     log('Sync data cleared');
 }
 
@@ -2043,5 +2070,5 @@ export {
     refreshPendingLineFromCloud, refreshGameStateFromCloud, deleteGameFromCloud,
     syncUserTeams, checkForUpdates, startAutoSync, stopAutoSync,
     syncAllData, pullFromCloud, getSyncStatus, checkIsOnline, clearSyncData,
-    getSyncQueueItems, clearSyncQueue,
+    getSyncQueueItems, clearSyncQueue, getDeadLetterCount, DEAD_LETTER_KEY,
 };
