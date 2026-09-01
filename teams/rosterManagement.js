@@ -51,6 +51,7 @@ import {
     buildStatsSheetAoA, aoaToFormattedSheet, downloadWorkbook,
     safeSheetName, safeFilename,
 } from '../utils/xlsxExport.js';
+import { showErasePlayerDialog, erasureBlockedReason } from './erasure.js';
 import { appendRosterCell, buildRosterRow } from './rosterRowHelpers.js';
 import {
     wireExportPlayerSelect, exportSelection, exportTitle, exportFilename,
@@ -1147,6 +1148,11 @@ function showEditPlayerDialog(player, options = {}) {
     // inherit/override checkbox) and gate the toggles accordingly.
     applyEditPlayerDialogMode(isEventOverride, editPlayerDialogOriginalData.hasOverride);
 
+    // Erase is offered only for a real roster player. A pickup is a throwaway
+    // in-game entry with no server record to erase, and event-override mode is
+    // not editing the person at all.
+    applyEditPlayerEraseState(!isEventOverride && options.context !== 'pickup');
+
     // Reset confirm button state
     if (confirmBtn) {
         confirmBtn.disabled = true;
@@ -1171,6 +1177,8 @@ function applyEditPlayerDialogMode(isEventOverride, hasOverride) {
     const overrideField = document.getElementById('editPlayerOverrideField');
     const overrideToggle = document.getElementById('editPlayerOverrideToggle');
     const deleteBtn = document.getElementById('editPlayerDeleteBtn');
+    const eraseBtn = document.getElementById('editPlayerEraseBtn');
+    const eraseBlocked = document.getElementById('editPlayerEraseBlocked');
     const title = document.querySelector('#editPlayerDialog .dialog-header h2');
 
     const idHide = isEventOverride ? 'none' : '';
@@ -1178,6 +1186,11 @@ function applyEditPlayerDialogMode(isEventOverride, hasOverride) {
     if (numberField) numberField.style.display = idHide;
     if (genderField) genderField.style.display = idHide;
     if (deleteBtn) deleteBtn.style.display = idHide;
+    // Erase visibility is finished by applyEditPlayerEraseState(), which also
+    // knows about pickup context; hiding here keeps override mode correct even
+    // on the paths that call this function on its own.
+    if (eraseBtn) eraseBtn.style.display = idHide;
+    if (isEventOverride && eraseBlocked) eraseBlocked.style.display = 'none';
     if (overrideField) overrideField.style.display = isEventOverride ? '' : 'none';
     if (title) title.textContent = isEventOverride ? 'Event Position / Line' : 'Edit Player';
 
@@ -1275,7 +1288,71 @@ function updateEditPlayerDialogState() {
 }
 
 /**
- * Delete the current player with confirmation
+ * Show, hide or disable the "Erase record permanently" button.
+ *
+ * Erasure races a live game: the game screen syncs continuously, so erasing
+ * somebody off the roster mid-point means this device keeps pushing a state
+ * that still has them in the active line. The server wins that race — it
+ * scrubs every inbound game write — but the coach is left scoring a point
+ * against a roster that no longer matches. So the button is disabled with the
+ * reason shown, rather than hidden (hiding it would just read as a bug) and
+ * rather than allowed.
+ *
+ * @param {boolean} applicable - Whether erasure means anything in this context.
+ */
+function applyEditPlayerEraseState(applicable) {
+    const eraseBtn = document.getElementById('editPlayerEraseBtn');
+    const blockedNote = document.getElementById('editPlayerEraseBlocked');
+    if (!eraseBtn) return;
+
+    if (!applicable) {
+        eraseBtn.style.display = 'none';
+        if (blockedNote) blockedNote.style.display = 'none';
+        return;
+    }
+
+    eraseBtn.style.display = '';
+    const reason = erasureBlockedReason(currentTeam?.id);
+    eraseBtn.disabled = !!reason;
+    eraseBtn.title = reason || '';
+    if (blockedNote) {
+        blockedNote.textContent = reason || '';
+        blockedNote.style.display = reason ? 'block' : 'none';
+    }
+}
+
+/**
+ * Open the permanent-erasure dialog for the player being edited.
+ *
+ * Distinct from deletePlayer() below, which only takes them off this roster.
+ */
+function erasePlayerRecord() {
+    if (!editPlayerDialogPlayerId) return;
+    const player = currentTeam?.teamRoster?.find(p => p.id === editPlayerDialogPlayerId)
+        || editPlayerDialogPlayer;
+    if (!player) {
+        alert('Error: Player not found. The roster may have been updated.');
+        closeEditPlayerDialog();
+        return;
+    }
+
+    // Close the edit dialog first — two stacked modals is not a state this app
+    // has anywhere else, and the erase dialog owns the flow from here.
+    closeEditPlayerDialog();
+    showErasePlayerDialog(player, {
+        teamId: currentTeam?.id,
+        onErased: () => {
+            if (typeof updateTeamRosterDisplay === 'function') updateTeamRosterDisplay();
+        },
+    });
+}
+
+/**
+ * Remove the current player from this team's roster, with confirmation.
+ *
+ * NOT erasure: the player record survives on the server, keeps its history,
+ * stays on any other team, and can be added back here. See erasePlayerRecord()
+ * for the destructive one.
  */
 function deletePlayer() {
     if (!editPlayerDialogPlayerId) {
@@ -1302,8 +1379,13 @@ function deletePlayer() {
 
     const playerName = player.name;
 
-    // Show confirmation alert
-    if (!confirm(`Are you sure you want to delete ${playerName}?`)) {
+    // Show confirmation alert. Says what it actually does — the record is not
+    // destroyed here, and a coach who wanted that has the Erase button.
+    if (!confirm(
+        `Remove ${playerName} from this team's roster?\n\n` +
+        'Their player record and past game history are kept, and they can be ' +
+        'added back later.'
+    )) {
         return; // User cancelled
     }
 
@@ -1488,10 +1570,16 @@ function saveEditedPlayer() {
         confirmBtn.addEventListener('click', saveEditedPlayer);
     }
 
-    // Delete button
+    // Remove-from-roster button (reversible)
     const deleteBtn = document.getElementById('editPlayerDeleteBtn');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', deletePlayer);
+    }
+
+    // Erase-permanently button (irreversible)
+    const eraseBtn = document.getElementById('editPlayerEraseBtn');
+    if (eraseBtn) {
+        eraseBtn.addEventListener('click', erasePlayerRecord);
     }
 
     // Gender buttons

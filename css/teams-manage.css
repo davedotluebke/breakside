@@ -1198,3 +1198,154 @@
     opacity: 0.6;
     cursor: not-allowed;
 }
+
+/* =============================================================================
+   Erase dialog — permanent erasure of a player or a team (teams/erasure.js)
+   =============================================================================
+
+   Shares the delete-account dialog's visual language on purpose: these are the
+   same *kind* of action, and a coach who has met one should recognise the
+   other instantly. It is a separate rule set rather than a shared class
+   because the two dialogs are free to diverge — the account one is an
+   account-scoped one-off, these are reachable repeatedly from the roster and
+   team list. */
+
+.erase-modal {
+    max-width: 460px;
+    text-align: left;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+.erase-lede {
+    margin: 0 0 12px 0;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.erase-body {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+}
+
+.erase-section-title {
+    margin: 12px 0 4px 0;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* css/tables.css resets `ul` to list-style-type: none globally; these are
+   genuine lists of what is about to be destroyed and read as prose without
+   their markers, so put them back. (Same trap as .delete-account-summary —
+   see ARCHITECTURE.md § CSS Styling Gotchas.) */
+.erase-summary,
+.erase-warnings {
+    margin: 0 0 8px 0;
+    padding-left: 20px;
+    list-style: disc;
+}
+
+.erase-summary li {
+    margin-bottom: 2px;
+}
+
+.erase-warnings {
+    color: var(--color-danger-text);
+    background: var(--color-danger-surface-soft);
+    border-radius: 6px;
+    padding: 8px 8px 8px 26px;
+}
+
+.erase-exports {
+    margin: 10px 0 0 0;
+    font-size: 0.8rem;
+    color: var(--text-faint);
+}
+
+.erase-note {
+    margin: 8px 0 0 0;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.erase-nothing,
+.erase-working {
+    margin: 0;
+    color: var(--text-secondary);
+}
+
+.erase-done {
+    margin: 0 0 8px 0;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.erase-confirm {
+    margin-top: 14px;
+}
+
+/* The orphaned-player opt-in. Unchecked by default and never pre-ticked: a
+   person is not a side effect of deleting a team. */
+.erase-orphan {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.erase-orphan input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 1px 0 0 0;
+    flex: 0 0 auto;
+}
+
+.erase-type-label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+/* box-sizing so the padding stays inside the 100% width (see
+   ARCHITECTURE.md § CSS Styling Gotchas). */
+.erase-type-input {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 1rem;
+    letter-spacing: 0.1em;
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    background: var(--surface-card);
+    color: var(--text-primary);
+}
+
+.erase-error {
+    margin-top: 12px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: var(--color-danger-text);
+    background: var(--color-danger-surface);
+}
+
+.erase-btn {
+    margin: 0;
+    background: var(--color-danger);
+    color: var(--white);
+    font-size: 0.9rem;
+}
+
+.erase-btn:hover:not(:disabled) {
+    background: var(--color-danger-hover);
+}
+
+.erase-btn:disabled {
+    background: var(--color-secondary);
+    opacity: 0.6;
+    cursor: not-allowed;
+}

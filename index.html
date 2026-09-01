@@ -775,6 +775,39 @@
         </div>
     </div>
 
+    <!-- Erase Dialog — permanent erasure of a player or a team (teams/erasure.js).
+         One dialog for both: same preview → confirm → receipt shape, and the
+         server returns the same counts object for each. -->
+    <div id="eraseDialog" class="modal" style="display: none;">
+        <div class="modal-content erase-modal">
+            <div class="dialog-header prominent-dialog-header">
+                <h2 id="eraseDialogTitle">Erase permanently</h2>
+                <span id="eraseCloseX" class="close">&times;</span>
+            </div>
+            <p id="eraseDialogLede" class="erase-lede"></p>
+            <div id="eraseBody" class="erase-body">Loading…</div>
+            <div id="eraseConfirm" class="erase-confirm" style="display: none;">
+                <label id="eraseOrphanRow" class="erase-orphan" style="display: none;">
+                    <input type="checkbox" id="eraseOrphanCheck">
+                    <span id="eraseOrphanLabel"></span>
+                </label>
+                <label class="erase-type-label" for="eraseTypeInput">
+                    Type <strong>ERASE</strong> to confirm
+                </label>
+                <input type="text" id="eraseTypeInput" class="erase-type-input"
+                       autocomplete="off" autocapitalize="characters" spellcheck="false"
+                       placeholder="ERASE">
+            </div>
+            <div id="eraseError" class="erase-error" style="display: none;"></div>
+            <div class="modal-buttons">
+                <button id="eraseCancelBtn" class="secondary-btn">Cancel</button>
+                <button id="eraseConfirmBtn" class="erase-btn" disabled>
+                    Erase permanently
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Pending Sync Dialog -->
     <div id="pendingSyncDialog" class="modal" style="display: none;">
         <div class="modal-content" style="max-width: 380px;">
@@ -951,7 +984,15 @@
                 </div>
             </div>
             <div class="edit-player-dialog-buttons">
-                <button id="editPlayerDeleteBtn" class="edit-player-delete-btn">Delete Player</button>
+                <!-- Two different actions, deliberately not one. Remove is the
+                     everyday one and is reversible (the record survives, they
+                     can be re-added); Erase destroys the person and cannot be
+                     undone. See teams/erasure.js. -->
+                <button id="editPlayerDeleteBtn" class="edit-player-delete-btn">Remove from roster</button>
+                <button id="editPlayerEraseBtn" class="edit-player-erase-btn">
+                    Erase record permanently…
+                </button>
+                <p id="editPlayerEraseBlocked" class="edit-player-erase-blocked" style="display: none;"></p>
                 <div class="edit-player-dialog-buttons-right">
                     <button id="editPlayerCancelBtn" class="edit-player-cancel-btn">Cancel</button>
                     <button id="editPlayerConfirmBtn" class="edit-player-confirm-btn" disabled>Confirm</button>

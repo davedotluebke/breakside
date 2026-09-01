@@ -16,13 +16,14 @@ import {
 } from '../store/storage.js';
 import {
     authFetch, API_BASE_URL, listServerGames, listTeamEvents, updateGamePhase,
-    deleteGameFromCloud, deleteTeamFromCloud, loadGameFromCloud, syncUserTeams,
+    deleteGameFromCloud, loadGameFromCloud, syncUserTeams,
     createTeamOffline, getSyncStatus,
 } from '../store/sync.js';
 import { getPlayerFromName, isPointInProgress } from '../utils/helpers.js';
 import { showScreen, showEditRosterScreen, showStartGameScreen } from '../screens/navigation.js';
 import { buildSyncStatusHTML } from './syncStatusUI.js';
 import { buildAccountSectionHTML } from './accountDeletion.js';
+import { showEraseTeamDialog } from './erasure.js';
 import {
     showCreateEventDialog, showEventSettingsDialog, startNewEventGame,
     showEventRosterScreen,
@@ -355,7 +356,7 @@ async function populateCloudTeamsAndGames() {
                 const deleteTeamBtn = document.createElement('button');
                 deleteTeamBtn.innerHTML = '<i class="fas fa-trash icon-danger"></i>';
                 deleteTeamBtn.classList.add('icon-button');
-                deleteTeamBtn.title = 'Delete Team';
+                deleteTeamBtn.title = 'Erase team permanently';
                 deleteTeamBtn.onclick = (e) => {
                     e.stopPropagation();
                     deleteCloudTeam(team);
@@ -623,49 +624,22 @@ async function selectCloudTeam(cloudTeam, options = {}) {
 }
 
 /**
- * Delete a team from the cloud
+ * Erase a team and everything that only existed because of it.
+ *
+ * This used to be a `confirm()` in front of `DELETE /api/teams/{id}` whose text
+ * promised to "permanently delete the team and all its games". It did not: the
+ * DELETE removes one JSON file and leaves the games, their version backups, the
+ * shares pointing at them, the invites and the memberships behind — unreachable
+ * through the UI but complete on disk, roster snapshots and player names
+ * included. The promise is now kept by the erase endpoint, and the dialog shows
+ * the coach exactly what it counted before anything happens.
  */
-async function deleteCloudTeam(team) {
-    if (!confirm(`Are you sure you want to delete "${team.name}"?\n\nThis will permanently delete the team and all its games. This cannot be undone.`)) {
-        return;
-    }
-
-    try {
-        // Delete from cloud
-        if (typeof deleteTeamFromCloud === 'function') {
-            await deleteTeamFromCloud(team.id);
-        } else {
-            // Direct API call if sync function not available
-            const response = await authFetch(`${API_BASE_URL}/api/teams/${team.id}`, {
-                method: 'DELETE'
-            });
-            if (!response.ok) {
-                throw new Error(`Failed to delete team: ${response.statusText}`);
-            }
-        }
-
-        // Remove from local state
-        const localIndex = teams.findIndex(t => t.id === team.id);
-        if (localIndex !== -1) {
-            teams.splice(localIndex, 1);
-
-            // If we deleted the current team, switch to another
-            if (currentTeam && currentTeam.id === team.id) {
-                setCurrentTeam(teams.length > 0 ? teams[0] : null);
-            }
-
-            if (typeof saveAllTeamsData === 'function') {
-                saveAllTeamsData();
-            }
-        }
-
-        // Refresh the display
-        populateCloudTeamsAndGames();
-
-    } catch (error) {
-        console.error('Error deleting team:', error);
-        alert('Failed to delete team: ' + error.message);
-    }
+function deleteCloudTeam(team) {
+    showEraseTeamDialog(team, {
+        // Local state is cleaned inside the dialog, only after the server
+        // confirms; this just redraws the list it left behind.
+        onErased: () => populateCloudTeamsAndGames(),
+    });
 }
 
 /**

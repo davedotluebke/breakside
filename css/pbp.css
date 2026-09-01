@@ -933,7 +933,8 @@
 
 .edit-player-cancel-btn,
 .edit-player-confirm-btn,
-.edit-player-delete-btn {
+.edit-player-delete-btn,
+.edit-player-erase-btn {
     padding: 0.8rem 1.5rem;
     border: none;
     border-radius: 0.5rem;
@@ -946,7 +947,8 @@
     box-sizing: border-box;
 }
 
-.edit-player-delete-btn {
+.edit-player-delete-btn,
+.edit-player-erase-btn {
     width: 100%;
 }
 
@@ -973,9 +975,42 @@
     opacity: 0.6;
 }
 
+/* "Remove from roster" is the everyday, reversible action — the player record
+   survives and they can be added back — so it stopped being a red slab when
+   erasure arrived beneath it. The red now means what it says. */
 .edit-player-delete-btn {
+    background-color: var(--color-secondary);
+    color: var(--white);
+}
+
+/* "Erase record permanently" destroys the person. Outlined rather than filled
+   so it does not out-shout the primary Confirm button, but unmistakably the
+   dangerous one in this dialog. */
+.edit-player-erase-btn {
+    background-color: transparent;
+    color: var(--color-danger);
+    border: 2px solid var(--color-danger);
+    font-size: 0.9rem;
+}
+
+.edit-player-erase-btn:hover:not(:disabled) {
     background-color: var(--color-danger);
     color: var(--white);
+}
+
+.edit-player-erase-btn:disabled {
+    border-color: var(--border-lighter);
+    color: var(--text-faint);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* Why the erase button is disabled — shown only when it is. */
+.edit-player-erase-blocked {
+    margin: -0.5rem 0 0 0;
+    font-size: 0.8rem;
+    color: var(--text-faint);
+    text-align: center;
 }
 
 /* Make roster name cells clickable */
