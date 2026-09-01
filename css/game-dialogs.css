@@ -519,3 +519,13 @@
 .set-picker-pop-opt.selected {
     background: var(--violet-set); border-color: var(--violet-set); color: var(--white);
 }
+
+/* Consent reminder under the roster's add-player controls. Sits inside
+   .management-container (column flex) so it stacks below .management-controls,
+   and inside .management-row so rosterManagement.js hides it for viewers along
+   with the controls it annotates. Colour/size come from .text-hint. */
+.roster-consent-hint {
+    margin: 6px 4px 2px;
+    text-align: left;
+    line-height: 1.4;
+}

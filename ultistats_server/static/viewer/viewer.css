@@ -1206,6 +1206,20 @@ body.share-mode #data-format-indicator {
     text-decoration: underline;
 }
 
+/* Second line of the share footer: the disclosure a spectator actually needs
+   (this page is public) plus the link to the privacy page. Quieter than the
+   product pitch above it. */
+.share-footer-privacy {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    opacity: 0.85;
+}
+
+.share-footer-privacy a {
+    font-weight: 400;
+    text-decoration: underline;
+}
+
 /* Set label on a possession header (zone tracking) */
 .possession-set {
     color: var(--text-muted);

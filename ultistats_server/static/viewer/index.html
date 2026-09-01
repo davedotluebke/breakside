@@ -277,9 +277,18 @@
     </main>
 
     <!-- Share-mode footer: the viewer is the shop window for anonymous visitors -->
+    <!-- Absolute URLs, not root-relative: this page is served both from
+         www.breakside.pro/viewer/ (S3) and from api.breakside.pro/static/viewer/,
+         and /privacy.html only exists on the former. -->
     <footer id="share-footer" class="share-footer" style="display: none;">
-        Live game tracking by <a href="https://www.breakside.pro">Breakside</a> —
-        free real-time ultimate stats for your team
+        <div>
+            Live game tracking by <a href="https://www.breakside.pro">Breakside</a> —
+            free real-time ultimate stats for your team
+        </div>
+        <div class="share-footer-privacy">
+            This page is public to anyone with the link, and lists players by name.
+            <a href="https://www.breakside.pro/privacy.html">What Breakside stores</a>
+        </div>
     </footer>
 
     <script src="viewer.js"></script>
