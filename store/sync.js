@@ -23,6 +23,9 @@ import { mergePendingNextLine } from './pendingLineLogic.js';
 import { makeAuthFetch } from './authFetchLogic.js';
 import { log } from '../utils/logger.js';
 import { isAllowedApiBase } from '../utils/apiOrigin.js';
+import {
+    purgePlayerFromQueue, purgeTeamFromQueue, dropFromEntityMap, purgeDeadLetter,
+} from './erasureCleanup.js';
 
 // =============================================================================
 // Configuration
@@ -560,6 +563,104 @@ function clearLocalOnlyFlag(type, id) {
             delete localGames[id];
             saveLocalGames();
             break;
+    }
+}
+
+// =============================================================================
+// Post-erasure cleanup
+// =============================================================================
+//
+// Called by teams/erasure.js ONLY after the server has confirmed an erasure.
+// Nothing here runs on a failed erase: a half-cleaned device whose server copy
+// is intact is worse than an untouched one.
+//
+// The transforms live in store/erasureCleanup.js (pure, unit-tested); this is
+// the part that owns the state they run against. It has to be here rather than
+// in the caller because `syncQueue` and the entity caches are module-private
+// in-memory values — rewriting their localStorage keys from outside would be
+// undone by the next saveSyncQueue().
+
+/**
+ * Purge an erased player from this device's pending sync state.
+ *
+ * @param {string} playerId
+ * @param {string} [playerName] - Matched in lines[].players alongside the ID.
+ * @returns {{dropped: number, scrubbed: number, queuedGames: number,
+ *            localPlayers: number, deadLetter: number}}
+ */
+function purgeErasedPlayerFromSync(playerId, playerName) {
+    const result = purgePlayerFromQueue(syncQueue, playerId, playerName);
+    syncQueue = result.queue;
+    saveSyncQueue();
+
+    const localRemoved = dropFromEntityMap(localPlayers, id => id === playerId);
+    if (localRemoved) saveLocalPlayers();
+
+    const deadLetter = purgeDeadLetterFor({ playerId });
+
+    log(`🧹 Post-erasure cleanup for player ${playerId}: ` +
+        `${result.dropped} queued write(s) dropped, ${result.scrubbed} payload(s) scrubbed, ` +
+        `${localRemoved} offline record(s), ${deadLetter} quarantined item(s)`);
+
+    return {
+        dropped: result.dropped,
+        scrubbed: result.scrubbed,
+        queuedGames: result.queuedGames,
+        localPlayers: localRemoved,
+        deadLetter,
+    };
+}
+
+/**
+ * Purge an erased team and its games from this device's pending sync state.
+ *
+ * @param {string} teamId
+ * @param {string[]} [gameIds] - Game IDs known to belong to the team.
+ * @returns {{dropped: number, localTeams: number, localGames: number, deadLetter: number}}
+ */
+function purgeErasedTeamFromSync(teamId, gameIds = []) {
+    // Anything this device queued for the team's games counts too, even if the
+    // caller could not name it — the payloads carry teamId.
+    const known = new Set(gameIds || []);
+    for (const [id, game] of Object.entries(localGames)) {
+        if (game && game.teamId === teamId) known.add(id);
+    }
+
+    const result = purgeTeamFromQueue(syncQueue, teamId, [...known]);
+    syncQueue = result.queue;
+    saveSyncQueue();
+
+    const teamsRemoved = dropFromEntityMap(localTeams, id => id === teamId);
+    if (teamsRemoved) saveLocalTeams();
+
+    const gamesRemoved = dropFromEntityMap(
+        localGames, (id, game) => known.has(id) || (game && game.teamId === teamId));
+    if (gamesRemoved) saveLocalGames();
+
+    const deadLetter = purgeDeadLetterFor({ teamId, gameIds: [...known] });
+
+    log(`🧹 Post-erasure cleanup for team ${teamId}: ` +
+        `${result.dropped} queued write(s) dropped, ${teamsRemoved} offline team(s), ` +
+        `${gamesRemoved} offline game(s), ${deadLetter} quarantined item(s)`);
+
+    return {
+        dropped: result.dropped,
+        localTeams: teamsRemoved,
+        localGames: gamesRemoved,
+        deadLetter,
+    };
+}
+
+/** Rewrite the dead-letter list without the erased entity. Never throws. */
+function purgeDeadLetterFor(target) {
+    try {
+        const stored = JSON.parse(localStorage.getItem(DEAD_LETTER_KEY) || '[]');
+        const { entries, dropped } = purgeDeadLetter(stored, target);
+        if (dropped) localStorage.setItem(DEAD_LETTER_KEY, JSON.stringify(entries));
+        return dropped;
+    } catch (e) {
+        console.warn('Failed to purge quarantined items after erasure:', e);
+        return 0;
     }
 }
 
@@ -2071,4 +2172,5 @@ export {
     syncUserTeams, checkForUpdates, startAutoSync, stopAutoSync,
     syncAllData, pullFromCloud, getSyncStatus, checkIsOnline, clearSyncData,
     getSyncQueueItems, clearSyncQueue, getDeadLetterCount, DEAD_LETTER_KEY,
+    purgeErasedPlayerFromSync, purgeErasedTeamFromSync,
 };
