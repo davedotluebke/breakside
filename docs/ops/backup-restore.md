@@ -38,6 +38,13 @@ the same region as the data. Cross-account replication is the fix for that and
 is noted in §7 as an optional upgrade — decide deliberately rather than
 assuming this covers it.
 
+**And it protects against everything above for 30 days, not forever.** The
+sync mirrors deletions (so that an erased player is really erased from the
+backup too — see §6), and versioning keeps the deleted copy recoverable for 30
+days before the lifecycle rule expires it. A disaster you notice within the
+month is fully recoverable; one you notice on day 31 is not. That number is a
+deliberate trade against the privacy notice's promise, not a limit to shave.
+
 ---
 
 ## 2. Create the bucket
@@ -86,21 +93,28 @@ aws s3api put-bucket-encryption --bucket "$B" \
   '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'
 ```
 
-Lifecycle — bound how long old versions accumulate, and clean up failed
-multipart uploads:
+Lifecycle — this is what turns "erased" into "gone from the backup too", and
+what bounds how long old versions accumulate. **The 30 days here is a policy
+number**: it is what the privacy notice promises, and it is also the window
+you have to notice and undo an accident. Change one, change the other.
 
 ```bash
 cat > /tmp/backup-lifecycle.json <<'JSON'
 {
   "Rules": [
     {
-      "ID": "expire-noncurrent-versions",
+      "ID": "data-expire-noncurrent-30d",
       "Status": "Enabled",
-      "Filter": { "Prefix": "" },
-      "NoncurrentVersionExpiration": {
-        "NoncurrentDays": 90,
-        "NewerNoncurrentVersions": 5
-      }
+      "Filter": { "Prefix": "data/" },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 30 },
+      "Expiration": { "ExpiredObjectDeleteMarker": true }
+    },
+    {
+      "ID": "snapshots-expire-30d",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "snapshots/" },
+      "Expiration": { "Days": 30 },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 1 }
     },
     {
       "ID": "abort-incomplete-multipart",
@@ -116,11 +130,32 @@ aws s3api put-bucket-lifecycle-configuration \
   --bucket "$B" --lifecycle-configuration file:///tmp/backup-lifecycle.json
 ```
 
-> **Read this rule before you paste it.** It expires **noncurrent** versions
-> only. There is deliberately no `Expiration` block, because an `Expiration`
-> rule deletes *current* objects — that is, it deletes the backup. A lifecycle
-> rule is the most common way people quietly destroy their own backups. If you
-> edit this file, keep `Expiration` out of it.
+> **Read these rules before you paste them — each line is load-bearing.**
+>
+> - **`data/` has NO `Days` expiration.** An `Expiration: { Days }` on the
+>   data prefix deletes *current* objects — that is, it deletes the backup.
+>   A lifecycle rule is the most common way people quietly destroy their own
+>   backups. The `data/` rule touches only **noncurrent** versions (superseded
+>   or delete-marked copies), plus `ExpiredObjectDeleteMarker`, which cleans up
+>   a zero-byte marker once the versions behind it have all expired.
+> - **There is deliberately no `NewerNoncurrentVersions`.** The first draft
+>   had `NewerNoncurrentVersions: 5`, which sounds like extra safety and is a
+>   trap: it retains the five most recent noncurrent versions of every object
+>   *indefinitely*, and only expires versions beyond those. An erased player
+>   file has exactly **one** noncurrent version (the copy behind its delete
+>   marker), so it would have been kept forever, and the 30-day promise would
+>   have been false while the config looked right. Do not add it back.
+> - **`snapshots/` is the one place a `Days` expiration is correct.** It holds
+>   dated `.tgz` tarballs taken *before* any given erasure, so they must age
+>   out too or the promise fails through the side door. They are disposable by
+>   design — each is a point in time, never overwritten — so `Days: 30` is
+>   safe there and nowhere else. On a versioned bucket that expiry writes a
+>   delete marker, hence the 1-day noncurrent purge behind it: a tarball is
+>   gone after ~31 days, not 60.
+>
+> The two rules use non-overlapping prefixes on purpose. S3 rejects some
+> combinations of overlapping filters with conflicting `Expiration` actions,
+> and "which rule wins" is not something to be reasoning about in an incident.
 
 Verify everything took:
 
@@ -172,16 +207,15 @@ cat > /tmp/breakside-backup-policy.json <<'JSON'
       "Resource": "arn:aws:s3:::<BACKUP_BUCKET>"
     },
     {
-      "Sid": "WriteBackupObjectsOnly",
+      "Sid": "WriteAndMarkDeleted",
       "Effect": "Allow",
-      "Action": ["s3:PutObject", "s3:AbortMultipartUpload"],
+      "Action": ["s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload"],
       "Resource": "arn:aws:s3:::<BACKUP_BUCKET>/*"
     },
     {
-      "Sid": "NeverDeleteOrReconfigure",
+      "Sid": "NeverPurgeOrReconfigure",
       "Effect": "Deny",
       "Action": [
-        "s3:DeleteObject",
         "s3:DeleteObjectVersion",
         "s3:PutBucketVersioning",
         "s3:PutLifecycleConfiguration",
@@ -217,12 +251,17 @@ Why it is shaped this way:
 - **No `s3:GetObject`.** The instance can write backups but cannot read them
   back. A compromised box cannot exfiltrate its own backup history. Restores
   run from your laptop with the `admin` profile, deliberately (§5).
-- **No `s3:DeleteObject`, and an explicit `Deny` on top.** Omission alone would
-  be undone by any future broad policy attached to the same role; an explicit
-  Deny cannot be overridden. This makes the backup effectively append-only from
-  the instance's point of view — a fully compromised box cannot erase what it
-  has already written. It also means that if anyone ever adds `--delete` to the
-  sync, IAM rejects it rather than silently mirroring a disaster.
+- **`s3:DeleteObject` allowed, `s3:DeleteObjectVersion` explicitly denied.**
+  This is the whole trick, and it only works because versioning is on. On a
+  versioned bucket, `DeleteObject` without a version id does not destroy
+  anything — it writes a **delete marker** and the previous copy becomes a
+  noncurrent version, recoverable for 30 days. `DeleteObjectVersion` is the
+  call that permanently removes a specific version, and that is what the Deny
+  blocks. So the script's `--delete` can hide an object (which is what makes an
+  erasure real in the backup), but a fully compromised box can only ever *hide*
+  history for 30 days; it cannot purge it. The Deny is explicit rather than an
+  omission because omission would be undone by any future broad policy on the
+  same role; an explicit Deny cannot be overridden.
 - **The Deny is scoped to this bucket only**, so it cannot interfere with
   `AmazonSSMManagedInstanceCore`, which needs S3 access to other paths.
 
@@ -428,30 +467,56 @@ routes:
    aws s3 cp "s3://$B/snapshots/data-20260823-234307.tgz" .
    tar xzf data-20260823-234307.tgz
    ```
-2. **Object versions**, for a single file you need an older copy of:
+2. **Object versions**, for a single file you need an older copy of — or one
+   that was deleted:
    ```bash
    aws s3api list-object-versions --bucket "$B" --prefix "data/teams/<file>.json"
    aws s3api get-object --bucket "$B" --key "data/teams/<file>.json" \
      --version-id <VERSION_ID> ./recovered.json
    ```
+   A file the script deleted (via `--delete`) shows up here as a **delete
+   marker** on top of its last real version. Fetch that version by id exactly
+   as above. **This only works for 30 days** — after that the noncurrent
+   version is expired by the lifecycle rule and the file is genuinely gone,
+   which is the point: that is what an erasure looks like from the backup's
+   side. So the practical rule is: if you think something was wrongly deleted,
+   act inside the month.
 
 ---
 
 ## 6. Design decisions, and what they cost you
 
-**`aws s3 sync` without `--delete`.** `--delete` would make the bucket a mirror,
-so a stray `rm -rf` or a bad migration is replicated to the backup on the next
-run — destroying the one copy that could have saved you. Versioning does soften
-this (deletes become delete markers, so it is recoverable), but recovering means
-enumerating delete markers and restoring per-object versions under pressure,
-which is exactly the procedure nobody wants to be learning during an incident.
-Without `--delete`, restore is a plain `aws s3 sync` back.
+**`aws s3 sync` WITH `--delete`, on a versioned bucket, with a 30-day noncurrent
+expiration.** The first draft of this runbook omitted `--delete`, and for a
+plain backup that is the conservative choice: a mirror replicates a stray
+`rm -rf` to the one copy that could have saved you. What changed the answer is
+that the app now genuinely erases people. An erasure deletes the player file and
+rewrites every game; without `--delete` the rewritten games sync fine but the
+deleted file is never touched again, and the erased person's record sits in the
+backup with their name in it, forever. A backup that quietly keeps what the
+product promised to delete is a privacy failure, not a safety feature.
 
-*The cost:* objects deleted locally linger in the bucket forever, so **a restore
-returns a superset of the live dataset**. For ~190 MB of JSON the storage cost
-is noise, and the app keys everything by id off `index.json`, so a resurrected
-orphan file is inert rather than corrupting. If orphans ever need clearing, do
-it as a deliberate one-off from the `admin` profile, never from the script.
+The three pieces only work together. `--delete` on its own would be reckless.
+Versioning turns each delete into a *delete marker* with the real copy kept
+behind it as a noncurrent version. The lifecycle rule expires that version after
+30 days. And IAM lets the instance write markers (`DeleteObject`) but never purge
+versions (`DeleteObjectVersion`). Net: **an accident is recoverable for 30 days
+rather than forever, and in exchange an erasure is real in the backup rather
+than cosmetic.** The 30 is a policy number — it is the figure the privacy notice
+gives, and it is also your window for noticing and undoing a mistake. If you
+ever change one, change the other.
+
+*What this does to restore:* it gets simpler, not harder. A delete marker makes
+an object invisible to `aws s3 sync`, so **a restore returns exactly the live
+dataset** — no orphans, no superset, nothing to clean up afterwards. The only
+thing that is now a per-version procedure is recovering something that was
+*deleted*, and that must happen inside the 30 days (§5d).
+
+*The honest cost:* a bad migration you do not notice for 31 days is
+unrecoverable from this backup. That is a real narrowing versus the
+keep-forever draft, and it is why the failure alarm in the script matters and
+why §5's restore drill is worth actually doing — you want to find out the
+backup is good before you need it, and you have a month, not forever.
 
 **Bucket versioning, not a dated prefix.** A dated prefix
 (`s3://bucket/2026-08-24/…`) starts empty on every run, so sync has nothing to

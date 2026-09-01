@@ -127,28 +127,34 @@ mkdir -p "$STATE_DIR"
 LAST_SUCCESS_FILE="$STATE_DIR/last-success"
 
 # ------------------------------------------------------------ the sync ------
-# WHY NO --delete
-# ---------------
-# --delete would make the bucket a mirror: anything gone locally is removed
-# remotely. That is precisely the failure this backup exists to survive. A bad
-# migration or a stray `rm -rf` would be faithfully replicated to the backup on
-# the very next run, and the one copy that could have saved us is gone.
+# WHY --delete (and why that is safe)
+# -----------------------------------
+# --delete makes the bucket a mirror: anything gone locally is removed
+# remotely. Read naively that is the failure a backup exists to survive — a
+# stray `rm -rf` faithfully replicated to the one copy that could have saved
+# us. It is here anyway, for a reason that did not exist when the first draft
+# of this script omitted it: the app now really erases people. When a coach
+# erases a player, the player file is deleted and every game is rewritten.
+# Without --delete the rewritten games sync fine, but the deleted file is
+# simply never touched again, and the erased person's record — name intact —
+# lives in the backup forever. The privacy notice promises that erased data
+# leaves backups within 30 days; --delete is what makes that true.
 #
-# Bucket versioning does soften that — a --delete would write delete markers
-# rather than truly destroying data, so it is *recoverable*. But recovering
-# means enumerating delete markers and restoring per-object versions under
-# pressure, which is exactly the procedure nobody wants to be learning during
-# an incident. Without --delete a restore is a plain `aws s3 sync` back.
+# What makes it safe is the bucket, not this script. Versioning is ON, so a
+# delete here writes a delete marker and the previous copy becomes a
+# noncurrent version — recoverable, by version id, for 30 days (the lifecycle
+# rule's NoncurrentVersionExpiration). The instance's IAM policy allows
+# DeleteObject (writes a marker) but explicitly DENIES DeleteObjectVersion
+# (purges a version), so even a fully compromised box can only *hide* history
+# for 30 days; it cannot destroy it. The same 30 days is the window for
+# noticing an rm -rf or a bad migration.
 #
-# The cost of omitting it: objects deleted locally linger in the bucket, so a
-# restore returns a SUPERSET of the current dataset. For ~190 MB of JSON the
-# storage cost is noise, and the app keys everything by id off index.json, so a
-# resurrected orphan file is inert rather than corrupting. The runbook's
-# restore procedure calls this out explicitly.
-#
-# Belt and braces: bucket versioning is the second layer, and the IAM policy
-# denies the instance any Delete* on this bucket at all, so even a fully
-# compromised box cannot erase the backups it writes.
+# So the trade is: an accident is recoverable for 30 days rather than forever,
+# and in exchange an erasure is real in the backup rather than cosmetic.
+# Restore is still a plain `aws s3 sync` back — a delete marker makes an
+# object invisible to sync, so a restore returns exactly the live dataset,
+# not a superset. Recovering something that was *deleted* is the per-version
+# procedure in the runbook (§5d), and it has to happen inside the window.
 #
 # WHY A SINGLE PREFIX, NOT A DATED ONE
 # ------------------------------------
@@ -165,6 +171,7 @@ LAST_SUCCESS_FILE="$STATE_DIR/last-success"
 # transient scratch, not data.
 SYNC_ARGS=(
     "$DATA_DIR/" "s3://$BUCKET/data/"
+    --delete
     --exclude '*.tmp'
     --exclude '.writable-probe-*'
     --no-progress
