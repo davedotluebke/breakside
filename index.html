@@ -740,6 +740,41 @@
         </div>
     </div>
 
+    <!-- Delete Account Dialog -->
+    <div id="deleteAccountDialog" class="modal" style="display: none;">
+        <div class="modal-content delete-account-modal">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Delete account</h2>
+                <span id="deleteAccountCloseX" class="close">&times;</span>
+            </div>
+            <p class="delete-account-lede">
+                This permanently deletes your Breakside account and everything
+                listed below. <strong>It cannot be undone</strong> — there is no
+                restore, and support cannot bring it back.
+            </p>
+            <div id="deleteAccountBody" class="delete-account-body">Loading…</div>
+            <div id="deleteAccountConfirm" class="delete-account-confirm" style="display: none;">
+                <label id="deleteAccountCascadeRow" class="delete-account-cascade" style="display: none;">
+                    <input type="checkbox" id="deleteAccountCascadeCheck">
+                    <span id="deleteAccountCascadeLabel"></span>
+                </label>
+                <label class="delete-account-type-label" for="deleteAccountTypeInput">
+                    Type <strong>DELETE</strong> to confirm
+                </label>
+                <input type="text" id="deleteAccountTypeInput" class="delete-account-type-input"
+                       autocomplete="off" autocapitalize="characters" spellcheck="false"
+                       placeholder="DELETE">
+            </div>
+            <div id="deleteAccountError" class="delete-account-error" style="display: none;"></div>
+            <div class="modal-buttons">
+                <button id="deleteAccountCancelBtn" class="secondary-btn">Cancel</button>
+                <button id="deleteAccountConfirmBtn" class="delete-account-btn" disabled>
+                    Delete my account
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Pending Sync Dialog -->
     <div id="pendingSyncDialog" class="modal" style="display: none;">
         <div class="modal-content" style="max-width: 380px;">

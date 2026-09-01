@@ -24,6 +24,8 @@ try:
     from storage.file_utils import assert_data_dir_writable
     from narration import router as narration_router
     from narration_lineup import router as narration_lineup_router
+    from account_deletion import set_team_eraser
+    from storage.erasure import erase_team
     import routers
 except ImportError:
     from ultistats_server.config import HOST, PORT, DEBUG, ALLOWED_ORIGINS
@@ -31,6 +33,8 @@ except ImportError:
     from ultistats_server.storage.file_utils import assert_data_dir_writable
     from ultistats_server.narration import router as narration_router
     from ultistats_server.narration_lineup import router as narration_lineup_router
+    from ultistats_server.account_deletion import set_team_eraser
+    from ultistats_server.storage.erasure import erase_team
     from ultistats_server import routers
 
 # Minimal app-wide logging setup. Uvicorn configures its own access/error
@@ -54,6 +58,13 @@ async def lifespan(app: FastAPI):
     # nested dirs) instead of 500ing on every later save. Root-owned dirs
     # from scripts run as root are the known way this breaks (2026-07-03).
     assert_data_dir_writable()
+    # Hand account deletion the real team cascade. Without this it silently
+    # falls back to its own minimal one, which deletes the games, shares and
+    # invites but does NOT record a team tombstone — so an offline client
+    # could POST the team straight back after the account was gone. The two
+    # halves were built independently and each is green on its own; this is
+    # the line that connects them.
+    set_team_eraser(erase_team)
     yield
 
 

@@ -46,6 +46,8 @@ from .index_storage import (
     link_player_to_team,
     update_index_for_game,
     update_index_for_team,
+    replace_player_in_index,
+    remove_team_from_index,
 )
 
 from .user_storage import (
@@ -114,6 +116,25 @@ from .event_storage import (
     add_game_to_event,
 )
 
+# Imported after the modules it builds on (games, teams, players, events,
+# index) so the package initializes cleanly in either import mode.
+from .erasure import (
+    ErasureBlocked,
+    PlayerScrubber,
+    TOMBSTONE_NAME,
+    TOMBSTONE_PREFIX,
+    erase_player,
+    erase_team,
+    mint_tombstone_id,
+    scrub_erased_from_game,
+    strip_erased_from_team,
+)
+
+from .tombstones import (
+    is_player_erased,
+    is_team_erased,
+)
+
 from .controller_storage import (
     get_controller_state,
     auto_assign_roles_if_unclaimed,
@@ -175,6 +196,20 @@ __all__ = [
     "link_player_to_team",
     "update_index_for_game",
     "update_index_for_team",
+    "replace_player_in_index",
+    "remove_team_from_index",
+    # Erasure (true deletion — see storage/erasure.py)
+    "ErasureBlocked",
+    "PlayerScrubber",
+    "TOMBSTONE_NAME",
+    "TOMBSTONE_PREFIX",
+    "erase_player",
+    "erase_team",
+    "mint_tombstone_id",
+    "scrub_erased_from_game",
+    "strip_erased_from_team",
+    "is_player_erased",
+    "is_team_erased",
     # User storage
     "user_exists",
     "get_user",

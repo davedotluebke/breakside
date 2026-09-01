@@ -34,6 +34,7 @@ try:
     from storage.event_storage import event_exists, get_event
     from storage.index_storage import get_player_teams_verified
     from storage.player_storage import get_player, player_exists
+    from storage.team_storage import team_exists
 except ImportError:
     from ultistats_server.storage.user_storage import get_user, user_exists
     from ultistats_server.storage.membership_storage import get_user_team_role, get_user_memberships, get_user_teams
@@ -41,6 +42,7 @@ except ImportError:
     from ultistats_server.storage.event_storage import event_exists, get_event
     from ultistats_server.storage.index_storage import get_player_teams_verified
     from ultistats_server.storage.player_storage import get_player, player_exists
+    from ultistats_server.storage.team_storage import team_exists
 
 
 async def get_json_body(body: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
@@ -811,3 +813,100 @@ async def require_player_read_access(
         )
 
     return user
+
+
+async def require_player_erase_access(
+    request: Request,
+    user: dict = Depends(get_current_user)
+) -> dict:
+    """Dependency for the player erase / erase-preview endpoints.
+
+    Same rule as ``require_player_edit_access`` — Coach of a team the player is
+    on — with one addition it needs and edit does not: **the player may already
+    be gone.**
+
+    Erasure has to be idempotent. A coach who double-taps Erase, or whose
+    request times out and retries, must get "nothing left to do" rather than a
+    denial; and after a partial failure the re-run is how the remaining
+    references get cleaned up. But ``assert_player_edit_access`` reads a
+    now-missing record as a teamless orphan with no ``createdBy``, which is its
+    most restrictive case, so it would refuse exactly the caller who just
+    performed the erasure.
+
+    So: if the record still exists, defer to the ordinary edit rule unchanged.
+    If it does not, require the caller to be a Coach of *some* team — the same
+    floor ``assert_player_edit_access`` applies to creating a new record — and
+    let the handler return zero counts.
+
+    Note this lets a coach distinguish "no such player" (zero counts) from
+    "exists, not yours" (403). That existence oracle already exists across this
+    API's 403/404 split, and the ID would have to be guessed to use it.
+    """
+    player_id = request.path_params.get("player_id")
+
+    if not player_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing player_id"
+        )
+    validate_id(player_id, "player_id")
+
+    if player_exists(player_id):
+        stored = get_player(player_id)
+        assert_player_edit_access(
+            user, player_id, created_by=stored.get("createdBy")
+        )
+    else:
+        assert_player_edit_access(user, None)
+
+    return user
+
+
+async def require_team_erase_access(
+    request: Request,
+    user: dict = Depends(get_current_user)
+) -> dict:
+    """Dependency for the team erase / erase-preview endpoints.
+
+    Coach of the team, as ``require_team_coach`` requires — plus the same
+    already-gone allowance as ``require_player_erase_access``, and for a
+    sharper reason: erasing a team deletes its memberships, so the coach who
+    ran it is no longer a coach of it. Without this branch, retrying the
+    operation you just performed is always a 403.
+
+    When the team record is gone the caller must still be a Coach of some
+    team, and all the operation can then do is sweep residue keyed to that
+    exact team ID — data already orphaned by the team's removal.
+
+    Caveat worth knowing: the pre-erasure ``DELETE /api/teams/{id}`` deletes
+    only the team file and leaves its games behind, so an ID in that state is
+    reachable through this branch by any coach who can name it. Team IDs carry
+    a 4-character random suffix, so naming one means guessing it, but tightening
+    this branch to admins-only is a reasonable call if that trade reads
+    differently to you.
+    """
+    team_id = request.path_params.get("team_id")
+
+    if not team_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing team_id"
+        )
+    validate_id(team_id, "team_id")
+
+    if not auth_required():
+        return user
+
+    if is_admin(user["id"]):
+        return user
+
+    if get_user_team_role(user["id"], team_id) == "coach":
+        return user
+
+    if not team_exists(team_id) and coach_team_ids(user["id"]):
+        return user
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Coach access required for this team"
+    )

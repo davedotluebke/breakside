@@ -348,6 +348,99 @@ def link_player_to_team(player_id: str, team_id: str) -> None:
             _save_index(index)
 
 
+def replace_player_in_index(player_id: str, tombstone_id: str) -> bool:
+    """Swap an erased player's index rows for their tombstone's.
+
+    Called by ``storage.erasure`` after the game documents have been scrubbed,
+    and shaped so the index matches what ``rebuild_index`` would now produce:
+
+    - ``gameRoster`` buckets: the tombstone now appears in those games'
+      documents, so it takes the player's place rather than vanishing.
+    - ``playerGames``: the player's row is renamed to the tombstone's.
+    - ``playerTeams``: dropped outright. Erasure removes the player from every
+      roster and leaves no tombstone there, so a rebuild would produce no row.
+
+    Idempotent: a second call finds nothing and writes nothing.
+
+    Returns:
+        True if the index changed.
+    """
+    with entity_lock(_INDEX_LOCK_KEY):
+        index = _load_index()
+        changed = False
+
+        game_roster = index.setdefault("gameRoster", {})
+        for game_id, player_ids in game_roster.items():
+            if player_id in player_ids:
+                game_roster[game_id] = [
+                    tombstone_id if pid == player_id else pid for pid in player_ids
+                ]
+                changed = True
+
+        player_games = index.setdefault("playerGames", {})
+        if player_id in player_games:
+            games = player_games.pop(player_id)
+            existing = player_games.setdefault(tombstone_id, [])
+            for game_id in games:
+                if game_id not in existing:
+                    existing.append(game_id)
+            changed = True
+
+        if index.setdefault("playerTeams", {}).pop(player_id, None) is not None:
+            changed = True
+
+        if changed:
+            _save_index(index)
+        return changed
+
+
+def remove_team_from_index(team_id: str, game_ids: List[str]) -> bool:
+    """Drop an erased team and its games from every index bucket.
+
+    ``game_ids`` are the games deleted with the team; their ``gameRoster`` rows
+    and their appearances in ``playerGames`` go too. Players themselves are not
+    removed — one may still be on another team — they simply lose this team and
+    these games.
+
+    Idempotent. Returns True if the index changed.
+    """
+    doomed = set(game_ids)
+    with entity_lock(_INDEX_LOCK_KEY):
+        index = _load_index()
+        changed = False
+
+        if index.setdefault("teamGames", {}).pop(team_id, None) is not None:
+            changed = True
+
+        game_roster = index.setdefault("gameRoster", {})
+        for game_id in list(game_roster):
+            if game_id in doomed:
+                del game_roster[game_id]
+                changed = True
+
+        player_games = index.setdefault("playerGames", {})
+        for player_id, games in list(player_games.items()):
+            kept = [g for g in games if g not in doomed]
+            if len(kept) != len(games):
+                changed = True
+                if kept:
+                    player_games[player_id] = kept
+                else:
+                    del player_games[player_id]
+
+        player_teams = index.setdefault("playerTeams", {})
+        for player_id, teams in list(player_teams.items()):
+            if team_id in teams:
+                teams.remove(team_id)
+                changed = True
+            if not teams:
+                del player_teams[player_id]
+
+        if changed:
+            _save_index(index)
+        return changed
+
+
 def update_index_for_team(team_id: str, team_data: dict) -> None:
     """
     Update the index for a specific team (incremental update).

@@ -59,6 +59,8 @@ require_event_team_access = auth.require_event_team_access
 require_body_team_coach = auth.require_body_team_coach
 require_player_edit_access = auth.require_player_edit_access
 require_player_read_access = auth.require_player_read_access
+require_player_erase_access = auth.require_player_erase_access
+require_team_erase_access = auth.require_team_erase_access
 assert_player_edit_access = auth.assert_player_edit_access
 assert_team_edit_access = auth.assert_team_edit_access
 

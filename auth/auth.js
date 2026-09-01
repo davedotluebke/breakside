@@ -495,6 +495,32 @@ async function signOut() {
     }
 }
 
+/**
+ * Sign out after the server has deleted the account itself.
+ *
+ * Same wipe as signOut(), plus the one thing sign-out deliberately keeps: the
+ * local-data snapshot. That snapshot exists so a coach who mis-tapped Sign Out
+ * can get their unsynced tournament back — but there is no account to sync it
+ * to any more, and leaving a verbatim copy of the rosters on the device is
+ * exactly what deleting the account was supposed to prevent.
+ *
+ * Called only by teams/accountDeletion.js, and only after DELETE
+ * /api/auth/me has returned 200. A failed delete must NOT come through here:
+ * the account still exists and the user is still signed in to it.
+ */
+async function signOutAfterAccountDeletion() {
+    await signOut();
+    try {
+        // Spelled literally rather than via the constant above: ownership of
+        // this key is moving to auth/signOutBackup.js (in flight on the
+        // sec-client-privacy branch), and this destructive path must keep
+        // working either way.
+        localStorage.removeItem('breakside_signout_backup');
+    } catch (e) {
+        console.warn('Could not clear the sign-out backup after account deletion:', e);
+    }
+}
+
 // =============================================================================
 // Redirect to Login
 // =============================================================================
@@ -746,6 +772,7 @@ const breaksideAuth = {
     // teamList in the module graph (auth → sync → controllerState → teamList),
     // so a static import would close that cycle.
     clearLocalData,
+    signOutAfterAccountDeletion,
     resetPassword,
     signInWithGoogle,
 

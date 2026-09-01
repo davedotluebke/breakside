@@ -4,12 +4,16 @@ Player endpoints.
 Player records are private: reads require membership of a team the player is
 on; writes require coach access (see auth.dependencies).
 """
+import logging
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 
 from ._shared import (
+    ErasureBlocked,
     assert_player_edit_access,
+    erase_player,
     get_current_user,
     get_optional_user,
     get_player,
@@ -19,16 +23,20 @@ from ._shared import (
     get_team_players,
     get_user_teams,
     is_admin,
+    is_player_erased,
     link_player_to_team,
     list_players,
     player_exists,
     require_player_edit_access,
+    require_player_erase_access,
     require_player_read_access,
     save_player,
     update_player,
     validate_id,
 )
 from ._shared import delete_player as delete_player_storage
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -62,6 +70,19 @@ async def create_player(
     provided_id = player_data.get('id')
     if provided_id:
         validate_id(provided_id, "player id")
+
+    # Erasure guard. store/sync.js re-POSTs whole entities from its offline
+    # queue ("POST handles both create and update via ID"), so a device that
+    # has not synced since an erasure would recreate the record here — ID,
+    # name and all — and nothing would report it. 410 Gone rather than 403:
+    # the resource is deliberately and permanently absent, and the client's
+    # queue retries a few times and then dead-letters the item (see
+    # store/sync.js quarantineSyncItem), which is the behavior we want.
+    if provided_id and is_player_erased(provided_id):
+        raise HTTPException(
+            status_code=410,
+            detail="This player was permanently erased and cannot be recreated."
+        )
 
     claimed_team_id = player_data.get('teamId')
     if claimed_team_id:
@@ -210,3 +231,94 @@ async def get_player_teams_endpoint(player_id: str, user: dict = Depends(require
             continue
 
     return {"player_id": player_id, "teams": teams_data, "count": len(teams_data)}
+
+
+# =============================================================================
+# Erasure — true deletion, as opposed to DELETE above
+# =============================================================================
+#
+# DELETE /api/players/{id} removes the player's own record and nothing else:
+# their name stays in every game that referenced them, and because entity IDs
+# embed the name (``Alice-7f3a``), so does their identity. These two endpoints
+# are the ones that actually erase a person. See storage/erasure.py.
+
+
+def _erasure_response(result: dict, key: str) -> dict:
+    """Shape a storage-layer erasure result for the API.
+
+    ``key`` is "willErase" for a preview and "erased" for the real thing —
+    identical contents, so the confirm dialog and the receipt can be rendered
+    by the same code, and a user can see that what they were promised is what
+    happened.
+    """
+    return {
+        key: result["counts"],
+        "warnings": result["warnings"],
+        "playerId": result["playerId"],
+        "tombstoneId": result["tombstoneId"],
+    }
+
+
+@router.get("/api/players/{player_id}/erase-preview")
+async def preview_erase_player(
+    player_id: str,
+    user: dict = Depends(require_player_erase_access)
+):
+    """
+    Report exactly what erasing this player would destroy. Mutates nothing.
+
+    Runs the identical traversal the erasure runs, with writes disabled, so the
+    counts cannot disagree with what follows. Reading every version backup is
+    the only way to count them honestly, so this is not a cheap call — measured
+    at ~4s against a production-sized corpus (6,800 version files, 370MB), which
+    is why it runs off the event loop. The server is single-worker by
+    construction (see main.py), so a synchronous call here would stall every
+    other request for the duration.
+
+    Requires: Coach access to a team this player is on.
+    """
+    result = await run_in_threadpool(erase_player, player_id, dry_run=True)
+    return _erasure_response(result, "willErase")
+
+
+@router.post("/api/players/{player_id}/erase")
+async def erase_player_endpoint(
+    player_id: str,
+    user: dict = Depends(require_player_erase_access)
+):
+    """
+    Permanently erase a player. **Irreversible — there is no undo.**
+
+    Deletes the player record and rewrites every reference to them — team
+    rosters and lines, tournament-event rosters, each game's current state and
+    every one of its version backups — to an opaque tombstone. The person is
+    also added to the erasure deny-list so a client that has not synced since
+    cannot push them back.
+
+    Idempotent: re-running returns zero counts rather than an error.
+
+    Runs off the event loop: rewriting a player out of a production-sized
+    corpus was measured at ~14s (6,800 version files, worst case where the
+    player appears in every one), and the server is single-worker.
+
+    Requires: Coach access to a team this player is on.
+    """
+    try:
+        result = await run_in_threadpool(erase_player, player_id)
+    except ErasureBlocked as exc:
+        # Refused before touching anything, so nothing is half-erased. 409:
+        # the request is valid, the server's state (file ownership) is not.
+        logger.error("Player erasure refused for %s: %s", player_id, exc)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Erasure refused: some stored files are in unwritable "
+                "directories, so the player could not be erased everywhere. "
+                "Nothing was changed. Fix the directory ownership and retry."
+            ),
+        )
+    logger.info(
+        "ERASED player %s -> %s: %s", player_id, result["tombstoneId"],
+        result["counts"],
+    )
+    return _erasure_response(result, "erased")
