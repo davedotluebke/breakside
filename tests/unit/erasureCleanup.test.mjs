@@ -74,6 +74,18 @@ test('strips name-keyed line entries only when the name is supplied', () => {
     assert.deepEqual(withoutName.lines[1].players, ['Alice', 'Bob']);
 });
 
+test('matches the nickname as well as the name — the app renders nickname || name', () => {
+    // A line stored while the roster displayed her nickname.
+    const t = team({ lines: [{ name: 'O', players: ['Ali', 'Bob'] }] });
+    // Name alone misses it: this is the bug the nickname pass exists to fix.
+    const nameOnly = team({ lines: [{ name: 'O', players: ['Ali', 'Bob'] }] });
+    stripPlayerFromTeamRecord(nameOnly, ALICE, 'Alice');
+    assert.deepEqual(nameOnly.lines[0].players, ['Ali', 'Bob']);
+
+    assert.equal(stripPlayerFromTeamRecord(t, ALICE, ['Alice', 'Ali']), true);
+    assert.deepEqual(t.lines[0].players, ['Bob']);
+});
+
 test('leaves a team that never had the player untouched, and reports no change', () => {
     const t = team({ playerIds: [BOB], teamRoster: [{ id: BOB, name: 'Bob' }], lines: [] });
     assert.equal(stripPlayerFromTeamRecord(t, ALICE, 'Alice'), false);

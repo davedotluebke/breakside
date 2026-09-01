@@ -44,6 +44,23 @@ function isPlayerItem(item, playerId) {
 }
 
 /**
+ * Every string one player is displayed as, as a lookup set.
+ *
+ * The nickname is a display name, not decoration: the app renders
+ * `nickname || name`, so a stored display string holds the NICKNAME whenever
+ * the player has one. The server matches both (see PlayerScrubber's
+ * `_display_names`); a client that only knew the real name would leave the
+ * nickname behind in local line lists.
+ *
+ * @param {string|string[]} [names]
+ * @returns {Set<string>}
+ */
+function displayNameSet(names) {
+    const list = Array.isArray(names) ? names : [names];
+    return new Set(list.filter(n => typeof n === 'string' && n));
+}
+
+/**
  * Remove one player from a team record, in place.
  *
  * Handles both live `Team` objects and the serialized payloads that sit in the
@@ -51,15 +68,20 @@ function isPlayerItem(item, playerId) {
  *
  * `lines[].players` holds display strings that may be either IDs or names
  * (see teams/rosterManagement.js), so both are matched, mirroring the server's
- * `strip_erased_from_team`.
+ * `_drop_from_id_list`. Matching a bare name is how a same-named teammate can
+ * be caught by somebody else's erasure — the server counts those as
+ * `name_only_matches` and warns about them in the preview, which is where the
+ * coach is told before they agree to it.
  *
  * @param {object} team - Team object or serialized team payload. Mutated.
  * @param {string} playerId
- * @param {string} [playerName] - Also match this name in `lines[].players`.
+ * @param {string|string[]} [playerNames] - Display names (name and nickname)
+ *   to match in `lines[].players` alongside the ID.
  * @returns {boolean} whether anything was removed.
  */
-export function stripPlayerFromTeamRecord(team, playerId, playerName) {
+export function stripPlayerFromTeamRecord(team, playerId, playerNames) {
     if (!team || typeof team !== 'object' || !playerId) return false;
+    const names = displayNameSet(playerNames);
     let changed = false;
 
     if (Array.isArray(team.playerIds)) {
@@ -82,7 +104,7 @@ export function stripPlayerFromTeamRecord(team, playerId, playerName) {
         for (const line of team.lines) {
             if (!line || !Array.isArray(line.players)) continue;
             const kept = line.players.filter(
-                ref => ref !== playerId && !(playerName && ref === playerName));
+                ref => ref !== playerId && !names.has(ref));
             if (kept.length !== line.players.length) {
                 line.players = kept;
                 changed = true;
@@ -126,14 +148,14 @@ export function stripPlayerFromEventRecord(event, playerId) {
  * @param {Array} queue - Sync queue items. Not mutated; team/event payloads
  *   inside the returned items ARE mutated in place (they are the same objects).
  * @param {string} playerId
- * @param {string} [playerName]
+ * @param {string|string[]} [playerNames] - Display names (name and nickname).
  * @returns {{queue: Array, dropped: number, scrubbed: number, queuedGames: number}}
  *   `dropped` — items removed outright (the player's own writes).
  *   `scrubbed` — team/event payloads that still mentioned them.
  *   `queuedGames` — unsynced games left alone; the server scrubs those on
  *   arrival, and the caller may want to say so.
  */
-export function purgePlayerFromQueue(queue, playerId, playerName) {
+export function purgePlayerFromQueue(queue, playerId, playerNames) {
     const items = Array.isArray(queue) ? queue : [];
     let dropped = 0;
     let scrubbed = 0;
@@ -152,7 +174,7 @@ export function purgePlayerFromQueue(queue, playerId, playerName) {
             if (item && item.type === 'game') queuedGames += 1;
             continue;
         }
-        if (item.type === 'team' && stripPlayerFromTeamRecord(item.data, playerId, playerName)) {
+        if (item.type === 'team' && stripPlayerFromTeamRecord(item.data, playerId, playerNames)) {
             scrubbed += 1;
         } else if (item.type === 'event' && stripPlayerFromEventRecord(item.data, playerId)) {
             scrubbed += 1;

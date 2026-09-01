@@ -116,7 +116,14 @@ export function showErasePlayerDialog(player, options = {}) {
         alert(blocked);
         return;
     }
-    openDialog('player', { id: player.id, name: player.name || 'this player' }, options);
+    openDialog('player', {
+        id: player.id,
+        // What the dialog calls them: the app renders `nickname || name`.
+        name: player.nickname || player.name || 'this player',
+        // What local cleanup matches on. Both, because a stored display string
+        // in lines[].players holds whichever one the roster showed at the time.
+        displayNames: [player.name, player.nickname].filter(Boolean),
+    }, options);
 }
 
 /**
@@ -396,7 +403,7 @@ async function confirmErase() {
 
         // Only now is local cleanup safe.
         const cleanup = mode === 'player'
-            ? cleanUpAfterPlayerErase(target.id, target.name)
+            ? cleanUpAfterPlayerErase(target.id, target.displayNames)
             : cleanUpAfterTeamErase(target.id, receipt);
 
         renderReceipt(receipt, cleanup);
@@ -470,14 +477,14 @@ function renderReceipt(receipt, cleanup) {
  * self-heals on its next refresh. The receipt says so rather than implying the
  * device is instantly clean.
  */
-function cleanUpAfterPlayerErase(playerId, playerName) {
+function cleanUpAfterPlayerErase(playerId, displayNames) {
     let rosters = 0;
     for (const team of teams || []) {
-        if (stripPlayerFromTeamRecord(team, playerId, playerName)) rosters += 1;
+        if (stripPlayerFromTeamRecord(team, playerId, displayNames)) rosters += 1;
     }
     if (rosters) saveAllTeamsData();
 
-    const sync = purgeErasedPlayerFromSync(playerId, playerName);
+    const sync = purgeErasedPlayerFromSync(playerId, displayNames);
     return { rosters, ...sync };
 }
 

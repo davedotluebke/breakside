@@ -584,12 +584,13 @@ function clearLocalOnlyFlag(type, id) {
  * Purge an erased player from this device's pending sync state.
  *
  * @param {string} playerId
- * @param {string} [playerName] - Matched in lines[].players alongside the ID.
+ * @param {string|string[]} [playerNames] - Display names (name and nickname),
+ *   matched in lines[].players alongside the ID.
  * @returns {{dropped: number, scrubbed: number, queuedGames: number,
  *            localPlayers: number, deadLetter: number}}
  */
-function purgeErasedPlayerFromSync(playerId, playerName) {
-    const result = purgePlayerFromQueue(syncQueue, playerId, playerName);
+function purgeErasedPlayerFromSync(playerId, playerNames) {
+    const result = purgePlayerFromQueue(syncQueue, playerId, playerNames);
     syncQueue = result.queue;
     saveSyncQueue();
 
