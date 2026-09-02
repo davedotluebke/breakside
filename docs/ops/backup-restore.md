@@ -384,8 +384,11 @@ Get the live count to compare against (read-only):
 ssh breakside "sudo find /var/lib/breakside/data -type f ! -name '*.tmp' | wc -l"
 ```
 
-The restored count should be **equal to or slightly greater than** the live
-count. Greater is expected and correct — see the note on orphans in §6.
+The restored count should **equal the live count exactly**. It used to be
+allowed to run higher (orphans lingered when the sync did not mirror deletions);
+now that it does, a mismatch in either direction means something is wrong —
+most likely a file written between the backup and your count, so re-run the
+sync and count again before worrying.
 
 Spot-check that the JSON is intact rather than truncated:
 

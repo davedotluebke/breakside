@@ -189,7 +189,10 @@ SYNC_ARGS=(
 [[ $DRY_RUN -eq 1 ]] && SYNC_ARGS+=(--dryrun)
 
 FAILED_STEP="s3 sync of $DATA_DIR"
-log "starting backup: $FILE_COUNT files in $DATA_DIR -> s3://$BUCKET/data/${DRY_RUN:+ (dry run)}"
+# Not ${DRY_RUN:+...}: that expands for ANY non-empty value, and 0 is non-empty,
+# so every real run was labelled "(dry run)" in its first log line.
+if [[ $DRY_RUN -eq 1 ]]; then DRY_TAG=' (dry run)'; else DRY_TAG=''; fi
+log "starting backup: $FILE_COUNT files in $DATA_DIR -> s3://$BUCKET/data/$DRY_TAG"
 
 SYNC_LOG=$(mktemp)
 
