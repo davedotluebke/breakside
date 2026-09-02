@@ -1,7 +1,7 @@
 # Security Policy
 
-Breakside is beta software maintained by one person in their spare time. There
-is no security team and no bug bounty. Reports are still very welcome — please
+Breakside is free beta software maintained by one person in their spare time. 
+There is no security team and no bug bounty. Reports are still very welcome — 
 just calibrate your expectations accordingly.
 
 ## Reporting a vulnerability
@@ -15,14 +15,9 @@ Use one of these instead:
 1. **GitHub private vulnerability reporting** — go to the repository's
    **Security** tab and choose **Report a vulnerability**. This creates a
    private draft advisory visible only to the maintainer.
-   TODO(owner): confirm private vulnerability reporting is enabled for this
-   repository (Settings → Advanced Security → Private vulnerability reporting).
-   If it is off, this link does not appear and finders have no private route.
-2. **Email** — TODO(owner): add a monitored address for security reports. Do
-   not assume the address in the git commit history is the right one; pick an
-   address you actually watch, and consider a dedicated alias.
+2. **Email** — help@breakside.pro
 
-Please include enough for the problem to be reproduced: the URL or endpoint,
+Please include enough detail for reproducing the problem: the URL or endpoint,
 what you did, what you got back, and why you believe it is a problem. A
 proof-of-concept request or a short screen recording helps a lot.
 
@@ -53,8 +48,8 @@ Out of scope:
   disclosure programs — report issues in their infrastructure to them. A
   *misconfiguration on Breakside's side* of one of those integrations is in
   scope.
-- Volumetric denial of service, load testing, or anything that degrades
-  service for real users mid-game.
+- Denial of service, load testing, or anything that would degrade service for
+  real users mid-game.
 - Social engineering of the maintainer or of any Breakside user.
 - Attacks that require an already-compromised device, browser, or account.
 - Reports consisting only of automated-scanner output with no demonstrated
@@ -65,7 +60,7 @@ Out of scope:
 
 ## Testing rules
 
-Breakside holds rosters of real people, some of them minors. When testing:
+Breakside holds rosters of real people, including minors. When testing:
 
 - Use your own account, your own team, and your own test data.
 - Do not access, modify, or download another user's teams, players, or games.
@@ -83,10 +78,7 @@ Testing that follows these rules will not be treated as an attack.
 These are documented deliberately rather than reported as vulnerabilities:
 
 - Anyone holding a share-link URL can view that game, without signing in.
-  Share links are unguessable and expire, but they are not access-controlled.
-  See [privacy.html](privacy.html).
-- Deleting a player removes them from the roster but does not erase historical
-  game records that already reference them, and there is no self-service
-  account deletion. See the privacy policy for how to request removal.
+  Share links are unguessable (high entropy) and expire, but they are not
+  access-controlled.  See [privacy.html](privacy.html).
 
-Last updated: 2026-08-24
+Last updated: 2026-09-01
