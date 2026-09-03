@@ -177,6 +177,7 @@ function serializeGame(game) {
                 offensive: possession.offensive,
                 modes: possession.modes || [],  // PBP modes events were recorded under in this possession
                 set: possession.set || null,  // set label (zone tracking) — null when untagged
+                startedAt: (typeof possession.startedAt === 'number') ? possession.startedAt : null,  // epoch ms; null for legacy data
                 events: possession.events.map(event => serializeEvent(event))
             }))
         }))
@@ -482,6 +483,9 @@ function deserializePointsFromServer(pointsData) {
                 const possession = new Possession(possessionData.offensive);
                 possession.modes = possessionData.modes || [];  // empty for legacy data
                 possession.set = possessionData.set || null;  // null for legacy/untagged data
+                // Constructor stamped "now"; legacy data has no startedAt and
+                // must NOT inherit the load time.
+                possession.startedAt = (typeof possessionData.startedAt === 'number') ? possessionData.startedAt : null;
                 if (possessionData.events && Array.isArray(possessionData.events)) {
                     possession.events = possessionData.events.map(eventData => deserializeEvent(eventData));
                 }

@@ -337,6 +337,12 @@ class Event {
         // false. Surfaces in summarize() output as an "(inferred)" prefix
         // so logs/reviewers know the event is the system's best guess.
         this.inferred_flag = false;
+        // When the event was recorded, epoch ms (Date.now()). Stamped by
+        // Possession.addEvent / stampEvent at record time; null on every
+        // event recorded before 2026-09 and on freshly constructed events.
+        // Consumers (the replay viewer) treat null as "no timing known" and
+        // never synthesize one — see docs/replay-viewer-plan.md.
+        this.at = null;
     }
 
     // Default summarize method for generic events
@@ -602,6 +608,19 @@ class Pull extends Event {
 // per the UI. Returns null when the panel system hasn't loaded yet (e.g. during
 // deserialization), in which case nothing is stamped. Lives here so addEvent can
 // self-stamp the recording mode without each call site having to thread it in.
+/**
+ * Stamp `event.at` (epoch ms) if it has no timestamp yet. Idempotent, so an
+ * event that arrives with its own `at` (a future narration offset, a
+ * re-added undo target) keeps it. Possession.addEvent calls this for every
+ * PBP event; the one bypass — the pull dialog's unshift — calls it directly.
+ */
+function stampEvent(event) {
+    if (event && (event.at === null || event.at === undefined)) {
+        event.at = Date.now();
+    }
+    return event;
+}
+
 function captureCurrentMode() {
     // late-bound back-edge (getCurrentMode's owner ui/panelSystem.js lives
     // "above" this layer); see ARCHITECTURE.md § ES modules — the window shim
@@ -628,9 +647,15 @@ class Possession {
         // configured lists) — null = unspecified. Only teams with
         // setsEnabled ever write it; legacy data simply lacks the key.
         this.set = set;
+        // When this possession began, epoch ms. Possessions are created on
+        // their first recorded event (or on a They-turnover / They-score tap),
+        // so construction time is the possession change. Deserialization
+        // overwrites it with the stored value (null for legacy data).
+        this.startedAt = Date.now();
     }
 
     addEvent(event) {
+        stampEvent(event);
         this.events.push(event);
         // Stamp the surface this event was recorded under. addEvent is the
         // chokepoint for all PBP events (throws, turnovers, scores, defense);
@@ -764,7 +789,7 @@ function isTestGame(game) {
 // --- ES-module exports. `Event` is deliberately NOT exported under that name
 // --- onto window anywhere — it would clobber the DOM Event constructor.
 export {
-    Role, Gender, PlayerPosition, DefaultLine, UNKNOWN_PLAYER,
+    Role, Gender, PlayerPosition, DefaultLine, UNKNOWN_PLAYER, stampEvent,
     Player, Game, Team, TournamentEvent,
     Event, Throw, Turnover, Violation, Defense, Other, Pull,
     Possession, Point,

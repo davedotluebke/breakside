@@ -572,6 +572,35 @@ are **render-time only** — stored `{x, y}` never change, so re-opening a game 
 flipping orientation never moves a recorded event. The canonical convention lives
 in the `fieldPbp.js` file header; keep the two in sync.
 
+### Event timestamps (`Event.at`, `Possession.startedAt`)
+
+Every PBP event carries `at` — epoch ms of when it was recorded — and every
+possession carries `startedAt`. Both were added 2026-09 for the replay viewer
+(docs/replay-viewer-plan.md); nothing else reads them yet.
+
+- `Possession.addEvent()` is the chokepoint and stamps `at` via `stampEvent()`
+  (idempotent: an event that already has `at` keeps it, which is the hook for a
+  future narration path that supplies transcript-relative timing). The
+  bypasses — the pull dialog's `events.unshift(pull)` and the `Other`
+  events (timeout, halftime, injury sub, lineup correction, force-swap) that
+  `game/gameScreenEvents.js` pushes directly — call `stampEvent` themselves;
+  any new bypass must too.
+- `Possession` stamps `startedAt` in its constructor, since possessions are
+  created on their first recorded event or on a They-turnover/They-score tap,
+  which *is* the possession change. `deserializePointsFromServer` overwrites
+  it with the stored value, **`null` for legacy data** — a legacy possession
+  must never inherit the load time.
+- **Never synthesize a timestamp** for data recorded before this existed. A
+  consumer that finds `at === null` treats the event as untimed (the replay
+  plays it "play after play"). `serializeEvent` diffs against a default
+  instance, so an unstamped event simply has no `at` key on the wire.
+- `Point.startTimestamp` is *not* a substitute: it doubles as the running-timer
+  segment marker and is nulled on every pause.
+
+Round-trip tests: `tests/unit/eventTimestamps.test.mjs` (client) and
+`test_event_timestamps_survive_sync_round_trip` in
+`ultistats_server/test_api.py` (server passes both fields through untouched).
+
 ### Feature Worktrees
 
 For parallel development, feature branches use git worktrees in `.worktrees/<feature-name>`. See CLAUDE.md for the workflow.

@@ -581,6 +581,38 @@ class TestGameAPI:
         assert possessions[0]["set"] == "Zone"
         assert "set" not in possessions[1] or possessions[1].get("set") is None
 
+    def test_event_timestamps_survive_sync_round_trip(self, client):
+        """Event `at` and possession `startedAt` (epoch ms, replay viewer
+        step 1) pass through sync + get untouched; a possession without them
+        comes back without them (the server must never invent timing)."""
+        game_id = "api-test-timestamps-game"
+        payload = {
+            "team": "TestTeam",
+            "teamId": "SyncTeam-0001",
+            "opponent": "Opponent",
+            "scores": {"team": 0, "opponent": 0},
+            "points": [{
+                "players": ["Alice"],
+                "winner": "",
+                "possessions": [
+                    {"offensive": True, "startedAt": 1700000000000, "events": [
+                        {"type": "Throw", "thrower": "Alice", "receiver": "Bob", "at": 1700000005000},
+                    ]},
+                    {"offensive": False, "events": [
+                        {"type": "Defense", "defender": "Alice", "block_flag": True},
+                    ]},
+                ],
+            }],
+        }
+        assert client.post(f"/api/games/{game_id}/sync", json=payload).status_code == 200
+
+        got = client.get(f"/api/games/{game_id}").json()
+        possessions = got["points"][0]["possessions"]
+        assert possessions[0]["startedAt"] == 1700000000000
+        assert possessions[0]["events"][0]["at"] == 1700000005000
+        assert "startedAt" not in possessions[1]
+        assert "at" not in possessions[1]["events"][0]
+
     def test_sync_game_without_team_fails(self, client):
         """Test that syncing without team/teamId returns 400."""
         response = client.post("/api/games/invalid-game/sync", json={

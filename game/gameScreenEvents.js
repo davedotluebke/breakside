@@ -5,7 +5,7 @@
  * play-by-play panel/start-point button state.
  * Split from the former monolithic gameScreen.js (refactor, no behavior change).
  */
-import { Role, Gender, Other, Possession, isTestGame } from '../store/models.js';
+import { Role, Gender, Other, Possession, isTestGame, stampEvent } from '../store/models.js';
 import { teams, currentTeam, saveAllTeamsData } from '../store/storage.js';
 import {
     currentGame, getLatestPoint, isPointInProgress,
@@ -1103,7 +1103,7 @@ function confirmSubstitution() {
         subbedInBefore: subbedInBefore,
     });
 
-    currentPossession.events.push(subEvent);
+    currentPossession.events.push(stampEvent(subEvent));
 
 
     // Log to event log
@@ -1636,7 +1636,7 @@ function applyLineupCorrection(mistakenPlayer, correctPlayer) {
         ? point.possessions[point.possessions.length - 1]
         : null;
     if (currentPossession) {
-        currentPossession.events.push(new Other({ lineupCorrection: true, description }));
+        currentPossession.events.push(stampEvent(new Other({ lineupCorrection: true, description })));
     }
 
     if (typeof logEvent === 'function') logEvent(description);
@@ -1775,7 +1775,7 @@ function recordTimeout(calledBy) {
         timeout: true, calledBy, calledByName,
         betweenPoints: point.winner ? true : null,
     });
-    poss.events.push(timeoutEvent);
+    poss.events.push(stampEvent(timeoutEvent));
 
     const summary = timeoutEvent.summarize().trim();
     if (typeof logEvent === 'function') logEvent(summary);
@@ -1846,7 +1846,7 @@ function applyPeriodBreak(kind) {
         if (!poss) { poss = new Possession(true); lastPoint.possessions.push(poss); }
         // Period breaks always happen between points (guarded above) — flag
         // the event so log renderers print it after this point's score lines.
-        poss.events.push(breakEvent);
+        poss.events.push(stampEvent(breakEvent));
     } else {
         // No points yet — switching before the first pull just flips the
         // chosen starting position (no event to record on a point).
@@ -1987,7 +1987,7 @@ function applyForceSwap() {
         lastPoint.possessions = lastPoint.possessions || [];
         let poss = lastPoint.possessions[lastPoint.possessions.length - 1];
         if (!poss) { poss = new Possession(true); lastPoint.possessions.push(poss); }
-        poss.events.push(new Other({ forceswap: true, betweenPoints: true }));
+        poss.events.push(stampEvent(new Other({ forceswap: true, betweenPoints: true })));
     } else {
         // No points yet — just flip the chosen starting position.
         game.startingPosition = (game.startingPosition === 'offense') ? 'defense' : 'offense';

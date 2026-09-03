@@ -2,7 +2,7 @@
  * Pull Dialog
  * Handles the pull dialog for logging pulls on defense points
  */
-import { Gender, Pull, Possession, UNKNOWN_PLAYER } from '../store/models.js';
+import { Gender, Pull, Possession, UNKNOWN_PLAYER, stampEvent } from '../store/models.js';
 import { saveAllTeamsData, currentTeam } from '../store/storage.js';
 import {
     currentGame, getLatestPoint, getPlayerFromName, getGenderRatioForPoint,
@@ -509,6 +509,7 @@ function createPullEvent() {
     // Add pull event at the beginning of the event list. Recording a pull is a
     // meaningful PBP entry, so stamp the surface it was recorded under — the
     // unshift bypasses Possession.addEvent (which does this for other events).
+    stampEvent(pullEvent);   // addEvent would have stamped `at`; the unshift bypasses it
     firstPossession.events.unshift(pullEvent);
     if (typeof getCurrentMode === 'function') { firstPossession.addMode(getCurrentMode()); }
     logEvent(pullEvent.summarize());
