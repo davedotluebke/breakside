@@ -64,13 +64,40 @@ aws cloudfront create-response-headers-policy --profile admin \
 > 2026-09-02), so the four safe headers are live while the CSP waits on the
 > plan change.
 >
-> To get the CSP through CloudFront, move the distribution to the standard
-> pricing plan; the custom policy created above survives and attaches
-> afterwards. The alternative with no billing change is an **enforcing**
+> **The route that works on the Free plan: a CloudFront Function.** The Free
+> plan's own feature list includes "Serverless edge compute", and a
+> `viewer-response` Function that sets the header is not a "custom response
+> headers policy", so `update-distribution` accepts it. Verified on staging
+> 2026-09-02: the Function adds `Content-Security-Policy-Report-Only` on top of
+> the managed policy's four headers, at no cost. The code is
+> `scripts/cloudfront-csp-function.js` — keep its CSP string in step with
+> `scripts/cloudfront-security-headers.json`, which remains the source of truth
+> for the directive list.
+>
+> ```bash
+> FN=breakside-csp-report-only
+> ETAG=$(aws cloudfront create-function --profile admin --name $FN \
+>   --function-config "Comment=CSP report-only,Runtime=cloudfront-js-2.0" \
+>   --function-code fileb://scripts/cloudfront-csp-function.js --query ETag --output text)
+> ARN=$(aws cloudfront publish-function --profile admin --name $FN --if-match "$ETAG" \
+>   --query FunctionSummary.FunctionMetadata.FunctionARN --output text)
+> # then add {"FunctionARN": $ARN, "EventType": "viewer-response"} to
+> # DefaultCacheBehavior.FunctionAssociations in the distribution config and
+> # update-distribution with the ETag, exactly as for the policy above.
+> ```
+>
+> Two things this changes about the phases below. **Phase 3 (enforce) no longer
+> touches the distribution**: edit the header name in the Function to
+> `content-security-policy`, `update-function`, `publish-function`, and the LIVE
+> stage propagates on its own. And the **paid** alternative is not "cents": the
+> plan tiers are Free / Pro **$15/month per distribution** / Business / Premium —
+> there is no pay-as-you-go "standard" option. Paying for a header this Function
+> provides for free is not a good trade.
+>
+> The alternative with no CloudFront involvement at all is an **enforcing**
 > `<meta http-equiv="Content-Security-Policy">` in `index.html` — but meta
-> ignores `Report-Only` and `frame-ancestors`, so there is no watch phase:
-> exercise it on staging (which deploys the working tree) and treat staging as
-> the report-only environment before it reaches prod.
+> ignores `Report-Only` and `frame-ancestors`, so there is no watch phase. The
+> Function route makes it unnecessary.
 
 Note the returned `Id`, then attach it to each distribution's default cache
 behaviour. This is a read-modify-write of the distribution config, so do it one
