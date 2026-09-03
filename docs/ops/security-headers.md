@@ -48,6 +48,28 @@ aws cloudfront create-response-headers-policy --profile admin \
   --response-headers-policy-config file://scripts/cloudfront-security-headers.json
 ```
 
+> **The CloudFront Free pricing plan blocks this step.** (Found by doing it,
+> 2026-09-02.) The staging distribution is on the Free plan, and
+> `update-distribution` refuses a *custom* response-headers policy with
+> "Distributions with the Free pricing plan can't have the following features:
+> Custom response headers policy". Prod was created the same way, so assume the
+> same until the console says otherwise (distribution → General → Pricing plan;
+> an `aws-cli` older than late 2025 does not show the field at all).
+>
+> What the Free plan *does* allow is AWS's **managed** policy
+> `Managed-SecurityHeadersPolicy` (`67f7725c-6f97-4210-82d7-5512b31e9d03`):
+> HSTS, `nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy` and
+> `X-XSS-Protection` — everything in this runbook **except the CSP**. It is
+> attached to staging as an interim.
+>
+> To get the CSP through CloudFront, move the distribution to the standard
+> pricing plan; the custom policy created above survives and attaches
+> afterwards. The alternative with no billing change is an **enforcing**
+> `<meta http-equiv="Content-Security-Policy">` in `index.html` — but meta
+> ignores `Report-Only` and `frame-ancestors`, so there is no watch phase:
+> exercise it on staging (which deploys the working tree) and treat staging as
+> the report-only environment before it reaches prod.
+
 Note the returned `Id`, then attach it to each distribution's default cache
 behaviour. This is a read-modify-write of the distribution config, so do it one
 at a time and keep the `ETag`:
