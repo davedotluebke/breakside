@@ -70,3 +70,6 @@ tests/.demo-record*.log
 # that deploy-excludes.txt does not cover it, so a tracked scratchpad/ would
 # sync straight to the S3 bucket.
 scratchpad/
+
+# Local Python venvs (e.g. the 3.12 venv used to validate requirements.lock)
+.venv*/
