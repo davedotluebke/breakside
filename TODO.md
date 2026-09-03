@@ -17,6 +17,19 @@ Sections, in roughly priority order:
 
 ### 🧪 Field-test the two features shipped 2026-07-26 (share links + set tracking)
 
+- [ ] **Share link opened in iOS Safari asked for a login, then rendered unstyled**
+      (2026-09-02). The viewer is meant to be public — no sign-in, ever. Observed: tapping a
+      `/view/{hash}` link on the phone showed the *app's* login screen; after signing in (as
+      the coach) the result was an unstyled page of bare elements. So the app shell ran
+      where the viewer should have. Suspects: iOS routing an in-scope link into the
+      **installed PWA** (check `manifest.json` `scope` against `/view/`); the service worker
+      serving the cached app shell so the `index.html` redirect shim to `/viewer/?share=`
+      never ran; or the shim running in standalone mode where `viewer.css` / `viewer.js`
+      (**relative** paths in `viewer/index.html`) resolved against the wrong base. Ruled
+      OUT: `nosniff` — prod serves `viewer.css` as `text/css` and `viewer.js` as
+      `text/javascript` (checked 2026-09-02). Repro first in a Safari **private** tab with
+      the PWA not installed, to separate PWA link-capture from a viewer bug.
+
 Both merged as `2405fbd` with suites green (332 backend / 133 unit / 21 e2e) and
 walked through end-to-end — but only against a **local dev backend on one desktop
 browser**. Nothing below has been exercised on real devices, real origins, or a
@@ -752,6 +765,20 @@ Improvements deferred from the initial implementation (see Active section above 
       `narration.py` prompt fix is server-side).
 
 ### Quality / accuracy
+
+- [ ] **Narration mis-splits a dropped pass across a pause (text→events phase).** Repro
+      2026-09-02 on staging, iOS: narrated *"Ella throws to Bob ⟨pause⟩ who drops it. They
+      pick it up and score."* The log showed THREE events — "Ella throws to Bob" (a
+      completion), then "Bob drops a pass from **Unknown Player**", then "Opponent scores".
+      The Full tab for the same point produces the correct single event, "Bob drops a pass
+      from Ella", so Drop handling itself is fine — the fault is in turning text into
+      events. Two suspects: the pause splits one throw into a completion plus a
+      thrower-less drop, and `narrationEngine.js` `applyTurnover` then falls back to the
+      literal "Unknown Player" roster entry instead of inferring the thrower from the throw
+      it just recorded. Add this exact utterance to the narration scenarios
+      (`ultistats_server/tests/narration/`) as a regression, and A/B it against Sonnet —
+      prod runs Haiku 4.5 for the slow pass (`NARRATION_SLOW_MODEL`); worth knowing whether
+      this is a model-quality gap or an engine merge rule any model would need.
 - [x] **Remove vocabulary-mapping dead code from slow-pass prompt.** A/B test across the test corpus (commit `e24098e`) showed `NARRATION_VOCAB_GUIDANCE=off` (no explicit jargon→flag map) outperformed `=on` by +0.082 mean F1 with no regressions. Deleted the `vocab_section` branch in `_build_finalize_prompt`, the `NARRATION_VOCAB_GUIDANCE` env var, and the structurally-identical "Event-to-function mapping" block in the dead `buildInstructions()` in `narration/narrationEngine.js`.
 - [ ] **Improve transcription accuracy**
   - [x] Switch to OpenAI's dedicated **Realtime transcription session** (`?intent=transcription` + `session.type=transcription` minted via `/v1/realtime/client_secrets`). No LLM in the loop, no `response.*` events, kills the "Transcription complete." ack-text spam, cheaper (no output-token billing). Legacy conversational path still reachable via `NARRATION_USE_LEGACY_SESSIONS=1` env var or `mode: 'conversation'` (used when fast-pass is re-enabled).
