@@ -183,11 +183,11 @@
                 <form id="loginForm" class="auth-form">
                     <div class="form-group">
                         <label for="loginEmail">Email</label>
-                        <input type="email" id="loginEmail" required placeholder="your@email.com">
+                        <input type="email" id="loginEmail" required placeholder="your@email.com" autocomplete="username">
                     </div>
                     <div class="form-group">
                         <label for="loginPassword">Password</label>
-                        <input type="password" id="loginPassword" required placeholder="••••••••">
+                        <input type="password" id="loginPassword" required placeholder="••••••••" autocomplete="current-password">
                     </div>
                     <button type="submit" class="auth-button primary">Sign In</button>
                 </form>
@@ -227,11 +227,11 @@
                     </div>
                     <div class="form-group">
                         <label for="signupPassword">Password</label>
-                        <input type="password" id="signupPassword" required placeholder="At least 6 characters" minlength="6">
+                        <input type="password" id="signupPassword" required placeholder="At least 6 characters" minlength="6" autocomplete="new-password">
                     </div>
                     <div class="form-group">
                         <label for="signupConfirmPassword">Confirm Password</label>
-                        <input type="password" id="signupConfirmPassword" required placeholder="••••••••">
+                        <input type="password" id="signupConfirmPassword" required placeholder="••••••••" autocomplete="new-password">
                     </div>
                     <button type="submit" class="auth-button primary">Create Account</button>
                 </form>
