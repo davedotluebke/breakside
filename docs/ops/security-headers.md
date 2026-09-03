@@ -60,7 +60,9 @@ aws cloudfront create-response-headers-policy --profile admin \
 > `Managed-SecurityHeadersPolicy` (`67f7725c-6f97-4210-82d7-5512b31e9d03`):
 > HSTS, `nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy` and
 > `X-XSS-Protection` — everything in this runbook **except the CSP**. It is
-> attached to staging as an interim.
+> attached to **both** distributions as the interim (staging and prod,
+> 2026-09-02), so the four safe headers are live while the CSP waits on the
+> plan change.
 >
 > To get the CSP through CloudFront, move the distribution to the standard
 > pricing plan; the custom policy created above survives and attaches
