@@ -285,7 +285,9 @@ disk and no access key is involved.
 
 > **Verified, not assumed:** IMDSv2 is enforced on this instance (a token-less
 > IMDSv1 request returns HTTP 401) with hop limit 1, and the installed
-> `aws-cli/1.18.147` on Python 2.7 *does* resolve instance-role credentials
+> `aws-cli/1.18.147` on Python 2.7 *did* resolve instance-role credentials (the box
+> has since moved to AL2023, whose bundled `aws-cli/2.x` does the same — verified
+> 2026-09-03 with a real run from the new instance). The original check: it
 > through it correctly — confirmed under a fully scrubbed `env -i` environment,
 > which is what cron gives you. The CLI is ancient but it works for this.
 >

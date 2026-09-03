@@ -58,8 +58,8 @@ Deploys current working directory (not committed state) to S3 + CloudFront inval
 ### Production deployment
 - **Frontend**: Push to `main` triggers GitHub Actions → S3 sync → CloudFront invalidation. No server restart needed.
 - **Backend**: After push, run the deploy script. `breakside` is a local
-  `~/.ssh/config` alias (tunnels over AWS SSM; `breakside-direct` is the
-  port-22 fallback). Works directly from Bash — no tmux needed:
+  `~/.ssh/config` alias (tunnels over AWS SSM; the box has no port 22, so
+  there is no direct fallback). Works directly from Bash — no tmux needed:
   ```bash
   ssh breakside 'sudo bash -s' < scripts/deploy-backend.sh
   ```

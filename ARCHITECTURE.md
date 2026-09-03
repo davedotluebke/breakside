@@ -643,7 +643,7 @@ export PATH="/Library/Frameworks/Python.framework/Versions/3.12/bin:$PATH"
 
 | Component | Details |
 |-----------|---------|
-| **Runtime** | Python 3.8 with venv |
+| **Runtime** | Python 3.12 venv (`/opt/breakside/venv`) on Amazon Linux 2023 — migrated 2026-09-03 from AL2 / Python 3.8, which had frozen PyJWT and Pillow below their security fixes |
 | **Framework** | FastAPI with uvicorn |
 | **Web Server** | nginx (reverse proxy, SSL termination) |
 | **Process Manager** | systemd |
@@ -1672,7 +1672,7 @@ Exported via `window.breakside.auth`:
 | **CloudFront (staging)** | Distribution `E12N2STN9MM8FA` |
 | **S3 Bucket (prod)** | `breakside.pro` (us-east-1) |
 | **S3 Bucket (staging)** | `staging.breakside.pro` (us-east-1) |
-| **EC2 Instance** | Amazon Linux 2, IP: 3.212.138.180 |
+| **EC2 Instance** | Amazon Linux 2023, t3.small, Elastic IP 3.212.138.180 (instance `i-0b643906d8153471b`, its own security group `breakside-api`: inbound 80/443 only, admin over SSM) |
 | **SSL (CloudFront)** | ACM certificate |
 | **SSL (EC2)** | Let's Encrypt via certbot |
 
@@ -1683,7 +1683,10 @@ Exported via `window.breakside.auth`:
 | `/etc/breakside/env` | Environment variables |
 | `/etc/systemd/system/breakside.service` | systemd unit |
 | `/etc/nginx/conf.d/breakside.conf` | nginx config |
-| `/etc/cron.d/certbot` | SSL renewal cron |
+| `/etc/cron.d/certbot` | SSL renewal cron (certbot is a pip install in `/opt/certbot`, symlinked to `/usr/local/bin/certbot` — AL2023 has no certbot rpm) |
+| `/etc/cron.d/cert-expiry-check` | Independent expiry alarm (see § TLS Certificate Renewal) |
+| `/etc/breakside/backup.env` + `/etc/cron.d/breakside-backup` | Nightly off-instance backup (see docs/ops/backup-restore.md) |
+| `/etc/systemd/journald.conf.d/breakside-retention.conf` | Journal capped at 200M / 30 days |
 
 ### DNS (Pair.com)
 
@@ -1818,9 +1821,10 @@ copy is gitignored and disposable.
 
 ```bash
 # SSH. `breakside` is a local ~/.ssh/config alias that tunnels over AWS SSM
-# (ProxyCommand + AWS-StartSSHSession), so it keeps working with inbound port
-# 22 closed. `breakside-direct` is the same host straight over port 22, kept
-# as a fallback. Both authenticate with the usual key as ec2-user.
+# (ProxyCommand + AWS-StartSSHSession). The box's security group has NO port
+# 22, so SSM is the only way in — there is no direct fallback; if the tunnel
+# misbehaves use `aws ssm start-session --target <instance-id>` directly.
+# Authenticates with the breakside-2026 key as ec2-user.
 ssh breakside
 
 # Service management
@@ -1828,8 +1832,8 @@ sudo systemctl status breakside
 sudo systemctl restart breakside
 sudo journalctl -u breakside -f
 
-# Deploy API updates
-cd /opt/breakside && sudo git pull && sudo systemctl restart breakside
+# Deploy API updates (pull, byte-compile, restart, health-check; see CLAUDE.md)
+ssh breakside 'sudo bash -s' < scripts/deploy-backend.sh
 
 # Rebuild index
 curl -X POST https://api.breakside.pro/api/index/rebuild
