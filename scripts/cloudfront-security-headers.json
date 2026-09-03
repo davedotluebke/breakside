@@ -1,6 +1,6 @@
 {
   "Name": "breakside-security-headers",
-  "Comment": "Breakside security response headers. PHASE 1: CSP is REPORT-ONLY. See docs/ops/security-headers.md before applying or promoting to enforcing.",
+  "Comment": "Breakside security headers + CSP (report-only). See docs/ops/security-headers.md",
   "SecurityHeadersConfig": {
     "StrictTransportSecurity": {
       "Override": true,
