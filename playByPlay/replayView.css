@@ -49,18 +49,21 @@
 .rv-strip .fp-chip.on-field { opacity: 1; }
 
 .rv-fieldwrap {
-    position: relative;
     flex: 1 1 auto;
     min-width: 0;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
 }
 /* Landscape: full width on a phone; on a wide screen the height cap wins so
    the log below keeps its room. Portrait: height-capped, width follows. */
 .rv-stage[data-o="landscape"] .rv-field { width: min(100%, calc(38vh * 110 / 40)); aspect-ratio: 110 / 40; height: auto; }
 .rv-stage[data-o="portrait"]  .rv-field { height: min(50vh, 560px); aspect-ratio: 40 / 110; max-width: 100%; }
 
-.rv-possbanner { position: absolute; left: 50%; transform: translateX(-50%); top: 6px; z-index: 9; pointer-events: none; }
+/* Possession / goal badge lives ABOVE the pitch, never on it, so it can't
+   cover a player. Fixed height so the field doesn't jump when it's empty. */
+.rv-possbanner { min-height: 18px; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 .rv-badge {
     display: inline-block;
     font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;

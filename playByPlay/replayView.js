@@ -59,7 +59,7 @@ function mountReplayView(cfg) {
     root.innerHTML = `
         <div class="rv-stage" data-o="${orientation}">
             <div class="rv-strip"></div>
-            <div class="rv-fieldwrap"><div class="fp-field rv-field"></div><div class="rv-possbanner"></div></div>
+            <div class="rv-fieldwrap"><div class="rv-possbanner"></div><div class="fp-field rv-field"></div></div>
         </div>
         <div class="rv-nofield">No field positions were recorded for this point</div>
         <div class="rv-transport">
