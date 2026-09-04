@@ -99,8 +99,8 @@ def seeded(tmp_path_factory):
 @pytest.fixture
 def client(seeded, monkeypatch):
     # Auth enforced (the env default), made explicit so a dev shell with
-    # ULTISTATS_AUTH_REQUIRED=false can't flip these tests.
-    monkeypatch.setenv("ULTISTATS_AUTH_REQUIRED", "true")
+    # BREAKSIDE_AUTH_REQUIRED=false can't flip these tests.
+    monkeypatch.setenv("BREAKSIDE_AUTH_REQUIRED", "true")
     from main import app
     # raise_server_exceptions=False: ServerErrorMiddleware re-raises after
     # sending the handler's response; we want to see the response.
@@ -393,7 +393,7 @@ class TestStartupWritabilityCheck:
         # disabled), then the data-dir check must refuse startup.
         import config
         from main import app
-        monkeypatch.setenv("ULTISTATS_AUTH_REQUIRED", "false")
+        monkeypatch.setenv("BREAKSIDE_AUTH_REQUIRED", "false")
         data_dir = tmp_path / "data"
         data_dir.mkdir()
         _make_unwritable(data_dir)
@@ -408,7 +408,7 @@ class TestStartupWritabilityCheck:
     def test_app_lifespan_boots_with_writable_dir(self, tmp_path, monkeypatch):
         import config
         from main import app
-        monkeypatch.setenv("ULTISTATS_AUTH_REQUIRED", "false")
+        monkeypatch.setenv("BREAKSIDE_AUTH_REQUIRED", "false")
         monkeypatch.setattr(config, "DATA_DIR", tmp_path / "data")
         with TestClient(app):
             pass  # lifespan ran both startup checks without raising

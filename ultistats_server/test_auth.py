@@ -30,7 +30,7 @@ def isolated_data_dir(tmp_path_factory):
     modules capture their dir constants at import time, so both config and
     each module's captured global must be patched; everything is restored
     on teardown. Auth is forced on so a dev shell with
-    ULTISTATS_AUTH_REQUIRED=false can't flip the 401/403 expectations, and
+    BREAKSIDE_AUTH_REQUIRED=false can't flip the 401/403 expectations, and
     any dependency overrides leaked by a previously-run module are cleared
     (this module needs the real auth dependencies).
     """
@@ -75,15 +75,15 @@ def isolated_data_dir(tmp_path_factory):
 
     app.dependency_overrides.clear()
 
-    saved_auth_env = os.environ.get("ULTISTATS_AUTH_REQUIRED")
-    os.environ["ULTISTATS_AUTH_REQUIRED"] = "true"
+    saved_auth_env = os.environ.get("BREAKSIDE_AUTH_REQUIRED")
+    os.environ["BREAKSIDE_AUTH_REQUIRED"] = "true"
 
     yield data_dir
 
     if saved_auth_env is None:
-        os.environ.pop("ULTISTATS_AUTH_REQUIRED", None)
+        os.environ.pop("BREAKSIDE_AUTH_REQUIRED", None)
     else:
-        os.environ["ULTISTATS_AUTH_REQUIRED"] = saved_auth_env
+        os.environ["BREAKSIDE_AUTH_REQUIRED"] = saved_auth_env
     for mod, name, original in saved:
         setattr(mod, name, original)
 

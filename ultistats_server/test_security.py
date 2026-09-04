@@ -96,17 +96,17 @@ class TestFileUtils:
 class TestConfigAuthRequired:
     def test_default_is_true(self, monkeypatch):
         import config
-        monkeypatch.delenv("ULTISTATS_AUTH_REQUIRED", raising=False)
+        monkeypatch.delenv("BREAKSIDE_AUTH_REQUIRED", raising=False)
         assert config.auth_required() is True
 
     def test_explicit_false(self, monkeypatch):
         import config
-        monkeypatch.setenv("ULTISTATS_AUTH_REQUIRED", "false")
+        monkeypatch.setenv("BREAKSIDE_AUTH_REQUIRED", "false")
         assert config.auth_required() is False
 
     def test_explicit_true(self, monkeypatch):
         import config
-        monkeypatch.setenv("ULTISTATS_AUTH_REQUIRED", "true")
+        monkeypatch.setenv("BREAKSIDE_AUTH_REQUIRED", "true")
         assert config.auth_required() is True
 
 
@@ -913,7 +913,7 @@ class TestInteractiveDocsDisabled:
     """/docs, /redoc and /openapi.json publish a complete map of every route,
     path parameter and body schema, unauthenticated. FastAPI serves them by
     default, so production was handing that map to anyone who asked. They are
-    now gated on DEBUG, which is false unless ULTISTATS_DEBUG=true — as it is
+    now gated on DEBUG, which is false unless BREAKSIDE_DEBUG=true — as it is
     under pytest, hence 404 here.
     """
 

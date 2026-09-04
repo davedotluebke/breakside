@@ -12,7 +12,7 @@ from pathlib import Path
 from datetime import datetime
 
 # Set up isolated test directory BEFORE importing any modules
-_original_env = os.environ.get("ULTISTATS_DATA_DIR")
+_original_env = os.environ.get("BREAKSIDE_DATA_DIR")
 
 
 @pytest.fixture(autouse=True)
@@ -22,7 +22,7 @@ def isolate_test_data(tmp_path):
     test_data_dir.mkdir()
     
     # Set environment variable
-    os.environ["ULTISTATS_DATA_DIR"] = str(test_data_dir)
+    os.environ["BREAKSIDE_DATA_DIR"] = str(test_data_dir)
     
     # Force reimport of config to pick up new env var
     import importlib
@@ -47,9 +47,9 @@ def isolate_test_data(tmp_path):
 
     # Restore original env
     if _original_env:
-        os.environ["ULTISTATS_DATA_DIR"] = _original_env
+        os.environ["BREAKSIDE_DATA_DIR"] = _original_env
     else:
-        os.environ.pop("ULTISTATS_DATA_DIR", None)
+        os.environ.pop("BREAKSIDE_DATA_DIR", None)
 
     # Reload again so config/storage module state points back at the default
     # data dir instead of this test's (soon to be pruned) tmp_path. Without

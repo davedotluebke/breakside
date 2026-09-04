@@ -1,7 +1,7 @@
 """
 End-to-end tests for admin_group_games.py.
 
-Each test runs the CLI as a subprocess against an isolated ULTISTATS_DATA_DIR,
+Each test runs the CLI as a subprocess against an isolated BREAKSIDE_DATA_DIR,
 so it exercises the real entry point (argparse + storage writes + index) in a
 clean process — the same way it'll run on the server.
 
@@ -20,7 +20,7 @@ SCRIPT = SERVER_DIR / "admin_group_games.py"
 
 
 def run(data_dir: Path, *cli_args):
-    env = dict(os.environ, ULTISTATS_DATA_DIR=str(data_dir))
+    env = dict(os.environ, BREAKSIDE_DATA_DIR=str(data_dir))
     return subprocess.run(
         [sys.executable, str(SCRIPT), *cli_args],
         cwd=str(SERVER_DIR), env=env,

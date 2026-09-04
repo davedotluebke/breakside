@@ -65,8 +65,8 @@ export default defineConfig({
       reuseExistingServer: true,
       timeout: 15_000,
       env: {
-        ULTISTATS_AUTH_REQUIRED: 'false',
-        ULTISTATS_DATA_DIR: path.join(ROOT, 'tests', 'demo-data-dir'),
+        BREAKSIDE_AUTH_REQUIRED: 'false',
+        BREAKSIDE_DATA_DIR: path.join(ROOT, 'tests', 'demo-data-dir'),
       },
     },
   ],

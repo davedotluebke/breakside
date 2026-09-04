@@ -65,7 +65,7 @@ def seeded(tmp_path_factory):
 
 @pytest.fixture
 def client(seeded, monkeypatch):
-    monkeypatch.setenv("ULTISTATS_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("BREAKSIDE_AUTH_REQUIRED", "true")
     from main import app
     c = TestClient(app)
     yield c

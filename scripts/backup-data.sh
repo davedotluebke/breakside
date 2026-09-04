@@ -35,7 +35,7 @@ LOG_TAG=breakside-backup
 [[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
 
 BUCKET="${BACKUP_BUCKET:-}"
-DATA_DIR="${ULTISTATS_DATA_DIR:-/var/lib/breakside/data}"
+DATA_DIR="${BREAKSIDE_DATA_DIR:-/var/lib/breakside/data}"
 LOCAL_SNAPSHOT_DIR="${BACKUP_SNAPSHOT_DIR:-/var/backups/breakside}"
 # Local tarballs older than this are pruned after a successful ship. Must match
 # the bucket's snapshots/ lifecycle expiry AND the figure in privacy.html —

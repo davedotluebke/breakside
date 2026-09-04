@@ -53,9 +53,9 @@ def assert_auth_configured() -> None:
     if auth_required() and not get_jwt_secret():
         raise RuntimeError(
             "SUPABASE_JWT_SECRET is not set but auth is required "
-            "(ULTISTATS_AUTH_REQUIRED defaults to true) — no request could "
+            "(BREAKSIDE_AUTH_REQUIRED defaults to true) — no request could "
             "ever authenticate. Set SUPABASE_JWT_SECRET, or explicitly set "
-            "ULTISTATS_AUTH_REQUIRED=false for a local/dev server."
+            "BREAKSIDE_AUTH_REQUIRED=false for a local/dev server."
         )
 
 
@@ -191,7 +191,7 @@ async def get_current_user(
 
     The ``X-Test-User-Id`` impersonation header is honored ONLY when auth is
     disabled (``auth_required()`` is False — i.e. local dev/agent servers that
-    explicitly set ``ULTISTATS_AUTH_REQUIRED=false``). Whenever auth is
+    explicitly set ``BREAKSIDE_AUTH_REQUIRED=false``). Whenever auth is
     required (the production default) the header is ignored and a valid JWT is
     mandatory, so a caller can never become an arbitrary user by sending it.
 

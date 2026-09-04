@@ -77,13 +77,13 @@ restart breakside`; confirm that happened before treating anything here as broke
 
 ### ✅ Temp ops cleanup — remove localhost from prod CORS (resolved 2026-07-19)
 
-Added `http://localhost:3002` (and possibly `:3001`/`:3000`) to `ULTISTATS_ALLOWED_ORIGINS`
+Added `http://localhost:3002` (and possibly `:3001`/`:3000`) to `BREAKSIDE_ALLOWED_ORIGINS`
 in `/etc/breakside/env` on EC2 so the localhost-only Claude preview could hit the prod API
 while building the **Field tab** (`field-position` branch). Low risk (auth is a Bearer JWT in
 `localStorage`, not reachable cross-origin), but remove it once Field-tab dev wraps up:
 
 - [x] `ssh ec2-user@3.212.138.180`; edit `/etc/breakside/env`, drop the `http://localhost:*`
-      origin(s) from `ULTISTATS_ALLOWED_ORIGINS`; `sudo systemctl restart breakside`
+      origin(s) from `BREAKSIDE_ALLOWED_ORIGINS`; `sudo systemctl restart breakside`
       *(done 2026-07-19 — inspection found **no** localhost entries anywhere in the env
       file (never persisted or already removed). Restarted anyway to pick up G2/G3;
       curl-verified: preflight from `http://localhost:3002` rejected, prod origin 200
@@ -1477,10 +1477,10 @@ Higher-leverage interventions, in roughly priority order:
 ./scripts/dev-backend.sh
 
 # ...or disable auth explicitly:
-cd ultistats_server && ULTISTATS_AUTH_REQUIRED=false python3 main.py
+cd ultistats_server && BREAKSIDE_AUTH_REQUIRED=false python3 main.py
 
 # Test with auth enabled
-ULTISTATS_AUTH_REQUIRED=true SUPABASE_JWT_SECRET=your-secret python3 main.py
+BREAKSIDE_AUTH_REQUIRED=true SUPABASE_JWT_SECRET=your-secret python3 main.py
 
 # Run auth tests
 pytest test_auth.py -v

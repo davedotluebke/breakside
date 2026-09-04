@@ -52,8 +52,8 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 15_000,
       env: {
-        ULTISTATS_AUTH_REQUIRED: 'false',
-        ULTISTATS_DATA_DIR: path.join(ROOT, 'tests', 'test-data-dir'),
+        BREAKSIDE_AUTH_REQUIRED: 'false',
+        BREAKSIDE_DATA_DIR: path.join(ROOT, 'tests', 'test-data-dir'),
         BREAKSIDE_STALE_TIMEOUT: String(STALE_TIMEOUT_S),
         BREAKSIDE_HANDOFF_EXPIRY: '10',
         // Cadence is server-directed (POLLING_OPTIMIZATION.md F4). Production's

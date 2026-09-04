@@ -636,7 +636,7 @@ into prod). `scripts/dev-backend.sh` provides this:
 ./scripts/dev-backend.sh --reset             # wipe & re-seed this label's data
 ```
 
-Each instance runs with `ULTISTATS_AUTH_REQUIRED=false` (no Supabase secrets
+Each instance runs with `BREAKSIDE_AUTH_REQUIRED=false` (no Supabase secrets
 needed; membership checks are skipped — see [dependencies.py](ultistats_server/auth/dependencies.py)),
 so a locally-served frontend reads/writes the copied data with no CORS or auth
 setup. Pair a frontend by opening it once with `?api=http://localhost:<port>`
@@ -647,7 +647,7 @@ localStorage is keyed per origin **including port**, frontend port 3001↔backen
 `.dev-data/` copies are gitignored and disposable.
 
 This is the durable replacement for adding `localhost` to the prod API's
-`ULTISTATS_ALLOWED_ORIGINS` — keep prod CORS locked to the real origins.
+`BREAKSIDE_ALLOWED_ORIGINS` — keep prod CORS locked to the real origins.
 
 #### `uvicorn` / `pytest` not found on PATH (python.org macOS builds)
 
@@ -1816,7 +1816,7 @@ API's CORS allowlist only contains the real origins** (`www`/`staging.breakside.
 — a localhost preview origin is blocked, so its data calls (list teams, load
 games, sync) silently fail and **no teams appear** even though Supabase login
 succeeded. Do **not** "fix" this by adding the localhost origin to prod
-`ULTISTATS_ALLOWED_ORIGINS` (that's the temp hack TODO.md tracks for removal).
+`BREAKSIDE_ALLOWED_ORIGINS` (that's the temp hack TODO.md tracks for removal).
 Instead, point the preview at an **isolated local backend**, which runs
 auth-disabled and returns `Access-Control-Allow-Origin: *`:
 

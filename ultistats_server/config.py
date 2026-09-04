@@ -1,13 +1,61 @@
 """
-Configuration for Ultistats server.
+Configuration for the Breakside server.
 """
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# Environment variables moved from the ``ULTISTATS_`` prefix to ``BREAKSIDE_``
+# when the project settled on its name. Both are accepted: the deployed
+# ``/etc/breakside/env`` can be updated on its own schedule instead of having
+# to change in the same breath as a code deploy. Getting that ordering wrong
+# is not a loud failure — an unset ``DATA_DIR`` falls back to a *relative*
+# path, so the API would come up healthy and serving an empty dataset.
+_LEGACY_PREFIX = "ULTISTATS_"
+_PREFIX = "BREAKSIDE_"
+_legacy_warned: set[tuple[str, str]] = set()
+
+
+def _env(suffix: str, default: str) -> str:
+    """Read ``BREAKSIDE_<suffix>``, falling back to ``ULTISTATS_<suffix>``.
+
+    Warns once per variable when only the legacy name is set, and loudly when
+    both are set to *different* values — during the transition that means the
+    two config sources disagree, and silently preferring one would hide it.
+    """
+    new_name, old_name = _PREFIX + suffix, _LEGACY_PREFIX + suffix
+    new_value, old_value = os.environ.get(new_name), os.environ.get(old_name)
+
+    if new_value is not None:
+        if old_value is not None and old_value != new_value:
+            # Deduped like the deprecation below: ``auth_required()`` re-reads
+            # the environment on every request, so an un-deduped message here
+            # would be one log line per request for as long as the mistake
+            # lives. ERROR level once is loud enough to notice.
+            if (key := ("conflict", new_name)) not in _legacy_warned:
+                _legacy_warned.add(key)
+                logger.error(
+                    "%s=%r and %s=%r disagree; using %s. Remove the legacy name.",
+                    new_name, new_value, old_name, old_value, new_name,
+                )
+        return new_value
+
+    if old_value is not None:
+        if (key := ("legacy", old_name)) not in _legacy_warned:
+            _legacy_warned.add(key)
+            logger.warning(
+                "%s is deprecated; rename it to %s.", old_name, new_name,
+            )
+        return old_value
+
+    return default
 
 # Data directory - can be overridden via environment variable
 # Default to local 'data' directory for development
 _default_data_dir = Path(__file__).parent.parent / "data"
-DATA_DIR = Path(os.getenv("ULTISTATS_DATA_DIR", str(_default_data_dir)))
+DATA_DIR = Path(_env("DATA_DIR", str(_default_data_dir)))
 GAMES_DIR = DATA_DIR / "games"
 TEAMS_DIR = DATA_DIR / "teams"
 PLAYERS_DIR = DATA_DIR / "players"
@@ -36,9 +84,9 @@ except (OSError, PermissionError):
     pass
 
 # Server configuration
-HOST = os.getenv("ULTISTATS_HOST", "0.0.0.0")
-PORT = int(os.getenv("ULTISTATS_PORT", "8000"))
-DEBUG = os.getenv("ULTISTATS_DEBUG", "False").lower() == "true"
+HOST = _env("HOST", "0.0.0.0")
+PORT = int(_env("PORT", "8000"))
+DEBUG = _env("DEBUG", "False").lower() == "true"
 
 # =============================================================================
 # Supabase Authentication
@@ -50,15 +98,15 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")  # Secret service k
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")  # JWT secret for token verification
 
 # Legacy auth settings (kept for potential future use)
-SECRET_KEY = os.getenv("ULTISTATS_SECRET_KEY", "change-me-in-production")
+SECRET_KEY = _env("SECRET_KEY", "change-me-in-production")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24 * 7  # 7 days
 
 # CORS
-ALLOWED_ORIGINS = os.getenv("ULTISTATS_ALLOWED_ORIGINS", "*").split(",")
+ALLOWED_ORIGINS = _env("ALLOWED_ORIGINS", "*").split(",")
 
 # Git versioning (optional)
-ENABLE_GIT_VERSIONING = os.getenv("ULTISTATS_ENABLE_GIT_VERSIONING", "false").lower() == "true"
+ENABLE_GIT_VERSIONING = _env("ENABLE_GIT_VERSIONING", "false").lower() == "true"
 
 # =============================================================================
 # Feature flags
@@ -67,7 +115,7 @@ def auth_required() -> bool:
     """Single source of truth for whether the API enforces authentication.
 
     Defaults to TRUE (secure by default). The ONLY supported way to disable
-    auth is to explicitly set ``ULTISTATS_AUTH_REQUIRED=false`` — which local
+    auth is to explicitly set ``BREAKSIDE_AUTH_REQUIRED=false`` — which local
     dev / agent tooling does (see ``scripts/dev-backend.sh``) and production
     never does.
 
@@ -77,7 +125,7 @@ def auth_required() -> bool:
     ``config.py`` defaulted ``false`` while the guards defaulted ``true``, so
     whether the API was open depended on which layer you looked at.
     """
-    return os.getenv("ULTISTATS_AUTH_REQUIRED", "true").lower() == "true"
+    return _env("AUTH_REQUIRED", "true").lower() == "true"
 
 
 # Backwards-compatible module constant, evaluated once at import. Prefer

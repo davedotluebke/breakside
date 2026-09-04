@@ -8,7 +8,7 @@ import json
 import os
 from pathlib import Path
 
-_original_env = os.environ.get("ULTISTATS_DATA_DIR")
+_original_env = os.environ.get("BREAKSIDE_DATA_DIR")
 
 
 @pytest.fixture(autouse=True)
@@ -17,7 +17,7 @@ def isolate_test_data(tmp_path):
     test_data_dir = tmp_path / "test_data"
     test_data_dir.mkdir()
 
-    os.environ["ULTISTATS_DATA_DIR"] = str(test_data_dir)
+    os.environ["BREAKSIDE_DATA_DIR"] = str(test_data_dir)
 
     import importlib
     import config
@@ -29,9 +29,9 @@ def isolate_test_data(tmp_path):
     yield test_data_dir
 
     if _original_env:
-        os.environ["ULTISTATS_DATA_DIR"] = _original_env
+        os.environ["BREAKSIDE_DATA_DIR"] = _original_env
     else:
-        os.environ.pop("ULTISTATS_DATA_DIR", None)
+        os.environ.pop("BREAKSIDE_DATA_DIR", None)
 
     # Reload again so config/event_storage module state points back at the
     # default data dir instead of this test's (soon to be pruned) tmp_path.

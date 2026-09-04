@@ -503,7 +503,7 @@ def list_all_games() -> List[Dict[str, Any]]:
     """
     games = []
     # Guard like entity_store.list() / index_storage: the dir doesn't exist
-    # until the first game is saved (fresh ULTISTATS_DATA_DIR, or the e2e
+    # until the first game is saved (fresh BREAKSIDE_DATA_DIR, or the e2e
     # suite wiping tests/test-data-dir), and iterdir() on a missing dir made
     # GET /api/games 500 with FileNotFoundError.
     if not GAMES_DIR.exists():

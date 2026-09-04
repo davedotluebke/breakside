@@ -25,11 +25,11 @@ Server runs at http://localhost:8000
 ### API Documentation
 
 The interactive docs are development-only — they are served only when
-`ULTISTATS_DEBUG=true`, and return 404 otherwise (production must not publish
+`BREAKSIDE_DEBUG=true`, and return 404 otherwise (production must not publish
 a map of every endpoint). Start the server with the flag to use them:
 
 ```bash
-ULTISTATS_DEBUG=true python main.py
+BREAKSIDE_DEBUG=true python main.py
 ```
 
 - Swagger UI: http://localhost:8000/docs
@@ -42,11 +42,19 @@ Set via environment variables or in `.env` file:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ULTISTATS_DATA_DIR` | `/data` | Where game data is stored |
-| `ULTISTATS_HOST` | `0.0.0.0` | Server bind address |
-| `ULTISTATS_PORT` | `8000` | Server port |
-| `ULTISTATS_DEBUG` | `false` | Enable debug mode |
-| `ULTISTATS_ALLOWED_ORIGINS` | `*` | CORS allowed origins |
+| `BREAKSIDE_DATA_DIR` | `/data` | Where game data is stored |
+| `BREAKSIDE_HOST` | `0.0.0.0` | Server bind address |
+| `BREAKSIDE_PORT` | `8000` | Server port |
+| `BREAKSIDE_DEBUG` | `false` | Enable debug mode |
+| `BREAKSIDE_ALLOWED_ORIGINS` | `*` | CORS allowed origins |
+
+These were prefixed `ULTISTATS_` until the project settled on its name.
+`config.py` still accepts the old names as a fallback, so a deployed
+`/etc/breakside/env` can be migrated on its own schedule rather than in the
+same breath as a code deploy. Using a legacy name logs a warning once; setting
+both names to *different* values logs an error and the `BREAKSIDE_` one wins.
+The fallback is a transition aid — drop it once no deployment sets the old
+names.
 
 ## API Overview
 

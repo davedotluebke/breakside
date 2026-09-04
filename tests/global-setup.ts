@@ -5,7 +5,7 @@ import { FRONTEND_PORT, BACKEND_PORT, REPO_ROOT } from './helpers/constants';
 /**
  * Reset the file-based backend data dir before each test run.
  *
- * The test backend (uvicorn on BACKEND_PORT) points ULTISTATS_DATA_DIR at
+ * The test backend (uvicorn on BACKEND_PORT) points BREAKSIDE_DATA_DIR at
  * tests/test-data-dir and uses file-based JSON storage, reading fresh from disk
  * on every request. Because playwright.config uses `reuseExistingServer` when
  * not on CI, nothing ever cleared this directory between runs — so months of

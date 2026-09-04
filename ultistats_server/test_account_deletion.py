@@ -96,7 +96,7 @@ def seeded(tmp_path, monkeypatch):
             value.mkdir(parents=True, exist_ok=True)
         setattr(mod, name, value)
 
-    monkeypatch.setenv("ULTISTATS_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("BREAKSIDE_AUTH_REQUIRED", "true")
 
     # --- players (names live in the ids, which is the whole point of § A) ---
     solo_player = player_storage.save_player({"name": "Solo Only Player"})

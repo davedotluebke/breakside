@@ -138,7 +138,7 @@ async def revoke_share_endpoint(
 
     # Must be admin or coach of the team. Skipped when auth is disabled,
     # matching the require_* dependencies (local dev backends run with
-    # ULTISTATS_AUTH_REQUIRED=false and no memberships for the test user).
+    # BREAKSIDE_AUTH_REQUIRED=false and no memberships for the test user).
     if auth_required() and not is_admin(user["id"]):
         role = get_user_team_role(user["id"], share["teamId"])
         if role != "coach":

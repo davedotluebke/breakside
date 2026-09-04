@@ -13,9 +13,9 @@ needed. The app discovers the event on its next sync via
 GET /api/teams/{team_id}/events and aggregates stats from event.gameIds.
 
 DATA LOCATION
-    Operates on whatever ULTISTATS_DATA_DIR points to (see config.py).
+    Operates on whatever BREAKSIDE_DATA_DIR points to (see config.py).
     On the EC2 host that is the production data:
-        ULTISTATS_DATA_DIR=/var/lib/breakside/data
+        BREAKSIDE_DATA_DIR=/var/lib/breakside/data
     Locally it defaults to <repo>/data.
 
 SAFETY
@@ -28,7 +28,7 @@ SAFETY
 USAGE
     # always run from inside the ultistats_server/ directory, or anywhere with
     # this file's directory importable — the script puts itself on sys.path.
-    export ULTISTATS_DATA_DIR=/var/lib/breakside/data   # on the server
+    export BREAKSIDE_DATA_DIR=/var/lib/breakside/data   # on the server
 
     python3 admin_group_games.py teams [--filter Flick]
     python3 admin_group_games.py games  --team "Team B"
@@ -381,7 +381,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Group existing games into a TournamentEvent.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=f"Data dir (ULTISTATS_DATA_DIR): {config.DATA_DIR}")
+        epilog=f"Data dir (BREAKSIDE_DATA_DIR): {config.DATA_DIR}")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     pt = sub.add_parser("teams", help="list teams")

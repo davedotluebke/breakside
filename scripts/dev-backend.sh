@@ -8,7 +8,7 @@
 # replacement for pointing a localhost frontend at the prod API.
 #
 # Each instance = one port + one data dir under .dev-data/<label>/ (gitignored).
-# Runs with ULTISTATS_AUTH_REQUIRED=false: no Supabase secrets needed and
+# Runs with BREAKSIDE_AUTH_REQUIRED=false: no Supabase secrets needed and
 # membership checks are skipped, so a locally-served frontend can read/write the
 # copied data via ?api=http://localhost:<port>.
 #
@@ -103,7 +103,7 @@ echo
 echo "──────────────────────────────────────────────────────────────"
 echo "  Local backend:  http://localhost:$PORT   (label: $LABEL)"
 echo "  Data dir:       $DATADIR"
-echo "  Auth:           disabled (ULTISTATS_AUTH_REQUIRED=false)"
+echo "  Auth:           disabled (BREAKSIDE_AUTH_REQUIRED=false)"
 echo
 echo "  Pair a frontend with it (open once; saved to that origin's localStorage):"
 echo "    http://localhost:<frontend-port>/index.html?api=http://localhost:$PORT"
@@ -114,7 +114,7 @@ echo "────────────────────────�
 echo
 
 cd "$REPO/ultistats_server"
-exec env ULTISTATS_DATA_DIR="$DATADIR" \
-         ULTISTATS_AUTH_REQUIRED=false \
-         ULTISTATS_PORT="$PORT" \
+exec env BREAKSIDE_DATA_DIR="$DATADIR" \
+         BREAKSIDE_AUTH_REQUIRED=false \
+         BREAKSIDE_PORT="$PORT" \
          uvicorn main:app --reload --port "$PORT"

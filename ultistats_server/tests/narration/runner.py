@@ -336,7 +336,7 @@ def call_finalize(
     # Late imports so module-load failures don't kill scenario discovery.
     from fastapi.testclient import TestClient
     # Ensure auth is disabled for tests by default.
-    os.environ.setdefault("ULTISTATS_AUTH_REQUIRED", "false")
+    os.environ.setdefault("BREAKSIDE_AUTH_REQUIRED", "false")
     # Local import — main.py does heavy import work, so do it once.
     if "ultistats_test_app" not in globals():
         from ultistats_server.main import app  # type: ignore

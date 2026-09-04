@@ -76,8 +76,8 @@ def seeded(tmp_path_factory):
 @pytest.fixture
 def client(seeded, monkeypatch):
     # Authz tests need auth enforced (the env default); make it explicit so a
-    # dev shell with ULTISTATS_AUTH_REQUIRED=false can't flip these tests.
-    monkeypatch.setenv("ULTISTATS_AUTH_REQUIRED", "true")
+    # dev shell with BREAKSIDE_AUTH_REQUIRED=false can't flip these tests.
+    monkeypatch.setenv("BREAKSIDE_AUTH_REQUIRED", "true")
     from main import app
     c = TestClient(app)
     yield c
@@ -268,7 +268,7 @@ class TestFaithfulRestore:
 class TestAuthConfigFailFast:
     def test_assert_raises_without_secret(self, monkeypatch):
         from auth import jwt_validation
-        monkeypatch.delenv("ULTISTATS_AUTH_REQUIRED", raising=False)  # default: true
+        monkeypatch.delenv("BREAKSIDE_AUTH_REQUIRED", raising=False)  # default: true
         monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
         monkeypatch.setattr(jwt_validation, "SUPABASE_JWT_SECRET", "")
         with pytest.raises(RuntimeError, match="SUPABASE_JWT_SECRET"):
@@ -276,13 +276,13 @@ class TestAuthConfigFailFast:
 
     def test_assert_ok_with_secret(self, monkeypatch):
         from auth import jwt_validation
-        monkeypatch.delenv("ULTISTATS_AUTH_REQUIRED", raising=False)
+        monkeypatch.delenv("BREAKSIDE_AUTH_REQUIRED", raising=False)
         monkeypatch.setenv("SUPABASE_JWT_SECRET", "s3cret")
         jwt_validation.assert_auth_configured()
 
     def test_assert_ok_when_auth_disabled(self, monkeypatch):
         from auth import jwt_validation
-        monkeypatch.setenv("ULTISTATS_AUTH_REQUIRED", "false")
+        monkeypatch.setenv("BREAKSIDE_AUTH_REQUIRED", "false")
         monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
         monkeypatch.setattr(jwt_validation, "SUPABASE_JWT_SECRET", "")
         jwt_validation.assert_auth_configured()
@@ -290,7 +290,7 @@ class TestAuthConfigFailFast:
     def test_app_startup_runs_the_check(self, monkeypatch):
         from auth import jwt_validation
         from main import app
-        monkeypatch.delenv("ULTISTATS_AUTH_REQUIRED", raising=False)
+        monkeypatch.delenv("BREAKSIDE_AUTH_REQUIRED", raising=False)
         monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
         monkeypatch.setattr(jwt_validation, "SUPABASE_JWT_SECRET", "")
         with pytest.raises(RuntimeError, match="SUPABASE_JWT_SECRET"):
