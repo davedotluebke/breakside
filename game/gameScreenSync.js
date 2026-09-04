@@ -175,8 +175,11 @@ function ensureReplayView() {
     const gameId = game.id || game.gameStartTimestamp || null;
     if (replayView && replayViewGameId !== gameId) { destroyReplayView(); }
     if (replayView) return;
+    // Host = the flex column that owns the log (.game-log-content), so the
+    // stage takes its height and the log keeps flex:1 of the rest; mounting
+    // in the scrolling panel content would let the stage push the log off.
     replayView = mountReplayView({
-        host, logEl: eventsEl,
+        host: eventsEl.parentElement || host, logEl: eventsEl,
         getGame: () => currentGameFn(),
         getEntryOptions: () => gameLogEntryOptions(),
         getPlayerByName: name => getPlayerFromName(name),
