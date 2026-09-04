@@ -28,8 +28,8 @@ import {
     getControllerState, getCurrentUserId, startControllerPolling,
     stopControllerPolling, showControllerToast, dismissToast, getPingGameStamp,
 } from './controllerState.js';
-import { summarizeGame } from './gameLogic.js';
-import { renderGameLogHTML, escapeHtml } from '../utils/gameLogRenderer.js';
+import { summarizeGameEntries } from './gameLogic.js';
+import { renderGameLogEntriesHTML, escapeHtml } from '../utils/gameLogRenderer.js';
 import {
     initGameScreen, gameScreenInitialized, updateHeaderTeamIdentities,
 } from './gameScreenPanels.js';
@@ -123,13 +123,12 @@ function updateGameLogEvents() {
     // Check if game screen is visible
     if (!isGameScreenVisible()) return;
     
-    // Get game summary
-    let summary = '';
-    if (typeof summarizeGame === 'function') {
-        summary = summarizeGame();
-    }
-    
-    if (!summary || summary.trim() === '') {
+    // Game log as entries — each rendered line carries data-entry="<index>"
+    // so the replay viewer can map a tapped line back to its entry.
+    const entries = summarizeGameEntries();
+    const hasContent = entries.some(e => e.text && e.text.trim() !== '');
+
+    if (!hasContent) {
         // Show placeholder when no events
         eventsEl.innerHTML = `
             <div class="game-log-placeholder">
@@ -140,9 +139,9 @@ function updateGameLogEvents() {
         return;
     }
     
-    // Format the summary for display — line classification + escaping live in
-    // the shared renderer (utils/gameLogRenderer.js, G6 merge).
-    const html = renderGameLogHTML(summary, getTeamName());
+    // Format for display — line classification + escaping live in the shared
+    // renderer (utils/gameLogRenderer.js, G6 merge).
+    const html = renderGameLogEntriesHTML(entries, getTeamName());
 
     // Only update DOM and auto-scroll if content actually changed
     if (eventsEl.innerHTML !== html) {

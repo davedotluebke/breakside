@@ -1,17 +1,21 @@
 /*
  * Game Log Renderer — THE single source of truth for the linear game log.
  *
- * Renders a game's points→possessions→events stream as the shared "game log"
- * line format (text) and as classed HTML lines. Consumed by:
- *   - game/gameLogic.js summarizeGame()            (Copy Summary clipboard text,
- *     and the in-game Log tab via gameScreenSync.updateGameLogEvents)
- *   - game/gameScreenSync.js updateGameLogEvents() (in-game Game Log panel HTML)
+ * Renders a game's points→possessions→events stream as a list of structured
+ * ENTRIES (buildGameLogEntries), from which the shared "game log" line format
+ * (buildGameLogText) and the classed HTML lines (renderGameLogHTML /
+ * renderGameLogEntriesHTML) both derive. Consumed by:
+ *   - game/gameLogic.js summarizeGame()            (Copy Summary clipboard text)
+ *   - game/gameScreenSync.js updateGameLogEvents() (in-game Log tab HTML)
  *   - teams/gameSummary.js renderGameSummaryEventLog() (post-game summary HTML)
+ *   - playByPlay/replayEngine.js                   (replay timeline — the entry
+ *     list IS the replay's scrub axis; see docs/replay-viewer-plan.md)
  *
  * History: these were three drifting near-copies (the 2026-07-05 betweenPoints
  * ordering fix had to be written twice; the Turnover possession-boundary logic
- * only ever landed in summarizeGame). Merged 2026-07-19 (G6). Any format change
- * now lands here, once.
+ * only ever landed in summarizeGame). Merged 2026-07-19 (G6). Entries added
+ * 2026-09 (replay step 2) — the TEXT output is byte-identical to before; the
+ * golden test pins it. Any format change now lands here, once.
  *
  * The public viewer (ultistats_server/static/viewer/viewer.js) renders per-point
  * cards from the same event stream but is a separate origin/app that cannot
@@ -22,7 +26,45 @@
  */
 
 /**
- * Build the game log as plain text (one line per `\n`).
+ * @typedef {object} GameLogEntry
+ * @property {string} kind - 'header' (version / "Game Summary:" lines),
+ *   'teamroster' (the "<team> roster:" line — text '' when the caller passed
+ *   no rosterNames, which keeps the blank line the clipboard format has
+ *   always had there), 'roster' ("Point N roster: …"), 'pullnote'
+ *   ("X pulls to Y."), 'possession' (O/D delimiter), 'event' (an event's
+ *   summarize() line), 'score' ("X scores!"), 'currentscore',
+ *   'after' (an event recorded after the point ended, deferred past the
+ *   score lines), 'periodnote' ("will pull … and play D").
+ * @property {string} text - the line exactly as buildGameLogText prints it
+ * @property {number|null} pointIdx - index into game.points, or null
+ * @property {number|null} possIdx - index into point.possessions, or null
+ * @property {number|null} eventIdx - index into possession.events, or null
+ * @property {object|null} event - the event object for 'event' / 'after'
+ * @property {number|null} at - epoch ms when this happened, or null when
+ *   the data carries no timing (see ARCHITECTURE.md § Event timestamps —
+ *   never synthesized). 'event'/'after' → event.at; 'possession' → the
+ *   possession's startedAt (an inline Turnover boundary uses the NEXT
+ *   possession's, falling back to the turnover's own at); 'roster' /
+ *   'pullnote' → the point's first timed event, else point.startTimestamp
+ *   (only ever non-null for the in-progress point — it is nulled on pause
+ *   and at point end); 'score' / 'currentscore' → point.endTimestamp.
+ * @property {'us'|'opp'|null} side - who the line is about: for 'possession'
+ *   whoever holds the disc (offense → 'us'), for 'score' who scored.
+ */
+
+const msOf = d => {
+    if (d == null) return null;
+    if (typeof d === 'number') return Number.isFinite(d) ? d : null;
+    if (d instanceof Date) { const t = d.getTime(); return Number.isFinite(t) ? t : null; }
+    if (typeof d === 'string') { const t = Date.parse(d); return Number.isFinite(t) ? t : null; }
+    return null;
+};
+const atOf = e => (e && typeof e.at === 'number') ? e.at : null;
+
+/**
+ * Build the game log as structured entries (see GameLogEntry). Same options
+ * as buildGameLogText; joining the entries' `text` with '\n' reproduces its
+ * output exactly.
  *
  * Line stream per point: "Point N roster: …", the pull line, possession
  * delimiters ("— Team on offense —"), each event's summarize() line (Turnover
@@ -49,9 +91,9 @@
  *   callers pass buildPointPlayerLookup-based resolution so id-era rosters
  *   don't print raw ids. Default null = print entries as stored (keeps this
  *   module a pure leaf with no resolver dependency).
- * @returns {string}
+ * @returns {GameLogEntry[]}
  */
-function buildGameLogText(game, {
+function buildGameLogEntries(game, {
     teamName = game ? game.team : undefined,
     opponentName = game ? game.opponent : undefined,
     versionInfo = '',
@@ -59,31 +101,57 @@ function buildGameLogText(game, {
     scoreBadge = null,
     resolvePlayerName = null,
 } = {}) {
-    let summary = versionInfo + `Game Summary: ${teamName} vs. ${opponentName}.\n`;
-    if (rosterNames) {
-        summary += `${teamName} roster:`;
-        rosterNames.forEach(name => summary += ` ${name}`);
+    const entries = [];
+    const push = (kind, text, extra) => {
+        entries.push(Object.assign({
+            kind, text, pointIdx: null, possIdx: null, eventIdx: null, event: null, at: null, side: null,
+        }, extra));
+        return entries[entries.length - 1];
+    };
+
+    // versionInfo is a '\n'-terminated prefix (possibly several lines); each
+    // line is its own header entry so the join reproduces the prefix.
+    if (versionInfo) {
+        versionInfo.split('\n').forEach((line, i, arr) => {
+            if (i === arr.length - 1 && line === '') return;   // the terminator
+            push('header', line);
+        });
     }
-    let numPoints = 0;
+    push('header', `Game Summary: ${teamName} vs. ${opponentName}.`);
+    push('teamroster', rosterNames ? `${teamName} roster:` + rosterNames.map(n => ` ${n}`).join('') : '');
+
     let runningScoreUs = 0;
     let runningScoreThem = 0;
     // How the current period opened — flips at each period break (halftime /
     // switch sides), driving the "who pulls next" note below. Mirrors
     // determineStartingPosition().
     let periodOpening = game ? game.startingPosition : undefined;
-    ((game && game.points) || []).forEach(point => {
+    ((game && game.points) || []).forEach((point, pointIdx) => {
         let switchsides = false;
         let forceswap = false;
-        numPoints += 1;
-        summary += `\nPoint ${numPoints} roster:`;
-        (point.players || []).forEach(player =>
-            summary += ` ${resolvePlayerName ? resolvePlayerName(player) : player}`);
-        // indicate which team pulls and which receives (thus starting on offense)
-        if (point.startingPosition === 'offense') {
-            summary += `\n${opponentName} pulls to ${teamName}.`;
-        } else {
-            summary += `\n${teamName} pulls to ${opponentName}.`;
+        const allPossessions = point.possessions || [];
+
+        // Point-start time: the first timed event, else the (in-progress-only)
+        // startTimestamp. Never synthesized.
+        let pointAt = null;
+        for (const poss of allPossessions) {
+            for (const e of (poss.events || [])) {
+                if (atOf(e) !== null) { pointAt = atOf(e); break; }
+            }
+            if (pointAt !== null) break;
         }
+        if (pointAt === null) pointAt = msOf(point.startTimestamp);
+        const pointEndAt = msOf(point.endTimestamp);
+
+        const rosterText = `Point ${pointIdx + 1} roster:` + (point.players || [])
+            .map(player => ` ${resolvePlayerName ? resolvePlayerName(player) : player}`).join('');
+        push('roster', rosterText, { pointIdx, at: pointAt });
+        // indicate which team pulls and which receives (thus starting on offense)
+        const pullText = point.startingPosition === 'offense'
+            ? `${opponentName} pulls to ${teamName}.`
+            : `${teamName} pulls to ${opponentName}.`;
+        push('pullnote', pullText, { pointIdx, at: pointAt });
+
         // O/D delimiter is emitted per logical possession boundary, not per
         // Possession object — a Turnover event lives inside the offensive
         // Possession that just ended (since ensurePossessionExists(true) is
@@ -97,17 +165,20 @@ function buildGameLogText(game, {
         // Events recorded AFTER the point ended (between-points timeouts,
         // switch sides) are deferred past the score lines below so the log
         // reads in real-world order.
-        const afterPointLines = [];
-        const allPossessions = point.possessions || [];
+        const afterPointEntries = [];
         // Set tag (zone tracking): "— Team on defense (Zone) —".
         const setTagFor = poss => (poss && poss.set) ? ` (${poss.set})` : '';
+        const startedAtOf = poss => poss ? msOf(poss.startedAt) : null;
         allPossessions.forEach((possession, possIdx) => {
             if (!suppressNextPossessionDelimiter) {
                 const role = possession.offensive ? 'offense' : 'defense';
-                summary += `\n— ${teamName} on ${role}${setTagFor(possession)} —`;
+                push('possession', `— ${teamName} on ${role}${setTagFor(possession)} —`, {
+                    pointIdx, possIdx, at: startedAtOf(possession),
+                    side: possession.offensive ? 'us' : 'opp',
+                });
             }
             suppressNextPossessionDelimiter = false;
-            (possession.events || []).forEach(event => {
+            (possession.events || []).forEach((event, eventIdx) => {
                 // Halftime implies the side switch; two breaks on the same
                 // point cancel (accidental tap + correction), so toggle.
                 if (event.type === 'Other' && (event.switchsides_flag || event.halftime_flag)) {
@@ -118,12 +189,15 @@ function buildGameLogText(game, {
                 }
                 if (event.type === 'Other' && event.betweenPoints) {
                     if (typeof event.summarize === 'function') {
-                        afterPointLines.push(event.summarize());
+                        afterPointEntries.push({
+                            kind: 'after', text: event.summarize(),
+                            pointIdx, possIdx, eventIdx, event, at: atOf(event), side: null,
+                        });
                     }
                     return;
                 }
                 if (typeof event.summarize === 'function') {
-                    summary += `\n${event.summarize()}`;
+                    push('event', event.summarize(), { pointIdx, possIdx, eventIdx, event, at: atOf(event) });
                 }
                 if (event.type === 'Turnover') {
                     // Possession just ended — emit the boundary so the log
@@ -138,7 +212,13 @@ function buildGameLogText(game, {
                     // this Turnover. Reading it off `possession` instead is
                     // what made mid-point defensive sets invisible in the log
                     // while offensive ones showed fine.
-                    summary += `\n— ${teamName} on defense${setTagFor(allPossessions[possIdx + 1])} —`;
+                    const next = allPossessions[possIdx + 1];
+                    const nextAt = startedAtOf(next);
+                    push('possession', `— ${teamName} on defense${setTagFor(next)} —`, {
+                        pointIdx, possIdx: next ? possIdx + 1 : null,
+                        at: nextAt !== null ? nextAt : atOf(event),
+                        side: 'opp',
+                    });
                     suppressNextPossessionDelimiter = true;
                 }
             });
@@ -147,17 +227,18 @@ function buildGameLogText(game, {
         const badgeLabel = scoreBadge ? scoreBadge(point) : null;
         const badgeSuffix = badgeLabel ? `  [${badgeLabel}]` : '';
         if (point.winner === 'team') {
-            summary += `\n${teamName} scores!${badgeSuffix} `;
+            push('score', `${teamName} scores!${badgeSuffix} `, { pointIdx, at: pointEndAt, side: 'us' });
             runningScoreUs++;
         }
         if (point.winner === 'opponent') {
-            summary += `\n${opponentName} scores!${badgeSuffix} `;
+            push('score', `${opponentName} scores!${badgeSuffix} `, { pointIdx, at: pointEndAt, side: 'opp' });
             runningScoreThem++;
         }
         if (point.winner) {
-            summary += `\nCurrent score: ${teamName} ${runningScoreUs}, ${opponentName} ${runningScoreThem}`;
+            push('currentscore', `Current score: ${teamName} ${runningScoreUs}, ${opponentName} ${runningScoreThem}`,
+                { pointIdx, at: pointEndAt });
         }
-        afterPointLines.forEach(line => summary += `\n${line}`);
+        afterPointEntries.forEach(e => entries.push(e));
         // Manual Swap O & D corrections flip the period bookkeeping too
         // (matches determineStartingPosition), so the note below and any
         // later halftime read from the corrected orientation.
@@ -170,13 +251,22 @@ function buildGameLogText(game, {
             // period receives — regardless of who won this point.
             periodOpening = (periodOpening === 'offense') ? 'defense' : 'offense';
             if (periodOpening === 'offense') {
-                summary += `\n${teamName} will receive the pull and play O. `;
+                push('periodnote', `${teamName} will receive the pull and play O. `, { pointIdx });
             } else {
-                summary += `\n${teamName} will pull to ${opponentName} and play D. `;
+                push('periodnote', `${teamName} will pull to ${opponentName} and play D. `, { pointIdx });
             }
         }
     });
-    return summary;
+    return entries;
+}
+
+/**
+ * Build the game log as plain text (one line per `\n`). Thin wrapper over
+ * buildGameLogEntries — see it for the options.
+ * @returns {string}
+ */
+function buildGameLogText(game, options = {}) {
+    return buildGameLogEntries(game, options).map(e => e.text).join('\n');
 }
 
 /**
@@ -237,6 +327,25 @@ function renderGameLogHTML(summaryText, teamName) {
 }
 
 /**
+ * Render entries to HTML: the same classed, escaped <div>s as
+ * renderGameLogHTML, each carrying `data-entry="<index into entries>"` so a
+ * line can be mapped back to its entry (the replay viewer's seek-by-tap).
+ * Blank-text entries (the teamroster placeholder) are skipped, exactly as
+ * the text renderer skips blank lines.
+ * @param {GameLogEntry[]} entries - output of buildGameLogEntries
+ * @param {string} teamName - our team's display name (us/them score detection)
+ * @returns {string} HTML string
+ */
+function renderGameLogEntriesHTML(entries, teamName) {
+    let html = '';
+    entries.forEach((entry, i) => {
+        if (!entry.text || !entry.text.trim()) return;
+        html += `<div class="${classifyGameLogLine(entry.text, teamName)}" data-entry="${i}">${escapeHtml(entry.text)}</div>`;
+    });
+    return html;
+}
+
+/**
  * Escape HTML entities to prevent XSS. String-based (no DOM) so this module
  * stays node-testable; escapes the same entities the old DOM-based
  * div.textContent/innerHTML round-trip did for element-content contexts.
@@ -252,4 +361,7 @@ function escapeHtml(text) {
 }
 
 // --- ES-module exports ---
-export { buildGameLogText, classifyGameLogLine, renderGameLogHTML, escapeHtml };
+export {
+    buildGameLogEntries, buildGameLogText, classifyGameLogLine,
+    renderGameLogHTML, renderGameLogEntriesHTML, escapeHtml,
+};

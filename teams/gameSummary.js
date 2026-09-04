@@ -17,7 +17,7 @@ import {
     getGamePlayerStats, getGameTeamStats, formatTeamStatsLine, classifyPoint,
     sumPlayerStats,
 } from '../utils/eventStats.js';
-import { buildGameLogText, renderGameLogHTML } from '../utils/gameLogRenderer.js';
+import { buildGameLogEntries, renderGameLogEntriesHTML } from '../utils/gameLogRenderer.js';
 import { createTableSortController } from '../utils/tableSort.js';
 import { attachStatsColumnHelp } from '../utils/statsHelp.js';
 import { wireStatsLevelSelect } from '../utils/statsLevel.js';
@@ -291,14 +291,14 @@ function renderGameSummaryEventLog(game) {
     // "Point N roster:" entries may be player ids (id-era games) — resolve to
     // display names; event lines already carry resolved {name, id} refs.
     const lookup = buildPointPlayerLookup(game);
-    const summary = buildGameLogText(game, {
+    const entries = buildGameLogEntries(game, {
         teamName,
         opponentName: opponent,
         scoreBadge: (point) => pointClassificationLabel(classifyPoint(point)),
         resolvePlayerName: entry => lookup(entry).name,
     });
 
-    logEl.innerHTML = renderGameLogHTML(summary, teamName);
+    logEl.innerHTML = renderGameLogEntriesHTML(entries, teamName);
 }
 
 /**
