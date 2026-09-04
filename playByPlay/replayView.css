@@ -1,0 +1,171 @@
+/*
+ * Replay view (playByPlay/replayView.js): the field diagram + transport bar +
+ * point timeline mounted above the game log on the Log tab and the post-game
+ * summary. The pitch itself is the Field tab's (.fp-field and its layers come
+ * from playByPlay/fieldPbp.css via fieldRender); this file only lays out the
+ * stage around it and styles the controls. Colors come from css/tokens.css so
+ * both themes hold, and match the log's own possession/score lines. Buttons
+ * here reset the global `button { margin: 10px }` (see ARCHITECTURE.md § CSS
+ * Styling Gotchas).
+ */
+
+.rv-root {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px 0 4px;
+    border-bottom: 1px solid var(--border-lighter);
+    margin-bottom: 6px;
+    flex: 0 0 auto;
+}
+
+/* ---- stage: badge + field ---- */
+.rv-stage { display: flex; gap: 6px; min-width: 0; }
+.rv-stage[data-o="landscape"] { flex-direction: column; align-items: center; }
+.rv-stage[data-o="portrait"]  { flex-direction: row; align-items: flex-start; justify-content: center; }
+
+.rv-fieldwrap { flex: 1 1 auto; min-width: 0; display: flex; justify-content: center; align-items: flex-start; }
+/* Never let flex stretch decide the pitch's height: iOS Safari lets a
+   stretched cross size override aspect-ratio (Chrome does not), which drew
+   the landscape pitch 1.3× taller than wide. */
+.rv-field { align-self: flex-start; flex: 0 0 auto; }
+/* Landscape: full width on a phone; on a wide screen the height cap wins so
+   the log below keeps its room. Portrait: height-capped, width follows. */
+.rv-stage[data-o="landscape"] .rv-fieldwrap { width: 100%; }
+/* Both orientations size the pitch by WIDTH and let aspect-ratio give the
+   height. Height-driven sizing (height + aspect-ratio + max-width: 100%)
+   collapsed to zero width on iOS Safari inside the flex row — a percentage
+   max-width against a content-sized flex parent is cyclic there. */
+.rv-stage[data-o="landscape"] .rv-field { width: min(100%, calc(42vh * 110 / 40)); aspect-ratio: 110 / 40; height: auto; }
+.rv-stage[data-o="portrait"]  .rv-field { width: calc(min(60vh, 640px) * 40 / 110); aspect-ratio: 40 / 110; height: auto; max-width: none; }
+.rv-stage[data-o="portrait"]  .rv-fieldwrap { flex: 0 0 auto; }
+/* The event layer is a real layer so its absolutely positioned children
+   (arrows SVG, markers) resolve against the pitch, not the page. */
+.rv-eventlayer { position: absolute; inset: 0; }
+
+/* The Offense / Defense / Goal badge: a row above the field in landscape, a
+   narrow vertical column to its left in portrait (maximum field height).
+   Same colors as the log's possession lines. Fixed size so the field never
+   shifts when there is no badge. */
+.rv-possbanner { display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.rv-stage[data-o="landscape"] .rv-possbanner { min-height: 20px; }
+.rv-stage[data-o="portrait"]  .rv-possbanner { width: 22px; align-self: stretch; }
+.rv-badge {
+    display: inline-block;
+    font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    padding: 2px 9px; border-radius: 999px; line-height: 1.3;
+}
+.rv-stage[data-o="portrait"] .rv-badge { writing-mode: vertical-rl; transform: rotate(180deg); padding: 9px 2px; }
+.rv-badge.off  { color: var(--color-success-text); background: var(--color-success-surface-soft); border: 1px solid var(--color-success-border); }
+.rv-badge.def  { color: var(--color-danger-text);  background: var(--color-danger-surface-soft);  border: 1px solid var(--color-danger-surface-deep); }
+.rv-badge.goal { color: var(--color-success-text); background: linear-gradient(135deg, var(--color-success-surface) 0%, var(--color-success-border) 100%); border: 1px solid var(--color-success-border); }
+
+/* Collapsed: the point under the playhead has no field positions. */
+.rv-nofield {
+    display: none;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--surface-inset);
+    color: var(--text-muted);
+    font-size: 12px;
+    text-align: center;
+}
+.rv-root.rv-collapsed .rv-stage { display: none; }
+.rv-root.rv-collapsed .rv-nofield { display: block; }
+
+/* ---- transport ---- */
+.rv-transport {
+    display: grid;
+    grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+    gap: 6px 10px;
+    align-items: center;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.rv-tbtn {
+    width: 36px; height: 36px; margin: 0; padding: 0;
+    border-radius: 50%;
+    border: 1px solid var(--border-light);
+    background: var(--surface-raised);
+    color: var(--text-primary);
+    display: grid; place-items: center;
+    font-size: 14px;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.rv-tbtn:disabled { opacity: .4; cursor: default; }
+.rv-tbtn.rv-play {
+    width: 42px; height: 42px; font-size: 16px;
+    background: var(--brand-orange); color: #fff; border-color: transparent;
+}
+.rv-tbtn svg { display: block; }
+.rv-tbtn.rv-play svg { margin-left: 2px; }
+.rv-speed { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* touch-action: none — a drag on the thumb must move the thumb, not scroll
+   the page; the taller box gives a thumb-sized touch target. */
+.rv-speed-input { width: 100%; margin: 0; height: 28px; accent-color: var(--brand-orange); touch-action: none; cursor: pointer; }
+.rv-ticks {
+    display: flex; justify-content: space-between;
+    font-size: 9px; color: var(--text-muted); white-space: nowrap;
+    font-variant-numeric: tabular-nums; padding: 0 2px;
+}
+.rv-ticks span.cur { color: var(--brand-orange-deep); font-weight: 700; }
+.rv-ticks span.disabled { opacity: .4; }
+.rv-following .rv-ticks span:first-child { color: var(--color-danger-ink); font-weight: 700; }
+.rv-waiting .rv-ticks span:first-child { animation: rvPulse 1.4s ease-in-out infinite; }
+@keyframes rvPulse { 50% { opacity: .45; } }
+
+.rv-golive {
+    align-self: center;
+    margin: 0; padding: 6px 12px;
+    border: 0; border-radius: 999px;
+    background: var(--text-primary); color: var(--surface-card);
+    font-size: 12px; font-weight: 600; cursor: pointer;
+}
+
+/* ---- timeline (one segment per point, width ∝ point duration) ---- */
+.rv-timeline {
+    position: relative; height: 26px; margin: 2px 4px 0; cursor: pointer;
+    touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.rv-seg { position: absolute; top: 12px; height: 8px; border-radius: 2px; box-sizing: border-box; border-right: 2px solid var(--surface-card); }
+.rv-seg.us   { background: var(--color-success); }
+.rv-seg.opp  { background: var(--color-danger); }
+.rv-seg.open { background: var(--brand-orange); }
+.rv-seg.unlocated { opacity: .35; }
+.rv-seg .rv-pn { position: absolute; top: -11px; left: 1px; font-size: 9px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.rv-head { position: absolute; top: 7px; width: 2px; height: 18px; background: var(--text-primary); transform: translateX(-1px); z-index: 2; pointer-events: none; }
+.rv-head::after { content: ""; position: absolute; left: -4px; top: -3px; width: 10px; height: 6px; background: var(--text-primary); clip-path: polygon(0 0, 100% 0, 50% 100%); }
+
+/* ---- log lines under playhead control ---- */
+.game-log-line[data-entry] { cursor: pointer; }
+.game-log-line.rv-future { opacity: .45; }
+.game-log-line.rv-cur {
+    opacity: 1;
+    background: var(--surface-inset);
+    box-shadow: inset 3px 0 0 var(--brand-orange);
+    padding-left: 6px;
+    margin-left: -6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rv-waiting .rv-ticks span:first-child { animation: none; }
+}
+
+/* ---- pitch overrides inside the replay ----
+   The event layer's own disc is a rebuilt element every render (no
+   transition possible), so it is hidden and .rv-disc, which persists, is the
+   one that glides. Markers are the Field tab's draggable ones — inert here.
+   The big "Attacking" arrow's sizing rules in fieldPbp.css are scoped to the
+   Field tab's container, so they are restated for the replay's pitch. */
+.rv-field .rv-eventlayer .fp-disc { display: none; }
+.rv-field .fp-marker[data-mkidx] { pointer-events: none; cursor: default; }
+.rv-field .rv-disc { transition: left 0ms ease-in-out, top 0ms ease-in-out, background 300ms; }
+.rv-field .rv-disc.opp { background: #9ca3af; }
+.rv-field .rv-disc.goal { box-shadow: 0 0 0 5px rgba(52, 211, 153, .7); }
+.rv-field .rv-disc.rv-fly { animation: rvFly 600ms ease-in-out; }
+@keyframes rvFly { 50% { transform: translate(-50%, -50%) scale(1.7); } }
+@media (prefers-reduced-motion: reduce) { .rv-field .rv-disc.rv-fly { animation: none; } }
+.rv-stage[data-o="portrait"]  .rv-field .fp-attack-arrow { height: 50%; }
+.rv-stage[data-o="portrait"]  .rv-field .fp-attack-arrow svg { height: 100%; width: auto; }
+.rv-stage[data-o="landscape"] .rv-field .fp-attack-arrow { width: 50%; }
+.rv-stage[data-o="landscape"] .rv-field .fp-attack-arrow svg { width: 100%; height: auto; }

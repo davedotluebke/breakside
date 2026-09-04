@@ -565,12 +565,29 @@ endzone depth" frame, which re-scaled past games when the depth setting changed.
 
 At render time the normalized `{x, y}` is scaled to the on-screen field — whose
 length *includes* the depth-dependent endzones — by the yard-based `pct()` /
-`toField()` helpers; `toNorm()` / `fromNorm()` in `fieldPbp.js` are the only
+`toField()` helpers; `toNorm()` / `fromNorm()` in `fieldRender.js` are the only
 bridge between the two frames. The two display flips (`flipAD` = attack
 direction, which auto-alternates per point; `flipHA` = which sideline is home)
 are **render-time only** — stored `{x, y}` never change, so re-opening a game or
 flipping orientation never moves a recorded event. The canonical convention lives
-in the `fieldPbp.js` file header; keep the two in sync.
+in the `playByPlay/fieldRender.js` file header; keep the two in sync.
+
+**Renderer split.** The drawing code lives in `playByPlay/fieldRender.js`
+(extracted 2026-09 for the replay viewer, docs/replay-viewer-plan.md § 5):
+geometry, `toNorm`/`fromNorm`, `pct`/`toField`/`clampLoc`/`inAttackEZ`, the
+static pitch layers, the located-event layer (arrows / markers / disc),
+possession segmentation and the fade cohorts (**per instance** —
+`createFadeTracker()`, so two fields on screen never share a boundary), and
+`chipHTML`. Every render function takes an explicit
+`view = { o, flipAD, flipHA }` (orientation + the *effective* flips) rather
+than reading the Field tab's private state. `fieldPbp.js` keeps the
+interactive surface — entry state, gestures, pull stopwatch, pickers,
+orientation, flip persistence — and passes its view in. The renderer also
+offers an optional **actor layer** (`actorLayerHTML` / `applyActorPositions`):
+player icons at reconstructed positions, animated by CSS transitions on
+`left`/`top` whose duration is the per-render `--fp-dur` custom property
+(CSS in `fieldPbp.css`, "Actor layer"); the Field tab does not render it.
+Unit tests: `tests/unit/fieldRender.test.mjs`.
 
 ### Event timestamps (`Event.at`, `Possession.startedAt`)
 
@@ -600,6 +617,56 @@ possession carries `startedAt`. Both were added 2026-09 for the replay viewer
 Round-trip tests: `tests/unit/eventTimestamps.test.mjs` (client) and
 `test_event_timestamps_survive_sync_round_trip` in
 `breakside_server/test_api.py` (server passes both fields through untouched).
+
+### Replay viewer (Log tab field playback)
+
+The Log tab (and the post-game summary) mounts a field diagram + transport bar
+above the game log for any game that has located events. Design and decisions:
+docs/replay-viewer-plan.md; interaction spec: mockups/replay-viewer/index.html.
+
+Layers, bottom-up (all under `playByPlay/`):
+
+- **`replayEngine.js`** (pure leaf, node-tested) — takes a game-shaped object,
+  builds `entries` via `buildGameLogEntries` (one log line = one playhead
+  position), derives `fieldStateAt(i)` (who is where, disc, holder, arrows —
+  from located events only), and `delayBefore(i, lastAnimMs)`: live → the
+  animation floor; play-after-play *or an untimed neighbour* → hold; else
+  `min(Δat, cap)/speed` with the within-point / between-point caps (0 = Off).
+  Timing is never synthesized (see § Event timestamps).
+- **`replayController.js`** (DOM-free, mock-timer-tested) — the clock:
+  play/pause/seek/step, speeds incl. `'live'` (follow the tail; `refresh()`
+  animates new entries or counts them as unseen; any seek back drops to 1×),
+  undo clamping, and the narration hook — `'entry'` listeners may return a
+  promise that play-after-play waits on (bounded by a ceiling), with
+  `saidSoFar` for the commentator's prompt.
+- **`fieldRender.js`** — the Field tab's pitch, shared (see § Field PBP
+  spatial coordinate frame). The replay uses the static + event layers, a
+  per-instance fade tracker, and the actor layer.
+- **`replayView.js`** — the only DOM code: the pitch with an Offense/Defense
+  badge (+ a persistent gliding disc; the event layer's own disc is hidden by
+  `replayView.css`; actor labels fade with the event that placed them, via
+  `eventLayerHTML`'s `visibility` out-param), transport bar (⏮ ▶ ⏭ ·
+  Live/1×/2×/4×/Speedy · ⟳), per-point timeline (widths ∝ point duration,
+  drag to scrub), and the log wiring (`data-entry` lines get `rv-cur`/`rv-future`;
+  tap = seek). Mounted by `game/gameScreenSync.js` (lazily, when the log
+  renders; live games start in Live) and `teams/gameSummary.js` (stored
+  games, Live disabled). Late-bound from `ui/panelSystem.js` via
+  `window.replayView` for tab shown/hidden and screen exit.
+
+Rules that are easy to break:
+
+- **The engine must build the same entry list the log rendered.** Both use
+  `gameLogEntryOptions()` (in-game) or the summary's option object; a drift
+  in `versionInfo`/`rosterNames`/`resolvePlayerName` shifts every index and
+  the highlighted line no longer matches the field.
+- **Collapse, don't hide the log.** No located events in the game → nothing
+  mounts (the Log tab is byte-identical to before). No located events in the
+  point under the playhead → the stage collapses to a banner. The stage lives
+  inside `.game-log-content` (the flex column) so the log keeps `flex: 1`.
+- **Orientation and caps are per-device settings** (`replay.*` in Advanced
+  Settings); the ⟳ button writes `replay.orientation`.
+- Field-tab pointer handlers are NOT attached to the replay's markers; the
+  CSS neutralizes their `data-mkidx` cursor.
 
 ### Feature Worktrees
 

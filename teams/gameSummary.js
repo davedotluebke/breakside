@@ -17,7 +17,8 @@ import {
     getGamePlayerStats, getGameTeamStats, formatTeamStatsLine, classifyPoint,
     sumPlayerStats,
 } from '../utils/eventStats.js';
-import { buildGameLogText, renderGameLogHTML } from '../utils/gameLogRenderer.js';
+import { buildGameLogEntries, renderGameLogEntriesHTML } from '../utils/gameLogRenderer.js';
+import { mountReplayView } from '../playByPlay/replayView.js';
 import { createTableSortController } from '../utils/tableSort.js';
 import { attachStatsColumnHelp } from '../utils/statsHelp.js';
 import { wireStatsLevelSelect } from '../utils/statsLevel.js';
@@ -291,15 +292,40 @@ function renderGameSummaryEventLog(game) {
     // "Point N roster:" entries may be player ids (id-era games) — resolve to
     // display names; event lines already carry resolved {name, id} refs.
     const lookup = buildPointPlayerLookup(game);
-    const summary = buildGameLogText(game, {
+    const entryOptions = {
         teamName,
         opponentName: opponent,
         scoreBadge: (point) => pointClassificationLabel(classifyPoint(point)),
         resolvePlayerName: entry => lookup(entry).name,
-    });
+    };
+    const entries = buildGameLogEntries(game, entryOptions);
 
-    logEl.innerHTML = renderGameLogHTML(summary, teamName);
+    logEl.innerHTML = renderGameLogEntriesHTML(entries, teamName);
+
+    // Replay view (docs/replay-viewer-plan.md step 7): the field playback
+    // above the log, for games with field positions. Never live here — the
+    // summary shows a stored game. Re-mounted on every render since the
+    // section is rebuilt per game.
+    if (summaryReplayView) { try { summaryReplayView.destroy(); } catch (e) { /* gone */ } summaryReplayView = null; }
+    const host = document.getElementById('gameSummaryEventLogSection');
+    if (host) {
+        summaryReplayView = mountReplayView({
+            host: logEl.parentElement || host, logEl,
+            getGame: () => game,
+            getEntryOptions: () => entryOptions,
+            getPlayerByName: name => { const r = lookup(name); return r && r.obj ? r.obj : null; },
+            live: false,
+        });
+        if (summaryReplayView) {
+            // Keep the section heading above the stage: mountReplayView
+            // prepends to its host, so re-home the root after the <h3>.
+            const h3 = host.querySelector('h3');
+            if (h3 && summaryReplayView.root.parentElement === host) h3.insertAdjacentElement('afterend', summaryReplayView.root);
+            summaryReplayView.onShown();
+        }
+    }
 }
+let summaryReplayView = null;
 
 /**
  * Export game summary stats to an .xlsx workbook (single sheet) and

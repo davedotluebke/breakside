@@ -902,6 +902,8 @@ function hideGameScreen() {
         document.body.classList.remove('game-screen-active');
         // Note: Legacy screens will be shown by showScreen() when navigating
     }
+    // Stop any replay clock on the Log tab (late-bound; owner game/gameScreenSync.js).
+    if (typeof window.replayView?.onLogTabHidden === 'function') window.replayView.onLogTabHidden();
 }
 
 /**
@@ -1256,6 +1258,11 @@ function applyTabState() {
                     eventsEl.scrollTop = eventsEl.scrollHeight;
                 });
             }
+            // Replay view (field playback above the log) — late-bound, the
+            // owner is game/gameScreenSync.js.
+            if (typeof window.replayView?.onLogTabShown === 'function') window.replayView.onLogTabShown();
+        } else if (typeof window.replayView?.onLogTabHidden === 'function') {
+            window.replayView.onLogTabHidden();
         }
     }
 

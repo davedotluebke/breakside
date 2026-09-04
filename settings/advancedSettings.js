@@ -97,6 +97,10 @@ const advancedSettings = (function() {
         'field.swingFraction': 0.25,                      // auto-classify a throw as a swing at ≥ this lateral fraction of the field width
         'field.flipHA': false,                            // swap which sideline is Home (Field tab display)
         'field.flipAD': false,                            // base attack direction (auto-alternates each point on top of this)
+        // --- Replay (Log tab field playback; docs/replay-viewer-plan.md) ---
+        'replay.capWithinMs': 4000,                       // dead time clipped between plays within a point (0 = Off)
+        'replay.capBetweenMs': 8000,                      // dead time clipped between points (0 = Off)
+        'replay.orientation': 'landscape',                // landscape (strip above the field) | portrait (strip down the side)
         // --- Hints ---
         'hints.hideAll': false                            // suppress all new-user hint toasts (see ui/hints.js)
     };
@@ -207,6 +211,20 @@ const advancedSettings = (function() {
     }
 
     /** Endzone depth (yards) for the Field tab. Defaults to 20 (USAU). */
+    /** Replay pacing/orientation (see docs/replay-viewer-plan.md). */
+    function getReplaySettings() {
+        const num = (key) => {
+            const v = parseInt(get(key), 10);
+            return Number.isFinite(v) && v >= 0 ? v : DEFAULTS[key];
+        };
+        const o = get('replay.orientation');
+        return {
+            capWithinMs: num('replay.capWithinMs'),
+            capBetweenMs: num('replay.capBetweenMs'),
+            orientation: o === 'portrait' ? 'portrait' : 'landscape',
+        };
+    }
+
     function getEndzoneYards() {
         let y = parseInt(get('field.endzoneYards'), 10);
         if (!Number.isFinite(y)) y = DEFAULTS['field.endzoneYards'];
@@ -392,6 +410,45 @@ const advancedSettings = (function() {
                         ['0.15', '15% of the field width'],
                         ['0.25', '25% of the field width'],
                         ['0.35', '35% of the field width']
+                    ]
+                }
+            ]
+        },
+        {
+            group: 'Replay',
+            note: 'Playback of the field diagram on the Log tab. Dead time is clipped so a replay at 1× doesn’t sit through real-world gaps; Off keeps the real spacing.',
+            fields: [
+                {
+                    key: 'replay.capWithinMs', label: 'Dead time within a point',
+                    help: 'Longest wait between two plays of the same point during timed playback.',
+                    type: 'select',
+                    options: [
+                        ['0', 'Off (real spacing)'],
+                        ['2000', '2 seconds'],
+                        ['4000', '4 seconds'],
+                        ['8000', '8 seconds'],
+                        ['15000', '15 seconds']
+                    ]
+                },
+                {
+                    key: 'replay.capBetweenMs', label: 'Dead time between points',
+                    help: 'Longest wait from the end of one point to the start of the next during timed playback.',
+                    type: 'select',
+                    options: [
+                        ['0', 'Off (real spacing)'],
+                        ['4000', '4 seconds'],
+                        ['8000', '8 seconds'],
+                        ['15000', '15 seconds'],
+                        ['30000', '30 seconds']
+                    ]
+                },
+                {
+                    key: 'replay.orientation', label: 'Field orientation',
+                    help: 'Landscape draws the field wide with the lineup strip above it; portrait draws it tall with the strip down the side. The ⟳ button on the replay bar switches too.',
+                    type: 'select',
+                    options: [
+                        ['landscape', 'Landscape (strip above)'],
+                        ['portrait', 'Portrait (strip beside)']
                     ]
                 }
             ]
@@ -657,6 +714,7 @@ const advancedSettings = (function() {
         buildNarrationVocabularyPrompt,
         getNarrationSessionOptions,
         getEndzoneYards,
+        getReplaySettings,
         getAutoLinePriorityOrder,
         getAutoLineCrossoverSamePriority,
         showAdvancedSettings
