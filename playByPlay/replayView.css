@@ -31,10 +31,13 @@
 .rv-strip {
     display: flex;
     gap: 5px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;          /* one line; replayView.js compacts chips to fit */
+    overflow: hidden;
     align-content: flex-start;
     min-width: 0;
 }
+.rv-strip.rv-compact .fp-chip { padding: 3px 7px; gap: 3px; }
+.rv-strip .fp-chip .fp-num[hidden] { display: none; }
 .rv-stage[data-o="portrait"] .rv-strip {
     flex-direction: column;
     flex-wrap: nowrap;

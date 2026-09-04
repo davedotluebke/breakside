@@ -136,6 +136,40 @@ function mountReplayView(cfg) {
         return Math.max(350, Math.min(1100, d * 1400)) / speed;
     }
 
+    // ---- strip fitting: one line, compacting as needed ----
+    // Levels, tried in order until the row fits: full (number + name), name
+    // only, number + initials, initials only. Portrait stacks chips in a
+    // column and never compacts.
+    const initialsOf = name => {
+        const words = String(name).trim().split(/\s+/).filter(Boolean);
+        if (words.length >= 2) return words.map(w => w[0].toUpperCase()).join('');
+        return String(name).slice(0, 2);
+    };
+    let fitKey = null, fitLevel = 0;
+    function applyLevel(level) {
+        stripEl.classList.toggle('rv-compact', level >= 2);
+        stripEl.querySelectorAll('.fp-chip[data-pname]').forEach(el => {
+            const name = el.dataset.pname;
+            const num = el.querySelector('.fp-num');
+            const nm = el.querySelector('.fp-nm');
+            if (num) num.hidden = (level === 1 || level === 3);
+            if (nm) nm.textContent = level >= 2 ? initialsOf(name) : name;
+        });
+    }
+    function fitStrip() {
+        if (view.o !== 'landscape') { applyLevel(0); fitKey = null; return; }
+        const key = stripEl.clientWidth + '|' + Array.from(stripEl.querySelectorAll('.fp-chip')).map(c => c.dataset.pname).join(',');
+        if (key === fitKey) { applyLevel(fitLevel); return; }
+        for (let level = 0; level <= 3; level++) {
+            applyLevel(level);
+            fitLevel = level;
+            if (stripEl.scrollWidth <= stripEl.clientWidth + 1) break;
+        }
+        fitKey = key;
+    }
+    const stripRO = (typeof ResizeObserver === 'function') ? new ResizeObserver(() => { fitKey = null; fitStrip(); }) : null;
+    if (stripRO) stripRO.observe(stripEl);
+
     const playerInfo = name => {
         const p = typeof cfg.getPlayerByName === 'function' ? cfg.getPlayerByName(name) : null;
         return { name, number: p && p.number != null ? p.number : null };
@@ -181,6 +215,7 @@ function mountReplayView(cfg) {
         // Strip: the whole line; a chip lights up once the player is on the field.
         stripEl.innerHTML = state.roster.map(name => fieldRender.chipHTML(playerInfo(name), { holder: state.holder === name })).join('');
         stripEl.querySelectorAll('.fp-chip[data-pname]').forEach(el => el.classList.toggle('on-field', !!state.players[el.dataset.pname]));
+        fitStrip();
         const who = state.who;
         bannerEl.innerHTML = who
             ? `<span class="rv-badge ${who}">${who === 'us' ? (engine.options.teamName || 'Us') : (engine.options.opponentName || 'Opponent')} possession</span>`
@@ -307,6 +342,7 @@ function mountReplayView(cfg) {
     function destroy() {
         controller.destroy();
         fade.dispose();
+        if (stripRO) stripRO.disconnect();
         logEl.removeEventListener('click', onLogClick);
         lineEls().forEach(el => el.classList.remove('rv-cur', 'rv-future'));
         root.remove();
