@@ -158,6 +158,9 @@ function mountReplayView(cfg) {
     }
     function fitStrip() {
         if (view.o !== 'landscape') { applyLevel(0); fitKey = null; return; }
+        // Not laid out yet (screen hidden, mid-transition): don't cache a
+        // bogus answer; the ResizeObserver re-fits once there is a width.
+        if (!stripEl.clientWidth) { fitKey = null; return; }
         const key = stripEl.clientWidth + '|' + Array.from(stripEl.querySelectorAll('.fp-chip')).map(c => c.dataset.pname).join(',');
         if (key === fitKey) { applyLevel(fitLevel); return; }
         for (let level = 0; level <= 3; level++) {
@@ -167,7 +170,12 @@ function mountReplayView(cfg) {
         }
         fitKey = key;
     }
-    const stripRO = (typeof ResizeObserver === 'function') ? new ResizeObserver(() => { fitKey = null; fitStrip(); }) : null;
+    // Re-fit on any size change, and once more a beat later: a screen that
+    // slides/scales in can report a transient width on the first callback.
+    const refit = () => { fitKey = null; fitStrip(); };
+    const stripRO = (typeof ResizeObserver === 'function')
+        ? new ResizeObserver(() => { refit(); requestAnimationFrame(refit); setTimeout(refit, 350); })
+        : null;
     if (stripRO) stripRO.observe(stripEl);
 
     const playerInfo = name => {
@@ -332,7 +340,7 @@ function mountReplayView(cfg) {
         markLog(controller.index);
         if (!controller.state.playing) redraw();
     }
-    function onShown() { shown = true; redraw(); }
+    function onShown() { shown = true; redraw(); refit(); }
     function onHidden() {
         shown = false;
         // A replay in progress stops with the tab; live-follow keeps its state
