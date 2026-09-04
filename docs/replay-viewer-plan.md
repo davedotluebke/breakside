@@ -12,10 +12,10 @@ was for the Field tab): **`mockups/replay-viewer/index.html`**. Run it with
 Design decisions below were settled with Dave on 2026-09-03; the "Why" notes
 record the reasoning so later sessions don't relitigate them.
 
-**Status (2026-09-03):** steps 1–7 built (branch `replay-engine`, which also
-carries `gamelog-entries` and `field-render-extract`); ARCHITECTURE.md
-§ Replay viewer is the code-level map. Step 8 (editing) and the later items
-are open.
+**Status (2026-09-04):** steps 1–7 are **merged to main** (merge `4bd3400`)
+after two field-test rounds on staging; ARCHITECTURE.md § Replay viewer is the
+code-level map. Step 8 (editing) and the later items are open — see
+"Handoff for step 8" at the end of this document.
 
 ## Decisions
 
@@ -309,3 +309,106 @@ Nothing else in the replay needs to know audio exists.
 - Narration-applied events: whether to prefer the transcript's own timing for
   `at` (the model could return offsets) or the apply time. Apply time is the
   v1 answer; the `??` in `stampEvent` leaves the door open.
+
+## Handoff for step 8 (editing) — written 2026-09-04
+
+Everything below is what a fresh session needs beyond the code and ARCHITECTURE.md.
+
+### Where things are
+
+- `playByPlay/replayView.js` — the only DOM code. `mountReplayView(cfg)` is
+  called from `game/gameScreenSync.js` (`ensureReplayView`, Log tab, live)
+  and `teams/gameSummary.js` (`renderGameSummaryEventLog`, stored games).
+  The view keeps `controller`, `engine`, `root`; `drawField(index, state,
+  animate)` renders one playhead position; `redraw()` re-renders the current
+  one. The controller already has `setEditing(on)` (refused while playing)
+  and a `transport` snapshot field `editing` — nothing renders it yet.
+- `playByPlay/replayEngine.js` — `fieldStateAt(i)` gives `players`,
+  `holder`, `disc`; `entries[i].event` is the live event object (same
+  identity as in `game.points[..].possessions[..].events[..]`), with
+  `pointIdx/possIdx/eventIdx`.
+- `playByPlay/fieldRender.js` — `toField(view, fx, fy)` + `clampLoc` +
+  `toNorm` turn a tap/drag on the pitch into a stored `{x, y}`; the Field
+  tab's `moveMarker` / `finishMarkerDrag` / `reclassifyThrow` in
+  `playByPlay/fieldPbp.js` are the reference for a location edit (huck /
+  swing flags re-derive from geometry; a `to` entering the attacking endzone
+  is the auto-score rule — confirm before flipping `score_flag`).
+- Modifier tables: `THROW_MODIFIERS` / `TURNOVER_MODIFIERS` /
+  `DEFENSE_MODIFIERS` and `handleModifierChange` live in
+  `playByPlay/fullPbp.js`; `findLastEditableEvent` in `pbpPossession`. Plan
+  step 8 says to move the tables to `pbpPossession` so both surfaces share
+  them.
+- Player-stat counters: `game/pointStats.js` `revertPointPlayerStats` /
+  `applyPointPlayerStats` — a score whose thrower/receiver changes must
+  revert + re-apply that point.
+- Narration bus: `narration/eventBus.js` has an `eventAmended` channel
+  (payload `{event, source, previousEvent}`) that nothing publishes yet —
+  the natural chokepoint for `pbpPossession.amendEvent(event, patch)`.
+- Save + sync after an edit: `saveAllTeamsData()` from `store/storage.js`
+  (that is what every PBP surface calls). **Unverified:** whether edits to a
+  *finished* game (summary screen) sync — the summary has no edit paths
+  today. Check `store/sync.js` for how a non-current game is pushed before
+  building on it.
+- Gate: `window.canEditPlayByPlay()` (Active Coach) for live games.
+
+### Log-line ↔ event mapping
+
+Lines carry `data-entry="<i>"`; `engine.entries[i]` is the entry; the
+engine and the log MUST be built with the same options
+(`gameLogEntryOptions()` in `game/gameLogic.js`, or the summary's option
+object) or indices drift. After an edit, call the view's `onLogUpdated()`
+(it rebuilds the engine and re-marks lines) — the Log tab does this itself
+whenever `updateGameLogEvents()` re-renders.
+
+### Test recipe that worked (preview, no chip-dragging)
+
+1. `./scripts/dev-backend.sh --port 8010 --label replay --fresh`, add a
+   launch.json entry serving the worktree on its own port (absolute script
+   path — see memory *project_preview_worktree_launch_json*), open
+   `?api=http://localhost:8010&testMode=true`.
+2. Create a team + 7 players through the UI (ids `newTeamNameInput`,
+   `saveNewTeamBtn`, `showRosterBtn`, `newPlayerInput`,
+   `newPlayerNumberInput`, `addFMPPlayerBtn`, `backToStartGameBtn`,
+   `opponentNameInput`, `startGameOnDBtn`), tick all boxes in
+   `#panelActivePlayersTable`, click `#pbpStartPointBtn`, dismiss
+   `#pullDialogClose`.
+3. Seed located events from a main-world `<script type="module">` (the
+   javascript tool runs in an isolated world):
+   `import { pbpPossession } from '/playByPlay/pbpPossession.js'` and call
+   `createPull / createDefense / createThrow(P('Bob'), P('Carol'), {from, to,
+   reset:true})` with `P = getPlayerFromName` from `/utils/helpers.js`.
+   Side effect: the pull dialog re-opens on every render because its
+   Proceed was never pressed — harmless, dismiss it.
+4. Log tab: `#headerSegControl button[data-tab="log"]`; the view is
+   `.rv-root` inside `.game-log-content`. Summary:
+   `GS.showGameSummaryFromList(game)` from `/teams/gameSummary.js` with a
+   game from `ST.teams` (`/store/storage.js`).
+5. The hidden Browser pane returns black screenshots and never fires
+   ResizeObserver / rAF; pin an element `position:fixed; top:0` to
+   screenshot it, and verify layout with `getBoundingClientRect` probes.
+
+### Field-test lessons (all fixed, don't regress)
+
+- Never use theme tokens for anything drawn ON the pitch — it is always
+  green; dark mode made white-on-white labels.
+- iOS Safari: size the pitch by **width** (`width` + `aspect-ratio`,
+  `height: auto`); height-driven sizing with a % max-width collapsed to zero
+  width, and flex `stretch` beat `aspect-ratio` — the field is
+  `align-self: flex-start`.
+- Font Awesome comes from a CDN; on a weak signal the transport buttons went
+  blank. The replay bar's icons are inline SVG now — keep it that way.
+- `touch-action: none` + no text selection on the slider and timeline, or a
+  drag scrolls the page.
+- A pre-merge-commit hook runs the Playwright suite when merging into main;
+  a flaky run leaves the merge staged ("Not committing merge") — `git commit
+  --no-edit` re-runs it.
+
+### Suggested v1 scope for the edit sheet
+
+Paused only; Edit button on the transport bar (the plan's ⌘ slot is free).
+Tap a `data-entry` line → sheet with: thrower / receiver (defender, puller)
+chips from the point roster + Unknown; modifier chips from the shared
+tables; "Move spot" which arms a drag of the actor label / disc on the
+pitch. Receiver change whose next event has a different thrower → confirm
+*Change next thrower to X* / *Insert two Unknown Player passes* / Cancel.
+All writes through `amendEvent` → `eventAmended` → save → `onLogUpdated()`.
