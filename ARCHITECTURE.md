@@ -659,17 +659,23 @@ Layers, bottom-up (all under `playByPlay/`):
   the pitch to move the catch spot (live preview from the mutated event,
   restored before the write). A receiver change that contradicts the next
   thrower gets an inline *retarget / bridge with two inferred Unknown
-  Player passes / cancel*. Every write is `pbpPossession.amendEvent()`;
-  the mount site's `onEdited` re-renders its lines/stats, then the view
+  Player passes / cancel* — and a thrower change gets the mirror image
+  (the previous pass's receiver, or an interception's defender across the
+  possession boundary). Every write is `pbpPossession.amendEvent()`; the
+  mount site's `onEdited` re-renders its lines/stats, then the view
   rebuilds its engine and follows the edited play. Gate: `cfg.canEdit()`
-  on every write — Active Coach in-game, not-a-viewer on the summary.
+  on every write — any coach of the team (not a viewer) on both surfaces;
+  the Active Coach role is for recording, not corrections. Chips WRAP
+  rather than scroll: `.fp-chip` carries `touch-action: none` for the
+  Field tab's pegman drag, which makes a scroll strip undraggable on a
+  phone.
   `pbpPossession` and the toast are late-bound (`window.*`): importing
   either closes a cycle through `teams/teamList → teams/gameSummary`.
 - **`eventAmend.js`** (pure leaf, node-tested) — the rules behind an
   amendment, shared with the Full tab's modifier strip and the Field tab's
   marker drag: the modifier tables, throw geometry → huck/reset/swing, the
-  catch-spot cascade (a `to` is the next event's `from`), the receiver
-  chain conflict and its two resolutions, and the live counter moves
+  catch-spot cascade (a `to` is the next event's `from`), the throw-chain
+  conflicts in both directions and their two resolutions, and the live counter moves
   (completedPasses / goals / assists follow a player change). `score_flag`
   is refused: a goal change moves the score and the point boundary.
 

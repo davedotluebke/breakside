@@ -184,6 +184,8 @@
     background: var(--surface-inset);
     border: 1px solid var(--border-lighter);
     font-size: 13px;
+    /* A double-tap on a chip must not select the page's text. */
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
 .rv-edit[hidden] { display: none; }
 .rv-edit-hd { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -197,11 +199,14 @@
 }
 .rv-edit-done { flex: 0 0 auto; background: var(--text-primary); color: var(--surface-card); border-color: transparent; }
 .rv-edit-hint { color: var(--text-muted); font-size: 12px; }
-.rv-edit-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.rv-edit-lbl { flex: 0 0 62px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
-.rv-edit-chips { flex: 1 1 auto; min-width: 0; display: flex; gap: 5px; overflow-x: auto; padding: 2px 0; scrollbar-width: none; }
-.rv-edit-chips::-webkit-scrollbar { display: none; }
-.rv-edit-chips .fp-chip { flex: 0 0 auto; cursor: pointer; }
+.rv-edit-row { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.rv-edit-lbl { flex: 0 0 62px; padding-top: 7px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+/* Chips WRAP rather than scroll: the Field tab's .fp-chip carries
+   touch-action: none (a chip drag there becomes a pegman), which makes a
+   horizontal scroll strip undraggable on a phone. Two rows of the point's
+   line + Unknown always fit; the tap target stays a plain tap. */
+.rv-edit-chips { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; gap: 5px; padding: 2px 0; }
+.rv-edit-chips .fp-chip { flex: 0 0 auto; cursor: pointer; touch-action: manipulation; padding: 6px 11px; font-size: 13px; }
 .rv-mod.on { background: var(--pbp-blue-deep, #1d4ed8); border-color: var(--pbp-blue-deep, #1d4ed8); color: #fff; }
 .rv-edit-spot.on { background: var(--brand-orange); border-color: transparent; color: #fff; }
 .rv-edit-confirm { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-top: 4px; border-top: 1px dashed var(--border-light); }

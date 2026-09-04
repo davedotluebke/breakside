@@ -13,8 +13,8 @@ import { Throw, Turnover, Defense, Pull } from '../../store/models.js';
 import {
     THROW_MODIFIERS, TURNOVER_MODIFIERS, DEFENSE_MODIFIERS, modifiersFor,
     classifyThrowGeometry, reclassifyThrow,
-    flattenPointEvents, locateEvent, pointOfEvent, nextInPossession,
-    receiverChainConflict, applyEventPatch, insertUnknownBridge,
+    flattenPointEvents, locateEvent, pointOfEvent, nextInPossession, prevInPossession,
+    receiverChainConflict, throwerChainConflict, applyEventPatch, insertUnknownBridge, insertUnknownBridgeBefore,
     adjustPlayerCounters, snapshotEvent,
 } from '../../playByPlay/eventAmend.js';
 
@@ -187,4 +187,58 @@ test('adjustPlayerCounters moves completedPasses / goals / assists with the play
     applyEventPatch(point, cal, { defender: P.Cara });
     adjustPlayerCounters(b4, cal);
     assert.equal(P.Bob.goals, 0); assert.equal(P.Cara.goals, 3);
+});
+
+test('throwerChainConflict: the previous receiver (or interceptor) must be the new thrower', () => {
+    const point = makePoint();
+    const [t0, t1, t2] = throws(point);
+    assert.equal(prevInPossession(point, t1), t0);
+    assert.equal(prevInPossession(point, t0), null);          // first in its possession
+    assert.equal(throwerChainConflict(point, t1, P.Cara), null);   // unchanged
+    assert.deepEqual(throwerChainConflict(point, t1, P.Alice), { prev: t0, field: 'receiver', holder: 'Cara' });
+    assert.equal(throwerChainConflict(point, t0, P.Alice), null);   // nothing before it in the possession
+    // A Turnover's thrower is chained the same way.
+    const turn = new Turnover({ thrower: P.Alice, throwaway: true });
+    point.possessions[1].events = [t0, t1, turn];
+    assert.equal(throwerChainConflict(point, turn, P.Bob).prev, t1);
+    // After an interception the interceptor holds the disc — and the
+    // interception sits in the DEFENSIVE possession, the throw opens the next.
+    const pick = new Defense({ defender: P.Bob, interception: true });
+    point.possessions[0].events[1] = pick;
+    point.possessions[1].events = [t2];
+    assert.deepEqual(throwerChainConflict(point, t2, P.Cara), { prev: pick, field: 'defender', holder: 'Bob' });
+    assert.equal(throwerChainConflict(point, t2, P.Bob), null);
+    // A block (not caught) names no holder.
+    point.possessions[0].events[1] = new Defense({ defender: P.Bob, block: true });
+    assert.equal(throwerChainConflict(point, t2, P.Cara), null);
+    // Only the first event of the possession looks back across the boundary.
+    point.possessions[0].events[1] = pick;
+    point.possessions[1].events = [t1, t2];
+    assert.equal(throwerChainConflict(point, t2, P.Bob).prev, t1);
+});
+
+test('insertUnknownBridgeBefore: two inferred passes between the previous holder and the new thrower', () => {
+    const point = makePoint();
+    const [t0, t1, t2] = throws(point);
+    assert.deepEqual(insertUnknownBridgeBefore(point, t1, UNKNOWN), []);
+    applyEventPatch(point, t1, { thrower: P.Alice });
+    const ins = insertUnknownBridgeBefore(point, t1, UNKNOWN);
+    assert.equal(ins.length, 2);
+    assert.deepEqual(point.possessions[1].events, [t0, ins[0], ins[1], t1, t2]);
+    assert.equal(ins[0].thrower, P.Cara); assert.equal(ins[0].receiver, UNKNOWN);
+    assert.equal(ins[1].thrower, UNKNOWN); assert.equal(ins[1].receiver, P.Alice);
+    ins.forEach(e => { assert.equal(e.inferred_flag, true); assert.equal(e.to, null); assert.equal(e.at, null); });
+    assert.equal(throwerChainConflict(point, t1, t1.thrower), null, 'bridged chain is consistent');
+});
+
+test('insertUnknownBridgeBefore after an interception inserts at the top of the offensive possession', () => {
+    const point = makePoint();
+    const [t0] = throws(point);
+    point.possessions[0].events[1] = new Defense({ defender: P.Bob, interception: true });
+    applyEventPatch(point, t0, { thrower: P.Dev });
+    const ins = insertUnknownBridgeBefore(point, t0, UNKNOWN);
+    assert.equal(ins.length, 2);
+    assert.deepEqual(point.possessions[1].events.slice(0, 3), [ins[0], ins[1], t0]);
+    assert.equal(ins[0].thrower, P.Bob); assert.equal(ins[1].receiver, P.Dev);
+    assert.equal(throwerChainConflict(point, t0, t0.thrower), null);
 });

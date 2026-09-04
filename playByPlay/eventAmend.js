@@ -14,9 +14,10 @@
  *   - the modifier tables (which flags each event type exposes for editing)
  *   - throw geometry → huck / reset / swing flags (Field-mode classification)
  *   - the catch-spot cascade: a Throw's `to` is the next event's `from`
- *   - the receiver chain: changing a receiver whose next throw has a
- *     different thrower is a contradiction the caller must resolve —
- *     retarget the next thrower, or bridge with two Unknown Player passes
+ *   - the throw chain, both ways: a receiver whose next throw has a
+ *     different thrower, or a thrower whom the previous play didn't leave
+ *     the disc with, is a contradiction the caller must resolve — retarget
+ *     the neighbour, or bridge with two Unknown Player passes
  *   - live per-player counters (completedPasses / goals / assists) follow a
  *     thrower / receiver change, so the roster stats stay consistent with
  *     what createThrow incremented
@@ -156,6 +157,56 @@ export function receiverChainConflict(point, event, newReceiver) {
     return { next, thrower: nextThrower };
 }
 
+/**
+ * The event that precedes `event` within the same possession, or null.
+ */
+export function prevInPossession(point, event) {
+    const at = locateEvent(point, event);
+    if (!at) return null;
+    const events = point.possessions[at.possIdx].events || [];
+    return at.eventIdx > 0 ? events[at.eventIdx - 1] : null;
+}
+
+/**
+ * The play that left the disc with this event's thrower: the previous
+ * event in the possession, or — for the FIRST event of an offensive
+ * possession — the last event of the previous possession when it is an
+ * interception (a Defense lives in the defensive possession; the throw it
+ * sets up opens the next one).
+ */
+export function holderSourceOf(point, event) {
+    const prev = prevInPossession(point, event);
+    if (prev) return prev;
+    const at = locateEvent(point, event);
+    if (!at || at.eventIdx !== 0 || at.possIdx === 0) return null;
+    const before = point.possessions[at.possIdx - 1].events || [];
+    const last = before[before.length - 1] || null;
+    return (last && last.type === 'Defense' && last.interception_flag) ? last : null;
+}
+
+/**
+ * The mirror of receiverChainConflict: would giving `event` (a Throw or
+ * Turnover) the thrower `newThrower` contradict the previous play? The
+ * previous Throw's receiver — or an interception's defender — is whoever
+ * releases this one.
+ * @returns {{ prev: object, field: 'receiver'|'defender', holder: string }|null}
+ *   the conflicting previous event, the field on it that names the
+ *   holder, and that holder's name; null when consistent
+ */
+export function throwerChainConflict(point, event, newThrower) {
+    if (!event || (event.type !== 'Throw' && event.type !== 'Turnover')) return null;
+    const prev = holderSourceOf(point, event);
+    if (!prev) return null;
+    let field = null;
+    if (prev.type === 'Throw' && !prev.score_flag) field = 'receiver';
+    else if (prev.type === 'Defense' && prev.interception_flag && prev.defender) field = 'defender';
+    if (!field) return null;
+    const holder = nameOf(prev[field]);
+    const thrower = nameOf(newThrower);
+    if (!holder || !thrower || holder === thrower) return null;
+    return { prev, field, holder };
+}
+
 // -----------------------------------------------------------------
 // Applying a patch.
 // -----------------------------------------------------------------
@@ -225,6 +276,25 @@ export function insertUnknownBridge(point, event, unknown) {
     a.inferred_flag = true;
     b.inferred_flag = true;
     events.splice(at.eventIdx + 1, 0, a, b);
+    return [a, b];
+}
+
+/**
+ * Bridge a thrower change: `event` is now thrown by X but the previous play
+ * left the disc with Y, so insert Throw Y→Unknown and Throw Unknown→X just
+ * before `event` (same shape as insertUnknownBridge).
+ * @returns {object[]} the inserted events (empty when nothing to bridge)
+ */
+export function insertUnknownBridgeBefore(point, event, unknown) {
+    const conflict = throwerChainConflict(point, event, event.thrower);
+    if (!conflict || !unknown) return [];
+    const at = locateEvent(point, event);
+    const events = point.possessions[at.possIdx].events;
+    const a = new Throw({ thrower: conflict.prev[conflict.field], receiver: unknown });
+    const b = new Throw({ thrower: unknown, receiver: event.thrower });
+    a.inferred_flag = true;
+    b.inferred_flag = true;
+    events.splice(at.eventIdx, 0, a, b);
     return [a, b];
 }
 

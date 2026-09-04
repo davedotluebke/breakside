@@ -316,7 +316,7 @@ function renderGameSummaryEventLog(game) {
             getEntryOptions: () => entryOptions,
             getPlayerByName: name => { const r = lookup(name); return r && r.obj ? r.obj : null; },
             live: false,
-            // Editing (step 8): coaches of the team, not viewers. After a
+            // Editing (step 8): any coach of the team, not viewers. After a
             // write, redraw the lines in place (the view re-marks them) and
             // recompute the stats tables from the amended events.
             canEdit: () => !isViewer(),

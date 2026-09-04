@@ -10,14 +10,14 @@
  * spot is being dragged (restored before the amendment is applied, so the
  * bus payload's previousEvent is honest).
  *
- * Gate: cfg.canEdit() at every write — the Active Coach in a live game (the
- * role can move while the sheet is open), a coach (not a viewer) on a
- * finished one.
+ * Gate: cfg.canEdit() at every write — any coach of the team (not a
+ * viewer); the Active Coach role does not apply to corrections.
  *
- * Receiver change (Decision 11): when the next throw in the possession is
- * thrown by someone other than the new receiver, an inline confirm offers
- * "change next thrower" or "insert two Unknown Player passes"; nothing is
- * written until one is picked.
+ * Receiver / thrower change (Decision 11): when the next throw in the
+ * possession is thrown by someone other than the new receiver — or the
+ * previous play left the disc with someone other than the new thrower —
+ * an inline confirm offers "change the neighbour" or "insert two Unknown
+ * Player passes"; nothing is written until one is picked.
  *
  * Not in v1 (deliberately): flipping score_flag from a spot that enters or
  * leaves the endzone — a goal change moves the score and the point boundary,
@@ -28,7 +28,7 @@ import { UNKNOWN_PLAYER } from '../store/models.js';
 import { playerStub } from '../utils/helpers.js';
 import { escapeHtml } from '../utils/gameLogRenderer.js';
 import * as fieldRender from './fieldRender.js';
-import { modifiersFor, receiverChainConflict, nextInPossession, nameOf } from './eventAmend.js';
+import { modifiersFor, receiverChainConflict, throwerChainConflict, nextInPossession, nameOf } from './eventAmend.js';
 
 // pbpPossession (the amendEvent chokepoint) and the controller toast are
 // late-bound: importing either here closes an import cycle back through
@@ -176,9 +176,17 @@ function createReplayEditor(ctx) {
                 </div>`;
             }
             if (pending && pending.ev === ev) {
+                const c = pending.conflict, nn = escapeHtml(pending.newName);
+                const txt = pending.side === 'next'
+                    ? `The next throw is by <b>${escapeHtml(c.thrower)}</b>, not ${nn}.`
+                    : (c.field === 'defender'
+                        ? `The previous play was an interception by <b>${escapeHtml(c.holder)}</b>, not ${nn}.`
+                        : `The previous pass was caught by <b>${escapeHtml(c.holder)}</b>, not ${nn}.`);
+                const retarget = pending.side === 'next' ? `Change next thrower to ${nn}`
+                    : (c.field === 'defender' ? `Change interceptor to ${nn}` : `Change previous receiver to ${nn}`);
                 h += `<div class="rv-edit-confirm">
-                    <div class="rv-edit-confirm-txt">The next throw is by <b>${escapeHtml(pending.conflict.thrower)}</b>, not ${escapeHtml(pending.newName)}.</div>
-                    <button type="button" data-chain="retarget">Change next thrower to ${escapeHtml(pending.newName)}</button>
+                    <div class="rv-edit-confirm-txt">${txt}</div>
+                    <button type="button" data-chain="retarget">${retarget}</button>
                     <button type="button" data-chain="bridge">Insert two Unknown Player passes</button>
                     <button type="button" data-chain="cancel">Cancel</button>
                 </div>`;
@@ -211,14 +219,13 @@ function createReplayEditor(ctx) {
     function changePlayer(ev, role, name) {
         if (nameOf(ev[role]) === name) return;
         const p = playerFor(name);
-        if (role === 'receiver' && ev.type === 'Throw') {
-            const entry = currentEntry();
-            const conflict = receiverChainConflict(pointOf(entry), ev, p);
-            if (conflict) {
-                pending = { ev, patch: { receiver: p }, conflict, newName: name };
-                render();
-                return;
-            }
+        const point = pointOf(currentEntry());
+        const conflict = role === 'receiver' ? receiverChainConflict(point, ev, p)
+            : role === 'thrower' ? throwerChainConflict(point, ev, p) : null;
+        if (conflict) {
+            pending = { ev, patch: { [role]: p }, conflict, newName: name, side: role === 'receiver' ? 'next' : 'prev' };
+            render();
+            return;
         }
         amend(ev, { [role]: p });
     }

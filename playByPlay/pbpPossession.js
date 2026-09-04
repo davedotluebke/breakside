@@ -41,8 +41,8 @@ import { moveToNextPoint } from '../game/pointManagement.js';
 import { ensurePossessionExists } from './keyPlayDialog.js';
 import {
     THROW_MODIFIERS, TURNOVER_MODIFIERS, DEFENSE_MODIFIERS, modifiersFor,
-    pointOfEvent, receiverChainConflict, applyEventPatch, insertUnknownBridge,
-    adjustPlayerCounters,
+    pointOfEvent, receiverChainConflict, throwerChainConflict, applyEventPatch,
+    insertUnknownBridge, insertUnknownBridgeBefore, adjustPlayerCounters,
 } from './eventAmend.js';
 
 const pbpPossession = (function() {
@@ -187,11 +187,13 @@ const pbpPossession = (function() {
      * @param opts  {
      *   game:   the game holding the event (default: the current game),
      *   chain:  how to reconcile a receiver change that contradicts the
-     *           next throw's thrower (eventAmend.receiverChainConflict):
-     *           'retarget' → the next event's thrower becomes the new
-     *           receiver; 'bridge' → two inferred Unknown Player passes are
-     *           inserted; undefined → leave the contradiction (the caller
-     *           checked, or accepted it),
+     *           next throw's thrower, or a thrower change that contradicts
+     *           the previous play's holder (eventAmend.receiverChainConflict /
+     *           throwerChainConflict): 'retarget' → the neighbour's
+     *           thrower / receiver (or interceptor) becomes the new player;
+     *           'bridge' → two inferred Unknown Player passes are inserted
+     *           between them; undefined → leave the contradiction (the
+     *           caller checked, or accepted it),
      *   source: bus source tag (default 'manual')
      * }
      * @returns {{ event, previousEvent, changed: object[], inserted: object[] }|null}
@@ -206,19 +208,29 @@ const pbpPossession = (function() {
         const point = where.point;
         const fractions = geometryFractions();
 
-        const conflict = (patch && patch.receiver && opts.chain)
+        const nextConflict = (patch && patch.receiver && opts.chain)
             ? receiverChainConflict(point, evt, patch.receiver) : null;
+        const prevConflict = (patch && patch.thrower && opts.chain)
+            ? throwerChainConflict(point, evt, patch.thrower) : null;
         const result = applyEventPatch(point, evt, patch, fractions);
         const amended = [[evt, result.previousEvent]];
         if (result.cascaded) amended.push([result.cascaded, null]);
 
         let inserted = [];
-        if (conflict && opts.chain === 'retarget') {
-            const r = applyEventPatch(point, conflict.next, { thrower: evt.receiver }, fractions);
-            adjustPlayerCounters(r.previousEvent, conflict.next);
-            amended.push([conflict.next, r.previousEvent]);
-        } else if (conflict && opts.chain === 'bridge') {
-            inserted = insertUnknownBridge(point, evt, getUnknown());
+        if (opts.chain === 'retarget') {
+            if (nextConflict) {
+                const r = applyEventPatch(point, nextConflict.next, { thrower: evt.receiver }, fractions);
+                adjustPlayerCounters(r.previousEvent, nextConflict.next);
+                amended.push([nextConflict.next, r.previousEvent]);
+            }
+            if (prevConflict) {
+                const r = applyEventPatch(point, prevConflict.prev, { [prevConflict.field]: evt.thrower }, fractions);
+                adjustPlayerCounters(r.previousEvent, prevConflict.prev);
+                amended.push([prevConflict.prev, r.previousEvent]);
+            }
+        } else if (opts.chain === 'bridge') {
+            if (nextConflict) inserted = inserted.concat(insertUnknownBridge(point, evt, getUnknown()));
+            if (prevConflict) inserted = inserted.concat(insertUnknownBridgeBefore(point, evt, getUnknown()));
             inserted.forEach(e => {
                 if (e.thrower && typeof e.thrower === 'object') {
                     e.thrower.completedPasses = (typeof e.thrower.completedPasses === 'number' ? e.thrower.completedPasses : 0) + 1;

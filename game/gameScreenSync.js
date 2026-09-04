@@ -184,10 +184,11 @@ function ensureReplayView() {
         getEntryOptions: () => gameLogEntryOptions(),
         getPlayerByName: name => getPlayerFromName(name),
         live: true,
-        // Editing (playByPlay/replayEdit.js): the Active Coach only, checked
-        // on every write (late-bound: game/controllerState evaluates later).
-        canEdit: () => (typeof window.canEditPlayByPlay === 'function' ? window.canEditPlayByPlay() : true),
-        editDeniedMessage: 'Only the Active Coach can edit plays',
+        // Editing (playByPlay/replayEdit.js): any coach of the team, not
+        // viewers — corrections don't need the Active Coach role (Dave,
+        // 2026-09-04 field test). Checked on every write.
+        canEdit: () => !(typeof window.isViewer === 'function' && window.isViewer()),
+        editDeniedMessage: 'Viewers can’t edit plays',
         onEdited: () => updateGameLogEvents(),
     });
     replayViewGameId = gameId;

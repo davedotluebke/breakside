@@ -320,10 +320,16 @@ Nothing else in the replay needs to know audio exists.
 
 ## Step 8 status and handoff — written 2026-09-04
 
-Editing v1 is built on branch `replay-edit` (commits `71ef286`, `95294c3`
-+ docs). Verified in the in-IDE preview against a fresh local backend on
-both mount sites (Log tab live game, post-game summary). Not yet
-field-tested on staging or merged.
+Editing v1 is built on branch `replay-edit`. Verified in the in-IDE
+preview against a fresh local backend on both mount sites (Log tab live
+game, post-game summary). First staging field test (Dave, 2026-09-04)
+found three things, all fixed and re-verified in the preview: the chip
+strip didn't scroll on a phone (now wraps — `.fp-chip`'s `touch-action:
+none` was the cause) and double-tap selected page text (`user-select:
+none` on the sheet); a thrower change now gets the mirror confirm of the
+receiver one (previous receiver, or the interceptor across the possession
+boundary); and the gate is **any coach**, not the Active Coach role.
+Second staging round pending; not merged.
 
 ### What shipped
 
@@ -331,7 +337,9 @@ field-tested on staging or merged.
   8 tests): modifier tables (moved out of fullPbp), `classifyThrowGeometry`
   (moved out of fieldPbp; both tabs now call it), `applyEventPatch`
   (players / `to` with cascade to the next `from` + reclassify / `*_flag`;
-  `score_flag` refused), `receiverChainConflict`, `insertUnknownBridge`,
+  `score_flag` refused), `receiverChainConflict` / `throwerChainConflict`
+  (`holderSourceOf` looks back across one possession boundary for an
+  interception), `insertUnknownBridge` / `insertUnknownBridgeBefore`,
   `adjustPlayerCounters`.
 - `pbpPossession.amendEvent(evt, patch, {game, chain, source})` — the
   chokepoint: applies, reconciles the chain (`'retarget'` | `'bridge'`),
@@ -342,9 +350,10 @@ field-tested on staging or merged.
   the open item about finished games (they did not sync before).
 - `playByPlay/replayEdit.js` + the ✎ button in `replayView.js` and the
   `rv-edit*` CSS. Mount sites pass `canEdit` / `editDeniedMessage` /
-  `onEdited`: `game/gameScreenSync.js` (Active Coach; `updateGameLogEvents`)
-  and `teams/gameSummary.js` (`!isViewer()`; re-renders lines + both stats
-  tables in place — the view is NOT remounted, so the playhead survives).
+  `onEdited`: `game/gameScreenSync.js` (`updateGameLogEvents`) and
+  `teams/gameSummary.js` (re-renders lines + both stats tables in place —
+  the view is NOT remounted, so the playhead survives). Both gate on
+  `!isViewer()`.
 - `window.showControllerToast` is a new window survivor (controllerState).
 
 ### Preview-verified behaviours (2026-09-04)
@@ -372,6 +381,11 @@ summary mounted with Live disabled and the ✎ visible; each write hit
 - Turnover / Defense "who" rows only appear when the event has that
   player; opponent plays and `Other`/`Violation` lines show "can't be
   edited here". Assist is not editable in v1.
+- Preview gotcha seen this round: seconds after seeding events through
+  the module script, the live game was replaced by the server's stale copy
+  (the sync-replacement trap in memory *project_preview_game_testing*) and
+  the seeded events vanished. Seed and drive the sheet in the SAME
+  javascript call.
 - Distant: insert / delete events; undo of an amendment (the bus carries
   `previousEvent`, nothing consumes it yet).
 
