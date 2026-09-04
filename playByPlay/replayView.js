@@ -23,6 +23,7 @@
 import { createReplayEngine } from './replayEngine.js';
 import { createReplayController } from './replayController.js';
 import * as fieldRender from './fieldRender.js';
+import { createReplayEditor } from './replayEdit.js';
 import { advancedSettings } from '../settings/advancedSettings.js';
 
 // Slider stops. 'pap' (the engine's play-after-play) is surfaced as "Speedy":
@@ -42,6 +43,7 @@ const ICON = {
     prev:   '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M2.5 2.5h2v11h-2zM13.5 2.5v11L5.5 8z"/></svg>',
     next:   '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M11.5 2.5h2v11h-2zM2.5 2.5v11L10.5 8z"/></svg>',
     rotate: '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M13 8a5 5 0 1 1-1.6-3.7"/><path fill="currentColor" d="M13.5 1.5v4h-4z"/></svg>',
+    edit:   '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M11.3 1.9a1.5 1.5 0 0 1 2.1 0l.7.7a1.5 1.5 0 0 1 0 2.1L6 12.8l-3.6.8.8-3.6zM10.6 3.7l1.7 1.7 1-1-1.7-1.7zM4.4 10l-.4 1.9 1.9-.4 5.3-5.3-1.5-1.5z"/></svg>',
 };
 
 /**
@@ -55,6 +57,10 @@ const ICON = {
  *   the same entry list so indices line up with the log's data-entry attributes
  * @param {(name: string) => object|null} [cfg.getPlayerByName] - display info (jersey number) for actor labels
  * @param {boolean} [cfg.live] - offer Live (follow the tail); false for finished games
+ * @param {() => boolean} [cfg.canEdit] - editing gate (playByPlay/replayEdit.js); absent = no Edit button
+ * @param {string} [cfg.editDeniedMessage] - toast when canEdit() refuses
+ * @param {() => void} [cfg.onEdited] - called after every amendment so the mount site can
+ *   re-render its log lines / stats; the view refreshes itself regardless
  * @returns {{refresh:Function, onLogUpdated:Function, onShown:Function, onHidden:Function, destroy:Function, controller:object, engine:object, root:HTMLElement}|null}
  *   null when the game has no located events (nothing mounted)
  */
@@ -90,6 +96,7 @@ function mountReplayView(cfg) {
                 <div class="rv-ticks">${SPEED_LABELS.map(l => `<span>${l}</span>`).join('')}</div>
             </div>
             <button class="rv-tbtn rv-rotate" title="Rotate field" aria-label="Rotate field">${ICON.rotate}</button>
+            <button class="rv-tbtn rv-editbtn" title="Edit play" aria-label="Edit play" hidden>${ICON.edit}</button>
         </div>
         <div class="rv-timeline" title="Points — tap or drag to scrub"><div class="rv-head"></div></div>
         <button class="rv-golive" hidden></button>
@@ -100,7 +107,10 @@ function mountReplayView(cfg) {
     const playBtn = q('.rv-play'), prevBtn = q('.rv-prev'), nextBtn = q('.rv-next');
     const speedInput = q('.rv-speed-input'), ticksEl = q('.rv-ticks');
     const timelineEl = q('.rv-timeline'), headEl = q('.rv-head'), goLiveBtn = q('.rv-golive');
+    const editBtn = q('.rv-editbtn');
     if (!live) { ticksEl.firstElementChild.classList.add('disabled'); }
+    const editable = typeof cfg.canEdit === 'function';
+    editBtn.hidden = !editable;
 
     // ---- field adapter (playByPlay/fieldRender.js) ----
     // The pitch is the Field tab's: static layers + the located-event layer
@@ -339,6 +349,10 @@ function mountReplayView(cfg) {
         root.classList.toggle('rv-waiting', !!s.follow && s.atTail);
         goLiveBtn.hidden = !(s.unseen > 0 && !s.follow);
         if (s.unseen > 0) goLiveBtn.textContent = `${s.unseen} new · Go live ›`;
+        root.classList.toggle('rv-editing', !!s.editing);
+        editBtn.classList.toggle('on', !!s.editing);
+        editBtn.title = s.editing ? 'Stop editing' : 'Edit play';
+        if (editor) editor.onTransport(s);
         positionHead(s.index);
     }
 
@@ -347,6 +361,17 @@ function mountReplayView(cfg) {
         markLog(index);
         return dur;
     });
+    // The editor subscribes to 'field' too (it re-renders its sheet when the
+    // playhead moves), so it is created before the transport listener that
+    // hands it snapshots.
+    const editor = editable ? createReplayEditor({
+        root, fieldEl, view, engine, controller,
+        getGame, getEntryOptions,
+        getPlayerByName: cfg.getPlayerByName,
+        canEdit: cfg.canEdit, editDeniedMessage: cfg.editDeniedMessage, onEdited: cfg.onEdited,
+        redraw: () => redraw(),
+        refreshView: () => onLogUpdated(),
+    }) : null;
     controller.on('transport', renderTransport);
 
     // ---- wiring ----
@@ -366,6 +391,7 @@ function mountReplayView(cfg) {
         redraw();
     });
     goLiveBtn.addEventListener('click', () => controller.goLive());
+    editBtn.addEventListener('click', () => { if (editor) editor.toggle(); });
 
     // Timeline scrubbing: tap or drag. Pointer capture keeps the drag on the
     // bar; touch-action: none (CSS) keeps the page from scrolling instead.
@@ -417,8 +443,10 @@ function mountReplayView(cfg) {
         // A replay in progress stops with the tab; live-follow keeps its state
         // (no timers run while waiting) so the tail is current on return.
         if (controller.state.playing && !controller.state.follow) controller.pause();
+        if (editor) editor.close();
     }
     function destroy() {
+        if (editor) editor.destroy();
         controller.destroy();
         fade.dispose();
         logEl.removeEventListener('click', onLogClick);
@@ -434,7 +462,7 @@ function mountReplayView(cfg) {
     else { controller.setSpeed(1); controller.seek(engine.entries.length - 1); }
     renderTransport(controller.snapshot());
 
-    return { refresh: onLogUpdated, onLogUpdated, onShown, onHidden, destroy, controller, engine, root };
+    return { refresh: onLogUpdated, onLogUpdated, onShown, onHidden, destroy, controller, engine, root, editor };
 }
 
 export { mountReplayView, SPEED_STOPS };

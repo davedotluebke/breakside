@@ -133,9 +133,11 @@ import './game/gameScreenSync.js';
 import { initializeScoreAttributionDialog } from './playByPlay/scoreAttribution.js';
 import { initializeKeyPlayDialog } from './playByPlay/keyPlayDialog.js';
 import { initializePullDialog } from './playByPlay/pullDialog.js';
+import './playByPlay/eventAmend.js';
 import './playByPlay/pbpPossession.js';
 import './playByPlay/fullPbp.js';
 import './playByPlay/fieldPbp.js';
+import './playByPlay/replayEdit.js';
 import './playByPlay/replayView.js';
 // narration/eventBus.js converted with C7 (the playByPlay layer imports it);
 // evaluating it here — earlier than its old tag position after the pbp files —

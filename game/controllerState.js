@@ -1709,6 +1709,10 @@ window.isLineCoach = isLineCoach;
 // window survivor: late-bound back-edge hook (called window-qualified by
 // game/gameScreenEvents.js and playByPlay modules)
 window.canEditPlayByPlay = canEditPlayByPlay;
+// window survivor: late-bound back-edge hook (called window-qualified by
+// playByPlay/replayEdit.js — a direct import would close a cycle through
+// teams/teamList → teams/gameSummary → playByPlay/replayView)
+window.showControllerToast = showControllerToast;
 // window survivor: e2e test seam — Playwright scenario 04 calls
 // w.startControllerPolling / w.stopControllerPolling; also called by
 // screens/navigation.js (evaluates before this file; late-bound back-edge)

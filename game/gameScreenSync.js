@@ -184,6 +184,11 @@ function ensureReplayView() {
         getEntryOptions: () => gameLogEntryOptions(),
         getPlayerByName: name => getPlayerFromName(name),
         live: true,
+        // Editing (playByPlay/replayEdit.js): the Active Coach only, checked
+        // on every write (late-bound: game/controllerState evaluates later).
+        canEdit: () => (typeof window.canEditPlayByPlay === 'function' ? window.canEditPlayByPlay() : true),
+        editDeniedMessage: 'Only the Active Coach can edit plays',
+        onEdited: () => updateGameLogEvents(),
     });
     replayViewGameId = gameId;
     if (replayView) replayView.onShown();

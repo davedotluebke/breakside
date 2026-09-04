@@ -9,7 +9,7 @@
  * whole event show the same stats in the same order.
  */
 import { Gender, Role } from '../store/models.js';
-import { currentTeam } from '../store/storage.js';
+import { currentTeam, isViewer } from '../store/storage.js';
 import {
     currentGame, formatPlayerName, buildPointPlayerLookup,
 } from '../utils/helpers.js';
@@ -298,9 +298,10 @@ function renderGameSummaryEventLog(game) {
         scoreBadge: (point) => pointClassificationLabel(classifyPoint(point)),
         resolvePlayerName: entry => lookup(entry).name,
     };
-    const entries = buildGameLogEntries(game, entryOptions);
-
-    logEl.innerHTML = renderGameLogEntriesHTML(entries, teamName);
+    const renderLines = () => {
+        logEl.innerHTML = renderGameLogEntriesHTML(buildGameLogEntries(game, entryOptions), teamName);
+    };
+    renderLines();
 
     // Replay view (docs/replay-viewer-plan.md step 7): the field playback
     // above the log, for games with field positions. Never live here — the
@@ -315,6 +316,16 @@ function renderGameSummaryEventLog(game) {
             getEntryOptions: () => entryOptions,
             getPlayerByName: name => { const r = lookup(name); return r && r.obj ? r.obj : null; },
             live: false,
+            // Editing (step 8): coaches of the team, not viewers. After a
+            // write, redraw the lines in place (the view re-marks them) and
+            // recompute the stats tables from the amended events.
+            canEdit: () => !isViewer(),
+            editDeniedMessage: 'Viewers can’t edit plays',
+            onEdited: () => {
+                renderLines();
+                renderGameSummaryStatsTable(game);
+                renderGameSummaryTeamStats(game);
+            },
         });
         if (summaryReplayView) {
             // Keep the section heading above the stage: mountReplayView
