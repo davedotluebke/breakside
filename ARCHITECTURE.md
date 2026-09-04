@@ -652,6 +652,26 @@ Layers, bottom-up (all under `playByPlay/`):
   renders; live games start in Live) and `teams/gameSummary.js` (stored
   games, Live disabled). Late-bound from `ui/panelSystem.js` via
   `window.replayView` for tab shown/hidden and screen exit.
+- **`replayEdit.js`** — editing v1 (plan step 8, Decision 11). The ✎ button
+  on the transport opens a sheet (paused only; Play / Go live close it) for
+  the line under the playhead: roster chips per role (thrower / receiver /
+  defender / puller + Unknown), modifier chips, and an armed tap-or-drag on
+  the pitch to move the catch spot (live preview from the mutated event,
+  restored before the write). A receiver change that contradicts the next
+  thrower gets an inline *retarget / bridge with two inferred Unknown
+  Player passes / cancel*. Every write is `pbpPossession.amendEvent()`;
+  the mount site's `onEdited` re-renders its lines/stats, then the view
+  rebuilds its engine and follows the edited play. Gate: `cfg.canEdit()`
+  on every write — Active Coach in-game, not-a-viewer on the summary.
+  `pbpPossession` and the toast are late-bound (`window.*`): importing
+  either closes a cycle through `teams/teamList → teams/gameSummary`.
+- **`eventAmend.js`** (pure leaf, node-tested) — the rules behind an
+  amendment, shared with the Full tab's modifier strip and the Field tab's
+  marker drag: the modifier tables, throw geometry → huck/reset/swing, the
+  catch-spot cascade (a `to` is the next event's `from`), the receiver
+  chain conflict and its two resolutions, and the live counter moves
+  (completedPasses / goals / assists follow a player change). `score_flag`
+  is refused: a goal change moves the score and the point boundary.
 
 Rules that are easy to break:
 
@@ -666,7 +686,12 @@ Rules that are easy to break:
 - **Orientation and caps are per-device settings** (`replay.*` in Advanced
   Settings); the ⟳ button writes `replay.orientation`.
 - Field-tab pointer handlers are NOT attached to the replay's markers; the
-  CSS neutralizes their `data-mkidx` cursor.
+  CSS neutralizes their `data-mkidx` cursor. The editor's spot drag listens
+  on the pitch element itself, only while armed (`rv-spot-armed`).
+- **`saveAllTeamsData()` syncs only the current game.** `amendEvent`
+  queues `syncGameToCloud(game)` itself when the edited game is not the
+  current one (summary of a stored game) — the first edit path a finished
+  game has had.
 
 ### Feature Worktrees
 

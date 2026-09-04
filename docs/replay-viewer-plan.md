@@ -14,8 +14,10 @@ record the reasoning so later sessions don't relitigate them.
 
 **Status (2026-09-04):** steps 1–7 are **merged to main** (merge `4bd3400`)
 after two field-test rounds on staging; ARCHITECTURE.md § Replay viewer is the
-code-level map. Step 8 (editing) and the later items are open — see
-"Handoff for step 8" at the end of this document.
+code-level map. Step 8 (editing v1) is **built on branch `replay-edit`**,
+preview-verified, and awaiting a staging field test before merge — see
+"Step 8 status and handoff" at the end of this document. The later items
+(share-viewer port, sliding split, commentator, insert/delete) remain open.
 
 ## Decisions
 
@@ -254,6 +256,12 @@ log renderer gains `data-entry` the same way.
 
 ### 8. Editing v1 (`replayEdit.js`)
 
+*Built 2026-09-04 on `replay-edit`; the "as built" notes are in the status
+section at the end. Two deviations from the sketch below: the modifier
+tables and geometry rules moved to a new pure leaf `playByPlay/eventAmend.js`
+(node-tested) rather than into `pbpPossession`, and a spot that enters or
+leaves the endzone does **not** offer to flip `score_flag` in v1.*
+
 Paused only. Gate: in a live game `window.canEditPlayByPlay()` (Active Coach);
 for a finished game, the same team-edit rights the summary uses. Every edit
 goes through a new `pbpPossession.amendEvent(event, patch)` which publishes
@@ -310,7 +318,78 @@ Nothing else in the replay needs to know audio exists.
   `at` (the model could return offsets) or the apply time. Apply time is the
   v1 answer; the `??` in `stampEvent` leaves the door open.
 
-## Handoff for step 8 (editing) — written 2026-09-04
+## Step 8 status and handoff — written 2026-09-04
+
+Editing v1 is built on branch `replay-edit` (commits `71ef286`, `95294c3`
++ docs). Verified in the in-IDE preview against a fresh local backend on
+both mount sites (Log tab live game, post-game summary). Not yet
+field-tested on staging or merged.
+
+### What shipped
+
+- `playByPlay/eventAmend.js` — pure leaf (tests/unit/eventAmend.test.mjs,
+  8 tests): modifier tables (moved out of fullPbp), `classifyThrowGeometry`
+  (moved out of fieldPbp; both tabs now call it), `applyEventPatch`
+  (players / `to` with cascade to the next `from` + reclassify / `*_flag`;
+  `score_flag` refused), `receiverChainConflict`, `insertUnknownBridge`,
+  `adjustPlayerCounters`.
+- `pbpPossession.amendEvent(evt, patch, {game, chain, source})` — the
+  chokepoint: applies, reconciles the chain (`'retarget'` | `'bridge'`),
+  moves the live counters, `logEvent`, publishes `eventAmended` (one per
+  mutated event; `eventAdded` for the two bridge passes), saves, and
+  **queues `syncGameToCloud(game)` itself when the game is not the current
+  one** — `saveAllTeamsData` only syncs the current game, which answered
+  the open item about finished games (they did not sync before).
+- `playByPlay/replayEdit.js` + the ✎ button in `replayView.js` and the
+  `rv-edit*` CSS. Mount sites pass `canEdit` / `editDeniedMessage` /
+  `onEdited`: `game/gameScreenSync.js` (Active Coach; `updateGameLogEvents`)
+  and `teams/gameSummary.js` (`!isViewer()`; re-renders lines + both stats
+  tables in place — the view is NOT remounted, so the playhead survives).
+- `window.showControllerToast` is a new window survivor (controllerState).
+
+### Preview-verified behaviours (2026-09-04)
+
+Flag toggle re-renders the line; receiver change → inline confirm →
+*retarget* rewrote the next thrower (and its later huck flag survived);
+*bridge* inserted the two "(inferred) … Unknown Player" lines and the
+playhead followed the edited play; armed spot drag moved the disc live,
+the throw reclassified reset → huck on release; Play closed the sheet; the
+summary mounted with Live disabled and the ✎ visible; each write hit
+`POST /api/games/<id>/sync` on the dev backend.
+
+### Not done / next
+
+- **Staging field test on a phone** (the sheet is untested on iOS Safari:
+  chip row horizontal scroll, `touch-action: none` on the armed pitch, the
+  confirm row wrapping). Then merge; keep the branch.
+- **Endzone ↔ `score_flag`**: moving a spot into / out of the attacking
+  endzone leaves `score_flag` alone (deliberate — a goal change moves the
+  score, `point.winner`, and the point boundary). If wanted, it belongs in
+  a confirm that routes through the score-attribution flow, not `amendEvent`.
+- **Non-current-game sync is verified by reading, not by test**: the
+  preview edited the current game on the summary. A stored older game's
+  edit should be checked once on staging (edit → reload → still there).
+- Turnover / Defense "who" rows only appear when the event has that
+  player; opponent plays and `Other`/`Violation` lines show "can't be
+  edited here". Assist is not editable in v1.
+- Distant: insert / delete events; undo of an amendment (the bus carries
+  `previousEvent`, nothing consumes it yet).
+
+### Preview test recipe additions (beyond steps 1–7's recipe below)
+
+- Use `ST.currentTeam.games[...]`, not `ST.teams[0]` — a sample team sits
+  at index 0 with no games, and `showGameSummaryFromList(undefined)`
+  silently no-ops.
+- `javascript_tool` runs in an isolated world but shares the DOM: driving
+  the sheet by `.click()` on `.rv-editbtn` / `.fp-chip[data-pname]` /
+  `.rv-mod[data-prop]` / `[data-chain]` and dispatching `PointerEvent`s on
+  `.rv-field` works. **No `await sleep()` while the pane is hidden** —
+  timers stall and the tool times out (the clicks still land). Amendments
+  are synchronous; read the DOM right after.
+- The pull dialog re-opens on every render; `#pullDialog{display:none
+  !important}` in an injected `<style>` keeps screenshots clean.
+
+## Handoff notes from steps 1–7 (still accurate)
 
 Everything below is what a fresh session needs beyond the code and ARCHITECTURE.md.
 
@@ -402,13 +481,3 @@ whenever `updateGameLogEvents()` re-renders.
 - A pre-merge-commit hook runs the Playwright suite when merging into main;
   a flaky run leaves the merge staged ("Not committing merge") — `git commit
   --no-edit` re-runs it.
-
-### Suggested v1 scope for the edit sheet
-
-Paused only; Edit button on the transport bar (the plan's ⌘ slot is free).
-Tap a `data-entry` line → sheet with: thrower / receiver (defender, puller)
-chips from the point roster + Unknown; modifier chips from the shared
-tables; "Move spot" which arms a drag of the actor label / disc on the
-pitch. Receiver change whose next event has a different thrower → confirm
-*Change next thrower to X* / *Insert two Unknown Player passes* / Cancel.
-All writes through `amendEvent` → `eventAmended` → save → `onLogUpdated()`.
