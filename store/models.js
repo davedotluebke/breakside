@@ -168,7 +168,7 @@ function Game(teamName, opponentName, startOn, teamId = null) {
     // `merge_pending_next_line` and client-side sync read-merge can resolve
     // conflicts last-writer-wins per field. When adding new fields here,
     // also extend `merge_pending_next_line` in
-    // `ultistats_server/storage/game_storage.py` and the read-merge in
+    // `breakside_server/storage/game_storage.py` and the read-merge in
     // `store/sync.js`. See TODO.md § "Multi-Coach Line Selection".
     this.pendingNextLine = {
         oLine: [],                  // Player names for O line (used when team loses)

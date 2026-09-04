@@ -174,7 +174,7 @@ and the claude-api reference:
   game. Haiku 4.5 generates output substantially faster, which directly cuts
   the stop→events wait the coach experiences.
 - Trial is nearly free: `NARRATION_SLOW_MODEL=claude-haiku-4-5` (the existing
-  env override) + run `ultistats_server/tests/narration/` for WER/event-F1
+  env override) + run `breakside_server/tests/narration/` for WER/event-F1
   regression. No code change.
 - Prompt caching: the static prompt prefix (system instructions + operation
   schema) could be cached; only pays off if calls land within the 5-minute

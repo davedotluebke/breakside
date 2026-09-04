@@ -24,11 +24,11 @@ eval before touching any product code.
    generation exists).
 3. `docs/narration-stt-research-2026-07.md` — pricing landscape; corrected
    cost baselines.
-4. `ultistats_server/tests/narration/README.md` — existing audio test harness.
+4. `breakside_server/tests/narration/README.md` — existing audio test harness.
 
 ## Key code references
 
-- **Existing harness**: `ultistats_server/tests/narration/runner.py`.
+- **Existing harness**: `breakside_server/tests/narration/runner.py`.
   `Scenario.load()` reads `(audio.flac, transcript.txt, roster.json,
   expected.json)` dirs from `scenarios/`; `stream_audio_for_transcription()`
   is the server-to-server Realtime WebSocket streamer (PCM16 chunks at
@@ -44,10 +44,10 @@ eval before touching any product code.
   `buildInstructions` / `handleFunctionCall` — use as the *starting point* for
   the eval's tool schema and instructions (they'll need updating for 2.1 and
   the no-call-default rules below). The event schema they emit must match the
-  ADD-operation event shape in `ultistats_server/narration.py`.
+  ADD-operation event shape in `breakside_server/narration.py`.
 - **Conversation-mode plumbing still live**: `narration/realtimeSession.js`
   (mode `'conversation'`, `?model=` URL form) and the conversation-mode token
-  path in `ultistats_server/narration.py` — not needed for Phase 1 (the
+  path in `breakside_server/narration.py` — not needed for Phase 1 (the
   harness uses the API key directly, server-to-server) but confirms the wire
   format.
 
@@ -124,5 +124,5 @@ provisional events against what the slow pass confirms; watch battery/data.
 - Harness runs are backend-only: plain `OPENAI_API_KEY`, no dev server, no
   browser needed for Phase 1. Don't run pytest in a pre-G3 worktree without
   the per-worktree data isolation (see MEMORY notes / CLAUDE.md).
-- The stale `~$0.06/min` comment at `ultistats_server/tests/narration/runner.py:26`
+- The stale `~$0.06/min` comment at `breakside_server/tests/narration/runner.py:26`
   can be corrected in passing while editing that file (docs already fixed).

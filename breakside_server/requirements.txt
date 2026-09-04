@@ -1,0 +1,16 @@
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+pytest>=7.4.0
+httpx>=0.25.0
+PyJWT>=2.8.0
+cryptography>=41.0.0
+Pillow>=10.0.0
+# Test-only deps (used by breakside_server/tests/narration/):
+#   websockets — direct WebSocket client to OpenAI Realtime API. The runner
+#                uses the legacy connect() API (extra_headers=...) which is
+#                supported on both v10.x and the v12+ legacy shim, so we
+#                allow either.
+#   soundfile  — FLAC encode/decode for committed audio scenarios
+websockets>=10.0
+soundfile>=0.12.0

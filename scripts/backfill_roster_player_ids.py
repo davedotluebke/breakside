@@ -68,7 +68,7 @@ _HASH_CHARS = string.ascii_lowercase + string.digits
 
 
 def generate_player_id(name, exists):
-    """Mirror ultistats_server/storage/id_utils.generate_entity_id +
+    """Mirror breakside_server/storage/id_utils.generate_entity_id +
     ensure_unique_id for players."""
     safe = re.sub(r'[^a-zA-Z0-9\s-]', '', name or '')
     safe = re.sub(r'\s+', '-', safe).strip('-')[:20]

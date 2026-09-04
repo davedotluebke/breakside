@@ -465,9 +465,9 @@ Ship when these work end-to-end:
 
 ## Implementation references (existing code that will be touched)
 
-- **Auth & user model**: `auth/` (frontend Supabase auth), `ultistats_server/auth/` (JWT validation), `ultistats_server/storage/users.py` and `memberships.py` (existing membership model — new types added here)
+- **Auth & user model**: `auth/` (frontend Supabase auth), `breakside_server/auth/` (JWT validation), `breakside_server/storage/users.py` and `memberships.py` (existing membership model — new types added here)
 - **Player ↔ user linking** (currently deferred): see [`memory/project_player_elevation.md`](../.claude/projects/-Users-luebke-src-ultistats/memory/project_player_elevation.md) and TODO.md "Player Features → Player ↔ User account linking." Fold this into Comms MVP.
-- **Team model**: `store/models.js` (Team), `ultistats_server/storage/teams.py`. Will need to gain Season + Channel concepts.
+- **Team model**: `store/models.js` (Team), `breakside_server/storage/teams.py`. Will need to gain Season + Channel concepts.
 - **Event model**: `store/models.js` (TournamentEvent), needs expansion to non-game event types.
 - **Existing notification surface**: there isn't one yet — push notifications are net-new infrastructure.
 - **Existing sync layer**: `store/sync.js`. The realtime delivery for chat is parallel infrastructure; don't try to bolt chat onto the game-sync polling loop.

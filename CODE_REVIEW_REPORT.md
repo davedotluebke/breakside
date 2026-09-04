@@ -22,7 +22,7 @@ The codebase is generally clean, well-commented, and the offline-first PWA archi
 Headline counts: **~145 findings** — roughly **41 🔴**, **40 🟠**, **48 🟡**, **16 🔵**.
 
 The three things that most deserve attention:
-- **Backend security cluster** (12 🔴 in `ultistats_server/`): the entire authorization model hinges on one env var (`BREAKSIDE_AUTH_REQUIRED`) whose default disagrees across config vs. guards; on top of that there is unauthenticated SSRF, path traversal from unvalidated IDs, several read endpoints with no authz, and non-atomic unlocked file writes that can lose or corrupt data under concurrent multi-coach use. **Confirm the production env first** — it determines how exploitable the rest is.
+- **Backend security cluster** (12 🔴 in `breakside_server/`): the entire authorization model hinges on one env var (`BREAKSIDE_AUTH_REQUIRED`) whose default disagrees across config vs. guards; on top of that there is unauthenticated SSRF, path traversal from unvalidated IDs, several read endpoints with no authz, and non-atomic unlocked file writes that can lose or corrupt data under concurrent multi-coach use. **Confirm the production env first** — it determines how exploitable the rest is.
 - **Stats correctness & entry-surface divergence** (frontend): player stats are keyed by *name* not *ID* in multiple places (silent stat-merge on duplicate names, split history on rename), and there are **five different event-entry surfaces** (Simple/Full/Field/Key Play/score-attribution) whose logic has already drifted — Key Play credits an assist on every completion, skips `completedPasses`, and never publishes to the narration bus, so the Full/Field tabs show stale state and stats genuinely differ by which screen the coach used.
 - **Structural maintainability**: four god-files (`gameScreen.js` 5568, `teamSelection.js` 2325, `main.py` 2030, `main.css` 4412), an all-globals/manual-load-order wiring model (48 `<script>` tags, 235 `window.*` assignments, fixed `setTimeout(100)` init, monkey-patched globals), and heavy hand-duplication of deserialize/merge/render logic that has already produced real divergence bugs.
 
@@ -38,7 +38,7 @@ These cut across multiple files; fixing the pattern is higher-leverage than fixi
 
 3. **🟠 Heavy copy-paste of serialize/deserialize/merge/render logic — already drifting.** Point/possession deserialization is near-verbatim in 3+ places (`sync.js`, `storage.js`); the `pendingNextLine` merge is duplicated with a *real divergence* (`refreshGameStateFromCloud` drops the `useSeparateLines` merge); Field vs Full PBP duplicate `reconstructState`/`manualHolder` handling and have drifted on point-boundary clearing; three roster-table renderers duplicate column logic; the backend storage modules duplicate ID-generation and `_index.json` load/save across ~11 files. Extract shared helpers.
 
-4. **🟠 God-files.** `game/gameScreen.js` (5568), `teams/teamSelection.js` (2325), `ultistats_server/main.py` (2030), `main.css` (4412). Each has clear internal seams to split along (documented in the per-area sections). Size is actively hiding bugs (e.g. `updateGameEventsModalState` defined twice).
+4. **🟠 God-files.** `game/gameScreen.js` (5568), `teams/teamSelection.js` (2325), `breakside_server/main.py` (2030), `main.css` (4412). Each has clear internal seams to split along (documented in the per-area sections). Size is actively hiding bugs (e.g. `updateGameEventsModalState` defined twice).
 
 5. **🟠 All-globals wiring with implicit load-order coupling.** 48 ordered `<script>` tags, 235 `window.* =` assignments, `setTimeout(initializeApp, 100)` as a readiness proxy, `window.showScreen`/`window.updateControllerUI`/`window.moveToNextPoint` monkey-patched at module-load, and pervasive `typeof X !== 'undefined'` global guards. Reordering or slow-loading a script silently degrades to offline/empty states. A native ES-module migration (no bundler required) would remove this whole class of fragility. (Big call — see Open Questions.)
 
@@ -118,7 +118,7 @@ The detailed per-file findings follow. Each section is self-contained and can be
 
 ---
 
-## Backend (ultistats_server/)
+## Backend (breakside_server/)
 
 > **Executor guidance (decisions applied, 2026-06-30):**
 > - **AUTH_REQUIRED:** unify to one shared config constant defaulting to **`true`** (remove the `config.py`-false vs guards-true split). It's only ever set false explicitly by local dev agents (`dev-backend.sh`). Default-disabled is the bug.
@@ -583,7 +583,7 @@ Anytime (isolated):    E2 deploy-time version bump · X1 S3 exclude fix · X3 wo
 
 ### Phase A — security (IN PROGRESS)
 
-- **A1 · Backend security** — _bug/security_ — owns `ultistats_server/**`. **🟢 LAUNCHED.** Fully orthogonal to all frontend work (different language/dir). The detailed prompt and scope are the 8 items in the Backend executor-guidance block. _Note: the `main.py` split and storage-dedup are deliberately **excluded** here (that's D3) so A1 stays a focused security pass._
+- **A1 · Backend security** — _bug/security_ — owns `breakside_server/**`. **🟢 LAUNCHED.** Fully orthogonal to all frontend work (different language/dir). The detailed prompt and scope are the 8 items in the Backend executor-guidance block. _Note: the `main.py` split and storage-dedup are deliberately **excluded** here (that's D3) so A1 stays a focused security pass._
 
 ### Phase B — frontend bug fixes (parallel-safe; start only after A1 finishes per Dave)
 
@@ -837,7 +837,7 @@ be missed:
   touching `/var/lib/breakside/data` as root.)
 
 ### G3 · Backend test suite is NOT green — **41 failed / 234 passed / 5 skipped** (re-verified 2026-07-19)
-Confirmed by running `pytest ultistats_server/` on `main` post-F3. Known causes:
+Confirmed by running `pytest breakside_server/` on `main` post-F3. Known causes:
 `test_api.py` path drift (unprefixed `/api` paths after the router split), `test_auth.py`
 collection-time config interference, `test_existing_data.py` assumptions about local data, and
 flaky live-LLM narration scenarios. (F3's targeted subsets — 77 backend tests — pass; the

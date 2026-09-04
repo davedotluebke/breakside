@@ -14,7 +14,7 @@
 #
 # Multiple at once: just run this in each worktree (or with a different --port);
 # it auto-picks a free port from 8000 and an independent data dir, so N sessions
-# coexist. The backend serves THIS worktree's ultistats_server code (--reload),
+# coexist. The backend serves THIS worktree's breakside_server code (--reload),
 # so each session tests its own server changes against its own data.
 #
 # Usage:
@@ -113,7 +113,7 @@ echo "  Stop with Ctrl-C."
 echo "──────────────────────────────────────────────────────────────"
 echo
 
-cd "$REPO/ultistats_server"
+cd "$REPO/breakside_server"
 exec env BREAKSIDE_DATA_DIR="$DATADIR" \
          BREAKSIDE_AUTH_REQUIRED=false \
          BREAKSIDE_PORT="$PORT" \

@@ -410,7 +410,7 @@ sys.exit(1 if bad else 0)
 
 Zero unparseable files is the pass condition. This is a real test: the backend
 writes JSON atomically (temp file + `os.replace()`, see
-`ultistats_server/storage/file_utils.py`), so no individual file should ever be
+`breakside_server/storage/file_utils.py`), so no individual file should ever be
 captured half-written — this check confirms that guarantee held.
 
 ### 5b. Actually boot the app against the restored data

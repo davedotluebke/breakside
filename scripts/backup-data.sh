@@ -172,7 +172,7 @@ LAST_SUCCESS_FILE="$STATE_DIR/last-success"
 #
 # *.tmp is excluded: the backend writes JSON atomically as
 # "<name>.<pid>.<tid>.tmp" then os.replace()s it into place
-# (ultistats_server/storage/file_utils.py), so any .tmp seen mid-sync is
+# (breakside_server/storage/file_utils.py), so any .tmp seen mid-sync is
 # transient scratch, not data.
 SYNC_ARGS=(
     "$DATA_DIR/" "s3://$BUCKET/data/"

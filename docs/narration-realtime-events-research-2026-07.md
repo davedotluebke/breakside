@@ -136,7 +136,7 @@ original design and was never updated for the transcription-only switch.)
    sideline audio (the hand-recorded harness scenarios, plus new outdoor
    captures) through the configured conversation-mode session and measure
    **event precision** against expected.json ground truth. The existing test
-   harness (`ultistats_server/tests/narration/`) already has the
+   harness (`breakside_server/tests/narration/`) already has the
    audio + expected-events scenario format; it needs a conversation-mode
    runner path. This is the only way to answer the central question — no
    external benchmark of 2.1 exists.

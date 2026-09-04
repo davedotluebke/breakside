@@ -243,7 +243,7 @@ All green on this branch:
 
 - **Unit:** `node --test 'tests/unit/*.test.mjs'` — 230 pass (note the glob
   form; the bare directory form fails on Node 25).
-- **Backend:** `pytest ultistats_server/ -q` — 372 pass.
+- **Backend:** `pytest breakside_server/ -q` — 372 pass.
 - **e2e:** full suite from `tests/` with `CI=1` — 30 pass, including
   `04-sleep-wake-recovery` (asserts ping behavior directly),
   `03-multi-coach-roles`, and the new `11-solo-ping-backoff`. 11 re-run in
@@ -275,7 +275,7 @@ longer being a constant, and they will bite anyone touching this again.
 
 ## Deploying
 
-- `ultistats_server/routers/{controller,games}.py` changed, so this needs the
+- `breakside_server/routers/{controller,games}.py` changed, so this needs the
   **EC2 restart**: `sudo git pull && sudo systemctl restart breakside`.
 - Old client against new server, and new client against old server, both work:
   a missing `gameStamp` reads as "no opinion" and falls back to unconditional

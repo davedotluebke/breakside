@@ -111,7 +111,7 @@ modules.
   places — good).
 - Merge safety: the server's `merge_pending_next_line` only touches
   `pendingNextLine`; events are replaced wholesale on sync, so `at` needs no
-  server change. Confirm with a round-trip in `ultistats_server/test_api.py`.
+  server change. Confirm with a round-trip in `breakside_server/test_api.py`.
 - Tests: extend `tests/unit/setsSerialization.test.mjs`-style round-trip for
   `at`/`startedAt`; a pytest that a game with `at` on events survives a sync.
 - Ship this **first**, alone — every field test after it collects real pacing

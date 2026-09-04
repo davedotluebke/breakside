@@ -15,14 +15,14 @@ Breakside is a Progressive Web App for tracking real-time ultimate frisbee stati
 
 ### Backend tests
 ```bash
-pytest ultistats_server/                    # all tests
-pytest ultistats_server/test_controller.py  # single test file
-pytest ultistats_server/test_api.py -k "test_name"  # single test
+pytest breakside_server/                    # all tests
+pytest breakside_server/test_controller.py  # single test file
+pytest breakside_server/test_api.py -k "test_name"  # single test
 ```
 
 ### Local backend server
 ```bash
-cd ultistats_server && pip install -r requirements.txt
+cd breakside_server && pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
@@ -77,7 +77,7 @@ Deploys current working directory (not committed state) to S3 + CloudFront inval
   piping the pull through anything (`git pull | tail`) makes `set -e` blind to
   its exit status, so a failed pull still reaches the restart and "succeeds"
   against the old code.
-- Only remind about server restart when changes touch `ultistats_server/` files.
+- Only remind about server restart when changes touch `breakside_server/` files.
 
 ### Version tracking
 `version.json` holds the committed semver `version` string (bump manually with `python3 increment-version.py major|minor|patch`) and a `build` field whose committed value is the placeholder `"dev"` — **build numbers are never committed**. They are stamped at **deploy time only**: both the production GitHub Action and `deploy-staging.sh` run `increment-version.py stamp`, which computes `git rev-list --count HEAD` and writes it into the *deployed* `version.json` and service-worker `cacheName` (the client detects updates by build/stamp *inequality*, so any new deploy triggers the update prompt). Nothing is pushed back to main — there is no pre-commit bump, no CI bot commit, and no cherry-pick caveat. Staging additionally stamps `deployStamp`/`deployLabel` and suffixes the cacheName (`build-<n>-stg-<stamp>`) so redeploys without a commit are still detected. See VERSIONING.md.
@@ -153,7 +153,7 @@ Native **ES modules** — still no build system, no bundler; files ship to S3 as
 - Offline-first: localStorage + service worker (network-first with 5s timeout)
 - IDs use format `{sanitized-name}-{4-char-hash}` (e.g., "Alice-7f3a")
 
-### Backend (`ultistats_server/`)
+### Backend (`breakside_server/`)
 FastAPI app in `main.py`. File-based JSON storage (no database).
 
 | Directory | Purpose |
@@ -171,8 +171,8 @@ FastAPI app in `main.py`. File-based JSON storage (no database).
 - Data stored at `/var/lib/breakside/data/` on EC2
 
 ### Environment variables (backend)
-Key env vars: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_JWT_SECRET`, `BREAKSIDE_DATA_DIR`, `BREAKSIDE_AUTH_REQUIRED`. See `ultistats_server/config.py` for full list.
+Key env vars: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_JWT_SECRET`, `BREAKSIDE_DATA_DIR`, `BREAKSIDE_AUTH_REQUIRED`. See `breakside_server/config.py` for full list.
 
 ## CI/CD
-- **Production**: GitHub Actions (`.github/workflows/main.yml`) deploys frontend on push to `main`. Skips deploy if changes only touch `ultistats_server/`, `data/`, `scripts/`, `**.py`, `**.md`, `.claude/`, or `.gitignore`. The double star matters: GitHub path filters don't let `*` match `/`, so `*.md` covered only root-level docs and every edit under `docs/` deployed production for nothing (fixed 2026-08-17). Note `.github/` is deliberately *not* on that list, so a workflow edit still triggers a run and can be verified by pushing it. `docs/**` is also deliberately absent — the tutorial clips under `docs/clips/` *are* deployed.
+- **Production**: GitHub Actions (`.github/workflows/main.yml`) deploys frontend on push to `main`. Skips deploy if changes only touch `breakside_server/`, `data/`, `scripts/`, `**.py`, `**.md`, `.claude/`, or `.gitignore`. The double star matters: GitHub path filters don't let `*` match `/`, so `*.md` covered only root-level docs and every edit under `docs/` deployed production for nothing (fixed 2026-08-17). Note `.github/` is deliberately *not* on that list, so a workflow edit still triggers a run and can be verified by pushing it. `docs/**` is also deliberately absent — the tutorial clips under `docs/clips/` *are* deployed.
 - **Staging**: Manual deploy via `./scripts/deploy-staging.sh` (no CI — deploys working directory directly).

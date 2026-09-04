@@ -268,7 +268,7 @@ Remaining:
       score" into two throws (the real one + a bogus Ella→Ella self-throw carrying
       sky+score); 019 ("Acer hits Hammer…") failed stochastically on the
       nickname-vs-jargon collision. Two targeted prompt rules added in
-      `ultistats_server/narration.py`: catch clauses modify the SAME throw / never
+      `breakside_server/narration.py`: catch clauses modify the SAME throw / never
       thrower==receiver, and words in player positions are player references. 013+019
       pass twice consecutively; full-corpus regression run green 2026-07-19 — 20
       passed / 0 failed / 5 skipped (the audio-less hand-record scenarios).)*
@@ -486,7 +486,7 @@ mostly earns that; the app *shell* does not. Four problems, roughly by severity:
   previous cache. The app shell is now precached from a manifest generated at
   deploy time by `increment-version.py stamp` (same exclude list as the S3 sync,
   so it can't list an unshipped file or rot as modules are added). Pinned by
-  `ultistats_server/test_precache_manifest.py`, including that every module
+  `breakside_server/test_precache_manifest.py`, including that every module
   `main.js` imports is in the manifest.
 
   **1f — offline team list (done 2026-08-17, same branch).** Closes the
@@ -600,7 +600,7 @@ mostly earns that; the app *shell* does not. Four problems, roughly by severity:
 >
 > **Conventions for new `pendingNextLine` fields** (e.g. on-deck): pair
 > each value field with its own `*ModifiedAt`/`*At` timestamp and extend
-> `merge_pending_next_line` in `ultistats_server/storage/game_storage.py`
+> `merge_pending_next_line` in `breakside_server/storage/game_storage.py`
 > (+ the read-merge in `store/sync.js` and serialize/deserialize in
 > `store/storage.js`) to resolve it last-writer-wins. Apply the same
 > role-based greying to any new line-selection surface.
@@ -654,7 +654,7 @@ The Line Coach (LC) plans the next line; the Active Coach (AC) records play. Tod
 
 ### Data model additions
 
-In `Game.pendingNextLine` ([store/models.js](store/models.js)) and the server-side payload. The server's `merge_pending_next_line` in [ultistats_server/storage/game_storage.py](ultistats_server/storage/game_storage.py) already preserves unknown keys, but it needs to be extended to merge the new timestamp-keyed fields the same way it handles `oLine` / `dLine` / `odLine`:
+In `Game.pendingNextLine` ([store/models.js](store/models.js)) and the server-side payload. The server's `merge_pending_next_line` in [breakside_server/storage/game_storage.py](breakside_server/storage/game_storage.py) already preserves unknown keys, but it needs to be extended to merge the new timestamp-keyed fields the same way it handles `oLine` / `dLine` / `odLine`:
 
 ```
 lineCoachViewing:     'o' | 'd' | 'od' | 'split' | null   // LC writes their activeType
@@ -693,7 +693,7 @@ matching, short delta toasts. Field-verified on production. Remaining:
 
 - [x] **Make the 18-scenario lineup eval permanent.** *(DONE — ported by commit
       `0eeba34`; this entry was stale. It lives in
-      `ultistats_server/test_narration_lineup.py` as
+      `breakside_server/test_narration_lineup.py` as
       `test_live_lineup_eval_matrix`: all 18 scenarios (W1–W3, C1–C3, S1–S5,
       A1–A5, M1–M2) parametrized over `claude-haiku-4-5` +
       `claude-sonnet-4-5-20250929`, each running end-to-end — real prompt →
@@ -710,7 +710,7 @@ matching, short delta toasts. Field-verified on production. Remaining:
       the matrix. Run it before shipping any lineup prompt or model change:
 
       ```bash
-      cd ultistats_server && NARRATION_LIVE_TESTS=1 python3 -m pytest test_narration_lineup.py -k live -q
+      cd breakside_server && NARRATION_LIVE_TESTS=1 python3 -m pytest test_narration_lineup.py -k live -q
       ```
 - [ ] **Field-watch two deliberate behavior choices** (revisit only if they
       annoy in practice): reciting a full line over a non-empty selection
@@ -776,7 +776,7 @@ Improvements deferred from the initial implementation (see Active section above 
       thrower-less drop, and `narrationEngine.js` `applyTurnover` then falls back to the
       literal "Unknown Player" roster entry instead of inferring the thrower from the throw
       it just recorded. Add this exact utterance to the narration scenarios
-      (`ultistats_server/tests/narration/`) as a regression, and A/B it against Sonnet —
+      (`breakside_server/tests/narration/`) as a regression, and A/B it against Sonnet —
       prod runs Haiku 4.5 for the slow pass (`NARRATION_SLOW_MODEL`); worth knowing whether
       this is a model-quality gap or an engine merge rule any model would need.
 - [x] **Remove vocabulary-mapping dead code from slow-pass prompt.** A/B test across the test corpus (commit `e24098e`) showed `NARRATION_VOCAB_GUIDANCE=off` (no explicit jargon→flag map) outperformed `=on` by +0.082 mean F1 with no regressions. Deleted the `vocab_section` branch in `_build_finalize_prompt`, the `NARRATION_VOCAB_GUIDANCE` env var, and the structurally-identical "Event-to-function mapping" block in the dead `buildInstructions()` in `narration/narrationEngine.js`.
@@ -814,7 +814,7 @@ OpenAI re-applies to every VAD-segmented utterance (~2.3 per line call), plus tr
       a line*; only the roster names and a few terms (`handler`, `cutter`, `strike`, `deep`) earn
       their place there. A lineup-specific subset would cut ~7% of all-in cost. Interacts with
       "Measure the vocabulary hint's effect" above — measure accuracy first, then trim.
-- [ ] **Prompt caching is unused** (`grep cache_control ultistats_server/` is empty). Moot today:
+- [ ] **Prompt caching is unused** (`grep cache_control breakside_server/` is empty). Moot today:
       the lineup prompt is 1,825 tokens, below Haiku 4.5's 4,096-token minimum cacheable prefix.
       It's also ordered cache-hostile — the ~1,200-token static instruction block sits *last*, after
       the volatile roster and transcript. Reorder static-first if the prompt ever grows past the
@@ -866,7 +866,7 @@ OpenAI re-applies to every VAD-segmented utterance (~2.3 per line call), plus tr
       flags, plus the four unattributed/opponent-pull negatives from the
       corpus). Corpus: 018's expected gains the Daniel pull; 007/010/011/015
       stay unchanged as the negatives. New deterministic suite
-      `ultistats_server/test_narration_finalize.py` (11 tests) pins the prompt
+      `breakside_server/test_narration_finalize.py` (11 tests) pins the prompt
       rules and gives `score_events`/`_event_signature` their first coverage
       in the default run — the live corpus module is entirely
       `NARRATION_LIVE_TESTS`-gated, so they had none;
@@ -895,7 +895,7 @@ Today the mic only narrates plays *during* a point. Two adjacent flows would ext
     2026-08-06**: `kind: "pull"` and `applyPull` exist (see Coverage above), so
     the pull leg of this flow has somewhere to land. Note the puller-required
     rule: "Bob hucks a flick OI pull" works, a bare "we pull" records nothing.
-  - Touch points: `narration/narrationEngine.js` (new pre-point intent + applier), new pull schema in `ultistats_server/narration.py`, `pointManagement.js` (programmatic line-select + start-point hook), `game/gameScreen.js` (mic surfaced on Line tab when between points).
+  - Touch points: `narration/narrationEngine.js` (new pre-point intent + applier), new pull schema in `breakside_server/narration.py`, `pointManagement.js` (programmatic line-select + start-point hook), `game/gameScreen.js` (mic surfaced on Line tab when between points).
   - Open question: one mic-tap or two? Single tap that handles "line + pull" feels natural orally but mixes two state transitions; safer to gate the pull narration behind the line being confirmed first.
 
 - [x] ~~**Speech-driven line selection (oral roll-call)**~~ **SHIPPED** as the
@@ -917,7 +917,7 @@ Today the mic only narrates plays *during* a point. Two adjacent flows would ext
 
 ### Test suite
 
-The audio-driven test harness is implemented in `ultistats_server/tests/narration/`. Skeleton works end-to-end. Scenarios `001`–`003` are the original baseline; `004`–`020` were scaffolded in a corpus-expansion pass and their synthetic `audio.flac` is **generated and committed** (20 of the 25 scenario dirs have audio). The five without audio are the hand-record variants (`004b`, `008b`, `015b`, `019b`, `021`) — those need a human, a phone, and a windy field.
+The audio-driven test harness is implemented in `breakside_server/tests/narration/`. Skeleton works end-to-end. Scenarios `001`–`003` are the original baseline; `004`–`020` were scaffolded in a corpus-expansion pass and their synthetic `audio.flac` is **generated and committed** (20 of the 25 scenario dirs have audio). The five without audio are the hand-record variants (`004b`, `008b`, `015b`, `019b`, `021`) — those need a human, a phone, and a windy field.
 
 Corpus structure:
 
@@ -940,7 +940,7 @@ Remaining work:
       synthetic scenarios have a committed `audio.flac`)*
 - [ ] **Hand-record 004b / 008b / 015b / 019b / 021** in noisy outdoor conditions; same expected.json, different audio.flac. Built-in regression for outdoor robustness. *(These five are the only scenario dirs still without audio.)*
 - [ ] **Re-record a live-conditions scenario to replace the deleted `022_live_field_point`.** The original was a phone recording of a real game point — wind, sideline chatter, dead-air gaps that fragmented the transcript into subject-less clauses ("Upfield to the handler.Turns it over…"). It caught four prompt gaps clean TTS never did. It was deleted in the name scrub because the recording *speaks real player names*, which no text edit can fix. Narrate a fresh point calling the generic roster (Alice/Bob/Charlie/Dana/Eve/Hank/Iris) and rebuild roster/transcript/expected alongside it.
-- [ ] **Schema gap: opponent unforced turnover.** Several scenarios above (007, 008, 014) gloss over what happens when the opponent throws it away to us — the narration schema in `ultistats_server/narration.py` has no event for "they turnover". The Full-PBP requirements doc models this as `Defense{unforcedError, defender=null}`. Decide whether to add it to the narration schema or handle implicitly via the next throw being from us.
+- [ ] **Schema gap: opponent unforced turnover.** Several scenarios above (007, 008, 014) gloss over what happens when the opponent throws it away to us — the narration schema in `breakside_server/narration.py` has no event for "they turnover". The Full-PBP requirements doc models this as `Defense{unforcedError, defender=null}`. Decide whether to add it to the narration schema or handle implicitly via the next throw being from us.
 - [x] **Schema gap: `record_pull`.** *(closed 2026-08-06 — see the Coverage
       section above.)* Worth knowing how it landed, because the answer was not
       what this entry assumed: the "they pull" / "we pull" openers **stay**
@@ -950,7 +950,7 @@ Remaining work:
       So 007/010/011/015 keep their expectations as negative cases, and 018
       ("Daniel pulls") is the positive one.
 - [ ] **Noise injection** — mix in wind/crowd samples to simulate field conditions, run the same scenarios at varying SNR.
-- [ ] **CI integration** — run on PRs that touch `narration/` or `ultistats_server/narration.py`. Fail on metric regression beyond a threshold. Cost note: ~$0.10 per scenario per run.
+- [ ] **CI integration** — run on PRs that touch `narration/` or `breakside_server/narration.py`. Fail on metric regression beyond a threshold. Cost note: ~$0.10 per scenario per run.
 
 ---
 
@@ -982,7 +982,7 @@ Remaining work:
 
 - [ ] **One user on two devices is unsupported — decide whether to support it.**
   Connected coaches are keyed by *user id* (`_connected_coaches[game_id][user_id]`
-  in `ultistats_server/storage/controller_storage.py`), so one account running
+  in `breakside_server/storage/controller_storage.py`), so one account running
   the app in two places collapses to a single entry. That was harmless when
   cadence was fixed, but the solo ping backoff reads that count: two instances of
   one user would each be told they were solo, both would back off to 10s, and
@@ -1035,7 +1035,7 @@ Remaining work:
 - [ ] **Low-power / reduced-motion mode** (long-term). A toggle (and/or honoring the OS `prefers-reduced-motion`) that disables non-essential animations to save battery during long sideline sessions. One-shot transitions (e.g. the Field tab's 5s possession-change fade) are cheap, but *continuous/looping* animations and per-frame JS (`requestAnimationFrame`/`setInterval`) keep the GPU/CPU from idling and do drain battery — so the rule of thumb is: avoid always-running animations, and let this mode strip any that exist. Audit current usage (e.g. pull hangtime `setInterval`, any CSS loops) when implementing. Noted while building the Field tab.
 - [ ] **Rare / administrative events** (long-term). Capture uncommon events that don't fit the main offense/defense/pull flows: offsides on the pull (O or D), cards (yellow / blue / red), and similar officiating/administrative calls. Likely surfaces via the "⋯ more" overflow on the Field/Full tabs (and the existing Game Events modal). Will need new event model support + summarize/serialization, and a decision on whether they affect possession (most don't). Noted while building the Field tab; out of scope for that effort.
 - [ ] **Stats: "50-50" drop/throwaway flag** (someday). Add a `50-50` chip to the `TURNOVER_MODIFIERS` set in `playByPlay/fullPbp.js` — the "Last turnover was a:" row, currently `{huck, good D}` — for turnovers where the blame genuinely splits: a tough but catchable disc, a throw into coverage the receiver got hands on, a miscommunication. Motivated by the turnover fault-attribution fix (2026-08-05): a drop is now charged to the receiver *alone* and a throwaway to the thrower alone, which makes fault a binary call at the moment of entry. The 50-50 flag is the escape hatch for plays that aren't binary, so coaches aren't forced to libel one player or the other.
-  - **Model**: new `fiftyFifty` constructor arg → `fifty_flag` on `Turnover` (`store/models.js`), following the `receiverError` → `drop_flag` pattern. Serialization is automatic (`deserializeEvent` copies unknown props), but `summarize()` needs phrasing ("50-50 between X and Y"), and the viewer's bespoke event renderer (`ultistats_server/static/viewer/viewer.js`) needs the same line.
+  - **Model**: new `fiftyFifty` constructor arg → `fifty_flag` on `Turnover` (`store/models.js`), following the `receiverError` → `drop_flag` pattern. Serialization is automatic (`deserializeEvent` copies unknown props), but `summarize()` needs phrasing ("50-50 between X and Y"), and the viewer's bespoke event renderer (`breakside_server/static/viewer/viewer.js`) needs the same line.
   - **Open question — how it scores.** Options: (a) half a turnover to each player, which makes TOs fractional and ugly in a table; (b) a full turnover to both, which double-counts against the team total; (c) a turnover to neither, tracked only as its own count; (d) its own bucket so `TAs + Drops + 50-50s = TOs`, preserving the "every turnover is charged once" invariant that `utils/statAccumulator.js` now maintains. (d) looks cleanest and fits the existing Full-level column set — add a `50-50` column next to TAs/Drops, and mirror it in `utils/xlsxExport.js` + `utils/statsHelp.js`.
   - Whatever is chosen, keep `utils/statAccumulator.js` and the viewer's `computePlayerStatsFromGame` in step — they compute turnovers independently and must agree.
 - [x] **Feature**: When Active Coach ends game, all coaches/viewers navigate to game summary. *(Wake recovery + foreground 3-second refresh both detect `gameEndTimestamp` and navigate away.)*
@@ -1078,7 +1078,7 @@ Remaining work:
     - **Simple mode**: default the dropdown to a placeholder like "Select HA passer" (the prior pass usually wasn't recorded, so there's nothing to pre-fill); coach picks from the roster or leaves it unset.
   - **Storage.** Record the chosen HA player on the scoring `Throw` event (e.g. `hockeyAssistId` / `hockeyAssist` name) rather than re-deriving it. Honor the huck case: a separate flag (or derive huck-HA from whether the recorded HA pass was a huck — only possible in Full mode where that pass exists).
   - **Stat computation.** `accumulateGameStats` reads the explicit HA attribution instead of walking the possession. **Backwards compat:** games played before this change have no explicit field — decide whether to (a) fall back to the existing auto-derivation for those, or (b) show them as having no HA. Leaning toward (a) so the tournament data already collected keeps its (approximate) HA numbers.
-  - **Touch points:** `playByPlay/scoreAttribution.js` (dialog UI + new picker), `store/models.js` (Throw field), `store/storage.js` (serialize/deserialize the field), `utils/eventStats.js` (read explicit field, fall back to derivation), and the AI narration path (`narration/narrationEngine.js` + `ultistats_server/narration.py`) if we want narrated scores to capture HA too.
+  - **Touch points:** `playByPlay/scoreAttribution.js` (dialog UI + new picker), `store/models.js` (Throw field), `store/storage.js` (serialize/deserialize the field), `utils/eventStats.js` (read explicit field, fall back to derivation), and the AI narration path (`narration/narrationEngine.js` + `breakside_server/narration.py`) if we want narrated scores to capture HA too.
 
 - [x] **Feature**: Per-possession defensive/offensive set flag (zone tracking, etc.)
   - **STATUS 2026-08-06 (branch `possession-sets-stage6`): COMPLETE through
@@ -1196,7 +1196,7 @@ Remaining work:
 
 - [ ] **Extension**: Richer modifier flags on `Turnover` events
   - The Full PBP "Last turnover was a:" panel currently exposes only `huck` and `good D` because those are the only orthogonal flags on the `Turnover` model today. To support "threw it away while attempting a *break* / *hammer* / *dump*" (and `sky` / `layout` for drops, e.g. receiver tried to layout but missed), add `break_flag`, `hammer_flag`, `dump_flag`, `sky_flag`, `layout_flag` to the `Turnover` constructor in `store/models.js` and surface them in `summarize()`.
-  - Touch points: `store/models.js` (constructor + summarize), `playByPlay/fullPbp.js` (extend `TURNOVER_MODIFIERS`), `ultistats_server/narration.py` slow-pass schema (add fields to the turnover event spec), `narration/narrationEngine.js` `applyTurnover` (forward the flags), and possibly `teams/gameSummary.js` if CSV columns enumerate flags.
+  - Touch points: `store/models.js` (constructor + summarize), `playByPlay/fullPbp.js` (extend `TURNOVER_MODIFIERS`), `breakside_server/narration.py` slow-pass schema (add fields to the turnover event spec), `narration/narrationEngine.js` `applyTurnover` (forward the flags), and possibly `teams/gameSummary.js` if CSV columns enumerate flags.
   - Backwards compat: existing serialized turnovers without these flags should default false on load — no migration needed.
 - [ ] **Feature**: Undo across point boundaries
   - Today the global Undo (`undoEvent` in `gameLogic.js`) handles in-point events and rolls back possessions/scores within the current point, but there's no UI affordance to undo *backwards* across a point boundary (e.g. "the previous point's last event was actually wrong"). Once a point ends, its events are effectively read-only from the UI even though they're still in the data model.
@@ -1477,7 +1477,7 @@ Higher-leverage interventions, in roughly priority order:
 ./scripts/dev-backend.sh
 
 # ...or disable auth explicitly:
-cd ultistats_server && BREAKSIDE_AUTH_REQUIRED=false python3 main.py
+cd breakside_server && BREAKSIDE_AUTH_REQUIRED=false python3 main.py
 
 # Test with auth enabled
 BREAKSIDE_AUTH_REQUIRED=true SUPABASE_JWT_SECRET=your-secret python3 main.py
@@ -1520,7 +1520,7 @@ cd /opt/breakside && sudo git pull && sudo systemctl restart breakside
 ### Backend: CORS headers on unhandled 500s (from staging shakedown, 2026-07-03)
 
 Both shipped as G2 (branch `g2-backend-hardening`; tests in
-`ultistats_server/test_error_handling.py`; ops rule documented in
+`breakside_server/test_error_handling.py`; ops rule documented in
 ARCHITECTURE.md § Data Directory Structure). Requires the usual EC2 backend
 restart to take effect after merge.
 

@@ -47,7 +47,7 @@ export default defineConfig({
     },
     {
       command: `uvicorn main:app --port ${BACKEND_PORT}`,
-      cwd: path.join(ROOT, 'ultistats_server'),
+      cwd: path.join(ROOT, 'breakside_server'),
       url: `http://localhost:${BACKEND_PORT}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 15_000,

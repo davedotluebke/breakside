@@ -1,0 +1,636 @@
+"""
+Narration endpoints — AI-powered speech-to-event processing.
+
+Two endpoints support the two-pass hybrid narration pipeline:
+
+  POST /api/narration/token
+    Creates an ephemeral OpenAI Realtime API session token so the browser can
+    open a WebSocket to OpenAI directly without the real API key ever leaving
+    the server.
+
+  POST /api/narration/finalize
+    Accepts the accumulated transcript + provisional events from the client
+    and asks a higher-quality model (Claude Sonnet) to review and issue
+    corrections as a list of operations (CONFIRM / AMEND / RETRACT / ADD).
+
+Authorization differs between the two, because only one of them names a game:
+
+  - /finalize carries a ``game_id``, so it requires Coach access to THAT
+    game's team (``require_body_game_coach``).
+  - /token is issued before a game exists (the practice-narration flow), so
+    the strongest question it can ask is whether the caller coaches any team
+    at all (``require_any_coach``). Both are strictly narrower than "any
+    authenticated user": Supabase self-signup is open, so that was anyone.
+
+Request bodies are also bounded — see the ``Field(max_length=...)`` caps on
+the transcript and list inputs, and the ``Literal`` model allowlists — since
+every one of these fields is forwarded to a metered third-party API on the
+operator's own key.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import os
+from typing import Any, Dict, List, Literal, Optional
+
+import httpx
+from fastapi import APIRouter, Body, Depends, HTTPException
+from pydantic import BaseModel, Field, ValidationError
+
+logger = logging.getLogger(__name__)
+
+# Import auth helpers — mirror the dual-import pattern used elsewhere in the codebase.
+try:
+    from auth import (  # type: ignore
+        get_json_body,
+        require_any_coach,
+        require_body_game_coach,
+    )
+except ImportError:
+    from breakside_server.auth import (  # type: ignore
+        get_json_body,
+        require_any_coach,
+        require_body_game_coach,
+    )
+
+
+router = APIRouter(prefix="/api/narration", tags=["narration"])
+
+
+# =============================================================================
+# Config helpers
+# =============================================================================
+
+def _openai_key() -> str:
+    key = os.getenv("OPENAI_API_KEY", "")
+    if not key:
+        raise HTTPException(status_code=503, detail="Narration unavailable: OPENAI_API_KEY not configured")
+    return key
+
+
+def _anthropic_key() -> Optional[str]:
+    return os.getenv("ANTHROPIC_API_KEY", "") or None
+
+
+def parse_body(model_cls, body: Dict[str, Any]):
+    """Validate a raw request body against ``model_cls``, as FastAPI would.
+
+    The narration routes that name a game authorize on ``game_id``, so the
+    authorization dependency needs the body — and takes it through the shared
+    ``get_json_body`` dependency, which FastAPI parses once and caches (the
+    same arrangement as ``require_game_sync_coach``). That leaves the route
+    with a single, untyped body param, so the Pydantic model has to be applied
+    here rather than by FastAPI.
+
+    Declaring BOTH ``Depends(get_json_body)`` and a ``Model = Body(...)``
+    param is not an alternative: FastAPI then sees two body fields with
+    different names, switches to embedded-body mode, and every existing client
+    starts getting 422s because their JSON is no longer nested under a key.
+
+    Raises ``HTTPException`` 422 carrying the same ``detail`` shape FastAPI's
+    own request validation produces, so callers can't tell the difference.
+    """
+    try:
+        return model_cls.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=json.loads(exc.json())) from exc
+
+
+# =============================================================================
+# POST /api/narration/token
+# =============================================================================
+
+class TokenRequest(BaseModel):
+    # Every field here is forwarded to OpenAI on the operator's key, so each
+    # one is a closed set rather than a free-form string.
+    #
+    # `mode` used to select the session kind, and "conversation" reached
+    # `_mint_legacy_session_token` — a full conversational gpt-realtime
+    # session, 10-20x the transcription rate (ARCHITECTURE.md § narration
+    # costs). It is now pinned to the one value the deployed client sends;
+    # NARRATION_USE_LEGACY_SESSIONS is the only remaining route to the
+    # conversational path, which is what it was always documented to be.
+    # Kept (rather than dropped) so a request that explicitly asks for
+    # "conversation" is refused out loud instead of silently downgraded.
+    mode: Literal["transcription"] = "transcription"
+    # Only meaningful for the legacy conversational session. Ignored for
+    # transcription (transcription-session tokens are model-agnostic; the
+    # actual ASR model is selected via session.update from the client).
+    model: Literal["gpt-realtime"] = "gpt-realtime"
+    # The two models offered by Advanced Settings ("Mini" / "Full") —
+    # settings/advancedSettings.js is the client-side source of this list.
+    transcription_model: Literal[
+        "gpt-4o-mini-transcribe", "gpt-4o-transcribe"
+    ] = "gpt-4o-mini-transcribe"
+    # NOTE: no game_id. The field used to exist here, unread, above a comment
+    # claiming it authenticated the requester against the game team. It never
+    # did, and it can't: this endpoint is called before a game exists.
+    # Authorization is `require_any_coach` on the route instead.
+
+
+@router.post("/token")
+async def create_ephemeral_token(
+    # Coach of *some* team. The practice-narration flow has no game to check
+    # against, so coach-of-this-game is not available here — but minting a
+    # live OpenAI credential must not be reachable by a drive-by signup.
+    user: dict = Depends(require_any_coach),
+    req: TokenRequest = Body(...),
+):
+    """
+    Create an ephemeral OpenAI Realtime API session token.
+
+    Hits the GA `client_secrets` endpoint with `session.type=transcription`
+    to mint a token for a transcription-only Realtime session. The legacy
+    `/v1/realtime/sessions` path (which mints a far pricier conversational
+    gpt-realtime session) is kept reachable via
+    NARRATION_USE_LEGACY_SESSIONS=1 in case we need to roll back — that env
+    flag is the only way to reach it; the request body cannot select it.
+    """
+    api_key = _openai_key()
+
+    use_legacy = os.getenv("NARRATION_USE_LEGACY_SESSIONS", "").strip() in ("1", "true", "yes")
+    if use_legacy:
+        return await _mint_legacy_session_token(api_key, req)
+    return await _mint_transcription_session_token(api_key, req)
+
+
+async def _mint_transcription_session_token(api_key: str, req: TokenRequest) -> Dict[str, Any]:
+    """
+    Mint an ephemeral token for a transcription-only Realtime session.
+
+    Hits `POST /v1/realtime/client_secrets` with `session.type=transcription`
+    and a baseline transcription-model selection. The browser is free to
+    refine the session via session.update (e.g. semantic_vad eagerness or
+    noise-reduction profile) once connected.
+    """
+    payload: Dict[str, Any] = {
+        "session": {
+            "type": "transcription",
+            "audio": {
+                "input": {
+                    "transcription": {"model": req.transcription_model},
+                }
+            },
+        }
+    }
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            resp = await client.post(
+                "https://api.openai.com/v1/realtime/client_secrets",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+        except httpx.HTTPError as e:
+            logger.exception("Transcription token mint failed (network error)")
+            raise HTTPException(status_code=502, detail=f"Upstream OpenAI error: {e}") from e
+
+    if resp.status_code != 200:
+        logger.warning(
+            "OpenAI client_secrets returned %s: %s", resp.status_code, resp.text[:500]
+        )
+        raise HTTPException(status_code=resp.status_code, detail=f"OpenAI: {resp.text}")
+
+    data = resp.json()
+    # Response shape (current GA): { "value": "ek_...", "expires_at": ... , "session": {...} }
+    # Older shape may nest under "client_secret"; tolerate both.
+    token = data.get("value")
+    expires_at = data.get("expires_at")
+    if not token:
+        nested = data.get("client_secret") or {}
+        token = nested.get("value")
+        expires_at = nested.get("expires_at") or expires_at
+    if not token:
+        logger.error("OpenAI client_secrets response missing token value: %s", data)
+        raise HTTPException(status_code=502, detail="OpenAI returned no token")
+
+    return {
+        "token": token,
+        "expires_at": expires_at,
+        "mode": "transcription",
+        "model": req.transcription_model,
+    }
+
+
+async def _mint_legacy_session_token(api_key: str, req: TokenRequest) -> Dict[str, Any]:
+    """
+    Mint a token for a conversational gpt-realtime session (tools + function
+    calling). Reachable only via NARRATION_USE_LEGACY_SESSIONS=1 — the
+    request body can no longer select it.
+
+    Uses the GA `client_secrets` endpoint with `session.type=realtime`. The old
+    beta path (`POST /v1/realtime/sessions` + `OpenAI-Beta: realtime=v1`, flat
+    `modalities`) was disabled by OpenAI; GA renames `modalities` ->
+    `output_modalities` and nests everything under `session`.
+    """
+    payload: Dict[str, Any] = {
+        "session": {
+            "type": "realtime",
+            "model": req.model,
+            # We only need transcription + function calling back, not audio out.
+            "output_modalities": ["text"],
+        }
+    }
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            resp = await client.post(
+                "https://api.openai.com/v1/realtime/client_secrets",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+        except httpx.HTTPError as e:
+            logger.exception("Ephemeral token creation failed (network error)")
+            raise HTTPException(status_code=502, detail=f"Upstream OpenAI error: {e}") from e
+
+    if resp.status_code != 200:
+        logger.warning("OpenAI token create returned %s: %s", resp.status_code, resp.text[:500])
+        raise HTTPException(status_code=resp.status_code, detail=f"OpenAI: {resp.text}")
+
+    data = resp.json()
+    # GA shape: { "value": "ek_...", "expires_at": ..., "session": {...} }.
+    # Tolerate the older { "client_secret": { value, expires_at } } shape too.
+    token = data.get("value")
+    expires_at = data.get("expires_at")
+    if not token:
+        secret = data.get("client_secret") or {}
+        token = secret.get("value")
+        expires_at = secret.get("expires_at") or expires_at
+    if not token:
+        logger.error("OpenAI token response missing token value: %s", data)
+        raise HTTPException(status_code=502, detail="OpenAI returned no token")
+
+    return {
+        "token": token,
+        "expires_at": expires_at,
+        "mode": "conversation",
+        "model": req.model,
+    }
+
+
+# =============================================================================
+# POST /api/narration/finalize
+# =============================================================================
+
+class ProvisionalEventRef(BaseModel):
+    id: str
+    type: str
+    summary: str = ""
+
+
+class RosterPlayer(BaseModel):
+    name: str
+    nickname: Optional[str] = None
+    number: Optional[str] = None
+
+
+class GameContext(BaseModel):
+    offense: bool = True
+    our_score: int = 0
+    their_score: int = 0
+    point: int = 0
+
+
+class FinalizeRequest(BaseModel):
+    game_id: str
+    # Bounds, not truncation: every one of these is pasted verbatim into a
+    # prompt billed to the operator's Anthropic key, and a client that
+    # overruns a cap has a bug we want to see rather than silently trim.
+    # One possession's narration is a few hundred characters; 8000 is
+    # already ~20x a realistic worst case.
+    transcript: str = Field(max_length=8000)
+    # On-field players for one point — seven a side, plus slack.
+    roster: List[RosterPlayer] = Field(max_length=40)
+    # Fast-pass events for one possession; a busy point is a handful.
+    provisional_events: List[ProvisionalEventRef] = Field(max_length=100)
+    game_context: GameContext
+
+
+class FinalizeOperation(BaseModel):
+    op: str  # 'CONFIRM' | 'AMEND' | 'RETRACT' | 'ADD'
+    provisional_id: Optional[str] = None
+    event: Optional[Dict[str, Any]] = None
+
+
+async def _finalize_request(
+    body: Dict[str, Any] = Depends(get_json_body)
+) -> FinalizeRequest:
+    """Typed view of the same parsed body the authorization dependency read."""
+    return parse_body(FinalizeRequest, body)
+
+
+@router.post("/finalize")
+async def finalize_narration(
+    # Authorization first, deliberately: an unauthorized caller should not be
+    # able to probe the request schema through validation errors.
+    user: dict = Depends(require_body_game_coach),
+    req: FinalizeRequest = Depends(_finalize_request),
+):
+    """
+    Run the slow-pass review over the full transcript.
+
+    Uses Claude Sonnet (Anthropic API) if an ANTHROPIC_API_KEY is set;
+    otherwise returns a no-op response that confirms all provisionals (the
+    fast-pass events stand on their own).
+    """
+    anthropic_key = _anthropic_key()
+    if not anthropic_key:
+        logger.info("ANTHROPIC_API_KEY not set — slow pass disabled, confirming all provisionals")
+        return {
+            "operations": [
+                {"op": "CONFIRM", "provisional_id": p.id} for p in req.provisional_events
+            ]
+        }
+
+    prompt = _build_finalize_prompt(req)
+    try:
+        operations = await _call_claude_finalize(anthropic_key, prompt)
+    except Exception as e:
+        logger.exception("Slow pass LLM call failed")
+        # Fallback: confirm all provisionals rather than losing data.
+        return {
+            "operations": [
+                {"op": "CONFIRM", "provisional_id": p.id} for p in req.provisional_events
+            ],
+            "error": str(e),
+        }
+
+    return {"operations": operations}
+
+
+def _build_finalize_prompt(req: FinalizeRequest) -> str:
+    roster_lines = []
+    for p in req.roster:
+        parts = [p.name]
+        if p.nickname:
+            parts.append(f'"{p.nickname}"')
+        if p.number:
+            parts.append(f"#{p.number}")
+        roster_lines.append("- " + " ".join(parts))
+
+    prov_lines = []
+    for p in req.provisional_events:
+        prov_lines.append(f"- id={p.id} type={p.type} summary={p.summary!r}")
+
+    side = "OFFENSE" if req.game_context.offense else "DEFENSE"
+
+    has_provisionals = bool(req.provisional_events)
+
+    # Mode-specific framing. In transcript-only mode there's nothing to review;
+    # the slow pass is the SOLE source of structured events. In hybrid mode it
+    # reviews the fast pass's output.
+    if has_provisionals:
+        review_section = f"""A fast-pass model already extracted these provisional events in order:
+{chr(10).join(prov_lines)}
+
+For each provisional event, emit one of:
+  - CONFIRM  — the event is correct as-is
+  - RETRACT  — the event should not have been recorded (coach corrected
+               themselves, misheard, etc.)
+
+Additionally, for any events clearly described in the transcript but
+missed by the fast pass, emit ADD.
+
+If the coach corrected a detail ("Bob threw to Alice — no wait, Carol"),
+emit RETRACT for the wrong event and ADD for the correct one. Do NOT
+emit an AMEND op — it is not supported."""
+    else:
+        review_section = """No fast-pass events were extracted live — you are the SOLE source
+of structured events for this narration. Walk through the transcript
+and emit one ADD operation for every distinct game event you find, in
+the order they happened.
+
+Be conservative: if a phrase is too garbled or ambiguous to interpret
+with confidence, skip it rather than guessing. It is better to miss an
+event than to fabricate one.
+
+If the coach corrects themselves mid-narration ("actually that was a
+throwaway", "no wait, it was Carol"), emit ONLY the corrected event —
+never the first version plus the correction. Example: "Bob hucks it to
+Dana — actually that was a throwaway" is ONE kind=turnover event with
+throwaway=true and huck=true (the modifiers move to the corrected
+event); it is NOT a throw event plus a turnover event. This includes a
+corrected score: "...to Dana in the endzone, score! — no, she dropped
+it" is ONE kind=turnover event with drop=true; the throw and the score
+never happened, so emit no throw event for them."""
+
+    return f"""You are extracting structured ultimate frisbee events from a coach's spoken narration of one possession.
+
+On-field players (use these EXACT spellings for any player names you emit):
+{chr(10).join(roster_lines) if roster_lines else "(none)"}
+
+Game context: our team is on {side}. Score our={req.game_context.our_score}, opponent={req.game_context.their_score}.
+
+Full transcript (what the coach said — note transcription may have errors):
+---
+{req.transcript}
+---
+
+{review_section}
+
+Event schema for ADD ops — the "event" object must have:
+  - kind: one of "throw" | "turnover" | "defense" | "opponent_score" | "pull"
+  - For kind=throw: thrower (player name), receiver (player name),
+    and any of huck, break_throw, reset, swing, hammer, sky, layout, score
+    (booleans). reset = a short backward pass to a handler — coaches say
+    "reset" or "dump", and BOTH words mean reset=true (there is no dump
+    field). swing = a lateral cross-field pass; whenever the coach explicitly
+    says "swing"/"swings it", set swing=true on that throw.
+    huck = a long deep shot; set huck=true only when the narration clearly
+    describes one ("hucks it", "puts it deep", "launches it", "bombs it").
+    Vague directional language alone ("upfield", "downfield") is NOT a huck.
+    break_throw = a throw to the break side; set break_throw=true only when
+    the coach explicitly says "break" ("break throw", "around break", "to
+    the break side"). Throw-technique words alone ("IO flick", "around
+    backhand", "up the line") do NOT make it a break throw.
+  - For kind=turnover: thrower, receiver (optional), and any of
+    throwaway, drop, huck, good_defense, stall (booleans).
+    Note: throwaway and drop are mutually exclusive.
+    throwaway=true means the throw itself was errant — described as behind /
+    over / past / away from the target, too far, or out of reach — even if
+    the narration adds that the receiver couldn't pull it in. drop=true
+    means the throw was catchable and the receiver failed to hold it
+    ("drops it", "right through the hands"); a drop should name the
+    receiver in the receiver field when the narration identifies them.
+    When the coach explicitly assigns the turnover to a player
+    ("Turnover Daniel there", "that's on Carla"), that player is the
+    turnover event's thrower — this explicit attribution overrides any
+    other inference about who turned it over. Any completed pass that got
+    that player the disc is still its own separate throw event.
+  - For kind=defense: defender (player name), and any of
+    block, interception, layout, sky, callahan (booleans).
+    Note: block and interception are mutually exclusive.
+    block=true means the disc was deflected (footblock, knockdown) and
+    nobody caught it out of the air. interception=true means the defender
+    caught the throw cleanly. Both can carry layout/sky modifiers.
+    callahan=true means the defender caught the opponent's throw in the
+    endzone, instantly scoring for US ("Callahan!"). Emit exactly ONE
+    defense event with interception=true and callahan=true — the
+    opponent did NOT score, so never add an opponent_score event.
+  - For kind=opponent_score: no additional fields
+  - For kind=pull: puller (player name), any of flick, roller, io, oi, brick
+    (booleans), and optionally quality (one of "Good Pull", "Okay Pull",
+    "Poor Pull"). io/oi are the two curl directions ("inside-out" / "outside-in")
+    — a coach who says only "flick pull" sets flick alone. roller=true when the
+    pull is deliberately rolled along the ground. brick=true when the pull sails
+    out of bounds or through the back of the endzone and the disc comes to the
+    brick mark — the coach says "brick", "bricked it", or "out the back".
+    Set quality only when the coach explicitly grades the pull ("nice pull",
+    "that's a poor one"); leave it out for a plain factual description.
+
+One completed pass = ONE throw event:
+  - A follow-on clause describing the receiver's catch ("...to Ella,
+    Ella skies her defender for the score") supplies modifiers (sky,
+    layout, score) for that SAME throw — never emit a separate event
+    for the catch.
+    RIGHT: {{ "kind": "throw", "thrower": "Alice", "receiver": "Ella",
+    "sky": true, "score": true }} — one event.
+    WRONG: a throw to Ella followed by a second event where Ella is
+    both thrower and receiver carrying the sky/score flags.
+  - Never emit a throw whose thrower and receiver are the same player;
+    if a clause seems to say that, it is describing the catch of the
+    previous throw.
+  - Narration often omits the thrower ("upfield to Daniel", "swings it
+    across to Ella"). The thrower is whoever currently holds the disc —
+    the receiver of the previous throw, or the player who picked it up.
+    Emit a normal throw event with that inferred thrower; never drop a
+    throw just because the thrower is implicit.
+  - Throw and turnover events describe OUR team only: thrower and
+    receiver must come from the roster above. Narration of the opponent
+    moving the disc ("their reset throws a flick") is context, not an
+    event — an opponent possession can only yield kind=opponent_score,
+    or kind=defense naming OUR defender when we take the disc away.
+
+Pulls:
+  - `puller` is REQUIRED on every pull event and must be a name from the
+    roster above. A pull event without a puller is invalid — if the narration
+    does not say WHO pulled, emit nothing at all for the pull.
+    RIGHT: {{ "kind": "pull", "puller": "Daniel", "flick": true }}
+    WRONG: {{ "kind": "pull" }} — no puller, so this event must not exist.
+  - Most mentions of a pull do NOT name anyone, and those are context, not
+    events. "We pull", "we pulled it", "we're pulling", "here comes the pull",
+    "after the pull" — every one of these is scene-setting for the possession
+    that follows. Emit NOTHING for them and go straight to the first real
+    event. The app already prompts the coach for pull details at point start,
+    so a nameless pull event adds nothing and will be discarded.
+  - The opponent's pull is never our event. "They pull", "their pull was a
+    brick" describes the opponent — emit nothing, no matter how it is
+    described. Never emit a pull whose puller is not on our roster.
+  - A pull is not a throw: never also emit kind=throw for the same act, and a
+    bricked or out-of-bounds pull is NOT a turnover — it stays kind=pull with
+    brick=true. The opponent picking up after our pull is not an event.
+  - A narration can span a point boundary: after we score, the next thing we
+    do is pull. A named pull late in the transcript is normal — emit it in
+    the order it happened.
+
+Player names in ADD events:
+  - Use ONLY the player's name itself, e.g. "Alice", NOT the full roster line.
+  - The roster lines above include nickname (in quotes) and jersey number (#N) as
+    HINTS to help you match what the coach said — never include those in the
+    emitted event. The `thrower`, `receiver`, `defender`, and `puller` fields
+    must contain just the bare name.
+  - Match case and spelling EXACTLY to the name as it appears at the start of a
+    roster line (e.g. roster line "- Alice "Ace" #7" → emit `"Alice"`).
+  - If a transcribed name is misspelled but clearly corresponds to a roster
+    player (e.g. "Karla" → "Carla"), use the corrected roster spelling.
+  - Some rosters contain names or nicknames that collide with ultimate jargon
+    (e.g. a player named or nicknamed "Sky", "Hammer", or "Huck"). A word in a
+    thrower/receiver/defender/puller position refers to that player; jargon flags
+    apply only when the word describes the throw or catch itself ("throws a
+    hammer", "skies her defender"). Transcription may lowercase a nickname
+    ("hits hammer for the score" = hits the player nicknamed Hammer). Each
+    word counts ONCE: matched to a player, it is consumed as that player and
+    must NOT also set the matching jargon flag — a receiver nicknamed Hammer
+    does not make the throw hammer=true.
+
+Output ONLY a JSON object of the form:
+{{
+  "operations": [
+    {{ "op": "CONFIRM", "provisional_id": "..." }},
+    {{ "op": "RETRACT", "provisional_id": "..." }},
+    {{ "op": "ADD",     "event": {{ "kind": "throw", "thrower": "...", "receiver": "...", "score": true }} }}
+  ]
+}}
+
+No prose, no markdown fences — just the JSON.
+"""
+
+
+async def _call_claude_finalize(api_key: str, prompt: str) -> List[Dict[str, Any]]:
+    """
+    Call Claude Sonnet via the Anthropic REST API. Returns a list of
+    operations. Raises on failure — caller decides the fallback.
+    """
+    model = os.getenv("NARRATION_SLOW_MODEL", "claude-sonnet-4-5-20250929")
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": model,
+                "max_tokens": 2048,
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ],
+            },
+        )
+    if resp.status_code != 200:
+        raise RuntimeError(f"Anthropic API {resp.status_code}: {resp.text[:500]}")
+
+    body = resp.json()
+    # Extract text from content blocks
+    text_parts: List[str] = []
+    for block in body.get("content", []):
+        if block.get("type") == "text":
+            text_parts.append(block.get("text", ""))
+    text = "".join(text_parts).strip()
+
+    parsed = _last_json_object(text, "operations")
+    ops = parsed.get("operations", [])
+    if not isinstance(ops, list):
+        raise RuntimeError("Claude response 'operations' is not a list")
+    return ops
+
+
+def _last_json_object(text: str, required_key: str) -> Dict[str, Any]:
+    """
+    Extract the LAST top-level JSON object in ``text`` containing
+    ``required_key``.
+
+    Despite the no-prose instruction, smaller models occasionally emit a
+    wrong first JSON block, prose reconsidering it, and then a corrected
+    block — the final object is the answer they mean. Scanning for objects
+    also tolerates markdown fences without special-casing them.
+    """
+    decoder = json.JSONDecoder()
+    found: Optional[Dict[str, Any]] = None
+    i = 0
+    while True:
+        start = text.find("{", i)
+        if start == -1:
+            break
+        try:
+            obj, end = decoder.raw_decode(text, start)
+        except json.JSONDecodeError:
+            i = start + 1
+            continue
+        if isinstance(obj, dict) and required_key in obj:
+            found = obj
+        i = end
+    if found is None:
+        raise RuntimeError(
+            f"no JSON object with key {required_key!r} in model reply"
+        )
+    return found

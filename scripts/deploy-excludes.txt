@@ -29,7 +29,7 @@ __pycache__/*
 */.DS_Store
 
 # Backend, data, scripts, tests — not part of the PWA
-ultistats_server/*
+breakside_server/*
 data/*
 .dev-data/*
 scripts/*

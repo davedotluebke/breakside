@@ -445,7 +445,7 @@ The Line Coach can prepare the line for the point *after* the next one while the
 - `getEffectiveLineForNextPoint` treats a `lineCoachViewing` value of `'odOnDeck'` as "no Next-line view preference" (Priority 1 is skipped) — an On Deck view must never resolve into a Next bucket.
 - `autoSelectActiveTypeForNextPoint` returns early when `activeType === 'odOnDeck'`, so a coach planning On Deck isn't yanked back to the Next view when a point ends.
 
-**Sync.** `odOnDeckLine` merges per-axis by `odOnDeckLineModifiedAt`, exactly like the O/D/OD lines: added to `_LINE_KEYS` in `merge_pending_next_line` (`ultistats_server/storage/game_storage.py`), to both client read-merge sites in `store/sync.js`, and to `serializeGame`/`deserializeGame` in `store/storage.js`. (`activeType` itself stays local-only, as before.)
+**Sync.** `odOnDeckLine` merges per-axis by `odOnDeckLineModifiedAt`, exactly like the O/D/OD lines: added to `_LINE_KEYS` in `merge_pending_next_line` (`breakside_server/storage/game_storage.py`), to both client read-merge sites in `store/sync.js`, and to `serializeGame`/`deserializeGame` in `store/storage.js`. (`activeType` itself stays local-only, as before.)
 
 ### Lineup Ready Signal
 
@@ -466,7 +466,7 @@ The ping is **not** a commit gate. Lineup edits sync continuously through `saveP
 
 Three layers, in order from least to most invasive:
 
-1. **Server-side role timeout = 120s** (`STALE_TIMEOUT_SECONDS` in `ultistats_server/storage/controller_storage.py`, override via `BREAKSIDE_STALE_TIMEOUT` env var). Mobile browsers aggressively throttle/freeze setInterval when the page is hidden, so a coach pocketing their phone for ~half a minute would lose their roles; 120s gives a more forgiving grace window. Genuine disconnects still free the role eventually.
+1. **Server-side role timeout = 120s** (`STALE_TIMEOUT_SECONDS` in `breakside_server/storage/controller_storage.py`, override via `BREAKSIDE_STALE_TIMEOUT` env var). Mobile browsers aggressively throttle/freeze setInterval when the page is hidden, so a coach pocketing their phone for ~half a minute would lose their roles; 120s gives a more forgiving grace window. Genuine disconnects still free the role eventually.
 2. **Wake-handler fallback** (`document.addEventListener('visibilitychange', ...)` in `game/controllerState.js`). If polling was running before the sleep, immediately re-pings + retries to re-claim any expired roles. New: if `currentGameIdForPolling` is null but `currentGame()` exists (PWA reload from background that didn't restart polling), it now restarts polling from the in-memory game id.
 3. **Manual "Rejoin Game" menu item** (in the in-game hamburger menu). Visible only when controller polling is not active. Tapping it walks `currentGame()` → `teams[].games` (any game without `gameEndTimestamp`) to find the in-progress game and calls `startControllerPolling(gameId)`. Toast: `"Reconnected — tap a role button to reclaim it"`. The fallback path covers cases where the wake handler couldn't fire (e.g. user opened the menu without a sleep/wake cycle).
 
@@ -599,7 +599,7 @@ possession carries `startedAt`. Both were added 2026-09 for the replay viewer
 
 Round-trip tests: `tests/unit/eventTimestamps.test.mjs` (client) and
 `test_event_timestamps_survive_sync_round_trip` in
-`ultistats_server/test_api.py` (server passes both fields through untouched).
+`breakside_server/test_api.py` (server passes both fields through untouched).
 
 ### Feature Worktrees
 
@@ -637,13 +637,13 @@ into prod). `scripts/dev-backend.sh` provides this:
 ```
 
 Each instance runs with `BREAKSIDE_AUTH_REQUIRED=false` (no Supabase secrets
-needed; membership checks are skipped — see [dependencies.py](ultistats_server/auth/dependencies.py)),
+needed; membership checks are skipped — see [dependencies.py](breakside_server/auth/dependencies.py)),
 so a locally-served frontend reads/writes the copied data with no CORS or auth
 setup. Pair a frontend by opening it once with `?api=http://localhost:<port>`
 (saved to that origin's localStorage; `?api=reset` clears it). Because
 localStorage is keyed per origin **including port**, frontend port 3001↔backend
 8001 and 3002↔8002 stay independent. `--reload` watches the worktree's own
-`ultistats_server/`, so each session tests its own server changes. The
+`breakside_server/`, so each session tests its own server changes. The
 `.dev-data/` copies are gitignored and disposable.
 
 This is the durable replacement for adding `localhost` to the prod API's
@@ -724,7 +724,7 @@ unreachable` log lines are just the box falling back from IPv6 to IPv4.
 ### Server File Structure
 
 ```
-ultistats_server/
+breakside_server/
 ├── main.py              # App wiring only: FastAPI app, CORS, router includes
 ├── config.py            # Configuration from environment variables
 ├── narration.py         # AI narration router (token + finalize endpoints)
@@ -907,12 +907,12 @@ where a full name is needed. Teams are `Team A`…`Team I`; `Breakside` vs
 
 Two standing exceptions, both deliberate:
 
-- `ultistats_server/tests/narration/scenarios/001`–`021` use their own
+- `breakside_server/tests/narration/scenarios/001`–`021` use their own
   synthetic roster (Alice / Bob / Carla / Daniel / Ella / Felix / Gina, plus
   Cara / Sky / Hannah). Each scenario's `audio.flac` **speaks** those names, so
   renaming the fixtures would desync them from the audio and silently break the
   eval. Leave them alone, and mirror that roster in the prompt examples in
-  `ultistats_server/narration.py` that describe it.
+  `breakside_server/narration.py` that describe it.
 - `Dave` / `David Luebke` appear as the author's own name — the LICENSE
   copyright, `Coach Dave` signup placeholders, `Dave L.` invite copy, and
   review-doc prose. Those are intentional, not leaks.
@@ -1322,7 +1322,7 @@ narration/
 
 ### Backend endpoints
 
-`ultistats_server/narration.py` exposes two routes mounted under `/api/narration/`:
+`breakside_server/narration.py` exposes two routes mounted under `/api/narration/`:
 
 - **`POST /token`** — receives `{model}`, calls OpenAI's `https://api.openai.com/v1/realtime/sessions` with the server's `OPENAI_API_KEY`, returns the ephemeral `client_secret` to the browser. Lets the browser open a WebSocket without ever seeing the real API key. Auth: any logged-in user.
 - **`POST /finalize`** — receives `{game_id, transcript, roster, provisional_events, game_context}`, builds a structured prompt (see below), calls Claude Sonnet via the Anthropic Messages API, parses the response, returns `{operations: [...]}`. Auth: any logged-in user. Falls back to confirming all provisionals if `ANTHROPIC_API_KEY` is unset, so the feature degrades gracefully.
@@ -1351,7 +1351,7 @@ The ADD `event` object has shape:
 
 Player names must match roster entries exactly. The slow-pass prompt explicitly tells Claude to emit bare names (not `"Alice #7"`) — this was a real bug caught by the test harness on its first run.
 
-**Pulls are gated on a named puller.** `puller` is required, and the prompt says so with an explicit `WRONG: {"kind": "pull"}` example; `applyPull` in `narration/narrationEngine.js` drops a pullerless pull as a second line of defense. The reason is that `showPullDialog()` already fires automatically at every point that starts on defense (`game/pointManagement.js`), so the coach has normally already entered the pull by hand — a narrated pull is only worth recording when it names a puller the dialog wouldn't have captured, and a nameless one is pure duplicate. Live probing confirmed this matters: before the required-puller rule was hardened, Haiku emitted a bare `{"kind": "pull"}` for scene-setting narration like "we pulled it" and "they pull". The prompt rules are pinned in `ultistats_server/test_narration_finalize.py`.
+**Pulls are gated on a named puller.** `puller` is required, and the prompt says so with an explicit `WRONG: {"kind": "pull"}` example; `applyPull` in `narration/narrationEngine.js` drops a pullerless pull as a second line of defense. The reason is that `showPullDialog()` already fires automatically at every point that starts on defense (`game/pointManagement.js`), so the coach has normally already entered the pull by hand — a narrated pull is only worth recording when it names a puller the dialog wouldn't have captured, and a nameless one is pure duplicate. Live probing confirmed this matters: before the required-puller rule was hardened, Haiku emitted a bare `{"kind": "pull"}` for scene-setting narration like "we pulled it" and "they pull". The prompt rules are pinned in `breakside_server/test_narration_finalize.py`.
 
 **One pull per point, guarded from both sides.** Two independent paths can record the pull, so each checks `pointHasPull()` (`utils/helpers.js`) before writing and the first one wins: `applyPull` skips a narrated pull when the dialog already recorded one, and `createPullEvent` (`playByPlay/pullDialog.js`) skips the dialog entry when narration got there first, toasting "Pull already recorded from narration" so the coach isn't left wondering where their quality/hang selections went. A one-sided guard is not enough — the slow pass lands seconds after the coach stops talking, so either order is reachable in practice. `pointHasPull` scans all possessions and keys on `event.type === 'Pull'` rather than `instanceof`, because points rebuilt from the server come back through `deserializeEvent`; `tests/unit/pointHasPull.test.mjs` pins both.
 
@@ -1385,7 +1385,7 @@ research (pricing, latency, on-device options) behind these numbers.
 
 ### Test harness
 
-Audio-driven regression suite in `ultistats_server/tests/narration/`. Each scenario is a directory of `(audio.flac, transcript.txt, roster.json, expected.json)` files. The runner:
+Audio-driven regression suite in `breakside_server/tests/narration/`. Each scenario is a directory of `(audio.flac, transcript.txt, roster.json, expected.json)` files. The runner:
 
 1. Streams the audio to OpenAI Realtime as a transcription-only session
 2. Captures the accumulated transcript
@@ -1403,7 +1403,7 @@ A second, independent narration layer lets a coach *speak the next line* instead
 - **Entry point**: the one floating mic FAB, not a button of its own. `narration/micButton.js` holds a target per narration layer and picks between them at press time. The predicate is the **game clock, not the tab** (`isLineupContext()`): **between points → lineup on every tab**, so a solo coach never has to detour to the Line tab to call the next line; **during a point → event narration, except on the Line tab**, where a coach is by definition planning the next line rather than watching the disc. A **non-idle layer always wins over the context**, so a lineup recording stays stoppable through the very point start that would otherwise flip the context under it, and neither layer can start a second session against the shared realtime-session singleton. The same tap-toggle and hold-to-record gestures drive both. Phase colours are shared (micButton.css): lineup's `processing` reuses `.mic-finalizing`, so there is no fifth state. The FAB polls its target every 500ms and `applyTabState()` / `startNextPoint()` refresh it directly, since background tabs throttle the poll hard — but that only keeps the *tooltip* fresh, as both targets render identically while idle and every press reads the target live. The Lines-tab mic button that shipped in build 1105 is gone; `lineupNarration.js` now owns only the inline status strip under the Select Line toolbar.
 - **Line-report toast lifetime**: the confirmation toast ("7/7 selected. Added: Kris. Off: Wes") is a whole line plus a miscount flag, so it gets reading time rather than glance time — **3× the 4s default on the Line tab** (where the checkboxes beside it already tell the story) and **6× off it** (where the toast is the only feedback). It's dismissed early the moment the coach visibly moves on — point start (via `startNextPoint` → `lineupNarration.onPointStarted()`), a fresh narration superseding it, or leaving the game screen (`breakside:screen-shown`) — plus the usual manual close/swipe. `lineupNarration` holds the live toast and clears its handle through the toast's own `onDismiss`, so a manual close never leaves a detached node behind.
 - **Capture**: `narration/lineupNarration.js` opens the same transcription-only Realtime session, but vocabulary-biases the recognizer toward the **full active roster** rather than the on-field seven — calling a line is precisely about naming bench players.
-- **Extraction**: on stop, the transcript is POSTed to **`POST /api/narration/lineup`** (`ultistats_server/narration_lineup.py`) along with the full roster (names, nicknames, jersey numbers), the **expected player count**, the **previous point's lineup**, and the current on-screen selection. Claude returns `{players, unmatched, note}` — the final set of roster names.
+- **Extraction**: on stop, the transcript is POSTed to **`POST /api/narration/lineup`** (`breakside_server/narration_lineup.py`) along with the full roster (names, nicknames, jersey numbers), the **expected player count**, the **previous point's lineup**, and the current on-screen selection. Claude returns `{players, unmatched, note}` — the final set of roster names.
 - **Tap-equivalent contract** (see `_build_lineup_prompt` / `_derive_players`): the model NEVER outputs a lineup. It returns only the voiced changes — `{"in": [names], "out": [{name, said}]}` — the verbal equivalent of tapping names on the list, and the SERVER derives `players = (current_selection − outs) ∪ ins` by set arithmetic. Picking, completing, or trimming a line is therefore structurally impossible (the Wholesale-then-"3 go in" fill-out bug class is dead: there is no slot for the model to fill). Bare names add; off/sits/replaced-by language removes; "same line"/"run it back" expands to the previous lineup as ins; later statements override earlier ones and retracted changes vanish; asides are ignored; the expected count is toast context only. An empty selection stays empty — there is NO fallback to the previous lineup (Wholesale means Wholesale). Reciting "the line is X, Y, Z" over a non-empty selection unions (9/7 toast) rather than replacing — clear first for a fresh line.
 - **Voiced clear-all**: "wholesale" (coaches verb the button name), "everybody comes off", "all players come off", "clear the line", "start fresh" set `clear: true` with the quoted words in `clear_said`; the server honors it only when the quote occurs in the transcript AND matches a collective-clear lexicon (`_CLEAR_LEXICON_RE` — includes the "whole sale" STT split). A verified clear empties the selection before ins apply ("Let's get a wholesale, then put in Kris and Charlie" → exactly those two) and cancels ins spoken before it; the client applies legitimately-empty results only when `voiced_clear`/`voiced_out` justify them, so "nothing heard" still can't wipe.
 - **Out-evidence guards**: each `out` entry must quote the coach's removal words (`said`), and the server honors it only if the quote (a) actually occurs in the transcript and (b) references that player by name token, nickname, or jersey number (digits or spoken words, "number five"). This deterministically kills the two small-model failure modes observed in eval: fabricated removal quotes, and "absent from a recited list" treated as removal. Dropped outs are logged. Roster names that embed jersey numbers ("Jamal 23") must be emitted byte-for-byte; the client matcher's normalized tier is the safety net. The reply leads with a `changes` worksheet (`[{out, in}]`, corrected substitutions only) that the model fills before materializing `players` — added for the Haiku slow-pass flip (`NARRATION_SLOW_MODEL=claude-haiku-4-5`, which lineup inherits via its model fallback); it eliminated Haiku's pad-to-expected-count and note/list-contradiction failures, bringing it to parity with Sonnet on the lineup eval matrix at ~half the latency. The `changes` field is advisory — the endpoint returns only `players`/`unmatched`/`note`.
@@ -1644,8 +1644,8 @@ at two different prefixes — `/static/viewer/` on the API host and `/viewer/`
 on S3 — so absolute paths would break one of them.
 
 ⚠️ **Viewer-only changes do not reach S3.** The production workflow's
-`paths-ignore` includes `ultistats_server/**`, so a commit touching only
-`ultistats_server/static/viewer/` never triggers the deploy that syncs
+`paths-ignore` includes `breakside_server/**`, so a commit touching only
+`breakside_server/static/viewer/` never triggers the deploy that syncs
 `/viewer/`. The www/staging copies then silently lag the API-hosted one.
 Touch a root-level file in the same commit, or run `deploy-staging.sh` /
 re-run the workflow manually.
@@ -1874,7 +1874,7 @@ curl -X POST https://api.breakside.pro/api/index/rebuild
 # Deploy PWA
 aws s3 sync . s3://breakside.pro/ \
   --exclude ".git/*" \
-  --exclude "ultistats_server/*" \
+  --exclude "breakside_server/*" \
   --exclude "data/*" \
   --exclude "scripts/*" \
   --exclude "*.py" \
@@ -1882,7 +1882,7 @@ aws s3 sync . s3://breakside.pro/ \
   --exclude ".DS_Store"
 
 # Deploy viewer
-aws s3 sync ultistats_server/static/viewer/ s3://breakside.pro/viewer/
+aws s3 sync breakside_server/static/viewer/ s3://breakside.pro/viewer/
 
 # Invalidate cache
 aws cloudfront create-invalidation --distribution-id E6M9KCXIU9CKD --paths "/*"

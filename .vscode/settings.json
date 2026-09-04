@@ -5,7 +5,7 @@
         "**/*.sass",
         "**/*.ts",
         "data/games/**",
-        "ultistats_server/data/**",
+        "breakside_server/data/**",
         "**/*.json"
     ]
 }

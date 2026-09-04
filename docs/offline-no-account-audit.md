@@ -23,7 +23,7 @@
 > is markup, `main.js` never runs, and the splash never retracts. The worker now
 > precaches the app shell from a manifest generated at deploy time. See
 > ARCHITECTURE.md § Power Management's neighbours and
-> `ultistats_server/test_precache_manifest.py`.
+> `breakside_server/test_precache_manifest.py`.
 >
 > **§2 is now half-closed.** A *signed-in* coach who loses the network gets
 > their teams and games rendered from localStorage instead of "Error loading

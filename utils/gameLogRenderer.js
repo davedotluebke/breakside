@@ -13,7 +13,7 @@
  * only ever landed in summarizeGame). Merged 2026-07-19 (G6). Any format change
  * now lands here, once.
  *
- * The public viewer (ultistats_server/static/viewer/viewer.js) renders per-point
+ * The public viewer (breakside_server/static/viewer/viewer.js) renders per-point
  * cards from the same event stream but is a separate origin/app that cannot
  * import PWA modules — it stays bespoke; see the keep-in-sync note there.
  *

@@ -77,7 +77,7 @@ aws s3 cp "$STAGED_SW" "s3://$BUCKET/service-worker.js" \
 rm -f "$STAGED_VERSION" "$STAGED_SW"
 
 # Sync viewer files
-aws s3 sync "$DIR/ultistats_server/static/viewer/" "s3://$BUCKET/viewer/"
+aws s3 sync "$DIR/breakside_server/static/viewer/" "s3://$BUCKET/viewer/"
 
 echo "Deployed to https://staging.breakside.pro"
 
