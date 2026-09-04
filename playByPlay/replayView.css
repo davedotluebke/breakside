@@ -28,9 +28,16 @@
 /* Landscape: full width on a phone; on a wide screen the height cap wins so
    the log below keeps its room. Portrait: height-capped, width follows. */
 .rv-stage[data-o="landscape"] .rv-fieldwrap { width: 100%; }
+/* Both orientations size the pitch by WIDTH and let aspect-ratio give the
+   height. Height-driven sizing (height + aspect-ratio + max-width: 100%)
+   collapsed to zero width on iOS Safari inside the flex row — a percentage
+   max-width against a content-sized flex parent is cyclic there. */
 .rv-stage[data-o="landscape"] .rv-field { width: min(100%, calc(42vh * 110 / 40)); aspect-ratio: 110 / 40; height: auto; }
-.rv-stage[data-o="portrait"]  .rv-field { height: min(60vh, 640px); aspect-ratio: 40 / 110; max-width: 100%; }
-.rv-stage[data-o="portrait"]  .rv-fieldwrap { flex: 0 1 auto; }
+.rv-stage[data-o="portrait"]  .rv-field { width: calc(min(60vh, 640px) * 40 / 110); aspect-ratio: 40 / 110; height: auto; max-width: none; }
+.rv-stage[data-o="portrait"]  .rv-fieldwrap { flex: 0 0 auto; }
+/* The event layer is a real layer so its absolutely positioned children
+   (arrows SVG, markers) resolve against the pitch, not the page. */
+.rv-eventlayer { position: absolute; inset: 0; }
 
 /* The Offense / Defense / Goal badge: a row above the field in landscape, a
    narrow vertical column to its left in portrait (maximum field height).
