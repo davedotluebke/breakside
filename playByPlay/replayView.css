@@ -4,8 +4,9 @@
  * summary. The pitch itself is the Field tab's (.fp-field and its layers come
  * from playByPlay/fieldPbp.css via fieldRender); this file only lays out the
  * stage around it and styles the controls. Colors come from css/tokens.css so
- * both themes hold. Buttons here reset the global `button { margin: 10px }`
- * (see ARCHITECTURE.md § CSS Styling Gotchas).
+ * both themes hold, and match the log's own possession/score lines. Buttons
+ * here reset the global `button { margin: 10px }` (see ARCHITECTURE.md § CSS
+ * Styling Gotchas).
  */
 
 .rv-root {
@@ -18,62 +19,35 @@
     flex: 0 0 auto;
 }
 
-/* ---- stage: strip + field ---- */
-.rv-stage {
-    position: relative;
-    display: flex;
-    gap: 8px;
-    min-width: 0;
-}
-.rv-stage[data-o="landscape"] { flex-direction: column; }
-.rv-stage[data-o="portrait"]  { flex-direction: row; align-items: flex-start; }
+/* ---- stage: badge + field ---- */
+.rv-stage { display: flex; gap: 6px; min-width: 0; }
+.rv-stage[data-o="landscape"] { flex-direction: column; align-items: center; }
+.rv-stage[data-o="portrait"]  { flex-direction: row; align-items: flex-start; justify-content: center; }
 
-.rv-strip {
-    display: flex;
-    gap: 5px;
-    flex-wrap: nowrap;          /* one line; replayView.js compacts chips to fit */
-    overflow: hidden;
-    align-content: flex-start;
-    min-width: 0;
-}
-.rv-strip.rv-compact .fp-chip { padding: 3px 7px; gap: 3px; }
-.rv-strip .fp-chip .fp-num[hidden] { display: none; }
-.rv-stage[data-o="portrait"] .rv-strip {
-    flex-direction: column;
-    flex-wrap: nowrap;
-    flex: 0 0 auto;
-    max-height: min(50vh, 560px);
-    overflow-y: auto;
-}
-/* Compact, non-interactive copies of the Field tab chips (fieldPbp.css). */
-.rv-strip .fp-chip { margin: 0; padding: 4px 10px; font-size: 12px; gap: 5px; cursor: default; }
-.rv-strip .fp-chip .fp-num { font-size: 10px; }
-.rv-strip .fp-chip:not(.on-field) { opacity: .5; }
-.rv-strip .fp-chip.on-field { opacity: 1; }
-
-.rv-fieldwrap {
-    flex: 1 1 auto;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-}
+.rv-fieldwrap { flex: 1 1 auto; min-width: 0; display: flex; justify-content: center; }
 /* Landscape: full width on a phone; on a wide screen the height cap wins so
    the log below keeps its room. Portrait: height-capped, width follows. */
-.rv-stage[data-o="landscape"] .rv-field { width: min(100%, calc(38vh * 110 / 40)); aspect-ratio: 110 / 40; height: auto; }
-.rv-stage[data-o="portrait"]  .rv-field { height: min(50vh, 560px); aspect-ratio: 40 / 110; max-width: 100%; }
+.rv-stage[data-o="landscape"] .rv-fieldwrap { width: 100%; }
+.rv-stage[data-o="landscape"] .rv-field { width: min(100%, calc(42vh * 110 / 40)); aspect-ratio: 110 / 40; height: auto; }
+.rv-stage[data-o="portrait"]  .rv-field { height: min(60vh, 640px); aspect-ratio: 40 / 110; max-width: 100%; }
+.rv-stage[data-o="portrait"]  .rv-fieldwrap { flex: 0 1 auto; }
 
-/* Possession / goal badge lives ABOVE the pitch, never on it, so it can't
-   cover a player. Fixed height so the field doesn't jump when it's empty. */
-.rv-possbanner { min-height: 18px; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+/* The Offense / Defense / Goal badge: a row above the field in landscape, a
+   narrow vertical column to its left in portrait (maximum field height).
+   Same colors as the log's possession lines. Fixed size so the field never
+   shifts when there is no badge. */
+.rv-possbanner { display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.rv-stage[data-o="landscape"] .rv-possbanner { min-height: 20px; }
+.rv-stage[data-o="portrait"]  .rv-possbanner { width: 22px; align-self: stretch; }
 .rv-badge {
     display: inline-block;
-    font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-    padding: 2px 7px; border-radius: 999px; color: #fff;
+    font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    padding: 2px 9px; border-radius: 999px; line-height: 1.3;
 }
-.rv-badge.us  { background: var(--color-primary); }
-.rv-badge.opp { background: var(--color-danger); }
+.rv-stage[data-o="portrait"] .rv-badge { writing-mode: vertical-rl; transform: rotate(180deg); padding: 9px 2px; }
+.rv-badge.off  { color: var(--color-success-text); background: var(--color-success-surface-soft); border: 1px solid var(--color-success-border); }
+.rv-badge.def  { color: var(--color-danger-text);  background: var(--color-danger-surface-soft);  border: 1px solid var(--color-danger-surface-deep); }
+.rv-badge.goal { color: var(--color-success-text); background: linear-gradient(135deg, var(--color-success-surface) 0%, var(--color-success-border) 100%); border: 1px solid var(--color-success-border); }
 
 /* Collapsed: the point under the playhead has no field positions. */
 .rv-nofield {
@@ -94,6 +68,7 @@
     grid-template-columns: auto auto auto minmax(0, 1fr) auto;
     gap: 6px 10px;
     align-items: center;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
 .rv-tbtn {
     width: 36px; height: 36px; margin: 0; padding: 0;
@@ -104,6 +79,7 @@
     display: grid; place-items: center;
     font-size: 14px;
     cursor: pointer;
+    touch-action: manipulation;
 }
 .rv-tbtn:disabled { opacity: .4; cursor: default; }
 .rv-tbtn.rv-play {
@@ -112,7 +88,9 @@
 }
 .rv-tbtn.rv-play i.fa-play { margin-left: 2px; }
 .rv-speed { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.rv-speed-input { width: 100%; margin: 0; accent-color: var(--brand-orange); }
+/* touch-action: none — a drag on the thumb must move the thumb, not scroll
+   the page; the taller box gives a thumb-sized touch target. */
+.rv-speed-input { width: 100%; margin: 0; height: 28px; accent-color: var(--brand-orange); touch-action: none; cursor: pointer; }
 .rv-ticks {
     display: flex; justify-content: space-between;
     font-size: 9px; color: var(--text-muted); white-space: nowrap;
@@ -132,15 +110,18 @@
     font-size: 12px; font-weight: 600; cursor: pointer;
 }
 
-/* ---- timeline ---- */
-.rv-timeline { position: relative; height: 20px; margin: 2px 4px 0; cursor: pointer; }
-.rv-seg { position: absolute; top: 8px; height: 7px; border-radius: 2px; opacity: .85; box-sizing: border-box; border-right: 2px solid var(--surface-card); }
-.rv-seg.us   { background: var(--color-primary); }
+/* ---- timeline (one segment per point, width ∝ point duration) ---- */
+.rv-timeline {
+    position: relative; height: 26px; margin: 2px 4px 0; cursor: pointer;
+    touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.rv-seg { position: absolute; top: 12px; height: 8px; border-radius: 2px; box-sizing: border-box; border-right: 2px solid var(--surface-card); }
+.rv-seg.us   { background: var(--color-success); }
 .rv-seg.opp  { background: var(--color-danger); }
 .rv-seg.open { background: var(--brand-orange); }
 .rv-seg.unlocated { opacity: .35; }
-.rv-seg .rv-pn { position: absolute; top: -10px; left: 1px; font-size: 9px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.rv-head { position: absolute; top: 3px; width: 2px; height: 16px; background: var(--text-primary); transform: translateX(-1px); z-index: 2; }
+.rv-seg .rv-pn { position: absolute; top: -11px; left: 1px; font-size: 9px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.rv-head { position: absolute; top: 7px; width: 2px; height: 18px; background: var(--text-primary); transform: translateX(-1px); z-index: 2; pointer-events: none; }
 .rv-head::after { content: ""; position: absolute; left: -4px; top: -3px; width: 10px; height: 6px; background: var(--text-primary); clip-path: polygon(0 0, 100% 0, 50% 100%); }
 
 /* ---- log lines under playhead control ---- */
@@ -161,7 +142,9 @@
 /* ---- pitch overrides inside the replay ----
    The event layer's own disc is a rebuilt element every render (no
    transition possible), so it is hidden and .rv-disc, which persists, is the
-   one that glides. Markers are the Field tab's draggable ones — inert here. */
+   one that glides. Markers are the Field tab's draggable ones — inert here.
+   The big "Attacking" arrow's sizing rules in fieldPbp.css are scoped to the
+   Field tab's container, so they are restated for the replay's pitch. */
 .rv-field .rv-eventlayer .fp-disc { display: none; }
 .rv-field .fp-marker[data-mkidx] { pointer-events: none; cursor: default; }
 .rv-field .rv-disc { transition: left 0ms ease-in-out, top 0ms ease-in-out, background 300ms; }
@@ -170,3 +153,7 @@
 .rv-field .rv-disc.rv-fly { animation: rvFly 600ms ease-in-out; }
 @keyframes rvFly { 50% { transform: translate(-50%, -50%) scale(1.7); } }
 @media (prefers-reduced-motion: reduce) { .rv-field .rv-disc.rv-fly { animation: none; } }
+.rv-stage[data-o="portrait"]  .rv-field .fp-attack-arrow { height: 50%; }
+.rv-stage[data-o="portrait"]  .rv-field .fp-attack-arrow svg { height: 100%; width: auto; }
+.rv-stage[data-o="landscape"] .rv-field .fp-attack-arrow { width: 50%; }
+.rv-stage[data-o="landscape"] .rv-field .fp-attack-arrow svg { width: 100%; height: auto; }

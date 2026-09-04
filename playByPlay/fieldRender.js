@@ -409,6 +409,8 @@ export function markerStyle(e, idx) {
  *             overrides "last located event in the current segment"
  *   fade:     createFadeTracker() instance | null (null = no fading; only
  *             the solid window renders)
+ *   visibility: optional object; on return it carries { shown(gi),
+ *             fadeAnimFor(gi) } for this render (see the actor layer)
  * }
  */
 export function eventLayerHTML(view, opts) {
@@ -426,6 +428,12 @@ export function eventLayerHTML(view, opts) {
     const { shown, fadeAnimFor } = opts.fade
         ? opts.fade.advance(opts.pointKey, solidStart, nowMs())
         : { shown: gi => gi >= solidStart, fadeAnimFor: () => '' };
+    // Out-param: an owner drawing its own layers on top (the replay's actor
+    // labels) can follow the same visibility/fade per event index.
+    if (opts.visibility && typeof opts.visibility === 'object') {
+        opts.visibility.shown = shown;
+        opts.visibility.fadeAnimFor = fadeAnimFor;
+    }
 
     let h = '';
     // An arrow's tail sits on the previous located event's catch spot.

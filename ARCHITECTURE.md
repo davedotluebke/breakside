@@ -641,11 +641,13 @@ Layers, bottom-up (all under `playByPlay/`):
   `saidSoFar` for the commentator's prompt.
 - **`fieldRender.js`** — the Field tab's pitch, shared (see § Field PBP
   spatial coordinate frame). The replay uses the static + event layers, a
-  per-instance fade tracker, `chipHTML` for the strip, and the actor layer.
-- **`replayView.js`** — the only DOM code: strip + pitch (+ a persistent
-  gliding disc; the event layer's own disc is hidden by `replayView.css`),
-  transport bar (⏮ ▶ ⏭ · Live/1×/2×/4×/Play after play · ⟳), per-point
-  timeline, and the log wiring (`data-entry` lines get `rv-cur`/`rv-future`;
+  per-instance fade tracker, and the actor layer.
+- **`replayView.js`** — the only DOM code: the pitch with an Offense/Defense
+  badge (+ a persistent gliding disc; the event layer's own disc is hidden by
+  `replayView.css`; actor labels fade with the event that placed them, via
+  `eventLayerHTML`'s `visibility` out-param), transport bar (⏮ ▶ ⏭ ·
+  Live/1×/2×/4×/Speedy · ⟳), per-point timeline (widths ∝ point duration,
+  drag to scrub), and the log wiring (`data-entry` lines get `rv-cur`/`rv-future`;
   tap = seek). Mounted by `game/gameScreenSync.js` (lazily, when the log
   renders; live games start in Live) and `teams/gameSummary.js` (stored
   games, Live disabled). Late-bound from `ui/panelSystem.js` via

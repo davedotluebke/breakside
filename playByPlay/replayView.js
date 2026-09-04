@@ -2,12 +2,13 @@
  * Replay View — the Log tab's field playback (docs/replay-viewer-plan.md
  * step 6) and, mounted with a finished game, the post-game summary's.
  *
- * Composition: a STAGE (lineup strip + the Field tab's pitch, drawn by
- * playByPlay/fieldRender.js) above a TRANSPORT bar (⏮ ▶ ⏭ · slider Live · 1×
- * · 2× · 4× · Play after play · ⟳ rotate) above a point TIMELINE, all sitting
- * on top of the existing game-log lines. The log itself is untouched: lines
- * come from renderGameLogEntriesHTML (each carries data-entry), and this
- * module only adds rv-cur / rv-future classes and a tap-to-seek handler.
+ * Composition: a STAGE (the Field tab's pitch, drawn by
+ * playByPlay/fieldRender.js, with an Offense/Defense badge beside or above
+ * it) over a TRANSPORT bar (⏮ ▶ ⏭ · slider Live · 1× · 2× · 4× · Speedy · ⟳
+ * rotate) over a point TIMELINE, all sitting on top of the existing game-log
+ * lines. The log itself is untouched: lines come from
+ * renderGameLogEntriesHTML (each carries data-entry), and this module only
+ * adds rv-cur / rv-future classes and a tap-to-seek handler.
  *
  * Collapse rules (Decisions 5 and 10): when the game has NO located events at
  * all, nothing is mounted and the Log tab looks exactly as before; when the
@@ -24,8 +25,13 @@ import { createReplayController } from './replayController.js';
 import * as fieldRender from './fieldRender.js';
 import { advancedSettings } from '../settings/advancedSettings.js';
 
+// Slider stops. 'pap' (the engine's play-after-play) is surfaced as "Speedy":
+// 4× animation with no dead time at all — each play fires as soon as the
+// previous animation lands.
 const SPEED_STOPS = ['live', 1, 2, 4, 'pap'];
-const SPEED_LABELS = ['Live', '1×', '2×', '4×', 'Play after play'];
+const SPEED_LABELS = ['Live', '1×', '2×', '4×', 'Speedy'];
+const SPEEDY_FACTOR = 4;
+const SPEEDY_HOLD_MS = 250;
 
 /**
  * Mount a replay view.
@@ -36,8 +42,9 @@ const SPEED_LABELS = ['Live', '1×', '2×', '4×', 'Play after play'];
  * @param {() => object} cfg.getEntryOptions - the buildGameLogEntries options the LOG was rendered
  *   with (teamName/opponentName/versionInfo/rosterNames/resolvePlayerName) — the engine must build
  *   the same entry list so indices line up with the log's data-entry attributes
+ * @param {(name: string) => object|null} [cfg.getPlayerByName] - display info (jersey number) for actor labels
  * @param {boolean} [cfg.live] - offer Live (follow the tail); false for finished games
- * @returns {{refresh:Function, onLogUpdated:Function, onShown:Function, onHidden:Function, destroy:Function, controller:object, engine:object}|null}
+ * @returns {{refresh:Function, onLogUpdated:Function, onShown:Function, onHidden:Function, destroy:Function, controller:object, engine:object, root:HTMLElement}|null}
  *   null when the game has no located events (nothing mounted)
  */
 function mountReplayView(cfg) {
@@ -46,6 +53,7 @@ function mountReplayView(cfg) {
     const settings = advancedSettings.getReplaySettings();
     const engine = createReplayEngine(getGame(), Object.assign({
         capWithinMs: settings.capWithinMs, capBetweenMs: settings.capBetweenMs,
+        papHoldMs: SPEEDY_HOLD_MS,
     }, getEntryOptions()));
     if (!engine.gameHasLocations()) return null;
 
@@ -58,8 +66,8 @@ function mountReplayView(cfg) {
     root.className = 'rv-root';
     root.innerHTML = `
         <div class="rv-stage" data-o="${orientation}">
-            <div class="rv-strip"></div>
-            <div class="rv-fieldwrap"><div class="rv-possbanner"></div><div class="fp-field rv-field"></div></div>
+            <div class="rv-possbanner"></div>
+            <div class="rv-fieldwrap"><div class="fp-field rv-field"></div></div>
         </div>
         <div class="rv-nofield">No field positions were recorded for this point</div>
         <div class="rv-transport">
@@ -72,12 +80,12 @@ function mountReplayView(cfg) {
             </div>
             <button class="rv-tbtn rv-rotate" title="Rotate field" aria-label="Rotate field"><i class="fas fa-sync-alt"></i></button>
         </div>
-        <div class="rv-timeline" title="Points — tap to jump"><div class="rv-head"></div></div>
+        <div class="rv-timeline" title="Points — tap or drag to scrub"><div class="rv-head"></div></div>
         <button class="rv-golive" hidden></button>
     `;
     host.insertBefore(root, host.firstChild);
     const q = sel => root.querySelector(sel);
-    const stageEl = q('.rv-stage'), stripEl = q('.rv-strip'), fieldEl = q('.rv-field'), bannerEl = q('.rv-possbanner');
+    const stageEl = q('.rv-stage'), fieldEl = q('.rv-field'), bannerEl = q('.rv-possbanner');
     const playBtn = q('.rv-play'), prevBtn = q('.rv-prev'), nextBtn = q('.rv-next');
     const speedInput = q('.rv-speed-input'), ticksEl = q('.rv-ticks');
     const timelineEl = q('.rv-timeline'), headEl = q('.rv-head'), goLiveBtn = q('.rv-golive');
@@ -86,10 +94,11 @@ function mountReplayView(cfg) {
     // ---- field adapter (playByPlay/fieldRender.js) ----
     // The pitch is the Field tab's: static layers + the located-event layer
     // (arrows / markers, with the same fade-out of demoted plays) come from
-    // fieldRender; on top sit the actor layer (player icons at reconstructed
-    // positions) and our own persistent disc element, both moved in place so
-    // CSS transitions carry the motion. The event layer's own disc is hidden
-    // by replayView.css — a rebuilt element can't animate.
+    // fieldRender; on top sit the actor layer (player labels at reconstructed
+    // positions, fading with the event that placed them) and our own
+    // persistent disc element, both moved in place so CSS transitions carry
+    // the motion. The event layer's own disc is hidden by replayView.css — a
+    // rebuilt element can't animate.
     const view = { o: orientation, flipAD: false, flipHA: false };
     let shown = true;
     let staticFor = null;          // orientation the static layers were drawn for
@@ -122,70 +131,25 @@ function mountReplayView(cfg) {
         return { point, events };
     }
 
+    function speedFactor() {
+        const s = controller.state.speed;
+        if (s === 'pap') return SPEEDY_FACTOR;
+        return typeof s === 'number' && s > 0 ? s : 1;
+    }
+
     /** Animation length for the move that entry `index` causes, ms. */
     function animMs(index, animate) {
         if (!animate) return 0;
         const e = engine.entries[index];
         if (!e || e.kind !== 'event' || !e.event) return 0;
         const ev = e.event;
-        const speed = typeof controller.state.speed === 'number' ? controller.state.speed : 1;
+        const speed = speedFactor();
         if (ev.type === 'Pull') return Math.min(typeof ev.hang === 'number' && ev.hang > 0 ? ev.hang : 1500, 2500) / speed;
         if (!ev.to) return 0;
         if (!ev.from) return 450 / speed;
         const d = Math.hypot(ev.to.x - ev.from.x, (ev.to.y - ev.from.y) * 0.57);
         return Math.max(350, Math.min(1100, d * 1400)) / speed;
     }
-
-    // ---- strip fitting: one line, compacting as needed ----
-    // Levels, tried in order until the row fits: full (number + name), name
-    // only, number + initials, initials only. Portrait stacks chips in a
-    // column and never compacts.
-    const initialsOf = name => {
-        const words = String(name).trim().split(/\s+/).filter(Boolean);
-        if (words.length >= 2) return words.map(w => w[0].toUpperCase()).join('');
-        return String(name).slice(0, 2);
-    };
-    let fitKey = null, fitLevel = 0;
-    function applyLevel(level) {
-        stripEl.dataset.fit = String(level);          // test/debug seam
-        stripEl.classList.toggle('rv-compact', level >= 2);
-        stripEl.querySelectorAll('.fp-chip[data-pname]').forEach(el => {
-            const name = el.dataset.pname;
-            const num = el.querySelector('.fp-num');
-            const nm = el.querySelector('.fp-nm');
-            if (num) num.hidden = (level === 1 || level === 3);
-            if (nm) nm.textContent = level >= 2 ? initialsOf(name) : name;
-        });
-    }
-    function fitStrip() {
-        if (view.o !== 'landscape') { applyLevel(0); fitKey = null; return; }
-        // Not laid out yet (screen hidden, mid-transition): don't cache a
-        // bogus answer; the ResizeObserver re-fits once there is a width.
-        if (!stripEl.clientWidth) { fitKey = null; return; }
-        const key = stripEl.clientWidth + '|' + Array.from(stripEl.querySelectorAll('.fp-chip')).map(c => c.dataset.pname).join(',');
-        if (key === fitKey) { applyLevel(fitLevel); return; }
-        try {
-            for (let level = 0; level <= 3; level++) {
-                applyLevel(level);
-                fitLevel = level;
-                if (stripEl.scrollWidth <= stripEl.clientWidth + 1) break;
-            }
-        } catch (e) {
-            stripEl.dataset.fitErr = String(e && e.message);
-        }
-        fitKey = key;
-    }
-    // Re-fit on any size change, and once more a beat later: a screen that
-    // slides/scales in can report a transient width on the first callback.
-    const refit = () => { fitKey = null; fitStrip(); };
-    const stripRO = (typeof ResizeObserver === 'function')
-        ? new ResizeObserver(() => { refit(); requestAnimationFrame(refit); setTimeout(refit, 350); })
-        : null;
-    if (stripRO) stripRO.observe(stripEl);
-    // The summary mounts while its screen is still hidden (zero width); the
-    // navigation event fires once it is shown, so fit then too.
-    const onScreenShown = () => { refit(); setTimeout(refit, 300); };
-    document.addEventListener('breakside:screen-shown', onScreenShown);
 
     const playerInfo = name => {
         const p = typeof cfg.getPlayerByName === 'function' ? cfg.getPlayerByName(name) : null;
@@ -206,6 +170,25 @@ function mountReplayView(cfg) {
         if (!wasHidden && dur > 0) { void discEl.offsetWidth; discEl.style.animationDuration = `${dur}ms`; discEl.classList.add('rv-fly'); }
     }
 
+    /**
+     * Which event (index into the point's event list) put each player where
+     * they stand — so a label fades and drops with that event's marker.
+     */
+    function placedByEvent(events) {
+        const placed = {};
+        const set = (ref, loc, gi) => {
+            const n = ref && typeof ref === 'object' ? ref.name : (typeof ref === 'string' ? ref : null);
+            if (n && loc && typeof loc.x === 'number') placed[n] = gi;
+        };
+        events.forEach((e, gi) => {
+            if (e.type === 'Throw') { set(e.thrower, e.from, gi); set(e.receiver, e.to, gi); }
+            else if (e.type === 'Turnover') set(e.thrower, e.from, gi);
+            else if (e.type === 'Defense') set(e.defender, e.to, gi);
+            else if (e.type === 'Pull') set(e.puller, e.from, gi);
+        });
+        return placed;
+    }
+
     function drawField(index, state, animate) {
         lastDrawn = { index, state };
         const pointIdx = state.pointIdx;
@@ -218,25 +201,37 @@ function mountReplayView(cfg) {
         const mode = state.who === 'us' ? 'offense'
             : state.who === 'opp' ? 'defense'
             : ((point && point.startingPosition === 'defense') ? 'defense' : 'offense');
+        const visibility = {};
         eventLayerEl.innerHTML = fieldRender.eventLayerHTML(view, {
             events, mode,
             pointKey: fieldRender.stablePointKey(engine.game, point),
-            discLoc: state.disc, fade,
+            discLoc: state.disc, fade, visibility,
         });
-        fieldRender.applyActorPositions(actorLayerEl, view, state.players, {
+        // Actors follow their placing event's marker: shown while it is
+        // solid, fading in step with it, gone once it drops.
+        const placed = placedByEvent(events);
+        const positions = {}, anims = {};
+        Object.keys(state.players).forEach(name => {
+            const pos = state.players[name];
+            if (!pos) return;
+            const gi = placed[name];
+            const isShown = gi === undefined || typeof visibility.shown !== 'function' || visibility.shown(gi);
+            if (!isShown) return;
+            positions[name] = pos;
+            const a = (gi !== undefined && typeof visibility.fadeAnimFor === 'function') ? visibility.fadeAnimFor(gi) : '';
+            anims[name] = a ? a.replace(/^;animation:/, '') : '';
+        });
+        fieldRender.applyActorPositions(actorLayerEl, view, positions, {
             players: playerInfo, holder: state.holder, durMs: dur,
         });
+        actorLayerEl.querySelectorAll('.fp-actor[data-pname]').forEach(el => { el.style.animation = anims[el.dataset.pname] || ''; });
         moveDisc(state.disc, dur);
         discEl.classList.toggle('opp', state.who === 'opp');
         discEl.classList.toggle('goal', !!state.goal);
-        // Strip: the whole line; a chip lights up once the player is on the field.
-        stripEl.innerHTML = state.roster.map(name => fieldRender.chipHTML(playerInfo(name), { holder: state.holder === name })).join('');
-        stripEl.querySelectorAll('.fp-chip[data-pname]').forEach(el => el.classList.toggle('on-field', !!state.players[el.dataset.pname]));
-        fitStrip();
         const who = state.who;
         bannerEl.innerHTML = who
-            ? `<span class="rv-badge ${who}">${who === 'us' ? (engine.options.teamName || 'Us') : (engine.options.opponentName || 'Opponent')} possession</span>`
-            : (state.goal ? `<span class="rv-badge us">Goal</span>` : '');
+            ? `<span class="rv-badge ${who === 'us' ? 'off' : 'def'}">${who === 'us' ? 'Offense' : 'Defense'}</span>`
+            : (state.goal ? `<span class="rv-badge goal">Goal</span>` : '');
         return dur;
     }
 
@@ -256,31 +251,71 @@ function mountReplayView(cfg) {
             else if (bot > logEl.scrollTop + logEl.clientHeight) logEl.scrollTop = bot - logEl.clientHeight + 4;
         }
     }
-    function renderTimeline() {
-        timelineEl.querySelectorAll('.rv-seg').forEach(s => s.remove());
+
+    // Timeline: one segment per point, width proportional to how long the
+    // point took. Untimed points (legacy data) get the median timed duration
+    // so they stay visible; a floor keeps very short points tappable.
+    let segs = [];   // [{pointIdx, left, width (fractions 0..1), startAt, endAt, first, last, winner, located}]
+    function layoutSegments() {
         const sums = engine.pointSummaries();
-        const n = sums.length;
-        if (!n) return;
-        // Equal-width segments: point durations are unknown for legacy data
-        // and a duration-proportional bar would misrepresent mixed games.
-        sums.forEach((s, i) => {
-            const seg = document.createElement('div');
-            seg.className = 'rv-seg ' + (s.winner || 'open') + (s.located ? '' : ' unlocated');
-            seg.style.left = (i / n * 100) + '%';
-            seg.style.width = (100 / n) + '%';
-            seg.dataset.point = String(s.pointIdx);
-            seg.innerHTML = `<span class="rv-pn">${s.pointIdx + 1}</span>`;
-            timelineEl.appendChild(seg);
+        const durs = sums.map(s => (s.startAt !== null && s.endAt !== null && s.endAt > s.startAt) ? s.endAt - s.startAt : null);
+        const known = durs.filter(d => d !== null).sort((a, b) => a - b);
+        const median = known.length ? known[Math.floor(known.length / 2)] : 1;
+        const weights = durs.map(d => Math.max(d === null ? median : d, median * 0.25));
+        const total = weights.reduce((a, b) => a + b, 0) || 1;
+        let x = 0;
+        segs = sums.map((s, i) => {
+            const w = weights[i] / total;
+            const seg = { pointIdx: s.pointIdx, left: x, width: w, startAt: s.startAt, endAt: s.endAt,
+                first: s.first, last: s.last, winner: s.winner, located: s.located };
+            x += w;
+            return seg;
+        });
+    }
+    function renderTimeline() {
+        layoutSegments();
+        timelineEl.querySelectorAll('.rv-seg').forEach(s => s.remove());
+        segs.forEach(s => {
+            const el = document.createElement('div');
+            el.className = 'rv-seg ' + (s.winner || 'open') + (s.located ? '' : ' unlocated');
+            el.style.left = (s.left * 100) + '%';
+            el.style.width = (s.width * 100) + '%';
+            el.dataset.point = String(s.pointIdx);
+            el.innerHTML = `<span class="rv-pn">${s.pointIdx + 1}</span>`;
+            timelineEl.appendChild(el);
         });
     }
     function positionHead(index) {
         const pointIdx = engine.pointOf(index);
-        const n = engine.pointSummaries().length;
-        if (pointIdx === null || !n) { headEl.style.left = '0%'; return; }
-        const r = engine.pointRange(pointIdx);
-        const frac = r.last > r.first ? (index - r.first) / (r.last - r.first) : 0;
-        headEl.style.left = ((pointIdx + frac) / n * 100) + '%';
+        const seg = pointIdx !== null ? segs[pointIdx] : null;
+        if (!seg) { headEl.style.left = '0%'; return; }
+        const entry = engine.entries[index];
+        let frac;
+        if (entry && entry.at !== null && entry.at !== undefined && seg.startAt !== null && seg.endAt !== null && seg.endAt > seg.startAt) {
+            frac = Math.max(0, Math.min(1, (entry.at - seg.startAt) / (seg.endAt - seg.startAt)));
+        } else {
+            frac = seg.last > seg.first ? (index - seg.first) / (seg.last - seg.first) : 0;
+        }
+        headEl.style.left = ((seg.left + frac * seg.width) * 100) + '%';
     }
+    /** Entry index for a horizontal fraction of the timeline. */
+    function entryAtFraction(fx) {
+        fx = Math.max(0, Math.min(0.9999, fx));
+        const seg = segs.find(s => fx >= s.left && fx < s.left + s.width) || segs[segs.length - 1];
+        if (!seg) return 0;
+        const f = seg.width > 0 ? (fx - seg.left) / seg.width : 0;
+        if (seg.startAt !== null && seg.endAt !== null && seg.endAt > seg.startAt) {
+            const t = seg.startAt + f * (seg.endAt - seg.startAt);
+            let best = seg.first;
+            for (let i = seg.first; i <= seg.last; i++) {
+                const a = engine.entries[i].at;
+                if (a !== null && a !== undefined && a <= t) best = i;
+            }
+            return best;
+        }
+        return seg.first + Math.round(f * (seg.last - seg.first));
+    }
+
     function renderTransport(s) {
         playBtn.innerHTML = s.playing ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
         playBtn.title = s.playing ? 'Pause' : 'Play';
@@ -320,12 +355,28 @@ function mountReplayView(cfg) {
         redraw();
     });
     goLiveBtn.addEventListener('click', () => controller.goLive());
-    timelineEl.addEventListener('click', ev => {
-        const seg = ev.target.closest('.rv-seg');
-        if (!seg) return;
-        const r = engine.pointRange(+seg.dataset.point);
-        if (r) { controller.pause(); controller.seek(r.first); }
+
+    // Timeline scrubbing: tap or drag. Pointer capture keeps the drag on the
+    // bar; touch-action: none (CSS) keeps the page from scrolling instead.
+    let scrubbing = false, lastScrubIndex = null;
+    const scrubTo = ev => {
+        const r = timelineEl.getBoundingClientRect();
+        if (!r.width) return;
+        const i = entryAtFraction((ev.clientX - r.left) / r.width);
+        if (i !== lastScrubIndex) { lastScrubIndex = i; controller.seek(i); }
+    };
+    timelineEl.addEventListener('pointerdown', ev => {
+        scrubbing = true; lastScrubIndex = null;
+        try { timelineEl.setPointerCapture(ev.pointerId); } catch (e) { /* not capturable */ }
+        controller.pause();
+        scrubTo(ev);
+        ev.preventDefault();
     });
+    timelineEl.addEventListener('pointermove', ev => { if (scrubbing) scrubTo(ev); });
+    const endScrub = () => { scrubbing = false; lastScrubIndex = null; };
+    timelineEl.addEventListener('pointerup', endScrub);
+    timelineEl.addEventListener('pointercancel', endScrub);
+
     const onLogClick = ev => {
         const line = ev.target.closest('[data-entry]');
         if (!line || !logEl.contains(line)) return;
@@ -349,7 +400,7 @@ function mountReplayView(cfg) {
         markLog(controller.index);
         if (!controller.state.playing) redraw();
     }
-    function onShown() { shown = true; redraw(); refit(); }
+    function onShown() { shown = true; redraw(); }
     function onHidden() {
         shown = false;
         // A replay in progress stops with the tab; live-follow keeps its state
@@ -359,8 +410,6 @@ function mountReplayView(cfg) {
     function destroy() {
         controller.destroy();
         fade.dispose();
-        if (stripRO) stripRO.disconnect();
-        document.removeEventListener('breakside:screen-shown', onScreenShown);
         logEl.removeEventListener('click', onLogClick);
         lineEls().forEach(el => el.classList.remove('rv-cur', 'rv-future'));
         root.remove();
