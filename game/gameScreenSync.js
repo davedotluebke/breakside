@@ -28,7 +28,9 @@ import {
     getControllerState, getCurrentUserId, startControllerPolling,
     stopControllerPolling, showControllerToast, dismissToast, getPingGameStamp,
 } from './controllerState.js';
-import { summarizeGameEntries } from './gameLogic.js';
+import { summarizeGameEntries, gameLogEntryOptions } from './gameLogic.js';
+import { mountReplayView } from '../playByPlay/replayView.js';
+import { currentGame as currentGameFn, getPlayerFromName } from '../utils/helpers.js';
 import { renderGameLogEntriesHTML, escapeHtml } from '../utils/gameLogRenderer.js';
 import {
     initGameScreen, gameScreenInitialized, updateHeaderTeamIdentities,
@@ -148,7 +150,56 @@ function updateGameLogEvents() {
         eventsEl.innerHTML = html;
         // Auto-scroll to bottom only when new content arrives
         eventsEl.scrollTop = eventsEl.scrollHeight;
+        ensureReplayView();
+        if (replayView) replayView.onLogUpdated();
+    } else {
+        ensureReplayView();
     }
+}
+
+// ---------------------------------------------------------------------------
+// Replay view (playByPlay/replayView.js) on the Log tab: the field diagram +
+// transport bar above #gameLogEvents. Mounted lazily the first time the log
+// renders for a game that has located events; torn down when the game changes
+// (the view is keyed to a game id). Games without field positions mount
+// nothing, so the Log tab is unchanged for them.
+// ---------------------------------------------------------------------------
+let replayView = null;
+let replayViewGameId = null;
+
+function ensureReplayView() {
+    const game = currentGameFn();
+    const host = document.getElementById('panel-follow-content');
+    const eventsEl = document.getElementById('gameLogEvents');
+    if (!game || !host || !eventsEl) return;
+    const gameId = game.id || game.gameStartTimestamp || null;
+    if (replayView && replayViewGameId !== gameId) { destroyReplayView(); }
+    if (replayView) return;
+    replayView = mountReplayView({
+        host, logEl: eventsEl,
+        getGame: () => currentGameFn(),
+        getEntryOptions: () => gameLogEntryOptions(),
+        getPlayerByName: name => getPlayerFromName(name),
+        live: true,
+    });
+    replayViewGameId = gameId;
+    if (replayView) replayView.onShown();
+}
+
+function destroyReplayView() {
+    if (replayView) { try { replayView.destroy(); } catch (e) { /* already gone */ } }
+    replayView = null;
+    replayViewGameId = null;
+}
+
+/** Log tab became the active tab (ui/panelSystem, late-bound). */
+function onLogTabShown() {
+    ensureReplayView();
+    if (replayView) replayView.onShown();
+}
+/** Log tab is no longer visible (another tab, or the game screen left). */
+function onLogTabHidden() {
+    if (replayView) replayView.onHidden();
 }
 
 /**
@@ -869,6 +920,9 @@ window.exitGameScreen = exitGameScreen;
 window.updateGameScreenScore = updateGameScreenScore;
 // window survivor: late-bound back-edge hook (called by ui/eventLogDisplay.js)
 window.updateGameLogEvents = updateGameLogEvents;
+// window survivor: late-bound back-edges for ui/panelSystem.js (tab switch) —
+// panelSystem sits above this layer and cannot import it.
+window.replayView = { onLogTabShown, onLogTabHidden, destroy: destroyReplayView };
 // window survivor: late-bound back-edge hook (called window-qualified by
 // game/controllerState.js, which evaluates before this file)
 window.startGameStateRefresh = startGameStateRefresh;

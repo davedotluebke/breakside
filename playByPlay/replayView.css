@@ -1,0 +1,162 @@
+/*
+ * Replay view (playByPlay/replayView.js): the field diagram + transport bar +
+ * point timeline mounted above the game log on the Log tab and the post-game
+ * summary. The pitch itself is the Field tab's (.fp-field and its layers come
+ * from playByPlay/fieldPbp.css via fieldRender); this file only lays out the
+ * stage around it and styles the controls. Colors come from css/tokens.css so
+ * both themes hold. Buttons here reset the global `button { margin: 10px }`
+ * (see ARCHITECTURE.md § CSS Styling Gotchas).
+ */
+
+.rv-root {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px 0 4px;
+    border-bottom: 1px solid var(--border-lighter);
+    margin-bottom: 6px;
+    flex: 0 0 auto;
+}
+
+/* ---- stage: strip + field ---- */
+.rv-stage {
+    position: relative;
+    display: flex;
+    gap: 8px;
+    min-width: 0;
+}
+.rv-stage[data-o="landscape"] { flex-direction: column; }
+.rv-stage[data-o="portrait"]  { flex-direction: row; align-items: flex-start; }
+
+.rv-strip {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    min-width: 0;
+}
+.rv-stage[data-o="portrait"] .rv-strip {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    flex: 0 0 auto;
+    max-height: min(52vh, 560px);
+    overflow-y: auto;
+}
+.rv-strip .fp-chip { margin: 0; }
+.rv-strip .fp-chip:not(.on-field) { opacity: .55; }
+.rv-strip .fp-chip.on-field { opacity: 1; }
+
+.rv-fieldwrap {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    justify-content: center;
+}
+.rv-stage[data-o="landscape"] .rv-field { width: 100%; aspect-ratio: 110 / 40; height: auto; }
+.rv-stage[data-o="portrait"]  .rv-field { height: min(52vh, 560px); aspect-ratio: 40 / 110; max-width: 100%; }
+
+.rv-possbanner { position: absolute; left: 6px; top: 6px; z-index: 9; pointer-events: none; }
+.rv-stage[data-o="portrait"] .rv-possbanner { left: auto; right: 6px; }
+.rv-badge {
+    display: inline-block;
+    font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 999px; color: #fff;
+}
+.rv-badge.us  { background: var(--color-primary); }
+.rv-badge.opp { background: var(--color-danger); }
+
+/* Collapsed: the point under the playhead has no field positions. */
+.rv-nofield {
+    display: none;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--surface-inset);
+    color: var(--text-muted);
+    font-size: 12px;
+    text-align: center;
+}
+.rv-root.rv-collapsed .rv-stage { display: none; }
+.rv-root.rv-collapsed .rv-nofield { display: block; }
+
+/* ---- transport ---- */
+.rv-transport {
+    display: grid;
+    grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+    gap: 6px 10px;
+    align-items: center;
+}
+.rv-tbtn {
+    width: 36px; height: 36px; margin: 0; padding: 0;
+    border-radius: 50%;
+    border: 1px solid var(--border-light);
+    background: var(--surface-raised);
+    color: var(--text-primary);
+    display: grid; place-items: center;
+    font-size: 14px;
+    cursor: pointer;
+}
+.rv-tbtn:disabled { opacity: .4; cursor: default; }
+.rv-tbtn.rv-play {
+    width: 42px; height: 42px; font-size: 16px;
+    background: var(--brand-orange); color: #fff; border-color: transparent;
+}
+.rv-tbtn.rv-play i.fa-play { margin-left: 2px; }
+.rv-speed { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rv-speed-input { width: 100%; margin: 0; accent-color: var(--brand-orange); }
+.rv-ticks {
+    display: flex; justify-content: space-between;
+    font-size: 9px; color: var(--text-muted); white-space: nowrap;
+    font-variant-numeric: tabular-nums; padding: 0 2px;
+}
+.rv-ticks span.cur { color: var(--brand-orange-deep); font-weight: 700; }
+.rv-ticks span.disabled { opacity: .4; }
+.rv-following .rv-ticks span:first-child { color: var(--color-danger-ink); font-weight: 700; }
+.rv-waiting .rv-ticks span:first-child { animation: rvPulse 1.4s ease-in-out infinite; }
+@keyframes rvPulse { 50% { opacity: .45; } }
+
+.rv-golive {
+    align-self: center;
+    margin: 0; padding: 6px 12px;
+    border: 0; border-radius: 999px;
+    background: var(--text-primary); color: var(--surface-card);
+    font-size: 12px; font-weight: 600; cursor: pointer;
+}
+
+/* ---- timeline ---- */
+.rv-timeline { position: relative; height: 20px; margin: 2px 4px 0; cursor: pointer; }
+.rv-seg { position: absolute; top: 8px; height: 7px; border-radius: 2px; opacity: .85; box-sizing: border-box; border-right: 2px solid var(--surface-card); }
+.rv-seg.us   { background: var(--color-primary); }
+.rv-seg.opp  { background: var(--color-danger); }
+.rv-seg.open { background: var(--brand-orange); }
+.rv-seg.unlocated { opacity: .35; }
+.rv-seg .rv-pn { position: absolute; top: -10px; left: 1px; font-size: 9px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.rv-head { position: absolute; top: 3px; width: 2px; height: 16px; background: var(--text-primary); transform: translateX(-1px); z-index: 2; }
+.rv-head::after { content: ""; position: absolute; left: -4px; top: -3px; width: 10px; height: 6px; background: var(--text-primary); clip-path: polygon(0 0, 100% 0, 50% 100%); }
+
+/* ---- log lines under playhead control ---- */
+.game-log-line[data-entry] { cursor: pointer; }
+.game-log-line.rv-future { opacity: .45; }
+.game-log-line.rv-cur {
+    opacity: 1;
+    background: var(--surface-inset);
+    box-shadow: inset 3px 0 0 var(--brand-orange);
+    padding-left: 6px;
+    margin-left: -6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rv-waiting .rv-ticks span:first-child { animation: none; }
+}
+
+/* ---- pitch overrides inside the replay ----
+   The event layer's own disc is a rebuilt element every render (no
+   transition possible), so it is hidden and .rv-disc, which persists, is the
+   one that glides. Markers are the Field tab's draggable ones — inert here. */
+.rv-field .rv-eventlayer .fp-disc { display: none; }
+.rv-field .fp-marker[data-mkidx] { pointer-events: none; cursor: default; }
+.rv-field .rv-disc { transition: left 0ms ease-in-out, top 0ms ease-in-out, background 300ms; }
+.rv-field .rv-disc.opp { background: #9ca3af; }
+.rv-field .rv-disc.goal { box-shadow: 0 0 0 5px rgba(52, 211, 153, .7); }
+.rv-field .rv-disc.rv-fly { animation: rvFly 600ms ease-in-out; }
+@keyframes rvFly { 50% { transform: translate(-50%, -50%) scale(1.7); } }
+@media (prefers-reduced-motion: reduce) { .rv-field .rv-disc.rv-fly { animation: none; } }

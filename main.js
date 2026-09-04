@@ -133,6 +133,7 @@ import { initializePullDialog } from './playByPlay/pullDialog.js';
 import './playByPlay/pbpPossession.js';
 import './playByPlay/fullPbp.js';
 import './playByPlay/fieldPbp.js';
+import './playByPlay/replayView.js';
 // narration/eventBus.js converted with C7 (the playByPlay layer imports it);
 // evaluating it here — earlier than its old tag position after the pbp files —
 // is harmless: its top level only builds the namespace object.

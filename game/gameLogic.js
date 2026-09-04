@@ -316,6 +316,15 @@ function downloadJSON(jsonData, filename) {
  * these so each line carries its entry index; the replay viewer scrubs them.
  */
 function summarizeGameEntries() {
+    return buildGameLogEntries(currentGame(), gameLogEntryOptions());
+}
+
+/**
+ * The buildGameLogEntries options the in-game log is rendered with. Shared
+ * with the replay view (playByPlay/replayView.js), whose engine must build
+ * the SAME entry list so its indices match the log's data-entry attributes.
+ */
+function gameLogEntryOptions() {
     let versionInfo = '';
     if (appVersion) {
         versionInfo = `App Version: ${appVersion.version} (Build ${appVersion.build})\n`;
@@ -324,13 +333,13 @@ function summarizeGameEntries() {
     // "Point N roster:" entries may be player ids (id-era games) — resolve to
     // display names; event lines already carry resolved {name, id} refs.
     const lookup = buildPointPlayerLookup(game);
-    return buildGameLogEntries(game, {
+    return {
         teamName: game.team,
         opponentName: game.opponent,
         versionInfo,
         rosterNames: currentTeam.teamRoster.map(player => player.name),
         resolvePlayerName: entry => lookup(entry).name,
-    });
+    };
 }
 
 /** The current game's log as clipboard text (joined summarizeGameEntries). */
@@ -488,7 +497,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // --- ES-module exports ---
 export {
-    updateScore, summarizeGame, summarizeGameEntries, downloadJSON, undoEvent,
+    updateScore, summarizeGame, summarizeGameEntries, gameLogEntryOptions, downloadJSON, undoEvent,
     configureStartGameMode, appVersion,
 };
 // window survivor: late-bound back-edge hook (called by ui/eventLogDisplay.js,
