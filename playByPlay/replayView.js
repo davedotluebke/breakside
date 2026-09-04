@@ -33,6 +33,17 @@ const SPEED_LABELS = ['Live', '1×', '2×', '4×', 'Speedy'];
 const SPEEDY_FACTOR = 4;
 const SPEEDY_HOLD_MS = 250;
 
+// Inline icons (no Font Awesome dependency: the CDN font is the one thing
+// this offline-first app can't count on, and a transport bar with blank
+// buttons is unusable). 16px viewBox, currentColor.
+const ICON = {
+    play:   '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M4 2.5v11l9-5.5z"/></svg>',
+    pause:  '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M3.5 2.5h3.5v11H3.5zM9 2.5h3.5v11H9z"/></svg>',
+    prev:   '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M2.5 2.5h2v11h-2zM13.5 2.5v11L5.5 8z"/></svg>',
+    next:   '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M11.5 2.5h2v11h-2zM2.5 2.5v11L10.5 8z"/></svg>',
+    rotate: '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M13 8a5 5 0 1 1-1.6-3.7"/><path fill="currentColor" d="M13.5 1.5v4h-4z"/></svg>',
+};
+
 /**
  * Mount a replay view.
  * @param {object} cfg
@@ -71,14 +82,14 @@ function mountReplayView(cfg) {
         </div>
         <div class="rv-nofield">No field positions were recorded for this point</div>
         <div class="rv-transport">
-            <button class="rv-tbtn rv-prev" title="Previous play" aria-label="Previous play"><i class="fas fa-step-backward"></i></button>
-            <button class="rv-tbtn rv-play" title="Play" aria-label="Play"><i class="fas fa-play"></i></button>
-            <button class="rv-tbtn rv-next" title="Next play" aria-label="Next play"><i class="fas fa-step-forward"></i></button>
+            <button class="rv-tbtn rv-prev" title="Previous play" aria-label="Previous play">${ICON.prev}</button>
+            <button class="rv-tbtn rv-play" title="Play" aria-label="Play">${ICON.play}</button>
+            <button class="rv-tbtn rv-next" title="Next play" aria-label="Next play">${ICON.next}</button>
             <div class="rv-speed">
                 <input type="range" class="rv-speed-input" min="0" max="4" step="1" value="1" aria-label="Playback speed">
                 <div class="rv-ticks">${SPEED_LABELS.map(l => `<span>${l}</span>`).join('')}</div>
             </div>
-            <button class="rv-tbtn rv-rotate" title="Rotate field" aria-label="Rotate field"><i class="fas fa-sync-alt"></i></button>
+            <button class="rv-tbtn rv-rotate" title="Rotate field" aria-label="Rotate field">${ICON.rotate}</button>
         </div>
         <div class="rv-timeline" title="Points — tap or drag to scrub"><div class="rv-head"></div></div>
         <button class="rv-golive" hidden></button>
@@ -317,7 +328,7 @@ function mountReplayView(cfg) {
     }
 
     function renderTransport(s) {
-        playBtn.innerHTML = s.playing ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
+        playBtn.innerHTML = s.playing ? ICON.pause : ICON.play;
         playBtn.title = s.playing ? 'Pause' : 'Play';
         prevBtn.disabled = s.index <= 0;
         nextBtn.disabled = s.index >= s.length - 1;

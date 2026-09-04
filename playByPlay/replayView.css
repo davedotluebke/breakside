@@ -97,7 +97,8 @@
     width: 42px; height: 42px; font-size: 16px;
     background: var(--brand-orange); color: #fff; border-color: transparent;
 }
-.rv-tbtn.rv-play i.fa-play { margin-left: 2px; }
+.rv-tbtn svg { display: block; }
+.rv-tbtn.rv-play svg { margin-left: 2px; }
 .rv-speed { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 /* touch-action: none — a drag on the thumb must move the thumb, not scroll
    the page; the taller box gives a thumb-sized touch target. */
