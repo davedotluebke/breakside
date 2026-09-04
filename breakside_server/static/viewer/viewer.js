@@ -1183,11 +1183,25 @@ function stopSyncStatusPolling() {
 }
 
 /**
+ * Read a key the PWA owns, tolerating the pre-rename `ultistats_` name.
+ *
+ * The viewer only ever READS these, so it needs no migration of its own — the
+ * PWA renames them on its next load (store/storageKeyMigration.js). This
+ * fallback covers the window where someone opens a share link before ever
+ * reloading the app, which is exactly the common case for a spectator.
+ */
+function readShared(key) {
+    const legacy = key.replace(/^breakside_/, 'ultistats_');
+    const value = localStorage.getItem(key);
+    return value !== null ? value : localStorage.getItem(legacy);
+}
+
+/**
  * Get sync status from localStorage (shared with PWA)
  */
 function getSyncStatusFromStorage() {
     try {
-        const queueData = localStorage.getItem('ultistats_sync_queue');
+        const queueData = readShared('breakside_sync_queue');
         const queue = queueData ? JSON.parse(queueData) : [];
         
         // Count by type
@@ -1199,9 +1213,9 @@ function getSyncStatusFromStorage() {
         });
         
         // Check local-only entities
-        const localPlayers = JSON.parse(localStorage.getItem('ultistats_local_players') || '{}');
-        const localTeams = JSON.parse(localStorage.getItem('ultistats_local_teams') || '{}');
-        const localGames = JSON.parse(localStorage.getItem('ultistats_local_games') || '{}');
+        const localPlayers = JSON.parse(readShared('breakside_local_players') || '{}');
+        const localTeams = JSON.parse(readShared('breakside_local_teams') || '{}');
+        const localGames = JSON.parse(readShared('breakside_local_games') || '{}');
         
         return {
             isOnline: navigator.onLine,
@@ -1362,13 +1376,13 @@ function isLocalOnly(type, id) {
     try {
         let storageKey;
         switch (type) {
-            case 'player': storageKey = 'ultistats_local_players'; break;
-            case 'team': storageKey = 'ultistats_local_teams'; break;
-            case 'game': storageKey = 'ultistats_local_games'; break;
+            case 'player': storageKey = 'breakside_local_players'; break;
+            case 'team': storageKey = 'breakside_local_teams'; break;
+            case 'game': storageKey = 'breakside_local_games'; break;
             default: return false;
         }
         
-        const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        const data = JSON.parse(readShared(storageKey) || '{}');
         return data[id] && data[id]._localOnly;
     } catch (e) {
         return false;

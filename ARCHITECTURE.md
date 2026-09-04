@@ -1770,7 +1770,7 @@ the in-IDE browser preview. Email + password live in `test-credentials.local`
 (gitignored, never committed). To drive preview against the real backend:
 
 ```js
-localStorage.setItem('ultistats_api_url', 'https://api.breakside.pro');
+localStorage.setItem('breakside_api_url', 'https://api.breakside.pro');
 location.reload();
 // then sign in with the credentials from test-credentials.local
 ```
@@ -1788,7 +1788,7 @@ driven headlessly, so use this handoff:
 1. **Claude** starts the preview server for the worktree and points it at the
    real backend so the user's teams load:
    ```js
-   localStorage.setItem('ultistats_api_url', 'https://api.breakside.pro');
+   localStorage.setItem('breakside_api_url', 'https://api.breakside.pro');
    location.href = '/index.html';   // redirects to /landing/ for login
    ```
 2. **Claude** tells the user the preview is ready and asks them to sign in in

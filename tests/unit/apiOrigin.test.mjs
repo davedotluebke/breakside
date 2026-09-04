@@ -1,6 +1,6 @@
 /*
  * Unit tests for utils/apiOrigin.js — the allowlist guarding the ?api= /
- * `ultistats_api_url` API-base override.
+ * `breakside_api_url` API-base override.
  *
  * This is the check that stops a link like
  *   https://www.breakside.pro/?api=https://evil.example

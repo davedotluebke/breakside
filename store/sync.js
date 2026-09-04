@@ -32,7 +32,7 @@ import {
 // =============================================================================
 
 // API_BASE_URL can be set via localStorage for multi-device testing
-// e.g., localStorage.setItem('ultistats_api_url', 'http://192.168.1.100:8000')
+// e.g., localStorage.setItem('breakside_api_url', 'http://192.168.1.100:8000')
 //
 // Both the ?api= parameter and the stored value are checked against
 // isAllowedApiBase() — this base URL is what authFetch attaches the Supabase
@@ -44,10 +44,10 @@ function getApiBaseUrl() {
     const apiParam = params.get('api');
     if (apiParam) {
         if (apiParam === 'reset') {
-            localStorage.removeItem('ultistats_api_url');
+            localStorage.removeItem('breakside_api_url');
             log('API override cleared');
         } else if (isAllowedApiBase(apiParam)) {
-            localStorage.setItem('ultistats_api_url', apiParam);
+            localStorage.setItem('breakside_api_url', apiParam);
             log(`API override set: ${apiParam}`);
         } else {
             // Refused, and deliberately NOT stored. console.warn rather than
@@ -66,10 +66,10 @@ function getApiBaseUrl() {
     // not just at write time: a browser poisoned before this guard existed
     // would otherwise keep honoring the hostile value forever. Dropping it
     // here is what remediates an already-affected user on their next load.
-    const storedUrl = localStorage.getItem('ultistats_api_url');
+    const storedUrl = localStorage.getItem('breakside_api_url');
     if (storedUrl) {
         if (isAllowedApiBase(storedUrl)) return storedUrl;
-        localStorage.removeItem('ultistats_api_url');
+        localStorage.removeItem('breakside_api_url');
         console.warn(`[sync] Dropped disallowed stored API override: ${storedUrl}`);
     }
 
@@ -203,10 +203,10 @@ async function authFetch(url, options = {}) {
 }
 
 // Storage keys
-const SYNC_QUEUE_KEY = 'ultistats_sync_queue';
-const LOCAL_PLAYERS_KEY = 'ultistats_local_players';
-const LOCAL_TEAMS_KEY = 'ultistats_local_teams';
-const LOCAL_GAMES_KEY = 'ultistats_local_games';
+const SYNC_QUEUE_KEY = 'breakside_sync_queue';
+const LOCAL_PLAYERS_KEY = 'breakside_local_players';
+const LOCAL_TEAMS_KEY = 'breakside_local_teams';
+const LOCAL_GAMES_KEY = 'breakside_local_games';
 // Quarantined queue items — see quarantineSyncItem(). Each entry is a whole
 // team/player/game payload, so this is user data and is cleared alongside the
 // rest of it on sign-out (auth/auth.js LOCAL_DATA_KEYS).

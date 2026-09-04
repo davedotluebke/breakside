@@ -1024,7 +1024,7 @@ function initializeTeamSelection() {
             // One wipe, shared with sign-out: auth/auth.js clearLocalData()
             // owns the list of keys that hold a coach's data. This button used
             // to keep its own — `clearSyncData()` plus
-            // `localStorage.removeItem('ultistats_teams')`, a key nothing has
+            // `localStorage.removeItem('breakside_teams')`, a key nothing has
             // ever written — so it destroyed the sync queue while leaving
             // 'teamsData' (every roster, every game log) fully intact, exactly
             // opposite to what the dialog promised. Reached window-qualified

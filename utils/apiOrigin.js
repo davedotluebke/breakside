@@ -1,5 +1,5 @@
 /**
- * Allowlist for the API-base override (`?api=<url>` and the `ultistats_api_url`
+ * Allowlist for the API-base override (`?api=<url>` and the `breakside_api_url`
  * localStorage value it writes).
  *
  * WHY THIS EXISTS

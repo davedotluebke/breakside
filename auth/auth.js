@@ -386,10 +386,10 @@ async function getAccessToken() {
 // written and left every roster in place.
 const LOCAL_DATA_KEYS = [
     'teamsData',
-    'ultistats_sync_queue',
-    'ultistats_local_players',
-    'ultistats_local_teams',
-    'ultistats_local_games',
+    'breakside_sync_queue',
+    'breakside_local_players',
+    'breakside_local_teams',
+    'breakside_local_games',
     DEAD_LETTER_KEY,
 ];
 

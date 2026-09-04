@@ -369,8 +369,8 @@ mostly earns that; the app *shell* does not. Four problems, roughly by severity:
 
       `handleSignOut()`
       (`teams/syncStatusUI.js:165`) → `signOut()` → `clearLocalData()`
-      (`auth/auth.js:368`) removes `teamsData`, `ultistats_sync_queue`, and the
-      three `ultistats_local_*` keys — **with no confirmation dialog and no
+      (`auth/auth.js:368`) removes `teamsData`, `breakside_sync_queue`, and the
+      three `breakside_local_*` keys — **with no confirmation dialog and no
       `getPendingSyncCount()` check**. A coach who recorded a tournament with no
       signal and then taps Sign Out loses the games *and* the queue that would
       have uploaded them. The wipe exists for a good reason (don't leak one

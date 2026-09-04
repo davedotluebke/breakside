@@ -14,7 +14,7 @@ import {
   theyScore, completePullDialog, expectScore,
 } from '../helpers/app';
 
-const SYNC_QUEUE_KEY = 'ultistats_sync_queue';
+const SYNC_QUEUE_KEY = 'breakside_sync_queue';
 
 /** Read the sync queue from the browser's localStorage. */
 async function getSyncQueue(page: Page): Promise<any[]> {

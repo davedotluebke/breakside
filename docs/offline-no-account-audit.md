@@ -217,8 +217,8 @@ Highest-severity finding, and it gets *worse* if the docs claim ships as written
 (`auth/auth.js:368-391`), which removes:
 
 ```
-teamsData, ultistats_sync_queue, ultistats_local_players,
-ultistats_local_teams, ultistats_local_games
+teamsData, breakside_sync_queue, breakside_local_players,
+breakside_local_teams, breakside_local_games
 ```
 
 There is **no confirmation dialog and no `getPendingSyncCount()` check**. A coach

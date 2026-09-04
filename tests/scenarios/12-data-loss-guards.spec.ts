@@ -54,7 +54,7 @@ const stuckGame = (id: string) => ({ type: 'game', action: 'update', id, data: {
 
 test.describe('sign-out guard', () => {
   test('warns before discarding unsynced changes, and Cancel keeps them', async ({ page }) => {
-    await seedStorage(page, { ultistats_sync_queue: [stuckGame('g1'), stuckGame('g2')] });
+    await seedStorage(page, { breakside_sync_queue: [stuckGame('g1'), stuckGame('g2')] });
     await goToApp(page);
     await expect(page.locator('#signOutBtn')).toBeVisible();
 
@@ -71,7 +71,7 @@ test.describe('sign-out guard', () => {
 
     // Cancelling must leave everything exactly as it was.
     const queueLen = await page.evaluate(
-      () => JSON.parse(localStorage.getItem('ultistats_sync_queue') || '[]').length);
+      () => JSON.parse(localStorage.getItem('breakside_sync_queue') || '[]').length);
     expect(queueLen).toBe(2);
     await expect(page.locator('#signOutBtn')).toBeEnabled();
     await expect(page.locator('#signOutBtn')).toContainText('Sign Out');
@@ -93,7 +93,7 @@ test.describe('sign-out guard', () => {
   test('backs up local data before wiping it', async ({ page }) => {
     await seedStorage(page, {
       teamsData: [{ id: 'Sideline-ab12', name: 'Sideline FC', teamRoster: [], games: [], lines: [] }],
-      ultistats_sync_queue: [stuckGame('g1')],
+      breakside_sync_queue: [stuckGame('g1')],
     });
     await goToApp(page);
 
@@ -109,7 +109,7 @@ test.describe('sign-out guard', () => {
     const backup = await page.evaluate(
       () => JSON.parse(localStorage.getItem('breakside_signout_backup') || 'null'));
     expect(backup).not.toBeNull();
-    expect(Object.keys(backup.data).sort()).toEqual(['teamsData', 'ultistats_sync_queue']);
+    expect(Object.keys(backup.data).sort()).toEqual(['teamsData', 'breakside_sync_queue']);
     expect(JSON.parse(backup.data.teamsData)[0].name).toBe('Sideline FC');
 
     await page.context().setOffline(false);

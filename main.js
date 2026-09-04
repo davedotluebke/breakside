@@ -61,6 +61,9 @@
 // itself calls; bare `import './x.js'` lines are order-keeping side-effect
 // imports.
 import { log } from './utils/logger.js';
+// First: renames legacy `ultistats_` localStorage keys onto `breakside_`.
+// Must precede every module that reads them (auth.js, sync.js).
+import './store/storageKeyMigration.js';
 import './auth/config.js';
 import './auth/signOutBackup.js';
 import './auth/auth.js';

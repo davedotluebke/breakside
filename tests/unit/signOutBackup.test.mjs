@@ -33,7 +33,7 @@ function fakeStorage(initial = {}) {
 
 const DATA_KEYS = [
     'teamsData',
-    'ultistats_sync_queue',
+    'breakside_sync_queue',
     'syncDeadLetter',
 ];
 
@@ -63,7 +63,7 @@ function readBackup(storage) {
 // ── stash ───────────────────────────────────────────────────────────────
 
 test('stash snapshots the named keys with a timestamp and an owner', () => {
-    const storage = fakeStorage({ teamsData: ROSTER, ultistats_sync_queue: QUEUE });
+    const storage = fakeStorage({ teamsData: ROSTER, breakside_sync_queue: QUEUE });
     const { backup, clock } = harness({ storage });
 
     assert.equal(backup.stash(DATA_KEYS, { userId: 'user-a' }), true);
@@ -71,7 +71,7 @@ test('stash snapshots the named keys with a timestamp and an owner', () => {
     const stored = readBackup(storage);
     assert.equal(stored.userId, 'user-a');
     assert.equal(Date.parse(stored.savedAt), clock.nowMs);
-    assert.deepEqual(stored.data, { teamsData: ROSTER, ultistats_sync_queue: QUEUE });
+    assert.deepEqual(stored.data, { teamsData: ROSTER, breakside_sync_queue: QUEUE });
     // Absent keys are simply not in the snapshot — no null placeholders.
     assert.equal('syncDeadLetter' in stored.data, false);
 });
