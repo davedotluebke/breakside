@@ -610,7 +610,7 @@ function openAppFeedback() {
 **Steps to reproduce:**`;
 
     const encodedBody = encodeURIComponent(body);
-    const feedbackUrl = `https://github.com/davedotluebke/ultistats/issues/new?labels=beta_feedback&title=${encodeURIComponent('Beta Feedback:')}&body=${encodedBody}`;
+    const feedbackUrl = `https://github.com/davedotluebke/breakside/issues/new?labels=beta_feedback&title=${encodeURIComponent('Beta Feedback:')}&body=${encodedBody}`;
 
     window.open(feedbackUrl, '_blank');
 }
