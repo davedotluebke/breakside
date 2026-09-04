@@ -147,6 +147,7 @@ function mountReplayView(cfg) {
     };
     let fitKey = null, fitLevel = 0;
     function applyLevel(level) {
+        stripEl.dataset.fit = String(level);          // test/debug seam
         stripEl.classList.toggle('rv-compact', level >= 2);
         stripEl.querySelectorAll('.fp-chip[data-pname]').forEach(el => {
             const name = el.dataset.pname;
@@ -163,10 +164,14 @@ function mountReplayView(cfg) {
         if (!stripEl.clientWidth) { fitKey = null; return; }
         const key = stripEl.clientWidth + '|' + Array.from(stripEl.querySelectorAll('.fp-chip')).map(c => c.dataset.pname).join(',');
         if (key === fitKey) { applyLevel(fitLevel); return; }
-        for (let level = 0; level <= 3; level++) {
-            applyLevel(level);
-            fitLevel = level;
-            if (stripEl.scrollWidth <= stripEl.clientWidth + 1) break;
+        try {
+            for (let level = 0; level <= 3; level++) {
+                applyLevel(level);
+                fitLevel = level;
+                if (stripEl.scrollWidth <= stripEl.clientWidth + 1) break;
+            }
+        } catch (e) {
+            stripEl.dataset.fitErr = String(e && e.message);
         }
         fitKey = key;
     }
@@ -177,6 +182,10 @@ function mountReplayView(cfg) {
         ? new ResizeObserver(() => { refit(); requestAnimationFrame(refit); setTimeout(refit, 350); })
         : null;
     if (stripRO) stripRO.observe(stripEl);
+    // The summary mounts while its screen is still hidden (zero width); the
+    // navigation event fires once it is shown, so fit then too.
+    const onScreenShown = () => { refit(); setTimeout(refit, 300); };
+    document.addEventListener('breakside:screen-shown', onScreenShown);
 
     const playerInfo = name => {
         const p = typeof cfg.getPlayerByName === 'function' ? cfg.getPlayerByName(name) : null;
@@ -351,6 +360,7 @@ function mountReplayView(cfg) {
         controller.destroy();
         fade.dispose();
         if (stripRO) stripRO.disconnect();
+        document.removeEventListener('breakside:screen-shown', onScreenShown);
         logEl.removeEventListener('click', onLogClick);
         lineEls().forEach(el => el.classList.remove('rv-cur', 'rv-future'));
         root.remove();
