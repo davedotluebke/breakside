@@ -59,44 +59,6 @@ if [[ "$BEFORE" == "$AFTER" ]]; then
 fi
 bold "pulled  : $AFTER  $(git log -1 --format=%s)"
 
-# ----------------------------------------------------------- unit drift -----
-# The systemd unit lives at /etc/systemd/system/breakside.service — NOT in
-# this repo — and it hardcodes the server directory twice, in
-# WorkingDirectory and in PYTHONPATH. The ultistats_server -> breakside_server
-# rename therefore leaves it pointing at a path the pull above just deleted,
-# and the service would fail on restart with a message that does not obviously
-# say "your unit file is stale". Heal it here instead, before the restart, so
-# the rename needs no hand-editing on the box.
-#
-# Idempotent: a unit already on the new path is not touched, so this is a
-# no-op on every deploy after the first.
-UNIT_FILE="/etc/systemd/system/$UNIT.service"
-if [[ -f "$UNIT_FILE" ]] && grep -q '/ultistats_server' "$UNIT_FILE"; then
-    bold "healing stale server path in $UNIT_FILE ..."
-    cp -a "$UNIT_FILE" "$UNIT_FILE.bak-$(date -u +%Y%m%d%H%M%S)"
-    sed -i 's|/ultistats_server|/breakside_server|g' "$UNIT_FILE"
-    systemctl daemon-reload
-fi
-
-# Whatever the unit points at has to exist. Checked BEFORE the restart because
-# the failure it prevents ("service is failed after restart") is much harder
-# to read than this message is.
-if [[ -f "$UNIT_FILE" ]]; then
-    while IFS= read -r unit_path; do
-        [[ -e "$unit_path" ]] || fail "$UNIT_FILE references $unit_path, which does not exist — NOT restarting"
-    done < <(grep -oE "$REPO/[A-Za-z0-9_./-]+" "$UNIT_FILE" | sort -u)
-fi
-
-# A directory git could not remove because it still holds untracked files —
-# after the rename that is the old $REPO/ultistats_server full of stale .pyc.
-# Harmless (nothing imports from it) but confusing to the next person, so say
-# so rather than deleting it out from under you.
-if [[ -d "$REPO/ultistats_server" ]]; then
-    red "note: $REPO/ultistats_server survived the pull (untracked files, most"
-    red "      likely __pycache__). Nothing imports from it. Remove when happy:"
-    red "        sudo rm -rf $REPO/ultistats_server"
-fi
-
 # ------------------------------------------------------------ bytecode ------
 # The runtime user cannot write into $REPO (it is root-owned so the app can
 # never rewrite its own source), so it cannot build its own .pyc cache. We
