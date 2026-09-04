@@ -14,6 +14,12 @@
  *   - createThrow / createTurnover / createDefense / createPull: append a real
  *     event to the current point, update stats, advance the score/point where
  *     appropriate, persist, and publish on the narration event bus.
+ *   - amendEvent(): edit a recorded event in place (players, catch spot,
+ *     modifier flags) — the one chokepoint every editing surface goes
+ *     through (replay editor, Full-tab modifier strip, Field-tab marker
+ *     drag), so persistence, cloud sync of non-current games and the
+ *     `eventAmended` bus message happen in exactly one place. The rules
+ *     themselves are pure, in playByPlay/eventAmend.js.
  *
  * These functions are intentionally free of any tab-specific UI state (no
  * manualHolder, no breakArmed, no render()). Callers pass the values they need
@@ -28,11 +34,16 @@ import {
     Throw, Turnover, Defense, Pull, Role, UNKNOWN_PLAYER,
 } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
-import { getLatestPoint, getPlayerFromName } from '../utils/helpers.js';
+import { getLatestPoint, getPlayerFromName, currentGame } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { updateScore } from '../game/gameLogic.js';
 import { moveToNextPoint } from '../game/pointManagement.js';
 import { ensurePossessionExists } from './keyPlayDialog.js';
+import {
+    THROW_MODIFIERS, TURNOVER_MODIFIERS, DEFENSE_MODIFIERS, modifiersFor,
+    pointOfEvent, receiverChainConflict, applyEventPatch, insertUnknownBridge,
+    adjustPlayerCounters,
+} from './eventAmend.js';
 
 const pbpPossession = (function() {
     // -----------------------------------------------------------------
@@ -129,8 +140,98 @@ const pbpPossession = (function() {
         });
     }
 
-    function persist() {
+    /**
+     * Save, and sync. saveAllTeamsData only pushes the CURRENT game to the
+     * cloud; an edit to a stored game (the post-game summary) must queue
+     * that game itself or it would never leave the device.
+     */
+    function persist(game) {
         if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+        if (!game) return;
+        let cur = null;
+        try { cur = currentGame(); } catch (e) { cur = null; }
+        if (game !== cur && typeof window.syncGameToCloud === 'function') {
+            try { window.syncGameToCloud(game); } catch (e) { console.warn('[pbpPossession] sync after amend failed', e); }
+        }
+    }
+
+    /** Field-mode classification thresholds from Advanced Settings. */
+    function geometryFractions() {
+        const get = key => {
+            const s = window.advancedSettings;
+            const v = (s && typeof s.get === 'function') ? parseFloat(s.get(key)) : NaN;
+            return (Number.isFinite(v) && v > 0) ? v : undefined;
+        };
+        return { huckFraction: get('field.huckFraction'), swingFraction: get('field.swingFraction') };
+    }
+
+    function publishAmended(evt, previousEvent, source) {
+        if (!window.narrationEventBus) return;
+        window.narrationEventBus.publish('eventAmended', {
+            event: evt,
+            previousEvent: previousEvent || null,
+            source: source || 'manual',
+            provisionalId: null
+        });
+    }
+
+    /**
+     * Amend a recorded event in place (docs/replay-viewer-plan.md step 8).
+     * The event keeps its identity and position in the timeline; a single
+     * eventAmended message carries before/after for each mutated event.
+     *
+     * @param evt   the live event object (as found in game.points[..])
+     * @param patch { thrower|receiver|defender|puller|assist: Player,
+     *                to: {x,y}|null, <any>_flag: boolean } — see
+     *                eventAmend.applyEventPatch; score_flag is refused there
+     * @param opts  {
+     *   game:   the game holding the event (default: the current game),
+     *   chain:  how to reconcile a receiver change that contradicts the
+     *           next throw's thrower (eventAmend.receiverChainConflict):
+     *           'retarget' → the next event's thrower becomes the new
+     *           receiver; 'bridge' → two inferred Unknown Player passes are
+     *           inserted; undefined → leave the contradiction (the caller
+     *           checked, or accepted it),
+     *   source: bus source tag (default 'manual')
+     * }
+     * @returns {{ event, previousEvent, changed: object[], inserted: object[] }|null}
+     *   null when the event isn't in the game
+     */
+    function amendEvent(evt, patch, opts) {
+        opts = opts || {};
+        let game = opts.game || null;
+        if (!game) { try { game = currentGame(); } catch (e) { game = null; } }
+        const where = pointOfEvent(game, evt);
+        if (!where) return null;
+        const point = where.point;
+        const fractions = geometryFractions();
+
+        const conflict = (patch && patch.receiver && opts.chain)
+            ? receiverChainConflict(point, evt, patch.receiver) : null;
+        const result = applyEventPatch(point, evt, patch, fractions);
+        const amended = [[evt, result.previousEvent]];
+        if (result.cascaded) amended.push([result.cascaded, null]);
+
+        let inserted = [];
+        if (conflict && opts.chain === 'retarget') {
+            const r = applyEventPatch(point, conflict.next, { thrower: evt.receiver }, fractions);
+            adjustPlayerCounters(r.previousEvent, conflict.next);
+            amended.push([conflict.next, r.previousEvent]);
+        } else if (conflict && opts.chain === 'bridge') {
+            inserted = insertUnknownBridge(point, evt, getUnknown());
+            inserted.forEach(e => {
+                if (e.thrower && typeof e.thrower === 'object') {
+                    e.thrower.completedPasses = (typeof e.thrower.completedPasses === 'number' ? e.thrower.completedPasses : 0) + 1;
+                }
+            });
+        }
+        adjustPlayerCounters(result.previousEvent, evt);
+
+        if (typeof logEvent === 'function') logEvent(`Amended ${evt.type}: ${evt.summarize()}`);
+        amended.forEach(([e, prev]) => publishAmended(e, prev, opts.source));
+        inserted.forEach(e => publishAdded(e, opts.source));
+        persist(game);
+        return { event: evt, previousEvent: result.previousEvent, changed: amended.map(a => a[0]), inserted };
     }
 
     // -----------------------------------------------------------------
@@ -302,7 +403,11 @@ const pbpPossession = (function() {
         createThrow,
         createTurnover,
         createDefense,
-        createPull
+        createPull,
+        amendEvent,
+        // Shared modifier tables (playByPlay/eventAmend.js), re-exported for
+        // window-qualified callers.
+        THROW_MODIFIERS, TURNOVER_MODIFIERS, DEFENSE_MODIFIERS, modifiersFor,
     };
 })();
 

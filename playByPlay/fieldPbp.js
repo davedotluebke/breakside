@@ -46,6 +46,7 @@ import { handlePanelStartPoint } from '../game/selectLine.js';
 import { wireSetControl } from '../ui/setPicker.js';
 import { ensurePossessionExists } from './keyPlayDialog.js';
 import { showScoreAttributionDialog } from './scoreAttribution.js';
+import { classifyThrowGeometry, reclassifyThrow as reclassifyThrowGeometry } from './eventAmend.js';
 import {
     geom, W, refreshGeometry, toNorm, clampLoc, inAttackEZ,
     pct as renderPct, toField as renderToField,
@@ -874,7 +875,6 @@ const fieldPbp = (function() {
      *            unless it's a huck (a deep cross-field shot reads as a huck,
      *            not a swing)
      */
-    const RESET_TOLERANCE = 0.025;   // ~1.75 yd backwards on a 70 yd playing field
     function settingFraction(key, dflt) {
         if (window.advancedSettings && typeof window.advancedSettings.get === 'function') {
             const v = parseFloat(window.advancedSettings.get(key));
@@ -882,16 +882,20 @@ const fieldPbp = (function() {
         }
         return dflt;
     }
+    function geometryFractions() {
+        return {
+            huckFraction: settingFraction('field.huckFraction', 0.5),
+            swingFraction: settingFraction('field.swingFraction', 0.25),
+        };
+    }
+    /**
+     * Huck / reset / swing from the endpoints — the rule is shared with the
+     * replay editor (playByPlay/eventAmend.js). Key names feed createThrow's
+     * opts verbatim via commitThrow's spread — they must match the
+     * constructor params (reset, not the old dump).
+     */
     function classifyThrow(from, to) {
-        if (!from || !to || typeof from.x !== 'number' || typeof to.x !== 'number') return {};
-        const dx = to.x - from.x;
-        const huck = dx >= settingFraction('field.huckFraction', 0.5);
-        const reset = dx <= -RESET_TOLERANCE;
-        const swing = !huck && typeof from.y === 'number' && typeof to.y === 'number'
-            && Math.abs(to.y - from.y) >= settingFraction('field.swingFraction', 0.25);
-        // Key names feed createThrow's opts verbatim via commitThrow's spread —
-        // they must match the constructor params (reset, not the old dump).
-        return { huck, reset, swing };
+        return classifyThrowGeometry(from, to, geometryFractions());
     }
 
     function commitThrow(thrower, receiver, from, to) {
@@ -1320,16 +1324,11 @@ const fieldPbp = (function() {
 
     /**
      * Re-derive the geometry-based modifier flags (huck / reset / swing) for
-     * a Throw whose endpoints changed (marker drag). Overwrites exactly those
-     * three flags from the new geometry — same rule as at commit time; other
-     * flags (break, hammer, sky, layout) are untouched.
+     * a Throw whose endpoints changed (marker drag) — playByPlay/eventAmend.js
+     * holds the rule; other flags (break, hammer, sky, layout) are untouched.
      */
     function reclassifyThrow(ev) {
-        if (!ev || ev.type !== 'Throw' || !ev.from || !ev.to) return;
-        const c = classifyThrow(ev.from, ev.to);
-        ev.huck_flag = !!c.huck;
-        ev.reset_flag = !!c.reset;
-        ev.swing_flag = !!c.swing;
+        reclassifyThrowGeometry(ev, geometryFractions());
     }
 
     function finishMarkerDrag(idx) {

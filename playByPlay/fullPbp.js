@@ -53,6 +53,7 @@ import {
 import { handlePanelStartPoint } from '../game/selectLine.js';
 import { ensurePossessionExists } from './keyPlayDialog.js';
 import { showScoreAttributionDialog } from './scoreAttribution.js';
+import { THROW_MODIFIERS, TURNOVER_MODIFIERS, DEFENSE_MODIFIERS } from './eventAmend.js';
 
 const fullPbp = (function() {
     // -----------------------------------------------------------------
@@ -566,32 +567,8 @@ const fullPbp = (function() {
         return null;
     }
 
-    /**
-     * Per-event-type definitions of which flags are editable from the
-     * modifier panel. Keys are the *visible* checkbox label; values are
-     * the property name on the event object. Order = display order.
-     */
-    // Order = display order, most-frequent first so common modifiers
-    // show up at the head of the row before any horizontal scroll.
-    // Labels are user-facing text; underlying property names on the
-    // event object stay the same (so existing data is unaffected).
-    const THROW_MODIFIERS = [
-        { label: 'break',        prop: 'break_flag'  },
-        { label: 'huck',         prop: 'huck_flag'   },
-        { label: 'reset',        prop: 'reset_flag'  },  // legacy stored dump_flag is aliased at deserialize
-        { label: 'swing',        prop: 'swing_flag'  },  // auto-set by Field mode geometry; editable anywhere
-        { label: 'hammer',       prop: 'hammer_flag' },
-        { label: 'sky catch',    prop: 'sky_flag'    },
-        { label: 'layout catch', prop: 'layout_flag' }
-    ];
-    const TURNOVER_MODIFIERS = [
-        { label: 'huck',   prop: 'huck_flag'    },
-        { label: 'good D', prop: 'defense_flag' }
-    ];
-    const DEFENSE_MODIFIERS = [
-        { label: 'sky',    prop: 'sky_flag'    },
-        { label: 'layout', prop: 'layout_flag' }
-    ];
+    // The modifier tables (THROW_/TURNOVER_/DEFENSE_MODIFIERS) live in
+    // playByPlay/eventAmend.js, shared with the replay editor.
 
     /**
      * Toggle a flag on the most recent Throw/Defense in place. This is
