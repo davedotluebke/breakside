@@ -12,6 +12,11 @@ was for the Field tab): **`mockups/replay-viewer/index.html`**. Run it with
 Design decisions below were settled with Dave on 2026-09-03; the "Why" notes
 record the reasoning so later sessions don't relitigate them.
 
+**Status (2026-09-03):** steps 1–7 built (branch `replay-engine`, which also
+carries `gamelog-entries` and `field-render-extract`); ARCHITECTURE.md
+§ Replay viewer is the code-level map. Step 8 (editing) and the later items
+are open.
+
 ## Decisions
 
 | # | Decision | Why |

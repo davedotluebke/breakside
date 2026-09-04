@@ -618,6 +618,54 @@ Round-trip tests: `tests/unit/eventTimestamps.test.mjs` (client) and
 `test_event_timestamps_survive_sync_round_trip` in
 `ultistats_server/test_api.py` (server passes both fields through untouched).
 
+### Replay viewer (Log tab field playback)
+
+The Log tab (and the post-game summary) mounts a field diagram + transport bar
+above the game log for any game that has located events. Design and decisions:
+docs/replay-viewer-plan.md; interaction spec: mockups/replay-viewer/index.html.
+
+Layers, bottom-up (all under `playByPlay/`):
+
+- **`replayEngine.js`** (pure leaf, node-tested) — takes a game-shaped object,
+  builds `entries` via `buildGameLogEntries` (one log line = one playhead
+  position), derives `fieldStateAt(i)` (who is where, disc, holder, arrows —
+  from located events only), and `delayBefore(i, lastAnimMs)`: live → the
+  animation floor; play-after-play *or an untimed neighbour* → hold; else
+  `min(Δat, cap)/speed` with the within-point / between-point caps (0 = Off).
+  Timing is never synthesized (see § Event timestamps).
+- **`replayController.js`** (DOM-free, mock-timer-tested) — the clock:
+  play/pause/seek/step, speeds incl. `'live'` (follow the tail; `refresh()`
+  animates new entries or counts them as unseen; any seek back drops to 1×),
+  undo clamping, and the narration hook — `'entry'` listeners may return a
+  promise that play-after-play waits on (bounded by a ceiling), with
+  `saidSoFar` for the commentator's prompt.
+- **`fieldRender.js`** — the Field tab's pitch, shared (see § Field PBP
+  spatial coordinate frame). The replay uses the static + event layers, a
+  per-instance fade tracker, `chipHTML` for the strip, and the actor layer.
+- **`replayView.js`** — the only DOM code: strip + pitch (+ a persistent
+  gliding disc; the event layer's own disc is hidden by `replayView.css`),
+  transport bar (⏮ ▶ ⏭ · Live/1×/2×/4×/Play after play · ⟳), per-point
+  timeline, and the log wiring (`data-entry` lines get `rv-cur`/`rv-future`;
+  tap = seek). Mounted by `game/gameScreenSync.js` (lazily, when the log
+  renders; live games start in Live) and `teams/gameSummary.js` (stored
+  games, Live disabled). Late-bound from `ui/panelSystem.js` via
+  `window.replayView` for tab shown/hidden and screen exit.
+
+Rules that are easy to break:
+
+- **The engine must build the same entry list the log rendered.** Both use
+  `gameLogEntryOptions()` (in-game) or the summary's option object; a drift
+  in `versionInfo`/`rosterNames`/`resolvePlayerName` shifts every index and
+  the highlighted line no longer matches the field.
+- **Collapse, don't hide the log.** No located events in the game → nothing
+  mounts (the Log tab is byte-identical to before). No located events in the
+  point under the playhead → the stage collapses to a banner. The stage lives
+  inside `.game-log-content` (the flex column) so the log keeps `flex: 1`.
+- **Orientation and caps are per-device settings** (`replay.*` in Advanced
+  Settings); the ⟳ button writes `replay.orientation`.
+- Field-tab pointer handlers are NOT attached to the replay's markers; the
+  CSS neutralizes their `data-mkidx` cursor.
+
 ### Feature Worktrees
 
 For parallel development, feature branches use git worktrees in `.worktrees/<feature-name>`. See CLAUDE.md for the workflow.
