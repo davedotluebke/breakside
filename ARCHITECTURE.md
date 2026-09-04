@@ -1726,6 +1726,69 @@ Exported via `window.breakside.auth`:
 | `staging.breakside.pro` | CNAME | *(CloudFront distribution domain for E12N2STN9MM8FA)* |
 | `api.breakside.pro` | A | 3.212.138.180 |
 
+Mail records for the domain (added 2026-09-03, see *Contact mail* below):
+
+| Host | Type | Value |
+|------|------|-------|
+| `breakside.pro` | MX | `smtp.google.com` (priority 1) |
+| `breakside.pro` | TXT | `v=spf1 include:_spf.google.com ~all` |
+| `google._domainkey` | TXT | 2048-bit DKIM public key for **breakside.pro** |
+| `_dmarc` | TXT | `v=DMARC1; p=none; rua=mailto:help@breakside.pro` |
+
+The apex carries both an A record (the EC2 box) and MX records; they coexist
+fine, and mail routes to Google regardless of where the A record points.
+
+### Contact mail (help@breakside.pro)
+
+`help@breakside.pro` is the published contact address — it appears in
+`privacy.html` and `SECURITY.md`. It exists so users are never handed the
+maintainer's personal address.
+
+**How it is wired.** `breakside.pro` was added to the existing `luebke.us`
+Google Workspace as a **secondary domain** (not a *user alias domain* — that
+mirrors existing users, giving `dave@breakside.pro` with no way to create
+`help@`). `help@breakside.pro` is then an **email alias** on the
+`dave@luebke.us` user, which costs nothing: an alias is not a second licence.
+
+**Sending as the address.** Mail is actually read in a separate consumer
+account (`luebke@gmail.com`) that `dave@luebke.us` forwards to. That account
+knows nothing about the Workspace alias, so `help@breakside.pro` had to be
+added there as a **Send mail as** identity relaying through
+`smtp.gmail.com:587`, authenticated as `dave@luebke.us` with a dedicated app
+password. Use a *separate* app password from the one Postfix on the API box
+uses (see *Outbound Mail* above) — revoking one otherwise silently breaks the
+other.
+
+**The trap that cost the most time.** In Admin console → Apps → Google
+Workspace → Gmail → **Authenticate email**, the domain selector defaults to
+the *primary* domain. Generating a DKIM key with it unchanged publishes
+`luebke.us`'s key under `breakside.pro`, and clicking *Start authentication*
+activates the wrong domain. Both mistakes are invisible in the console; the
+symptom is outbound mail signed `d=luebke-us.<date>.gappssmtp.com` instead of
+`d=breakside.pro`, which fails DMARC alignment. **Check the selector reads
+`breakside.pro` before generating and before starting.** Each secondary domain
+needs its own key generated, published, *and* activated — the primary's DKIM
+covers only itself.
+
+**Verifying.** `dig +short TXT google._domainkey.breakside.pro` must differ
+from the same query against `luebke.us` — identical values mean the wrong
+domain was selected. End to end, mail `check-auth@verifier.port25.com` from
+the address; the reply should say `pass ... header.d=breakside.pro`.
+
+**DMARC is `p=none`** — monitoring only, it cannot cause a receiver to reject
+or junk mail. Tighten to `p=quarantine` only after the aggregate reports come
+back clean. Note SPF does *not* align (the envelope sender is `luebke.us`,
+since Google's outbound path stamps the authenticated account); DMARC passes on
+the DKIM leg alone, which is why the DKIM domain being right is load-bearing.
+
+**Known limitation.** Relaying through Google as `dave@luebke.us` puts
+`Return-Path: dave@luebke.us` in the raw headers of every reply. No mail client
+shows it without "show original", but it is there — the Workspace path cannot
+hide it. Closing that would mean moving the send side to SES SMTP with
+`breakside.pro` verified, at which point the envelope sender becomes an
+`amazonses.com` bounce address. The AWS account already has SES production
+access if that ever becomes worth doing.
+
 ### CI/CD
 
 **Production** — GitHub Actions workflow (`.github/workflows/main.yml`):
