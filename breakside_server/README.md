@@ -48,13 +48,12 @@ Set via environment variables or in `.env` file:
 | `BREAKSIDE_DEBUG` | `false` | Enable debug mode |
 | `BREAKSIDE_ALLOWED_ORIGINS` | `*` | CORS allowed origins |
 
-These were prefixed `ULTISTATS_` until the project settled on its name.
-`config.py` still accepts the old names as a fallback, so a deployed
-`/etc/breakside/env` can be migrated on its own schedule rather than in the
-same breath as a code deploy. Using a legacy name logs a warning once; setting
-both names to *different* values logs an error and the `BREAKSIDE_` one wins.
-The fallback is a transition aid — drop it once no deployment sets the old
-names.
+These were prefixed `ULTISTATS_` until the project settled on its name
+(renamed 2026-09-03). `config.py` accepted both for one release; that
+fallback is gone, so an environment still setting an `ULTISTATS_` name gets
+the *default* rather than its configured value — silently, since an unset
+`BREAKSIDE_DATA_DIR` falls back to a relative path and the API comes up
+healthy on an empty dataset.
 
 ## API Overview
 
