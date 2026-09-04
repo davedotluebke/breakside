@@ -565,12 +565,29 @@ endzone depth" frame, which re-scaled past games when the depth setting changed.
 
 At render time the normalized `{x, y}` is scaled to the on-screen field — whose
 length *includes* the depth-dependent endzones — by the yard-based `pct()` /
-`toField()` helpers; `toNorm()` / `fromNorm()` in `fieldPbp.js` are the only
+`toField()` helpers; `toNorm()` / `fromNorm()` in `fieldRender.js` are the only
 bridge between the two frames. The two display flips (`flipAD` = attack
 direction, which auto-alternates per point; `flipHA` = which sideline is home)
 are **render-time only** — stored `{x, y}` never change, so re-opening a game or
 flipping orientation never moves a recorded event. The canonical convention lives
-in the `fieldPbp.js` file header; keep the two in sync.
+in the `playByPlay/fieldRender.js` file header; keep the two in sync.
+
+**Renderer split.** The drawing code lives in `playByPlay/fieldRender.js`
+(extracted 2026-09 for the replay viewer, docs/replay-viewer-plan.md § 5):
+geometry, `toNorm`/`fromNorm`, `pct`/`toField`/`clampLoc`/`inAttackEZ`, the
+static pitch layers, the located-event layer (arrows / markers / disc),
+possession segmentation and the fade cohorts (**per instance** —
+`createFadeTracker()`, so two fields on screen never share a boundary), and
+`chipHTML`. Every render function takes an explicit
+`view = { o, flipAD, flipHA }` (orientation + the *effective* flips) rather
+than reading the Field tab's private state. `fieldPbp.js` keeps the
+interactive surface — entry state, gestures, pull stopwatch, pickers,
+orientation, flip persistence — and passes its view in. The renderer also
+offers an optional **actor layer** (`actorLayerHTML` / `applyActorPositions`):
+player icons at reconstructed positions, animated by CSS transitions on
+`left`/`top` whose duration is the per-render `--fp-dur` custom property
+(CSS in `fieldPbp.css`, "Actor layer"); the Field tab does not render it.
+Unit tests: `tests/unit/fieldRender.test.mjs`.
 
 ### Event timestamps (`Event.at`, `Possession.startedAt`)
 

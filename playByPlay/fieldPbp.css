@@ -334,6 +334,26 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
    a single bounded animation, not a continuous loop — negligible battery. */
 @keyframes fpFadeOut { from { opacity: 1; } to { opacity: 0; } }
 
+/* ---- Actor layer (playByPlay/fieldRender.js actorLayerHTML) ----------------
+   Player icons at reconstructed positions on the pitch — the replay viewer's
+   "where everyone is" view. The Field tab does NOT render this layer. Icons
+   move via CSS transitions on left/top; the per-render `--fp-dur` custom
+   property on the layer sets the duration (0ms = jump, e.g. on seek), and
+   transitions only run when an existing element's style changes, so the
+   owner patches positions in place (applyActorPositions) rather than
+   rebuilding the DOM per frame. Sits above markers (5), below the disc (7). */
+.fp-actors { position: absolute; inset: 0; pointer-events: none; z-index: 6; --fp-dur: 0ms; }
+.fp-actor {
+    position: absolute; transform: translate(-50%, -50%);
+    transition: left var(--fp-dur) linear, top var(--fp-dur) linear;
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 2px 6px; border-radius: 10px; white-space: nowrap; line-height: 1.2;
+    background: rgba(255, 255, 255, .9); color: var(--text-primary);
+    border: 1.5px solid var(--white); font-size: 10px; font-weight: 700;
+}
+.fp-actor.holder { background: var(--fp-holdbg); border-color: var(--fp-hold); }
+.fp-actor .fp-num { font: 700 9px 'JetBrains Mono', monospace; color: var(--text-muted); }
+
 /* Events bar buttons (pull hangtime + brick; offense/defense buttons later). */
 .fp-ebtn {
     /* basis = content so labels show in full; grow to share the row. nowrap
