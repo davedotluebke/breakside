@@ -24,7 +24,11 @@
 .rv-stage[data-o="landscape"] { flex-direction: column; align-items: center; }
 .rv-stage[data-o="portrait"]  { flex-direction: row; align-items: flex-start; justify-content: center; }
 
-.rv-fieldwrap { flex: 1 1 auto; min-width: 0; display: flex; justify-content: center; }
+.rv-fieldwrap { flex: 1 1 auto; min-width: 0; display: flex; justify-content: center; align-items: flex-start; }
+/* Never let flex stretch decide the pitch's height: iOS Safari lets a
+   stretched cross size override aspect-ratio (Chrome does not), which drew
+   the landscape pitch 1.3× taller than wide. */
+.rv-field { align-self: flex-start; flex: 0 0 auto; }
 /* Landscape: full width on a phone; on a wide screen the height cap wins so
    the log below keeps its room. Portrait: height-capped, width follows. */
 .rv-stage[data-o="landscape"] .rv-fieldwrap { width: 100%; }
