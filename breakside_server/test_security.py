@@ -451,14 +451,13 @@ class TestProxyImageSSRF:
 
 class TestStaticTraversal:
     def test_traversal_blocked(self, client, seeded):
-        for path in ["/ultistats/game/../../config.py",
-                     "/app/../../config.py",
+        for path in ["/app/../../config.py",
                      "/landing/../../config.py"]:
             r = client.get(path)
             assert r.status_code == 404, path
 
     def test_legit_static_served(self, client, seeded):
-        r = client.get("/ultistats/version.json")
+        r = client.get("/version.json")
         assert r.status_code == 200
 
 

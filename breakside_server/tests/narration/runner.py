@@ -338,10 +338,10 @@ def call_finalize(
     # Ensure auth is disabled for tests by default.
     os.environ.setdefault("BREAKSIDE_AUTH_REQUIRED", "false")
     # Local import — main.py does heavy import work, so do it once.
-    if "ultistats_test_app" not in globals():
+    if "breakside_test_app" not in globals():
         from breakside_server.main import app  # type: ignore
-        globals()["ultistats_test_app"] = app
-    app = globals()["ultistats_test_app"]
+        globals()["breakside_test_app"] = app
+    app = globals()["breakside_test_app"]
 
     client = TestClient(app)
     resp = client.post(

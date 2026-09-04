@@ -1,4 +1,4 @@
 """
-Google Sheets integration module for ultistats server.
+Google Sheets integration module for the Breakside server.
 """
 

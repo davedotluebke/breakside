@@ -17,7 +17,7 @@ router = APIRouter()
 async def api_info():
     """API information endpoint."""
     return {
-        "message": "Ultistats API Server",
+        "message": "Breakside API Server",
         "version": "1.0.0",
         "status": "running"
     }

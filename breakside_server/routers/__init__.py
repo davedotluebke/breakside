@@ -1,5 +1,5 @@
 """
-API routers for the Ultistats server.
+API routers for the Breakside server.
 
 Each module holds one endpoint group split out of the former 2000-line
 main.py. Route paths are written in full in each decorator (no router

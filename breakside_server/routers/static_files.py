@@ -19,7 +19,7 @@ from ._shared import safe_static_path
 router = APIRouter()
 
 # Repo root (this file lives at breakside_server/routers/): the PWA files are
-# the main ultistats app in the parent of breakside_server.
+# the main Breakside app in the parent of breakside_server.
 pwa_dir = Path(__file__).parent.parent.parent
 pwa_static_files = ["main.css", "main.js", "manifest.json", "service-worker.js", "version.json"]
 pwa_static_dirs = ["data", "game", "playByPlay", "screens", "teams", "ui", "utils", "images", "auth", "landing", "store", "narration"]
@@ -67,12 +67,12 @@ _PWA_ALLOWED_FIRST_PARTS = set(pwa_static_files) | set(pwa_static_dirs)
 
 @router.get("/")
 async def root():
-    """Serve the PWA index.html at root (redirects to /ultistats/ for PWA compatibility)"""
+    """Serve the PWA index.html at root."""
     index_file = pwa_dir / "index.html"
     if index_file.exists():
         return FileResponse(index_file, media_type="text/html")
     return {
-        "message": "Ultistats API Server",
+        "message": "Breakside API Server",
         "version": "1.0.0",
         "status": "running"
     }
@@ -166,25 +166,6 @@ async def viewer_redirect():
     """Redirect /viewer/ to the static viewer."""
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/static/viewer/", status_code=302)
-
-
-# =============================================================================
-# PWA routes under /ultistats/ (matches production path and manifest.json)
-# =============================================================================
-
-@router.get("/ultistats/")
-@router.get("/ultistats/index.html")
-async def ultistats_root():
-    """Serve the PWA index.html under /ultistats/ path (for PWA install)"""
-    index_file = pwa_dir / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file, media_type="text/html")
-    raise HTTPException(status_code=404, detail="index.html not found")
-
-@router.get("/ultistats/{filename:path}")
-async def serve_ultistats_file(filename: str):
-    """Serve PWA files under /ultistats/ path."""
-    return _serve_static_file(pwa_dir, filename, _PWA_ALLOWED_FIRST_PARTS)
 
 
 # PWA file serving - MUST be last to avoid catching API routes

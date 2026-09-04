@@ -1,5 +1,5 @@
 /**
- * Ultistats Viewer
+ * Breakside Viewer
  * Handles navigation, entity listing, and game detail viewing
  * 
  * Phase 3 update: Added sync status indicator and pending sync badges

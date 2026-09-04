@@ -129,7 +129,7 @@ class TestHealthEndpoint:
         """API info should work without auth."""
         response = client.get("/api")
         assert response.status_code == 200
-        assert "Ultistats API Server" in response.json()["message"]
+        assert "Breakside API Server" in response.json()["message"]
 
 
 class TestAuthMeEndpoint:

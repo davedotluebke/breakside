@@ -1,5 +1,5 @@
 """
-Main FastAPI application for the Ultistats server.
+Main FastAPI application for the Breakside server.
 
 App wiring only: the endpoints live in the routers/ package (games, teams,
 players, invites, shares, controller, events, auth_api, misc, static_files)
@@ -78,8 +78,8 @@ async def lifespan(app: FastAPI):
 # schema at runtime (the PWA calls fixed URLs), so gating on DEBUG costs local
 # development nothing and removes the endpoint map from production.
 app = FastAPI(
-    title="Ultistats API",
-    description="API for the Ultistats PWA - Ultimate Frisbee Statistics Tracker",
+    title="Breakside API",
+    description="API for the Breakside PWA - Ultimate Frisbee Statistics Tracker",
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs" if DEBUG else None,

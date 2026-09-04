@@ -4,7 +4,7 @@
  *
  *   File Structure Map
  *
- *   ultistats/
+ *   breakside/
  *   ├── store/                   # Data layer
  *   │   ├── models.js           # Data structure definitions (Player, Game, Team, Point, Possession, Event classes)
  *   │   ├── storage.js          # Serialization/deserialization, local storage, shared app state

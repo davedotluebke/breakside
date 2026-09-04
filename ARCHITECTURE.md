@@ -63,7 +63,7 @@ Staging uses the same production API. The API endpoint can be overridden via `?a
 The frontend is a vanilla JavaScript Progressive Web App with no framework dependencies.
 
 ```
-ultistats/
+breakside/
 ├── index.html              # Main HTML entry point
 ├── main.js                 # Application bootstrap (~436 lines)
 ├── css/                    # Application styles: tokens.css (color palette) + per-concern files split from the old main.css (load order preserved in index.html)
