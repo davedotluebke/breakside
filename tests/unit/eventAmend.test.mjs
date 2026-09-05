@@ -13,7 +13,7 @@ import { Throw, Turnover, Defense, Pull } from '../../store/models.js';
 import {
     THROW_MODIFIERS, TURNOVER_MODIFIERS, DEFENSE_MODIFIERS, modifiersFor,
     classifyThrowGeometry, reclassifyThrow,
-    flattenPointEvents, locateEvent, pointOfEvent, nextInPossession, prevInPossession,
+    flattenPointEvents, locateEvent, pointOfEvent, nextInPossession, prevInPossession, holderSourceOf,
     receiverChainConflict, throwerChainConflict, applyEventPatch, insertUnknownBridge, insertUnknownBridgeBefore,
     adjustPlayerCounters, snapshotEvent,
 } from '../../playByPlay/eventAmend.js';
@@ -241,4 +241,29 @@ test('insertUnknownBridgeBefore after an interception inserts at the top of the 
     assert.deepEqual(point.possessions[1].events.slice(0, 3), [ins[0], ins[1], t0]);
     assert.equal(ins[0].thrower, P.Bob); assert.equal(ins[1].receiver, P.Dev);
     assert.equal(throwerChainConflict(point, t0, t0.thrower), null);
+});
+
+test('applyEventPatch: a moved `from` cascades back into the previous catch (or the interception spot)', () => {
+    const point = makePoint();
+    const [t0, t1] = throws(point);
+    const r = applyEventPatch(point, t1, { from: { x: .15, y: .1 } });
+    assert.deepEqual(t1.from, { x: .15, y: .1 });
+    assert.deepEqual(t0.to, { x: .15, y: .1 });
+    assert.notEqual(t1.from, t0.to);
+    assert.equal(r.cascaded, t0);
+    assert.deepEqual(r.changed, [t1, t0]);
+    assert.equal(t0.reset_flag, true);    // .5 → .15 is backwards now
+    assert.equal(t1.huck_flag, true);     // .15 → .7 is a huck now
+    // First throw of the possession after an interception: the pick's spot moves.
+    const pick = new Defense({ defender: P.Bob, interception: true, to: { x: .5, y: .5 } });
+    point.possessions[0].events[1] = pick;
+    assert.equal(holderSourceOf(point, t0), pick);
+    const r2 = applyEventPatch(point, t0, { from: { x: .3, y: .3 } });
+    assert.deepEqual(pick.to, { x: .3, y: .3 });
+    assert.equal(r2.cascaded, pick);
+    // A block is not a catch: nothing behind the first throw to move.
+    point.possessions[0].events[1] = new Defense({ defender: P.Bob, block: true, to: { x: .5, y: .5 } });
+    const r3 = applyEventPatch(point, t0, { from: { x: .4, y: .4 } });
+    assert.equal(r3.cascaded, null);
+    assert.deepEqual(point.possessions[0].events[1].to, { x: .5, y: .5 });
 });

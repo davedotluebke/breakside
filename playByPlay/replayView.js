@@ -57,7 +57,8 @@ const ICON = {
  *   the same entry list so indices line up with the log's data-entry attributes
  * @param {(name: string) => object|null} [cfg.getPlayerByName] - display info (jersey number) for actor labels
  * @param {boolean} [cfg.live] - offer Live (follow the tail); false for finished games
- * @param {() => boolean} [cfg.canEdit] - editing gate (playByPlay/replayEdit.js); absent = no Edit button
+ * @param {() => boolean} [cfg.canEdit] - editing gate (playByPlay/replayEdit.js); absent = no Edit
+ *   button, false = the button is hidden (viewers never see it)
  * @param {string} [cfg.editDeniedMessage] - toast when canEdit() refuses
  * @param {() => void} [cfg.onEdited] - called after every amendment so the mount site can
  *   re-render its log lines / stats; the view refreshes itself regardless
@@ -109,8 +110,12 @@ function mountReplayView(cfg) {
     const timelineEl = q('.rv-timeline'), headEl = q('.rv-head'), goLiveBtn = q('.rv-golive');
     const editBtn = q('.rv-editbtn');
     if (!live) { ticksEl.firstElementChild.classList.add('disabled'); }
+    // The ✎ exists only where a mount site offers editing, and shows only
+    // while cfg.canEdit() holds (re-checked on every transport render, so a
+    // role change hides it rather than greeting a viewer with a refusal).
     const editable = typeof cfg.canEdit === 'function';
-    editBtn.hidden = !editable;
+    const mayEdit = () => { try { return editable && !!cfg.canEdit(); } catch (e) { return false; } };
+    editBtn.hidden = !mayEdit();
 
     // ---- field adapter (playByPlay/fieldRender.js) ----
     // The pitch is the Field tab's: static layers + the located-event layer
@@ -349,6 +354,8 @@ function mountReplayView(cfg) {
         root.classList.toggle('rv-waiting', !!s.follow && s.atTail);
         goLiveBtn.hidden = !(s.unseen > 0 && !s.follow);
         if (s.unseen > 0) goLiveBtn.textContent = `${s.unseen} new · Go live ›`;
+        editBtn.hidden = !mayEdit();
+        if (editBtn.hidden && editor && editor.active) { editor.close(); return; }   // close() re-renders
         root.classList.toggle('rv-editing', !!s.editing);
         editBtn.classList.toggle('on', !!s.editing);
         editBtn.title = s.editing ? 'Stop editing' : 'Edit play';

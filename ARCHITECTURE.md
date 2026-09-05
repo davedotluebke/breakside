@@ -655,17 +655,20 @@ Layers, bottom-up (all under `playByPlay/`):
 - **`replayEdit.js`** — editing v1 (plan step 8, Decision 11). The ✎ button
   on the transport opens a sheet (paused only; Play / Go live close it) for
   the line under the playhead: roster chips per role (thrower / receiver /
-  defender / puller + Unknown), modifier chips, and an armed tap-or-drag on
-  the pitch to move the catch spot (live preview from the mutated event,
-  restored before the write). A receiver change that contradicts the next
+  defender / puller + Unknown), modifier chips, and per-player spot
+  buttons ("Move thrower" = the release point, "Move receiver" = the catch
+  point) that arm a tap-or-drag on the pitch (live preview from the
+  mutated event, restored before the write). A receiver change that contradicts the next
   thrower gets an inline *retarget / bridge with two inferred Unknown
   Player passes / cancel* — and a thrower change gets the mirror image
   (the previous pass's receiver, or an interception's defender across the
   possession boundary). Every write is `pbpPossession.amendEvent()`; the
   mount site's `onEdited` re-renders its lines/stats, then the view
   rebuilds its engine and follows the edited play. Gate: `cfg.canEdit()`
-  on every write — any coach of the team (not a viewer) on both surfaces;
-  the Active Coach role is for recording, not corrections. Chips WRAP
+  on every write — any coach of the team on both surfaces; the Active
+  Coach role is for recording, not corrections. A viewer never sees the ✎
+  (re-checked on every transport render, and an open sheet closes if the
+  role flips) — the refusal toast is only a backstop. Chips WRAP
   rather than scroll: `.fp-chip` carries `touch-action: none` for the
   Field tab's pegman drag, which makes a scroll strip undraggable on a
   phone.
@@ -674,7 +677,8 @@ Layers, bottom-up (all under `playByPlay/`):
 - **`eventAmend.js`** (pure leaf, node-tested) — the rules behind an
   amendment, shared with the Full tab's modifier strip and the Field tab's
   marker drag: the modifier tables, throw geometry → huck/reset/swing, the
-  catch-spot cascade (a `to` is the next event's `from`), the throw-chain
+  spot cascades both ways (a `to` is the next event's `from`; a `from` is
+  the previous catch, or the interception spot), the throw-chain
   conflicts in both directions and their two resolutions, and the live counter moves
   (completedPasses / goals / assists follow a player change). `score_flag`
   is refused: a goal change moves the score and the point boundary.

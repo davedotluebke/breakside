@@ -329,7 +329,12 @@ none` was the cause) and double-tap selected page text (`user-select:
 none` on the sheet); a thrower change now gets the mirror confirm of the
 receiver one (previous receiver, or the interceptor across the possession
 boundary); and the gate is **any coach**, not the Active Coach role.
-Second staging round pending; not merged.
+Second staging round (Dave, 2026-09-04): staging looked good; two
+follow-ups landed — "Move spot" became per-player **Move thrower** (the
+release point, cascading back into the previous catch / interception
+spot) and **Move receiver** (the catch point, cascading into the next
+release), and the ✎ is simply **hidden for viewers** rather than refused.
+Third staging round pending; not merged.
 
 ### What shipped
 
@@ -337,7 +342,8 @@ Second staging round pending; not merged.
   8 tests): modifier tables (moved out of fullPbp), `classifyThrowGeometry`
   (moved out of fieldPbp; both tabs now call it), `applyEventPatch`
   (players / `to` with cascade to the next `from` + reclassify / `*_flag`;
-  `score_flag` refused), `receiverChainConflict` / `throwerChainConflict`
+  `score_flag` refused; `from` cascades back via `holderSourceOf`),
+  `receiverChainConflict` / `throwerChainConflict`
   (`holderSourceOf` looks back across one possession boundary for an
   interception), `insertUnknownBridge` / `insertUnknownBridgeBefore`,
   `adjustPlayerCounters`.

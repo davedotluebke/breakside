@@ -219,16 +219,19 @@ export function snapshotEvent(event) {
 
 /**
  * Apply `patch` to `event` in place. Accepted keys: the PLAYER_FIELDS
- * (Player refs), `to` (normalized {x, y} | null) and any `*_flag` boolean.
- * A changed `to` cascades to the next event's `from` when it has one (the
- * catch spot is where the next throw is released from), and re-derives the
- * geometry flags of every Throw whose endpoints moved. `score_flag` is
+ * (Player refs), `to` / `from` (normalized {x, y} | null) and any `*_flag`
+ * boolean. A changed `to` cascades to the next event's `from` when it has
+ * one (the catch spot is where the next throw is released from); a changed
+ * `from` cascades back into the previous catch (`holderSourceOf`: the
+ * previous Throw's `to`, or an interception's spot). Every Throw whose
+ * endpoints moved has its geometry flags re-derived. `score_flag` is
  * deliberately NOT patchable here: flipping a goal changes the score, the
  * point boundary and the roster counters — that is the score-attribution
  * flow's job, not an amendment's.
  * @returns {{ previousEvent: object, changed: object[], cascaded: object|null }}
  *   `changed` lists every event mutated (the event first); `cascaded` is
- *   the next event when its `from` moved
+ *   the neighbour whose spot moved with this one (next on a `to` change,
+ *   previous on a `from` change)
  */
 export function applyEventPatch(point, event, patch, fractions) {
     const previousEvent = snapshotEvent(event);
@@ -247,11 +250,20 @@ export function applyEventPatch(point, event, patch, fractions) {
                 cascaded = next;
                 changed.push(next);
             }
+        } else if (key === 'from') {
+            if (!('from' in event)) return;
+            event.from = copyLoc(patch.from);
+            const prev = holderSourceOf(point, event);
+            if (prev && 'to' in prev && (hasLoc(prev.to) || hasLoc(event.from))) {
+                prev.to = copyLoc(event.from);
+                cascaded = prev;
+                changed.push(prev);
+            }
         } else if (/_flag$/.test(key)) {
             event[key] = !!patch[key];
         }
     });
-    if (patch && 'to' in patch) {
+    if (patch && ('to' in patch || 'from' in patch)) {
         reclassifyThrow(event, fractions);
         if (cascaded) reclassifyThrow(cascaded, fractions);
     }

@@ -1,7 +1,8 @@
 /*
  * Replay editor — editing v1 for the replay viewer (docs/replay-viewer-plan.md
  * step 8, Decision 11): while the replay is PAUSED, the line under the
- * playhead can have its players, modifier flags and catch spot changed.
+ * playhead can have its players, modifier flags and spots (the thrower's
+ * release point, the receiver's catch point) changed.
  *
  * Owned and mounted by playByPlay/replayView.js (the Edit button on the
  * transport bar toggles it). The sheet sits between the transport and the
@@ -10,8 +11,9 @@
  * spot is being dragged (restored before the amendment is applied, so the
  * bus payload's previousEvent is honest).
  *
- * Gate: cfg.canEdit() at every write — any coach of the team (not a
- * viewer); the Active Coach role does not apply to corrections.
+ * Gate: cfg.canEdit() at every write — any coach of the team; a viewer
+ * never sees the ✎ (replayView hides it), the toast is only a backstop
+ * for a role that changes while the sheet is open.
  *
  * Receiver / thrower change (Decision 11): when the next throw in the
  * possession is thrown by someone other than the new receiver — or the
@@ -28,7 +30,7 @@ import { UNKNOWN_PLAYER } from '../store/models.js';
 import { playerStub } from '../utils/helpers.js';
 import { escapeHtml } from '../utils/gameLogRenderer.js';
 import * as fieldRender from './fieldRender.js';
-import { modifiersFor, receiverChainConflict, throwerChainConflict, nextInPossession, nameOf } from './eventAmend.js';
+import { modifiersFor, receiverChainConflict, throwerChainConflict, nextInPossession, holderSourceOf, nameOf } from './eventAmend.js';
 
 // pbpPossession (the amendEvent chokepoint) and the controller toast are
 // late-bound: importing either here closes an import cycle back through
@@ -59,6 +61,25 @@ function rolesFor(ev) {
 }
 
 /**
+ * Which located spots an event exposes, as "Move <who>" buttons: the spot
+ * belongs to a player (the thrower releases from `from`, the receiver
+ * catches at `to`) so the button is named for the player, not the field.
+ */
+function spotButtons(ev) {
+    if (!ev) return [];
+    if (ev.type === 'Throw') return [{ field: 'from', who: 'thrower' }, { field: 'to', who: 'receiver' }];
+    if (ev.type === 'Turnover') {
+        const out = [];
+        if (ev.thrower) out.push({ field: 'from', who: 'thrower' });
+        out.push({ field: 'to', who: ev.drop_flag ? 'receiver' : 'disc' });
+        return out;
+    }
+    if (ev.type === 'Defense') return [{ field: 'to', who: 'defender' }];
+    if (ev.type === 'Pull') return [{ field: 'to', who: 'landing spot' }];
+    return [];
+}
+
+/**
  * @param {object} ctx
  * @param {HTMLElement} ctx.root - the .rv-root
  * @param {HTMLElement} ctx.fieldEl - the .rv-field (drag surface for "Move spot")
@@ -82,7 +103,7 @@ function createReplayEditor(ctx) {
     root.querySelector('.rv-transport').insertAdjacentElement('afterend', panel);
 
     let active = false;
-    let armed = false;          // "Move spot": the next tap/drag on the pitch places the catch spot
+    let armed = null;           // 'from' | 'to' | null — which spot the next tap/drag on the pitch places
     let pending = null;         // receiver-chain confirm: { ev, patch, conflict, newName }
     let drag = null;            // live spot drag: { ev, next, origTo, origFrom }
     let renderedIndex = null;
@@ -168,11 +189,15 @@ function createReplayEditor(ctx) {
                         `<button type="button" class="rv-mod${ev[m.prop] ? ' on' : ''}" data-prop="${m.prop}">${escapeHtml(m.label)}</button>`).join('')}</div>
                 </div>`;
             }
-            if ('to' in ev) {
-                const label = armed ? 'Tap or drag on the field…' : (ev.to ? 'Move spot' : 'Place spot');
+            const spots = spotButtons(ev);
+            if (spots.length) {
                 h += `<div class="rv-edit-row" data-role="spot">
                     <span class="rv-edit-lbl">Spot</span>
-                    <div class="rv-edit-chips"><button type="button" class="rv-edit-spot${armed ? ' on' : ''}">${label}</button></div>
+                    <div class="rv-edit-chips">${spots.map(sp => {
+                        const on = armed === sp.field;
+                        const label = on ? 'Tap or drag on the field…' : `${ev[sp.field] ? 'Move' : 'Place'} ${sp.who}`;
+                        return `<button type="button" class="rv-edit-spot${on ? ' on' : ''}" data-field="${sp.field}">${escapeHtml(label)}</button>`;
+                    }).join('')}</div>
                 </div>`;
             }
             if (pending && pending.ev === ev) {
@@ -239,20 +264,27 @@ function createReplayEditor(ctx) {
         const yd = fieldRender.toField(view, fx, fy);
         return fieldRender.toNorm(fieldRender.clampLoc(yd.l, yd.w));
     }
+    // Live preview mutates the armed spot and the neighbour it is chained to
+    // (a `to` is the next event's `from`; a `from` is the previous catch) —
+    // the same pair applyEventPatch will move for real on release.
     function previewSpot(loc) {
-        drag.ev.to = copyLoc(loc);
-        if (drag.next && 'from' in drag.next) drag.next.from = copyLoc(loc);
+        drag.ev[drag.field] = copyLoc(loc);
+        if (drag.partner) drag.partner[drag.partnerField] = copyLoc(loc);
         ctx.redraw();
     }
     function onFieldDown(e) {
         if (!active || !armed || drag) return;
         const entry = currentEntry();
         const ev = editableEvent(entry);
-        if (!ev || !('to' in ev)) return;
+        if (!ev || !(armed in ev)) return;
         const loc = fieldLoc(e.clientX, e.clientY);
         if (!loc) return;
-        const next = nextInPossession(pointOf(entry), ev);
-        drag = { ev, next, origTo: copyLoc(ev.to), origFrom: next ? copyLoc(next.from) : null };
+        const point = pointOf(entry);
+        const field = armed;
+        let partner = null, partnerField = null;
+        if (field === 'to') { const n = nextInPossession(point, ev); if (n && 'from' in n) { partner = n; partnerField = 'from'; } }
+        else { const p = holderSourceOf(point, ev); if (p && 'to' in p) { partner = p; partnerField = 'to'; } }
+        drag = { ev, field, partner, partnerField, orig: copyLoc(ev[field]), partnerOrig: partner ? copyLoc(partner[partnerField]) : null };
         try { fieldEl.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
         e.preventDefault();
         previewSpot(loc);
@@ -267,11 +299,11 @@ function createReplayEditor(ctx) {
         const d = drag; drag = null;
         const loc = e.type === 'pointercancel' ? null : fieldLoc(e.clientX, e.clientY);
         // Undo the preview so amendEvent sees (and reports) the real before-state.
-        d.ev.to = d.origTo;
-        if (d.next && 'from' in d.next) d.next.from = d.origFrom;
-        armed = false;
+        d.ev[d.field] = d.orig;
+        if (d.partner) d.partner[d.partnerField] = d.partnerOrig;
+        armed = null;
         if (!loc) { ctx.redraw(); render(); return; }
-        amend(d.ev, { to: loc });
+        amend(d.ev, { [d.field]: loc });
     }
     fieldEl.addEventListener('pointerdown', onFieldDown);
     fieldEl.addEventListener('pointermove', onFieldMove);
@@ -300,13 +332,14 @@ function createReplayEditor(ctx) {
         }
         const mod = t.closest('.rv-mod[data-prop]');
         if (mod) { amend(ev, { [mod.dataset.prop]: !ev[mod.dataset.prop] }); return; }
-        if (t.closest('.rv-edit-spot')) { armed = !armed; render(); }
+        const spot = t.closest('.rv-edit-spot[data-field]');
+        if (spot) { armed = armed === spot.dataset.field ? null : spot.dataset.field; render(); }
     });
 
     // The playhead moved (log tap, ⏮/⏭, scrub): show that line's sheet.
     const offField = controller.on('field', ({ index }) => {
         if (!active || index === renderedIndex) return;
-        pending = null; armed = false; drag = null;
+        pending = null; armed = null; drag = null;
         render();
     });
 
@@ -323,7 +356,7 @@ function createReplayEditor(ctx) {
     }
     function close() {
         const was = active;
-        active = false; armed = false; pending = null; drag = null;
+        active = false; armed = null; pending = null; drag = null;
         panel.hidden = true;
         root.classList.remove('rv-editing', 'rv-spot-armed');
         if (was && controller.state.editing) controller.setEditing(false);
