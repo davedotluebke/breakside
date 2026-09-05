@@ -12,12 +12,12 @@ was for the Field tab): **`mockups/replay-viewer/index.html`**. Run it with
 Design decisions below were settled with Dave on 2026-09-03; the "Why" notes
 record the reasoning so later sessions don't relitigate them.
 
-**Status (2026-09-04):** steps 1–7 are **merged to main** (merge `4bd3400`)
-after two field-test rounds on staging; ARCHITECTURE.md § Replay viewer is the
-code-level map. Step 8 (editing v1) is **built on branch `replay-edit`**,
-preview-verified, and awaiting a staging field test before merge — see
-"Step 8 status and handoff" at the end of this document. The later items
-(share-viewer port, sliding split, commentator, insert/delete) remain open.
+**Status (2026-09-04):** steps 1–8 are **merged to main** (steps 1–7 in
+merge `4bd3400`, step 8 editing v1 the same day after three staging rounds);
+ARCHITECTURE.md § Replay viewer is the code-level map. See "Step 8 status
+and handoff" at the end of this document for what editing v1 covers and
+deliberately leaves out. The later items (share-viewer port, sliding split,
+commentator, insert/delete, endzone ↔ score_flag) remain open.
 
 ## Decisions
 
@@ -334,7 +334,8 @@ follow-ups landed — "Move spot" became per-player **Move thrower** (the
 release point, cascading back into the previous catch / interception
 spot) and **Move receiver** (the catch point, cascading into the next
 release), and the ✎ is simply **hidden for viewers** rather than refused.
-Third staging round pending; not merged.
+Third staging round approved by Dave 2026-09-04; **merged to main** the
+same day. No backend change (no server restart).
 
 ### What shipped
 
