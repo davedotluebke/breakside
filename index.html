@@ -23,26 +23,20 @@
             var m = location.pathname.match(/^\/join\/([A-Za-z0-9]+)\/?$/);
             if (m) location.replace('/landing/join.html?code=' + m[1]);
 
-            // Game share links (/view/<hash>) land here the same way. Keep
-            // the reader on THIS origin: the deploy syncs the viewer to
-            // /viewer/ on both www and staging (see "Sync viewer to S3" in
-            // .github/workflows/main.yml and deploy-staging.sh), and the
-            // viewer maps its own API calls to api.breakside.pro. Bouncing
-            // to the API host instead would cost a second redirect and put
-            // api.breakside.pro in the reader's URL bar.
+            // Game share links (/view/<hash>) land here the same way. The
+            // app itself opens them as a read-only guest session
+            // (teams/shareGuest.js, checked first in initializeApp) — but
+            // NOT from this path: every asset reference in this file is
+            // relative, so at /view/<hash> they would resolve under /view/
+            // and 404 (the "unstyled page of bare elements" of 2026-09-02).
+            // Boot from the root instead, carrying the hash as ?share= and
+            // keeping any other query (a dev ?api= override) intact.
+            // Until 2026-09 this bounced to a separate /viewer/ app.
             var v = location.pathname.match(/^\/view\/([A-Za-z0-9]+)\/?$/);
             if (v) {
-                var host = location.hostname;
-                if (host === 'localhost' || host === '127.0.0.1') {
-                    // Dev: no /viewer/ copy is served locally, so hand off to
-                    // the backend's own /view route (honoring an ?api= dev
-                    // backend override, as landing/join.js does).
-                    var apiParam = new URLSearchParams(location.search).get('api');
-                    var apiBase = (apiParam && apiParam !== 'reset') ? apiParam : 'http://localhost:8000';
-                    location.replace(apiBase + '/view/' + v[1]);
-                } else {
-                    location.replace('/viewer/?share=' + v[1]);
-                }
+                var q = new URLSearchParams(location.search);
+                q.set('share', v[1]);
+                location.replace('/?' + q.toString());
             }
         })();
     </script>
@@ -56,6 +50,11 @@
     <script>
         (function () {
             var pref = 'dark';   // default; see getPreference() in utils/theme.js
+            // A share-link guest (/view/<hash>, teams/shareGuest.js) follows
+            // the device instead: the dark default is for sideline battery
+            // life, not a spectator's phone. A stored preference still wins.
+            if (/^\/view\/[A-Za-z0-9]+\/?$/.test(location.pathname)
+                || /[?&]share=[A-Za-z0-9]+/.test(location.search)) pref = 'auto';
             try {
                 var s = JSON.parse(localStorage.getItem('breakside_advanced_settings') || '{}') || {};
                 if (s['display.theme'] === 'light' || s['display.theme'] === 'dark' || s['display.theme'] === 'auto') {
@@ -1009,12 +1008,21 @@
                 <i class="fas fa-arrow-left"></i>
             </button>
             <span class="panel-title">Game Summary</span>
+            <!-- Share-guest chrome (teams/shareGuest.js): live/final badge and
+                 the poll connection state. Only shown under body.share-guest. -->
+            <span id="shareStatusBadge" class="share-status-badge" style="display:none;"></span>
+            <span id="shareConnection" class="share-connection connecting">Connecting…</span>
             <button id="shareGameSummaryBtn" class="back-button" title="Share game (public live link)" style="display:none;">
                 <i class="fas fa-share-alt"></i> Share
             </button>
             <button id="exportGameSummaryBtn" class="back-button" title="Export to Excel (.xlsx)" style="display:none;">
                 <i class="fas fa-file-excel"></i> Export
             </button>
+        </div>
+
+        <!-- Shown to a share guest if the link dies while they are watching -->
+        <div id="shareExpiredBanner" class="share-expired-banner" style="display:none;">
+            This share link has expired — the score below is no longer updating.
         </div>
 
         <div id="finalScore">
@@ -1063,6 +1071,29 @@
             <button id="copySummaryBtn"><i class="fas fa-clipboard"></i> Copy Summary</button>
             <button id="anotherGameBtn">New Game</button>
         </footer>
+
+        <!-- Share-guest footer: the disclosure a spectator actually needs
+             (this page is public) plus the product pitch. body.share-guest only. -->
+        <div class="share-guest-footer">
+            <div>
+                Live game tracking by <a href="/landing/">Breakside</a> —
+                free real-time ultimate stats for your team
+            </div>
+            <div class="share-guest-footer-privacy">
+                This page is public to anyone with the link, and lists players by name.
+                <a href="/privacy.html">What Breakside stores</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Share-link error screen (bad / expired / revoked link) — teams/shareGuest.js -->
+    <section id="shareErrorScreen" style="display: none;">
+        <div class="share-error">
+            <div class="share-error-icon">🥏</div>
+            <h1 id="shareErrorTitle">Game not found</h1>
+            <p id="shareErrorMessage">This share link isn't valid.</p>
+            <a class="share-error-cta" href="/landing/">What is Breakside?</a>
+        </div>
     </section>
 
     <!-- Auth modules (auth/config.js, auth/auth.js, auth/loginScreen.js) are

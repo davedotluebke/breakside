@@ -11,7 +11,8 @@ const screens = [
     document.getElementById('teamRosterScreen'),
     document.getElementById('teamSettingsScreen'),
     document.getElementById('eventRosterScreen'),
-    document.getElementById('gameSummaryScreen')
+    document.getElementById('gameSummaryScreen'),
+    document.getElementById('shareErrorScreen'),   // share-link guest only (teams/shareGuest.js)
 ];
 
 // Non-game screens where controller polling should stop

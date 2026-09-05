@@ -117,6 +117,8 @@ import './teams/activeGamePolling.js';
 import { showTeamSettingsScreen } from './teams/teamSettings.js';
 import './teams/eventRoster.js';
 import { getGameSummaryBackTarget } from './teams/gameSummary.js';
+// Share-link guest sessions (/view/<hash>): checked first in initializeApp.
+import { matchShareRoute, startShareGuest } from './teams/shareGuest.js';
 import './game/genderRatioDropdown.js';
 import './game/pointStats.js';
 import './game/undoLogic.js';
@@ -351,6 +353,16 @@ function isTestModeAllowed() {
 
 // Initialize authentication
 async function initializeApp() {
+    // Share link (/view/<hash>): a read-only guest session for one shared
+    // game — no account, no Supabase init, no team load. Decided before
+    // anything else so a spectator never meets the sign-in gate.
+    const shareHash = matchShareRoute();
+    if (shareHash) {
+        log('[Share] Guest session for share', shareHash);
+        startShareGuest(shareHash);
+        return;
+    }
+
     // Test mode: skip Supabase auth and inject a fake session.
     // Activated via ?testMode=true URL parameter (localhost only).
     // Optional ?testUserId=<id> sets the user identity (for multi-coach tests).

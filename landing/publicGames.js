@@ -64,7 +64,10 @@
             ? '<span class="pg-live-badge">LIVE</span>'
             : '<span class="pg-date">' + esc(gameDateLabel(game.gameStartTimestamp)) + '</span>';
         var scores = game.scores || {};
-        var viewerUrl = API_BASE + '/view/' + encodeURIComponent(game.hash);
+        // Same-origin: the app renders share links itself (/view/<hash>,
+        // teams/shareGuest.js) on every static origin. On the API host's
+        // copy of this page the backend redirects to the canonical URL.
+        var viewerUrl = '/view/' + encodeURIComponent(game.hash);
         return '<a class="pg-card" href="' + esc(viewerUrl) + '">' +
             '<div class="pg-card-top">' + badge + '</div>' +
             '<div class="pg-teams">' +
@@ -89,12 +92,14 @@
                 list.innerHTML = games.map(renderCard).join('');
                 section.style.display = '';
 
-                // The hero's "Watch Live Games" button predates this section
-                // and points at the browse viewer, which is empty for
-                // anonymous visitors (auth-required listings). While public
-                // games exist, send the button here instead.
+                // The hero's "Watch Live Games" button has nowhere to go
+                // unless public games exist (there is no browse-all page),
+                // so it stays hidden until this section has cards.
                 var watchBtn = document.getElementById('watchLiveGamesBtn');
-                if (watchBtn) watchBtn.href = '#publicGamesSection';
+                if (watchBtn) {
+                    watchBtn.href = '#publicGamesSection';
+                    watchBtn.style.display = '';
+                }
             })
             .catch(function () { /* leave hidden — landing must never break */ });
     }

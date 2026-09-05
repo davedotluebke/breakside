@@ -18,7 +18,11 @@ Sections, in roughly priority order:
 ### 🧪 Field-test the two features shipped 2026-07-26 (share links + set tracking)
 
 - [ ] **Share link opened in iOS Safari asked for a login, then rendered unstyled**
-      (2026-09-02). The viewer is meant to be public — no sign-in, ever. Observed: tapping a
+      (2026-09-02). **Re-test after the 2026-09-05 `share-route` merge:** share links
+      now open as a guest session inside the app (no sign-in gate on that route), and
+      the "unstyled" half was the app's relative asset URLs resolving under `/view/` —
+      the head shim now boots from `/?share=` (see ARCHITECTURE.md § Share Links).
+      Original observation kept below. The viewer is meant to be public — no sign-in, ever. Observed: tapping a
       `/view/{hash}` link on the phone showed the *app's* login screen; after signing in (as
       the coach) the result was an unstyled page of bare elements. So the app shell ran
       where the viewer should have. Suspects: iOS routing an in-scope link into the
@@ -54,9 +58,9 @@ restart breakside`; confirm that happened before treating anything here as broke
       the last-known state under the "expired" banner, not a blank or error page.
 - [ ] **"List publicly"**: game appears in the landing page's "Happening on
       Breakside" and disappears again when the share is revoked or expires.
-- [ ] Worth knowing: **two viewer copies are deployed** — `www/viewer/` (S3, synced
-      by the same Action) and `api/static/viewer/` (FastAPI). Share links route to
-      the API copy. If the two ever diverge, check that first.
+- [x] ~~Worth knowing: **two viewer copies are deployed**~~ — obsolete since
+      2026-09-05: the standalone viewer is gone; share links open inside the PWA
+      (`teams/shareGuest.js`), so there is one copy, deployed with the app.
 
 **Set tracking (zone)** — invisible until a team opts in via Team Settings → Set Tracking.
 

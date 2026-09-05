@@ -136,7 +136,6 @@ FastAPI app in `main.py`. File-based JSON storage, no database.
 |-----------|---------|
 | `storage/` | CRUD modules for games, teams, players, users, memberships, invites, shares, controller state |
 | `auth/` | Supabase JWT validation and FastAPI auth dependencies |
-| `static/viewer/` | Public game viewer |
 
 Key patterns:
 - Full game state sent on each sync (stateless API); every sync writes a timestamped version backup.

@@ -3,7 +3,8 @@
  * BOTH short links:
  *
  *   /join/<code>  → /landing/join.html?code=<code>        (added 2026-07-22, 32a51ed)
- *   /view/<hash>  → /viewer/?share=<hash>                 (share links)
+ *   /view/<hash>  → left alone: the app opens it as a guest session
+ *                   (teams/shareGuest.js; until 2026-09 → /viewer/?share=)
  *
  * Why a test at all: on www/staging neither path exists as a route. The S3
  * website config's ErrorDocument serves the PWA's index.html instead, and
@@ -80,36 +81,28 @@ test('invite codes keep their case (redemption is case-insensitive server-side)'
 
 // ── /view/<hash> — share links ──────────────────────────────────────────
 
-test('share link stays on the origin the reader clicked', () => {
-    // Every static origin ships its own /viewer/ copy (the deploy's "Sync
-    // viewer to S3" step), so there is no reason to bounce the reader to
-    // api.breakside.pro — the viewer maps its own API calls.
+test('share link boots the app from the root with the hash as ?share=', () => {
+    // Since 2026-09 the app renders share links itself (teams/shareGuest.js,
+    // checked before auth) — but index.html's asset URLs are relative, so it
+    // must boot from `/`, not from under /view/. Same origin, every origin.
     for (const host of [
         'www.breakside.pro', 'breakside.pro', 'staging.breakside.pro',
-        'www.breakside.us', 'breakside.us', 'luebke.us',
+        'www.breakside.us', 'breakside.us', 'luebke.us', 'localhost:3019',
     ]) {
         assert.equal(
             resolve(`https://${host}/view/a8f3e2b1c9d4`),
-            '/viewer/?share=a8f3e2b1c9d4',
+            '/?share=a8f3e2b1c9d4',
             `wrong redirect for ${host}`
         );
     }
 });
 
-test('localhost hands off to the dev backend, honoring an ?api= override', () => {
-    assert.equal(
-        resolve('http://localhost:3019/view/a8f3e2b1c9d4'),
-        'http://localhost:8000/view/a8f3e2b1c9d4'
-    );
-    assert.equal(
-        resolve('http://localhost:3019/view/a8f3e2b1c9d4?api=http://localhost:8005'),
-        'http://localhost:8005/view/a8f3e2b1c9d4'
-    );
-    // ?api=reset means "clear the override", not "use 'reset' as a URL"
-    assert.equal(
-        resolve('http://127.0.0.1:3019/view/a8f3e2b1c9d4?api=reset'),
-        'http://localhost:8000/view/a8f3e2b1c9d4'
-    );
+test('share link redirect keeps the rest of the query (a dev ?api= override)', () => {
+    const to = resolve('http://localhost:3019/view/a8f3e2b1c9d4?api=http://localhost:8005');
+    assert.ok(to && to.startsWith('/?'), to);
+    const q = new URLSearchParams(to.slice(2));
+    assert.equal(q.get('share'), 'a8f3e2b1c9d4');
+    assert.equal(q.get('api'), 'http://localhost:8005');
 });
 
 // ── everything else must boot the app untouched ─────────────────────────
@@ -136,7 +129,7 @@ test('malformed codes/hashes do not redirect', () => {
 
 test('a trailing slash is tolerated on both links', () => {
     assert.equal(resolve('https://www.breakside.pro/view/a8f3e2b1c9d4/'),
-        '/viewer/?share=a8f3e2b1c9d4');
+        '/?share=a8f3e2b1c9d4');
     assert.equal(resolve('https://www.breakside.pro/join/ABC12/'),
         '/landing/join.html?code=ABC12');
 });

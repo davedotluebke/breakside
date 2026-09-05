@@ -776,3 +776,157 @@ td.player-mmp,
     cursor: pointer;
 }
 
+
+/* =============================================================================
+   Share-link guest (teams/shareGuest.js) — the Review screen shown to an
+   anonymous spectator at /view/<hash>. body.share-guest hides every control
+   that needs an account or a team; the rest is the live/final badge, the
+   connection state, the expired banner, the footer, and the error screen.
+   ============================================================================= */
+
+body.share-guest .header-menu-container,
+body.share-guest #backFromSummaryBtn,
+body.share-guest #shareGameSummaryBtn,
+body.share-guest #exportGameSummaryBtn,
+body.share-guest #gameSummaryExportGroup,
+body.share-guest #gameSummaryScreen footer {
+    display: none !important;
+}
+
+/* Only a guest sees the badge / connection state / footer */
+.share-status-badge,
+.share-connection,
+.share-guest-footer {
+    display: none;
+}
+
+body.share-guest .share-status-badge,
+body.share-guest .share-connection {
+    display: inline-block;
+}
+
+body.share-guest .share-guest-footer {
+    display: block;
+}
+
+.share-status-badge {
+    margin-left: auto;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.share-status-badge.status-live {
+    background: var(--color-danger);
+    color: var(--white);
+    animation: share-live-pulse 2s infinite;
+}
+
+.share-status-badge.status-stale {
+    background: var(--text-muted);
+    color: var(--surface-card);
+}
+
+.share-status-badge.status-final {
+    background: var(--btn-dark);
+    color: var(--white);
+}
+
+@keyframes share-live-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.share-connection {
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.share-connection.connecting { background: var(--color-warning); color: var(--black); }
+.share-connection.connected { background: var(--color-success); color: var(--white); }
+.share-connection.disconnected { background: var(--color-danger); color: var(--white); }
+
+.share-expired-banner {
+    background: var(--color-warning-surface);
+    border: 1px solid var(--color-warning-border);
+    color: var(--color-warning-text);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin: 0.5rem 1rem 0;
+    font-size: 0.9rem;
+}
+
+.share-guest-footer {
+    text-align: center;
+    padding: 1.5rem 1rem 2rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.share-guest-footer a {
+    color: var(--brand-orange);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.share-guest-footer a:hover {
+    text-decoration: underline;
+}
+
+.share-guest-footer-privacy {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    opacity: 0.85;
+}
+
+.share-guest-footer-privacy a {
+    font-weight: 400;
+    text-decoration: underline;
+}
+
+.share-error {
+    max-width: 480px;
+    margin: 4rem auto;
+    text-align: center;
+    padding: 2rem 1.5rem;
+}
+
+.share-error-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.share-error h1 {
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--text-primary);
+}
+
+.share-error p {
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+}
+
+.share-error-cta {
+    display: inline-block;
+    background: var(--brand-orange);
+    color: var(--white);
+    padding: 0.6rem 1.4rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.share-error-cta:hover {
+    background: var(--brand-orange-deep);
+}

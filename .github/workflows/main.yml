@@ -28,18 +28,8 @@ on:
       # the build number.
       - '!.claude/**'
       - '!.gitignore'
-      # ...but the PUBLIC VIEWER is frontend that happens to live under
-      # breakside_server/ (the API serves the same files at /static/viewer/,
-      # and the "Sync viewer to S3" step below publishes them to
-      # s3://breakside.pro/viewer/, which is where /view/{hash} lands).
-      # Re-include it AFTER the `!breakside_server/**` line above — without
-      # this, a viewer-only commit matches nothing and the whole run is
-      # skipped, so the change never reaches S3. Three commits have already
-      # been silently dropped this way (they only shipped because a later
-      # mixed commit swept them along), and the next one was a security fix.
       # `.github/**` is deliberately absent from the exclusions, so a workflow
       # edit still triggers a run and can be verified by pushing it.
-      - 'breakside_server/static/viewer/**'
   # Manual trigger: lets you deploy without inventing a commit — e.g. after
   # (re)adding the AWS secrets, or to re-push the current main to S3.
   workflow_dispatch:
@@ -97,13 +87,6 @@ jobs:
           aws s3 cp service-worker.js s3://breakside.pro/service-worker.js \
             --cache-control "no-cache, no-store, must-revalidate" \
             --content-type "application/javascript"
-
-      - name: Sync viewer to S3
-        run: |
-          # --delete: the viewer directory on S3 mirrors the repo directory
-          # exactly, so a file retired here (viewer-replay.js, 2026-09) does
-          # not linger on the bucket.
-          aws s3 sync breakside_server/static/viewer/ s3://breakside.pro/viewer/ --delete
 
       - name: Invalidate CloudFront cache
         run: |

@@ -48,7 +48,6 @@ Breakside uses a hybrid architecture with a Progressive Web App (PWA) frontend h
 | **PWA** | https://www.breakside.pro | CloudFront → S3 |
 | **PWA (redirect)** | https://breakside.pro | EC2 → www |
 | **Staging PWA** | https://staging.breakside.pro | CloudFront → S3 |
-| **Static Viewer** | https://www.breakside.pro/viewer/ | CloudFront → S3 |
 | **API** | https://api.breakside.pro | EC2 → FastAPI |
 | **Health Check** | https://api.breakside.pro/health | EC2 |
 
@@ -674,34 +673,20 @@ Layers, bottom-up (all under `playByPlay/`):
   phone.
   `pbpPossession` and the toast are late-bound (`window.*`): importing
   either closes a cycle through `teams/teamList → teams/gameSummary`.
-- **Share viewer** (`breakside_server/static/viewer/viewer.js`, plan
-  Decision 4c) — the public viewer is a single ES module that mounts the
-  SAME `replayView` above one card per point, and renders those cards from
-  `buildGameLogEntries` itself (the entries grouped by `pointIdx`; the
-  `roster` entry becomes the card title, every other line carries
-  `data-entry` exactly as the app's Log tab does, so the view marks and
-  seeks by them directly). It imports the PWA's leaf modules by
-  URL-relative path (`../playByPlay/…`, `../store/models.js`,
-  `../utils/gameLogRenderer.js`): from `/viewer/` on S3 that is the PWA
-  root, from `/static/viewer/` on the API host it is the
-  `/static/{playByPlay,store,utils,settings,css,images}` mounts `main.py`
-  adds (registered before `/static`, or that mount would shadow them). The
-  import closure of `replayView.js` and of `viewer.js` is therefore pinned
-  to a LEAF allowlist by `tests/unit/replayLeafGraph.test.mjs` — nothing
-  under either may reach `store/storage.js`, `utils/helpers.js` or `game/*`
-  (`fieldRender` and `replayEdit` read `window.advancedSettings` / inline a
-  stub for exactly this reason). The viewer's raw JSON events become model
+- **Share guests** (`teams/shareGuest.js`, plan Decision 4c) — a share
+  link opens the PWA itself as a read-only guest and lands on the same
+  Review screen mount above, with `live` on for a game in progress and no
+  `canEdit` (so the ✎ never exists). The raw share JSON becomes model
   instances through `store/models.js hydrateGame()` (players as
-  `{name, id}` refs, no roster) so the entries can summarize them — the
-  viewer has no event phrasing of its own. Its stylesheet references only
-  `css/tokens.css` variables and follows `data-theme` (a coach's saved
-  app preference when present — same origin — else the device; see the
-  theme boot in its `index.html`). The public share payload carries
-  `from`/`to`/`at`/`hang`, possession `startedAt` and the point's
-  `startingPosition` + timestamps for this (§ Share Links). No `canEdit`
-  is passed, so the ✎ never shows there. Until 2026-09 the viewer was a
-  classic script with a hand-copied duplicate of every event phrasing plus
-  dead browse/sync-status chrome (branch `viewer-shell` removed both).
+  `{name, id}` refs, no roster) so `buildGameLogEntries` can summarize
+  them; a poll refresh calls `refreshGameSummaryForShare()`, which redraws
+  the lines and hands the mounted view `onLogUpdated()` instead of
+  re-mounting. See § Share Links. (Until 2026-09 this was a separate
+  viewer app under `breakside_server/static/viewer/` that imported the
+  replay stack by URL from another prefix, which is why `replayEngine`,
+  `fieldRender` and `replayEdit` are leaf modules reading
+  `window.advancedSettings` / inlining stubs — a constraint no longer
+  enforced, but still cheap to keep.)
 - **`eventAmend.js`** (pure leaf, node-tested) — the rules behind an
   amendment, shared with the Full tab's modifier strip and the Field tab's
   marker drag: the modifier tables, throw geometry → huck/reset/swing, the
@@ -874,12 +859,6 @@ breakside_server/
 │   ├── share_storage.py     # Game sharing management
 │   ├── controller_storage.py # In-memory game controller state (single-worker!)
 │   └── index_storage.py # Cross-entity index management
-│
-├── static/
-│   └── viewer/          # Static game viewer
-│       ├── index.html
-│       ├── viewer.js
-│       └── viewer.css
 │
 ├── auth/                # Authentication
 │   ├── __init__.py
@@ -1726,7 +1705,7 @@ Coaches poll the ping endpoint to maintain role claims and detect other coaches.
 |------|---------|
 | `/` | Landing page (intro, login, download instructions) |
 | `/app/` | PWA entry point |
-| `/view/{game-hash}` | Game share link → standalone viewer in share mode (no auth) |
+| `/view/{game-hash}` | Game share link → the PWA in a read-only guest session (no auth); the head shim boots it as `/?share={hash}` |
 | `/join/{code}` | Invite short link → redirects to `/landing/join.html?code={code}` |
 
 ### Share Links (public game viewing)
@@ -1735,43 +1714,47 @@ A coach mints a share link from the **Share Game** dialog (in-game hamburger
 menu, or the Share button on the game summary). The API returns
 `https://www.breakside.pro/view/{hash}` (12-char hex hash; links expire —
 1 day to 6 months, revocable from the same dialog). The destination is the
-**standalone viewer in share mode**, which every origin serves from its own
-copy — so the reader never leaves the host they clicked.
+**PWA itself in a read-only guest session** (`teams/shareGuest.js`): no
+account, no Supabase init, no team load — the Review screen
+(`teams/gameSummary.js`) with its stats table, game log and field replay,
+every account-only control hidden by `body.share-guest`, and editing never
+offered (no `canEdit` is passed, so the ✎ does not exist). Until 2026-09
+this was a separate viewer app under `breakside_server/static/viewer/`
+with its own copy of the event phrasing and its own palette (branches
+`viewer-shell`, `share-route` retired it).
 
 **How `/view/{hash}` resolves** (same funnel pattern as `/join/{code}`, and
 like it, a *same-origin* bounce):
 
 | Origin | Mechanism |
 |--------|-----------|
-| www/staging (CloudFront→S3) | No `/view/*` route exists; the S3 404 fallback serves the PWA `index.html`, whose inline `<head>` shim redirects to **`/viewer/?share={hash}` on the same origin** — the deploy syncs the viewer there (the "Sync viewer to S3" step in `.github/workflows/main.yml`; `deploy-staging.sh` does the same). The viewer's own `getApiBaseUrl()` maps www/staging → `api.breakside.pro` for its data calls |
-| api.breakside.pro (FastAPI) | `routers/static_files.py` 302-redirects to `/static/viewer/?share={hash}` (the viewer's path under the API host) |
-| localhost (dev) | No `/viewer/` copy is served locally, so the shim hands off to the dev backend's own `/view` route (honoring an `?api=` override). `scripts/dev-server.sh` serves `index.html` for `/join/*` and `/view/*` so both shims are testable locally — production's S3 `ErrorDocument` equivalent |
+| www/staging (CloudFront→S3) | No `/view/*` route exists; the S3 404 fallback serves the PWA `index.html`, whose inline `<head>` shim redirects to **`/?share={hash}`** (keeping any other query, e.g. a dev `?api=`). `main.js initializeApp()` checks `matchShareRoute()` BEFORE auth and hands off to `startShareGuest()` |
+| api.breakside.pro (FastAPI) | `routers/static_files.py` 302-redirects to the canonical www URL (`routers/shares.py share_url`) — the API host serves no copy of the app at that path |
+| localhost (dev) | `scripts/dev-server.sh` serves `index.html` for `/join/*` and `/view/*` (production's S3 `ErrorDocument` equivalent), so the same shim runs; pair a dev backend with `?api=` |
 
-Do NOT serve the viewer's `index.html` directly at `/view/{hash}` — its
-relative asset URLs (viewer.js/viewer.css) would resolve under `/view/` and
-break, exactly like the join-page trap (`test_shares.py::TestViewShortLink`
-pins the redirect). Those asset paths stay **relative** on purpose (unlike
-`landing/join.html`, which 32a51ed made absolute): the same files are served
-at two different prefixes — `/static/viewer/` on the API host and `/viewer/`
-on S3 — so absolute paths would break one of them.
+Why the shim bounces to `/` instead of booting in place: every asset
+reference in `index.html` is **relative**, so at `/view/{hash}` they would
+resolve under `/view/` and 404 — the "unstyled page of bare elements" seen
+on 2026-09-02. `tests/unit/shortLinkShim.test.mjs` pins the redirect;
+`test_shares.py::TestViewShortLink` pins the API host's.
 
-⚠️ **Viewer-only changes do not reach S3.** The production workflow's
-`paths-ignore` includes `breakside_server/**`, so a commit touching only
-`breakside_server/static/viewer/` never triggers the deploy that syncs
-`/viewer/`. The www/staging copies then silently lag the API-hosted one.
-Touch a root-level file in the same commit, or run `deploy-staging.sh` /
-re-run the workflow manually.
-
-**Share mode in the viewer** (`static/viewer/viewer.js`): all data flows
-through the public endpoints only — `GET /api/share/{hash}` (full game +
-change stamp) and `GET /api/share/{hash}/poll` (stamp only; the full game is
-refetched when the stamp moves; stamp = `current.json` mtime_ns). Browse
-tabs/sync chrome are hidden (`body.share-mode`) because the listing
-endpoints require auth and come back empty for anonymous visitors. Polling
-pauses while the tab is hidden. A share dying mid-view (410) keeps the last
-state with an "expired" banner; a dead link on first load gets an error view.
-The LIVE badge requires a missing `gameEndTimestamp` AND recent activity
-(~30 min) — an abandoned game is not "live".
+**The guest session** (`teams/shareGuest.js`): all data flows through the
+public endpoints only — `GET /api/share/{hash}` (full game + change stamp)
+and `GET /api/share/{hash}/poll` (stamp only; the full game is refetched
+when the stamp moves; stamp = `current.json` mtime_ns). The raw JSON is
+hydrated into model events by `store/models.js hydrateGame()` (players as
+`{name, id}` refs resolved against the roster snapshot; no roster objects)
+and shown with `showGameSummaryForShare()`; a moved stamp goes through
+`refreshGameSummaryForShare()`, which redraws score / stats / log lines in
+place and lets the mounted replay pick up the new tail rather than
+re-mounting it. Polling pauses while the tab is hidden. A share dying
+mid-view (410) keeps the last state with an "expired" banner; a dead link
+on first load gets `#shareErrorScreen`. The LIVE badge requires a missing
+`gameEndTimestamp` AND recent activity (~30 min) — an abandoned game is not
+"live". Theme: a guest follows the device (`auto`) instead of the app's
+dark default, unless a preference is stored on that origin (a coach
+opening a link on their own phone) — the pre-paint boot in `index.html`
+and `startShareGuest()` make the same call.
 
 **What the public payload carries** (`routers/shares.py` `_PUBLIC_*_FIELDS`,
 pinned by `test_shares.py::TestPublicGameProjection`): names/ids of the
@@ -1781,9 +1764,6 @@ the viewer's field replay (2026-09-05, § Replay viewer) — each event's
 `startedAt`, and the point's `startingPosition` / `startTimestamp` /
 `endTimestamp`. Still stripped: `description`, `calledBy`/`calledByName`,
 `pullerGender`, roster gender/number/position, and every coaching field.
-The API host also mounts the PWA's leaf directories under `/static/` for
-the viewer's replay imports (see § Replay viewer, share-viewer port) — a
-backend change, so it needs the deploy script's restart.
 
 **Public listing is a separate opt-in.** A share link alone never lists the
 game anywhere; `POST /api/games/{id}/share?listed=true` (the dialog's "List
@@ -1991,9 +1971,6 @@ aws s3 sync . s3://breakside.pro/ \
   --exclude "*.py" \
   --exclude "*.md" \
   --exclude ".DS_Store"
-
-# Deploy viewer
-aws s3 sync breakside_server/static/viewer/ s3://breakside.pro/viewer/
 
 # Invalidate cache
 aws cloudfront create-invalidation --distribution-id <distribution-id> --paths "/*"

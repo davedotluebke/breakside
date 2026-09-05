@@ -60,9 +60,62 @@ function showGameSummaryPostGame() {
 }
 
 /**
- * Render the full game summary: score, stats table, event log.
+ * Show a game a share-link GUEST is watching (teams/shareGuest.js): the
+ * same screen, read-only — no editing, and the account-only controls are
+ * hidden by `body.share-guest` (index.html). `live` offers the replay's
+ * Live speed for an in-progress game.
+ * @param {object} game - hydrated game (store/models.js hydrateGame)
  */
-function renderGameSummary(game) {
+function showGameSummaryForShare(game, { live = false } = {}) {
+    gameSummaryOrigin = 'selectTeamScreen';
+    renderGameSummary(game, { guest: true, live });
+}
+
+/**
+ * A share guest's game changed (the poll stamp moved): redraw score, stats
+ * and log lines in place and let the mounted replay pick up the new tail,
+ * rather than re-mounting it (which would drop the playhead / live-follow).
+ */
+function refreshGameSummaryForShare(game) {
+    if (!game) return;
+    _lastRenderedGame = game;
+    renderSummaryScore(game);
+    renderGameSummaryStatsTable(game);
+    renderGameSummaryTeamStats(game);
+    if (summaryReplayView) {
+        _summaryLookup = buildPointPlayerLookup(game);
+        _entryOptions = buildSummaryEntryOptions(game, _summaryLookup);
+        renderSummaryLogLines();
+        summaryReplayView.onLogUpdated();
+    } else {
+        // Nothing mounted yet (no located events so far) — a full render
+        // tries again, mounting once the first located play arrives.
+        renderGameSummaryEventLog(game, { live: true, editable: false });
+    }
+}
+
+function renderSummaryScore(game) {
+    // "Final Score" is a lie while a share guest watches a game in progress.
+    const heading = document.querySelector('#finalScore h3');
+    if (heading) heading.textContent = (game.gameEndTimestamp || !document.body.classList.contains('share-guest')) ? 'Final Score' : 'Score';
+    const teamNameEl = document.getElementById('teamName');
+    const oppNameEl = document.getElementById('opponentName');
+    const teamScoreEl = document.getElementById('teamFinalScore');
+    const oppScoreEl = document.getElementById('opponentFinalScore');
+    if (teamNameEl) teamNameEl.textContent = game.team || 'My Team';
+    if (oppNameEl) oppNameEl.textContent = game.opponent || 'Opponent';
+    if (teamScoreEl) teamScoreEl.textContent = game.scores?.[Role.TEAM] || game.scores?.team || 0;
+    if (oppScoreEl) oppScoreEl.textContent = game.scores?.[Role.OPPONENT] || game.scores?.opponent || 0;
+}
+
+/**
+ * Render the full game summary: score, stats table, event log.
+ * @param {object} game
+ * @param {object} [opts]
+ * @param {boolean} [opts.guest] - share-link guest: no editing
+ * @param {boolean} [opts.live] - offer the replay's Live speed
+ */
+function renderGameSummary(game, { guest = false, live = false } = {}) {
     if (!game) return;
     _lastRenderedGame = game;
 
@@ -73,15 +126,7 @@ function renderGameSummary(game) {
     }
     gameSummarySortState = null;
 
-    // Score header
-    const teamNameEl = document.getElementById('teamName');
-    const oppNameEl = document.getElementById('opponentName');
-    const teamScoreEl = document.getElementById('teamFinalScore');
-    const oppScoreEl = document.getElementById('opponentFinalScore');
-    if (teamNameEl) teamNameEl.textContent = game.team || 'My Team';
-    if (oppNameEl) oppNameEl.textContent = game.opponent || 'Opponent';
-    if (teamScoreEl) teamScoreEl.textContent = game.scores?.[Role.TEAM] || game.scores?.team || 0;
-    if (oppScoreEl) oppScoreEl.textContent = game.scores?.[Role.OPPONENT] || game.scores?.opponent || 0;
+    renderSummaryScore(game);
 
     // Hide/show footer buttons based on origin
     const anotherGameBtn = document.getElementById('anotherGameBtn');
@@ -91,7 +136,7 @@ function renderGameSummary(game) {
 
     renderGameSummaryStatsTable(game);
     renderGameSummaryTeamStats(game);
-    renderGameSummaryEventLog(game);
+    renderGameSummaryEventLog(game, { live, editable: !guest });
 
     // Show the export button (and its player menu) if there are stats
     const exportBtn = document.getElementById('exportGameSummaryBtn');
@@ -282,51 +327,47 @@ function pointClassificationLabel(kind) {
  * (utils/gameLogRenderer.js, G6 merge); this surface adds per-point
  * classification badges and omits the version/roster header lines.
  */
-function renderGameSummaryEventLog(game) {
+function renderGameSummaryEventLog(game, { live = false, editable = true } = {}) {
     const logEl = document.getElementById('gameSummaryEventLog');
     if (!logEl) return;
 
-    const teamName = game.team || 'My Team';
-    const opponent = game.opponent || 'Opponent';
-
     // "Point N roster:" entries may be player ids (id-era games) — resolve to
     // display names; event lines already carry resolved {name, id} refs.
-    const lookup = buildPointPlayerLookup(game);
-    const entryOptions = {
-        teamName,
-        opponentName: opponent,
-        scoreBadge: (point) => pointClassificationLabel(classifyPoint(point)),
-        resolvePlayerName: entry => lookup(entry).name,
-    };
-    const renderLines = () => {
-        logEl.innerHTML = renderGameLogEntriesHTML(buildGameLogEntries(game, entryOptions), teamName);
-    };
-    renderLines();
+    _summaryLookup = buildPointPlayerLookup(game);
+    _entryOptions = buildSummaryEntryOptions(game, _summaryLookup);
+    renderSummaryLogLines();
 
     // Replay view (docs/replay-viewer-plan.md step 7): the field playback
-    // above the log, for games with field positions. Never live here — the
-    // summary shows a stored game. Re-mounted on every render since the
-    // section is rebuilt per game.
+    // above the log, for games with field positions. Live only for a share
+    // guest watching a game in progress; a coach's summary shows a stored
+    // game. Re-mounted on every render since the section is rebuilt per game
+    // (a guest's poll refresh goes through refreshGameSummaryForShare instead).
     if (summaryReplayView) { try { summaryReplayView.destroy(); } catch (e) { /* gone */ } summaryReplayView = null; }
     const host = document.getElementById('gameSummaryEventLogSection');
     if (host) {
-        summaryReplayView = mountReplayView({
+        const cfg = {
             host: logEl.parentElement || host, logEl,
-            getGame: () => game,
-            getEntryOptions: () => entryOptions,
-            getPlayerByName: name => { const r = lookup(name); return r && r.obj ? r.obj : null; },
-            live: false,
+            getGame: () => _lastRenderedGame,
+            getEntryOptions: () => _entryOptions,
+            getPlayerByName: name => { const r = _summaryLookup(name); return r && r.obj ? r.obj : null; },
+            live,
+        };
+        if (editable) {
             // Editing (step 8): any coach of the team, not viewers. After a
             // write, redraw the lines in place (the view re-marks them) and
-            // recompute the stats tables from the amended events.
-            canEdit: () => !isViewer(),
-            editDeniedMessage: 'Viewers can’t edit plays',
-            onEdited: () => {
-                renderLines();
-                renderGameSummaryStatsTable(game);
-                renderGameSummaryTeamStats(game);
-            },
-        });
+            // recompute the stats tables from the amended events. A share
+            // guest gets no canEdit at all, so the ✎ never exists for them.
+            Object.assign(cfg, {
+                canEdit: () => !isViewer(),
+                editDeniedMessage: 'Viewers can’t edit plays',
+                onEdited: () => {
+                    renderSummaryLogLines();
+                    renderGameSummaryStatsTable(_lastRenderedGame);
+                    renderGameSummaryTeamStats(_lastRenderedGame);
+                },
+            });
+        }
+        summaryReplayView = mountReplayView(cfg);
         if (summaryReplayView) {
             // Keep the section heading above the stage: mountReplayView
             // prepends to its host, so re-home the root after the <h3>.
@@ -337,6 +378,28 @@ function renderGameSummaryEventLog(game) {
     }
 }
 let summaryReplayView = null;
+// The lookup and buildGameLogEntries options the log lines were last
+// rendered with. The replay reads the SAME options (getEntryOptions) so its
+// entry indices line up with the lines' data-entry attributes; a refresh
+// replaces both together.
+let _summaryLookup = null;
+let _entryOptions = null;
+
+function buildSummaryEntryOptions(game, lookup) {
+    return {
+        teamName: game.team || 'My Team',
+        opponentName: game.opponent || 'Opponent',
+        scoreBadge: (point) => pointClassificationLabel(classifyPoint(point)),
+        resolvePlayerName: entry => lookup(entry).name,
+    };
+}
+
+function renderSummaryLogLines() {
+    const logEl = document.getElementById('gameSummaryEventLog');
+    if (!logEl || !_lastRenderedGame || !_entryOptions) return;
+    logEl.innerHTML = renderGameLogEntriesHTML(
+        buildGameLogEntries(_lastRenderedGame, _entryOptions), _entryOptions.teamName);
+}
 
 /**
  * Export game summary stats to an .xlsx workbook (single sheet) and
@@ -389,4 +452,7 @@ document.getElementById('shareGameSummaryBtn')?.addEventListener('click', () => 
 });
 
 // --- ES-module exports ---
-export { showGameSummaryFromList, showGameSummaryPostGame, getGameSummaryBackTarget };
+export {
+    showGameSummaryFromList, showGameSummaryPostGame, getGameSummaryBackTarget,
+    showGameSummaryForShare, refreshGameSummaryForShare,
+};

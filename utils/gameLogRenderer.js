@@ -17,9 +17,9 @@
  * 2026-09 (replay step 2) — the TEXT output is byte-identical to before; the
  * golden test pins it. Any format change now lands here, once.
  *
- * The public viewer (breakside_server/static/viewer/viewer.js) is a consumer
- * too: it imports this module by relative URL and groups the entries into one
- * card per point, so it never re-phrases an event (2026-09, viewer-shell).
+ * Share-link guests (teams/shareGuest.js) see the post-game summary surface
+ * above, so a public share link never re-phrases an event either (the
+ * separate viewer app that once did was retired 2026-09).
  *
  * This module is a pure leaf (no imports, no DOM) so node:test can exercise it
  * directly: tests/unit/gameLogRenderer.test.mjs.

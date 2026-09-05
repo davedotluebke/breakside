@@ -245,8 +245,8 @@ class PlayerScrubber:
     has to win over the small risk of over-scrubbing.
 
     **The nickname is a display name, not decoration.** Both the PWA
-    (``utils/helpers.js`` formatPlayerName) and the public viewer
-    (``static/viewer/viewer.js`` resolvePlayerName) render ``nickname ||
+    (``utils/helpers.js`` formatPlayerName) and a share-link guest session
+    (``teams/shareGuest.js`` resolvePlayerName) render ``nickname ||
     name``, so a stored display-name field holds the NICKNAME whenever the
     player has one. A legacy ID-less event is therefore *more* likely to carry
     "Seph" than "Persephone", which makes the nickname the common case for

@@ -76,8 +76,9 @@ aws s3 cp "$STAGED_SW" "s3://$BUCKET/service-worker.js" \
 
 rm -f "$STAGED_VERSION" "$STAGED_SW"
 
-# Sync viewer files
-aws s3 sync "$DIR/breakside_server/static/viewer/" "s3://$BUCKET/viewer/" --delete
+# The standalone viewer that used to sync to /viewer/ is gone (2026-09):
+# share links are a route in the PWA now. Its bucket prefix was removed
+# once by hand (`aws s3 rm --recursive`); nothing here recreates it.
 
 echo "Deployed to https://staging.breakside.pro"
 

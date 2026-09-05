@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 
 from ._shared import safe_static_path
+from .shares import share_url
 
 router = APIRouter()
 
@@ -123,17 +124,17 @@ async def join_page(code: str):
 @router.get("/view/{hash}")
 async def view_shared_game(hash: str):
     """
-    Redirect public share links to the standalone game viewer.
+    Send a public share link to the app that renders it.
 
-    Same trap as /join/{code}: serving the viewer's index.html directly at
-    /view/{hash} would break its relative asset URLs (viewer.js/viewer.css
-    would resolve under /view/ and this route would answer them with HTML).
-    Redirect to the real viewer app, which reads ?share= and enters share
-    mode (public /api/share/{hash} data path, live polling).
+    Share links open as a read-only guest session inside the PWA
+    (teams/shareGuest.js); the canonical URL is on the www origin, whose
+    S3 404 fallback serves the app's index.html for /view/*. The API host
+    serves no copy of the app at that path, so bounce there — the same
+    URL the Share dialog minted (routers/shares.py share_url).
     """
     if not (hash.isascii() and hash.isalnum()):
         raise HTTPException(status_code=404, detail="Not found")
-    return RedirectResponse(url=f"/static/viewer/?share={hash}", status_code=302)
+    return RedirectResponse(url=share_url(hash), status_code=302)
 
 
 # =============================================================================
@@ -154,18 +155,6 @@ async def landing_page():
 async def serve_landing_file(filename: str):
     """Serve landing page static files."""
     return _serve_static_file(landing_dir, filename)
-
-
-# =============================================================================
-# Viewer redirect (user-friendly URL)
-# =============================================================================
-
-@router.get("/viewer/")
-@router.get("/viewer")
-async def viewer_redirect():
-    """Redirect /viewer/ to the static viewer."""
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/static/viewer/", status_code=302)
 
 
 # PWA file serving - MUST be last to avoid catching API routes

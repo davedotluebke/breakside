@@ -3,8 +3,8 @@ Share link endpoints (public no-auth game viewing).
 
 The public share URL is https://www.breakside.pro/view/{hash} — see
 ARCHITECTURE.md § Share Links for how that path resolves on each origin
-(S3 shim redirect on www/staging, 302 in static_files.py on the API host,
-landing at /static/viewer/?share={hash}).
+(the PWA's head shim boots a guest session from /?share={hash} on
+www/staging; static_files.py 302s to the canonical URL on the API host).
 """
 from datetime import datetime, timezone
 
@@ -32,7 +32,7 @@ from ._shared import (
 router = APIRouter()
 
 
-def _share_url(hash: str) -> str:
+def share_url(hash: str) -> str:
     """Canonical public URL for a share hash."""
     return f"https://www.breakside.pro/view/{hash}"
 
@@ -90,7 +90,7 @@ async def create_game_share(
 
     return {
         "share": share,
-        "url": _share_url(share["hash"])
+        "url": share_url(share["hash"])
     }
 
 
@@ -116,7 +116,7 @@ async def list_game_shares_endpoint(
     for share in shares:
         share_copy = dict(share)
         share_copy["isValid"] = is_share_valid(share)
-        share_copy["url"] = _share_url(share["hash"])
+        share_copy["url"] = share_url(share["hash"])
         shares_with_status.append(share_copy)
 
     return {"shares": shares_with_status, "count": len(shares_with_status)}
@@ -356,7 +356,7 @@ async def list_public_games(limit: int = Query(default=20, ge=1, le=100)):
         scores = game.get("scores") or {}
         cards[game_id] = {
             "hash": share["hash"],
-            "url": _share_url(share["hash"]),
+            "url": share_url(share["hash"]),
             "team": game.get("team", "Unknown"),
             "opponent": game.get("opponent", "Unknown"),
             "scores": {

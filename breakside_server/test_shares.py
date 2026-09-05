@@ -11,8 +11,8 @@ end-to-end contract added when sharing was wired up for real:
 - GET  /api/share/{hash}/poll is the cheap live-poll (stamp only, 410 on
   expiry/revoke so pollers stop)
 - GET  /api/public/games lists only valid listed shares, one card per game
-- GET  /view/{hash} 302s to /static/viewer/?share={hash} (never serves HTML
-  at /view/* — same relative-asset trap as /join/{code})
+- GET  /view/{hash} 302s to the canonical www share URL (the PWA renders
+  share links as a guest session; this host serves no copy of the app)
 
 Run: cd breakside_server && python -m pytest test_shares.py -v
 """
@@ -299,14 +299,14 @@ class TestPublicGamesList:
 
 
 class TestViewShortLink:
-    """/view/{hash} must REDIRECT to the viewer, never serve HTML in place —
-    serving a document at /view/<hash> would break the viewer's relative
-    asset URLs exactly like the /join/{code} trap did."""
+    """/view/{hash} on the API host must REDIRECT to the canonical share URL
+    (the PWA on www renders share links as a guest session), never serve
+    HTML in place — this host has no copy of the app at that path."""
 
-    def test_redirects_to_viewer_with_share_param(self, client, seeded):
+    def test_redirects_to_canonical_share_url(self, client, seeded):
         r = client.get("/view/a8f3e2b1c9d4", follow_redirects=False)
         assert r.status_code == 302
-        assert r.headers["location"] == "/static/viewer/?share=a8f3e2b1c9d4"
+        assert r.headers["location"] == "https://www.breakside.pro/view/a8f3e2b1c9d4"
 
     def test_asset_like_paths_rejected(self, client, seeded):
         for path in ("/view/viewer.js", "/view/viewer.css"):

@@ -36,7 +36,7 @@ In scope:
 
 - The web app at `www.breakside.pro` and `staging.breakside.pro`
 - The API at `api.breakside.pro`
-- The public game viewer served at `/viewer/` and `/view/{hash}`
+- Public game share links (`/view/{hash}`, rendered by the web app as a read-only guest session)
 - The code in this repository, including the deploy scripts under `scripts/`
   and the GitHub Actions workflow
 
