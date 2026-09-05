@@ -172,6 +172,7 @@ function switchTab(tabName) {
 
 function showHomeView() {
     stopPolling();
+    if (window.viewerReplay && typeof window.viewerReplay.destroy === 'function') window.viewerReplay.destroy();
     document.getElementById('home-view').classList.remove('hidden');
     document.getElementById('game-detail-view').classList.add('hidden');
     document.getElementById('team-detail-view').classList.add('hidden');
@@ -903,10 +904,19 @@ function renderGame(game) {
             content.classList.add('expanded');
         }
         pointEl.querySelector('.point-content').setAttribute('data-point-index', index);
+        pointEl.setAttribute('data-point', index);
     });
 
     if (isNearBottom) {
         window.scrollTo(0, document.body.scrollHeight);
+    }
+
+    // Field replay above the cards (viewer-replay.js, an ES module): mounts
+    // on the first game with located events, refreshes on every re-render.
+    // Live = follow the tail while the game is in progress.
+    if (window.viewerReplay && typeof window.viewerReplay.update === 'function') {
+        try { window.viewerReplay.update(game, { live: !game.gameEndTimestamp }); }
+        catch (err) { console.error('Replay update failed:', err); }
     }
 }
 
@@ -996,19 +1006,22 @@ const KNOWN_EVENT_TYPES = ['Throw', 'Turnover', 'Defense', 'Pull', 'Violation', 
 function renderPossessions(possessions) {
     if (!possessions || possessions.length === 0) return '<div class="possession">No possessions yet</div>';
     
+    // data-poss / data-ev are loop indices: viewer-replay.js maps them to the
+    // shared game-log entry indices (data-entry) so the replay can highlight
+    // and seek by line. They never carry game data.
     return possessions.map((pos, index) => `
-        <div class="possession">
+        <div class="possession" data-poss="${index}">
             <div class="possession-header">
                 ${pos.offensive ? 'Offense' : 'Defense'}${pos.set ? ` <span class="possession-set">(${escapeHtmlViewer(pos.set)})</span>` : ''}
             </div>
             <div class="events-list">
-                ${(pos.events || []).map(event => renderEvent(event)).join('')}
+                ${(pos.events || []).map((event, ei) => renderEvent(event, ei)).join('')}
             </div>
         </div>
     `).join('');
 }
 
-function renderEvent(event) {
+function renderEvent(event, eventIndex) {
     let type = event.type;
     let desc = '';
     
@@ -1100,8 +1113,9 @@ function renderEvent(event) {
     // correct and far less error-prone than escaping at each of the ~15
     // concatenation sites.
     const typeClass = KNOWN_EVENT_TYPES.includes(type) ? type : 'Unknown';
+    const evAttr = Number.isInteger(eventIndex) ? ` data-ev="${eventIndex}"` : '';
     return `
-        <div class="event-item">
+        <div class="event-item"${evAttr}>
             <span class="event-type ${typeClass}">${escapeHtmlViewer(type)}</span>
             <span class="event-desc">${escapeHtmlViewer(desc)}</span>
         </div>

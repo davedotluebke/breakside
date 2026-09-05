@@ -11,6 +11,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     
+    <!-- Replay (field playback above the play-by-play). The pitch and
+         transport are the PWA's own, imported by RELATIVE path so the same
+         files resolve from both prefixes this page is served at (/viewer/
+         on S3 beside the PWA, /static/viewer/ on the API host, which mounts
+         these directories — see ARCHITECTURE.md § Replay viewer). tokens.css
+         only declares variables; viewer.css loads last and wins any overlap. -->
+    <link rel="stylesheet" href="../css/tokens.css">
+    <link rel="stylesheet" href="../playByPlay/fieldPbp.css">
+    <link rel="stylesheet" href="../playByPlay/replayView.css">
     <link rel="stylesheet" href="viewer.css">
 </head>
 <body>
@@ -140,6 +149,9 @@
                 </div>
             </div>
 
+            <!-- Field replay: mounted by viewer-replay.js when the game has
+                 located events (otherwise stays empty and costs no space). -->
+            <div id="replay-host" class="replay-host"></div>
             <div id="points-container" class="points-container">
                 <!-- Points will be injected here -->
             </div>
@@ -291,6 +303,11 @@
         </div>
     </footer>
 
+    <!-- The replay is an ES module (it imports the PWA's leaf modules);
+         viewer.js stays a classic script and reaches it through
+         window.viewerReplay. Modules run before DOMContentLoaded, so the
+         hook exists by the time viewer.js renders a game. -->
+    <script type="module" src="viewer-replay.js"></script>
     <script src="viewer.js"></script>
 </body>
 </html>

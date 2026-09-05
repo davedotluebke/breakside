@@ -1225,3 +1225,17 @@ body.share-mode #data-format-indicator {
     color: var(--text-muted);
     font-weight: 400;
 }
+
+/* =============================================================================
+   Field replay (viewer-replay.js + the PWA's playByPlay/replayView.css).
+   The stage sticks to the top of the viewport so the pitch stays in view
+   while the play-by-play scrolls under it; the cards take the PWA's
+   rv-cur / rv-future line states.
+   ============================================================================= */
+.replay-host { position: sticky; top: 0; z-index: 5; background: var(--light-bg, #f5f6f8); }
+.replay-host:empty { display: none; }
+.replay-host .rv-root { padding: 6px 4px 4px; margin-bottom: 0.75rem; border-bottom: 1px solid var(--border-color); }
+.point-card [data-entry] { cursor: pointer; }
+.point-card .event-item.rv-future, .point-card .possession-header.rv-future { opacity: .45; }
+.point-card .event-item.rv-cur { border-color: var(--primary-color); box-shadow: inset 3px 0 0 var(--primary-color), 0 0 0 1px var(--primary-color); }
+.point-card .possession-header.rv-cur { color: var(--primary-color); }

@@ -175,8 +175,14 @@ async def revoke_share_endpoint(
 _PUBLIC_GAME_FIELDS = (
     "team", "opponent", "scores", "gameStartTimestamp", "gameEndTimestamp",
 )
-_PUBLIC_POINT_FIELDS = ("players", "winner", "totalPointTime")
-_PUBLIC_POSSESSION_FIELDS = ("offensive", "set")
+# startingPosition / the timestamps / startedAt feed the viewer's replay
+# (docs/replay-viewer-plan.md): who pulled, when each play happened, how
+# long a point took. None of it names a person.
+_PUBLIC_POINT_FIELDS = (
+    "players", "winner", "totalPointTime", "startingPosition",
+    "startTimestamp", "endTimestamp",
+)
+_PUBLIC_POSSESSION_FIELDS = ("offensive", "set", "startedAt")
 _PUBLIC_ROSTER_FIELDS = ("id", "name", "nickname")
 
 # Named event fields. The *Id variants stay because the viewer falls back to
@@ -184,13 +190,16 @@ _PUBLIC_ROSTER_FIELDS = ("id", "name", "nickname")
 # terms: an id is ``{sanitized-name}-{hash}``, so it carries the same name the
 # adjacent ``thrower``/``receiver``/``defender``/``puller`` field already does.
 # Boolean ``*_flag`` keys are carried through separately (see below) — they are
-# what the play-by-play is made of. Everything else is dropped, which is what
-# removes ``description``, ``calledBy``/``calledByName``, ``pullerGender`` and
-# the field-position coordinates.
+# what the play-by-play is made of. ``from``/``to`` (field positions),
+# ``at`` (epoch ms) and ``hang`` (pull hang time) are what the viewer's
+# replay animates — a spot on the pitch and a clock, not personal data.
+# Everything else is dropped, which is what removes ``description``,
+# ``calledBy``/``calledByName`` and ``pullerGender``.
 _PUBLIC_EVENT_FIELDS = (
     "type", "quality",
     "thrower", "receiver", "defender", "puller",
     "throwerId", "receiverId", "defenderId", "pullerId",
+    "from", "to", "at", "hang",
 )
 
 

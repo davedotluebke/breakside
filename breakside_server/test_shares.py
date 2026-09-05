@@ -369,11 +369,13 @@ def _seed_rich_game(seeded):
             "possessions": [{
                 "offensive": True,
                 "set": "vert stack",
+                "startedAt": 1751565660000,
                 "events": [
                     {"type": "Pull", "puller": "Played Player",
                      "pullerId": "Played-1111", "pullerGender": "FMP",
-                     "quality": "good", "io_flag": True,
-                     "from": [0, 0], "to": [40, 60]},
+                     "quality": "good", "io_flag": True, "hang": 1500,
+                     "at": 1751565660000,
+                     "from": {"x": 0, "y": 0.5}, "to": {"x": 0.8, "y": 0.4}},
                     {"type": "Throw", "thrower": "Played Player",
                      "throwerId": "Played-1111", "receiver": "Played Player",
                      "receiverId": "Played-1111", "score_flag": True,
@@ -435,14 +437,33 @@ class TestPublicGameProjection:
         events = game["points"][0]["possessions"][0]["events"]
         for ev in events:
             for leaked in ("pullerGender", "description",
-                           "calledBy", "calledByName", "from", "to"):
+                           "calledBy", "calledByName"):
                 assert leaked not in ev, f"{leaked} in {ev}"
+
+    def test_replay_fields_are_published(self, client, seeded):
+        """The viewer's replay (docs/replay-viewer-plan.md) animates field
+        positions and real timing — a spot on the pitch and a clock, not
+        personal data — so those survive the projection."""
+        game = _shared_game(client, seeded)
+        point = game["points"][0]
+        assert point["startingPosition"] == "offense"
+        assert point["startTimestamp"] == "2026-07-03T18:01:00Z"
+        assert point["endTimestamp"] == "2026-07-03T18:01:42Z"
+        possession = point["possessions"][0]
+        assert possession["startedAt"] == 1751565660000
+        pull = possession["events"][0]
+        assert pull["from"] == {"x": 0, "y": 0.5}
+        assert pull["to"] == {"x": 0.8, "y": 0.4}
+        assert pull["at"] == 1751565660000
+        assert pull["hang"] == 1500
 
     def test_point_level_extras_are_stripped(self, client, seeded):
         game = _shared_game(client, seeded)
         point = game["points"][0]
-        assert set(point) == {"players", "winner", "totalPointTime", "possessions"}
+        assert set(point) == {"players", "winner", "totalPointTime", "possessions",
+                              "startingPosition", "startTimestamp", "endTimestamp"}
         assert "substitutedOutPlayers" not in point
+        assert "lastPauseTime" not in point
 
     def test_the_viewer_still_gets_what_it_renders(self, client, seeded):
         """The projection must not break the play-by-play."""

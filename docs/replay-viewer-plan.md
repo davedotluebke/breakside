@@ -12,12 +12,15 @@ was for the Field tab): **`mockups/replay-viewer/index.html`**. Run it with
 Design decisions below were settled with Dave on 2026-09-03; the "Why" notes
 record the reasoning so later sessions don't relitigate them.
 
-**Status (2026-09-04):** steps 1–8 are **merged to main** (steps 1–7 in
-merge `4bd3400`, step 8 editing v1 the same day after three staging rounds);
-ARCHITECTURE.md § Replay viewer is the code-level map. See "Step 8 status
-and handoff" at the end of this document for what editing v1 covers and
-deliberately leaves out. The later items (share-viewer port, sliding split,
-commentator, insert/delete, endzone ↔ score_flag) remain open.
+**Status (2026-09-05):** steps 1–8 are **merged to main** (steps 1–7 in
+merge `4bd3400`, step 8 editing v1 on 2026-09-04 after three staging
+rounds), and the **share-viewer port (Decision 4c) shipped 2026-09-05** on
+branch `replay-share-viewer`; ARCHITECTURE.md § Replay viewer is the
+code-level map (incl. the leaf-allowlist rule the port imposes). See "Step
+8 status and handoff" at the end of this document for what editing v1
+covers and deliberately leaves out. Everything still open is listed in
+TODO.md § "Replay viewer — follow-ups" (sliding split, commentator,
+insert/delete, endzone ↔ score_flag, assist editing, undo).
 
 ## Decisions
 
@@ -304,7 +307,8 @@ Nothing else in the replay needs to know audio exists.
 | 6 Log tab integration + settings | `replay-log-tab` | M | Depends on 2–5. |
 | 7 Post-game summary | `replay-summary` | S | |
 | 8 Editing v1 | `replay-edit` | M | |
-| Later | | | Share-viewer port; sliding-panel split with auto-rotate; commentator; insert/delete. |
+| 9 Share-viewer port | `replay-share-viewer` | M | Shipped 2026-09-05: viewer mounts the same replayView; leaf allowlist + API-host mounts; public payload widened to carry locations/timing. |
+| Later | | | Sliding-panel split with auto-rotate; commentator; insert/delete — TODO.md § Replay viewer — follow-ups. |
 
 ## Open items to confirm while building
 
