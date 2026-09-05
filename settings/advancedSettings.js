@@ -100,7 +100,7 @@ const advancedSettings = (function() {
         // --- Replay (Log tab field playback; docs/replay-viewer-plan.md) ---
         'replay.capWithinMs': 4000,                       // dead time clipped between plays within a point (0 = Off)
         'replay.capBetweenMs': 8000,                      // dead time clipped between points (0 = Off)
-        'replay.orientation': 'landscape',                // landscape (strip above the field) | portrait (strip down the side)
+        'replay.orientation': 'landscape',                // default orientation the replay field opens in: landscape (wide) | portrait (tall); the ⟳ button writes here too
         // --- Hints ---
         'hints.hideAll': false                            // suppress all new-user hint toasts (see ui/hints.js)
     };
@@ -444,11 +444,11 @@ const advancedSettings = (function() {
                 },
                 {
                     key: 'replay.orientation', label: 'Field orientation',
-                    help: 'Landscape draws the field wide with the lineup strip above it; portrait draws it tall with the strip down the side. The ⟳ button on the replay bar switches too.',
+                    help: 'Default orientation the replay field opens in: landscape draws it wide, portrait draws it tall. The ⟳ button on the replay bar flips the field and updates this default.',
                     type: 'select',
                     options: [
-                        ['landscape', 'Landscape (strip above)'],
-                        ['portrait', 'Portrait (strip beside)']
+                        ['landscape', 'Landscape (wide)'],
+                        ['portrait', 'Portrait (tall)']
                     ]
                 }
             ]
