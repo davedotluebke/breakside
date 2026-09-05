@@ -40,7 +40,16 @@
  * flips; this module only reads them. (ARCHITECTURE.md § Field PBP spatial
  * coordinate frame is the prose copy of this header; keep the two in sync.)
  */
-import { showPlayerNumbers } from '../utils/helpers.js';
+// display.showPlayerNumbers, read late-bound from the settings surface (as
+// refreshGeometry does for the endzone depth) rather than imported from
+// utils/helpers.js: that import pulled store/storage.js and the whole PWA
+// behind it, and this renderer must stay a LEAF so the public share viewer
+// can import it (see ARCHITECTURE.md § Replay viewer, share-viewer port).
+function showPlayerNumbers() {
+    const adv = (typeof window !== 'undefined') ? window.advancedSettings : null;
+    if (adv && typeof adv.get === 'function') return adv.get('display.showPlayerNumbers') !== false;
+    return true;
+}
 
 // -----------------------------------------------------------------
 // Field geometry (canonical yards). Width and the playing field proper are

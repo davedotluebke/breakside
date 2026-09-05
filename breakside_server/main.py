@@ -177,6 +177,19 @@ app.include_router(narration_router)
 # separate layer from in-point narration; see narration_lineup.py)
 app.include_router(narration_lineup_router)
 
+# The public viewer's replay (static/viewer/viewer-replay.js) imports the
+# PWA's leaf modules by RELATIVE path (../playByPlay/..., ../store/...,
+# ../utils/..., ../settings/..., ../css/...) so the same files resolve on
+# both prefixes it is served from: /viewer/ on S3 (next to the PWA) and
+# /static/viewer/ here. Mount those repo directories under /static/ — they
+# must be registered BEFORE the /static mount or it would shadow them.
+# The allowlist is pinned by tests/unit/replayLeafGraph.test.mjs.
+repo_root = Path(__file__).parent.parent
+for pwa_dir in ("playByPlay", "store", "utils", "settings", "css"):
+    d = repo_root / pwa_dir
+    if d.exists():
+        app.mount(f"/static/{pwa_dir}", StaticFiles(directory=str(d)), name=f"pwa-{pwa_dir}")
+
 # Mount static files (viewer, etc.) - html=True enables serving index.html for directories
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():

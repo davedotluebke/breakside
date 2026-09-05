@@ -100,6 +100,31 @@ MVP shipped. Coach speaks naturally; the system extracts structured game events.
 
 ## Near Term
 
+### Replay viewer — follow-ups (docs/replay-viewer-plan.md; steps 1–8 + share viewer shipped 2026-09-05)
+
+Deliberately left out of editing v1 / the share-viewer port:
+
+- **Endzone ↔ goal**: moving a spot into or out of the attacking endzone
+  leaves `score_flag` alone. A goal change moves the score, `point.winner`
+  and the point boundary, so if wanted it belongs in a confirm that routes
+  through the score-attribution flow — not `pbpPossession.amendEvent`.
+- **Insert / delete events** (undo-stack and possession-boundary
+  implications); editing the opponent's plays.
+- **Assist** is not editable from the sheet (only thrower / receiver /
+  defender / puller).
+- **Undo of an amendment**: the `eventAmended` bus payload carries
+  `previousEvent`, nothing consumes it yet.
+- **Sliding-panel split** for the Log tab (like the All tab), with the
+  field auto-rotating as its panel shrinks (plan Decision 10).
+- **Commentator** (AI text-to-speech): `replayController` already emits
+  `entry` with `saidSoFar`; a subscriber returning a promise makes Speedy
+  wait for the audio (plan § 9).
+- **Share viewer**: the sticky stage + card highlighting were preview-tested
+  only, not on a phone; the card headers are deliberately not seekable (a
+  tap toggles the card). A "jump to now" nudge when a parent scrolls up
+  during a live game may be wanted.
+
+
 ### Code-review follow-ups (see CODE_REVIEW_REPORT.md §8)
 
 The 2026-06/07 whole-codebase review program (A1…F5) is **complete**; everything still

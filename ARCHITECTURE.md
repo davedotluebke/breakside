@@ -674,6 +674,27 @@ Layers, bottom-up (all under `playByPlay/`):
   phone.
   `pbpPossession` and the toast are late-bound (`window.*`): importing
   either closes a cycle through `teams/teamList → teams/gameSummary`.
+- **Share-viewer port** (`breakside_server/static/viewer/viewer-replay.js`,
+  plan Decision 4c) — the public viewer mounts the SAME `replayView` above
+  its per-point cards. It is an ES module importing the PWA's leaf modules
+  by URL-relative path (`../playByPlay/…`, `../store/models.js`): from
+  `/viewer/` on S3 that is the PWA root, from `/static/viewer/` on the API
+  host it is the `/static/{playByPlay,store,utils,settings,css}` mounts
+  `main.py` adds (registered before `/static`, or that mount would shadow
+  them). The import closure of `replayView.js` is therefore pinned to a
+  LEAF allowlist by `tests/unit/replayLeafGraph.test.mjs` — nothing under
+  it may reach `store/storage.js`, `utils/helpers.js` or `game/*`
+  (`fieldRender` and `replayEdit` read `window.advancedSettings` / inline a
+  stub for exactly this reason). The viewer's raw JSON events become model
+  instances through `store/models.js hydrateGame()` (players as
+  `{name, id}` refs, no roster) so `buildGameLogEntries` can summarize
+  them; `viewer.js` (a classic script) reaches the module through
+  `window.viewerReplay.update(game, {live}) / destroy()` and stamps
+  `data-poss` / `data-ev` on its cards so `viewer-replay.js` can map the
+  shared entry indices onto them (`data-entry`). The public share payload
+  carries `from`/`to`/`at`/`hang`, possession `startedAt` and the point's
+  `startingPosition` + timestamps for this (§ Share Links). No `canEdit`
+  is passed, so the ✎ never shows there.
 - **`eventAmend.js`** (pure leaf, node-tested) — the rules behind an
   amendment, shared with the Full tab's modifier strip and the Field tab's
   marker drag: the modifier tables, throw geometry → huck/reset/swing, the
@@ -1762,6 +1783,18 @@ pauses while the tab is hidden. A share dying mid-view (410) keeps the last
 state with an "expired" banner; a dead link on first load gets an error view.
 The LIVE badge requires a missing `gameEndTimestamp` AND recent activity
 (~30 min) — an abandoned game is not "live".
+
+**What the public payload carries** (`routers/shares.py` `_PUBLIC_*_FIELDS`,
+pinned by `test_shares.py::TestPublicGameProjection`): names/ids of the
+players who appeared, the flags and `quality` of every event, and — since
+the viewer's field replay (2026-09-05, § Replay viewer) — each event's
+`from`/`to` field positions, `at` timestamp and pull `hang`, possession
+`startedAt`, and the point's `startingPosition` / `startTimestamp` /
+`endTimestamp`. Still stripped: `description`, `calledBy`/`calledByName`,
+`pullerGender`, roster gender/number/position, and every coaching field.
+The API host also mounts the PWA's leaf directories under `/static/` for
+the viewer's replay imports (see § Replay viewer, share-viewer port) — a
+backend change, so it needs the deploy script's restart.
 
 **Public listing is a separate opt-in.** A share link alone never lists the
 game anywhere; `POST /api/games/{id}/share?listed=true` (the dialog's "List

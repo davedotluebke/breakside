@@ -26,8 +26,7 @@
  * which is the score-attribution flow's job; inserting/deleting events;
  * editing the opponent's plays.
  */
-import { UNKNOWN_PLAYER } from '../store/models.js';
-import { playerStub } from '../utils/helpers.js';
+import { UNKNOWN_PLAYER, Gender } from '../store/models.js';
 import { escapeHtml } from '../utils/gameLogRenderer.js';
 import * as fieldRender from './fieldRender.js';
 import { modifiersFor, receiverChainConflict, throwerChainConflict, nextInPossession, holderSourceOf, nameOf } from './eventAmend.js';
@@ -41,6 +40,11 @@ const toast = (msg, kind, ms) => {
     if (typeof window.showControllerToast === 'function') window.showControllerToast(msg, kind, ms);
     else console.warn('[replayEdit]', msg);
 };
+
+// A minimal Player-shaped ref for a name that no longer resolves on the
+// roster (utils/helpers.js playerStub, inlined: helpers is not a leaf, and
+// the replay stack must stay importable by the public share viewer).
+const playerStub = name => ({ name, id: null, gender: Gender.UNKNOWN });
 
 const EDITABLE_TYPES = new Set(['Throw', 'Turnover', 'Defense', 'Pull']);
 const ROLE_LABELS = { thrower: 'Thrower', receiver: 'Receiver', defender: 'Defender', puller: 'Puller' };

@@ -786,6 +786,61 @@ function isTestGame(game) {
     return false;
 }
 
+// =============================================================================
+// Hydration: serialized (JSON) events → model instances.
+//
+// The public share viewer receives games as raw JSON from /api/share/{hash}
+// (thrower/receiver/... are NAME strings, *Id fields beside them) and cannot
+// reach store/storage.js's deserializer, which resolves players against the
+// device roster. The replay stack (utils/gameLogRenderer.js, playByPlay/
+// replayEngine.js) only needs events that summarize() and carry {name}
+// player refs — that is what these build. Pure: no globals, no roster.
+// =============================================================================
+const EVENT_CLASSES = { Throw, Turnover, Violation, Defense, Pull, Other };
+const EVENT_PLAYER_REFS = [['thrower', 'throwerId'], ['receiver', 'receiverId'],
+    ['defender', 'defenderId'], ['puller', 'pullerId'], ['assist', 'assistId']];
+
+/**
+ * Build a model event from its serialized form. Player refs become
+ * `{ name, id }` objects (never roster Players); `resolveName(id, name)`
+ * may supply a display name when the JSON carries only an id. Unknown
+ * types come back as a plain Event with a generic summarize().
+ * The input is not mutated.
+ */
+function hydrateEvent(raw, resolveName) {
+    if (!raw || typeof raw !== 'object') return null;
+    const Cls = EVENT_CLASSES[raw.type];
+    const ev = Cls ? new Cls({}) : new Event(String(raw.type || 'Unknown'));
+    Object.keys(raw).forEach(k => { if (k !== 'type') ev[k] = raw[k]; });
+    if (ev.dump_flag) ev.reset_flag = true;      // legacy alias, as deserializeEvent
+    delete ev.dump_flag;
+    EVENT_PLAYER_REFS.forEach(([field, idField]) => {
+        const name = raw[field], id = raw[idField];
+        delete ev[idField];
+        if (!(field in ev) && name == null && id == null) return;
+        if (name == null && id == null) { ev[field] = null; return; }
+        if (name && typeof name === 'object') { ev[field] = name; return; }   // already a ref
+        const display = (typeof resolveName === 'function' ? resolveName(id, name) : null) || name || id;
+        ev[field] = { name: String(display), id: id || null };
+    });
+    return ev;
+}
+
+/**
+ * A game-shaped copy whose events are model instances (see hydrateEvent);
+ * points and possessions are shallow copies, everything else is shared.
+ */
+function hydrateGame(raw, resolveName) {
+    if (!raw || typeof raw !== 'object') return raw;
+    const game = Object.assign({}, raw);
+    game.points = (raw.points || []).map(point => Object.assign({}, point, {
+        possessions: (point.possessions || []).map(poss => Object.assign({}, poss, {
+            events: (poss.events || []).map(e => hydrateEvent(e, resolveName)).filter(Boolean),
+        })),
+    }));
+    return game;
+}
+
 // --- ES-module exports. `Event` is deliberately NOT exported under that name
 // --- onto window anywhere — it would clobber the DOM Event constructor.
 export {
@@ -796,5 +851,6 @@ export {
     createRosterSnapshot, captureCurrentMode,
     generateShortId, generatePlayerId, generateTeamId, generateEventId,
     isTestName, isTestTeam, isTestGame,
+    hydrateEvent, hydrateGame,
 };
 
