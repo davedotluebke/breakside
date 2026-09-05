@@ -979,6 +979,19 @@ Remaining work:
 
 ## Backlog
 
+- [ ] **Verify: offline team creation when auth fails to initialise.** A 2026-03
+      note recorded that the create-team handler returned early with an alert
+      when `isAuthenticated()` was false, so the offline fallback in its `catch`
+      was unreachable (Supabase down at a tournament = cannot create a team).
+      The handler has since moved (`teams/rosterManagement.js` now checks auth
+      *or* `navigator.onLine`); confirm the account-free path covers it and
+      close this, or fix.
+- [ ] **Verify: Team Settings reachable from in-game.** Requested so a coach can
+      mint a viewer invite without leaving the game. `#menuAppTeamSettings` now
+      exists in the app header menu (`main.js`); confirm that menu is available
+      on the in-game screen and that Back returns to the game rather than team
+      selection. If not, add it to the in-game hamburger with context-aware back.
+
 - [ ] **Account-free operation — SHELVED 2026-08-17, and it's a product question
   before it's an engineering one.** Whether Breakside should work with no account
   at all is undecided; it is parked here rather than dropped so the analysis
