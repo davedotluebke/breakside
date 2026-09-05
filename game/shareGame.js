@@ -68,8 +68,8 @@ function renderShareRow(share) {
                 <span class="share-link-url">…/view/${esc(share.hash)}</span>
                 <span class="share-link-meta">${expiry}${listedBadge ? ' · ' : ''}${listedBadge}</span>
             </div>
-            <button class="share-copy-btn" title="Copy link"><i class="fas fa-copy"></i></button>
-            <button class="share-revoke-btn" title="Turn off this link"><i class="fas fa-times"></i></button>
+            <button class="share-copy-btn" title="Copy link">Copy</button>
+            <button class="share-revoke-btn" title="Turn off this link — it stops working and the game leaves the public list">Turn off</button>
         </div>`;
 }
 

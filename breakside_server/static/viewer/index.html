@@ -31,9 +31,11 @@
     <!-- Navigation Header -->
     <header class="main-header">
         <div class="header-content">
+            <!-- The wordmark, by RELATIVE path like every other asset here:
+                 ../images/ is the PWA's images/ on S3 and the API host's
+                 /static/images mount. -->
             <a href="/static/viewer/" class="logo">
-                <img src="/images/logo.disc.only.png" alt="Breakside Logo" class="logo-icon">
-                <span class="logo-text">Breakside</span>
+                <img src="../images/logo.wordmark.png" alt="Breakside" class="logo-icon">
             </a>
             <nav class="main-nav" id="main-nav">
                 <a href="#games" class="nav-tab active" data-tab="games">Games</a>

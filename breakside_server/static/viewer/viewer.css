@@ -3,13 +3,15 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
 
 :root {
-    /* Primary colors - matching PWA orange theme */
-    --primary-color: #E19049;
-    --primary-dark: #c77a38;
+    /* Primary colors - the PWA's brand orange (css/tokens.css --brand-orange /
+       --brand-orange-deep). Since the 2026-08 rebrand the orange is an ACCENT
+       (header underline, active tab, buttons) on a white header, not a fill. */
+    --primary-color: #eb8232;
+    --primary-dark: #d06e1f;
     --secondary-color: #d4823e;
     
     /* Accent colors */
-    --accent-color: #E19049;
+    --accent-color: #eb8232;
     --accent-secondary: #444;
     
     /* Background colors */
@@ -56,13 +58,17 @@ body {
    Main Header & Navigation
    ============================================================================= */
 
+/* White header with an orange underline and the wordmark — the PWA's
+   post-rebrand header (css/shell.css `header`). */
 .main-header {
-    background-color: var(--primary-color);
-    padding: 0.75rem 1rem;
+    background-color: white;
+    color: var(--text-color);
+    padding: 0.5rem 1rem;
     position: sticky;
     top: 0;
     z-index: 100;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border-bottom: 3px solid var(--primary-color);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 
 .header-content {
@@ -78,20 +84,12 @@ body {
     align-items: center;
     gap: 0.5rem;
     text-decoration: none;
-    color: white;
+    color: var(--text-color);
 }
 
 .logo-icon {
-    height: 40px;
+    height: 36px;
     width: auto;
-    border-radius: 4px;
-}
-
-.logo-text {
-    font-weight: 600;
-    font-size: 1.5rem;
-    letter-spacing: 0.5px;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
 }
 
 .main-nav {
@@ -102,7 +100,7 @@ body {
 
 .nav-tab {
     padding: 0.5rem 1rem;
-    color: rgba(255,255,255,0.8);
+    color: var(--text-muted);
     text-decoration: none;
     border-radius: 5px;
     font-weight: 500;
@@ -111,13 +109,13 @@ body {
 }
 
 .nav-tab:hover {
-    color: white;
-    background-color: rgba(255,255,255,0.15);
+    color: var(--text-color);
+    background-color: var(--light-bg);
 }
 
 .nav-tab.active {
     color: white;
-    background-color: #444;
+    background-color: var(--primary-color);
 }
 
 .status-badge {
@@ -603,8 +601,8 @@ body {
     border-radius: 5px;
     font-size: 0.75rem;
     font-weight: 500;
-    background: rgba(255,255,255,0.15);
-    color: rgba(255,255,255,0.9);
+    background: var(--light-bg);
+    color: var(--text-color);
     cursor: pointer;
 }
 
@@ -627,9 +625,9 @@ body {
 }
 
 .sync-btn {
-    background: rgba(255,255,255,0.15);
-    border: 1px solid rgba(255,255,255,0.3);
-    color: white;
+    background: var(--light-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
     padding: 0.3rem 0.6rem;
     border-radius: 5px;
     cursor: pointer;
@@ -642,8 +640,8 @@ body {
 }
 
 .sync-btn:hover {
-    background: rgba(255,255,255,0.25);
-    border-color: rgba(255,255,255,0.5);
+    background: var(--border-color);
+    border-color: var(--text-muted);
 }
 
 .sync-btn:disabled {
@@ -993,8 +991,8 @@ body {
         padding: 1rem;
     }
     
-    .logo-text {
-        font-size: 1.25rem;
+    .logo-icon {
+        height: 30px;
     }
     
     .card-meta {

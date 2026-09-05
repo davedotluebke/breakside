@@ -185,7 +185,7 @@ app.include_router(narration_lineup_router)
 # must be registered BEFORE the /static mount or it would shadow them.
 # The allowlist is pinned by tests/unit/replayLeafGraph.test.mjs.
 repo_root = Path(__file__).parent.parent
-for pwa_dir in ("playByPlay", "store", "utils", "settings", "css"):
+for pwa_dir in ("playByPlay", "store", "utils", "settings", "css", "images"):
     d = repo_root / pwa_dir
     if d.exists():
         app.mount(f"/static/{pwa_dir}", StaticFiles(directory=str(d)), name=f"pwa-{pwa_dir}")

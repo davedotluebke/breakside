@@ -342,9 +342,18 @@ function mountReplayView(cfg) {
         return seg.first + Math.round(f * (seg.last - seg.first));
     }
 
+    // The play/pause icon is rewritten ONLY when the state flips. 'transport'
+    // fires on every step during playback, and replacing the button's SVG
+    // while a finger is on it detaches the touchstart target — the browser
+    // then drops the click, so Pause "didn't respond" mid-play (field-test
+    // 2026-09-05).
+    let lastPlaying = null;
     function renderTransport(s) {
-        playBtn.innerHTML = s.playing ? ICON.pause : ICON.play;
-        playBtn.title = s.playing ? 'Pause' : 'Play';
+        if (s.playing !== lastPlaying) {
+            lastPlaying = s.playing;
+            playBtn.innerHTML = s.playing ? ICON.pause : ICON.play;
+            playBtn.title = s.playing ? 'Pause' : 'Play';
+        }
         prevBtn.disabled = s.index <= 0;
         nextBtn.disabled = s.index >= s.length - 1;
         const pos = SPEED_STOPS.indexOf(s.speed);
