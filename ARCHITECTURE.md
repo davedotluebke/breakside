@@ -45,9 +45,9 @@ Breakside uses a hybrid architecture with a Progressive Web App (PWA) frontend h
 
 | Service | URL | Hosted On |
 |---------|-----|-----------|
-| **PWA** | https://www.breakside.pro | CloudFront (`E6M9KCXIU9CKD`) → S3 |
+| **PWA** | https://www.breakside.pro | CloudFront → S3 |
 | **PWA (redirect)** | https://breakside.pro | EC2 → www |
-| **Staging PWA** | https://staging.breakside.pro | CloudFront (`E12N2STN9MM8FA`) → S3 |
+| **Staging PWA** | https://staging.breakside.pro | CloudFront → S3 |
 | **Static Viewer** | https://www.breakside.pro/viewer/ | CloudFront → S3 |
 | **API** | https://api.breakside.pro | EC2 → FastAPI |
 | **Health Check** | https://api.breakside.pro/health | EC2 |
@@ -781,47 +781,29 @@ export PATH="/Library/Frameworks/Python.framework/Versions/3.12/bin:$PATH"
 | **Data Storage** | JSON files on filesystem |
 | **SSL** | Let's Encrypt (certbot) |
 
-### TLS Certificate Renewal (and the PATH gotcha)
+### TLS, cron PATH, and outbound mail
 
-nginx terminates TLS using Let's Encrypt certs under `/etc/letsencrypt/live/`. Two
-lineages exist: `api.breakside.pro` (covers `api.breakside.pro` + `api.breakside.us`,
-both served from EC2) and `api.breakside.us` (the apex/redirect block). **`www.breakside.pro`
-must NOT be on any EC2 cert** — it's served by CloudFront, so its http-01 challenge
-404s on EC2 and fails the whole renewal.
+nginx terminates TLS with Let's Encrypt certificates renewed by `certbot renew`
+from a cron entry. Lessons that apply to any host running this stack:
 
-Renewal runs from `/etc/cron.d/certbot` (`certbot renew --quiet`, twice daily) using the
-**nginx authenticator plugin**.
+- **Cron's default PATH does not include `/usr/sbin`, where `nginx` lives.**
+  certbot's nginx authenticator shells out to `nginx`, so under cron every
+  renewal fails with "The nginx plugin is not working" while the same command
+  succeeds from a login shell. A June 2026 outage came from exactly this. Put a
+  `PATH=` line that includes `/usr/sbin` at the top of the cron file, and
+  reproduce with `sudo env -i PATH=/usr/bin:/bin certbot renew --dry-run`.
+- **Let's Encrypt no longer emails expiry warnings** (since 2025). Run an
+  independent daily expiry check over `/etc/letsencrypt/live/*/fullchain.pem`
+  that mails under 20 days, so a silent renewal failure is caught by something
+  certbot is not part of.
+- Any name served by a CDN in front of the app must not be on the box's
+  certificate, or its HTTP-01 challenge fails and takes the whole renewal down.
+- EC2 blocks outbound port 25, so a box that needs to send alert mail must
+  relay through an authenticated SMTP service (Postfix `relayhost` with SASL).
 
-**Historical root cause (June 2026 outage):** the `api.breakside.pro` cert silently failed
-to auto-renew for ~3 months and eventually expired, taking the API down. The cron job *was*
-running certbot twice daily the whole time, but every run failed with `The nginx plugin is
-not working`. The real reason buried in `/var/log/letsencrypt/letsencrypt.log` was
-`Could not find a usable 'nginx' binary ... your PATH`: **cron's default PATH
-(`/usr/bin:/bin`) does not include `/usr/sbin`, where the `nginx` binary lives.** The nginx
-plugin shells out to `nginx`, couldn't find it, and aborted — but only under cron. Run by
-hand (login PATH includes `/usr/sbin`) it always worked, which masked the bug. Fix: a
-`PATH=...:/usr/sbin:...` line at the top of `/etc/cron.d/certbot`. Verify with
-`sudo env -i PATH=/usr/bin:/bin certbot renew --dry-run` (reproduces the failure) vs
-adding `/usr/sbin` (succeeds).
-
-**Expiry tripwire:** Let's Encrypt stopped emailing expiry warnings in 2025, so the silent
-failure went unnoticed until the API died. `/usr/local/bin/cert-expiry-check.sh` (daily via
-`/etc/cron.d/cert-expiry-check`) checks days-to-expiry on every `live/*/fullchain.pem` and,
-under 20 days, logs to syslog (`logger -t cert-expiry`) **and** emails dave@luebke.us — an
-alarm independent of whatever certbot does, so it catches any future cause.
-
-### Outbound Mail (Postfix → Gmail relay)
-
-The box sends mail (cert alarm; also the old text-adventure game's git-sync/db-backup
-notices) via local **Postfix**. EC2 blocks outbound port 25 to the internet, so Postfix
-cannot deliver directly — it **must** relay through an authenticated SMTP service. It's
-configured to relay through Gmail (`relayhost = [smtp.gmail.com]:587`, SASL creds in
-`/etc/postfix/sasl_passwd`, perms 600). The auth account is a `luebke.us` Google account
-using an **app password** (not the login password; requires 2FA). If mail stops delivering,
-check `sudo postqueue -p` and `/var/log/maillog` — `relay=none ... Network is unreachable`
-on port 25 means the relay config was lost; `535 Username and Password not accepted` means
-the app password is stale. The harmless `connect to smtp.gmail.com[<ipv6>]:587: Network is
-unreachable` log lines are just the box falling back from IPv6 to IPv4.
+The production box's exact cron files, scripts, relay settings, and the
+contact-address wiring are recorded in the private ops repository
+(`breakside-ops`, `runbooks/tls-and-mail.md`).
 
 ### Server File Structure
 
@@ -1797,99 +1779,23 @@ Exported via `window.breakside.auth`:
 
 ### Infrastructure
 
-| Component | Details |
-|-----------|---------|
-| **CloudFront (prod)** | Distribution `E6M9KCXIU9CKD` |
-| **CloudFront (staging)** | Distribution `E12N2STN9MM8FA` |
-| **S3 Bucket (prod)** | `breakside.pro` (us-east-1) |
-| **S3 Bucket (staging)** | `staging.breakside.pro` (us-east-1) |
-| **EC2 Instance** | Amazon Linux 2023, t3.small, Elastic IP 3.212.138.180 (instance `i-0b643906d8153471b`, its own security group `breakside-api`: inbound 80/443 only, admin over SSM) |
-| **SSL (CloudFront)** | ACM certificate |
-| **SSL (EC2)** | Let's Encrypt via certbot |
+The production deployment is: CloudFront distributions in front of two S3
+buckets (production and staging PWA), one EC2 instance running nginx and
+uvicorn for the API, Let's Encrypt on the box, ACM on CloudFront, DNS at a
+registrar (not Route53), Supabase for authentication, and a nightly S3 backup
+driven by the instance role.
 
-### Configuration Files
+Distribution IDs, bucket names, instance and network identifiers, DNS records,
+tracked copies of the box's config files, and the mail setup behind
+`help@breakside.pro` live in the private ops repository (`breakside-ops`:
+`INVENTORY.md`, `etc/`, `runbooks/`). They are deliberately not in this file.
 
-| File | Purpose |
-|------|---------|
-| `/etc/breakside/env` | Environment variables |
-| `/etc/systemd/system/breakside.service` | systemd unit |
-| `/etc/nginx/conf.d/breakside.conf` | nginx config |
-| `/etc/cron.d/certbot` | SSL renewal cron (certbot is a pip install in `/opt/certbot`, symlinked to `/usr/local/bin/certbot` — AL2023 has no certbot rpm) |
-| `/etc/cron.d/cert-expiry-check` | Independent expiry alarm (see § TLS Certificate Renewal) |
-| `/etc/breakside/backup.env` + `/etc/cron.d/breakside-backup` | Nightly off-instance backup (see docs/ops/backup-restore.md) |
-| `/etc/systemd/journald.conf.d/breakside-retention.conf` | Journal capped at 200M / 30 days |
-
-### DNS (Pair.com)
-
-| Domain | Type | Value |
-|--------|------|-------|
-| `breakside.pro` | A | 3.212.138.180 |
-| `www.breakside.pro` | CNAME | d17eottm1x91n5.cloudfront.net |
-| `staging.breakside.pro` | CNAME | *(CloudFront distribution domain for E12N2STN9MM8FA)* |
-| `api.breakside.pro` | A | 3.212.138.180 |
-
-Mail records for the domain (added 2026-09-03, see *Contact mail* below):
-
-| Host | Type | Value |
-|------|------|-------|
-| `breakside.pro` | MX | `smtp.google.com` (priority 1) |
-| `breakside.pro` | TXT | `v=spf1 include:_spf.google.com ~all` |
-| `google._domainkey` | TXT | 2048-bit DKIM public key for **breakside.pro** |
-| `_dmarc` | TXT | `v=DMARC1; p=none; rua=mailto:help@breakside.pro` |
-
-The apex carries both an A record (the EC2 box) and MX records; they coexist
-fine, and mail routes to Google regardless of where the A record points.
-
-### Contact mail (help@breakside.pro)
-
-`help@breakside.pro` is the published contact address — it appears in
-`privacy.html` and `SECURITY.md`. It exists so users are never handed the
-maintainer's personal address.
-
-**How it is wired.** `breakside.pro` was added to the existing `luebke.us`
-Google Workspace as a **secondary domain** (not a *user alias domain* — that
-mirrors existing users, giving `dave@breakside.pro` with no way to create
-`help@`). `help@breakside.pro` is then an **email alias** on the
-`dave@luebke.us` user, which costs nothing: an alias is not a second licence.
-
-**Sending as the address.** Mail is actually read in a separate consumer
-account (`luebke@gmail.com`) that `dave@luebke.us` forwards to. That account
-knows nothing about the Workspace alias, so `help@breakside.pro` had to be
-added there as a **Send mail as** identity relaying through
-`smtp.gmail.com:587`, authenticated as `dave@luebke.us` with a dedicated app
-password. Use a *separate* app password from the one Postfix on the API box
-uses (see *Outbound Mail* above) — revoking one otherwise silently breaks the
-other.
-
-**The trap that cost the most time.** In Admin console → Apps → Google
-Workspace → Gmail → **Authenticate email**, the domain selector defaults to
-the *primary* domain. Generating a DKIM key with it unchanged publishes
-`luebke.us`'s key under `breakside.pro`, and clicking *Start authentication*
-activates the wrong domain. Both mistakes are invisible in the console; the
-symptom is outbound mail signed `d=luebke-us.<date>.gappssmtp.com` instead of
-`d=breakside.pro`, which fails DMARC alignment. **Check the selector reads
-`breakside.pro` before generating and before starting.** Each secondary domain
-needs its own key generated, published, *and* activated — the primary's DKIM
-covers only itself.
-
-**Verifying.** `dig +short TXT google._domainkey.breakside.pro` must differ
-from the same query against `luebke.us` — identical values mean the wrong
-domain was selected. End to end, mail `check-auth@verifier.port25.com` from
-the address; the reply should say `pass ... header.d=breakside.pro`.
-
-**DMARC is `p=none`** — monitoring only, it cannot cause a receiver to reject
-or junk mail. Tighten to `p=quarantine` only after the aggregate reports come
-back clean. Note SPF does *not* align (the envelope sender is `luebke.us`,
-since Google's outbound path stamps the authenticated account); DMARC passes on
-the DKIM leg alone, which is why the DKIM domain being right is load-bearing.
-
-**Known limitation.** Relaying through Google as `dave@luebke.us` puts
-`Return-Path: dave@luebke.us` in the raw headers of every reply. No mail client
-shows it without "show original", but it is there — the Workspace path cannot
-hide it. Closing that would mean moving the send side to SES SMTP with
-`breakside.pro` verified, at which point the envelope sender becomes an
-`amazonses.com` bounce address. The AWS account already has SES production
-access if that ever becomes worth doing.
+To self-host, everything needed is here: `breakside_server/` (the API),
+`scripts/deploy-backend.sh` (assumes a root-owned clone at `/opt/breakside`
+and a systemd unit named `breakside`), `scripts/deploy-staging.sh`
+(parameterised by `STAGING_BUCKET`, `STAGING_CF_DIST`, `AWS_PROFILE`),
+`scripts/backup-data.sh`, `scripts/cloudfront-csp-function.js`, and the
+environment variables listed in `breakside_server/config.py`.
 
 ### CI/CD
 
@@ -1899,7 +1805,7 @@ access if that ever becomes worth doing.
 3. Syncs PWA files to S3 (`breakside.pro`) using the shared exclude list `scripts/deploy-excludes.txt`
 4. Uploads the stamped `version.json` and `service-worker.js` with no-cache headers
 5. Syncs viewer to S3
-6. Invalidates CloudFront cache (`E6M9KCXIU9CKD`)
+6. Invalidates the CloudFront cache
 
 **Version stamping** — Build numbers are **never committed**. The committed `version.json` carries the placeholder `build: "dev"` (and `service-worker.js` the cacheName `'build-dev'`); the committed semver `version` string is bumped manually via `python3 increment-version.py major|minor|patch`. At deploy time, both the production workflow and `deploy-staging.sh` run `increment-version.py stamp`, which:
 - computes the build number as `git rev-list --count HEAD` (deterministic, monotonic on `main`, no committed state);
@@ -1918,7 +1824,7 @@ Always pass a short version description (e.g. `"test audio narration v2"`) so te
 2. Syncs the working directory to `staging.breakside.pro` (same shared exclude list as prod)
 3. Uploads the stamped `version.json` and service worker with no-cache headers
 4. Syncs viewer to S3
-5. Invalidates CloudFront cache (`E12N2STN9MM8FA`)
+5. Invalidates the CloudFront cache
 
 Staging has a purple header (vs production orange) via `body.staging` CSS class. The deploy stamp lets the PWA detect redeploys without a commit — tap Online/About to check for updates. The label appears in the version toast as `[label]`, making it the easiest way to confirm "am I actually on the build I just deployed?"
 
@@ -2018,7 +1924,7 @@ copy is gitignored and disposable.
 # (ProxyCommand + AWS-StartSSHSession). The box's security group has NO port
 # 22, so SSM is the only way in — there is no direct fallback; if the tunnel
 # misbehaves use `aws ssm start-session --target <instance-id>` directly.
-# Authenticates with the breakside-2026 key as ec2-user.
+# Aliases, keys and instance ids: breakside-ops, runbooks/ec2-access.md.
 ssh breakside
 
 # Service management
@@ -2050,7 +1956,7 @@ aws s3 sync . s3://breakside.pro/ \
 aws s3 sync breakside_server/static/viewer/ s3://breakside.pro/viewer/
 
 # Invalidate cache
-aws cloudfront create-invalidation --distribution-id E6M9KCXIU9CKD --paths "/*"
+aws cloudfront create-invalidation --distribution-id <distribution-id> --paths "/*"
 ```
 
 ---

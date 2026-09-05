@@ -7,7 +7,7 @@
 # Why this exists: there is exactly one instance, one EBS volume, and one copy
 # of every team, roster and game. `/var/backups/breakside/*.tgz` is NOT a backup
 # — it is on the same disk, so it dies with the disk. This is the off-instance
-# copy. See docs/ops/backup-restore.md for the bucket/IAM setup and, more
+# copy. See runbooks/backup-restore.md in the private breakside-ops repo for the bucket/IAM setup and, more
 # importantly, for the RESTORE drill. An untested backup is not a backup.
 #
 # Credentials: the EC2 instance role, resolved through IMDSv2. Nothing is
@@ -91,7 +91,7 @@ trap on_exit EXIT
 # ------------------------------------------------------------- preflight ----
 FAILED_STEP="preflight checks"
 [[ $EUID -eq 0 ]] || { echo "ERROR: must run as root (needs to read $DATA_DIR)" >&2; exit 2; }
-[[ -n "$BUCKET" ]] || { echo "ERROR: BACKUP_BUCKET is not set. Add it to $CONFIG_FILE — see docs/ops/backup-restore.md" >&2; exit 2; }
+[[ -n "$BUCKET" ]] || { echo "ERROR: BACKUP_BUCKET is not set. Add it to $CONFIG_FILE — see breakside-ops runbooks/backup-restore.md" >&2; exit 2; }
 [[ -d "$DATA_DIR" ]] || { echo "ERROR: data directory $DATA_DIR does not exist" >&2; exit 2; }
 command -v aws >/dev/null || { echo "ERROR: aws CLI not found on PATH" >&2; exit 2; }
 

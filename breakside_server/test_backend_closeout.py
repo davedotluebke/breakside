@@ -1,5 +1,5 @@
 """
-Tests for the F1 backend-closeout fixes (CODE_REVIEW_REPORT.md § 7):
+Tests for the F1 backend-closeout fixes (June 2026 code review report § 7, archived in breakside-ops):
 
 - Event endpoints routed through shared require_* dependencies
   (read/list require team access, writes require team coach)

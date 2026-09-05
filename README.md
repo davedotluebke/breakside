@@ -202,7 +202,7 @@ For detailed technical documentation including:
 - Complete file structure
 - Server architecture
 - Data model and sync strategy
-- Deployment infrastructure
+- Deployment mechanism (the production instance itself is documented in a private ops repo)
 
 See **[ARCHITECTURE.md](ARCHITECTURE.md)**
 

@@ -118,7 +118,7 @@ ACTIVITY_WINDOW_SECONDS = 5 * 60
 # from an instance) and the EC2 `breakside` systemd unit has no `--workers`
 # flag. DO NOT add `--workers N` (or `gunicorn -w N`) without first moving this
 # state into a shared store (e.g. Redis); otherwise multi-coach control silently
-# breaks. See CODE_REVIEW_REPORT.md (decision 4).
+# breaks. See the June 2026 code review report, decision 4 (archived in breakside-ops).
 _controller_states: Dict[str, ControllerState] = {}
 _lock = threading.Lock()
 

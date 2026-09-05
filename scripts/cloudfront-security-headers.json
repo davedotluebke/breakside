@@ -1,6 +1,6 @@
 {
   "Name": "breakside-security-headers",
-  "Comment": "Breakside security headers + CSP (report-only). See docs/ops/security-headers.md",
+  "Comment": "Breakside security headers + CSP (report-only). See breakside-ops runbooks/security-headers.md",
   "SecurityHeadersConfig": {
     "StrictTransportSecurity": {
       "Override": true,

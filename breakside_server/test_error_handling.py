@@ -1,5 +1,5 @@
 """
-Tests for the G2 backend hardening (CODE_REVIEW_REPORT.md §8), both fixes
+Tests for the G2 backend hardening (June 2026 code review report §8, archived in breakside-ops), both fixes
 root-caused during the 2026-07-03 staging incident:
 
 1. Unhandled 500s carry CORS headers. An unhandled exception bypasses

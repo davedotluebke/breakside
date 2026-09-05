@@ -82,7 +82,7 @@ in `/etc/breakside/env` on EC2 so the localhost-only Claude preview could hit th
 while building the **Field tab** (`field-position` branch). Low risk (auth is a Bearer JWT in
 `localStorage`, not reachable cross-origin), but remove it once Field-tab dev wraps up:
 
-- [x] `ssh ec2-user@3.212.138.180`; edit `/etc/breakside/env`, drop the `http://localhost:*`
+- [x] On the API box, edit `/etc/breakside/env`, drop the `http://localhost:*`
       origin(s) from `BREAKSIDE_ALLOWED_ORIGINS`; `sudo systemctl restart breakside`
       *(done 2026-07-19 — inspection found **no** localhost entries anywhere in the env
       file (never persisted or already removed). Restarted anyway to pick up G2/G3;
@@ -100,10 +100,10 @@ MVP shipped. Coach speaks naturally; the system extracts structured game events.
 
 ## Near Term
 
-### Code-review follow-ups (see CODE_REVIEW_REPORT.md §8)
+### Code-review follow-ups (see the June 2026 code review report §8, archived in breakside-ops)
 
 The 2026-06/07 whole-codebase review program (A1…F5) is **complete**; everything still
-open from it lives in **[CODE_REVIEW_REPORT.md](CODE_REVIEW_REPORT.md) §8** (the G1–G11
+open from it lives in **the June 2026 code review report §8** (archived in the private breakside-ops repo) (the G1–G11
 punch list) — that section is the single source of truth for review follow-up work, so
 cleanup items are no longer scattered across this file's sections. Status snapshot
 (2026-07-19 session):
@@ -126,7 +126,7 @@ cleanup items are no longer scattered across this file's sections. Status snapsh
   config**, not CloudFront: prod's bucket had `ErrorDocument: index.html` (SPA fallback),
   staging's lacked it. Dave applied `put-bucket-website` on `staging.breakside.pro`
   (IndexDocument + ErrorDocument both `index.html`) and invalidated `/join/*` on
-  distribution `E12N2STN9MM8FA`. Verified: `get-bucket-website` shows the config, and
+  the staging distribution. Verified: `get-bucket-website` shows the config, and
   `staging.breakside.pro/join/<code>` now serves the app's `index.html` byte-identical to
   prod (both via S3's ErrorDocument mechanism, which returns HTTP 404 with the SPA body —
   prod has always worked this way).
@@ -138,7 +138,7 @@ cleanup items are no longer scattered across this file's sections. Status snapsh
   every player across two name buckets; id-keying reunites them, all diffs gains, team
   totals identical. Also answered: the write-migration was never run on prod (no
   `playerIds` anywhere) and isn't needed — frontend era resolvers are the stats path.
-  Full findings + script caveats in CODE_REVIEW_REPORT.md §G8.
+  Full findings + script caveats in the archived code review report §G8 (breakside-ops).
 - **Verified clean (G8):** prod + staging S3 buckets contain no stray `.claude/` /
   `.vscode/` / `.worktrees/` objects (checked 2026-07-19).
 - **G11.1–.2 exercised locally 2026-07-19** (two-tab multi-coach via
@@ -725,10 +725,8 @@ matching, short delta toasts. Field-verified on production. Remaining:
       seam (unit tests + live eval + manual field tests covered everything
       so far; the seam was built for this).
 
-Ops note: agent sessions currently cannot deploy to EC2 — after the Mac
-reboot the ssh-agent has no identity (`Permission denied (publickey)`).
-Re-establish once inside `tmux new -s breakside` (ssh to the EC2 host from
-that pane) and agent-driven deploys via send-keys work again.
+Ops note: backend deploys are `ssh breakside 'sudo bash -s' < scripts/deploy-backend.sh`
+after pushing main (see CLAUDE.md); the old tmux route is gone.
 
 ## AI Narration — improvements
 
@@ -1505,9 +1503,8 @@ git push origin main
 # Force PWA cache refresh
 # Edit service-worker.js: increment cacheName (e.g., 'v8' → 'v9')
 
-# Deploy API to EC2
-ssh ec2-user@3.212.138.180
-cd /opt/breakside && sudo git pull && sudo systemctl restart breakside
+# Deploy API to EC2 (push main first; the box pulls from origin)
+ssh breakside 'sudo bash -s' < scripts/deploy-backend.sh
 ```
 
 ### Supabase Dashboard
