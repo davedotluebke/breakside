@@ -81,6 +81,21 @@ function followPlayhead({ index, state }) {
     if (line && typeof line.scrollIntoView === 'function') line.scrollIntoView({ block: 'nearest', behavior: 'auto' });
 }
 
+/**
+ * The page header is sticky too: stack the stage under it, not behind it.
+ * The header's height changes with the viewport (it wraps on a phone), so
+ * this runs on every update and on resize.
+ */
+function stackUnderHeader() {
+    const host = $('replay-host');
+    const header = document.querySelector('.main-header');
+    if (!host || !header) return;
+    if (/sticky|fixed/.test(getComputedStyle(header).position)) {
+        host.style.top = `${Math.round(header.getBoundingClientRect().height)}px`;
+    }
+}
+window.addEventListener('resize', stackUnderHeader);
+
 function update(rawGame, opts) {
     opts = opts || {};
     const host = $('replay-host'), logEl = $('points-container');
@@ -91,6 +106,7 @@ function update(rawGame, opts) {
         opponentName: rawGame.opponent || 'Opponent',
         resolvePlayerName: entry => resolveName(entry, null) || entry,
     };
+    stackUnderHeader();
     if (!view) {
         view = mountReplayView({
             host, logEl,
