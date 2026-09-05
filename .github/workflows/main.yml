@@ -100,7 +100,10 @@ jobs:
 
       - name: Sync viewer to S3
         run: |
-          aws s3 sync breakside_server/static/viewer/ s3://breakside.pro/viewer/
+          # --delete: the viewer directory on S3 mirrors the repo directory
+          # exactly, so a file retired here (viewer-replay.js, 2026-09) does
+          # not linger on the bucket.
+          aws s3 sync breakside_server/static/viewer/ s3://breakside.pro/viewer/ --delete
 
       - name: Invalidate CloudFront cache
         run: |

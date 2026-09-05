@@ -1,61 +1,113 @@
-/**
- * Breakside Viewer
- * Handles navigation, entity listing, and game detail viewing
- * 
- * Phase 3 update: Added sync status indicator and pending sync badges
+/*
+ * Breakside public game viewer — the page behind /view/{hash} share links.
+ *
+ * One shared game, read through the public /api/share endpoints, polled while
+ * the game is live. Nothing here needs an account, and the page never has
+ * anywhere else to go.
+ *
+ * This is an ES module that imports the PWA's LEAF modules by URL-relative
+ * path: from /viewer/ on S3 `../` is the PWA root, and from /static/viewer/
+ * on the API host it is the /static/{playByPlay,store,utils,settings,css}
+ * mounts main.py adds. Only leaf modules may be reached — nothing that
+ * touches store/storage.js, utils/helpers.js or game/* — and
+ * tests/unit/replayLeafGraph.test.mjs pins the allowlist.
+ *
+ * What is shared, and therefore never drifts from the app:
+ *   - the game log itself: buildGameLogEntries (utils/gameLogRenderer.js)
+ *     is THE renderer of the play-by-play; this file only groups its entries
+ *     into one card per point and styles them. Event phrasing, possession
+ *     boundaries, score lines: all the app's.
+ *   - the events: raw share JSON becomes model instances through
+ *     hydrateGame (store/models.js) so the entries can summarize() them.
+ *   - the field replay: mountReplayView (playByPlay/replayView.js), the
+ *     app's own pitch + transport, with the cards as its log (each line
+ *     carries data-entry, exactly like the app's Log tab).
+ *   - the palette: css/tokens.css, flipped by data-theme (see applyTheme).
  */
+import { mountReplayView } from '../playByPlay/replayView.js';
+import { hydrateGame } from '../store/models.js';
+import { buildGameLogEntries, escapeHtml } from '../utils/gameLogRenderer.js';
 
 // =============================================================================
 // API Configuration
 // =============================================================================
 
 /**
- * Get the API base URL based on where the viewer is hosted.
- * - If served from api.breakside.pro, use relative URLs (same origin)
- * - If served from www.breakside.pro or other domains, use absolute URL
+ * Where the API lives, given where this page is served from: relative on the
+ * API host itself, api.breakside.pro from the S3/CloudFront origins,
+ * relative (the dev backend) on localhost.
  */
 function getApiBaseUrl() {
     const hostname = window.location.hostname;
-    
-    // If served from the API server itself, use relative URLs
-    if (hostname === 'api.breakside.pro' || hostname === 'api.breakside.us') {
-        return '';
-    }
-    
-    // If served from CloudFront/S3 or other hosts, use absolute API URL
+    if (hostname === 'api.breakside.pro' || hostname === 'api.breakside.us') return '';
     if (hostname === 'www.breakside.pro' || hostname === 'breakside.pro' ||
         hostname === 'www.breakside.us' || hostname === 'breakside.us' ||
         hostname === 'luebke.us' ||
         hostname.endsWith('.breakside.pro') || hostname.endsWith('.breakside.us')) {
         return 'https://api.breakside.pro';
     }
-    
-    // Local development
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return '';
-    }
-    
-    // Default: assume same origin
     return '';
 }
 
 const API_BASE_URL = getApiBaseUrl();
-console.log(`📡 Viewer API URL: ${API_BASE_URL || '(same origin)'}`);
 
 const POLL_INTERVAL = 3000; // 3 seconds
-const SYNC_STATUS_POLL_INTERVAL = 5000; // 5 seconds
 // A game with no end timestamp counts as LIVE only if it changed this
 // recently — otherwise it's just unfinished (coach forgot to end it).
 const LIVE_RECENCY_MS = 30 * 60 * 1000;
-let currentGameId = null;
-let lastGameVersion = null;
-let isPolling = false;
-let pollingInterval = null;
-let syncStatusInterval = null;
 
-// Share mode (public /view/{hash} links → /static/viewer/?share=<hash>).
-// All data flows through the public /api/share endpoints; the browse tabs
-// (auth-required endpoints, empty for anonymous visitors) are hidden.
+const $ = id => document.getElementById(id);
+
+// =============================================================================
+// Theme
+// =============================================================================
+
+// index.html's <head> already set data-theme before first paint from the same
+// inputs; this re-applies (idempotent), swaps the wordmark, and follows the
+// device while no explicit preference is stored. A signed-in coach's app
+// preference is readable here because the viewer shares the PWA's origin.
+const THEME_STORAGE_KEY = 'breakside_advanced_settings';
+const THEME_SETTING_KEY = 'display.theme';
+const THEME_COLOR = { light: '#ffffff', dark: '#0d0d0d' };
+const darkQuery = typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+function themePreference() {
+    try {
+        const store = JSON.parse(localStorage.getItem(THEME_STORAGE_KEY) || '{}') || {};
+        const pref = store[THEME_SETTING_KEY];
+        if (pref === 'light' || pref === 'dark') return pref;
+    } catch (e) { /* no storage: follow the device */ }
+    return 'auto';
+}
+
+function applyTheme() {
+    const pref = themePreference();
+    const resolved = pref === 'auto' ? ((darkQuery && darkQuery.matches) ? 'dark' : 'light') : pref;
+    const root = document.documentElement;
+    if (root.getAttribute('data-theme') !== resolved) root.setAttribute('data-theme', resolved);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', THEME_COLOR[resolved]);
+    document.querySelectorAll('img[data-dark-src]').forEach(img => {
+        if (!img.getAttribute('data-light-src')) img.setAttribute('data-light-src', img.getAttribute('src'));
+        const want = img.getAttribute(resolved === 'dark' ? 'data-dark-src' : 'data-light-src');
+        if (want && !img.src.endsWith(want.replace(/^\.\.\//, ''))) img.src = want;
+    });
+    // fieldPbp.js paints the pitch from computed token values; tell it the
+    // palette moved (the same event utils/theme.js dispatches in the app).
+    document.dispatchEvent(new CustomEvent('breakside:theme-changed', { detail: { theme: resolved, preference: pref } }));
+}
+
+if (darkQuery) {
+    const resync = () => applyTheme();
+    if (typeof darkQuery.addEventListener === 'function') darkQuery.addEventListener('change', resync);
+    else if (typeof darkQuery.addListener === 'function') darkQuery.addListener(resync);
+}
+
+// =============================================================================
+// Share session state
+// =============================================================================
+
 let currentShareHash = null;
 let lastShareStamp = null;
 let shareFetchInFlight = false;
@@ -63,549 +115,59 @@ let shareFetchInFlight = false;
 // two "share died" presentations; deliberately NOT keyed on lastShareStamp,
 // which stays null against a backend that predates the change stamp.
 let shareGameRendered = false;
+let pollingInterval = null;
 
-// Data caches
-let gamesCache = [];
-let teamsCache = [];
-let playersCache = [];
-
-// Player ID to name/nickname lookup (built from rosterSnapshot)
+// The game as last rendered: raw share JSON, its hydrated (model-event) twin,
+// and the entry options both the cards and the replay engine were built with
+// — the replay must build the SAME entry list so indices line up with the
+// cards' data-entry attributes.
+let rawGame = null;
+let hydrated = null;
+let entryOptions = null;
+// Player id → display name (nickname preferred), from the roster snapshot.
 let playerIdToName = {};
-
-// Sync status tracking
-let lastSyncStatus = null;
 
 // =============================================================================
 // Initialization
 // =============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Parse URL parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    const shareHash = urlParams.get('share');
-    const gameId = urlParams.get('game_id');
-    const teamId = urlParams.get('team_id');
-    const playerId = urlParams.get('player_id');
+    applyTheme();
 
-    // Setup navigation tabs
-    setupNavigation();
-
-    // Delegated handler for the entity/detail links rendered by the list
-    // views. These used to carry inline `onclick="showXDetail('${id}')"`,
-    // which put an attacker-controlled id inside a JS string inside an HTML
-    // attribute — a context HTML-escaping cannot make safe, because entities
-    // are decoded before the JS is parsed. Routing through data-* attributes
-    // removes the script context entirely; the id arrives via getAttribute as
-    // inert text.
-    document.addEventListener('click', (e) => {
-        const link = e.target.closest('a[data-detail]');
-        if (!link) return;
-        e.preventDefault();
-        const id = link.getAttribute('data-detail-id');
-        if (!id) return;
-        switch (link.getAttribute('data-detail')) {
-            case 'player': showPlayerDetail(id); break;
-            case 'team': showTeamDetail(id); break;
-            case 'game': showGameDetail(id); break;
-        }
-    });
-
-    // Setup info toggle for game detail view
-    const infoToggle = document.getElementById('info-toggle');
+    const infoToggle = $('info-toggle');
     if (infoToggle) {
-        const infoPanel = document.getElementById('game-info-panel');
-        infoToggle.addEventListener('click', () => {
-            infoPanel.classList.toggle('open');
-        });
+        infoToggle.addEventListener('click', () => $('game-info-panel').classList.toggle('open'));
     }
 
-    // Share mode is its own world: public endpoints only, no sync status,
-    // no browse navigation. Everything else about the page is unchanged.
-    if (shareHash) {
-        showSharedGame(shareHash);
+    // Tapping a point header toggles the card. Delegated: cards are
+    // re-rendered on every poll, and an ES module has no globals for
+    // inline handlers anyway.
+    $('points-container').addEventListener('click', (e) => {
+        const header = e.target.closest('.point-header');
+        if (!header || e.target.closest('[data-entry]')) return;
+        header.nextElementSibling.classList.toggle('expanded');
+    });
+
+    const shareHash = new URLSearchParams(window.location.search).get('share');
+    if (!shareHash) {
+        handleShareDead(404);
         return;
     }
-
-    // Start sync status polling (Phase 3)
-    startSyncStatusPolling();
-
-    // Route to appropriate view
-    if (gameId) {
-        showGameDetail(gameId);
-    } else if (teamId) {
-        showTeamDetail(teamId);
-    } else if (playerId) {
-        showPlayerDetail(playerId);
-    } else {
-        showHomeView();
-        loadAllData();
-    }
+    showSharedGame(shareHash);
 });
-
-function setupNavigation() {
-    const navTabs = document.querySelectorAll('.nav-tab');
-    navTabs.forEach(tab => {
-        tab.addEventListener('click', (e) => {
-            e.preventDefault();
-            const tabName = tab.getAttribute('data-tab');
-            switchTab(tabName);
-        });
-    });
-}
-
-function switchTab(tabName) {
-    // Update nav tabs
-    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    document.querySelector(`.nav-tab[data-tab="${tabName}"]`).classList.add('active');
-    
-    // Update tab content
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    document.getElementById(`${tabName}-tab`).classList.add('active');
-    
-    // Update URL hash
-    window.location.hash = tabName;
-}
-
-// =============================================================================
-// View Management
-// =============================================================================
-
-function showHomeView() {
-    stopPolling();
-    if (window.viewerReplay && typeof window.viewerReplay.destroy === 'function') window.viewerReplay.destroy();
-    document.getElementById('home-view').classList.remove('hidden');
-    document.getElementById('game-detail-view').classList.add('hidden');
-    document.getElementById('team-detail-view').classList.add('hidden');
-    document.getElementById('player-detail-view').classList.add('hidden');
-    document.getElementById('main-nav').classList.remove('hidden');
-    
-    // Update URL
-    history.pushState({}, '', '/static/viewer/');
-    
-    // Refresh current tab data
-    const activeTab = document.querySelector('.nav-tab.active');
-    if (activeTab) {
-        const tabName = activeTab.getAttribute('data-tab');
-        if (tabName === 'games') loadGames();
-        else if (tabName === 'teams') loadTeams();
-        else if (tabName === 'players') loadPlayers();
-    }
-}
-
-function showGameDetail(gameId) {
-    currentGameId = gameId;
-    document.getElementById('home-view').classList.add('hidden');
-    document.getElementById('game-detail-view').classList.remove('hidden');
-    document.getElementById('team-detail-view').classList.add('hidden');
-    document.getElementById('player-detail-view').classList.add('hidden');
-    document.getElementById('main-nav').classList.add('hidden');
-    
-    // Update URL
-    history.pushState({}, '', `/static/viewer/?game_id=${gameId}`);
-    
-    // Start loading and polling
-    startGamePolling();
-}
-
-function showTeamDetail(teamId) {
-    stopPolling();
-    document.getElementById('home-view').classList.add('hidden');
-    document.getElementById('game-detail-view').classList.add('hidden');
-    document.getElementById('team-detail-view').classList.remove('hidden');
-    document.getElementById('player-detail-view').classList.add('hidden');
-    document.getElementById('main-nav').classList.add('hidden');
-    
-    // Update URL
-    history.pushState({}, '', `/static/viewer/?team_id=${teamId}`);
-    
-    loadTeamDetail(teamId);
-}
-
-function showPlayerDetail(playerId) {
-    stopPolling();
-    document.getElementById('home-view').classList.add('hidden');
-    document.getElementById('game-detail-view').classList.add('hidden');
-    document.getElementById('team-detail-view').classList.add('hidden');
-    document.getElementById('player-detail-view').classList.remove('hidden');
-    document.getElementById('main-nav').classList.add('hidden');
-    
-    // Update URL
-    history.pushState({}, '', `/static/viewer/?player_id=${playerId}`);
-    
-    loadPlayerDetail(playerId);
-}
-
-// =============================================================================
-// Data Loading
-// =============================================================================
-
-async function loadAllData() {
-    updateConnectionStatus('connecting');
-    try {
-        await Promise.all([loadGames(), loadTeams(), loadPlayers()]);
-        updateConnectionStatus('connected');
-    } catch (error) {
-        console.error('Failed to load data:', error);
-        updateConnectionStatus('disconnected');
-    }
-}
-
-async function loadGames() {
-    const container = document.getElementById('games-list');
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/games`);
-        if (!response.ok) throw new Error(`Failed to fetch games: ${response.statusText}`);
-        
-        const data = await response.json();
-        gamesCache = data.games || [];
-        
-        renderGamesList(gamesCache, container);
-        updateConnectionStatus('connected');
-    } catch (error) {
-        console.error('Failed to load games:', error);
-        container.innerHTML = `<div class="error-message">Failed to load games: ${escapeHtmlViewer(error.message)}</div>`;
-        updateConnectionStatus('disconnected');
-    }
-}
-
-async function loadTeams() {
-    const container = document.getElementById('teams-list');
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/teams`);
-        if (!response.ok) throw new Error(`Failed to fetch teams: ${response.statusText}`);
-        
-        const data = await response.json();
-        teamsCache = data.teams || [];
-        
-        renderTeamsList(teamsCache, container);
-        updateConnectionStatus('connected');
-    } catch (error) {
-        console.error('Failed to load teams:', error);
-        container.innerHTML = `<div class="error-message">Failed to load teams: ${escapeHtmlViewer(error.message)}</div>`;
-        updateConnectionStatus('disconnected');
-    }
-}
-
-async function loadPlayers() {
-    const container = document.getElementById('players-list');
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/players`);
-        if (!response.ok) throw new Error(`Failed to fetch players: ${response.statusText}`);
-        
-        const data = await response.json();
-        playersCache = data.players || [];
-        
-        renderPlayersList(playersCache, container);
-        updateConnectionStatus('connected');
-    } catch (error) {
-        console.error('Failed to load players:', error);
-        container.innerHTML = `<div class="error-message">Failed to load players: ${escapeHtmlViewer(error.message)}</div>`;
-        updateConnectionStatus('disconnected');
-    }
-}
-
-async function loadTeamDetail(teamId) {
-    try {
-        const [teamResponse, playersResponse, gamesResponse] = await Promise.all([
-            fetch(`${API_BASE_URL}/api/teams/${teamId}`),
-            fetch(`${API_BASE_URL}/api/teams/${teamId}/players`),
-            fetch(`${API_BASE_URL}/api/teams/${teamId}/games`)
-        ]);
-        
-        if (!teamResponse.ok) throw new Error('Team not found');
-        
-        const team = await teamResponse.json();
-        const playersData = await playersResponse.json();
-        const gamesData = await gamesResponse.json();
-        
-        document.getElementById('team-name').textContent = team.name;
-        document.getElementById('team-id-display').textContent = `ID: ${team.id}`;
-        document.getElementById('team-player-count').textContent = playersData.players?.length || 0;
-        document.getElementById('team-game-count').textContent = gamesData.game_ids?.length || 0;
-        
-        // Phase 4: Load and compute season stats
-        loadTeamSeasonStats(teamId, gamesData.game_ids || []);
-        
-        // Render players with gender-based color coding
-        const playersContainer = document.getElementById('team-players-list');
-        if (playersData.players && playersData.players.length > 0) {
-            playersContainer.innerHTML = playersData.players.map(p => {
-                const genderClass = p.gender === 'FMP' ? 'gender-fmp' : p.gender === 'MMP' ? 'gender-mmp' : '';
-                return `
-                    <a href="?player_id=${encodeURIComponent(p.id)}" class="mini-item ${genderClass}" data-detail="player" data-detail-id="${escapeHtmlViewer(p.id)}">
-                        <span class="mini-name">${escapeHtmlViewer(p.name)}</span>
-                        <span class="mini-badge">#${escapeHtmlViewer(p.number || '-')}</span>
-                    </a>
-                `;
-            }).join('');
-        } else {
-            playersContainer.innerHTML = '<div class="empty-state">No players</div>';
-        }
-        
-        // Render games (need to fetch game details)
-        const gamesContainer = document.getElementById('team-games-list');
-        if (gamesData.game_ids && gamesData.game_ids.length > 0) {
-            gamesContainer.innerHTML = gamesData.game_ids.map(gameId => `
-                <a href="?game_id=${encodeURIComponent(gameId)}" class="mini-item" data-detail="game" data-detail-id="${escapeHtmlViewer(gameId)}">
-                    <span class="mini-name">${escapeHtmlViewer(formatGameId(gameId))}</span>
-                </a>
-            `).join('');
-        } else {
-            gamesContainer.innerHTML = '<div class="empty-state">No games</div>';
-        }
-        
-        updateConnectionStatus('connected');
-    } catch (error) {
-        console.error('Failed to load team:', error);
-        document.getElementById('team-name').textContent = 'Error loading team';
-        updateConnectionStatus('disconnected');
-    }
-}
-
-async function loadPlayerDetail(playerId) {
-    try {
-        const [playerResponse, gamesResponse, teamsResponse] = await Promise.all([
-            fetch(`${API_BASE_URL}/api/players/${playerId}`),
-            fetch(`${API_BASE_URL}/api/players/${playerId}/games`),
-            fetch(`${API_BASE_URL}/api/players/${playerId}/teams`)
-        ]);
-        
-        if (!playerResponse.ok) throw new Error('Player not found');
-        
-        const player = await playerResponse.json();
-        const gamesData = await gamesResponse.json();
-        const teamsData = teamsResponse.ok ? await teamsResponse.json() : { teams: [] };
-        
-        document.getElementById('player-name').textContent = player.name;
-        document.getElementById('player-id-display').textContent = `ID: ${player.id}`;
-        document.getElementById('player-number').textContent = player.number || '-';
-        
-        // Set gender with color styling
-        const genderEl = document.getElementById('player-gender');
-        genderEl.textContent = player.gender || '-';
-        genderEl.classList.remove('gender-fmp', 'gender-mmp');
-        if (player.gender === 'FMP') {
-            genderEl.classList.add('gender-fmp');
-        } else if (player.gender === 'MMP') {
-            genderEl.classList.add('gender-mmp');
-        }
-        
-        document.getElementById('player-game-count').textContent = gamesData.game_ids?.length || 0;
-        
-        // Phase 4: Load and compute career stats
-        loadPlayerCareerStats(playerId, gamesData.game_ids || []);
-        
-        // Render teams
-        const teamsContainer = document.getElementById('player-teams-list');
-        if (teamsData.teams && teamsData.teams.length > 0) {
-            teamsContainer.innerHTML = teamsData.teams.map(team => `
-                <a href="?team_id=${encodeURIComponent(team.id)}" class="mini-item" data-detail="team" data-detail-id="${escapeHtmlViewer(team.id)}">
-                    <span class="mini-name">${escapeHtmlViewer(team.name)}</span>
-                </a>
-            `).join('');
-        } else {
-            teamsContainer.innerHTML = '<div class="empty-state">Not on any teams</div>';
-        }
-        
-        // Render games
-        const gamesContainer = document.getElementById('player-games-list');
-        if (gamesData.game_ids && gamesData.game_ids.length > 0) {
-            gamesContainer.innerHTML = gamesData.game_ids.map(gameId => `
-                <a href="?game_id=${encodeURIComponent(gameId)}" class="mini-item" data-detail="game" data-detail-id="${escapeHtmlViewer(gameId)}">
-                    <span class="mini-name">${escapeHtmlViewer(formatGameId(gameId))}</span>
-                </a>
-            `).join('');
-        } else {
-            gamesContainer.innerHTML = '<div class="empty-state">No games</div>';
-        }
-        
-        updateConnectionStatus('connected');
-    } catch (error) {
-        console.error('Failed to load player:', error);
-        document.getElementById('player-name').textContent = 'Error loading player';
-        updateConnectionStatus('disconnected');
-    }
-}
-
-// =============================================================================
-// List Rendering
-// =============================================================================
-
-function renderGamesList(games, container) {
-    if (games.length === 0) {
-        container.innerHTML = '<div class="empty-state">No games found</div>';
-        return;
-    }
-    
-    // Sort by date, newest first
-    games.sort((a, b) => {
-        const dateA = new Date(a.game_start_timestamp || 0);
-        const dateB = new Date(b.game_start_timestamp || 0);
-        return dateB - dateA;
-    });
-    
-    container.innerHTML = games.map(game => {
-        const date = game.game_start_timestamp ? new Date(game.game_start_timestamp) : null;
-        const dateStr = date ? date.toLocaleDateString() : 'Unknown date';
-        const scores = game.scores || {};
-        const teamScore = scores.team || 0;
-        const oppScore = scores.opponent || 0;
-        const isInProgress = !game.game_end_timestamp;
-        const isPending = game._localOnly || isLocalOnly('game', game.game_id);
-        const localOnlyClass = isPending ? 'local-only' : '';
-        
-        return `
-            <a href="?game_id=${encodeURIComponent(game.game_id)}" class="entity-card game-card ${localOnlyClass}" data-detail="game" data-detail-id="${escapeHtmlViewer(game.game_id)}">
-                <div class="card-header">
-                    <span class="card-title">${escapeHtmlViewer(game.team)} vs ${escapeHtmlViewer(game.opponent)}</span>
-                    ${isInProgress ? '<span class="live-badge">LIVE</span>' : ''}
-                    ${isPending ? '<span class="pending-sync-badge"><span class="pending-icon">⏳</span>Pending</span>' : ''}
-                </div>
-                <div class="card-meta">
-                    <span class="card-date">${escapeHtmlViewer(dateStr)}</span>
-                    <span class="card-score">${escapeHtmlViewer(teamScore)} - ${escapeHtmlViewer(oppScore)}</span>
-                    <span class="card-points">${escapeHtmlViewer(game.points_count || 0)} pts</span>
-                </div>
-            </a>
-        `;
-    }).join('');
-}
-
-function renderTeamsList(teams, container) {
-    if (teams.length === 0) {
-        container.innerHTML = '<div class="empty-state">No teams found. Create teams in the PWA to see them here.</div>';
-        return;
-    }
-    
-    container.innerHTML = teams.map(team => {
-        const playerCount = team.playerIds?.length || 0;
-        const isPending = team._localOnly || isLocalOnly('team', team.id);
-        const localOnlyClass = isPending ? 'local-only' : '';
-        
-        return `
-            <a href="?team_id=${encodeURIComponent(team.id)}" class="entity-card team-card ${localOnlyClass}" data-detail="team" data-detail-id="${escapeHtmlViewer(team.id)}">
-                <div class="card-header">
-                    <span class="card-title">${escapeHtmlViewer(team.name)}</span>
-                    ${isPending ? '<span class="pending-sync-badge"><span class="pending-icon">⏳</span>Pending</span>' : ''}
-                </div>
-                <div class="card-meta">
-                    <span class="card-id">${escapeHtmlViewer(team.id)}</span>
-                    <span class="card-count">${playerCount} players</span>
-                </div>
-            </a>
-        `;
-    }).join('');
-}
-
-function renderPlayersList(players, container) {
-    if (players.length === 0) {
-        container.innerHTML = '<div class="empty-state">No players found. Create players in the PWA to see them here.</div>';
-        return;
-    }
-    
-    container.innerHTML = players.map(player => {
-        const genderClass = player.gender === 'FMP' ? 'gender-fmp' : player.gender === 'MMP' ? 'gender-mmp' : '';
-        const isPending = player._localOnly || isLocalOnly('player', player.id);
-        const localOnlyClass = isPending ? 'local-only' : '';
-        
-        return `
-            <a href="?player_id=${encodeURIComponent(player.id)}" class="entity-card player-card ${genderClass} ${localOnlyClass}" data-detail="player" data-detail-id="${escapeHtmlViewer(player.id)}">
-                <div class="card-header">
-                    <span class="card-title">${escapeHtmlViewer(player.name)}</span>
-                    ${player.number ? `<span class="player-number">#${escapeHtmlViewer(player.number)}</span>` : ''}
-                    ${isPending ? '<span class="pending-sync-badge"><span class="pending-icon">⏳</span>Pending</span>' : ''}
-                </div>
-                <div class="card-meta">
-                    <span class="card-id">${escapeHtmlViewer(player.id)}</span>
-                    ${player.gender ? `<span class="card-gender">${escapeHtmlViewer(player.gender)}</span>` : ''}
-                </div>
-            </a>
-        `;
-    }).join('');
-}
-
-// =============================================================================
-// Game Detail & Polling
-// =============================================================================
-
-function startGamePolling() {
-    if (isPolling) return;
-    isPolling = true;
-    
-    updateConnectionStatus('connecting');
-    loadGameDetail();
-    
-    pollingInterval = setInterval(async () => {
-        try {
-            await loadGameDetail();
-            updateConnectionStatus('connected');
-        } catch (error) {
-            console.error('Poll failed:', error);
-            updateConnectionStatus('disconnected');
-        }
-    }, POLL_INTERVAL);
-}
-
-function stopPolling() {
-    if (pollingInterval) {
-        clearInterval(pollingInterval);
-        pollingInterval = null;
-    }
-    isPolling = false;
-    currentGameId = null;
-    lastGameVersion = null;
-}
-
-async function loadGameDetail() {
-    if (!currentGameId) return;
-    
-    const response = await fetch(`${API_BASE_URL}/api/games/${currentGameId}`);
-    if (!response.ok) {
-        throw new Error(`Failed to fetch game: ${response.statusText}`);
-    }
-
-    const gameData = await response.json();
-    
-    // Check if data changed
-    const currentDataJson = JSON.stringify(gameData);
-    if (lastGameVersion !== currentDataJson) {
-        lastGameVersion = currentDataJson;
-        renderGame(gameData);
-    }
-    
-    updateConnectionStatus('connected');
-}
 
 // =============================================================================
 // Share Mode (public /view/{hash} links)
 // =============================================================================
 
-/**
- * Enter share mode: single shared game, public endpoints, live polling.
- * The page never leaves this mode — anonymous visitors have nowhere else
- * to go (the browse endpoints require auth and would all come back empty).
- */
+/** Enter share mode: single shared game, public endpoints, live polling. */
 function showSharedGame(hash) {
     currentShareHash = hash;
-    document.body.classList.add('share-mode');
-
-    // The logo has nothing useful to link to inside the viewer for an
-    // anonymous visitor — send it to the product page instead.
-    const logo = document.querySelector('.main-header .logo');
-    if (logo) logo.href = 'https://www.breakside.pro';
-
-    document.getElementById('home-view').classList.add('hidden');
-    document.getElementById('game-detail-view').classList.remove('hidden');
-    document.getElementById('team-detail-view').classList.add('hidden');
-    document.getElementById('player-detail-view').classList.add('hidden');
-    document.getElementById('main-nav').classList.add('hidden');
-    document.getElementById('share-footer').style.display = '';
-
+    $('game-view').classList.remove('hidden');
     updateConnectionStatus('connecting');
     loadSharedGame();
 
     pollingInterval = setInterval(pollSharedGame, POLL_INTERVAL);
-    isPolling = true;
 
     // Parents pocket their phones between points: stop polling while the
     // tab is hidden, catch up immediately when it comes back.
@@ -657,9 +219,7 @@ async function loadSharedGame() {
     }
 }
 
-/**
- * Cheap poll: change stamp only. Refetch the full game when it moves.
- */
+/** Cheap poll: change stamp only. Refetch the full game when it moves. */
 async function pollSharedGame() {
     if (!currentShareHash) return;
     try {
@@ -703,21 +263,20 @@ function handleShareDead(status) {
         clearInterval(pollingInterval);
         pollingInterval = null;
     }
-    isPolling = false;
 
     if (shareGameRendered) {
         // Mid-session death: keep the last state visible, stop pretending
         // it's live.
-        document.getElementById('share-expired-banner').style.display = '';
+        $('share-expired-banner').style.display = '';
         setStatusBadge(null);
         updateConnectionStatus('disconnected');
         return;
     }
 
-    document.getElementById('game-detail-view').classList.add('hidden');
-    document.getElementById('share-error-view').classList.remove('hidden');
-    const title = document.getElementById('share-error-title');
-    const message = document.getElementById('share-error-message');
+    $('game-view').classList.add('hidden');
+    $('share-error-view').classList.remove('hidden');
+    const title = $('share-error-title');
+    const message = $('share-error-message');
     if (status === 410) {
         title.textContent = 'This link has expired';
         message.textContent =
@@ -751,7 +310,7 @@ function renderShareStatusBadge(game) {
 }
 
 function setStatusBadge(kind, label) {
-    const badge = document.getElementById('game-status-badge');
+    const badge = $('game-status-badge');
     if (!badge) return;
     if (!kind) {
         badge.style.display = 'none';
@@ -762,373 +321,212 @@ function setStatusBadge(kind, label) {
     badge.style.display = '';
 }
 
+function updateConnectionStatus(status) {
+    const el = $('connection-status');
+    if (!el) return;
+    el.className = `status-badge ${status}`;
+    el.textContent = { connecting: 'Connecting...', connected: 'Connected', disconnected: 'Disconnected' }[status] || status;
+}
+
+// =============================================================================
+// Player names
+// =============================================================================
+
 /**
- * Resolve a player ID to display name (nickname if present, otherwise name)
- * Falls back to the ID itself if not found in rosterSnapshot
+ * Resolve a player id to its display name (nickname if present, otherwise
+ * name). Point rosters and legacy events carry bare NAMES in some data eras
+ * and IDS in others; an id that isn't in the roster snapshot falls back to
+ * the name portion of the id (everything before the `-hash` suffix).
  */
 function resolvePlayerName(playerId) {
     if (!playerId) return 'Unknown';
-    
-    // Check if we have a mapping
-    if (playerIdToName[playerId]) {
-        return playerIdToName[playerId];
-    }
-    
-    // If it doesn't look like an ID (no hyphen with 4-char suffix), it's probably already a name
-    if (!playerId.includes('-') || playerId.length < 6) {
-        return playerId;
-    }
-    
-    // Extract name portion from ID (everything before the last hyphen)
+    if (playerIdToName[playerId]) return playerIdToName[playerId];
+    // Not id-shaped (no hyphen + 4-char suffix): already a name.
+    if (!playerId.includes('-') || playerId.length < 6) return playerId;
     const lastHyphen = playerId.lastIndexOf('-');
-    if (lastHyphen > 0) {
-        return playerId.substring(0, lastHyphen);
-    }
-    
-    return playerId;
+    return lastHyphen > 0 ? playerId.substring(0, lastHyphen) : playerId;
 }
 
-/**
- * Build player ID to name lookup from rosterSnapshot
- */
+/** hydrateGame's resolver: the event's own name wins, else the id lookup. */
+function resolveEventName(id, name) {
+    if (name) return name;
+    return id ? resolvePlayerName(id) : null;
+}
+
 function buildPlayerLookup(game) {
     playerIdToName = {};
-    
-    if (game.rosterSnapshot && game.rosterSnapshot.players) {
-        game.rosterSnapshot.players.forEach(player => {
-            // Prefer nickname if present, otherwise use name
-            const displayName = player.nickname || player.name;
-            playerIdToName[player.id] = displayName;
-        });
-    }
+    const players = (game.rosterSnapshot && game.rosterSnapshot.players) || [];
+    players.forEach(player => {
+        playerIdToName[player.id] = player.nickname || player.name;
+    });
 }
 
+/** Jersey numbers for replay actor labels, when the roster snapshot carries them. */
+function playerByName(name) {
+    const players = (rawGame && rawGame.rosterSnapshot && rawGame.rosterSnapshot.players) || [];
+    const p = players.find(x => x && (x.name === name || x.nickname === name));
+    return p ? { name, number: p.number != null ? p.number : null } : null;
+}
+
+// =============================================================================
+// Rendering
+// =============================================================================
+
 function renderGame(game) {
-    // Build player lookup for this game
+    rawGame = game;
     buildPlayerLookup(game);
-    
-    // Render Header
-    document.getElementById('game-title').textContent = `${game.team} vs ${game.opponent}`;
-    // Share mode has no game id in play (and it's internal plumbing anyway)
-    document.getElementById('game-id').textContent =
-        currentShareHash ? '' : `ID: ${currentGameId}`;
-    
+    hydrated = hydrateGame(game, resolveEventName);
+    entryOptions = {
+        teamName: game.team || 'Team',
+        opponentName: game.opponent || 'Opponent',
+        resolvePlayerName: entry => resolvePlayerName(entry),
+    };
+
+    renderHeader(game);
+    renderCards(game);
+    updateReplay(game);
+}
+
+function renderHeader(game) {
+    $('game-title').textContent = `${game.team} vs ${game.opponent}`;
+
     const date = new Date(game.gameStartTimestamp);
-    document.getElementById('game-date').textContent = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-    
+    $('game-date').textContent = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
     const scores = game.scores || { team: 0, opponent: 0 };
     const teamScore = scores.team || scores[game.team] || 0;
     const oppScore = scores.opponent || scores[game.opponent] || 0;
-    
-    document.getElementById('game-score').textContent = `${teamScore} - ${oppScore}`;
-    
-    // Stats
-    document.getElementById('total-points').textContent = (game.points || []).length;
-    
-    // Duration = wall-clock time from start to end (or now if in progress)
-    if (game.gameStartTimestamp) {
-        const start = new Date(game.gameStartTimestamp);
-        const end = game.gameEndTimestamp ? new Date(game.gameEndTimestamp) : null;
-        if (end) {
-            const diffSeconds = Math.floor((end - start) / 1000);
-            document.getElementById('game-duration').textContent = formatDuration(diffSeconds);
-        } else {
-            // Game in progress - show "--:--" since wall-clock from weeks ago is meaningless
-            document.getElementById('game-duration').textContent = '--:--';
-        }
-    } else {
-        document.getElementById('game-duration').textContent = '--:--';
-    }
-    
-    // Play Time = sum of actual point durations (excludes timeouts, halftime, etc.)
-    let totalPlayedMs = 0;
-    (game.points || []).forEach(point => {
-        if (point.totalPointTime) {
-            totalPlayedMs += point.totalPointTime;
-        }
-    });
-    
-    const playTimeEl = document.getElementById('game-play-time');
-    if (playTimeEl) {
-        if (totalPlayedMs > 0) {
-            playTimeEl.textContent = formatDuration(Math.floor(totalPlayedMs / 1000));
-        } else {
-            playTimeEl.textContent = '--:--';
-        }
-    }
-    
-    // Show data format indicator (Phase 2)
-    const formatIndicator = document.getElementById('data-format-indicator');
-    if (formatIndicator) {
-        const hasTeamId = !!game.teamId;
-        const hasRosterSnapshot = !!game.rosterSnapshot;
-        const isNewFormat = hasTeamId || hasRosterSnapshot;
-        
-        if (isNewFormat) {
-            formatIndicator.textContent = 'New Format';
-            formatIndicator.className = 'format-badge new-format';
-            formatIndicator.title = `teamId: ${game.teamId || 'none'}, rosterSnapshot: ${hasRosterSnapshot ? 'yes' : 'no'}`;
-        } else {
-            formatIndicator.textContent = 'Legacy';
-            formatIndicator.className = 'format-badge legacy-format';
-            formatIndicator.title = 'Legacy format (name-based references)';
-        }
-        formatIndicator.style.display = 'inline-block';
-    }
+    $('game-score').textContent = `${teamScore} - ${oppScore}`;
 
-    // Render Points
-    const pointsContainer = document.getElementById('points-container');
-    
-    // Save expanded state
+    $('total-points').textContent = (game.points || []).length;
+
+    // Duration = wall-clock time from start to end. In progress → "--:--":
+    // wall-clock from weeks ago is meaningless.
+    let duration = '--:--';
+    if (game.gameStartTimestamp && game.gameEndTimestamp) {
+        duration = formatDuration(Math.floor((new Date(game.gameEndTimestamp) - new Date(game.gameStartTimestamp)) / 1000));
+    }
+    $('game-duration').textContent = duration;
+
+    // Play Time = sum of point durations (excludes timeouts, halftime, etc.)
+    let totalPlayedMs = 0;
+    (game.points || []).forEach(point => { if (point.totalPointTime) totalPlayedMs += point.totalPointTime; });
+    $('game-play-time').textContent = totalPlayedMs > 0 ? formatDuration(Math.floor(totalPlayedMs / 1000)) : '--:--';
+}
+
+/**
+ * One card per point, its body the shared game log's entries for that point
+ * (everything but the 'roster' entry, which becomes the card title). Each
+ * line carries data-entry = its index in the entry list, which is what the
+ * replay view marks (rv-cur / rv-future) and seeks by on tap.
+ */
+function renderCards(game) {
+    const container = $('points-container');
+    const entries = buildGameLogEntries(hydrated, entryOptions);
+    const byPoint = new Map();
+    entries.forEach((entry, index) => {
+        if (entry.pointIdx === null || entry.pointIdx === undefined) return;
+        if (!byPoint.has(entry.pointIdx)) byPoint.set(entry.pointIdx, []);
+        byPoint.get(entry.pointIdx).push({ entry, index });
+    });
+
+    // Preserve which cards the reader has open across re-renders.
     const expandedPoints = new Set();
-    document.querySelectorAll('.point-content.expanded').forEach(el => {
+    container.querySelectorAll('.point-content.expanded').forEach(el => {
         expandedPoints.add(el.getAttribute('data-point-index'));
     });
-
-    // Check scroll position
     const isNearBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 100;
 
-    pointsContainer.innerHTML = '';
-
-    const totalPoints = (game.points || []).length;
-
-    (game.points || []).forEach((point, index) => {
-        const pointEl = createPointElement(point, index + 1, game.team, game.opponent);
-        pointsContainer.appendChild(pointEl);
-
-        const isLast = index === totalPoints - 1;
+    container.innerHTML = '';
+    const points = game.points || [];
+    points.forEach((point, index) => {
+        const card = createPointCard(point, index, byPoint.get(index) || [], game);
+        container.appendChild(card);
+        const isLast = index === points.length - 1;
         const isInProgress = !point.winner;
-        
         if (expandedPoints.has(String(index)) || (isLast && (isInProgress || expandedPoints.size === 0))) {
-            const content = pointEl.querySelector('.point-content');
-            content.classList.add('expanded');
+            card.querySelector('.point-content').classList.add('expanded');
         }
-        pointEl.querySelector('.point-content').setAttribute('data-point-index', index);
-        pointEl.setAttribute('data-point', index);
     });
 
-    if (isNearBottom) {
-        window.scrollTo(0, document.body.scrollHeight);
-    }
+    if (isNearBottom) window.scrollTo(0, document.body.scrollHeight);
+}
 
-    // Field replay above the cards (viewer-replay.js, an ES module): mounts
-    // on the first game with located events, refreshes on every re-render.
-    // Live = follow the tail while the game is in progress.
-    if (window.viewerReplay && typeof window.viewerReplay.update === 'function') {
-        try { window.viewerReplay.update(game, { live: !game.gameEndTimestamp }); }
-        catch (err) { console.error('Replay update failed:', err); }
+// Event types the stylesheet has a pill colour for. `event.type` is
+// attacker-controlled and lands in a class attribute, where escaping alone
+// would still let it inject extra classes — so the class comes from this
+// allowlist and the visible label is escaped separately.
+const KNOWN_EVENT_TYPES = ['Throw', 'Turnover', 'Defense', 'Pull', 'Violation', 'Other'];
+
+/**
+ * HTML for one game-log entry as a card line. Every non-literal string is
+ * escaped: game data reaches the viewer straight from storage, and this page
+ * shares the PWA's origin (where the Supabase tokens live), so script
+ * execution here would be account takeover, not a contained defacement.
+ */
+function renderEntry({ entry, index }) {
+    const text = escapeHtml(entry.text.trim());
+    const attr = `data-entry="${index}"`;
+    switch (entry.kind) {
+        case 'event':
+        case 'after': {
+            const type = entry.event ? String(entry.event.type || '') : '';
+            const typeClass = KNOWN_EVENT_TYPES.includes(type) ? type : 'Unknown';
+            return `<div class="log-line event-item" ${attr}>` +
+                `<span class="event-type ${typeClass}">${escapeHtml(type)}</span>` +
+                `<span class="event-desc">${text}</span></div>`;
+        }
+        case 'possession':
+            return `<div class="log-line possession-header ${entry.side === 'us' ? 'possession-offense' : 'possession-defense'}" ${attr}>${text}</div>`;
+        case 'score':
+            return `<div class="log-line score-line ${entry.side === 'us' ? 'our-score' : 'their-score'}" ${attr}>${text}</div>`;
+        case 'currentscore':
+            return `<div class="log-line current-score" ${attr}>${text}</div>`;
+        case 'pullnote':
+            return `<div class="log-line pull-note" ${attr}>${text}</div>`;
+        case 'periodnote':
+            return `<div class="log-line period-note" ${attr}>${text}</div>`;
+        default:
+            return '';
     }
 }
 
-function createPointElement(point, pointNumber, teamName, opponentName) {
+function createPointCard(point, index, pointEntries, game) {
     const div = document.createElement('div');
     div.className = 'point-card';
-    
+    div.setAttribute('data-point', index);
+
     let resultClass = '';
     let resultText = 'In Progress';
-    
     if (point.winner) {
-        if (point.winner === 'team' || point.winner === teamName) {
+        if (point.winner === 'team' || point.winner === game.team) {
             resultClass = 'our-score';
-            resultText = `${teamName} Score`;
+            resultText = `${game.team} Score`;
         } else {
             resultClass = 'their-score';
-            resultText = `${opponentName} Score`;
+            resultText = `${game.opponent} Score`;
         }
     }
 
     const durationSeconds = point.totalPointTime ? Math.floor(point.totalPointTime / 1000) : 0;
-    const summary = `Duration: ${formatDuration(durationSeconds)}`;
-    // Resolve player IDs to names
     const rosterList = (point.players || []).map(p => resolvePlayerName(p)).join(', ');
+    const lines = pointEntries.filter(({ entry }) => entry.kind !== 'roster').map(renderEntry).join('');
 
-    // rosterList is player names; resultText embeds the team/opponent name.
-    // Both are coach-entered and reach anonymous share-link visitors, so both
-    // are escaped. pointNumber is a loop index and resultClass is one of two
-    // literals, so neither is attacker-controlled.
+    // rosterList and resultText are coach-entered names; the index is a loop
+    // counter and resultClass one of two literals.
     div.innerHTML = `
-        <div class="point-header" onclick="togglePoint(this)">
+        <div class="point-header">
             <div class="point-title">
-                <span>Point ${pointNumber}: ${escapeHtmlViewer(rosterList)}</span>
-                <span class="point-score-summary">${escapeHtmlViewer(summary)}</span>
+                <span>Point ${index + 1}: ${escapeHtml(rosterList)}</span>
+                <span class="point-score-summary">Duration: ${formatDuration(durationSeconds)}</span>
             </div>
-            <span class="point-result ${resultClass}">${escapeHtmlViewer(resultText)}</span>
+            <span class="point-result ${resultClass}">${escapeHtml(resultText)}</span>
         </div>
-        <div class="point-content">
-            ${renderPossessions(point.possessions)}
+        <div class="point-content" data-point-index="${index}">
+            ${lines || '<div class="log-line empty-line">No plays yet</div>'}
         </div>
     `;
     return div;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// KEEP IN SYNC with the PWA's shared game-log renderer:
-//   utils/gameLogRenderer.js (buildGameLogText / renderGameLogHTML)
-// That module is the single source of truth for the PWA's linear game log
-// (in-game Log tab, Copy Summary text, post-game summary). This viewer is a
-// separate origin/app (served by the API, classic script, no ES modules), so
-// it CANNOT import PWA modules and keeps its own per-point CARD layout —
-// structurally different on purpose (point result lives in the card header,
-// so e.g. betweenPoints re-ordering doesn't apply here). But renderPossessions
-// / renderEvent below re-implement the same event walking and phrasing as
-// Event.summarize() in store/models.js — when event phrasing, flags, or
-// possession-boundary semantics change there or in gameLogRenderer, mirror
-// the change here by hand.
-// ─────────────────────────────────────────────────────────────────────────────
-// HTML-escape for EVERY non-literal string interpolated into innerHTML in this
-// file. Game data reaches the viewer straight from storage with no validation
-// on the way in — routers/games.py checks only that `team` and `opponent`
-// exist, and player creation only that `name` does — so player names, team
-// names, opponent names and every event field are attacker-controlled text.
-//
-// This viewer is served from s3://breakside.pro/viewer/, i.e. the SAME ORIGIN
-// as the PWA, where the Supabase access *and refresh* tokens live in
-// localStorage. Script execution here is therefore durable account takeover,
-// not a contained defacement. Escape everything; there is no "safe" field.
-//
-// Escapes ' as well as " so the output is also safe inside an attribute value.
-// It is deliberately NOT relied on for a JS-string-inside-attribute context
-// (`onclick="f('...')"`), because HTML entities are decoded before the JS is
-// parsed — the detail links below use data-* attributes and one delegated
-// listener instead of inline handlers, which removes that context entirely.
-function escapeHtmlViewer(s) {
-    return String(s == null ? '' : s)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-// Event types this viewer knows how to style. `event.type` is attacker-
-// controlled, and it is interpolated into a class attribute — escaping alone
-// would still let it inject extra space-separated classes, so the class comes
-// from this allowlist while the displayed text is escaped separately.
-const KNOWN_EVENT_TYPES = ['Throw', 'Turnover', 'Defense', 'Pull', 'Violation', 'Other'];
-
-function renderPossessions(possessions) {
-    if (!possessions || possessions.length === 0) return '<div class="possession">No possessions yet</div>';
-    
-    // data-poss / data-ev are loop indices: viewer-replay.js maps them to the
-    // shared game-log entry indices (data-entry) so the replay can highlight
-    // and seek by line. They never carry game data.
-    return possessions.map((pos, index) => `
-        <div class="possession" data-poss="${index}">
-            <div class="possession-header">
-                ${pos.offensive ? 'Offense' : 'Defense'}${pos.set ? ` <span class="possession-set">(${escapeHtmlViewer(pos.set)})</span>` : ''}
-            </div>
-            <div class="events-list">
-                ${(pos.events || []).map((event, ei) => renderEvent(event, ei)).join('')}
-            </div>
-        </div>
-    `).join('');
-}
-
-function renderEvent(event, eventIndex) {
-    let type = event.type;
-    let desc = '';
-    
-    if (type === 'Throw') {
-        let verb = event.huck_flag ? 'hucks' : 'throws';
-        desc = `${event.thrower || 'Unknown'} ${verb} `;
-        let throwType = '';
-        if (event.break_flag) throwType += 'break ';
-        if (event.hammer_flag) throwType += 'hammer ';
-        // reset_flag is canonical; dump_flag appears in games stored before
-        // the rename (the viewer renders server JSON as-is, no deserializer).
-        if (event.reset_flag || event.dump_flag) throwType += 'reset ';
-        if (event.swing_flag) throwType += 'swing ';
-        if (throwType) desc += `a ${throwType}`;
-        if (event.receiver) desc += `to ${event.receiver} `;
-        if (event.sky_flag || event.layout_flag) {
-            desc += `for a ${event.sky_flag ? "sky ":""}${event.layout_flag ? "layout ":""}catch `;
-        }        
-        if (event.score_flag) desc += 'for the score!';
-        
-    } else if (type === 'Turnover') {
-        const t = event.thrower || "Unknown";
-        const r = event.receiver || "Unknown";
-        const hucktxt = event.huck_flag ? 'on a huck' : '';
-        const defensetxt = event.defense_flag ? 'due to good defense' : '';
-        if (event.throwaway_flag) desc = `${t} throws it away ${hucktxt} ${defensetxt}`;
-        else if (event.drop_flag) desc = `${r} misses the catch from ${t} ${hucktxt} ${defensetxt}`;
-        else if (event.defense_flag) desc = `Turnover ${defensetxt}`;
-        else if (event.stall_flag) desc = `${t} gets stalled ${defensetxt}`;
-        else desc = `Turnover by ${t}`;
-
-    } else if (type === 'Defense') {
-        let summary = '';
-        let defender = event.defender || '';
-        if (event.interception_flag) summary += 'Interception ';
-        if (event.layout_flag) summary += 'Layout D ';
-        if (event.sky_flag) summary += 'Sky D ';
-        if (event.Callahan_flag) summary += 'Callahan ';
-        if (event.stall_flag) summary += 'Stall ';
-        if (event.unforcedError_flag) summary += 'Unforced error ';
-        if (defender) {
-            if (summary) {
-                summary += `by ${defender}`;
-            } else {
-                summary = `Defensive play by ${defender}: turnover caused`;
-            }
-        } else {
-            summary = summary || 'Unforced turnover by opponent';
-        }
-        desc = summary;
-
-    } else if (type === 'Pull') {
-        let pullerName = event.puller || 'Unknown';
-        desc = `Pull by ${pullerName}`;
-        if (event.quality) desc += ` (${event.quality})`;
-        let pullType = [];
-        if (event.flick_flag) pullType.push('Flick');
-        if (event.roller_flag) pullType.push('Roller');
-        if (event.io_flag) pullType.push('IO');
-        if (event.oi_flag) pullType.push('OI');
-        if (pullType.length > 0) desc += ` - ${pullType.join(', ')}`;
-
-    } else if (type === 'Violation') {
-        let summary = 'Violation called: ';
-        if (event.ofoul_flag) summary += 'Offensive foul ';
-        if (event.strip_flag) summary += 'Strip ';
-        if (event.pick_flag) summary += 'Pick ';
-        if (event.travel_flag) summary += 'Travel ';
-        if (event.contest_flag) summary += 'Contested foul ';
-        if (event.dblteam_flag) summary += 'Double team ';
-        desc = summary;
-
-    } else if (type === 'Other') {
-        let summary = '';
-        if (event.timeout_flag) summary += 'Timeout called. ';
-        if (event.injury_flag) summary += 'Injury sub called ';
-        if (event.timecap_flag) summary += 'Hard cap called; game over ';
-        if (event.switchsides_flag) summary += 'O and D switch sides ';
-        if (event.halftime_flag) summary += 'Halftime ';
-        desc = summary;
-
-    } else {
-        desc = type;
-    }
-
-    // `desc` is assembled above from literal phrasing plus attacker-controlled
-    // names (thrower/receiver/defender/puller/quality). None of the literal
-    // parts contain markup, so escaping the finished string once here is both
-    // correct and far less error-prone than escaping at each of the ~15
-    // concatenation sites.
-    const typeClass = KNOWN_EVENT_TYPES.includes(type) ? type : 'Unknown';
-    const evAttr = Number.isInteger(eventIndex) ? ` data-ev="${eventIndex}"` : '';
-    return `
-        <div class="event-item"${evAttr}>
-            <span class="event-type ${typeClass}">${escapeHtmlViewer(type)}</span>
-            <span class="event-desc">${escapeHtmlViewer(desc)}</span>
-        </div>
-    `;
-}
-
-// =============================================================================
-// Utility Functions
-// =============================================================================
-
-function togglePoint(header) {
-    const content = header.nextElementSibling;
-    content.classList.toggle('expanded');
 }
 
 function formatDuration(seconds) {
@@ -1138,577 +536,64 @@ function formatDuration(seconds) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-function formatGameId(gameId) {
-    // Extract date and teams from game ID
-    // Format: YYYY-MM-DD_Team_vs_Opponent_Timestamp
-    const parts = gameId.split('_');
-    if (parts.length >= 4) {
-        const date = parts[0];
-        const team = parts[1];
-        const opponent = parts[3];
-        return `${date}: ${team} vs ${opponent}`;
-    }
-    return gameId;
-}
-
-function updateConnectionStatus(status) {
-    const badge = document.getElementById('connection-status');
-    badge.className = `status-badge ${status}`;
-    
-    if (status === 'connected') badge.textContent = 'Connected';
-    else if (status === 'connecting') badge.textContent = 'Loading...';
-    else if (status === 'disconnected') badge.textContent = 'Disconnected';
-}
-
-// Handle browser back button
-window.addEventListener('popstate', () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const gameId = urlParams.get('game_id');
-    const teamId = urlParams.get('team_id');
-    const playerId = urlParams.get('player_id');
-    
-    if (gameId) showGameDetail(gameId);
-    else if (teamId) showTeamDetail(teamId);
-    else if (playerId) showPlayerDetail(playerId);
-    else showHomeView();
-});
-
 // =============================================================================
-// Sync Status Functions (Phase 3)
+// Field replay (the PWA's playByPlay/replayView.js above the cards)
 // =============================================================================
 
-/**
- * Start polling for sync status from the PWA (via localStorage)
- * This allows the viewer to show sync status even when the PWA is open in another tab
- */
-function startSyncStatusPolling() {
-    updateSyncStatusDisplay();
-    syncStatusInterval = setInterval(updateSyncStatusDisplay, SYNC_STATUS_POLL_INTERVAL);
+let view = null;
+let offField = null;
+
+/** Keep the card under the playhead open and its line in view. */
+function followPlayhead({ index, state }) {
+    const host = $('points-container');
+    if (!host || !view) return;
+    if (state && state.pointIdx !== null && state.pointIdx !== undefined) {
+        const content = host.querySelector(`.point-card[data-point="${state.pointIdx}"] .point-content`);
+        if (content && !content.classList.contains('expanded')) content.classList.add('expanded');
+    }
+    const line = host.querySelector(`[data-entry="${index}"]`);
+    if (line && typeof line.scrollIntoView === 'function') line.scrollIntoView({ block: 'nearest', behavior: 'auto' });
 }
 
 /**
- * Stop sync status polling
+ * The page header is sticky too: stack the stage under it, not behind it.
+ * The header's height changes with the viewport (it wraps on a phone), so
+ * this runs on every update and on resize.
  */
-function stopSyncStatusPolling() {
-    if (syncStatusInterval) {
-        clearInterval(syncStatusInterval);
-        syncStatusInterval = null;
+function stackUnderHeader() {
+    const host = $('replay-host');
+    const header = document.querySelector('.main-header');
+    if (!host || !header) return;
+    if (/sticky|fixed/.test(getComputedStyle(header).position)) {
+        host.style.top = `${Math.round(header.getBoundingClientRect().height)}px`;
     }
 }
+window.addEventListener('resize', stackUnderHeader);
 
-/**
- * Read a key the PWA owns, tolerating the pre-rename `ultistats_` name.
- *
- * The viewer only ever READS these, so it needs no migration of its own — the
- * PWA renames them on its next load (store/storageKeyMigration.js). This
- * fallback covers the window where someone opens a share link before ever
- * reloading the app, which is exactly the common case for a spectator.
- */
-function readShared(key) {
-    const legacy = key.replace(/^breakside_/, 'ultistats_');
-    const value = localStorage.getItem(key);
-    return value !== null ? value : localStorage.getItem(legacy);
-}
-
-/**
- * Get sync status from localStorage (shared with PWA)
- */
-function getSyncStatusFromStorage() {
+function updateReplay(game) {
+    const host = $('replay-host'), logEl = $('points-container');
+    if (!host || !logEl) return;
+    stackUnderHeader();
     try {
-        const queueData = readShared('breakside_sync_queue');
-        const queue = queueData ? JSON.parse(queueData) : [];
-        
-        // Count by type
-        const counts = { player: 0, team: 0, game: 0 };
-        queue.forEach(item => {
-            if (counts[item.type] !== undefined) {
-                counts[item.type]++;
-            }
-        });
-        
-        // Check local-only entities
-        const localPlayers = JSON.parse(readShared('breakside_local_players') || '{}');
-        const localTeams = JSON.parse(readShared('breakside_local_teams') || '{}');
-        const localGames = JSON.parse(readShared('breakside_local_games') || '{}');
-        
-        return {
-            isOnline: navigator.onLine,
-            pendingCount: queue.length,
-            pendingByType: counts,
-            localPlayersCount: Object.keys(localPlayers).filter(k => localPlayers[k]._localOnly).length,
-            localTeamsCount: Object.keys(localTeams).filter(k => localTeams[k]._localOnly).length,
-            localGamesCount: Object.keys(localGames).filter(k => localGames[k]._localOnly).length
-        };
-    } catch (e) {
-        console.error('Failed to get sync status:', e);
-        return null;
-    }
-}
-
-/**
- * Update the sync status display in the header
- */
-function updateSyncStatusDisplay() {
-    const status = getSyncStatusFromStorage();
-    if (!status) return;
-    
-    lastSyncStatus = status;
-    
-    const syncStatusEl = document.getElementById('sync-status');
-    const syncQueuePanel = document.getElementById('sync-queue-panel');
-    
-    if (syncStatusEl) {
-        const totalPending = status.pendingCount;
-        const hasLocalOnly = status.localPlayersCount + status.localTeamsCount + status.localGamesCount > 0;
-        
-        if (totalPending > 0 || hasLocalOnly) {
-            syncStatusEl.className = 'sync-status has-pending';
-            syncStatusEl.innerHTML = `
-                <span class="sync-icon">⏳</span>
-                <span>${totalPending} pending</span>
-            `;
-            syncStatusEl.title = `${status.pendingByType.player} players, ${status.pendingByType.team} teams, ${status.pendingByType.game} games pending sync`;
-        } else {
-            syncStatusEl.className = 'sync-status';
-            syncStatusEl.innerHTML = `
-                <span class="sync-icon">✓</span>
-                <span>Synced</span>
-            `;
-            syncStatusEl.title = 'All data synced to server';
-        }
-    }
-    
-    // Update sync queue panel if visible
-    if (syncQueuePanel && syncQueuePanel.classList.contains('visible')) {
-        updateSyncQueuePanel(status);
-    }
-    
-    // Update offline banner
-    const offlineBanner = document.getElementById('offline-banner');
-    if (offlineBanner) {
-        if (!status.isOnline) {
-            offlineBanner.classList.add('visible');
-        } else {
-            offlineBanner.classList.remove('visible');
-        }
-    }
-}
-
-/**
- * Update the sync queue panel content
- */
-function updateSyncQueuePanel(status) {
-    const statsEl = document.getElementById('sync-queue-stats');
-    if (!statsEl) return;
-    
-    statsEl.innerHTML = `
-        <div class="sync-queue-stat ${status.pendingByType.player > 0 ? 'pending' : ''}">
-            <span class="stat-icon">👤</span>
-            <span>${status.pendingByType.player} players</span>
-        </div>
-        <div class="sync-queue-stat ${status.pendingByType.team > 0 ? 'pending' : ''}">
-            <span class="stat-icon">👥</span>
-            <span>${status.pendingByType.team} teams</span>
-        </div>
-        <div class="sync-queue-stat ${status.pendingByType.game > 0 ? 'pending' : ''}">
-            <span class="stat-icon">🎮</span>
-            <span>${status.pendingByType.game} games</span>
-        </div>
-    `;
-    
-    // Update sync button state
-    const syncBtn = document.getElementById('sync-now-btn');
-    if (syncBtn) {
-        syncBtn.disabled = !status.isOnline || status.pendingCount === 0;
-        syncBtn.textContent = status.isOnline ? 'Sync Now' : 'Offline';
-    }
-}
-
-/**
- * Toggle sync queue panel visibility
- */
-function toggleSyncQueuePanel() {
-    const panel = document.getElementById('sync-queue-panel');
-    if (panel) {
-        panel.classList.toggle('visible');
-        if (panel.classList.contains('visible')) {
-            updateSyncQueuePanel(lastSyncStatus || getSyncStatusFromStorage());
-        }
-    }
-}
-
-/**
- * Trigger sync (calls PWA's sync function if available)
- */
-async function triggerSync() {
-    const syncBtn = document.getElementById('sync-now-btn');
-    if (syncBtn) {
-        syncBtn.disabled = true;
-        syncBtn.textContent = 'Syncing...';
-    }
-    
-    try {
-        // Try to call the PWA's sync function if available (same tab)
-        if (typeof window.processSyncQueue === 'function') {
-            await window.processSyncQueue();
-        } else {
-            // Otherwise, just refresh data from server
-            await loadAllData();
-        }
-        
-        // Update sync status
-        updateSyncStatusDisplay();
-        
-    } catch (error) {
-        console.error('Sync failed:', error);
-    } finally {
-        if (syncBtn) {
-            syncBtn.disabled = false;
-            syncBtn.textContent = 'Sync Now';
-        }
-    }
-}
-
-/**
- * Refresh data from server
- */
-async function refreshFromServer() {
-    updateConnectionStatus('connecting');
-    try {
-        await loadAllData();
-        updateConnectionStatus('connected');
-    } catch (error) {
-        console.error('Refresh failed:', error);
-        updateConnectionStatus('disconnected');
-    }
-}
-
-/**
- * Check if an entity is local-only (pending sync)
- */
-function isLocalOnly(type, id) {
-    try {
-        let storageKey;
-        switch (type) {
-            case 'player': storageKey = 'breakside_local_players'; break;
-            case 'team': storageKey = 'breakside_local_teams'; break;
-            case 'game': storageKey = 'breakside_local_games'; break;
-            default: return false;
-        }
-        
-        const data = JSON.parse(readShared(storageKey) || '{}');
-        return data[id] && data[id]._localOnly;
-    } catch (e) {
-        return false;
-    }
-}
-
-// =============================================================================
-// Career Stats Functions (Phase 4)
-// =============================================================================
-
-/**
- * Load and compute career stats for a player
- * @param {string} playerId - Player ID
- * @param {Array} gameIds - List of game IDs the player participated in
- */
-async function loadPlayerCareerStats(playerId, gameIds) {
-    // Initialize with placeholder values
-    const statElements = {
-        games: document.getElementById('career-games'),
-        points: document.getElementById('career-points'),
-        goals: document.getElementById('career-goals'),
-        assists: document.getElementById('career-assists'),
-        ds: document.getElementById('career-ds'),
-        turnovers: document.getElementById('career-turnovers'),
-        plusminus: document.getElementById('career-plusminus'),
-        compPct: document.getElementById('career-comp-pct')
-    };
-    
-    // Set loading state
-    Object.values(statElements).forEach(el => {
-        if (el) el.textContent = '...';
-    });
-    
-    if (!gameIds || gameIds.length === 0) {
-        Object.values(statElements).forEach(el => {
-            if (el) el.textContent = '0';
-        });
-        if (statElements.compPct) statElements.compPct.textContent = '-';
-        return;
-    }
-    
-    try {
-        // Fetch all games and compute stats
-        const stats = {
-            games: gameIds.length,
-            points: 0,
-            goals: 0,
-            assists: 0,
-            ds: 0,
-            turnovers: 0,
-            pointsWon: 0,
-            pointsLost: 0,
-            completions: 0,
-            totalThrows: 0
-        };
-        
-        // Fetch games in batches to avoid overwhelming the server
-        const batchSize = 5;
-        for (let i = 0; i < gameIds.length; i += batchSize) {
-            const batch = gameIds.slice(i, i + batchSize);
-            const gamePromises = batch.map(gameId => 
-                fetch(`${API_BASE_URL}/api/games/${gameId}`).then(r => r.ok ? r.json() : null)
-            );
-            
-            const games = await Promise.all(gamePromises);
-            
-            games.forEach(game => {
-                if (!game) return;
-                
-                const playerStats = computePlayerStatsFromGame(game, playerId);
-                stats.points += playerStats.points;
-                stats.goals += playerStats.goals;
-                stats.assists += playerStats.assists;
-                stats.ds += playerStats.ds;
-                stats.turnovers += playerStats.turnovers;
-                stats.pointsWon += playerStats.pointsWon;
-                stats.pointsLost += playerStats.pointsLost;
-                stats.completions += playerStats.completions;
-                stats.totalThrows += playerStats.totalThrows;
+        if (!view) {
+            // Mounts only once the game has located events; until then this
+            // returns null and is retried on the next update.
+            view = mountReplayView({
+                host, logEl,
+                getGame: () => hydrated,
+                getEntryOptions: () => entryOptions,
+                getPlayerByName: playerByName,
+                live: !game.gameEndTimestamp,
             });
+            if (!view) return;
+            offField = view.controller.on('field', followPlayhead);
+            view.onShown();
+            return;
         }
-        
-        // Update display
-        if (statElements.games) statElements.games.textContent = stats.games;
-        if (statElements.points) statElements.points.textContent = stats.points;
-        if (statElements.goals) statElements.goals.textContent = stats.goals;
-        if (statElements.assists) statElements.assists.textContent = stats.assists;
-        if (statElements.ds) statElements.ds.textContent = stats.ds;
-        if (statElements.turnovers) statElements.turnovers.textContent = stats.turnovers;
-        
-        const plusMinus = stats.pointsWon - stats.pointsLost;
-        if (statElements.plusminus) {
-            statElements.plusminus.textContent = plusMinus > 0 ? `+${plusMinus}` : plusMinus;
-            statElements.plusminus.className = 'stat-value ' + (plusMinus > 0 ? 'positive' : plusMinus < 0 ? 'negative' : '');
-        }
-        
-        if (statElements.compPct) {
-            if (stats.totalThrows > 0) {
-                const pct = Math.round((stats.completions / stats.totalThrows) * 100);
-                statElements.compPct.textContent = `${pct}%`;
-            } else {
-                statElements.compPct.textContent = '-';
-            }
-        }
-        
-    } catch (error) {
-        console.error('Failed to load career stats:', error);
-        Object.values(statElements).forEach(el => {
-            if (el) el.textContent = '-';
-        });
-    }
-}
-
-/**
- * Compute player stats from a single game
- * @param {Object} game - Game data
- * @param {string} playerId - Player ID to compute stats for
- * @returns {Object} Stats object
- */
-function computePlayerStatsFromGame(game, playerId) {
-    const stats = {
-        points: 0,
-        goals: 0,
-        assists: 0,
-        ds: 0,
-        turnovers: 0,
-        pointsWon: 0,
-        pointsLost: 0,
-        completions: 0,
-        totalThrows: 0
-    };
-    
-    if (!game.points) return stats;
-    
-    // Find player name(s) - check roster snapshot and legacy name matching
-    const playerNames = new Set();
-    playerNames.add(playerId);
-    
-    if (game.rosterSnapshot && game.rosterSnapshot.players) {
-        const snapshotPlayer = game.rosterSnapshot.players.find(p => p.id === playerId);
-        if (snapshotPlayer) {
-            playerNames.add(snapshotPlayer.name);
-        }
-    }
-    
-    // Also try to extract name from ID (format: Name-hash)
-    const lastHyphen = playerId.lastIndexOf('-');
-    if (lastHyphen > 0) {
-        playerNames.add(playerId.substring(0, lastHyphen));
-    }
-    
-    game.points.forEach(point => {
-        // Check if player was in this point
-        const wasInPoint = point.players && point.players.some(p => playerNames.has(p));
-        
-        if (wasInPoint) {
-            stats.points++;
-            
-            if (point.winner === 'team') {
-                stats.pointsWon++;
-            } else if (point.winner === 'opponent') {
-                stats.pointsLost++;
-            }
-        }
-        
-        // Scan events for this player's actions
-        if (point.possessions) {
-            point.possessions.forEach(possession => {
-                if (!possession.events) return;
-                
-                possession.events.forEach(event => {
-                    const thrower = event.thrower || event.throwerId;
-                    const receiver = event.receiver || event.receiverId;
-                    const defender = event.defender || event.defenderId;
-                    
-                    if (event.type === 'Throw') {
-                        if (thrower && playerNames.has(thrower)) {
-                            stats.totalThrows++;
-                            stats.completions++;
-                            if (event.score_flag && receiver && playerNames.has(receiver)) {
-                                stats.goals++;
-                            } else if (event.score_flag) {
-                                stats.assists++;
-                            }
-                        } else if (receiver && playerNames.has(receiver)) {
-                            if (event.score_flag) {
-                                stats.goals++;
-                            }
-                        }
-                    } else if (event.type === 'Turnover') {
-                        // Fault attribution mirrors utils/statAccumulator.js:
-                        // a drop means the throw was good and the receiver
-                        // didn't catch it, so it is charged wholly to the
-                        // receiver and touches nothing on the thrower — not
-                        // the turnover, not Throws. Throwaways and stalls are
-                        // the thrower's. Keep the two in step: a player's TOs
-                        // and Comp% must read the same here as in the app.
-                        if (event.drop_flag) {
-                            if (receiver && playerNames.has(receiver)) {
-                                stats.turnovers++;
-                            }
-                        } else if (thrower && playerNames.has(thrower)) {
-                            stats.totalThrows++;
-                            stats.turnovers++;
-                        }
-                    } else if (event.type === 'Defense') {
-                        if (defender && playerNames.has(defender)) {
-                            stats.ds++;
-                            if (event.Callahan_flag) {
-                                stats.goals++;
-                            }
-                        }
-                    }
-                });
-            });
-        }
-    });
-    
-    return stats;
-}
-
-/**
- * Load and compute season stats for a team
- * @param {string} teamId - Team ID
- * @param {Array} gameIds - List of game IDs
- */
-async function loadTeamSeasonStats(teamId, gameIds) {
-    const statElements = {
-        games: document.getElementById('season-games'),
-        wins: document.getElementById('season-wins'),
-        losses: document.getElementById('season-losses'),
-        pointsFor: document.getElementById('season-points-for'),
-        pointsAgainst: document.getElementById('season-points-against'),
-        pointDiff: document.getElementById('season-point-diff')
-    };
-    
-    // Set loading state
-    Object.values(statElements).forEach(el => {
-        if (el) el.textContent = '...';
-    });
-    
-    if (!gameIds || gameIds.length === 0) {
-        Object.values(statElements).forEach(el => {
-            if (el) el.textContent = '0';
-        });
-        return;
-    }
-    
-    try {
-        // Use the games cache if available, otherwise fetch
-        let games = [];
-        
-        for (const gameId of gameIds) {
-            const cached = gamesCache.find(g => g.game_id === gameId);
-            if (cached) {
-                games.push(cached);
-            } else {
-                try {
-                    const response = await fetch(`${API_BASE_URL}/api/games/${gameId}`);
-                    if (response.ok) {
-                        const game = await response.json();
-                        games.push({
-                            game_id: gameId,
-                            scores: game.scores
-                        });
-                    }
-                } catch (e) {
-                    // Skip this game
-                }
-            }
-        }
-        
-        const stats = {
-            games: games.length,
-            wins: 0,
-            losses: 0,
-            pointsFor: 0,
-            pointsAgainst: 0
-        };
-        
-        games.forEach(game => {
-            const scores = game.scores || {};
-            const teamScore = scores.team || 0;
-            const oppScore = scores.opponent || 0;
-            
-            stats.pointsFor += teamScore;
-            stats.pointsAgainst += oppScore;
-            
-            if (teamScore > oppScore) {
-                stats.wins++;
-            } else if (teamScore < oppScore) {
-                stats.losses++;
-            }
-        });
-        
-        // Update display
-        if (statElements.games) statElements.games.textContent = stats.games;
-        if (statElements.wins) statElements.wins.textContent = stats.wins;
-        if (statElements.losses) statElements.losses.textContent = stats.losses;
-        if (statElements.pointsFor) statElements.pointsFor.textContent = stats.pointsFor;
-        if (statElements.pointsAgainst) statElements.pointsAgainst.textContent = stats.pointsAgainst;
-        
-        const pointDiff = stats.pointsFor - stats.pointsAgainst;
-        if (statElements.pointDiff) {
-            statElements.pointDiff.textContent = pointDiff > 0 ? `+${pointDiff}` : pointDiff;
-            statElements.pointDiff.className = 'stat-value ' + (pointDiff > 0 ? 'positive' : pointDiff < 0 ? 'negative' : '');
-        }
-        
-    } catch (error) {
-        console.error('Failed to load season stats:', error);
-        Object.values(statElements).forEach(el => {
-            if (el) el.textContent = '-';
-        });
+        // The cards are new elements: let the view rebuild its engine and
+        // re-mark the lines (live-follow animates the new tail).
+        view.onLogUpdated();
+    } catch (err) {
+        console.error('Replay update failed:', err);
     }
 }

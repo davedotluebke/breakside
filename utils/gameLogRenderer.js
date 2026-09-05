@@ -17,9 +17,9 @@
  * 2026-09 (replay step 2) — the TEXT output is byte-identical to before; the
  * golden test pins it. Any format change now lands here, once.
  *
- * The public viewer (breakside_server/static/viewer/viewer.js) renders per-point
- * cards from the same event stream but is a separate origin/app that cannot
- * import PWA modules — it stays bespoke; see the keep-in-sync note there.
+ * The public viewer (breakside_server/static/viewer/viewer.js) is a consumer
+ * too: it imports this module by relative URL and groups the entries into one
+ * card per point, so it never re-phrases an event (2026-09, viewer-shell).
  *
  * This module is a pure leaf (no imports, no DOM) so node:test can exercise it
  * directly: tests/unit/gameLogRenderer.test.mjs.

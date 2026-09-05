@@ -177,7 +177,7 @@ app.include_router(narration_router)
 # separate layer from in-point narration; see narration_lineup.py)
 app.include_router(narration_lineup_router)
 
-# The public viewer's replay (static/viewer/viewer-replay.js) imports the
+# The public viewer (static/viewer/viewer.js, an ES module) imports the
 # PWA's leaf modules by RELATIVE path (../playByPlay/..., ../store/...,
 # ../utils/..., ../settings/..., ../css/...) so the same files resolve on
 # both prefixes it is served from: /viewer/ on S3 (next to the PWA) and

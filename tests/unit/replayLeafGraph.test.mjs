@@ -21,7 +21,7 @@ const ALLOWED = new Set([
     'utils/gameLogRenderer.js', 'store/models.js', 'settings/advancedSettings.js',
 ]);
 
-const VIEWER_ENTRY = 'breakside_server/static/viewer/viewer-replay.js';
+const VIEWER_ENTRY = 'breakside_server/static/viewer/viewer.js';
 
 function imports(rel) {
     const src = readFileSync(join(ROOT, rel), 'utf8');
@@ -57,5 +57,5 @@ test('replayView.js import closure stays inside the leaf allowlist', () => {
     }
     viewerSeen.delete(VIEWER_ENTRY);
     const bad = [...viewerSeen].filter(f => !ALLOWED.has(f));
-    assert.deepEqual(bad, [], `viewer-replay.js reaches: ${bad.join(', ')}`);
+    assert.deepEqual(bad, [], `viewer.js reaches: ${bad.join(', ')}`);
 });

@@ -674,27 +674,34 @@ Layers, bottom-up (all under `playByPlay/`):
   phone.
   `pbpPossession` and the toast are late-bound (`window.*`): importing
   either closes a cycle through `teams/teamList → teams/gameSummary`.
-- **Share-viewer port** (`breakside_server/static/viewer/viewer-replay.js`,
-  plan Decision 4c) — the public viewer mounts the SAME `replayView` above
-  its per-point cards. It is an ES module importing the PWA's leaf modules
-  by URL-relative path (`../playByPlay/…`, `../store/models.js`): from
-  `/viewer/` on S3 that is the PWA root, from `/static/viewer/` on the API
-  host it is the `/static/{playByPlay,store,utils,settings,css}` mounts
-  `main.py` adds (registered before `/static`, or that mount would shadow
-  them). The import closure of `replayView.js` is therefore pinned to a
-  LEAF allowlist by `tests/unit/replayLeafGraph.test.mjs` — nothing under
-  it may reach `store/storage.js`, `utils/helpers.js` or `game/*`
+- **Share viewer** (`breakside_server/static/viewer/viewer.js`, plan
+  Decision 4c) — the public viewer is a single ES module that mounts the
+  SAME `replayView` above one card per point, and renders those cards from
+  `buildGameLogEntries` itself (the entries grouped by `pointIdx`; the
+  `roster` entry becomes the card title, every other line carries
+  `data-entry` exactly as the app's Log tab does, so the view marks and
+  seeks by them directly). It imports the PWA's leaf modules by
+  URL-relative path (`../playByPlay/…`, `../store/models.js`,
+  `../utils/gameLogRenderer.js`): from `/viewer/` on S3 that is the PWA
+  root, from `/static/viewer/` on the API host it is the
+  `/static/{playByPlay,store,utils,settings,css,images}` mounts `main.py`
+  adds (registered before `/static`, or that mount would shadow them). The
+  import closure of `replayView.js` and of `viewer.js` is therefore pinned
+  to a LEAF allowlist by `tests/unit/replayLeafGraph.test.mjs` — nothing
+  under either may reach `store/storage.js`, `utils/helpers.js` or `game/*`
   (`fieldRender` and `replayEdit` read `window.advancedSettings` / inline a
   stub for exactly this reason). The viewer's raw JSON events become model
   instances through `store/models.js hydrateGame()` (players as
-  `{name, id}` refs, no roster) so `buildGameLogEntries` can summarize
-  them; `viewer.js` (a classic script) reaches the module through
-  `window.viewerReplay.update(game, {live}) / destroy()` and stamps
-  `data-poss` / `data-ev` on its cards so `viewer-replay.js` can map the
-  shared entry indices onto them (`data-entry`). The public share payload
-  carries `from`/`to`/`at`/`hang`, possession `startedAt` and the point's
+  `{name, id}` refs, no roster) so the entries can summarize them — the
+  viewer has no event phrasing of its own. Its stylesheet references only
+  `css/tokens.css` variables and follows `data-theme` (a coach's saved
+  app preference when present — same origin — else the device; see the
+  theme boot in its `index.html`). The public share payload carries
+  `from`/`to`/`at`/`hang`, possession `startedAt` and the point's
   `startingPosition` + timestamps for this (§ Share Links). No `canEdit`
-  is passed, so the ✎ never shows there.
+  is passed, so the ✎ never shows there. Until 2026-09 the viewer was a
+  classic script with a hand-copied duplicate of every event phrasing plus
+  dead browse/sync-status chrome (branch `viewer-shell` removed both).
 - **`eventAmend.js`** (pure leaf, node-tested) — the rules behind an
   amendment, shared with the Full tab's modifier strip and the Field tab's
   marker drag: the modifier tables, throw geometry → huck/reset/swing, the

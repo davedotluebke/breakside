@@ -1,38 +1,16 @@
-/* Import fonts to match PWA */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
-
-:root {
-    /* Primary colors - the PWA's brand orange (css/tokens.css --brand-orange /
-       --brand-orange-deep). Since the 2026-08 rebrand the orange is an ACCENT
-       (header underline, active tab, buttons) on a white header, not a fill. */
-    --primary-color: #eb8232;
-    --primary-dark: #d06e1f;
-    --secondary-color: #d4823e;
-    
-    /* Accent colors */
-    --accent-color: #eb8232;
-    --accent-secondary: #444;
-    
-    /* Background colors */
-    --light-bg: #f4f4f4;
-    --border-color: #dee2e6;
-    
-    /* Text colors */
-    --text-color: #333;
-    --text-muted: #6c757d;
-    
-    /* Status colors */
-    --success-color: #28a745;
-    --danger-color: #dc3545;
-    --warning-color: #ffc107;
-    
-    /* Gender colors - matching PWA */
-    --fmp-color: #7d3c98;
-    --fmp-light: #e8d5f2;
-    --mmp-color: #2d8659;
-    --mmp-light: #d4e8dd;
-}
+/*
+ * Breakside public game viewer.
+ *
+ * Every colour here is a css/tokens.css variable (loaded first, by the
+ * page), so the page flips between the light and dark palettes with the
+ * data-theme attribute viewer.js sets — no raw colours, no second palette.
+ * Pill tints are color-mix()es of the token inks, so they follow too.
+ *
+ * Layout only: header, the game header card, one card per point holding
+ * the shared game log's lines, and the share-link chrome (expired banner,
+ * error view, footer). The pitch and transport above the cards are styled
+ * by the PWA's fieldPbp.css / replayView.css.
+ */
 
 * {
     margin: 0;
@@ -45,8 +23,8 @@ body {
     font-family: 'Poppins', sans-serif;
     margin: 0;
     padding: 0;
-    background-color: var(--light-bg);
-    color: var(--text-color);
+    background-color: var(--surface-page);
+    color: var(--text-primary);
     line-height: 1.6;
 }
 
@@ -55,20 +33,19 @@ body {
 }
 
 /* =============================================================================
-   Main Header & Navigation
+   Header
    ============================================================================= */
 
-/* White header with an orange underline and the wordmark — the PWA's
-   post-rebrand header (css/shell.css `header`). */
+/* The PWA's post-rebrand header: card surface, orange underline, wordmark. */
 .main-header {
-    background-color: white;
-    color: var(--text-color);
+    background-color: var(--surface-card);
+    color: var(--text-primary);
     padding: 0.5rem 1rem;
     position: sticky;
     top: 0;
     z-index: 100;
-    border-bottom: 3px solid var(--primary-color);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border-bottom: 3px solid var(--brand-orange);
+    box-shadow: var(--shadow-xs);
 }
 
 .header-content {
@@ -84,38 +61,12 @@ body {
     align-items: center;
     gap: 0.5rem;
     text-decoration: none;
-    color: var(--text-color);
+    color: var(--text-primary);
 }
 
 .logo-icon {
     height: 36px;
     width: auto;
-}
-
-.main-nav {
-    display: flex;
-    gap: 0.25rem;
-    margin-left: 2rem;
-}
-
-.nav-tab {
-    padding: 0.5rem 1rem;
-    color: var(--text-muted);
-    text-decoration: none;
-    border-radius: 5px;
-    font-weight: 500;
-    font-size: 0.9rem;
-    transition: all 0.2s ease;
-}
-
-.nav-tab:hover {
-    color: var(--text-color);
-    background-color: var(--light-bg);
-}
-
-.nav-tab.active {
-    color: white;
-    background-color: var(--primary-color);
 }
 
 .status-badge {
@@ -129,22 +80,22 @@ body {
 }
 
 .status-badge.connecting {
-    background-color: var(--warning-color);
-    color: #212529;
+    background-color: var(--color-warning);
+    color: var(--black);
 }
 
 .status-badge.connected {
-    background-color: var(--success-color);
-    color: white;
+    background-color: var(--color-success);
+    color: var(--white);
 }
 
 .status-badge.disconnected {
-    background-color: var(--danger-color);
-    color: white;
+    background-color: var(--color-danger);
+    color: var(--white);
 }
 
 /* =============================================================================
-   Main Content Area
+   Main content
    ============================================================================= */
 
 .main-content {
@@ -153,350 +104,12 @@ body {
     padding: 1.5rem;
 }
 
-.section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-}
-
-.section-header h2 {
-    margin: 0;
-    font-size: 1.5rem;
-    font-weight: 500;
-    color: var(--text-color);
-}
-
-.refresh-btn {
-    background: white;
-    border: 1px solid var(--border-color);
-    padding: 0.5rem 1rem;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    transition: all 0.2s ease;
-}
-
-.refresh-btn:hover {
-    background: var(--light-bg);
-    color: var(--text-color);
-}
-
-/* Tab Content */
-.tab-content {
-    display: none;
-}
-
-.tab-content.active {
-    display: block;
-}
-
-/* =============================================================================
-   Entity Lists (Cards)
-   ============================================================================= */
-
-.entity-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 1rem;
-}
-
-.entity-card {
-    background: white;
-    border-radius: 5px;
-    padding: 1rem 1.25rem;
-    text-decoration: none;
-    color: inherit;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    border: 1px solid var(--border-color);
-    transition: all 0.2s ease;
-    cursor: pointer;
-}
-
-.entity-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    border-color: var(--primary-color);
-}
-
-.card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.5rem;
-}
-
-.card-title {
-    font-weight: 600;
-    font-size: 1.1rem;
-    color: var(--text-color);
-}
-
-.live-badge {
-    background: var(--danger-color);
-    color: white;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-}
-
-.card-meta {
-    display: flex;
-    gap: 1rem;
-    font-size: 0.85rem;
-    color: var(--text-muted);
-}
-
-.card-score {
-    font-weight: 600;
-    color: var(--text-color);
-}
-
-.card-id {
-    font-family: 'JetBrains Mono', Monaco, monospace;
-    font-size: 0.8rem;
-    color: var(--text-muted);
-}
-
-.player-number {
-    background: #444;
-    color: white;
-    padding: 0.1rem 0.4rem;
-    border-radius: 4px;
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
-/* Gender colors for player cards - matching PWA purple/green */
-.player-card.gender-fmp {
-    border-left: 4px solid var(--fmp-color);
-}
-
-.player-card.gender-mmp {
-    border-left: 4px solid var(--mmp-color);
-}
-
-/* Gender text colors for player names */
-.player-name.gender-fmp {
-    color: var(--fmp-color);
-    font-weight: bold;
-}
-
-.player-name.gender-mmp {
-    color: var(--mmp-color);
-    font-weight: bold;
-}
-
-/* Gender badge in card meta */
-.card-gender {
-    font-weight: 600;
-}
-
-.player-card.gender-fmp .card-gender {
-    color: var(--fmp-color);
-}
-
-.player-card.gender-mmp .card-gender {
-    color: var(--mmp-color);
-}
-
-/* Empty & Loading states */
-.empty-state, .loading, .error-message {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: var(--text-muted);
-    font-size: 1rem;
-    grid-column: 1 / -1;
-}
-
-.error-message {
-    color: var(--danger-color);
-    background: #fff5f5;
-    border-radius: 5px;
-}
-
-/* =============================================================================
-   Detail Views
-   ============================================================================= */
-
-.detail-header {
-    margin-bottom: 1rem;
-}
-
-.back-btn {
-    background: white;
-    border: 1px solid var(--border-color);
-    padding: 0.5rem 1rem;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    color: var(--text-muted);
-    transition: all 0.2s ease;
-}
-
-.back-btn:hover {
-    background: var(--light-bg);
-    color: var(--text-color);
-}
-
-.entity-detail {
-    background: white;
-    border-radius: 5px;
-    padding: 1.5rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-}
-
-.entity-detail h1 {
-    margin: 0 0 0.25rem 0;
-    font-size: 1.75rem;
-    font-weight: 500;
-    color: var(--text-color);
-}
-
-.id-display {
-    font-family: 'JetBrains Mono', Monaco, monospace;
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    margin: 0 0 1.5rem 0;
-}
-
-.player-info-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-}
-
-.info-item {
-    display: flex;
-    flex-direction: column;
-}
-
-.info-label {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 0.25rem;
-}
-
-.info-value {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--text-color);
-}
-
-/* Gender-specific info value colors */
-.info-value.gender-fmp {
-    color: var(--fmp-color);
-}
-
-.info-value.gender-mmp {
-    color: var(--mmp-color);
-}
-
-.detail-section {
-    margin-top: 1.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--border-color);
-}
-
-.detail-section h3 {
-    margin: 0 0 1rem 0;
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.mini-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-
-.mini-item {
-    background: var(--light-bg);
-    padding: 0.5rem 0.75rem;
-    border-radius: 5px;
-    text-decoration: none;
-    color: var(--text-color);
-    font-size: 0.9rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    transition: all 0.2s ease;
-}
-
-.mini-item:hover {
-    background: var(--primary-color);
-    color: white;
-}
-
-/* Gender-colored mini items (players in team view) */
-.mini-item.gender-fmp {
-    background: var(--fmp-light);
-    border-left: 3px solid var(--fmp-color);
-}
-
-.mini-item.gender-fmp .mini-name {
-    color: var(--fmp-color);
-    font-weight: 600;
-}
-
-.mini-item.gender-fmp:hover {
-    background: var(--fmp-color);
-}
-
-.mini-item.gender-fmp:hover .mini-name {
-    color: white;
-}
-
-.mini-item.gender-mmp {
-    background: var(--mmp-light);
-    border-left: 3px solid var(--mmp-color);
-}
-
-.mini-item.gender-mmp .mini-name {
-    color: var(--mmp-color);
-    font-weight: 600;
-}
-
-.mini-item.gender-mmp:hover {
-    background: var(--mmp-color);
-}
-
-.mini-item.gender-mmp:hover .mini-name {
-    color: white;
-}
-
-.mini-badge {
-    background: rgba(0,0,0,0.1);
-    padding: 0.1rem 0.3rem;
-    border-radius: 3px;
-    font-size: 0.8rem;
-}
-
-/* =============================================================================
-   Game Detail View
-   ============================================================================= */
-
+/* Game header card */
 .game-header {
-    background-color: white;
+    background-color: var(--surface-card);
     padding: 0.75rem 1rem;
     border-radius: 5px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    box-shadow: var(--shadow-xs);
     margin-bottom: 1rem;
 }
 
@@ -515,7 +128,7 @@ body {
 }
 
 .info-icon:hover {
-    color: var(--primary-color);
+    color: var(--brand-orange);
 }
 
 .game-header h1 {
@@ -528,7 +141,7 @@ body {
 .score-display {
     font-weight: 700;
     font-size: 1.25rem;
-    color: var(--text-color);
+    color: var(--text-primary);
 }
 
 .game-info-panel {
@@ -543,7 +156,7 @@ body {
     opacity: 1;
     margin-top: 0.75rem;
     padding-top: 0.75rem;
-    border-top: 1px solid var(--border-color);
+    border-top: 1px solid var(--border-soft);
 }
 
 .game-meta-row {
@@ -552,230 +165,6 @@ body {
     margin-bottom: 0.5rem;
     display: flex;
     gap: 1rem;
-}
-
-.game-id-display {
-    font-family: 'JetBrains Mono', Monaco, monospace;
-    font-size: 0.8rem;
-}
-
-/* Data format indicator */
-.format-badge {
-    padding: 0.15rem 0.4rem;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    margin-left: auto;
-}
-
-.format-badge.new-format {
-    background-color: #e3f2fd;
-    color: #1565c0;
-    border: 1px solid #90caf9;
-}
-
-.format-badge.legacy-format {
-    background-color: #fff8e1;
-    color: #f57f17;
-    border: 1px solid #ffe082;
-}
-
-/* =============================================================================
-   Sync Status Indicator
-   ============================================================================= */
-
-.sync-status-container {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-left: auto;
-}
-
-.sync-status {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.3rem 0.6rem;
-    border-radius: 5px;
-    font-size: 0.75rem;
-    font-weight: 500;
-    background: var(--light-bg);
-    color: var(--text-color);
-    cursor: pointer;
-}
-
-.sync-status.has-pending {
-    background: rgba(255, 193, 7, 0.3);
-    color: #ffc107;
-}
-
-.sync-status .sync-icon {
-    font-size: 0.85rem;
-}
-
-.sync-status.syncing .sync-icon {
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-.sync-btn {
-    background: var(--light-bg);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-    padding: 0.3rem 0.6rem;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 0.75rem;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-}
-
-.sync-btn:hover {
-    background: var(--border-color);
-    border-color: var(--text-muted);
-}
-
-.sync-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* Pending Sync Badge */
-.pending-sync-badge {
-    background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
-    color: white;
-    padding: 0.15rem 0.4rem;
-    border-radius: 4px;
-    font-size: 0.65rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
-    animation: pendingPulse 2s infinite;
-}
-
-@keyframes pendingPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-}
-
-.pending-sync-badge .pending-icon {
-    font-size: 0.7rem;
-}
-
-/* Local-only indicator for cards */
-.entity-card.local-only {
-    border-left: 4px solid #ff9800;
-    position: relative;
-}
-
-.entity-card.local-only::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 0;
-    height: 0;
-    border-style: solid;
-    border-width: 0 24px 24px 0;
-    border-color: transparent #ff9800 transparent transparent;
-}
-
-/* Offline indicator */
-.offline-banner {
-    background: linear-gradient(135deg, #ff5722 0%, #e64a19 100%);
-    color: white;
-    padding: 0.5rem 1rem;
-    text-align: center;
-    font-size: 0.85rem;
-    font-weight: 500;
-    display: none;
-}
-
-.offline-banner.visible {
-    display: block;
-}
-
-/* Sync queue panel */
-.sync-queue-panel {
-    background: white;
-    border-radius: 5px;
-    padding: 0.75rem 1rem;
-    margin-bottom: 1rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    border: 1px solid var(--border-color);
-    display: none;
-}
-
-.sync-queue-panel.visible {
-    display: block;
-}
-
-.sync-queue-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.5rem;
-}
-
-.sync-queue-header h4 {
-    margin: 0;
-    font-size: 0.9rem;
-    font-weight: 500;
-    color: var(--text-color);
-}
-
-.sync-queue-stats {
-    display: flex;
-    gap: 1rem;
-    font-size: 0.85rem;
-    color: var(--text-muted);
-}
-
-.sync-queue-stat {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-}
-
-.sync-queue-stat .stat-icon {
-    font-size: 0.9rem;
-}
-
-.sync-queue-stat.pending {
-    color: #ff9800;
-}
-
-.sync-now-btn {
-    background: var(--primary-color);
-    color: white;
-    border: none;
-    padding: 0.4rem 0.8rem;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 0.8rem;
-    font-weight: 600;
-    transition: all 0.2s ease;
-}
-
-.sync-now-btn:hover {
-    background: var(--primary-dark);
-}
-
-.sync-now-btn:disabled {
-    background: #ccc;
-    cursor: not-allowed;
 }
 
 .stats-row {
@@ -798,320 +187,10 @@ body {
 .stat-value {
     font-weight: 700;
     font-size: 1.1rem;
-    color: var(--text-color);
+    color: var(--text-primary);
 }
 
-/* Point Cards */
-.points-container {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-
-.point-card {
-    background-color: white;
-    border-radius: 5px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    overflow: hidden;
-}
-
-.point-header {
-    padding: 1rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.point-header:hover {
-    background-color: var(--light-bg);
-}
-
-.point-title {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.point-title > span:first-child {
-    font-weight: 600;
-    color: var(--text-color);
-}
-
-.point-score-summary {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-}
-
-.point-result {
-    font-weight: 600;
-    padding: 0.25rem 0.6rem;
-    border-radius: 5px;
-    font-size: 0.8rem;
-}
-
-.point-result.our-score {
-    background-color: #d4edda;
-    color: #155724;
-}
-
-.point-result.their-score {
-    background-color: #f8d7da;
-    color: #721c24;
-}
-
-/* Gender ratio point styling - matching PWA colors */
-.point-result.fmp-point {
-    background-color: var(--fmp-light);
-    color: var(--fmp-color);
-}
-
-.point-result.mmp-point {
-    background-color: var(--mmp-light);
-    color: var(--mmp-color);
-}
-
-.point-content {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s;
-    background-color: #fafafa;
-}
-
-.point-content.expanded {
-    max-height: 3000px;
-    border-top: 1px solid var(--border-color);
-}
-
-.possession {
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid #eee;
-}
-
-.possession:last-child {
-    border-bottom: none;
-}
-
-.possession-header {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 0.5rem;
-    font-weight: 600;
-}
-
-.events-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-}
-
-.event-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.4rem 0.6rem;
-    background-color: white;
-    border-radius: 5px;
-    border: 1px solid #eee;
-    font-size: 0.9rem;
-}
-
-.event-type {
-    font-weight: 600;
-    font-size: 0.75rem;
-    padding: 0.15rem 0.5rem;
-    border-radius: 4px;
-    min-width: 65px;
-    text-align: center;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-}
-
-.event-type.Throw { background-color: #e3f2fd; color: #1565c0; }
-.event-type.Turnover { background-color: #ffebee; color: #c62828; }
-.event-type.Defense { background-color: #fff8e1; color: #f57f17; }
-.event-type.Pull { background-color: #e8f5e9; color: #2e7d32; }
-.event-type.Violation { background-color: #fce4ec; color: #ad1457; }
-.event-type.Other { background-color: #f3e5f5; color: #7b1fa2; }
-
-.event-desc {
-    flex: 1;
-    color: var(--text-color);
-}
-
-/* =============================================================================
-   Responsive Design
-   ============================================================================= */
-
-@media (max-width: 768px) {
-    .header-content {
-        flex-wrap: wrap;
-    }
-    
-    .main-nav {
-        margin-left: 0;
-        order: 3;
-        width: 100%;
-        margin-top: 0.5rem;
-    }
-    
-    .nav-tab {
-        flex: 1;
-        text-align: center;
-        padding: 0.4rem 0.5rem;
-        font-size: 0.85rem;
-    }
-    
-    .entity-list {
-        grid-template-columns: 1fr;
-    }
-    
-    .section-header h2 {
-        font-size: 1.25rem;
-    }
-    
-    .game-header h1 {
-        font-size: 1.1rem;
-    }
-    
-    .point-header {
-        padding: 0.75rem;
-    }
-    
-    .point-title > span:first-child {
-        font-size: 0.95rem;
-    }
-}
-
-@media (max-width: 480px) {
-    .main-content {
-        padding: 1rem;
-    }
-    
-    .logo-icon {
-        height: 30px;
-    }
-    
-    .card-meta {
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-}
-
-/* =============================================================================
-   Stats Grid (Career & Season Stats)
-   ============================================================================= */
-
-.career-stats-section,
-.season-stats-section {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border-radius: 5px;
-    padding: 1rem;
-    margin-bottom: 1rem;
-}
-
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0.75rem;
-}
-
-@media (max-width: 768px) {
-    .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (max-width: 480px) {
-    .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-.stat-card {
-    background: white;
-    border-radius: 5px;
-    padding: 0.75rem;
-    text-align: center;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.stat-card.wide {
-    grid-column: span 2;
-}
-
-.stat-card .stat-value {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--text-color);
-    line-height: 1.2;
-}
-
-.stat-card .stat-label {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.stat-value.positive {
-    color: #28a745;
-}
-
-.stat-value.negative {
-    color: #dc3545;
-}
-
-/* =============================================================================
-   Player Detail Gender Styling
-   ============================================================================= */
-
-.player-detail.gender-fmp .entity-detail {
-    border-left: 4px solid var(--fmp-color);
-}
-
-.player-detail.gender-mmp .entity-detail {
-    border-left: 4px solid var(--mmp-color);
-}
-
-.gender-badge {
-    display: inline-block;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.8rem;
-    font-weight: 600;
-}
-
-.gender-badge.fmp {
-    background-color: var(--fmp-light);
-    color: var(--fmp-color);
-}
-
-.gender-badge.mmp {
-    background-color: var(--mmp-light);
-    color: var(--mmp-color);
-}
-
-/* =============================================================================
-   Share Mode (public /view/{hash} links)
-   ============================================================================= */
-
-/* Anonymous visitors: no browse nav, no PWA sync chrome, no back button,
-   no internal-id / format debugging chrome. */
-body.share-mode .sync-status-container,
-body.share-mode #main-nav,
-body.share-mode .back-btn,
-body.share-mode #game-id,
-body.share-mode #data-format-indicator {
-    display: none !important;
-}
-
+/* LIVE / IN PROGRESS / FINAL badge next to the score */
 .game-status-badge {
     padding: 0.25rem 0.6rem;
     border-radius: 4px;
@@ -1124,25 +203,211 @@ body.share-mode #data-format-indicator {
 }
 
 .game-status-badge.status-live {
-    background: var(--danger-color);
-    color: white;
+    background: var(--color-danger);
+    color: var(--white);
     animation: pulse 2s infinite;
 }
 
 .game-status-badge.status-stale {
     background: var(--text-muted);
-    color: white;
+    color: var(--surface-card);
 }
 
 .game-status-badge.status-final {
-    background: var(--accent-secondary);
-    color: white;
+    background: var(--btn-dark);
+    color: var(--white);
 }
 
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* =============================================================================
+   Point cards
+   ============================================================================= */
+
+.points-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.point-card {
+    background-color: var(--surface-card);
+    border-radius: 5px;
+    box-shadow: var(--shadow-xs);
+    overflow: hidden;
+}
+
+.point-header {
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.point-header:hover {
+    background-color: var(--surface-hover);
+}
+
+.point-title {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.point-title > span:first-child {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.point-score-summary {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.point-result {
+    font-weight: 600;
+    padding: 0.25rem 0.6rem;
+    border-radius: 5px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    background-color: var(--surface-subtle);
+    color: var(--text-muted);
+}
+
+.point-result.our-score {
+    background-color: var(--color-success-surface);
+    color: var(--color-success-text);
+}
+
+.point-result.their-score {
+    background-color: var(--color-danger-surface);
+    color: var(--color-danger-text);
+}
+
+.point-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s;
+    background-color: var(--surface-subtle);
+}
+
+.point-content.expanded {
+    max-height: 3000px;
+    border-top: 1px solid var(--border-soft);
+    padding: 0.6rem 1rem 0.75rem;
+}
+
+/* ---- game-log lines (one per shared-renderer entry) ---- */
+
+.log-line {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.log-line + .log-line {
+    margin-top: 0.4rem;
+}
+
+/* O/D delimiter: "— Team on offense —" */
+.possession-header {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    padding-top: 0.35rem;
+}
+
+.possession-header.possession-offense { color: var(--pbp-green-ink); }
+.possession-header.possession-defense { color: var(--pbp-red-ink); }
+
+/* "Team pulls to Opponent." / "Team will receive the pull and play O." */
+.pull-note,
+.period-note {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.event-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    background-color: var(--surface-card);
+    border-radius: 5px;
+    border: 1px solid var(--border-soft);
+}
+
+.event-type {
+    font-weight: 600;
+    font-size: 0.75rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    min-width: 65px;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    background-color: color-mix(in srgb, var(--text-muted) 14%, transparent);
+    color: var(--text-muted);
+}
+
+.event-type.Throw     { color: var(--pbp-blue-ink);  background-color: color-mix(in srgb, var(--pbp-blue-ink) 14%, transparent); }
+.event-type.Turnover  { color: var(--pbp-red-ink);   background-color: color-mix(in srgb, var(--pbp-red-ink) 14%, transparent); }
+.event-type.Defense   { color: var(--pbp-amber-ink); background-color: color-mix(in srgb, var(--pbp-amber-ink) 16%, transparent); }
+.event-type.Pull      { color: var(--pbp-green-ink); background-color: color-mix(in srgb, var(--pbp-green-ink) 14%, transparent); }
+.event-type.Violation { color: var(--gender-fmp);    background-color: color-mix(in srgb, var(--gender-fmp) 14%, transparent); }
+.event-type.Other     { color: var(--accent-purple); background-color: color-mix(in srgb, var(--accent-purple) 14%, transparent); }
+
+.event-desc {
+    flex: 1;
+    color: var(--text-primary);
+}
+
+/* "Team scores!" — the line the point ends on */
+.score-line {
+    font-weight: 700;
+    padding: 0.45rem 0.75rem;
+    border-radius: 5px;
+    margin-top: 0.6rem;
+}
+
+.score-line.our-score {
+    background-color: var(--color-success-surface);
+    color: var(--color-success-text);
+}
+
+.score-line.their-score {
+    background-color: var(--color-danger-surface);
+    color: var(--color-danger-text);
+}
+
+.current-score {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.empty-line {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* =============================================================================
+   Share-link chrome
+   ============================================================================= */
+
 .share-banner {
-    background: #fff3cd;
-    border: 1px solid #ffeeba;
-    color: #856404;
+    background: var(--color-warning-surface);
+    border: 1px solid var(--color-warning-border);
+    color: var(--color-warning-text);
     border-radius: 6px;
     padding: 0.75rem 1rem;
     margin: 0.5rem 0 1rem;
@@ -1164,7 +429,7 @@ body.share-mode #data-format-indicator {
 .share-error h1 {
     font-size: 1.5rem;
     margin-bottom: 0.75rem;
-    color: var(--text-color);
+    color: var(--text-primary);
 }
 
 .share-error p {
@@ -1175,8 +440,8 @@ body.share-mode #data-format-indicator {
 
 .share-cta-btn {
     display: inline-block;
-    background: var(--primary-color);
-    color: white;
+    background: var(--brand-orange);
+    color: var(--white);
     padding: 0.6rem 1.4rem;
     border-radius: 6px;
     text-decoration: none;
@@ -1184,7 +449,7 @@ body.share-mode #data-format-indicator {
 }
 
 .share-cta-btn:hover {
-    background: var(--primary-dark);
+    background: var(--brand-orange-deep);
 }
 
 .share-footer {
@@ -1195,7 +460,7 @@ body.share-mode #data-format-indicator {
 }
 
 .share-footer a {
-    color: var(--primary-color);
+    color: var(--brand-orange);
     font-weight: 600;
     text-decoration: none;
 }
@@ -1204,9 +469,9 @@ body.share-mode #data-format-indicator {
     text-decoration: underline;
 }
 
-/* Second line of the share footer: the disclosure a spectator actually needs
-   (this page is public) plus the link to the privacy page. Quieter than the
-   product pitch above it. */
+/* Second line of the footer: the disclosure a spectator actually needs
+   (this page is public) plus the link to the privacy page. Quieter than
+   the product pitch above it. */
 .share-footer-privacy {
     margin-top: 0.5rem;
     font-size: 0.8rem;
@@ -1218,22 +483,49 @@ body.share-mode #data-format-indicator {
     text-decoration: underline;
 }
 
-/* Set label on a possession header (zone tracking) */
-.possession-set {
-    color: var(--text-muted);
-    font-weight: 400;
-}
-
 /* =============================================================================
-   Field replay (viewer-replay.js + the PWA's playByPlay/replayView.css).
+   Field replay (the PWA's replayView above the cards)
    The stage sticks to the top of the viewport so the pitch stays in view
-   while the play-by-play scrolls under it; the cards take the PWA's
+   while the play-by-play scrolls under it; the cards take the view's
    rv-cur / rv-future line states.
    ============================================================================= */
-.replay-host { position: sticky; top: 0; z-index: 5; background: var(--light-bg, #f5f6f8); }
+
+.replay-host { position: sticky; top: 0; z-index: 5; background: var(--surface-page); }
 .replay-host:empty { display: none; }
-.replay-host .rv-root { padding: 6px 4px 4px; margin-bottom: 0.75rem; border-bottom: 1px solid var(--border-color); }
+.replay-host .rv-root { padding: 6px 4px 4px; margin-bottom: 0.75rem; border-bottom: 1px solid var(--border-soft); }
 .point-card [data-entry] { cursor: pointer; }
-.point-card .event-item.rv-future, .point-card .possession-header.rv-future { opacity: .45; }
-.point-card .event-item.rv-cur { border-color: var(--primary-color); box-shadow: inset 3px 0 0 var(--primary-color), 0 0 0 1px var(--primary-color); }
-.point-card .possession-header.rv-cur { color: var(--primary-color); }
+.point-card [data-entry].rv-future { opacity: .45; }
+.point-card .event-item.rv-cur { border-color: var(--brand-orange); box-shadow: inset 3px 0 0 var(--brand-orange), 0 0 0 1px var(--brand-orange); }
+.point-card .log-line:not(.event-item).rv-cur { color: var(--brand-orange); }
+
+/* =============================================================================
+   Responsive
+   ============================================================================= */
+
+@media (max-width: 768px) {
+    .header-content {
+        flex-wrap: wrap;
+    }
+
+    .game-header h1 {
+        font-size: 1.1rem;
+    }
+
+    .point-header {
+        padding: 0.75rem;
+    }
+
+    .point-title > span:first-child {
+        font-size: 0.95rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .main-content {
+        padding: 1rem;
+    }
+
+    .logo-icon {
+        height: 30px;
+    }
+}

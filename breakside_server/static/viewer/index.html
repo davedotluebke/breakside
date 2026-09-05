@@ -4,112 +4,58 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Breakside Viewer</title>
-    
+    <meta name="theme-color" content="#ffffff">
+    <script>
+        // Theme boot — set data-theme before the first paint so a dark page
+        // never flashes white. Same resolution viewer.js applies later: a
+        // coach's saved app preference wins (same origin as the PWA on www /
+        // staging, so the setting is readable here), otherwise follow the
+        // device. Anonymous visitors have no preference, so 'auto' — unlike
+        // the app, which defaults to dark for sideline battery life.
+        (function () {
+            var pref = 'auto';
+            try {
+                var s = JSON.parse(localStorage.getItem('breakside_advanced_settings') || '{}');
+                if (s && (s['display.theme'] === 'light' || s['display.theme'] === 'dark')) pref = s['display.theme'];
+            } catch (e) { /* no storage: follow the device */ }
+            var dark = pref === 'dark' || (pref === 'auto' && window.matchMedia &&
+                window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        })();
+    </script>
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-    
-    <!-- Replay (field playback above the play-by-play). The pitch and
-         transport are the PWA's own, imported by RELATIVE path so the same
-         files resolve from both prefixes this page is served at (/viewer/
-         on S3 beside the PWA, /static/viewer/ on the API host, which mounts
-         these directories — see ARCHITECTURE.md § Replay viewer). tokens.css
-         only declares variables; viewer.css loads last and wins any overlap. -->
+
+    <!-- The palette, the pitch and the replay transport are the PWA's own
+         stylesheets, by RELATIVE path so the same files resolve from both
+         prefixes this page is served at (/viewer/ on S3 beside the PWA,
+         /static/viewer/ on the API host, which mounts these directories —
+         see ARCHITECTURE.md § Replay viewer). viewer.css loads last and
+         only references tokens.css variables, so it flips with data-theme. -->
     <link rel="stylesheet" href="../css/tokens.css">
     <link rel="stylesheet" href="../playByPlay/fieldPbp.css">
     <link rel="stylesheet" href="../playByPlay/replayView.css">
     <link rel="stylesheet" href="viewer.css">
 </head>
 <body>
-    <!-- Offline Banner (Phase 3) -->
-    <div id="offline-banner" class="offline-banner">
-        📴 You are offline. Changes will be synced when connection is restored.
-    </div>
-
-    <!-- Navigation Header -->
     <header class="main-header">
         <div class="header-content">
             <!-- The wordmark, by RELATIVE path like every other asset here:
                  ../images/ is the PWA's images/ on S3 and the API host's
-                 /static/images mount. -->
-            <a href="/static/viewer/" class="logo">
-                <img src="../images/logo.wordmark.png" alt="Breakside" class="logo-icon">
+                 /static/images mount. viewer.js swaps in the dark variant. -->
+            <a href="https://www.breakside.pro" class="logo">
+                <img src="../images/logo.wordmark.png" data-dark-src="../images/logo.wordmark.dark.png"
+                     alt="Breakside" class="logo-icon">
             </a>
-            <nav class="main-nav" id="main-nav">
-                <a href="#games" class="nav-tab active" data-tab="games">Games</a>
-                <a href="#teams" class="nav-tab" data-tab="teams">Teams</a>
-                <a href="#players" class="nav-tab" data-tab="players">Players</a>
-            </nav>
-            <div class="sync-status-container">
-                <div id="sync-status" class="sync-status" onclick="toggleSyncQueuePanel()" title="Click for sync details">
-                    <span class="sync-icon">✓</span>
-                    <span>Synced</span>
-                </div>
-                <button class="sync-btn" onclick="refreshFromServer()" title="Refresh from server">
-                    <span>↻</span>
-                    <span>Refresh</span>
-                </button>
-            </div>
             <div id="connection-status" class="status-badge connecting">Loading...</div>
         </div>
     </header>
 
-    <!-- Main Content Area -->
     <main class="main-content">
-        <!-- Sync Queue Panel (Phase 3) -->
-        <div id="sync-queue-panel" class="sync-queue-panel">
-            <div class="sync-queue-header">
-                <h4>Sync Queue</h4>
-                <button id="sync-now-btn" class="sync-now-btn" onclick="triggerSync()">Sync Now</button>
-            </div>
-            <div id="sync-queue-stats" class="sync-queue-stats">
-                <!-- Stats populated by JS -->
-            </div>
-        </div>
-
-        <!-- Home View (List Views) -->
-        <div id="home-view">
-            <!-- Games Tab -->
-            <section id="games-tab" class="tab-content active">
-                <div class="section-header">
-                    <h2>Games</h2>
-                    <button class="refresh-btn" onclick="loadGames()">↻ Refresh</button>
-                </div>
-                <div id="games-list" class="entity-list">
-                    <div class="loading">Loading games...</div>
-                </div>
-            </section>
-
-            <!-- Teams Tab -->
-            <section id="teams-tab" class="tab-content">
-                <div class="section-header">
-                    <h2>Teams</h2>
-                    <button class="refresh-btn" onclick="loadTeams()">↻ Refresh</button>
-                </div>
-                <div id="teams-list" class="entity-list">
-                    <div class="loading">Loading teams...</div>
-                </div>
-            </section>
-
-            <!-- Players Tab -->
-            <section id="players-tab" class="tab-content">
-                <div class="section-header">
-                    <h2>Players</h2>
-                    <button class="refresh-btn" onclick="loadPlayers()">↻ Refresh</button>
-                </div>
-                <div id="players-list" class="entity-list">
-                    <div class="loading">Loading players...</div>
-                </div>
-            </section>
-        </div>
-
-        <!-- Game Detail View -->
-        <div id="game-detail-view" class="hidden">
-            <div class="detail-header">
-                <button class="back-btn" onclick="showHomeView()">← Back to Games</button>
-            </div>
+        <div id="game-view" class="hidden">
             <!-- Shown if a share link dies while someone is watching -->
             <div id="share-expired-banner" class="share-banner" style="display: none;">
                 This share link has expired — the score below is no longer updating.
@@ -127,12 +73,10 @@
                     <span id="game-score" class="score-display"></span>
                     <span id="game-status-badge" class="game-status-badge" style="display: none;"></span>
                 </div>
-                
+
                 <div id="game-info-panel" class="game-info-panel">
                     <div class="game-meta-row">
                         <span id="game-date"></span>
-                        <span id="game-id" class="game-id-display"></span>
-                        <span id="data-format-indicator" class="format-badge" style="display: none;"></span>
                     </div>
                     <div class="stats-row">
                         <div class="stat-item">
@@ -151,11 +95,11 @@
                 </div>
             </div>
 
-            <!-- Field replay: mounted by viewer-replay.js when the game has
-                 located events (otherwise stays empty and costs no space). -->
+            <!-- Field replay: mounted by viewer.js when the game has located
+                 events (otherwise stays empty and costs no space). -->
             <div id="replay-host" class="replay-host"></div>
             <div id="points-container" class="points-container">
-                <!-- Points will be injected here -->
+                <!-- Point cards are injected here -->
             </div>
         </div>
 
@@ -168,133 +112,13 @@
                 <a class="share-cta-btn" href="https://www.breakside.pro">What is Breakside?</a>
             </div>
         </div>
-
-        <!-- Team Detail View -->
-        <div id="team-detail-view" class="hidden">
-            <div class="detail-header">
-                <button class="back-btn" onclick="showHomeView()">← Back to Teams</button>
-            </div>
-            <div class="entity-detail">
-                <h1 id="team-name">Loading...</h1>
-                <p id="team-id-display" class="id-display"></p>
-                
-                <!-- Phase 4: Team Season Stats Section -->
-                <div class="detail-section season-stats-section">
-                    <h3>Season Stats</h3>
-                    <div id="team-season-stats" class="stats-grid">
-                        <div class="stat-card">
-                            <span class="stat-value" id="season-games">-</span>
-                            <span class="stat-label">Games</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="season-wins">-</span>
-                            <span class="stat-label">Wins</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="season-losses">-</span>
-                            <span class="stat-label">Losses</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="season-points-for">-</span>
-                            <span class="stat-label">Points For</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="season-points-against">-</span>
-                            <span class="stat-label">Points Against</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="season-point-diff">-</span>
-                            <span class="stat-label">Point Diff</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="detail-section">
-                    <h3>Players (<span id="team-player-count">0</span>)</h3>
-                    <div id="team-players-list" class="mini-list"></div>
-                </div>
-                <div class="detail-section">
-                    <h3>Games (<span id="team-game-count">0</span>)</h3>
-                    <div id="team-games-list" class="mini-list"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Player Detail View -->
-        <div id="player-detail-view" class="hidden">
-            <div class="detail-header">
-                <button class="back-btn" onclick="showHomeView()">← Back to Players</button>
-            </div>
-            <div class="entity-detail">
-                <h1 id="player-name">Loading...</h1>
-                <p id="player-id-display" class="id-display"></p>
-                <div class="player-info-grid">
-                    <div class="info-item">
-                        <span class="info-label">Number</span>
-                        <span id="player-number" class="info-value">-</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Gender</span>
-                        <span id="player-gender" class="info-value">-</span>
-                    </div>
-                </div>
-                
-                <!-- Phase 4: Career Stats Section -->
-                <div class="detail-section career-stats-section">
-                    <h3>Career Stats</h3>
-                    <div id="player-career-stats" class="stats-grid">
-                        <div class="stat-card">
-                            <span class="stat-value" id="career-games">-</span>
-                            <span class="stat-label">Games</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="career-points">-</span>
-                            <span class="stat-label">Points</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="career-goals">-</span>
-                            <span class="stat-label">Goals</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="career-assists">-</span>
-                            <span class="stat-label">Assists</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="career-ds">-</span>
-                            <span class="stat-label">Ds</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="career-turnovers">-</span>
-                            <span class="stat-label">Turnovers</span>
-                        </div>
-                        <div class="stat-card wide">
-                            <span class="stat-value" id="career-plusminus">-</span>
-                            <span class="stat-label">+/-</span>
-                        </div>
-                        <div class="stat-card wide">
-                            <span class="stat-value" id="career-comp-pct">-</span>
-                            <span class="stat-label">Comp %</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="detail-section">
-                    <h3>Teams</h3>
-                    <div id="player-teams-list" class="mini-list"></div>
-                </div>
-                <div class="detail-section">
-                    <h3>Games (<span id="player-game-count">0</span>)</h3>
-                    <div id="player-games-list" class="mini-list"></div>
-                </div>
-            </div>
-        </div>
     </main>
 
-    <!-- Share-mode footer: the viewer is the shop window for anonymous visitors -->
+    <!-- The viewer is the shop window for anonymous visitors -->
     <!-- Absolute URLs, not root-relative: this page is served both from
          www.breakside.pro/viewer/ (S3) and from api.breakside.pro/static/viewer/,
          and /privacy.html only exists on the former. -->
-    <footer id="share-footer" class="share-footer" style="display: none;">
+    <footer class="share-footer">
         <div>
             Live game tracking by <a href="https://www.breakside.pro">Breakside</a> —
             free real-time ultimate stats for your team
@@ -305,11 +129,8 @@
         </div>
     </footer>
 
-    <!-- The replay is an ES module (it imports the PWA's leaf modules);
-         viewer.js stays a classic script and reaches it through
-         window.viewerReplay. Modules run before DOMContentLoaded, so the
-         hook exists by the time viewer.js renders a game. -->
-    <script type="module" src="viewer-replay.js"></script>
-    <script src="viewer.js"></script>
+    <!-- An ES module: it imports the PWA's leaf modules (the shared game-log
+         renderer, the event models, the replay view) by relative path. -->
+    <script type="module" src="viewer.js"></script>
 </body>
 </html>
