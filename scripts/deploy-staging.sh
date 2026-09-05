@@ -77,8 +77,9 @@ aws s3 cp "$STAGED_SW" "s3://$BUCKET/service-worker.js" \
 rm -f "$STAGED_VERSION" "$STAGED_SW"
 
 # The standalone viewer that used to sync to /viewer/ is gone (2026-09):
-# share links are a route in the PWA now. Its bucket prefix was removed
-# once by hand (`aws s3 rm --recursive`); nothing here recreates it.
+# share links are a route in the PWA now. The PWA sync above runs with
+# --delete and nothing excludes viewer/*, so the stale bucket prefix goes
+# away on the first deploy after the change.
 
 echo "Deployed to https://staging.breakside.pro"
 
