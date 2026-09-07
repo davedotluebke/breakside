@@ -96,32 +96,43 @@ self.addEventListener('fetch', e => {
     // browser handing back a stale cached landing.css/logo/etc. Cross-origin CDN
     // assets (Google Fonts, Supabase, Font Awesome) keep their normal caching.
     const networkFetch = isSameOrigin
-        ? fetch(e.request, { cache: 'reload' })
+        ? fetch(reloadRequest(e.request))
         : fetch(e.request);
 
+    const networkFirst = withTimeout(networkFetch)
+        .then(networkResponse => {
+            // Only cache successful, same-origin GET responses. Caching
+            // error responses (404/500) or opaque cross-origin responses
+            // would let stale/invalid content be served offline as valid.
+            if (isSameOrigin && networkResponse && networkResponse.ok) {
+                const responseClone = networkResponse.clone();
+                caches.open(cacheName)
+                    .then(cache => {
+                        cache.put(e.request, responseClone);
+                    });
+            }
+            return networkResponse;
+        });
+
+    if (isSameOrigin && e.request.mode === 'navigate') {
+        // A NAVIGATION (address bar, a tapped link, a home-screen launch) is
+        // always answered by the app shell: this is a single-page app, so
+        // any in-scope path — including ones that exist only as an S3 404
+        // fallback, like /view/<hash> share links — boots index.html and
+        // routes from there. So when the network fails or times out, fall
+        // back to the precached shell rather than to a cached copy of that
+        // exact URL, which never exists for a fresh path. Before this, an
+        // installed PWA opening a share link from Messages on a slow cold
+        // start died with "no cached response found" (2026-09-02).
+        e.respondWith(
+            networkFirst.catch(() => matchFirst([e.request, '/index.html', '/'])
+                .then(hit => hit || Promise.reject('No cached app shell')))
+        );
+        return;
+    }
+
     e.respondWith(
-        Promise.race([
-            // Try network first
-            networkFetch
-                .then(networkResponse => {
-                    // Only cache successful, same-origin GET responses. Caching
-                    // error responses (404/500) or opaque cross-origin responses
-                    // would let stale/invalid content be served offline as valid.
-                    if (isSameOrigin && networkResponse && networkResponse.ok) {
-                        const responseClone = networkResponse.clone();
-                        caches.open(cacheName)
-                            .then(cache => {
-                                cache.put(e.request, responseClone);
-                            });
-                    }
-                    return networkResponse;
-                }),
-            // Timeout after 5 seconds
-            new Promise((_, reject) => {
-                setTimeout(() => reject(new Error('Timeout')), 5000);
-            })
-        ])
-        .catch(() => {
+        networkFirst.catch(() => {
             // If network fails or times out, try cache
             return caches.match(e.request)
                 .then(cacheResponse => {
@@ -130,3 +141,37 @@ self.addEventListener('fetch', e => {
         })
     );
 });
+
+const NETWORK_TIMEOUT_MS = 5000;
+
+/** The network attempt, abandoned after NETWORK_TIMEOUT_MS. */
+function withTimeout(promise) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Timeout')), NETWORK_TIMEOUT_MS);
+        }),
+    ]);
+}
+
+/**
+ * A copy of `request` that bypasses the browser HTTP cache. Built up front
+ * (not via fetch(request, init)) and guarded: some engines refuse to derive
+ * a new Request from a navigation request with a non-empty init, and a
+ * synchronous TypeError there would reject the whole network attempt before
+ * it started. Falling back to the original request costs only freshness.
+ */
+function reloadRequest(request) {
+    try {
+        return new Request(request, { cache: 'reload' });
+    } catch (_) {
+        return request;
+    }
+}
+
+/** The first cache hit among `keys` (Request objects or URL strings), else undefined. */
+function matchFirst(keys) {
+    return keys.reduce(
+        (chain, key) => chain.then(hit => hit || caches.match(key)),
+        Promise.resolve(undefined));
+}
