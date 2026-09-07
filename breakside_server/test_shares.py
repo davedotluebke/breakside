@@ -7,6 +7,8 @@ UI, no /view route, viewer used auth-required endpoints); these tests pin the
 end-to-end contract added when sharing was wired up for real:
 
 - POST /api/games/{id}/share mints /view/{hash} URLs and honors ?listed=
+  only while public listing is enabled (BREAKSIDE_PUBLIC_LISTING=true; the
+  default is off, and then ?listed= is ignored and /api/public/games is 404)
 - GET  /api/share/{hash} is public and carries a change stamp ("version")
 - GET  /api/share/{hash}/poll is the cheap live-poll (stamp only, 410 on
   expiry/revoke so pollers stop)
@@ -106,6 +108,12 @@ def client(seeded, monkeypatch):
     app.dependency_overrides.clear()
 
 
+@pytest.fixture
+def listing_on(monkeypatch):
+    """Turn the (default-off) public listing on for one test."""
+    monkeypatch.setenv("BREAKSIDE_PUBLIC_LISTING", "true")
+
+
 @pytest.fixture(autouse=True)
 def clean_shares(seeded):
     """Each test starts with no shares on the books."""
@@ -154,7 +162,7 @@ class TestCreateShare:
         assert body["url"] == f"https://www.breakside.pro/view/{body['share']['hash']}"
         assert body["share"]["listed"] is False
 
-    def test_listed_flag_round_trips(self, client, seeded):
+    def test_listed_flag_round_trips(self, client, seeded, listing_on):
         _as(COACH)
         r = client.post(f"/api/games/{GAME_ID}/share?listed=true")
         assert r.status_code == 200
@@ -237,7 +245,51 @@ class TestSharePoll:
         assert client.get(f"/api/share/{share['hash']}/poll").status_code == 410
 
 
+class TestPublicListingDisabled:
+    """The default. Public listing is off unless BREAKSIDE_PUBLIC_LISTING=true
+    (config.public_listing_enabled explains why); production never sets it.
+    Share links themselves are untouched."""
+
+    def test_public_games_endpoint_is_404(self, client, seeded):
+        _mint(listed=True)  # a listed share on disk still lists nothing
+        _anon()
+        assert client.get("/api/public/games").status_code == 404
+
+    def test_listed_param_is_ignored_not_rejected(self, client, seeded):
+        # A cached PWA build that still sends ?listed=true must get a
+        # working link, just an unlisted one.
+        _as(COACH)
+        r = client.post(f"/api/games/{GAME_ID}/share?listed=true")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["share"]["listed"] is False
+        assert body["url"].startswith("https://www.breakside.pro/view/")
+
+    def test_share_list_reports_effective_listed_state(self, client, seeded):
+        # Minted while listing was on: listed=true on disk, but not public now.
+        share = _mint(listed=True)
+        _as(COACH)
+        r = client.get(f"/api/games/{GAME_ID}/shares")
+        assert r.status_code == 200
+        [row] = r.json()["shares"]
+        assert row["hash"] == share["hash"]
+        assert row["listed"] is False
+        assert row["isValid"] is True  # the link itself still works
+
+    def test_share_links_still_work(self, client, seeded):
+        share = _mint(listed=True)
+        _anon()
+        assert client.get(f"/api/share/{share['hash']}").status_code == 200
+
+
+@pytest.mark.usefixtures("listing_on")
 class TestPublicGamesList:
+    def test_share_list_reports_listed_when_enabled(self, client, seeded):
+        _mint(listed=True)
+        _as(COACH)
+        [row] = client.get(f"/api/games/{GAME_ID}/shares").json()["shares"]
+        assert row["listed"] is True
+
     def test_empty_when_nothing_listed(self, client, seeded):
         _mint(listed=False)  # a private share link is NOT a public listing
         _anon()

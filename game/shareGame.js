@@ -3,13 +3,27 @@
  *
  * A share link (https://www.breakside.pro/view/{hash}) opens the standalone
  * viewer in share mode: live score + play-by-play, no account needed. Links
- * expire; "List publicly" additionally puts the game on the breakside.pro
- * landing page (a private link alone never does). Routing chain documented
- * in ARCHITECTURE.md § Share Links.
+ * expire. Routing chain documented in ARCHITECTURE.md § Share Links.
+ *
+ * "List publicly" (put the game on the breakside.pro landing page) is
+ * DISABLED — see PUBLIC_LISTING_ENABLED below. The code is kept so it can
+ * come back as an admin-only action for verified games.
  */
 import { log } from '../utils/logger.js';
 import { getApiBaseUrl, authFetch } from '../store/sync.js';
 import { showControllerToast } from './controllerState.js';
+
+/*
+ * Public listing switch. false since 2026-09-07: letting any coach of any
+ * team put a game (their team name, opponent name, score) on the site's home
+ * page is a defacement vector — a throwaway account is all it takes. The
+ * backend has the matching gate (config.public_listing_enabled, default
+ * off) and is the one that matters; this only hides the checkbox and the
+ * "Public" badge. Flipping this alone does nothing on production. The
+ * intended way back is an admin-only listing of verified games; see TODO.md
+ * and ARCHITECTURE.md § Share Links.
+ */
+const PUBLIC_LISTING_ENABLED = false;
 
 const EXPIRY_CHOICES = [
     { days: 1, label: '1 day' },
@@ -59,7 +73,7 @@ function renderShareRow(share) {
         : left === 0 ? 'expires today'
         : left === 1 ? 'expires tomorrow'
         : `expires in ${left} days`;
-    const listedBadge = share.listed
+    const listedBadge = PUBLIC_LISTING_ENABLED && share.listed
         ? '<span class="share-listed-badge" title="Shown in the public games list on breakside.pro">Public</span>'
         : '';
     return `
@@ -69,7 +83,7 @@ function renderShareRow(share) {
                 <span class="share-link-meta">${expiry}${listedBadge ? ' · ' : ''}${listedBadge}</span>
             </div>
             <button class="share-copy-btn" title="Copy link">Copy</button>
-            <button class="share-revoke-btn" title="Turn off this link — it stops working and the game leaves the public list">Turn off</button>
+            <button class="share-revoke-btn" title="Turn off this link — it stops working for everyone who has it">Turn off</button>
         </div>`;
 }
 
@@ -137,12 +151,14 @@ async function loadShareList(modal, gameId) {
 async function createShare(modal, gameId) {
     const btn = modal.querySelector('#createShareLinkBtn');
     const days = modal.querySelector('#shareExpirySelect').value;
-    const listed = modal.querySelector('#shareListedCheckbox').checked;
+    const listedBox = modal.querySelector('#shareListedCheckbox');
+    const listed = PUBLIC_LISTING_ENABLED && !!(listedBox && listedBox.checked);
     btn.disabled = true;
     btn.textContent = 'Creating…';
     try {
+        const listedParam = PUBLIC_LISTING_ENABLED ? `&listed=${listed}` : '';
         const response = await authFetch(
-            `${getApiBaseUrl()}/api/games/${gameId}/share?expires_days=${encodeURIComponent(days)}&listed=${listed}`,
+            `${getApiBaseUrl()}/api/games/${gameId}/share?expires_days=${encodeURIComponent(days)}${listedParam}`,
             { method: 'POST' }
         );
         if (response.status === 404) {
@@ -182,6 +198,10 @@ function showShareGameDialog(game) {
     const expiryOptions = EXPIRY_CHOICES.map(c =>
         `<option value="${c.days}"${c.days === DEFAULT_EXPIRY_DAYS ? ' selected' : ''}>${c.label}</option>`
     ).join('');
+    const listedControl = PUBLIC_LISTING_ENABLED ? `
+                    <label class="share-listed-label" title="Also show this game in the public games list on breakside.pro">
+                        <input type="checkbox" id="shareListedCheckbox"> List publicly
+                    </label>` : '';
 
     modal = document.createElement('div');
     modal.id = 'shareGameModal';
@@ -204,9 +224,7 @@ function showShareGameDialog(game) {
                     <label class="share-expiry-label">Expires:
                         <select id="shareExpirySelect">${expiryOptions}</select>
                     </label>
-                    <label class="share-listed-label" title="Also show this game in the public games list on breakside.pro">
-                        <input type="checkbox" id="shareListedCheckbox"> List publicly
-                    </label>
+${listedControl}
                     <button id="createShareLinkBtn" type="button">Create link</button>
                 </div>
             </div>

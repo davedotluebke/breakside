@@ -84,6 +84,23 @@ def auth_required() -> bool:
 # ``auth_required()`` for per-request checks so a runtime env change is seen.
 AUTH_REQUIRED = auth_required()
 
+
+def public_listing_enabled() -> bool:
+    """Whether coaches can list a shared game on the breakside.pro landing
+    page ("Happening on Breakside") and ``GET /api/public/games`` serves it.
+
+    Defaults to FALSE and production leaves it there. Disabled 2026-09-07:
+    any coach of any team could put a game — team name, opponent name, score
+    — on the home page of the site, which is a defacement vector (a
+    throwaway account plus a game named whatever you like). The share links
+    themselves are unaffected; only the *listing* is gated. The code stays so
+    the feature can return as an admin-only action for verified games (see
+    TODO.md and ARCHITECTURE.md § Share Links). Set
+    ``BREAKSIDE_PUBLIC_LISTING=true`` to turn it on for a local backend or a
+    test. Read at call time, like ``auth_required()``.
+    """
+    return os.getenv("BREAKSIDE_PUBLIC_LISTING", "false").lower() == "true"
+
 # =============================================================================
 # AI Narration (speech-to-events)
 # =============================================================================

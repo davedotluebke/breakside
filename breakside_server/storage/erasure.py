@@ -1004,17 +1004,22 @@ def erase_team(team_id: str, *, dry_run: bool = False,
     # Shares are found two ways: by game (the index) and by the denormalized
     # teamId on the share itself, which catches shares whose game has already
     # gone missing.
+    # "Shared publicly" means a currently-valid share link: anyone holding
+    # one can view the game with no account. (It used to count the
+    # ``listed`` flag — the landing-page listing — which has been disabled;
+    # see ``config.public_listing_enabled``.)
     share_ids = set()
-    listed_public = 0
+    games_with_live_links = set()
     for game_id in game_ids:
         for share in share_storage.list_game_shares(game_id):
             share_ids.add(share["id"])
-            if share.get("listed"):
-                listed_public += 1
+            if share_storage.is_share_valid(share):
+                games_with_live_links.add(game_id)
     for share in share_storage.list_all_shares():
         if share.get("teamId") == team_id:
             share_ids.add(share["id"])
     counts["shares"] = len(share_ids)
+    listed_public = len(games_with_live_links)
 
     invites = invite_storage.list_team_invites(team_id)
     counts["invites"] = len(invites)
@@ -1042,7 +1047,10 @@ def erase_team(team_id: str, *, dry_run: bool = False,
             orphans.append(player_id)
 
     if listed_public:
-        warnings.append(f"{listed_public} game(s) are shared publicly")
+        warnings.append(
+            f"{listed_public} game(s) are shared publicly — an active share "
+            f"link lets anyone holding it watch without an account"
+        )
     if orphans and not erase_orphaned_players:
         warnings.append(
             f"orphans {len(orphans)} player(s) — they are on no other team and "

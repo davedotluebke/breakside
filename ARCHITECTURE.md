@@ -1765,13 +1765,36 @@ the viewer's field replay (2026-09-05, § Replay viewer) — each event's
 `endTimestamp`. Still stripped: `description`, `calledBy`/`calledByName`,
 `pullerGender`, roster gender/number/position, and every coaching field.
 
-**Public listing is a separate opt-in.** A share link alone never lists the
-game anywhere; `POST /api/games/{id}/share?listed=true` (the dialog's "List
-publicly" checkbox) additionally surfaces it in `GET /api/public/games`,
-which the landing page's "Happening on Breakside" section
-(`landing/publicGames.js`) renders. The section hides itself when no listed
-games exist. Only currently-valid shares count; revoking or expiry delists
-immediately.
+**Public listing exists but is disabled (2026-09-07).** The share flow once
+had a second, separate opt-in: `POST /api/games/{id}/share?listed=true` (a
+"List publicly" checkbox in the dialog) surfaced the game in
+`GET /api/public/games`, which a "Happening on Breakside" section on the
+landing page (`landing/publicGames.js`) rendered as cards. It is switched
+off, not removed, and the reason is worth keeping next to the code: the
+cards show the team name, the opponent name and the score, and anyone with a
+free account can coach a team with any name they like, so the feature let
+an arbitrary stranger put arbitrary text on the site's home page. That is a
+defacement vector, and there was no moderation step in front of it. Share
+links themselves (a URL you hand to parents) are unaffected.
+
+How it is off, layer by layer:
+
+| Layer | State |
+|-------|-------|
+| Backend | `config.public_listing_enabled()` reads `BREAKSIDE_PUBLIC_LISTING` (default `false`; production leaves it unset). While off, `?listed=true` is coerced to `false` (not rejected — a cached PWA build still gets a working link), `GET /api/games/{id}/shares` reports `listed` as `false` for every row, and `GET /api/public/games` is 404. `test_shares.py::TestPublicListingDisabled` pins this; the listing tests run with the flag on |
+| PWA | `PUBLIC_LISTING_ENABLED = false` in `game/shareGame.js` hides the checkbox and the "Public" badge and drops `listed=` from the create call. Cosmetic only; the backend gate is the one that matters |
+| Landing | The section markup and the `<script src="publicGames.js">` tag are removed from `landing/index.html` (the file and its CSS remain). The script fails safe to hidden on a 404 anyway |
+| Erasure preview | The "shared publicly" warning now counts games with a currently-valid share link rather than `listed` shares |
+
+Shares minted while listing was on keep `listed: true` on disk; nothing
+reads it while the flag is off.
+
+**If it comes back, it should come back admin-only.** The backlog entry in
+TODO.md sketches it: listing as an action only a Breakside admin
+(`is_admin`) can take, for games the admin has looked at — a verified team,
+a real event — with the coach's opt-in as a precondition rather than the
+whole gate. Do not re-enable the coach-side checkbox as-is: the flag is one
+env var away, and the abuse case is unchanged.
 
 ### Client-Side Auth Module
 

@@ -24,6 +24,7 @@ from ._shared import (
     is_share_valid,
     list_all_shares,
     list_game_shares,
+    public_listing_enabled,
     require_game_team_coach,
     revoke_share,
     validate_id,
@@ -67,12 +68,21 @@ async def create_game_share(
     Args:
         expires_days: Days until the link expires (1-365, default 7)
         listed: Also list the game publicly on the landing page
-                (default False — a share link alone stays unlisted)
+                (default False — a share link alone stays unlisted).
+                Ignored while public listing is disabled (the default;
+                see ``config.public_listing_enabled``): the link is still
+                created, just never listed.
 
     Requires: Coach access to the game's team.
     """
     if not game_exists(game_id):
         raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+
+    # Coerce rather than reject: a PWA still running a cached build with the
+    # "List publicly" checkbox should get a working (unlisted) link, not an
+    # error, and nothing an anonymous visitor can reach ever reads the flag.
+    if listed and not public_listing_enabled():
+        listed = False
 
     game = get_game_current(game_id)
     team_id = game.get("teamId")
@@ -112,11 +122,15 @@ async def list_game_shares_endpoint(
     shares = list_game_shares(game_id)
 
     # Add validity status + canonical URL to each share
+    listing_on = public_listing_enabled()
     shares_with_status = []
     for share in shares:
         share_copy = dict(share)
         share_copy["isValid"] = is_share_valid(share)
         share_copy["url"] = share_url(share["hash"])
+        # Report the *effective* state: a share minted while listing was on
+        # keeps listed=true on disk, but it is not on any public list now.
+        share_copy["listed"] = bool(share.get("listed")) and listing_on
         shares_with_status.append(share_copy)
 
     return {"shares": shares_with_status, "count": len(shares_with_status)}
@@ -330,7 +344,14 @@ async def list_public_games(limit: int = Query(default=20, ge=1, le=100)):
     Only games with a currently-valid share link created with listed=true
     appear. Returns lightweight cards (names, score, status) sorted by most
     recent game activity, plus the share hash to build the viewer URL.
+
+    404 while public listing is disabled (the default — see
+    ``config.public_listing_enabled`` for why). The landing page's consumer
+    treats any non-2xx as "no games" and stays hidden.
     """
+    if not public_listing_enabled():
+        raise HTTPException(status_code=404, detail="Public game listing is disabled")
+
     listed_shares = [
         s for s in list_all_shares()
         if s.get("listed") and is_share_valid(s)

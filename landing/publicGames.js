@@ -1,6 +1,14 @@
 /**
  * Landing page: "Public games" section.
  *
+ * DISABLED since 2026-09-07 — this script is no longer loaded by
+ * landing/index.html, and the section it fills was removed from the markup
+ * (both are a two-line restore). The API side is off too
+ * (config.public_listing_enabled, default false), so loading this would
+ * only ever leave the section hidden. Why: any coach could put a game on the
+ * site's home page, which is a defacement vector. Kept for a possible
+ * admin-only "verified games" listing; see ARCHITECTURE.md § Share Links.
+ *
  * Fetches /api/public/games (games whose coaches created a share link with
  * "List publicly" checked) and renders cards linking to the standalone
  * viewer. The section stays hidden unless at least one game comes back —

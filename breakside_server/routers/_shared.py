@@ -68,3 +68,4 @@ assert_team_edit_access = auth.assert_team_edit_access
 validate_id = validation.validate_id
 safe_static_path = validation.safe_static_path
 auth_required = config.auth_required
+public_listing_enabled = config.public_listing_enabled

@@ -56,8 +56,10 @@ restart breakside`; confirm that happened before treating anything here as broke
       confirm the copy actually lands on a real iPhone.
 - [ ] **Expiry + revoke on a live link**: a revoked link should leave a watcher on
       the last-known state under the "expired" banner, not a blank or error page.
-- [ ] **"List publicly"**: game appears in the landing page's "Happening on
-      Breakside" and disappears again when the share is revoked or expires.
+- [x] ~~**"List publicly"**: game appears in the landing page's "Happening on
+      Breakside" and disappears again when the share is revoked or expires.~~
+      N/A — public listing was disabled 2026-09-07 (see Backlog, "Public game
+      listing, admin-only"). Nothing to field-test.
 - [x] ~~Worth knowing: **two viewer copies are deployed**~~ — obsolete since
       2026-09-05: the standalone viewer is gone; share links open inside the PWA
       (`teams/shareGuest.js`), so there is one copy, deployed with the app.
@@ -330,7 +332,10 @@ The multi-user push is mostly done. A few items linger:
       (`listed=true`, the dialog's "List publicly" checkbox) — a share link
       alone never lists the game. Hero "Watch Live Games" button retargets to
       the section while it's populated (its old `/viewer/` target is
-      anonymous-empty).
+      anonymous-empty). **Disabled 2026-09-07** (defacement vector; see
+      Backlog, "Public game listing, admin-only"). Code kept, switched off at
+      the API (`BREAKSIDE_PUBLIC_LISTING`, default off), in the dialog, and
+      on the landing page.
 - [x] **"Clear pending" in connection info** — the Online/About toast now shows
       "N pending updates waiting to sync" with a View / Clear… button opening
       the existing pending-sync dialog (reachable mid-game, unlike the
@@ -987,6 +992,29 @@ Remaining work:
 ---
 
 ## Backlog
+
+- [ ] **Public game listing, admin-only (the "Happening on Breakside" section).**
+      The coach-side version shipped 2026-07-26 and was **disabled 2026-09-07**:
+      a "List publicly" checkbox in the Share dialog put the game's team name,
+      opponent name and score on the breakside.pro home page, with nothing in
+      between. Anyone can make a free account, create a team, and name the team
+      and the opponent whatever they like, so the feature was a way for a
+      stranger to put arbitrary text on the site's front page — a defacement
+      vector, not a stats feature — and the abuse case has no fix short of a
+      human in the loop. Share links (a URL handed to parents) are unaffected.
+      The code is intact: `config.public_listing_enabled()` gates the API,
+      `PUBLIC_LISTING_ENABLED` in `game/shareGame.js` hides the checkbox, and the
+      landing section plus `publicGames.js` tag are removed from
+      `landing/index.html`. Layer-by-layer state in ARCHITECTURE.md § Share Links.
+      **If it returns, it returns as an admin action**: a Breakside admin
+      (`is_admin`) lists a game they have looked at — a verified team, a real
+      event — with the coach's opt-in as a precondition, not the whole gate.
+      Sketch: keep `listed` as the coach's request, add an admin-set
+      `listingApprovedBy`/`At` on the share (or a separate allowlist of team ids),
+      and have `/api/public/games` require both; an admin surface (the existing
+      admin router) to approve/revoke; the checkbox comes back reading "Request
+      public listing". Do not simply flip the env var — the abuse case is
+      unchanged.
 
 - [ ] **Verify: offline team creation when auth fails to initialise.** A 2026-03
       note recorded that the create-team handler returned early with an alert

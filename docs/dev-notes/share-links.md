@@ -17,7 +17,13 @@ Corollaries:
 
 ## Deploy note
 
-The feature has a backend half (share endpoints, the `/view` redirect). Staging cannot exercise new endpoints until the backend is deployed, because staging talks to the production API. The landing "Happening on Breakside" section fails safe to hidden and the share dialog shows a friendly error until then; do not debug that as a bug.
+The feature has a backend half (share endpoints, the `/view` redirect). Staging cannot exercise new endpoints until the backend is deployed, because staging talks to the production API. The share dialog shows a friendly error until then; do not debug that as a bug.
+
+## Public listing: disabled 2026-09-07
+
+The "List publicly" checkbox and the landing page's "Happening on Breakside" section are switched off, not deleted. Any coach of any team could put a game — team name, opponent name, score, all free text — on the site's home page with nothing in between, which is a defacement vector for anyone with a throwaway account. Share links are unaffected.
+
+The switch is `config.public_listing_enabled()` (env `BREAKSIDE_PUBLIC_LISTING`, default off); the layer-by-layer state and the intended admin-only return path are in ARCHITECTURE.md § Share Links, and the backlog entry is in TODO.md. To exercise the listing locally: `BREAKSIDE_PUBLIC_LISTING=true` on the dev backend, flip `PUBLIC_LISTING_ENABLED` in `game/shareGame.js`, and restore the section plus the `publicGames.js` script tag in `landing/index.html` (the last commit before the disable, `git log -S publicGamesSection -- landing/index.html`, shows both).
 
 ## History
 

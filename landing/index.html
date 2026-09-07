@@ -70,14 +70,8 @@
         </div>
     </section>
 
-    <!-- Public Games (hidden unless the API returns listed games) -->
-    <section id="publicGamesSection" class="public-games" style="display: none;">
-        <div class="section-content">
-            <h2 class="section-title">Happening on Breakside</h2>
-            <p class="section-subtitle">Games coaches have shared publicly — tap one to watch the score and play-by-play live.</p>
-            <div id="publicGamesList" class="public-games-list"></div>
-        </div>
-    </section>
+    <!-- The "Happening on Breakside" public-games section and its script
+         (publicGames.js) are disabled; see ARCHITECTURE.md § Share Links. -->
 
     <!-- Features Section -->
     <section id="features" class="features">
@@ -321,7 +315,6 @@
     <script src="supabaseInit.js"></script>
     <script src="landing.js"></script>
     <script src="apiOrigin.js"></script>
-    <script src="publicGames.js"></script>
     <script src="hero-carousel.js"></script>
 </body>
 </html>
