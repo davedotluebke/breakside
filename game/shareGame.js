@@ -112,6 +112,9 @@ async function loadShareList(modal, gameId) {
         listEl.querySelectorAll('.share-revoke-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const shareId = btn.closest('.share-link-row').dataset.shareId;
+                // Irreversible for everyone holding the link, so confirm
+                // (the app's plain confirm() convention, as for End Game).
+                if (!confirm('Turn off this share link? Anyone who has it will lose access, and it can\'t be turned back on.')) return;
                 btn.disabled = true;
                 try {
                     const r = await authFetch(`${getApiBaseUrl()}/api/shares/${shareId}`, { method: 'DELETE' });

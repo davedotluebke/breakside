@@ -34,6 +34,12 @@
             // Until 2026-09 this bounced to a separate /viewer/ app.
             var v = location.pathname.match(/^\/view\/([A-Za-z0-9]+)\/?$/);
             if (v) {
+                // Known cost: the parser's preload scanner has already queued
+                // every <link>/<script> below relative to /view/ by the time
+                // this runs, and on S3 each of those 404s is answered with
+                // this whole page. Nothing in the page can prevent that (a
+                // written <base> comes too late); the fix is a CloudFront
+                // redirect for /view/* — see breakside-ops.
                 var q = new URLSearchParams(location.search);
                 q.set('share', v[1]);
                 location.replace('/?' + q.toString());
@@ -53,13 +59,17 @@
             // A share-link guest (/view/<hash>, teams/shareGuest.js) follows
             // the device instead: the dark default is for sideline battery
             // life, not a spectator's phone. A stored preference still wins.
-            if (/^\/view\/[A-Za-z0-9]+\/?$/.test(location.pathname)
-                || /[?&]share=[A-Za-z0-9]+/.test(location.search)) pref = 'auto';
+            var isShare = /^\/view\/[A-Za-z0-9]+\/?$/.test(location.pathname)
+                || /[?&]share=[A-Za-z0-9]+/.test(location.search);
+            if (isShare) pref = 'auto';
             try {
                 var s = JSON.parse(localStorage.getItem('breakside_advanced_settings') || '{}') || {};
                 if (s['display.theme'] === 'light' || s['display.theme'] === 'dark' || s['display.theme'] === 'auto') {
                     pref = s['display.theme'];
                 }
+                // A guest's own toggle (the footer button) outranks both.
+                var g = isShare ? localStorage.getItem('breakside_share_theme') : null;
+                if (g === 'light' || g === 'dark') pref = g;
             } catch (e) { /* private mode / corrupt JSON: fall back to the default */ }
             var dark = pref === 'dark' || (pref === 'auto'
                 && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -1075,13 +1085,17 @@
         <!-- Share-guest footer: the disclosure a spectator actually needs
              (this page is public) plus the product pitch. body.share-guest only. -->
         <div class="share-guest-footer">
-            <div>
-                Live game tracking by <a href="/landing/">Breakside</a> —
-                free real-time ultimate stats for your team
+            <div class="share-guest-footer-row">
+                <span>Live game tracking by <a href="/landing/">Breakside</a> —
+                free real-time ultimate stats for your team</span>
+                <button id="shareThemeToggle" class="share-theme-toggle" title="Switch light / dark" aria-label="Switch light / dark">
+                    <i class="fas fa-moon"></i>
+                </button>
             </div>
-            <div class="share-guest-footer-privacy">
-                This page is public to anyone with the link, and lists players by name.
-                <a href="/privacy.html">What Breakside stores</a>
+            <div id="shareGuestNotice" class="share-guest-footer-privacy">
+                <span>This page is public to anyone with the link, and lists players by name.
+                <a href="/privacy.html">What Breakside stores</a></span>
+                <button id="shareNoticeDismiss" class="share-notice-dismiss" title="Dismiss" aria-label="Dismiss">&times;</button>
             </div>
         </div>
     </section>

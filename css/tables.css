@@ -930,3 +930,43 @@ body.share-guest .share-guest-footer {
 .share-error-cta:hover {
     background: var(--brand-orange-deep);
 }
+
+/* Guest footer: the theme toggle sits on the pitch line, the dismiss × on
+   the public-page notice; both share the muted footer colour. */
+.share-guest-footer-row,
+.share-guest-footer-privacy {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.share-theme-toggle,
+.share-notice-dismiss {
+    background: none;
+    border: 1px solid var(--border-soft);
+    color: var(--text-muted);
+    border-radius: 50%;
+    width: 1.8rem;
+    height: 1.8rem;
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+}
+
+.share-theme-toggle:hover,
+.share-notice-dismiss:hover {
+    color: var(--text-primary);
+    border-color: var(--border-default);
+}
+
+.share-notice-dismiss {
+    font-size: 1.1rem;
+}

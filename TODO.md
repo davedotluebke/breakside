@@ -114,6 +114,11 @@ Deliberately left out of editing v1 / the share-viewer port:
   through the score-attribution flow — not `pbpPossession.amendEvent`.
 - **Insert / delete events** (undo-stack and possession-boundary
   implications); editing the opponent's plays.
+- **Edit a point's roster from the log** (next phase, 2026-09-07): tapping a
+  "Point N roster: …" line on the signed-in Review screen should open the
+  substitute-player dialog (the roster-change one, not the injury sub) to
+  change who played that point — re-keying that point's stats and
+  membership, not just the label.
 - **Assist** is not editable from the sheet (only thrower / receiver /
   defender / puller).
 - **Undo of an amendment**: the `eventAmended` bus payload carries

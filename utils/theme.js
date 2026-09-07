@@ -57,13 +57,31 @@ const darkQuery = typeof window.matchMedia === 'function'
  * means changing the pre-paint copy in index.html too.
  */
 function getPreference() {
+    const share = isShareRoute();
     try {
+        if (share) {
+            // A share-link guest's own footer toggle (teams/shareGuest.js)
+            // outranks the app setting — it never writes that setting, so a
+            // coach's own phone keeps its app theme.
+            const g = localStorage.getItem(GUEST_KEY);
+            if (g === 'light' || g === 'dark') return g;
+        }
         const store = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {};
         const v = store[SETTING_KEY];
-        return VALID.includes(v) ? v : 'dark';
-    } catch (e) {
-        return 'dark';
-    }
+        if (VALID.includes(v)) return v;
+    } catch (e) { /* fall through to the default */ }
+    // Unset: the app is dark for sideline battery life; a spectator on a
+    // share link just follows the device. index.html's pre-paint boot makes
+    // the same call.
+    return share ? 'auto' : 'dark';
+}
+
+// Share links (/view/<hash>, booted as /?share=<hash> — see
+// teams/shareGuest.js matchShareRoute, which must agree with this).
+const GUEST_KEY = 'breakside_share_theme';
+function isShareRoute() {
+    return /^\/view\/[A-Za-z0-9]+\/?$/.test(location.pathname)
+        || /[?&]share=[A-Za-z0-9]+/.test(location.search);
 }
 
 /** The preference collapsed against the OS: always 'light' or 'dark'. */

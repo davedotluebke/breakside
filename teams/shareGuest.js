@@ -21,7 +21,7 @@
  */
 import { API_BASE_URL } from '../store/sync.js';
 import { hydrateGame } from '../store/models.js';
-import { applyTheme, getPreference } from '../utils/theme.js';
+import { applyTheme, isDark } from '../utils/theme.js';
 import { showScreen } from '../screens/navigation.js';
 import { showGameSummaryForShare, refreshGameSummaryForShare } from './gameSummary.js';
 
@@ -29,7 +29,6 @@ const POLL_INTERVAL = 3000; // 3 seconds
 // A game with no end timestamp counts as LIVE only if it changed this
 // recently — otherwise it's just unfinished (coach forgot to end it).
 const LIVE_RECENCY_MS = 30 * 60 * 1000;
-const THEME_STORAGE_KEY = 'breakside_advanced_settings';
 
 let currentShareHash = null;
 let lastShareStamp = null;
@@ -65,12 +64,11 @@ function startShareGuest(hash) {
     currentShareHash = hash;
     document.body.classList.add('share-guest');
 
-    // A guest has no reason to sit on the app's dark-by-default: the app
-    // defaults to dark for sideline battery life, a spectator's phone should
-    // just follow the device. A stored preference (a coach opening a link
-    // on their own phone) still wins — index.html's pre-paint boot makes the
-    // same call, so this only re-applies it.
-    if (!hasStoredThemePreference()) applyTheme('auto');
+    // Theme: utils/theme.js getPreference() knows it is on a share route and
+    // ranks the guest's own footer toggle above the app setting, and the
+    // device above the app's dark default; index.html's pre-paint boot
+    // makes the same call. Nothing to apply here — only the footer to wire.
+    wireGuestFooter();
 
     loadSharedGame();
     pollingInterval = setInterval(pollSharedGame, POLL_INTERVAL);
@@ -91,12 +89,46 @@ function startShareGuest(hash) {
     });
 }
 
-function hasStoredThemePreference() {
-    try {
-        const store = JSON.parse(localStorage.getItem(THEME_STORAGE_KEY) || '{}') || {};
-        return ['auto', 'light', 'dark'].includes(store['display.theme']);
-    } catch (e) {
-        return false;
+// The guest's own theme pick; utils/theme.js reads the same key (and
+// index.html's pre-paint boot), so it wins on every later load too.
+const GUEST_THEME_KEY = 'breakside_share_theme';
+// The public-page notice is dismissed per browser session: a fresh visit
+// (new tab, next day) shows it again.
+const NOTICE_DISMISSED_KEY = 'breakside_share_notice_dismissed';
+
+/** The footer's light/dark toggle and the dismissable public-page notice. */
+function wireGuestFooter() {
+    const toggle = $('shareThemeToggle');
+    const paintToggle = () => {
+        if (!toggle) return;
+        const dark = isDark();
+        toggle.innerHTML = `<i class="fas ${dark ? 'fa-sun' : 'fa-moon'}"></i>`;
+        toggle.title = dark ? 'Switch to light' : 'Switch to dark';
+        toggle.setAttribute('aria-label', toggle.title);
+    };
+    if (toggle) {
+        toggle.addEventListener('click', () => {
+            const next = isDark() ? 'light' : 'dark';
+            try { localStorage.setItem(GUEST_THEME_KEY, next); } catch (e) { /* private mode */ }
+            applyTheme();
+            paintToggle();
+        });
+        // theme.js re-applies the resolved preference on DOMContentLoaded;
+        // paint after that, and whenever the palette moves (device flip).
+        paintToggle();
+        document.addEventListener('breakside:theme-changed', paintToggle);
+    }
+
+    const notice = $('shareGuestNotice');
+    const dismiss = $('shareNoticeDismiss');
+    let dismissed = false;
+    try { dismissed = sessionStorage.getItem(NOTICE_DISMISSED_KEY) === '1'; } catch (e) { /* no storage */ }
+    if (notice && dismissed) notice.style.display = 'none';
+    if (dismiss && notice) {
+        dismiss.addEventListener('click', () => {
+            notice.style.display = 'none';
+            try { sessionStorage.setItem(NOTICE_DISMISSED_KEY, '1'); } catch (e) { /* no storage */ }
+        });
     }
 }
 
