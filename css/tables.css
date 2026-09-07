@@ -931,15 +931,29 @@ body.share-guest .share-guest-footer {
     background: var(--brand-orange-deep);
 }
 
-/* Guest footer: the theme toggle sits on the pitch line, the dismiss × on
-   the public-page notice; both share the muted footer colour. */
+/* Guest footer: the theme toggle sits beside the pitch line, the dismiss ×
+   beside the public-page notice. The text wraps INSIDE its span (min-width: 0)
+   while the button stays on the line; the row itself never wraps. */
 .share-guest-footer-row,
 .share-guest-footer-privacy {
     display: flex;
     justify-content: center;
     align-items: center;
     gap: 0.5rem;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+}
+
+.share-guest-footer-row > span,
+.share-guest-footer-privacy > span {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+/* Narrow phones: keep the pitch line to two rows by dropping the tagline. */
+@media (max-width: 480px) {
+    .share-guest-tagline {
+        display: none;
+    }
 }
 
 .share-theme-toggle,
