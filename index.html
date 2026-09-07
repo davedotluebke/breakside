@@ -34,12 +34,13 @@
             // Until 2026-09 this bounced to a separate /viewer/ app.
             var v = location.pathname.match(/^\/view\/([A-Za-z0-9]+)\/?$/);
             if (v) {
-                // Known cost: the parser's preload scanner has already queued
-                // every <link>/<script> below relative to /view/ by the time
-                // this runs, and on S3 each of those 404s is answered with
-                // this whole page. Nothing in the page can prevent that (a
-                // written <base> comes too late); the fix is a CloudFront
-                // redirect for /view/* — see breakside-ops.
+                // On www/staging a CloudFront Function answers this redirect
+                // at the edge (scripts/cloudfront-short-links-function.js), so
+                // this branch is the fallback for dev servers and any origin
+                // without it. It is a poor primary: the parser's preload
+                // scanner has already queued every <link>/<script> below
+                // relative to /view/ by the time this runs, and on S3 each of
+                // those 404s is answered with this whole page.
                 var q = new URLSearchParams(location.search);
                 q.set('share', v[1]);
                 location.replace('/?' + q.toString());

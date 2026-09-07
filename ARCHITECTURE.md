@@ -1728,7 +1728,7 @@ like it, a *same-origin* bounce):
 
 | Origin | Mechanism |
 |--------|-----------|
-| www/staging (CloudFront→S3) | No `/view/*` route exists; the S3 404 fallback serves the PWA `index.html`, whose inline `<head>` shim redirects to **`/?share={hash}`** (keeping any other query, e.g. a dev `?api=`). `main.js initializeApp()` checks `matchShareRoute()` BEFORE auth and hands off to `startShareGuest()` |
+| www/staging (CloudFront→S3) | A CloudFront Function on the viewer-request event (`scripts/cloudfront-short-links-function.js`, deploy notes in breakside-ops) 302s to **`/?share={hash}`** at the edge, keeping any other query. Fallback for an origin without it: the S3 404 fallback serves the PWA `index.html`, whose inline `<head>` shim performs the same redirect — but only after the browser's preload scanner has already requested every relative asset under `/view/`, which is why the edge function exists. `main.js initializeApp()` checks `matchShareRoute()` BEFORE auth and hands off to `startShareGuest()` |
 | api.breakside.pro (FastAPI) | `routers/static_files.py` 302-redirects to the canonical www URL (`routers/shares.py share_url`) — the API host serves no copy of the app at that path |
 | localhost (dev) | `scripts/dev-server.sh` serves `index.html` for `/join/*` and `/view/*` (production's S3 `ErrorDocument` equivalent), so the same shim runs; pair a dev backend with `?api=` |
 
