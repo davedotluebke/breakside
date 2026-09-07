@@ -1,6 +1,6 @@
 # Wordmark logo rollout
 
-Status: shipped (branch `logo-refresh`, mid-2026); three spots still on the old disc asset as of 2026-09-05.
+Status: complete as of 2026-09-07 (branch `retire-disc-logo`); the disc artwork survives only in the favicon / app-icon set.
 
 ## What shipped
 
@@ -12,14 +12,19 @@ Status: shipped (branch `logo-refresh`, mid-2026); three spots still on the old 
 
 `apple-mobile-web-app-status-bar-style` is `default` (was `black-translucent`). **Do not use `viewport-fit=cover`.** An attempt with it extended the canvas under the notch, and top-anchored fixed elements that are not safe-area aware (the "Next Point" countdown at `top:10px`, toasts) drew into the dynamic island while `env()`-padded elements sat below: an inconsistent top reference. Without cover, the layout viewport stays below the notch and the default status bar paints it white. The main `<header>` still breaks out of body's 5 px padding via negative margins; the `env(safe-area-inset-top)` paddings on the headers remain but are no-ops.
 
-## Still on `logo.disc.only.png`
+## Disc logo retired (2026-09-07)
 
-These sit on dark or non-white backgrounds and want the transparent wordmark:
+`images/logo.disc.only.png` and `images/logo.png` are deleted. The last three
+`<img>` spots (in-app auth screen, landing footer, join footer) all sit on dark
+surfaces in both themes, so they use `logo.wordmark.dark.png` directly with no
+`data-dark-src` swap. The landing hero carousel stills were re-shot from the
+current chrome with `tests/demo/hero-shots.spec.ts` (see
+`landing/screens/README.md`).
 
-- In-app auth screen logo: `index.html` (search for `logo.disc.only`)
-- Landing footer: `landing/index.html`, `landing/join.html`
-
-The public viewer has been updated. Also: the landing hero's phone-mockup screenshots still show the old orange in-game header and should be regenerated.
+What still carries the disc artwork: `images/favicon-*.png`, `images/favicon.ico`,
+`images/staging/favicon-*.png` (and `browserconfig.xml`'s tile). Replacing the
+app icon needs a square mark derived from the wordmark, which is a design
+decision, not a search-and-replace.
 
 ## Loose end from the same review
 
