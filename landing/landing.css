@@ -1043,7 +1043,9 @@ body {
 }
 
 .footer-logo {
-    height: 24px;
+    /* Transparent light-lettered wordmark: the footer is dark in both themes. */
+    height: 32px;
+    width: auto;
 }
 
 .footer-links {

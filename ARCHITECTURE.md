@@ -128,9 +128,9 @@ breakside/
 │   └── buttonLayout.js      # UI consistency functions
 │
 └── images/                  # App icons and logos
-    ├── logo.png            # Full logo with text
-    ├── logo.disc.only.png  # Icon-only logo
-    └── favicon-*.png       # Various favicon sizes
+    ├── logo.wordmark.png       # Wordmark, light theme (baked white background)
+    ├── logo.wordmark.dark.png  # Wordmark, dark theme (transparent, light lettering)
+    └── favicon-*.png           # Various favicon sizes
 ```
 
 ### Module Loading (ES modules)

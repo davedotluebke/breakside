@@ -22,5 +22,4 @@ array in [`../hero-carousel.js`](../hero-carousel.js):
 | `all`             | all.png               | All tab — combined PBP + Next Line + Game Log            |
 
 All shots are from one consistent game (Breakside 6 – Rival City 6) with a tidy
-point-timer. The standalone `../game-screenshot.png` is the old hero image, no
-longer referenced.
+point-timer.

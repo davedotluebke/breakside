@@ -30,19 +30,10 @@
 }
 
 .auth-logo img {
-    width: 80px;
-    height: 80px;
-    margin-bottom: 1rem;
-    filter: drop-shadow(0 4px 8px rgba(225, 144, 73, 0.3));
-}
-
-.auth-logo h1 {
-    color: #E19049;
-    font-family: 'Poppins', sans-serif;
-    font-size: 2rem;
-    font-weight: 700;
-    margin: 0;
-    letter-spacing: 1px;
+    /* Light-lettered wordmark; the auth panel is a dark gradient in both themes. */
+    width: 240px;
+    max-width: 100%;
+    height: auto;
 }
 
 .auth-tagline {
@@ -272,12 +263,7 @@
     }
     
     .auth-logo img {
-        width: 60px;
-        height: 60px;
-    }
-    
-    .auth-logo h1 {
-        font-size: 1.5rem;
+        width: 200px;
     }
 }
 
