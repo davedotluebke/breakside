@@ -109,7 +109,7 @@ test.describe('sign-out guard', () => {
     const backup = await page.evaluate(
       () => JSON.parse(localStorage.getItem('breakside_signout_backup') || 'null'));
     expect(backup).not.toBeNull();
-    expect(Object.keys(backup.data).sort()).toEqual(['teamsData', 'breakside_sync_queue']);
+    expect(Object.keys(backup.data).sort()).toEqual(['breakside_sync_queue', 'teamsData']);
     expect(JSON.parse(backup.data.teamsData)[0].name).toBe('Sideline FC');
 
     await page.context().setOffline(false);
