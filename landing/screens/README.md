@@ -1,9 +1,16 @@
 # Hero carousel media
 
-Real-app screenshots for the landing-page hero carousel, captured from a live
-game (Breakside vs. Rival City) in the running app. To swap any of these for an
-updated screenshot or a short looping clip (MP4/WebM), edit the `HERO_SLIDES`
-array in [`../hero-carousel.js`](../hero-carousel.js):
+Real-app screenshots for the landing-page hero carousel, captured from one
+scripted game (Breakside 6 – Rival City 6, canonical roster) by
+[`tests/demo/hero-shots.spec.ts`](../../tests/demo/hero-shots.spec.ts). Re-shoot
+all seven whenever the in-game chrome changes:
+
+```bash
+cd tests && HERO_SHOTS=1 npx playwright test --config=playwright.demo.config.ts demo/hero-shots.spec.ts
+```
+
+To swap any slide for a different screenshot or a short looping clip (MP4/WebM),
+edit the `HERO_SLIDES` array in [`../hero-carousel.js`](../hero-carousel.js):
 
 - Drop the new file in this folder (keep the name, or update `media.src`).
 - For video, set `media.type: 'video'` and point `media.src` at the `.mp4`/`.webm`.
@@ -21,6 +28,5 @@ array in [`../hero-carousel.js`](../hero-carousel.js):
 | `line`            | line.png              | Line tab (roster, score progression, points-played)      |
 | `all`             | all.png               | All tab — combined PBP + Next Line + Game Log            |
 
-All shots are from one consistent game (Breakside 6 – Rival City 6) with a tidy
-point-timer. The standalone `../game-screenshot.png` is the old hero image, no
-longer referenced.
+All shots are from one consistent game with the thirteenth point about a
+minute old, so the header point-timer reads as mid-point rather than 0:0x.

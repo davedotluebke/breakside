@@ -53,7 +53,7 @@ PRECACHE_EXTENSIONS = {
 PRECACHE_NEVER = {'version.json', 'service-worker.js'}
 
 # One oversized asset would evict the rest of the shell on a tight quota.
-# images/logo.png is ~500 KB and IS the splash, so the cap has to clear it.
+# images/logo.wordmark.png is ~450 KB and IS the splash, so the cap has to clear it.
 PRECACHE_MAX_FILE_BYTES = 1_500_000
 # A whole shell far past this means something unintended got swept in.
 PRECACHE_MAX_TOTAL_BYTES = 12_000_000
