@@ -93,7 +93,7 @@
     <!-- Favicon and Icons -->
     <script>
         var _iconBase = window._isStaging ? 'images/staging/' : 'images/';
-        document.write('<link rel="icon" type="image/x-icon" href="images/favicon.ico">');
+        document.write('<link rel="icon" type="image/x-icon" href="' + _iconBase + 'favicon.ico">');
         ['16x16','32x32','48x48','96x96','192x192','512x512'].forEach(function(s) {
             document.write('<link rel="icon" type="image/png" sizes="' + s + '" href="' + _iconBase + 'favicon-' + s + '.png">');
         });

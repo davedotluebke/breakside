@@ -1,6 +1,6 @@
 # Wordmark logo rollout
 
-Status: complete as of 2026-09-07 (branch `retire-disc-logo`); the disc artwork survives only in the favicon / app-icon set.
+Status: complete as of 2026-09-11; nothing carries the disc artwork any more.
 
 ## What shipped
 
@@ -21,10 +21,15 @@ surfaces in both themes, so they use `logo.wordmark.dark.png` directly with no
 current chrome with `tests/demo/hero-shots.spec.ts` (see
 `landing/screens/README.md`).
 
-What still carries the disc artwork: `images/favicon-*.png`, `images/favicon.ico`,
-`images/staging/favicon-*.png` (and `browserconfig.xml`'s tile). Replacing the
-app icon needs a square mark derived from the wordmark, which is a design
-decision, not a search-and-replace.
+## App icon (2026-09-11)
+
+`scripts/make-icons.py` generates `images/favicon-*.png`, `images/favicon.ico`
+and the `images/staging/` set from the wordmark itself: the "k" (whiteboard
+X-player and line) is cut out of `logo.wordmark.dark.png` as its two orange
+connected components, so it is pixel-faithful rather than redrawn. Sizes from
+96 px add the arrow shrunk along the bottom; 48/32/16 drop it and thicken the
+strokes. Production is the orange mark on white, staging a white mark on the
+staging purple. Re-run the script rather than editing the PNGs.
 
 ## Loose end from the same review
 
