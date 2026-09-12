@@ -28,6 +28,7 @@ data/memberships/
 data/shares/
 data/invites/
 data/users/
+data/mail/
 data/index.json
 
 # Feature worktrees (parallel Claude Code sessions)
