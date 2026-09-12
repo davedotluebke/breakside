@@ -291,7 +291,7 @@ async function redeemInvite() {
             localStorage.removeItem('pendingInviteCode');
             showAuthMessage("You're already on this team!", 'success');
             setTimeout(() => {
-                window.location.href = '/app/';
+                window.location.href = '/';   // not /app/: that path is not a route (see auth/auth.js resetPassword)
             }, 1500);
             return;
         }

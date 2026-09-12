@@ -836,7 +836,10 @@ async function signInWithGoogle() {
         const { error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: `${window.location.origin}/app/`,
+                // The app root, for the same reason as resetPassword() above:
+                // /app/ is not a route. tests/unit/noAppPathRedirect.test.mjs
+                // pins this.
+                redirectTo: `${window.location.origin}/`,
             },
         });
         

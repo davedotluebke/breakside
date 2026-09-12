@@ -20,7 +20,7 @@ Nothing for a signed-in user, and "Forgot password?" was half a feature. Both si
 
 ## Things that bit
 
-- `/app/` is not a route. S3's 404 fallback serves `index.html` there, and every asset reference in that file is relative, so `main.js` resolves to `/app/main.js` and comes back as HTML. `resetPassword()` used to redirect there; it now targets `/`. `signInWithGoogle()` still does and is untouched (TODO.md).
+- `/app/` is not a route. S3's 404 fallback serves `index.html` there, and every asset reference in that file is relative, so `main.js` resolves to `/app/main.js` and comes back as HTML (checked on production: 404, `text/html`). `resetPassword()`, `signInWithGoogle()` and the join page's post-join redirect all pointed there; all target `/` now, and `tests/unit/noAppPathRedirect.test.mjs` fails on any new one.
 - Supabase honours `redirectTo` only from its Redirect URL allowlist and otherwise sends the link to the Site URL (production). If a staging reset link lands on www, that is the cause. The link's host is worth checking on the first real test.
 - On the landing page, `updateUIForUser(session.user)` runs on every auth event and flips the modal to "Welcome"; recovery mode has to short-circuit it until the form's own handler is done. Likewise, subscribing with `onAuthStateChange` emits `INITIAL_SESSION` straight away, and the logged-out branch of that handler resets the modal, which wiped an expired-link message shown just before subscribing. The message is now shown from inside the handler.
 - Expired links come back as `#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired`, not as a token. Both pages surface the description.
@@ -33,6 +33,12 @@ Nothing for a signed-in user, and "Forgot password?" was half a feature. Both si
 - **Landing page**: call the global `showNewPasswordForm()` after stubbing `supabaseClient.auth.updateUser` and `getSession` (classic script, so `supabaseClient` is a global `const`; patch its methods, as for the join page). The expired-link path is `/landing/#error_description=…` with no stubs.
 - **Real end-to-end** (needs a person): staging → sign in → Teams → Account → Change password, including a wrong current password and the sign-out-others box; then Sign Out → Forgot password → email → link → the dialog should open in recovery mode. If "Secure password change" is on in the Supabase dashboard, expect the reauthentication message instead of a change.
 
+## Landing-page twin (branch `password-followups`, 2026-09-12)
+
+The *My Account* modal on `/landing/` got its own change-password form. It is deliberately smaller than the app's dialog (no show-passwords toggle, no sign-out-other-devices) and its rules are a hand-kept copy of `auth/passwordRules.js`, because `landing/` is classic scripts that cannot import a module; `landing/apiOrigin.js` is the precedent. The current-password check is the same direct GoTrue grant, for the same reason: `updateUIForUser()` runs on every auth event, and a `signInWithPassword` on the page's client would flip the modal back to the welcome view mid-flow. Sign-out resets the form; closing the modal returns to the account view.
+
+Test without an account: from an injected main-world `<script>`, stub `supabaseClient.auth.updateUser` and the global `verifyCurrentPassword`, call `updateUIForUser({ email, identities: [{ provider: 'email' }] })`, click `#changePasswordLink`, and drive `#changePasswordForm`. A user object whose identities hold only `google` hides the link.
+
 ## Follow-ups
 
-Listed in TODO.md § Near Term: the Google `/app/` redirect, a landing-page *Change password* link, and *Set a password* for Google-only accounts.
+Listed in TODO.md § Near Term: *Set a password* for Google-only accounts.

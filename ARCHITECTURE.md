@@ -1661,8 +1661,13 @@ the testing recipe are in [docs/dev-notes/password-change.md](docs/dev-notes/pas
   than implementing the nonce flow.
 - **Never redirect to `/app/`.** It is not a route: S3's 404 fallback serves
   `index.html` there, whose relative asset URLs then resolve under `/app/` and
-  break. `resetPassword()` targets `/` for this reason; `signInWithGoogle()`
-  still targets `/app/` (see TODO.md).
+  break. Every redirect and link targets `/`;
+  `tests/unit/noAppPathRedirect.test.mjs` pins that.
+- **Landing page twin.** The *My Account* modal on `/landing/` has its own,
+  smaller change-password form (`landing/landing.js`): same current-password
+  check against the GoTrue grant, same `updateUser`, no extras. `landing/` is
+  classic scripts and cannot import `auth/passwordRules.js`, so the rules are
+  hand-kept there, like `landing/apiOrigin.js`.
 
 ### User Roles
 
