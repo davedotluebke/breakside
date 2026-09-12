@@ -14,6 +14,7 @@ from . import (
     events,
     games,
     invites,
+    mail,
     misc,
     players,
     shares,

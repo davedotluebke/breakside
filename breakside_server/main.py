@@ -5,6 +5,7 @@ App wiring only: the endpoints live in the routers/ package (games, teams,
 players, invites, shares, controller, events, auth_api, misc, static_files)
 and share storage/auth imports via routers/_shared.py.
 """
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -26,6 +27,7 @@ try:
     from narration_lineup import router as narration_lineup_router
     from account_deletion import set_team_eraser
     from storage.erasure import erase_team
+    from mail.inbound import build_poller
     import routers
 except ImportError:
     from breakside_server.config import HOST, PORT, DEBUG, ALLOWED_ORIGINS
@@ -35,6 +37,7 @@ except ImportError:
     from breakside_server.narration_lineup import router as narration_lineup_router
     from breakside_server.account_deletion import set_team_eraser
     from breakside_server.storage.erasure import erase_team
+    from breakside_server.mail.inbound import build_poller
     from breakside_server import routers
 
 # Minimal app-wide logging setup. Uvicorn configures its own access/error
@@ -47,6 +50,9 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+# The SQS long-poll is 20s; give a stopping poller one full poll to return.
+RECEIVE_SHUTDOWN_SECONDS = 25
 
 
 @asynccontextmanager
@@ -65,7 +71,21 @@ async def lifespan(app: FastAPI):
     # halves were built independently and each is green on its own; this is
     # the line that connects them.
     set_team_eraser(erase_team)
-    yield
+    # Team mailing lists: long-poll the inbound queue while the app runs.
+    # build_poller() returns None unless BREAKSIDE_MAIL_TRANSPORT=ses and a
+    # queue URL are configured, so dev backends and tests start nothing.
+    poller = build_poller()
+    stop_polling = asyncio.Event()
+    poller_task = asyncio.create_task(poller.run(stop_polling)) if poller else None
+    try:
+        yield
+    finally:
+        if poller_task:
+            stop_polling.set()
+            try:
+                await asyncio.wait_for(poller_task, timeout=RECEIVE_SHUTDOWN_SECONDS)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                poller_task.cancel()
 
 
 # Create FastAPI app.
@@ -191,6 +211,7 @@ app.include_router(routers.games.router)
 app.include_router(routers.controller.router)
 app.include_router(routers.shares.router)
 app.include_router(routers.invites.router)
+app.include_router(routers.mail.router)
 app.include_router(routers.teams.router)
 app.include_router(routers.players.router)
 

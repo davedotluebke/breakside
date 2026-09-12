@@ -111,3 +111,36 @@ def public_listing_enabled() -> bool:
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 NARRATION_SLOW_MODEL = os.getenv("NARRATION_SLOW_MODEL", "claude-sonnet-4-5-20250929")
+
+# =============================================================================
+# Team mailing lists (Comms Phase 0 — see TODO.Comms.md)
+# =============================================================================
+# Lists live at ``<local>@MAIL_DOMAIN`` (``parents-<slug>@team.breakside.pro``).
+# Inbound mail arrives via SES receiving → S3 (raw MIME) → SNS → SQS; the app
+# long-polls the queue (mail/inbound.py). Outbound goes through SES. None of
+# the AWS identifiers are defaults here: this repo is public, and they belong
+# in /etc/breakside/env on the box (recorded in the private ops repo).
+MAIL_DOMAIN = os.getenv("BREAKSIDE_MAIL_DOMAIN", "team.breakside.pro")
+# ``ses`` in production, ``file`` for local development and tests (writes each
+# outbound message as .eml into MAIL_OUTBOX_DIR), ``none`` to log and discard.
+MAIL_TRANSPORT = os.getenv("BREAKSIDE_MAIL_TRANSPORT", "none")
+MAIL_REGION = os.getenv("BREAKSIDE_MAIL_REGION", "us-east-1")
+MAIL_INBOUND_BUCKET = os.getenv("BREAKSIDE_MAIL_INBOUND_BUCKET", "")
+MAIL_QUEUE_URL = os.getenv("BREAKSIDE_MAIL_QUEUE_URL", "")
+MAIL_CONFIGURATION_SET = os.getenv("BREAKSIDE_MAIL_CONFIGURATION_SET", "")
+# Where the coach-facing admin screen lives; quarantine digests link here.
+MAIL_APP_URL = os.getenv("BREAKSIDE_MAIL_APP_URL", "https://www.breakside.pro/app/")
+MAIL_DIR = DATA_DIR / "mail"
+MAIL_OUTBOX_DIR = Path(os.getenv("BREAKSIDE_MAIL_OUTBOX_DIR", str(MAIL_DIR / "_outbox")))
+
+
+def mail_inbound_enabled() -> bool:
+    """Whether the SQS poller should run: SES transport plus a queue URL.
+
+    Read at call time so a dev backend or a test can flip it without a
+    restart, same as ``auth_required()``.
+    """
+    return (
+        os.getenv("BREAKSIDE_MAIL_TRANSPORT", "none") == "ses"
+        and bool(os.getenv("BREAKSIDE_MAIL_QUEUE_URL", ""))
+    )
