@@ -253,8 +253,12 @@ ensure_configuration_set() {
         apply aws sesv2 create-configuration-set --configuration-set-name "$NAME" >/dev/null
     fi
     local dest="{\"Enabled\":true,\"MatchingEventTypes\":[\"BOUNCE\",\"COMPLAINT\",\"REJECT\"],\"SnsDestination\":{\"TopicArn\":\"$TOPIC_ARN\"}}"
-    if aws sesv2 get-configuration-set-event-destinations --configuration-set-name "$NAME" \
-        --query "EventDestinations[?Name=='$NAME-events']" --output text 2>/dev/null | grep -q .; then
+    # A set with no destinations omits the key; the CLI then prints "None",
+    # which is why this compares the name rather than grepping for any output.
+    local existing
+    existing=$(aws sesv2 get-configuration-set-event-destinations --configuration-set-name "$NAME" \
+        --query "EventDestinations[?Name=='$NAME-events'].Name | [0]" --output text 2>/dev/null || true)
+    if [[ -n "$existing" && "$existing" != "None" ]]; then
         doing "update event destination"
         apply aws sesv2 update-configuration-set-event-destination --configuration-set-name "$NAME" \
             --event-destination-name "$NAME-events" --event-destination "$dest" >/dev/null
@@ -293,7 +297,10 @@ JSON
         doing "create policy $POLICY_NAME"
         apply aws iam create-policy --policy-name "$POLICY_NAME" --policy-document "$doc" >/dev/null
     fi
-    if aws iam list-attached-role-policies --role-name "$ROLE" --query "AttachedPolicies[?PolicyName=='$POLICY_NAME']" --output text | grep -q .; then
+    local attached
+    attached=$(aws iam list-attached-role-policies --role-name "$ROLE" \
+        --query "AttachedPolicies[?PolicyName=='$POLICY_NAME'].PolicyName | [0]" --output text 2>/dev/null || true)
+    if [[ -n "$attached" && "$attached" != "None" ]]; then
         have "attached to $ROLE"
     else
         doing "attach to role $ROLE"
