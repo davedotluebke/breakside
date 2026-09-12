@@ -35,10 +35,21 @@ def parse_notification(body: str) -> Dict[str, Any]:
     is the SES JSON as a string. Handle both, so a subscription created by
     hand still works.
     """
-    data = json.loads(body)
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        # SES publishes a plain-text "Successfully validated SNS topic for
+        # Amazon SES event publishing" when a destination is wired up. Not
+        # actionable, not an error: report it so the poller deletes it.
+        return {"Type": "Text", "text": body[:200]}
     if isinstance(data, dict) and data.get("Type") == "Notification" and "Message" in data:
         inner = data["Message"]
-        return json.loads(inner) if isinstance(inner, str) else inner
+        if isinstance(inner, str):
+            try:
+                return json.loads(inner)
+            except json.JSONDecodeError:
+                return {"Type": "Text", "text": inner[:200]}
+        return inner
     return data
 
 
@@ -89,6 +100,9 @@ class InboundPoller:
             return self._handle_received(note)
         if kind in ("Bounce", "Complaint"):
             self._handle_bounce(kind, note)
+            return None
+        if kind == "Text":
+            logger.info("mail: ignoring non-JSON queue message: %s", note.get("text"))
             return None
         if kind == "SubscriptionConfirmation":
             logger.warning("mail: SNS subscription is unconfirmed (SubscribeURL in message); "

@@ -541,9 +541,9 @@ class TestInbound:
         poller = inbound.InboundPoller("q", region="us-east-1", bucket="bkt",
                                        sqs_client=FakeSQS(bodies), s3_client=FakeS3({("bkt", "inbound/k1"): raw, ("bkt", "inbound/k2"): raw}))
         handled = poller.poll_once()
-        assert handled == 5                      # the two bad bodies stay in the queue
+        assert handled == 6                      # only the JSON message with no S3 key stays in the queue
         assert poller.processed == 2
-        assert sorted(poller.sqs.deleted) == ["h0", "h1", "h2", "h3", "h6"]
+        assert sorted(poller.sqs.deleted) == ["h0", "h1", "h2", "h3", "h5", "h6"]
         sends = configured["outbox"].sent()
         assert sends[0]["from"] == f"parents-cudo@{DOMAIN}"                                    # k1 relayed
         assert ms.list_mail_quarantine(configured["team_id"])[0]["reason"] == "dmarc-fail"      # k2 held
@@ -555,6 +555,8 @@ class TestInbound:
         from mail import inbound
         assert inbound.parse_notification(json.dumps({"Type": "Notification", "Message": "{\"a\": 1}"})) == {"a": 1}
         assert inbound.parse_notification(json.dumps({"a": 2})) == {"a": 2}
+        assert inbound.parse_notification("Successfully validated SNS topic for Amazon SES event publishing.")["Type"] == "Text"
+        assert inbound.parse_notification(json.dumps({"Type": "Notification", "Message": "plain text"})) == {"Type": "Text", "text": "plain text"}
         assert inbound.verdicts_from_receipt({"spfVerdict": {"status": "pass"}}) == {"spam": "", "virus": "", "spf": "PASS", "dkim": "", "dmarc": ""}
 
     def test_build_poller_off_by_default(self, monkeypatch):
