@@ -1262,3 +1262,12 @@ body {
     font-weight: 600;
     color: var(--brand-orange);
 }
+
+/* Password-recovery mode: the emailed reset link landed here with a recovery
+   session, so the modal shows only the new-password form (landing.js). */
+#authContainer.recovery-mode .auth-tabs,
+#authContainer.recovery-mode .auth-divider,
+#authContainer.recovery-mode .btn-google,
+#authContainer.recovery-mode .google-note {
+    display: none;
+}

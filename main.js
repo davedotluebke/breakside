@@ -23,6 +23,7 @@
  *   │   ├── syncStatusUI.js     # Sync status indicator, full-refresh, pending-sync dialog
  *   │   ├── activeGamePolling.js # Active-game polling and teams-screen auto-refresh
  *   │   ├── accountDeletion.js  # Account section + delete-account preview/confirm dialog
+ *   │   ├── accountPassword.js  # Change-password dialog; also where the reset-link lands
  *   │   ├── erasure.js          # Permanent erasure of a player or team: preview/confirm dialog
  *   │   └── rosterManagement.js # Roster display, player management, and line management
  *   │
@@ -108,6 +109,7 @@ import { showScreen, showEditRosterScreen, showEditRosterSubscreen } from './scr
 import './teams/rosterRowHelpers.js';
 import './teams/exportPlayerPicker.js';
 import { updateTeamRosterDisplay } from './teams/rosterManagement.js';
+import { showChangePasswordDialog } from './teams/accountPassword.js';
 import './teams/accountDeletion.js';
 import './teams/erasure.js';
 import { showSelectTeamScreen } from './teams/teamList.js';
@@ -381,6 +383,10 @@ async function initializeApp() {
     const hasAuthCallback = window.location.hash.includes('access_token') ||
                            window.location.hash.includes('refresh_token') ||
                            window.location.hash.includes('error_description');
+    // The emailed password-reset link is one of those callbacks, tagged
+    // type=recovery. Read it now, before the hash is cleaned up below; the
+    // dialog it opens lives in teams/accountPassword.js.
+    const isPasswordRecovery = hasAuthCallback && /[#&]type=recovery(?:&|$)/.test(window.location.hash);
 
     // Initialize auth module
     if (window.breakside?.auth?.initializeAuth) {
@@ -406,7 +412,14 @@ async function initializeApp() {
                     if (hasAuthCallback) {
                         history.replaceState(null, '', window.location.pathname);
                     }
-                    showPwaInstallPrompt();
+                    if (isPasswordRecovery) {
+                        // Finish the reset before anything else asks for
+                        // attention; the install prompt can wait for a
+                        // later sign-in.
+                        showChangePasswordDialog({ recovery: true });
+                    } else {
+                        showPwaInstallPrompt();
+                    }
                 }
             } else {
                 // User is not logged in
@@ -421,6 +434,14 @@ async function initializeApp() {
                 log('Auth callback but not authenticated, showing login');
                 if (window.breakside?.loginScreen?.showAuthScreen) {
                     window.breakside.loginScreen.showAuthScreen();
+                }
+                // Say why when Supabase said: an expired reset link comes
+                // back as #error_description=Email+link+is+invalid+or+has+expired.
+                const why = new URLSearchParams(window.location.hash.slice(1)).get('error_description');
+                const authError = document.getElementById('authError');
+                if (why && authError) {
+                    authError.textContent = why;
+                    authError.style.display = 'block';
                 }
                 // showAuthScreen() bypasses showScreen(), so no
                 // breakside:screen-shown fires — retract the splash by hand.
@@ -456,6 +477,12 @@ function handleAuthStateChange(event, session) {
             break;
         case 'TOKEN_REFRESHED':
             // Token was refreshed, no action needed
+            break;
+        case 'PASSWORD_RECOVERY':
+            // supabase-js fires this instead of SIGNED_IN for a reset-link
+            // session. The boot path normally opens the dialog first, from
+            // the URL hash; this is the backstop, and a no-op if it is up.
+            showChangePasswordDialog({ recovery: true });
             break;
     }
 }

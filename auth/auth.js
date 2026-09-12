@@ -694,7 +694,14 @@ async function resetPassword(email) {
     
     try {
         const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-            redirectTo: `${window.location.origin}/app/`,
+            // The app root, not /app/: that path exists only as S3's 404
+            // fallback serving index.html, whose relative asset URLs then
+            // resolve under /app/ and break. main.js recognises the recovery
+            // hash the link arrives with and opens the set-new-password
+            // dialog (teams/accountPassword.js). Supabase honours redirectTo
+            // only for URLs on the project's Redirect URL allowlist and
+            // otherwise falls back to the Site URL, i.e. the production root.
+            redirectTo: `${window.location.origin}/`,
         });
         
         return { error };
@@ -702,6 +709,117 @@ async function resetPassword(email) {
     } catch (error) {
         console.error('Reset password error:', error);
         return { error: { message: error.message || 'Password reset failed' } };
+    }
+}
+
+/**
+ * Check the signed-in user's current password without disturbing the app's
+ * session. Talks to GoTrue's password grant directly rather than through
+ * supabase-js: signing in on this client would replace the session and fire
+ * SIGNED_IN (main.js re-renders the Teams screen on that), and a second
+ * client instance logs a "Multiple GoTrueClient instances" warning. The
+ * throwaway session the grant creates is revoked straight away (scope=local,
+ * so only that one).
+ * @param {string} password
+ * @returns {Promise<{ok: boolean, error: object|null}>}
+ */
+async function verifyCurrentPassword(password) {
+    const email = currentUser?.email;
+    const config = window.BREAKSIDE_AUTH;
+    if (!email || !supabaseClient || !config?.SUPABASE_URL || !config?.SUPABASE_ANON_KEY) {
+        return { ok: false, error: { message: 'Not signed in' } };
+    }
+
+    const base = `${config.SUPABASE_URL}/auth/v1`;
+    const headers = {
+        apikey: config.SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+    };
+
+    let response;
+    try {
+        response = await fetch(`${base}/token?grant_type=password`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ email, password }),
+        });
+    } catch (e) {
+        return { ok: false, error: { name: 'AuthRetryableFetchError', status: 0, message: e.message } };
+    }
+
+    let body = {};
+    try {
+        body = await response.json();
+    } catch (e) {
+        /* non-JSON body; the status code carries the answer */
+    }
+
+    if (response.ok) {
+        if (body.access_token) {
+            fetch(`${base}/logout?scope=local`, {
+                method: 'POST',
+                headers: { ...headers, Authorization: `Bearer ${body.access_token}` },
+            }).catch(() => { /* best effort; the session expires on its own */ });
+        }
+        return { ok: true, error: null };
+    }
+
+    // GoTrue answers {error_code, msg} today and {error, error_description}
+    // on older versions, where a 400 on this grant means bad credentials.
+    const code = body.error_code || (response.status === 400 ? 'invalid_credentials' : '');
+    return {
+        ok: false,
+        error: {
+            code,
+            status: response.status,
+            message: body.msg || body.error_description || body.message
+                || `Password check failed (${response.status})`,
+        },
+    };
+}
+
+/**
+ * Set a new password on the signed-in account. Serves both the change-password
+ * dialog (after verifyCurrentPassword) and the emailed reset link, whose
+ * recovery session is the proof of identity. Fires USER_UPDATED, which the
+ * listener above folds into currentUser.
+ * @param {string} newPassword
+ * @param {{signOutOthers?: boolean}} [options] also revoke every other
+ *        session of this account; this device stays signed in
+ * @returns {Promise<{error: object|null, othersSignedOut: boolean}>}
+ */
+async function updatePassword(newPassword, { signOutOthers = false } = {}) {
+    if (!supabaseClient) {
+        return { error: { message: 'Auth not initialized' }, othersSignedOut: false };
+    }
+
+    try {
+        const { data, error } = await supabaseClient.auth.updateUser({ password: newPassword });
+        if (error) {
+            return { error, othersSignedOut: false };
+        }
+        if (data?.user) {
+            currentUser = data.user;
+        }
+
+        let othersSignedOut = false;
+        if (signOutOthers) {
+            // scope 'others' leaves this session and its storage alone and
+            // fires no SIGNED_OUT, so main.js does not bounce to the landing
+            // page. A failure here is not a failed password change.
+            const { error: signOutError } = await supabaseClient.auth.signOut({ scope: 'others' });
+            othersSignedOut = !signOutError;
+            if (signOutError) {
+                console.warn('Signing out other devices failed:', signOutError);
+            }
+        }
+
+        log('Auth: password updated');
+        return { error: null, othersSignedOut };
+
+    } catch (error) {
+        console.error('Update password error:', error);
+        return { error: { message: error.message || 'Password update failed' }, othersSignedOut: false };
     }
 }
 
@@ -774,6 +892,9 @@ const breaksideAuth = {
     clearLocalData,
     signOutAfterAccountDeletion,
     resetPassword,
+    // Change-password dialog (teams/accountPassword.js)
+    verifyCurrentPassword,
+    updatePassword,
     signInWithGoogle,
 
     // Utilities

@@ -26,6 +26,7 @@
 import { authFetch, API_BASE_URL } from '../store/sync.js';
 import { escapeHtml } from '../utils/gameLogRenderer.js';
 import { log } from '../utils/logger.js';
+import { buildAccountPasswordHTML } from './accountPassword.js';
 
 // The last preview the dialog rendered. The DELETE call reads its
 // requiresTeamCascadeConfirmation rather than re-deriving it from the DOM.
@@ -35,6 +36,8 @@ let deleteInFlight = false;
 /**
  * Markup for the account section at the bottom of the Teams screen.
  * Rendered by teams/teamList.js so the whole screen is built in one place.
+ * The password row comes from teams/accountPassword.js, the other
+ * account-scoped action that lives down here.
  */
 function buildAccountSectionHTML() {
     const email = window.breakside?.auth?.getCurrentUser?.()?.email || '';
@@ -42,9 +45,12 @@ function buildAccountSectionHTML() {
         <div class="account-section">
             <h4 class="account-section-title">Account</h4>
             ${email ? `<div class="account-section-email">${escapeHtml(email)}</div>` : ''}
-            <button class="delete-account-link" onclick="showDeleteAccountDialog()">
-                Delete account…
-            </button>
+            <div class="account-section-actions">
+                ${buildAccountPasswordHTML()}
+                <button class="delete-account-link" onclick="showDeleteAccountDialog()">
+                    Delete account…
+                </button>
+            </div>
         </div>
     `;
 }

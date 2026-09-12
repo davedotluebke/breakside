@@ -1533,6 +1533,43 @@ Breakside uses **Supabase Auth** for user authentication, providing email/passwo
 4. PWA includes `Authorization: Bearer {token}` on all API calls
 5. FastAPI validates JWT signature using Supabase JWT secret
 
+### Password management
+
+All of it is Supabase-side; the API has no password endpoints. Design notes and
+the testing recipe are in [docs/dev-notes/password-change.md](docs/dev-notes/password-change.md).
+
+- **Change (signed in)**: Teams screen → Account section → *Change password…*
+  (`teams/accountPassword.js`, markup in `index.html`, rules in
+  `auth/passwordRules.js`). The dialog asks for the current password and
+  `auth/auth.js verifyCurrentPassword()` checks it against GoTrue's password
+  grant directly (`POST /auth/v1/token?grant_type=password`, then
+  `/logout?scope=local` on the throwaway session it mints), so the app's own
+  session is never replaced and no `SIGNED_IN` fires. Only then does
+  `updatePassword()` call `supabase.auth.updateUser({ password })`. An
+  unchecked-by-default box also revokes every other session
+  (`signOut({ scope: 'others' })`, which keeps this one). Google-only accounts
+  (no `email` identity) see a note instead of the link.
+- **Reset (signed out)**: *Forgot password?* on either sign-in form sends
+  `resetPasswordForEmail`. The link signs the user in with a recovery session
+  and lands on `/` (from the app: `#access_token=…&type=recovery`) or
+  `/landing/?reset=true#…` (from the landing page). `main.js` reads the hash
+  before cleaning it and opens the same dialog in recovery mode (no
+  current-password field); `landing/landing.js` shows its own new-password
+  form. Both also listen for supabase-js's `PASSWORD_RECOVERY` event as a
+  backstop. An expired link arrives as `#error_description=…`, which both
+  pages display.
+- **Supabase dashboard dependencies.** A `redirectTo` is honoured only if it
+  is on *Authentication → URL Configuration → Redirect URLs*; anything else
+  falls back to the Site URL, i.e. the production root. Staging needs its own
+  origin listed to receive reset links. If *Secure password change* (require
+  reauthentication) is turned on, `updateUser` answers
+  `reauthentication_needed`; the dialog then points at the reset link rather
+  than implementing the nonce flow.
+- **Never redirect to `/app/`.** It is not a route: S3's 404 fallback serves
+  `index.html` there, whose relative asset URLs then resolve under `/app/` and
+  break. `resetPassword()` targets `/` for this reason; `signInWithGoogle()`
+  still targets `/app/` (see TODO.md).
+
 ### User Roles
 
 #### Persistent Roles (Team-Level)

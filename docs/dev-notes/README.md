@@ -20,6 +20,7 @@ These notes were seeded on 2026-09-05 from an AI agent's per-project memory, ver
 | [invite-url-flow.md](invite-url-flow.md) | Why `/join/<code>` works the way it does, and how to test it locally |
 | [logo-wordmark.md](logo-wordmark.md) | Wordmark rollout, iOS notch decision, remaining spots |
 | [on-deck-line.md](on-deck-line.md) | Design convergence and conventions for `pendingNextLine` fields |
+| [password-change.md](password-change.md) | Change/reset password: why the current password is verified the way it is, Supabase traps, how to test |
 | [player-elevation.md](player-elevation.md) | Player privacy/linking design; Phase 1 shipped, rest unbuilt |
 | [polling-and-multi-coach.md](polling-and-multi-coach.md) | The constraints behind the solo-coach ping backoff |
 | [possession-sets.md](possession-sets.md) | Set tracking: the design call and three bug patterns |

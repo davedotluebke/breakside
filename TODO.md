@@ -106,6 +106,25 @@ MVP shipped. Coach speaks naturally; the system extracts structured game events.
 
 ## Near Term
 
+### 🔑 Password change and reset (branch `password-change`, on staging 2026-09-12, unmerged)
+
+Design and test recipe: docs/dev-notes/password-change.md.
+
+- [ ] **Try it with a real account on staging**: Teams → Account → *Change
+      password…*; then Sign Out → *Forgot password?* → email → link. The
+      Supabase calls themselves are unexercised by automation. If the reset
+      link lands on www instead of staging, add the staging origin to
+      Supabase → Authentication → URL Configuration → Redirect URLs.
+- [ ] `auth/auth.js signInWithGoogle()` still redirects to `/app/`, which is
+      not a route (S3 404 fallback plus relative asset URLs). Same one-word
+      fix `resetPassword()` got on this branch; left alone because it could
+      not be exercised.
+- [ ] The landing page's *My Account* modal has no *Change password* link;
+      the app's Account section is the only entry point.
+- [ ] Google-only accounts: offer *Set a password* so they can also sign in
+      by email? Needs a reauthentication story first, since there is no
+      current password to check.
+
 ### Replay viewer — follow-ups (docs/replay-viewer-plan.md; steps 1–8 + share viewer shipped 2026-09-05)
 
 Deliberately left out of editing v1 / the share-viewer port:
