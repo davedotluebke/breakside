@@ -172,7 +172,10 @@ def _relay(raw, team_id, directory, decision, local, domain, author_name, author
         log_id = _log(team_id, {**base_entry, "action": "failed", "recipients": len(emails),
                                 "reason": str(exc)[:200]})
         raise
-    log_id = _log(team_id, {**base_entry, "action": "relayed", "recipients": len(emails),
+    # A quarantine release is logged as "released" rather than "relayed" so
+    # the coach's activity view shows one row per message, not two.
+    action = "released" if base_entry.get("source") == "release" else "relayed"
+    log_id = _log(team_id, {**base_entry, "action": action, "recipients": len(emails),
                             "reason": None, "providerId": provider_id,
                             "senderKinds": decision.sender_kinds})
     logger.info("mail: relayed %s from %s to %d recipient(s)", address, author_email, len(emails))
@@ -259,14 +262,6 @@ def release_quarantine(team_id: str, item_id: str, *, add_sender: Optional[Dict[
     address = f"{item['list']}@{config.MAIL_DOMAIN}"
     results = process_inbound(raw, envelope_recipients=[address], source="release", force=True)
     storage.remove_mail_quarantine(team_id, item_id)
-    for r in results:
-        if r.team_id == team_id:
-            storage.append_mail_log(team_id, {
-                "action": "released", "list": item["list"], "kind": item.get("kind"),
-                "alias": item.get("alias"), "from": item.get("from"), "fromName": item.get("fromName"),
-                "subject": item.get("subject"), "recipients": r.recipients, "reason": r.reason,
-                "quarantineId": item_id, "source": "release",
-            })
     return results
 
 

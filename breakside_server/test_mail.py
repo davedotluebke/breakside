@@ -277,7 +277,8 @@ class TestRelay:
         assert ms.list_mail_quarantine(tid) == []
         assert any(c["email"] == "newp@x.test" for c in ms.get_mail_directory(tid)["contacts"])
         assert len(configured["outbox"].sent()) == before + 1
-        assert ms.read_mail_log(tid, 1)[0]["action"] == "released"
+        newest = ms.read_mail_log(tid, 2)
+        assert newest[0]["action"] == "released" and newest[1]["action"] == "quarantined"   # one row per release
         with pytest.raises(KeyError):
             relay.release_quarantine(tid, held["id"])
         # next message from them relays directly
@@ -466,7 +467,7 @@ class TestApi:
         qid = client.get(f"/api/teams/{tid}/mail/quarantine").json()["items"][0]["id"]
         assert client.delete(f"/api/teams/{tid}/mail/quarantine/{qid}").status_code == 200
         log = client.get(f"/api/teams/{tid}/mail/log?limit=10").json()["entries"]
-        assert [e["action"] for e in log][:3] == ["quarantined", "released", "relayed"]
+        assert [e["action"] for e in log][:3] == ["quarantined", "released", "quarantined"]
         r = client.post(f"/api/teams/{tid}/mail/test")
         assert r.status_code == 200 and r.json()["to"] == "coach@x.test" and r.json()["transport"] == "file"
 

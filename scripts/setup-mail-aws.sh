@@ -57,6 +57,9 @@ note() { printf '  %s\n' "$*"; }
 fail() { printf '\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 doing() { if [[ "$MODE" == "apply" ]]; then printf '\033[32m+ %s\033[0m\n' "$*"; else printf '\033[33m(plan) would %s\033[0m\n' "$*"; fi; }
 have() { printf '\033[36m= %s\033[0m\n' "$*"; }
+# Run a command only in apply mode. A bare `[[ apply ]] && cmd` returns 1 in
+# plan mode, and as the last statement of a function that trips `set -e`.
+apply() { [[ "$MODE" == "apply" ]] || return 0; "$@"; }
 
 command -v aws >/dev/null || fail "aws CLI not on PATH"
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text) || fail "no AWS credentials for profile $AWS_PROFILE"
@@ -76,7 +79,7 @@ ensure_identity() {
         have "identity exists"
     else
         doing "create identity with Easy DKIM"
-        [[ "$MODE" == "apply" ]] && aws sesv2 create-email-identity --email-identity "$MAIL_DOMAIN" \
+        apply aws sesv2 create-email-identity --email-identity "$MAIL_DOMAIN" \
             --dkim-signing-attributes NextSigningKeyLength=RSA_2048_BIT >/dev/null
     fi
     local current
@@ -85,13 +88,14 @@ ensure_identity() {
         have "MAIL FROM domain $MAIL_FROM_DOMAIN"
     else
         doing "set MAIL FROM domain $MAIL_FROM_DOMAIN"
-        [[ "$MODE" == "apply" ]] && aws sesv2 put-email-identity-mail-from-attributes \
+        apply aws sesv2 put-email-identity-mail-from-attributes \
             --email-identity "$MAIL_DOMAIN" --mail-from-domain "$MAIL_FROM_DOMAIN" \
             --behavior-on-mx-failure USE_DEFAULT_VALUE >/dev/null
     fi
+    return 0
 }
 
-# --------------------------------------------------------------- 2. bucket ----
+# ---------- 2. bucket ----
 ensure_bucket() {
     bold "2. S3 bucket for received mail"
     if [[ -z "$BUCKET" ]]; then
@@ -137,19 +141,20 @@ JSON
 JSON
 )"
     fi
+    return 0
 }
 
-# ------------------------------------------------------- 3. topic + queues ----
+# ---------- 3. topic + queues ----
 ensure_topic_and_queues() {
     bold "3. SNS topic + SQS queue ($NAME)"
     if aws sns get-topic-attributes --topic-arn "$TOPIC_ARN" >/dev/null 2>&1; then
         have "topic $TOPIC_ARN"
     else
         doing "create topic $NAME"
-        [[ "$MODE" == "apply" ]] && aws sns create-topic --name "$NAME" >/dev/null
+        apply aws sns create-topic --name "$NAME" >/dev/null
     fi
     doing "set topic policy: SES may publish"
-    [[ "$MODE" == "apply" ]] && aws sns set-topic-attributes --topic-arn "$TOPIC_ARN" --attribute-name Policy --attribute-value "$(cat <<JSON
+    apply aws sns set-topic-attributes --topic-arn "$TOPIC_ARN" --attribute-name Policy --attribute-value "$(cat <<JSON
 {"Version":"2012-10-17","Statement":[
  {"Sid":"OwnerFull","Effect":"Allow","Principal":{"AWS":"arn:aws:iam::$ACCOUNT:root"},"Action":"SNS:*","Resource":"$TOPIC_ARN"},
  {"Sid":"SESPublish","Effect":"Allow","Principal":{"Service":"ses.amazonaws.com"},"Action":"SNS:Publish","Resource":"$TOPIC_ARN",
@@ -163,15 +168,19 @@ JSON
         have "dead-letter queue $NAME-dlq"
     else
         doing "create dead-letter queue $NAME-dlq (14-day retention)"
-        [[ "$MODE" == "apply" ]] && dlq_url=$(aws sqs create-queue --queue-name "$NAME-dlq" \
-            --attributes MessageRetentionPeriod=1209600 --query QueueUrl --output text)
+        if [[ "$MODE" == "apply" ]]; then
+            dlq_url=$(aws sqs create-queue --queue-name "$NAME-dlq" \
+                --attributes MessageRetentionPeriod=1209600 --query QueueUrl --output text)
+        fi
     fi
     queue_url=$(aws sqs get-queue-url --queue-name "$NAME" --query QueueUrl --output text 2>/dev/null || true)
     if [[ -n "$queue_url" ]]; then
         have "queue $queue_url"
     else
         doing "create queue $NAME (visibility 120s, retention 14d, DLQ after 5 receives)"
-        [[ "$MODE" == "apply" ]] && queue_url=$(aws sqs create-queue --queue-name "$NAME" --query QueueUrl --output text)
+        if [[ "$MODE" == "apply" ]]; then
+            queue_url=$(aws sqs create-queue --queue-name "$NAME" --query QueueUrl --output text)
+        fi
     fi
     QUEUE_URL="$queue_url"
     doing "set queue attributes + policy: topic may send"
@@ -193,9 +202,10 @@ import json,sys; print(json.dumps({"VisibilityTimeout":"120","MessageRetentionPe
                 --attributes RawMessageDelivery=true --return-subscription-arn >/dev/null
         fi
     fi
+    return 0
 }
 
-# --------------------------------------------------------- 4. receipt rule ----
+# ---------- 4. receipt rule ----
 ensure_receipt_rule() {
     bold "4. SES receipt rule for $MAIL_DOMAIN"
     local active
@@ -208,10 +218,10 @@ ensure_receipt_rule() {
             have "rule set $RULESET exists (inactive)"
         else
             doing "create rule set $RULESET"
-            [[ "$MODE" == "apply" ]] && aws ses create-receipt-rule-set --rule-set-name "$RULESET"
+            apply aws ses create-receipt-rule-set --rule-set-name "$RULESET"
         fi
         doing "activate rule set $RULESET"
-        [[ "$MODE" == "apply" ]] && aws ses set-active-receipt-rule-set --rule-set-name "$RULESET"
+        apply aws ses set-active-receipt-rule-set --rule-set-name "$RULESET"
     fi
     local rule
     rule=$(cat <<JSON
@@ -221,36 +231,38 @@ JSON
 )
     if aws ses describe-receipt-rule --rule-set-name "$RULESET" --rule-name "$NAME" >/dev/null 2>&1; then
         doing "update rule $NAME in $RULESET"
-        [[ "$MODE" == "apply" ]] && aws ses update-receipt-rule --rule-set-name "$RULESET" --rule "$rule"
+        apply aws ses update-receipt-rule --rule-set-name "$RULESET" --rule "$rule"
     else
         doing "create rule $NAME in $RULESET: $MAIL_DOMAIN → s3://$BUCKET/$PREFIX + topic"
-        [[ "$MODE" == "apply" ]] && aws ses create-receipt-rule --rule-set-name "$RULESET" --rule "$rule"
+        apply aws ses create-receipt-rule --rule-set-name "$RULESET" --rule "$rule"
     fi
+    return 0
 }
 
-# ------------------------------------------------------ 5. configuration set --
+# ---------- 5. configuration set --
 ensure_configuration_set() {
     bold "5. SES configuration set $NAME (bounces/complaints → topic)"
     if aws sesv2 get-configuration-set --configuration-set-name "$NAME" >/dev/null 2>&1; then
         have "configuration set exists"
     else
         doing "create configuration set"
-        [[ "$MODE" == "apply" ]] && aws sesv2 create-configuration-set --configuration-set-name "$NAME" >/dev/null
+        apply aws sesv2 create-configuration-set --configuration-set-name "$NAME" >/dev/null
     fi
     local dest="{\"Enabled\":true,\"MatchingEventTypes\":[\"BOUNCE\",\"COMPLAINT\",\"REJECT\"],\"SnsDestination\":{\"TopicArn\":\"$TOPIC_ARN\"}}"
     if aws sesv2 get-configuration-set-event-destinations --configuration-set-name "$NAME" \
         --query "EventDestinations[?Name=='$NAME-events']" --output text 2>/dev/null | grep -q .; then
         doing "update event destination"
-        [[ "$MODE" == "apply" ]] && aws sesv2 update-configuration-set-event-destination --configuration-set-name "$NAME" \
+        apply aws sesv2 update-configuration-set-event-destination --configuration-set-name "$NAME" \
             --event-destination-name "$NAME-events" --event-destination "$dest" >/dev/null
     else
         doing "create event destination → topic"
-        [[ "$MODE" == "apply" ]] && aws sesv2 create-configuration-set-event-destination --configuration-set-name "$NAME" \
+        apply aws sesv2 create-configuration-set-event-destination --configuration-set-name "$NAME" \
             --event-destination-name "$NAME-events" --event-destination "$dest" >/dev/null
     fi
+    return 0
 }
 
-# ------------------------------------------------------------ 6. IAM policy ---
+# ---------- 6. IAM policy ---
 ensure_iam() {
     bold "6. IAM policy $POLICY_NAME on role $ROLE"
     local doc arn
@@ -275,17 +287,18 @@ JSON
         fi
     else
         doing "create policy $POLICY_NAME"
-        [[ "$MODE" == "apply" ]] && aws iam create-policy --policy-name "$POLICY_NAME" --policy-document "$doc" >/dev/null
+        apply aws iam create-policy --policy-name "$POLICY_NAME" --policy-document "$doc" >/dev/null
     fi
     if aws iam list-attached-role-policies --role-name "$ROLE" --query "AttachedPolicies[?PolicyName=='$POLICY_NAME']" --output text | grep -q .; then
         have "attached to $ROLE"
     else
         doing "attach to role $ROLE"
-        [[ "$MODE" == "apply" ]] && aws iam attach-role-policy --role-name "$ROLE" --policy-arn "$arn"
+        apply aws iam attach-role-policy --role-name "$ROLE" --policy-arn "$arn"
     fi
+    return 0
 }
 
-# ----------------------------------------------------------------- status -----
+# ---------- status -----
 print_status() {
     bold "Identity"
     aws sesv2 get-email-identity --email-identity "$MAIL_DOMAIN" \
