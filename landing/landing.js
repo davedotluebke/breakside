@@ -30,6 +30,7 @@ const closeAuthModal = document.getElementById('closeAuthModal');
 const signinForm = document.getElementById('signinForm');
 const signupForm = document.getElementById('signupForm');
 const resetForm = document.getElementById('resetForm');
+const newPasswordForm = document.getElementById('newPasswordForm');
 const authMessage = document.getElementById('authMessage');
 
 // Auth tabs
@@ -63,6 +64,14 @@ function closeModal() {
     authModal.classList.remove('active');
     document.body.style.overflow = '';
     clearAuthMessage();
+    if (inRecoveryMode()) {
+        // Dismissed without setting a password: they are still signed in
+        // through the reset link, so show that rather than a dead form.
+        leaveRecoveryMode();
+        supabaseClient.auth.getSession().then(({ data }) => {
+            updateUIForUser(data?.session?.user || null);
+        });
+    }
 }
 
 // Event listeners for opening/closing modal
@@ -145,6 +154,8 @@ function switchAuthTab(tabName) {
     signinForm.classList.toggle('hidden', tabName !== 'signin');
     signupForm.classList.toggle('hidden', tabName !== 'signup');
     resetForm.classList.add('hidden');
+    newPasswordForm?.classList.add('hidden');
+    leaveRecoveryMode();
     
     clearAuthMessage();
 }
@@ -329,6 +340,88 @@ resetForm?.addEventListener('submit', async (e) => {
 });
 
 // =============================================================================
+// Set New Password (the emailed reset link lands here)
+// =============================================================================
+
+// A reset link arrives as /landing/?reset=true#access_token=…&type=recovery.
+// supabase-js turns the hash into a recovery session when the client is
+// created and later fires PASSWORD_RECOVERY; the hash check is the belt to
+// that event's braces. An expired link arrives with an error_description
+// instead of a token.
+const arrivedFromResetLink = /[#&]type=recovery(?:&|$)/.test(window.location.hash);
+const callbackErrorDescription = new URLSearchParams(window.location.hash.slice(1)).get('error_description');
+let pendingCallbackMessage = callbackErrorDescription;
+
+const authSubtitle = document.querySelector('.auth-subtitle');
+const defaultAuthSubtitle = authSubtitle?.textContent || '';
+
+function inRecoveryMode() {
+    return authContainer.classList.contains('recovery-mode');
+}
+
+function leaveRecoveryMode() {
+    authContainer.classList.remove('recovery-mode');
+    if (authSubtitle) authSubtitle.textContent = defaultAuthSubtitle;
+}
+
+function showNewPasswordForm() {
+    authContainer.classList.add('recovery-mode');
+    authContainer.classList.remove('hidden');
+    loggedInContainer.classList.add('hidden');
+    signinForm.classList.add('hidden');
+    signupForm.classList.add('hidden');
+    resetForm.classList.add('hidden');
+    newPasswordForm.classList.remove('hidden');
+    if (authSubtitle) authSubtitle.textContent = 'Set a new password for your account';
+    clearAuthMessage();
+    openAuthModal();
+    document.getElementById('newPassword').focus();
+}
+
+newPasswordForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearAuthMessage();
+
+    const password = document.getElementById('newPassword').value;
+    const confirm = document.getElementById('newPasswordConfirm').value;
+    if (password.length < 6) {
+        showAuthMessage('Your new password needs at least 6 characters.');
+        return;
+    }
+    if (password !== confirm) {
+        showAuthMessage("The two passwords don't match.");
+        return;
+    }
+
+    const submitBtn = newPasswordForm.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'Saving...';
+    submitBtn.disabled = true;
+
+    try {
+        const { error } = await supabaseClient.auth.updateUser({ password });
+        if (error) throw error;
+
+        // The token in the hash has done its job; keep it out of history.
+        history.replaceState(null, '', window.location.pathname);
+        newPasswordForm.reset();
+        showAuthMessage("Your new password is set. You're signed in.", 'success');
+        setTimeout(async () => {
+            leaveRecoveryMode();
+            const { data } = await supabaseClient.auth.getSession();
+            updateUIForUser(data?.session?.user || null);
+        }, 1500);
+
+    } catch (error) {
+        console.error('Set new password error:', error);
+        showAuthMessage(error.message || 'Failed to set the new password');
+    } finally {
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+    }
+});
+
+// =============================================================================
 // Google Sign In
 // =============================================================================
 
@@ -400,6 +493,7 @@ function updateUIForUser(user) {
         signinForm?.reset();
         signupForm?.reset();
         resetForm?.reset();
+        newPasswordForm?.reset();
         
         // Update nav button
         if (loginBtn) {
@@ -414,18 +508,50 @@ function updateUIForUser(user) {
 
 async function initializeAuth() {
     try {
-        // Get current session
+        // Get current session. A reset link's hash has already become a
+        // recovery session by now (supabase-js does that on client creation).
         const { data: { session } } = await supabaseClient.auth.getSession();
-        
+
         if (session?.user) {
-            updateUIForUser(session.user);
+            if (arrivedFromResetLink) {
+                showNewPasswordForm();
+            } else {
+                updateUIForUser(session.user);
+            }
+        } else if (callbackErrorDescription) {
+            // Typically an expired reset link; the message itself is shown
+            // from the listener below. Keep the error out of history now.
+            history.replaceState(null, '', window.location.pathname);
         }
-        
+
         // Listen for auth changes
         supabaseClient.auth.onAuthStateChange((event, session) => {
             console.log('Auth state changed:', event);
+
+            if (event === 'PASSWORD_RECOVERY') {
+                // The reset link's session: ask for the new password rather
+                // than showing the signed-in view. Usually the hash check
+                // above got here first; this is the backstop.
+                if (!inRecoveryMode()) showNewPasswordForm();
+                return;
+            }
+            // While the new-password form is up, the session events around
+            // it (INITIAL_SESSION, USER_UPDATED) must not flip the modal to
+            // the signed-in view mid-reset; the form's own handler does that.
+            if (inRecoveryMode()) return;
+
             updateUIForUser(session?.user || null);
-            
+
+            if (pendingCallbackMessage && !session) {
+                // Supabase's reason the link failed, shown where a fresh one
+                // can be requested. Done here rather than before subscribing
+                // because the INITIAL_SESSION event that subscribing emits
+                // resets the modal (updateUIForUser(null)) and would wipe it.
+                openAuthModal();
+                showAuthMessage(pendingCallbackMessage);
+                pendingCallbackMessage = null;
+            }
+
             // Handle specific events
             if (event === 'SIGNED_IN' && userInitiatedAuth) {
                 // Only redirect on a genuine, user-initiated sign-in — NOT on a
@@ -434,13 +560,9 @@ async function initializeAuth() {
                 window.location.href = '/';
             } else if (event === 'SIGNED_OUT') {
                 closeModal();
-            } else if (event === 'PASSWORD_RECOVERY') {
-                // User clicked password reset link
-                openAuthModal();
-                showAuthMessage('Enter your new password', 'success');
             }
         });
-        
+
     } catch (error) {
         console.error('Auth initialization error:', error);
     }

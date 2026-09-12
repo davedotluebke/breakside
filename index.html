@@ -785,6 +785,65 @@
         </div>
     </div>
 
+    <!-- Change Password Dialog (teams/accountPassword.js). Opened from the
+         Teams screen's Account section, and by main.js in recovery mode when
+         the emailed reset link lands here. -->
+    <div id="changePasswordDialog" class="modal" style="display: none;">
+        <div class="modal-content change-password-modal">
+            <div class="dialog-header prominent-dialog-header">
+                <h2 id="changePasswordTitle">Change password</h2>
+                <span id="changePasswordCloseX" class="close">&times;</span>
+            </div>
+            <p id="changePasswordLede" class="change-password-lede"></p>
+            <form id="changePasswordForm" class="change-password-form" novalidate>
+                <label class="change-password-field">
+                    Account
+                    <!-- Read-only, so password managers pair the new password
+                         with the right account. -->
+                    <input type="email" id="changePasswordEmail" class="change-password-input"
+                           autocomplete="username" readonly tabindex="-1">
+                </label>
+                <label class="change-password-field" id="changePasswordCurrentRow">
+                    Current password
+                    <input type="password" id="changePasswordCurrent" class="change-password-input"
+                           autocomplete="current-password" autocapitalize="off" spellcheck="false">
+                </label>
+                <label class="change-password-field">
+                    New password
+                    <input type="password" id="changePasswordNew" class="change-password-input"
+                           autocomplete="new-password" autocapitalize="off" spellcheck="false">
+                </label>
+                <div id="changePasswordHint" class="change-password-hint"></div>
+                <label class="change-password-field">
+                    Confirm new password
+                    <input type="password" id="changePasswordConfirm" class="change-password-input"
+                           autocomplete="new-password" autocapitalize="off" spellcheck="false">
+                </label>
+                <label class="change-password-check">
+                    <input type="checkbox" id="changePasswordShow">
+                    <span>Show passwords</span>
+                </label>
+                <label class="change-password-check">
+                    <input type="checkbox" id="changePasswordSignOutOthers">
+                    <span>Sign out my other devices</span>
+                </label>
+                <div id="changePasswordError" class="change-password-error" style="display: none;"></div>
+                <div class="modal-buttons">
+                    <button type="button" id="changePasswordCancelBtn" class="secondary-btn">Cancel</button>
+                    <button type="submit" id="changePasswordSubmitBtn" class="primary-btn" disabled>Change password</button>
+                </div>
+            </form>
+            <div id="changePasswordDone" class="change-password-done" style="display: none;"></div>
+            <div id="changePasswordDoneRow" class="modal-buttons" style="display: none;">
+                <button type="button" id="changePasswordDoneBtn" class="primary-btn">Done</button>
+            </div>
+            <div id="changePasswordForgotRow" class="change-password-forgot">
+                <span id="changePasswordForgotText">Forgot your current password?</span>
+                <button type="button" id="changePasswordForgotBtn" class="change-password-forgot-btn">Email me a reset link</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Erase Dialog — permanent erasure of a player or a team (teams/erasure.js).
          One dialog for both: same preview → confirm → receipt shape, and the
          server returns the same counts object for each. -->

@@ -1200,6 +1200,172 @@
 }
 
 /* =============================================================================
+   Change-password dialog (teams/accountPassword.js)
+   =============================================================================
+
+   Shares the Account section with delete-account and borrows that dialog's
+   layout, but it is an everyday action and must read as one: neutral link
+   colour in the section, a primary (not danger) confirm button. */
+
+.account-section-actions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+}
+
+/* Same undo-the-global-button treatment as .delete-account-link. */
+.account-link {
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.account-link:hover {
+    background: none;
+    color: var(--text-primary);
+}
+
+.account-section-note {
+    font-size: 0.85rem;
+    color: var(--text-faint);
+}
+
+.change-password-modal {
+    max-width: 420px;
+    text-align: left;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+/* "CHANGE PASSWORD" wraps to two lines at the shared 2rem header size, and the
+   form below is tall already; one line keeps the whole thing on a phone. */
+.change-password-modal .prominent-dialog-header h2 {
+    font-size: 1.6rem;
+}
+
+.change-password-lede {
+    margin: 0 0 14px 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.change-password-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.change-password-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+/* box-sizing so the padding stays inside the 100% width (see
+   ARCHITECTURE.md § CSS Styling Gotchas). */
+.change-password-input {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 10px;
+    font-size: 1rem;
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    background: var(--surface-card);
+    color: var(--text-primary);
+}
+
+.change-password-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-glow);
+}
+
+.change-password-input[readonly] {
+    color: var(--text-muted);
+    background: var(--surface-subtle);
+}
+
+.change-password-hint {
+    margin-top: -8px;
+    font-size: 0.78rem;
+    color: var(--text-faint);
+}
+
+.change-password-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.change-password-check input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+}
+
+.change-password-error {
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: var(--color-danger-text);
+    background: var(--color-danger-surface);
+}
+
+.change-password-done {
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: var(--color-success-text);
+    background: var(--color-success-surface);
+}
+
+/* The global `button { margin: 10px }` would double up with the flex gap. */
+.change-password-modal .modal-buttons button {
+    margin: 0;
+}
+
+.change-password-modal .primary-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.change-password-forgot {
+    margin-top: 14px;
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--text-faint);
+}
+
+.change-password-forgot-btn {
+    background: none;
+    border: none;
+    padding: 2px 4px;
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.change-password-forgot-btn:hover:not(:disabled) {
+    background: none;
+    color: var(--text-primary);
+}
+
+/* =============================================================================
    Erase dialog — permanent erasure of a player or a team (teams/erasure.js)
    =============================================================================
 
