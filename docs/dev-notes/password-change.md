@@ -1,6 +1,6 @@
 # Password change and reset
 
-Status: built 2026-09-12 on branch `password-change` and deployed to staging for evaluation; unmerged. Everything up to the Supabase calls was verified in a browser preview with those calls stubbed (an agent session cannot sign in); the calls themselves await a person with an account. Last verified 2026-09-12.
+Status: shipped. Built 2026-09-12 on branch `password-change`, tried on staging with a real account the same day, and merged to `main` 2026-09-12. Everything up to the Supabase calls was first verified in a browser preview with those calls stubbed (an agent session cannot sign in); the recipe below is still the way to exercise it without an account. Last verified 2026-09-12.
 
 The mechanism is summarised in ARCHITECTURE.md § Password management. This note is the why, the traps, and the test recipe.
 
