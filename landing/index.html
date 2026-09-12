@@ -301,13 +301,40 @@
 
             <!-- Logged in state -->
             <div id="loggedInContainer" class="hidden">
-                <div class="logged-in-content">
+                <div id="accountMessage" class="auth-message hidden"></div>
+                <div class="logged-in-content" id="loggedInContent">
                     <div class="user-avatar" id="userAvatar">👤</div>
                     <h3 id="userName">Welcome!</h3>
                     <p id="userEmail" class="user-email"></p>
                     <a href="/" class="btn btn-primary btn-full">Open Breakside App</a>
                     <button id="signOutBtn" class="btn btn-secondary btn-full">Sign Out</button>
+                    <!-- Hidden for accounts with no password (Google-only); landing.js -->
+                    <button type="button" id="changePasswordLink" class="btn-link">Change password</button>
                 </div>
+
+                <!-- Change Password Form — the landing-page twin of the app's
+                     dialog (teams/accountPassword.js); see landing.js -->
+                <form id="changePasswordForm" class="auth-form hidden" novalidate>
+                    <p class="auth-info">Choose a new password for <strong id="changePasswordEmail"></strong>.</p>
+                    <div class="form-group">
+                        <label for="currentPassword">Current Password</label>
+                        <input type="password" id="currentPassword" required placeholder="Your current password" autocomplete="current-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="changeNewPassword">New Password</label>
+                        <input type="password" id="changeNewPassword" required minlength="6" placeholder="At least 6 characters" autocomplete="new-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="changeNewPasswordConfirm">Confirm New Password</label>
+                        <input type="password" id="changeNewPasswordConfirm" required placeholder="Confirm your new password" autocomplete="new-password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Change Password</button>
+                    <button type="button" id="backToAccountBtn" class="btn-link">Back to my account</button>
+                    <p class="auth-forgot-note">
+                        Forgot your current password?
+                        <button type="button" id="changePasswordForgotBtn" class="btn-link">Email me a reset link</button>
+                    </p>
+                </form>
             </div>
         </div>
     </div>

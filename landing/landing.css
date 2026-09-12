@@ -1271,3 +1271,20 @@ body {
 #authContainer.recovery-mode .google-note {
     display: none;
 }
+
+/* Change-password form in the My Account modal (landing.js). The "forgot"
+   line sits under the form's buttons, quieter than the fields above it. */
+.logged-in-content .btn-link {
+    margin-top: var(--space-xs);
+}
+
+.auth-forgot-note {
+    margin: var(--space-sm) 0 0;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--gray-400);
+}
+
+.auth-forgot-note .btn-link {
+    padding: 0 var(--space-xs);
+}

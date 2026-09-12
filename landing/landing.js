@@ -45,6 +45,10 @@ const signOutBtn = document.getElementById('signOutBtn');
 // Containers
 const authContainer = document.getElementById('authContainer');
 const loggedInContainer = document.getElementById('loggedInContainer');
+const loggedInContent = document.getElementById('loggedInContent');
+const changePasswordLink = document.getElementById('changePasswordLink');
+const changePasswordForm = document.getElementById('changePasswordForm');
+const accountMessage = document.getElementById('accountMessage');
 
 // User info elements
 const userAvatar = document.getElementById('userAvatar');
@@ -64,6 +68,8 @@ function closeModal() {
     authModal.classList.remove('active');
     document.body.style.overflow = '';
     clearAuthMessage();
+    showAccountView();
+    clearAccountMessage();
     if (inRecoveryMode()) {
         // Dismissed without setting a password: they are still signed in
         // through the reset link, so show that rather than a dead form.
@@ -192,6 +198,20 @@ function showAuthMessage(message, type = 'error') {
 function clearAuthMessage() {
     authMessage.classList.add('hidden');
     authMessage.textContent = '';
+}
+
+// The same two helpers for #accountMessage, which lives in the logged-in
+// half of the modal (#authMessage is inside the signed-out half, hidden
+// whenever there is a session).
+function showAccountMessage(message, type = 'error') {
+    accountMessage.textContent = message;
+    accountMessage.className = `auth-message ${type}`;
+    accountMessage.classList.remove('hidden');
+}
+
+function clearAccountMessage() {
+    accountMessage.classList.add('hidden');
+    accountMessage.textContent = '';
 }
 
 // =============================================================================
@@ -340,6 +360,194 @@ resetForm?.addEventListener('submit', async (e) => {
 });
 
 // =============================================================================
+// Change Password (My Account modal)
+// =============================================================================
+
+// The landing-page twin of the app's change-password dialog
+// (teams/accountPassword.js), kept deliberately smaller: no show-passwords
+// toggle, no sign-out-other-devices. The rules below mirror
+// auth/passwordRules.js, which this classic script cannot import.
+
+let signedInUser = null;
+
+function hasPasswordIdentity(user) {
+    if (!user) return false;
+    const providers = Array.isArray(user.identities) && user.identities.length
+        ? user.identities.map(i => i && i.provider).filter(Boolean)
+        : ((user.app_metadata && user.app_metadata.providers) || []);
+    return providers.length === 0 || providers.includes('email');
+}
+
+function showAccountView() {
+    loggedInContent?.classList.remove('hidden');
+    changePasswordForm?.classList.add('hidden');
+}
+
+function openChangePasswordForm() {
+    clearAccountMessage();
+    changePasswordForm.reset();
+    document.getElementById('changePasswordEmail').textContent = signedInUser?.email || '';
+    const forgotBtn = document.getElementById('changePasswordForgotBtn');
+    forgotBtn.disabled = false;
+    forgotBtn.textContent = 'Email me a reset link';
+    loggedInContent.classList.add('hidden');
+    changePasswordForm.classList.remove('hidden');
+    document.getElementById('currentPassword').focus();
+}
+
+changePasswordLink?.addEventListener('click', openChangePasswordForm);
+document.getElementById('backToAccountBtn')?.addEventListener('click', () => {
+    clearAccountMessage();
+    showAccountView();
+});
+
+/**
+ * Check the current password against GoTrue's password grant directly rather
+ * than through supabaseClient.signInWithPassword(): that would replace the
+ * session and fire SIGNED_IN, and updateUIForUser() runs on every auth event.
+ * The throwaway session the grant mints is revoked straight away
+ * (scope=local, so only that one). Same approach as auth/auth.js.
+ */
+async function verifyCurrentPassword(email, password) {
+    const base = `${SUPABASE_URL}/auth/v1`;
+    const headers = { apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' };
+
+    let response;
+    try {
+        response = await fetch(`${base}/token?grant_type=password`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ email, password }),
+        });
+    } catch (e) {
+        return { ok: false, message: "Couldn't reach the sign-in service. Check your connection and try again." };
+    }
+
+    let body = {};
+    try {
+        body = await response.json();
+    } catch (e) {
+        /* non-JSON body; the status code carries the answer */
+    }
+
+    if (response.ok) {
+        if (body.access_token) {
+            fetch(`${base}/logout?scope=local`, {
+                method: 'POST',
+                headers: { ...headers, Authorization: `Bearer ${body.access_token}` },
+            }).catch(() => { /* best effort; the session expires on its own */ });
+        }
+        return { ok: true };
+    }
+    if (response.status === 429) return { ok: false, message: 'Too many attempts. Wait a minute and try again.' };
+    if (response.status === 400) return { ok: false, message: 'That current password is incorrect.' };
+    return { ok: false, message: body.msg || body.error_description || `Password check failed (${response.status})` };
+}
+
+function describeUpdateError(error) {
+    switch (error?.code) {
+        case 'same_password':
+            return 'Your new password must be different from your current one.';
+        case 'reauthentication_needed':
+            return 'This account is set to confirm password changes by email. Use the reset link below instead.';
+        case 'over_request_rate_limit':
+            return 'Too many attempts. Wait a minute and try again.';
+        default:
+            break;
+    }
+    if (error?.status === 429) return 'Too many attempts. Wait a minute and try again.';
+    return error?.message || 'Failed to change the password';
+}
+
+changePasswordForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearAccountMessage();
+
+    const email = signedInUser?.email;
+    const current = document.getElementById('currentPassword').value;
+    const next = document.getElementById('changeNewPassword').value;
+    const confirm = document.getElementById('changeNewPasswordConfirm').value;
+
+    if (!email) {
+        showAccountMessage("You're not signed in.");
+        return;
+    }
+    if (!current) {
+        showAccountMessage('Enter your current password.');
+        return;
+    }
+    if (next.length < 6) {
+        showAccountMessage('Your new password needs at least 6 characters.');
+        return;
+    }
+    if (next !== confirm) {
+        showAccountMessage("The two new passwords don't match.");
+        return;
+    }
+    if (next === current) {
+        showAccountMessage('Your new password must be different from your current one.');
+        return;
+    }
+
+    const submitBtn = changePasswordForm.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+
+    try {
+        submitBtn.textContent = 'Checking...';
+        const check = await verifyCurrentPassword(email, current);
+        if (!check.ok) {
+            showAccountMessage(check.message);
+            return;
+        }
+
+        submitBtn.textContent = 'Saving...';
+        const { error } = await supabaseClient.auth.updateUser({ password: next });
+        if (error) {
+            showAccountMessage(describeUpdateError(error));
+            return;
+        }
+
+        changePasswordForm.reset();
+        showAccountMessage('Your password has been changed.', 'success');
+        setTimeout(showAccountView, 1500);
+
+    } catch (error) {
+        console.error('Change password error:', error);
+        showAccountMessage(error.message || 'Failed to change the password');
+    } finally {
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+    }
+});
+
+// For the coach who has been signed in for months and no longer knows the
+// current password: the same reset email as "Forgot password?", whose link
+// comes back to this page's set-new-password form.
+document.getElementById('changePasswordForgotBtn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const email = signedInUser?.email;
+    if (!email || btn.disabled) return;
+
+    clearAccountMessage();
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+    try {
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.origin + '/landing/?reset=true',
+        });
+        if (error) throw error;
+        btn.textContent = 'Sent';
+        showAccountMessage(`Reset link sent to ${email}. Open it on this device to set a new password.`, 'success');
+    } catch (error) {
+        console.error('Reset email failed:', error);
+        btn.disabled = false;
+        btn.textContent = 'Email me a reset link';
+        showAccountMessage(error.message || 'Failed to send reset email');
+    }
+});
+
+// =============================================================================
 // Set New Password (the emailed reset link lands here)
 // =============================================================================
 
@@ -464,6 +672,7 @@ signOutBtn?.addEventListener('click', async () => {
 // =============================================================================
 
 function updateUIForUser(user) {
+    signedInUser = user;
     if (user) {
         // User is logged in
         authContainer.classList.add('hidden');
@@ -481,6 +690,9 @@ function updateUIForUser(user) {
         if (loginBtn) {
             loginBtn.textContent = 'My Account';
         }
+
+        // No password to change on a Google-only account.
+        changePasswordLink?.classList.toggle('hidden', !hasPasswordIdentity(user));
     } else {
         // User is logged out
         authContainer.classList.remove('hidden');
@@ -494,6 +706,9 @@ function updateUIForUser(user) {
         signupForm?.reset();
         resetForm?.reset();
         newPasswordForm?.reset();
+        changePasswordForm?.reset();
+        showAccountView();
+        clearAccountMessage();
         
         // Update nav button
         if (loginBtn) {

@@ -113,12 +113,14 @@ Design and test recipe: docs/dev-notes/password-change.md.
 - [x] Tried with a real account on staging 2026-09-12; works. (If a staging
       reset link ever lands on www instead, add the staging origin to
       Supabase → Authentication → URL Configuration → Redirect URLs.)
-- [ ] `auth/auth.js signInWithGoogle()` still redirects to `/app/`, which is
-      not a route (S3 404 fallback plus relative asset URLs). Same one-word
-      fix `resetPassword()` got on this branch; left alone because it could
-      not be exercised.
-- [ ] The landing page's *My Account* modal has no *Change password* link;
-      the app's Account section is the only entry point.
+- [x] `/app/` redirect targets (in-app Google sign-in, the join page's
+      post-join redirect and its *Open Breakside App* link) now point at `/`;
+      `tests/unit/noAppPathRedirect.test.mjs` pins it. Branch
+      `password-followups`, on staging 2026-09-12. **Verify the in-app Google
+      sign-in lands on the app**, which automation cannot do.
+- [x] *Change password* link on the landing page's *My Account* modal
+      (same branch, same staging deploy). Smaller than the app's dialog on
+      purpose: no show-passwords toggle, no sign-out-other-devices.
 - [ ] Google-only accounts: offer *Set a password* so they can also sign in
       by email? Needs a reauthentication story first, since there is no
       current password to check.
