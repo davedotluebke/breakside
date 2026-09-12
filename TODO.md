@@ -115,12 +115,11 @@ Design and test recipe: docs/dev-notes/password-change.md.
       Supabase → Authentication → URL Configuration → Redirect URLs.)
 - [x] `/app/` redirect targets (in-app Google sign-in, the join page's
       post-join redirect and its *Open Breakside App* link) now point at `/`;
-      `tests/unit/noAppPathRedirect.test.mjs` pins it. Branch
-      `password-followups`, on staging 2026-09-12. **Verify the in-app Google
-      sign-in lands on the app**, which automation cannot do.
+      `tests/unit/noAppPathRedirect.test.mjs` pins it. Merged 2026-09-12
+      after the in-app Google sign-in was verified on staging.
 - [x] *Change password* link on the landing page's *My Account* modal
-      (same branch, same staging deploy). Smaller than the app's dialog on
-      purpose: no show-passwords toggle, no sign-out-other-devices.
+      (merged 2026-09-12). Smaller than the app's dialog on purpose: no
+      show-passwords toggle, no sign-out-other-devices.
 - [ ] Google-only accounts: offer *Set a password* so they can also sign in
       by email? Needs a reauthentication story first, since there is no
       current password to check.

@@ -33,7 +33,7 @@ Nothing for a signed-in user, and "Forgot password?" was half a feature. Both si
 - **Landing page**: call the global `showNewPasswordForm()` after stubbing `supabaseClient.auth.updateUser` and `getSession` (classic script, so `supabaseClient` is a global `const`; patch its methods, as for the join page). The expired-link path is `/landing/#error_description=…` with no stubs.
 - **Real end-to-end** (needs a person): staging → sign in → Teams → Account → Change password, including a wrong current password and the sign-out-others box; then Sign Out → Forgot password → email → link → the dialog should open in recovery mode. If "Secure password change" is on in the Supabase dashboard, expect the reauthentication message instead of a change.
 
-## Landing-page twin (branch `password-followups`, 2026-09-12)
+## Landing-page twin (branch `password-followups`, merged 2026-09-12)
 
 The *My Account* modal on `/landing/` got its own change-password form. It is deliberately smaller than the app's dialog (no show-passwords toggle, no sign-out-other-devices) and its rules are a hand-kept copy of `auth/passwordRules.js`, because `landing/` is classic scripts that cannot import a module; `landing/apiOrigin.js` is the precedent. The current-password check is the same direct GoTrue grant, for the same reason: `updateUIForUser()` runs on every auth event, and a `signInWithPassword` on the page's client would flip the modal back to the welcome view mid-flow. Sign-out resets the form; closing the modal returns to the account view.
 
