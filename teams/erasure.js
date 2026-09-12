@@ -254,6 +254,7 @@ const PLAYER_COUNT_LABELS = [
     ['versions', 'saved game version rewritten', 'saved game versions rewritten'],
     ['rosters', 'team roster updated', 'team rosters updated'],
     ['events', 'tournament/event roster updated', 'tournament/event rosters updated'],
+    ['mailContacts', 'email-list address removed', 'email-list addresses removed'],
 ];
 
 const TEAM_COUNT_LABELS = [
@@ -265,6 +266,7 @@ const TEAM_COUNT_LABELS = [
     ['memberships', 'team membership removed', 'team memberships removed'],
     ['events', 'tournament/event deleted', 'tournaments/events deleted'],
     ['players', 'orphaned player erased', 'orphaned players erased'],
+    ['mailContacts', 'email-list contact deleted', 'email-list contacts deleted'],
 ];
 
 /**

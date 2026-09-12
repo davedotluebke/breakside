@@ -6,6 +6,8 @@ httpx>=0.25.0
 PyJWT>=2.8.0
 cryptography>=41.0.0
 Pillow>=10.0.0
+# Team mailing lists (mail/): SES send, S3 fetch of received mail, SQS poll.
+boto3>=1.34.0
 # Test-only deps (used by breakside_server/tests/narration/):
 #   websockets — direct WebSocket client to OpenAI Realtime API. The runner
 #                uses the legacy connect() API (extra_headers=...) which is

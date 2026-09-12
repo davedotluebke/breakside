@@ -128,8 +128,12 @@
                         That's the whole record.
                     </p>
                     <p>
-                        It does <em>not</em> collect a date of birth, address, phone number, email
-                        address, photo, or any medical information about a player.
+                        It does <em>not</em> collect a date of birth, address, phone number, photo,
+                        or any medical information about a player. If a coach turns on the team's
+                        <strong>email lists</strong>, they may enter an email address for a player
+                        and for the player's parents or guardians so that list mail reaches them.
+                        Those addresses are visible only to the team's coaches, are never shown to
+                        other members, and are deleted when the player is erased.
                     </p>
                     <div class="docs-note">
                         Internal player IDs are built from the player's name — for example
@@ -301,7 +305,7 @@
                         </li>
                         <li>
                             <strong>Amazon Web Services</strong> — hosting. Handles every request to
-                            the site and holds the stored data.
+                            the site and holds the stored data. If your team turns on email lists, AWS's email service (SES) also receives mail sent to the team's list addresses and delivers the relayed copies; received messages are kept for 30 days for review and then deleted.
                         </li>
                         <li>
                             <strong>Google Fonts</strong> — every Breakside page, including the

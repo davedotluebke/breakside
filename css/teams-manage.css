@@ -1515,3 +1515,256 @@
     opacity: 0.6;
     cursor: not-allowed;
 }
+
+/* =========================================================================
+   Team Mail (email lists) screen — teams/teamMail.js
+   Reuses .settings-section / .member-item / .invite-btn / .save-identity-btn
+   from above; only the mail-specific pieces live here.
+   ========================================================================= */
+
+.mail-address-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-lighter);
+}
+
+.mail-address-row:last-of-type {
+    border-bottom: none;
+}
+
+.mail-address-label {
+    flex: 0 0 6.5em;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.mail-address,
+#teamMailContent code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    background: var(--surface-inset);
+    padding: 2px 6px;
+    border-radius: 4px;
+    overflow-wrap: anywhere;
+}
+
+.mail-address {
+    flex: 1;
+    min-width: 0;
+}
+
+.mail-inline-form,
+.mail-add-form,
+.mail-list-form {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.mail-inline-form {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.mail-inline-form label,
+.mail-form-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    min-width: 0;
+}
+
+.mail-inline-form label {
+    flex: 1 1 10em;
+}
+
+.mail-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14em, 1fr));
+    gap: 10px;
+}
+
+.mail-form-grid select,
+.mail-inline-form select {
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    border-radius: 8px;
+}
+
+.mail-add-form h4 {
+    margin: 8px 0 0 0;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.mail-policy {
+    border: 1px solid var(--border-lighter);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mail-policy legend {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    padding: 0 4px;
+}
+
+.mail-policy label,
+.mail-toggle {
+    flex-direction: row !important;
+    align-items: center;
+    gap: 8px !important;
+    color: var(--text-primary) !important;
+}
+
+.mail-list-form {
+    padding: 12px 0;
+    border-top: 1px solid var(--border-lighter);
+}
+
+.mail-list-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.mail-list-head .mail-toggle {
+    margin-left: auto;
+    font-size: 0.9rem;
+}
+
+.mail-list-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.mail-list-actions .save-identity-btn {
+    padding: 8px 16px;
+}
+
+.mail-contact-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.mail-player-row {
+    flex-wrap: wrap;
+}
+
+.mail-player-form {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex: 1 1 100%;
+    margin-top: 8px;
+}
+
+.mail-player-form .url-input {
+    padding: 8px 10px;
+}
+
+.mail-alias-input {
+    flex: 0 1 9em;
+}
+
+.mail-flag {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--surface-inset);
+    color: var(--text-muted);
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+.mail-flag-bad {
+    background: var(--color-danger-surface);
+    color: var(--color-danger-ink);
+}
+
+.mail-badge {
+    display: inline-block;
+    min-width: 1.5em;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--brand-orange);
+    color: var(--white);
+    font-size: 0.8rem;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.mail-held .member-details {
+    gap: 2px;
+}
+
+.mail-reason {
+    color: var(--color-danger);
+}
+
+.mail-held-preview {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: var(--surface-inset);
+    border-radius: 6px;
+    white-space: pre-wrap;
+    font-size: 0.85rem;
+    max-height: 14em;
+    overflow: auto;
+}
+
+.mail-import summary {
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin: 10px 0;
+}
+
+.mail-transport-note {
+    margin: 12px 0 0 0;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--surface-inset);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.mail-log {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.mail-log td {
+    padding: 6px 6px;
+    border-bottom: 1px solid var(--border-lighter);
+    vertical-align: top;
+    overflow-wrap: anywhere;
+}
+
+#mailLogList {
+    overflow-x: auto;
+}
+
+#teamMailContent .icon-status.success {
+    color: var(--color-success, var(--text-muted));
+}

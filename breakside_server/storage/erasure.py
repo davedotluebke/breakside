@@ -90,7 +90,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from . import (
-    event_storage, game_storage, index_storage, invite_storage,
+    event_storage, game_storage, index_storage, invite_storage, mail_storage,
     membership_storage, player_storage, share_storage, team_storage,
     tombstones,
 )
@@ -800,6 +800,7 @@ def _empty_counts() -> Dict[str, int]:
         "memberships": 0,
         "shares": 0,
         "invites": 0,
+        "mailContacts": 0,
     }
 
 
@@ -909,6 +910,12 @@ def erase_player(player_id: str, *, dry_run: bool = False,
     # simply loses the entry (the tombstone is on no roster).
     if not dry_run:
         index_storage.replace_player_in_index(player_id, tombstone)
+
+    # Mailing lists (storage/mail_storage.py): the player's own alias address,
+    # their guardians' links (a guardian left with no player goes too), held
+    # mail addressed to the alias, and log lines that name it.
+    mail_counts = mail_storage.scrub_player_from_mail(player_id, dry_run=dry_run)
+    counts["mailContacts"] = mail_counts["contacts"]
 
     # The record itself, last.
     if stored is not None:
@@ -1036,6 +1043,10 @@ def erase_team(team_id: str, *, dry_run: bool = False,
 
     counts["teams"] = 1 if exists else 0
 
+    # The team's mail directory (parent/player addresses) goes with the team.
+    mail_directory = mail_storage.get_mail_directory(team_id)
+    counts["mailContacts"] = len((mail_directory or {}).get("contacts") or [])
+
     # Orphans: on this roster and no other.
     orphans: List[str] = []
     for player_id in team.get("playerIds") or []:
@@ -1084,6 +1095,7 @@ def erase_team(team_id: str, *, dry_run: bool = False,
         invite_storage.delete_invite(invite["id"])
     for event in events:
         event_storage.delete_event(event["id"])
+    mail_storage.delete_mail_directory(team_id)
 
     # Orphaned players before the memberships go, so erase_player's scan runs
     # while the data dir is otherwise settled. Their games are already gone, so

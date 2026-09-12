@@ -55,3 +55,12 @@ uvicorn==0.33.0
 uvloop==0.22.1
 watchfiles==0.24.0
 websockets==13.1
+# Added 2026-09-11 for team mailing lists (breakside_server/mail/): boto3 and
+# its closure, at the versions the change was tested with on Python 3.12.
+boto3==1.43.93
+botocore==1.43.93
+jmespath==1.1.0
+python-dateutil==2.9.0.post0
+s3transfer==0.19.2
+six==1.17.0
+urllib3==2.4.0

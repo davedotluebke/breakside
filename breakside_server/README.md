@@ -47,6 +47,12 @@ Set via environment variables or in `.env` file:
 | `BREAKSIDE_PORT` | `8000` | Server port |
 | `BREAKSIDE_DEBUG` | `false` | Enable debug mode |
 | `BREAKSIDE_ALLOWED_ORIGINS` | `*` | CORS allowed origins |
+| `BREAKSIDE_MAIL_TRANSPORT` | `none` | Team mailing lists: `ses`, `file` (outbox dir, for dev/tests) or `none` |
+| `BREAKSIDE_MAIL_DOMAIN` | `team.breakside.pro` | Domain the list addresses live at |
+| `BREAKSIDE_MAIL_QUEUE_URL` | | SQS queue fed by SES receiving; the inbound poller runs only when set (with `ses`) |
+| `BREAKSIDE_MAIL_INBOUND_BUCKET` | | S3 bucket SES stores received mail in |
+| `BREAKSIDE_MAIL_CONFIGURATION_SET` | | SES configuration set for bounce/complaint events |
+| `BREAKSIDE_MAIL_REGION` | `us-east-1` | AWS region for SES/S3/SQS |
 
 These were prefixed `ULTISTATS_` until the project settled on its name
 (renamed 2026-09-03). `config.py` accepted both for one release; that
