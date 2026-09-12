@@ -115,6 +115,7 @@ import './teams/eventDialogs.js';
 import { showConnectionInfo } from './teams/syncStatusUI.js';
 import './teams/activeGamePolling.js';
 import { showTeamSettingsScreen } from './teams/teamSettings.js';
+import './teams/teamMail.js';
 import './teams/eventRoster.js';
 import { getGameSummaryBackTarget } from './teams/gameSummary.js';
 // Share-link guest sessions (/view/<hash>): checked first in initializeApp.

@@ -577,6 +577,15 @@
                 </div>
             </div>
 
+            <!-- Email Lists (team mailing lists) entry point -->
+            <div class="settings-section">
+                <h3>Email Lists</h3>
+                <p class="section-description">Team email addresses (everyone, parents, coaches, one per player) that relay to the right people. Coaches manage who's on them here.</p>
+                <button id="openTeamMailBtn" class="roster-nav-btn">
+                    <i class="fas fa-envelope"></i> Manage Email Lists
+                </button>
+            </div>
+
             <!-- Members Section -->
             <div class="settings-section">
                 <h3>Members (<span id="memberCount">0</span>)</h3>
@@ -611,6 +620,19 @@
                     <button id="joinTeamBtn" class="join-btn">Join</button>
                 </div>
             </div>
+        </div>
+    </section>
+
+    <!-- Team Mail (email lists) Screen — teams/teamMail.js -->
+    <section id="teamMailScreen" style="display: none;">
+        <div class="panel-title-bar not-draggable">
+            <button class="title-bar-back-btn" id="backFromTeamMailBtn">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <span class="panel-title">Email Lists</span>
+        </div>
+        <div class="settings-content" id="teamMailContent">
+            <p class="loading-message">Loading…</p>
         </div>
     </section>
 

@@ -819,6 +819,80 @@ The production box's exact cron files, scripts, relay settings, and the
 contact-address wiring are recorded in the private ops repository
 (`breakside-ops`, `runbooks/tls-and-mail.md`).
 
+### Team mailing lists
+
+Each team can have email lists at `<slug>@team.breakside.pro` (design and
+rationale: [TODO.Comms.md § Phase 0](TODO.Comms.md#phase-0--team-mailing-lists-teambreaksidepro)).
+The code is the `breakside_server/mail/` package, `storage/mail_storage.py`
+and `routers/mail.py`; the coach-facing screen is `teams/teamMail.js`,
+reached from Team Settings.
+
+| Address | Delivers to |
+|---|---|
+| `<slug>@` | everyone in the directory |
+| `parents-<slug>@` | guardians, managers, coaches |
+| `coaches-<slug>@` | coaches (anyone on the team may write to it) |
+| `staff-<slug>@` | coaches and managers |
+| `players-<slug>@` | players and coaches (off unless the team turns it on) |
+| `<alias>-<slug>@` | one player, all of their guardians, every coach |
+
+**Pipeline.** SES receives mail for the domain, stores the raw MIME in S3
+(30-day lifecycle) and notifies an SNS topic; an SQS queue subscribes. The
+app long-polls that queue from a background task started in the lifespan
+(`mail/inbound.py`), fetches the object, and hands it to `mail/relay.py`,
+which applies policy (`mail/policy.py`), rewrites headers
+(`mail/rewrite.py`) and sends through SES (`mail/transport.py`). Bounce and
+complaint events from the SES configuration set land on the same queue and
+are recorded on the contact. There is no inbound HTTP endpoint and no port
+25 on the box; if the API is down, mail waits in the queue.
+
+**Policy order.** Loop guards (our own `X-Breakside-List`, `Precedence:
+list|bulk`, `Auto-Submitted`, mail from a list address) → SES verdicts
+(spam/virus FAIL dropped; DMARC FAIL or SPF+DKIM FAIL quarantined even from
+a known sender, since that is what a spoof looks like) → sender must be in
+the directory → the list's post policy → recipients expanded, deduplicated,
+minus the sender, minus opt-outs, paused/alumni and hard-bounced addresses.
+Unknown senders are **quarantined, never bounced** (bouncing to unknown
+senders is backscatter); coaches get a rate-limited notice and release or
+discard from the screen. Held mail expires after 14 days.
+
+**From rewrite.** Yahoo, AOL and Apple publish DMARC `p=reject`, so a relayed
+message must not keep the author's From. Like Google Groups we send
+`From: "Name via CUDO Parents" <parents-cudo@team.breakside.pro>` with
+Reply-To per list policy (author, list, or the coaches list), a subject tag,
+`List-Id`/`List-Post`/`Precedence: list`, and the original From preserved in
+`X-Original-From`. Message-ID, References, attachments and HTML pass through
+untouched so threads stay intact. Recipients are envelope-only: nobody sees
+anyone else's address.
+
+**Data.** `data/mail/_slugs.json` maps slug → team for inbound routing;
+`data/mail/{teamId}/directory.json` holds the slug, per-list settings and the
+contacts (guardians, players with their aliases, managers, "other").
+**Coaches are never stored** — they are derived from team memberships on
+every use, so the coaches list cannot go stale. `log/{YYYY-MM}.jsonl` records
+every relayed, held, dropped and bounced message; `quarantine/` holds
+metadata and raw MIME for held mail. Player erasure removes the player's
+alias and contact, unlinks guardians (dropping any left with no player), and
+scrubs held mail and log lines; team erasure deletes the directory and frees
+the slug. All of it is coach-only over the API.
+
+**Environment.** `BREAKSIDE_MAIL_TRANSPORT` (`ses` | `file` | `none`, default
+`none`), `BREAKSIDE_MAIL_DOMAIN`, `BREAKSIDE_MAIL_REGION`,
+`BREAKSIDE_MAIL_INBOUND_BUCKET`, `BREAKSIDE_MAIL_QUEUE_URL`,
+`BREAKSIDE_MAIL_CONFIGURATION_SET`, `BREAKSIDE_MAIL_OUTBOX_DIR`,
+`BREAKSIDE_MAIL_APP_URL`. The poller only starts when the transport is `ses`
+and a queue URL is set. The AWS side is provisioned by
+`scripts/setup-mail-aws.sh` (idempotent; prints the DNS records and env
+lines); the identifiers it generates live in the private ops repo.
+
+**Local testing.** Run a dev backend with `BREAKSIDE_MAIL_TRANSPORT=file`:
+every send lands as `.eml` + `.json` envelope in the outbox dir, and
+`POST /api/mail/dev/inbound` (body: a raw RFC 822 message; optional
+`?to=addr,addr` envelope) processes a message exactly like a queue delivery.
+That endpoint 404s whenever auth is required and debug is off, i.e. in
+production. `test_mail_rules.py` covers the pure rules; `test_mail.py` runs
+the relay, API, poller (fake SQS/S3) and erasure hooks end to end.
+
 ### Server File Structure
 
 ```
@@ -826,6 +900,7 @@ breakside_server/
 ├── main.py              # App wiring only: FastAPI app, CORS, router includes
 ├── config.py            # Configuration from environment variables
 ├── narration.py         # AI narration router (token + finalize endpoints)
+├── mail/                # Team mailing lists: addresses, policy, rewrite, transport, relay, inbound poller
 ├── validation.py        # ID validation + safe static-path resolution
 ├── requirements.txt     # Python dependencies
 │
@@ -838,6 +913,7 @@ breakside_server/
 │   ├── controller.py    # Controller roles: status/claim/release/handoff/ping
 │   ├── shares.py        # Game share links + public /api/share/{hash}
 │   ├── invites.py       # Team invites + redeem/revoke
+│   ├── mail.py          # Team mailing lists admin (coach-only) + dev inbound endpoint
 │   ├── teams.py         # Team CRUD, members, roster, games, active-game
 │   ├── players.py       # Player CRUD + games/teams lookups
 │   ├── misc.py          # /api info, /health, /api/proxy-image, /api/index/*
@@ -857,6 +933,7 @@ breakside_server/
 │   ├── user_storage.py  # User account CRUD operations
 │   ├── membership_storage.py # Team membership management
 │   ├── invite_storage.py    # Invite code management
+│   ├── mail_storage.py      # Mailing-list directory, slug index, log, quarantine
 │   ├── share_storage.py     # Game sharing management
 │   ├── controller_storage.py # In-memory game controller state (single-worker!)
 │   └── index_storage.py # Cross-entity index management
@@ -896,6 +973,12 @@ breakside_server/
 │   └── {player_id}.json
 ├── users/
 │   └── {user_id}.json        # User profile (synced from Supabase)
+├── mail/
+│   ├── _slugs.json           # slug → teamId (routes inbound list mail)
+│   └── {team_id}/
+│       ├── directory.json    # slug, per-list settings, contacts (coach-only)
+│       ├── log/{YYYY-MM}.jsonl
+│       └── quarantine/{id}.json + {id}.eml
 ├── memberships.json          # Team membership index
 └── index.json                # Cross-entity index
 ```
@@ -960,6 +1043,17 @@ below).
 - `POST /api/invites/{code}/redeem` - Redeem invite code
 - `GET /api/teams/{team_id}/members` - List team members
 - `DELETE /api/teams/{team_id}/members/{user_id}` - Remove member
+
+#### Team mail (coach-only; see § Team mailing lists)
+- `GET /api/teams/{team_id}/mail` - The admin view: settings, addresses, lists with current recipients, contacts, roster aliases, members, quarantine count
+- `POST /api/teams/{team_id}/mail` - Create the directory (`{slug, displayName?}`) or change slug / display name
+- `PATCH /api/teams/{team_id}/mail/lists/{kind}` - Per-list `enabled`, `postPolicy`, `subjectTag`, `replyTo`
+- `POST/PATCH/DELETE /api/teams/{team_id}/mail/contacts[/{id}]` - Directory contacts (guardian / player / manager / other)
+- `POST /api/teams/{team_id}/mail/aliases/sync` - Give roster players without an address one
+- `GET /api/teams/{team_id}/mail/quarantine[/{id}]`, `POST …/{id}/release`, `DELETE …/{id}` - Held mail
+- `GET /api/teams/{team_id}/mail/log?limit=` - Delivery log
+- `POST /api/teams/{team_id}/mail/test` - Email the requesting coach from the team address
+- `POST /api/mail/dev/inbound` - Dev backends only: process a raw message as if received
 
 #### Game Control
 - `GET /api/games/{game_id}/controller` - Get controller state (roles, pending handoffs)
