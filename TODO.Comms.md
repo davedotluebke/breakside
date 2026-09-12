@@ -1,8 +1,101 @@
 # Breakside Comms — Roadmap
 
-> **Status**: design draft, not yet implemented. This is the kickoff plan for a fresh session to take on **team communications** as a major new pillar of Breakside, separate from the stats-tracking core.
+> **Status**: design draft. **Phase 0 (team mailing lists) is in progress as of 2026-09-11** on branch `team-mail`; everything from [Vision](#vision) down is the larger plan for a fresh session to take on **team communications** as a major new pillar of Breakside, separate from the stats-tracking core.
 >
 > The main [TODO.md](TODO.md) tracks the existing stats app. Comms is large enough — and orthogonal enough — to live in its own doc until a meaningful MVP ships. When the first v1 milestones land, the headline items will be backported to TODO.md and this doc will become the canonical detail reference.
+
+---
+
+## Phase 0 — Team mailing lists (`@team.breakside.pro`)
+
+> A deliberately small first step toward the Comms vision: admin-managed email
+> lists that replace Google Groups for a youth team. Google Groups fails us
+> twice over — some parents refuse Google tools, and some school-district
+> addresses reject Google Groups mail outright. Plain email lists on our own
+> domain sidestep both. Everything here is email; nothing in the app changes
+> for players or parents, who keep using whatever mail client they have.
+
+### What it is
+
+- Every team gets a set of list addresses under **`team.breakside.pro`**, keyed by a coach-chosen team slug (`cudo`): `cudo@`, `parents-cudo@`, `coaches-cudo@`, `staff-cudo@`, optionally `players-cudo@`.
+- Every player gets an alias address, `alice-cudo@`, disambiguated as needed. Mail to it goes to the player (if they have an address), **all** of that player's guardians, and **all** coaches — the email form of the pseudo-DM rule.
+- Only addresses in the team's directory may post. Mail from anyone else is **quarantined**, never bounced (bouncing to unknown senders is backscatter), and coaches get a digest with release/discard links.
+- A coach-only admin screen in the PWA (reached from Team Settings) manages the slug, the directory, per-list policy, the quarantine queue, and a delivery log.
+
+### Why a subdomain
+
+The apex `breakside.pro` MX points at Google Workspace, which is how `help@breakside.pro` works; DNS allows one MX per name, so the apex cannot be split between Google and a list relay by recipient. Lists therefore live at `team.breakside.pro`: one additive MX record, zero risk to the support address, DMARC reports keep flowing. Moving to the apex later (with `help@` becoming a one-member open list relayed by the same code) is possible once the relay has proven itself for a season.
+
+### Architecture
+
+- **Inbound**: SES email receiving (us-east-1). A receipt rule for `team.breakside.pro` stores the raw MIME in S3 and notifies an SNS topic; an SQS queue subscribes. The API box **long-polls the queue** from a background task in the FastAPI lifespan, fetches the object, applies policy, relays. No inbound webhook, no port 25 on the box; SES does spam/virus scanning first; if the box is down, mail waits in the queue.
+- **Outbound**: SES `SendRawEmail` from the box. `team.breakside.pro` verified with Easy DKIM and a custom MAIL FROM (`bounce.team.breakside.pro`) so SPF aligns too. Bounces and complaints flow through a configuration set to the same queue and are recorded per contact.
+- **From rewriting** (the non-obvious part): Yahoo/AOL/Apple publish DMARC `p=reject`, so relaying `From: parent@yahoo.com` unchanged gets rejected everywhere. Like Google Groups, we rewrite:
+
+  ```
+  From: "Bob Smith via CUDO Parents" <parents-cudo@team.breakside.pro>
+  Reply-To: <per list policy: original author, or the list>
+  Subject: [CUDO Parents] Carpool for Saturday
+  List-Id: <parents-cudo.team.breakside.pro>
+  X-Breakside-List: parents-cudo
+  Precedence: list
+  ```
+
+  `Message-ID`, `In-Reply-To`, `References`, attachments and HTML pass through untouched so threads stay intact.
+- **Policy, in order**: drop loops (our own `X-Breakside-List`, `Precedence: list`/`bulk`, `Auto-Submitted`); resolve the slug → team; look up the sender's address in the directory (unknown → quarantine); check the list's post policy (forbidden → quarantine, different reason); expand recipients, dedupe, drop the sender's own copy, honor per-contact opt-outs; relay; log with the SES auth verdicts.
+- **Loop/abuse guards**: never relay from a list address; recipient cap; per-sender hourly cap; oversize (SES limits) → notify the (known) sender.
+- **Transport abstraction** so nothing needs AWS locally: `ses` in production, `file` (writes `.eml` to an outbox dir) for dev and tests, plus a dev-only endpoint that accepts a raw MIME body as if it had arrived from the queue.
+
+### Data (server-side, coach-only, under the data dir so backups cover it)
+
+```
+data/mail/_slugs.json                      # slug → teamId (global, for inbound routing)
+data/mail/{teamId}/directory.json          # slug, contacts, lists, settings
+data/mail/{teamId}/log/{YYYY-MM}.jsonl     # one line per relayed/quarantined message
+data/mail/{teamId}/quarantine/{id}.json    # pending items (raw stays in S3, 30-day lifecycle)
+```
+
+- **Contact**: `{id, kind: coach|guardian|player|manager|other, name, email, playerIds[], alias, status: active|paused|alumni, optOut[], bounce: {at, kind}|null}`. Coaches are **derived live from team memberships** (never entered), so that list is never stale.
+- **List**: `{slug, kind, enabled, postPolicy, subjectTag, replyTo: author|list}`. Defaults below.
+- **Slug**: `[a-z0-9]+(-[a-z0-9]+)*`, 2–24 chars, globally unique, reserved words blocked (`help`, `admin`, `postmaster`, `abuse`, `noreply`, `www`, `mail`, `bounce`, and every list prefix). Player aliases: ASCII-folded first name, disambiguated `alice-b` / `alice2`, coach-editable, may not equal a list prefix.
+
+| Address | Delivers to | May post (default; settable) | Reply-To default |
+|---|---|---|---|
+| `<slug>@` | everyone | coaches, managers, guardians | the coaches list |
+| `parents-<slug>@` | guardians + coaches | guardians, coaches | the list |
+| `coaches-<slug>@` | coaches | anyone on the team | the list |
+| `staff-<slug>@` | coaches + managers | anyone on the team | the list |
+| `players-<slug>@` | players + coaches (always copied) | players, coaches | the list |
+| `<alias>-<slug>@` | player + their guardians + all coaches | anyone on the team | the list |
+
+`players-<slug>@` is **off by default** (team toggle) — the same age-gating call as the in-app players channel. `<slug>@` replies go to the coaches list on purpose: reply-all storms are the top complaint about team lists, and a parent's reply to an announcement is almost always a question for the coaches.
+
+### Erasure and privacy
+
+- `erase_player` gains a hook: remove the player's contact and alias, remove guardians linked **only** to that player, scrub alias/address from the log lines.
+- `privacy.html` gains a line: coaches may enter player and guardian email addresses; only coaches see them; player erasure deletes them.
+- Directory endpoints are coach-only (`require_team_coach`); nothing mail-related is ever returned to viewers.
+
+### Ops (breakside-ops, never here)
+
+SES identity + DKIM + MAIL FROM, S3 bucket, SNS topic, SQS queue, receipt rule set, IAM policy additions for the box's instance role, the env vars in `/etc/breakside/env`, and the DNS records at PairNIC. Set up by `scripts/setup-mail-aws.sh` (parameterized; no identifiers in the public repo) and recorded in `breakside-ops` (`INVENTORY.md`, `runbooks/team-mail.md`).
+
+### Work list
+
+- [ ] Storage: `storage/mail_storage.py` (slug index, directory, lists, log, quarantine) + tests
+- [ ] Policy + rewrite engine: `mail/policy.py`, `mail/rewrite.py`, `mail/addresses.py` (pure, fixture-tested with `.eml` files)
+- [ ] Transports: `mail/transport.py` (`ses`, `file`, `none`)
+- [ ] Inbound: `mail/inbound.py` (SQS poller in the lifespan, S3 fetch, bounce/complaint handling)
+- [ ] API: `routers/mail.py` — directory CRUD, lists, quarantine release/discard, log, "send test message"; dev-only raw-inbound endpoint
+- [ ] Erasure hook + privacy line
+- [ ] PWA: `teams/teamMail.js` screen (slug, directory with "import from team members", lists, quarantine, log, bounces) + Team Settings entry point
+- [ ] `scripts/setup-mail-aws.sh` + DNS record list; ops notes to breakside-ops
+- [ ] ARCHITECTURE.md § Team mailing lists; `boto3` in requirements
+- [ ] Field test with the maintainer's team for a season before considering the apex cutover
+
+### Later (not Phase 0)
+
+- `captains-<slug>@` (needs a captain flag), per-event lists, per-coach list-address override, SES suppression-list management from the admin page, an archive with retention beyond 30 days, `help@` on the apex via the same relay.
 
 ---
 
@@ -384,6 +477,10 @@ Two real options:
 ---
 
 ## Phasing
+
+### Phase 0 — Team mailing lists
+
+See [Phase 0](#phase-0--team-mailing-lists-teambreaksidepro) at the top of this doc. In progress on branch `team-mail` as of 2026-09-11.
 
 ### v1.0 — Comms MVP
 
