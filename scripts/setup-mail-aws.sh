@@ -153,10 +153,14 @@ ensure_topic_and_queues() {
         doing "create topic $NAME"
         apply aws sns create-topic --name "$NAME" >/dev/null
     fi
+    # SNS rejects the "SNS:*" wildcard ("action out of service scope"); the
+    # owner statement has to spell the actions out, as the default policy does.
     doing "set topic policy: SES may publish"
     apply aws sns set-topic-attributes --topic-arn "$TOPIC_ARN" --attribute-name Policy --attribute-value "$(cat <<JSON
 {"Version":"2012-10-17","Statement":[
- {"Sid":"OwnerFull","Effect":"Allow","Principal":{"AWS":"arn:aws:iam::$ACCOUNT:root"},"Action":"SNS:*","Resource":"$TOPIC_ARN"},
+ {"Sid":"OwnerFull","Effect":"Allow","Principal":{"AWS":"arn:aws:iam::$ACCOUNT:root"},
+  "Action":["SNS:GetTopicAttributes","SNS:SetTopicAttributes","SNS:AddPermission","SNS:RemovePermission",
+            "SNS:DeleteTopic","SNS:Subscribe","SNS:ListSubscriptionsByTopic","SNS:Publish"],"Resource":"$TOPIC_ARN"},
  {"Sid":"SESPublish","Effect":"Allow","Principal":{"Service":"ses.amazonaws.com"},"Action":"SNS:Publish","Resource":"$TOPIC_ARN",
   "Condition":{"StringEquals":{"aws:SourceAccount":"$ACCOUNT"}}}]}
 JSON
