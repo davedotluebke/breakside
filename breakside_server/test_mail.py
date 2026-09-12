@@ -21,7 +21,7 @@ def env(tmp_path, monkeypatch):
     players; mail configured with slug ``cudo``, a file-outbox transport."""
     import config
     from storage import (team_storage, player_storage, user_storage, membership_storage,
-                         index_storage, mail_storage)
+                         index_storage, mail_storage, tombstones)
     from mail import transport
 
     patches = [
@@ -45,6 +45,8 @@ def env(tmp_path, monkeypatch):
         (index_storage, "TEAMS_DIR", tmp_path / "teams"),
         (index_storage, "PLAYERS_DIR", tmp_path / "players"),
         (mail_storage, "MAIL_DIR", tmp_path / "mail"),
+        # The erasure tests record tombstones; keep them out of the repo's data/.
+        (tombstones, "ERASED_FILE", tmp_path / "erased.json"),
     ]
     saved = [(mod, name, getattr(mod, name)) for mod, name, _ in patches]
     for mod, name, value in patches:
