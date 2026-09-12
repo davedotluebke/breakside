@@ -1,6 +1,6 @@
 # Breakside Comms — Roadmap
 
-> **Status**: design draft. **Phase 0 (team mailing lists) is in progress as of 2026-09-11** on branch `team-mail`; everything from [Vision](#vision) down is the larger plan for a fresh session to take on **team communications** as a major new pillar of Breakside, separate from the stats-tracking core.
+> **Status**: design draft. **Phase 0 (team mailing lists) shipped to production on 2026-09-11** (branch `team-mail`, merged as 71de777); the DNS records and the box environment are the last two steps, tracked in the private ops runbook. Everything from [Vision](#vision) down is the larger plan for a fresh session to take on **team communications** as a major new pillar of Breakside, separate from the stats-tracking core.
 >
 > The main [TODO.md](TODO.md) tracks the existing stats app. Comms is large enough — and orthogonal enough — to live in its own doc until a meaningful MVP ships. When the first v1 milestones land, the headline items will be backported to TODO.md and this doc will become the canonical detail reference.
 
@@ -82,16 +82,16 @@ SES identity + DKIM + MAIL FROM, S3 bucket, SNS topic, SQS queue, receipt rule s
 
 ### Work list
 
-- [ ] Storage: `storage/mail_storage.py` (slug index, directory, lists, log, quarantine) + tests
-- [ ] Policy + rewrite engine: `mail/policy.py`, `mail/rewrite.py`, `mail/addresses.py` (pure, fixture-tested with `.eml` files)
-- [ ] Transports: `mail/transport.py` (`ses`, `file`, `none`)
-- [ ] Inbound: `mail/inbound.py` (SQS poller in the lifespan, S3 fetch, bounce/complaint handling)
-- [ ] API: `routers/mail.py` — directory CRUD, lists, quarantine release/discard, log, "send test message"; dev-only raw-inbound endpoint
-- [ ] Erasure hook + privacy line
-- [ ] PWA: `teams/teamMail.js` screen (slug, directory with "import from team members", lists, quarantine, log, bounces) + Team Settings entry point
-- [ ] `scripts/setup-mail-aws.sh` + DNS record list; ops notes to breakside-ops
-- [ ] ARCHITECTURE.md § Team mailing lists; `boto3` in requirements
-- [ ] Field test with the maintainer's team for a season before considering the apex cutover
+- [x] Storage: `storage/mail_storage.py` (slug index, directory, lists, log, quarantine) + tests
+- [x] Policy + rewrite engine: `mail/policy.py`, `mail/rewrite.py`, `mail/addresses.py` (pure, fixture-tested with `.eml` files)
+- [x] Transports: `mail/transport.py` (`ses`, `file`, `none`)
+- [x] Inbound: `mail/inbound.py` (SQS poller in the lifespan, S3 fetch, bounce/complaint handling)
+- [x] API: `routers/mail.py` — directory CRUD, lists, quarantine release/discard, log, "send test message"; dev-only raw-inbound endpoint
+- [x] Erasure hook + privacy line
+- [x] PWA: `teams/teamMail.js` screen (slug, directory with "import from team members", lists, quarantine, log, bounces) + Team Settings entry point
+- [x] `scripts/setup-mail-aws.sh` + DNS record list; ops notes to breakside-ops
+- [x] ARCHITECTURE.md § Team mailing lists; `boto3` in requirements
+- [ ] Publish the DNS records and set the box environment (ops runbook checklist), then field test with the maintainer's team for a season before considering the apex cutover
 
 ### Later (not Phase 0)
 
@@ -480,7 +480,7 @@ Two real options:
 
 ### Phase 0 — Team mailing lists
 
-See [Phase 0](#phase-0--team-mailing-lists-teambreaksidepro) at the top of this doc. In progress on branch `team-mail` as of 2026-09-11.
+See [Phase 0](#phase-0--team-mailing-lists-teambreaksidepro) at the top of this doc. Shipped 2026-09-11 (branch `team-mail`).
 
 ### v1.0 — Comms MVP
 
