@@ -291,18 +291,33 @@ class TestRelay:
         from mail import relay
         results = relay.process_inbound(raw_mail("Coach Dave <coach@x.test>", f"alice-cudo@{DOMAIN}", subject="Practice"),
                                         envelope_recipients=[f"alice-cudo@{DOMAIN}"])
-        assert results[0].action == "relay"
-        send = configured["outbox"].sent()[-1]
-        assert sorted(send["recipients"]) == ["coach2@x.test", "dad@x.test", "mom@x.test"]   # Alice has no email; sender excluded
+        assert results[0].action == "relay" and results[0].recipients == 3
         import email as email_lib
         from email import policy as email_policy
-        out = email_lib.message_from_bytes(send["raw"], policy=email_policy.default)
-        assert out["From"].addresses[0].display_name == "Coach Dave via CUDO (Alice Smith)"
-        assert out["From"].addresses[0].addr_spec == f"alice-cudo@{DOMAIN}"
-        assert out["Subject"] == "[CUDO] Practice"
-        # Bob has his own address: he is on his own alias list
-        results = relay.process_inbound(raw_mail("Mom <mom@x.test>", f"bob-cudo@{DOMAIN}"), envelope_recipients=[f"bob-cudo@{DOMAIN}"])
-        assert sorted(configured["outbox"].sent()[-1]["recipients"]) == ["bob@x.test", "coach2@x.test", "coach@x.test", "dad@x.test"]
+        # Alice has no email; the sender is excluded; guardians and coaches get SEPARATE copies,
+        # and only the guardians' copy carries the marker.
+        sends = configured["outbox"].sent()
+        assert len(sends) == 2
+        by_recipients = {tuple(sorted(s["recipients"])): email_lib.message_from_bytes(s["raw"], policy=email_policy.default) for s in sends}
+        guardians = by_recipients[("dad@x.test", "mom@x.test")]
+        coaches = by_recipients[("coach2@x.test",)]
+        assert guardians["Subject"] == "[CUDO] [Parent copy] Practice"
+        assert coaches["Subject"] == "[CUDO] Practice"
+        for out in (guardians, coaches):
+            assert out["From"].addresses[0].display_name == "Coach Dave via CUDO (Alice Smith)"
+            assert out["From"].addresses[0].addr_spec == f"alice-cudo@{DOMAIN}"
+            assert out["Message-ID"] == "<m1@x.test>"
+        from storage import mail_storage as ms
+        assert ms.read_mail_log(configured["team_id"], 1)[0]["copies"] == {"guardian": 2, "coach": 1}
+        # A parent's reply carries the marker; the player's own copy must not.
+        results = relay.process_inbound(raw_mail("Mom <mom@x.test>", f"bob-cudo@{DOMAIN}", subject="Re: [CUDO] [Parent copy] Practice"),
+                                        envelope_recipients=[f"bob-cudo@{DOMAIN}"])
+        assert results[0].recipients == 4
+        sends = configured["outbox"].sent()[-3:]
+        subjects = {tuple(sorted(s["recipients"])): email_lib.message_from_bytes(s["raw"], policy=email_policy.default)["Subject"] for s in sends}
+        assert subjects[("bob@x.test",)] == "Re: [CUDO] Practice"
+        assert subjects[("dad@x.test",)] == "Re: [CUDO] [Parent copy] Practice"
+        assert subjects[("coach2@x.test", "coach@x.test")] == "Re: [CUDO] Practice"
         results = relay.process_inbound(raw_mail("Mom <mom@x.test>", f"zed-cudo@{DOMAIN}"), envelope_recipients=[f"zed-cudo@{DOMAIN}"])
         assert (results[0].action, results[0].reason) == ("quarantine", "unknown-alias")
 

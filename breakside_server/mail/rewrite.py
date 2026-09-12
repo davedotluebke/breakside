@@ -38,6 +38,16 @@ _REPLY_PREFIX_RE = re.compile(
     r"^((?:\s*(?:re|fwd?|aw|sv|tr|wg)\s*:\s*)+)(.*)$", re.IGNORECASE | re.DOTALL
 )
 
+# Subject markers the relay adds to one recipient group's copy of a message
+# (today: the guardians' copy of mail to a player's alias). They are stripped
+# from every inbound subject first, so a parent replying to "[Parent copy]
+# Practice" does not send the player a message labelled as a parent copy.
+PARENT_COPY_MARKER = "[Parent copy]"
+COPY_MARKERS = (PARENT_COPY_MARKER,)
+_MARKER_RE = re.compile(
+    "|".join(re.escape(m) for m in COPY_MARKERS), re.IGNORECASE
+)
+
 
 def parse_message(raw: bytes) -> EmailMessage:
     return BytesParser(policy=email_policy.default).parsebytes(raw)
@@ -91,10 +101,38 @@ def tagged_subject(subject: str, tag: str) -> str:
     return f"{tag} {subject}".strip()
 
 
+def strip_markers(subject: str) -> str:
+    """Remove any copy marker from a subject and tidy the spacing."""
+    cleaned = _MARKER_RE.sub("", subject or "")
+    return re.sub(r"[ \t]{2,}", " ", cleaned).strip()
+
+
+def marked_subject(subject: str, tag: str, marker: str = "") -> str:
+    """Tag the subject, then place ``marker`` right after the tag.
+
+    ``[Offline] Practice`` → ``[Offline] [Parent copy] Practice``;
+    ``Re: [Offline] Practice`` → ``Re: [Offline] [Parent copy] Practice``.
+    With no tag the marker goes where the tag would have gone (after any
+    Re:/Fwd: prefixes). Existing markers are always stripped first.
+    """
+    tagged = tagged_subject(strip_markers(subject), tag)
+    marker = (marker or "").strip()
+    if not marker:
+        return tagged
+    tag = (tag or "").strip()
+    if tag:
+        at = tagged.lower().find(tag.lower())
+        if at >= 0:
+            end = at + len(tag)
+            return f"{tagged[:end]} {marker}{tagged[end:]}".strip()
+    return tagged_subject(tagged, marker)
+
+
 def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
                     subject_tag: str, reply_to_mode: str,
                     coaches_address: Optional[str] = None,
-                    author: Optional[Tuple[str, str]] = None) -> bytes:
+                    author: Optional[Tuple[str, str]] = None,
+                    subject_marker: str = "") -> bytes:
     """Return the relayed form of ``raw``.
 
     Args:
@@ -106,6 +144,8 @@ def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
             Reply-To if they set one), ``list``, or ``coaches``.
         coaches_address: needed for ``coaches`` mode.
         author: (name, email) if the caller already parsed it.
+        subject_marker: e.g. ``[Parent copy]`` for one recipient group's copy;
+            placed after the tag (see ``marked_subject``).
     """
     msg = parse_message(raw)
     name, addr = author or sender_of(msg)
@@ -140,7 +180,7 @@ def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
 
     subject = str(msg.get("Subject", "") or "")
     del msg["Subject"]
-    msg["Subject"] = tagged_subject(subject, subject_tag)
+    msg["Subject"] = marked_subject(subject, subject_tag, subject_marker)
 
     if not msg.get("Message-ID"):
         msg["Message-ID"] = make_msgid(domain=domain or None)

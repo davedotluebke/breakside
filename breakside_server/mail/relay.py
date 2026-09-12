@@ -151,35 +151,64 @@ def _list_display(directory: Dict[str, Any], decision: policy.Decision) -> str:
     return f"{name} {suffix}" if suffix else name
 
 
+def _recipient_groups(decision: policy.Decision) -> List[tuple]:
+    """``[(group, contacts, subject_marker), …]`` — one send per group.
+
+    Mail to a player's alias goes out as separate copies: the player's own,
+    the guardians' (subject marked ``[Parent copy]`` so it reads as what it
+    is), and the coaches'. Every other list is a single unmarked send.
+    """
+    if decision.kind != "player":
+        return [("all", list(decision.recipients), "")]
+    by_kind: Dict[str, list] = {"player": [], "guardian": [], "coach": []}
+    for contact in decision.recipients:
+        by_kind.setdefault(contact.get("kind", "coach"), []).append(contact)
+    return [
+        ("player", by_kind.pop("player"), ""),
+        ("guardian", by_kind.pop("guardian"), rewrite.PARENT_COPY_MARKER),
+        ("coach", by_kind.pop("coach"), ""),
+    ] + [(kind, contacts, "") for kind, contacts in by_kind.items()]
+
+
 def _relay(raw, team_id, directory, decision, local, domain, author_name, author_email, base_entry) -> RelayResult:
     address = f"{local}@{domain}"
     settings = decision.list_settings
     coaches_address = addresses.address("coaches", directory["slug"], domain)
-    out = rewrite.rewrite_message(
-        raw,
-        list_address=address,
-        list_display=_list_display(directory, decision),
-        subject_tag=settings.get("subjectTag", ""),
-        reply_to_mode=settings.get("replyTo", "list"),
-        coaches_address=coaches_address,
-        author=(author_name, author_email),
-    )
-    emails = [c["email"] for c in decision.recipients]
-    try:
-        provider_id = get_transport().send(from_addr=address, recipients=emails, raw=out)
-    except TransportError as exc:
-        logger.error("mail: relay to %s failed: %s", address, exc)
-        log_id = _log(team_id, {**base_entry, "action": "failed", "recipients": len(emails),
-                                "reason": str(exc)[:200]})
-        raise
+    total = len(decision.recipients)
+    copies: Dict[str, int] = {}
+    provider_id: Optional[str] = None
+    for group, contacts, marker in _recipient_groups(decision):
+        if not contacts:
+            continue
+        out = rewrite.rewrite_message(
+            raw,
+            list_address=address,
+            list_display=_list_display(directory, decision),
+            subject_tag=settings.get("subjectTag", ""),
+            reply_to_mode=settings.get("replyTo", "list"),
+            coaches_address=coaches_address,
+            author=(author_name, author_email),
+            subject_marker=marker,
+        )
+        emails = [c["email"] for c in contacts]
+        try:
+            sent_id = get_transport().send(from_addr=address, recipients=emails, raw=out)
+        except TransportError as exc:
+            logger.error("mail: relay to %s (%s copy) failed: %s", address, group, exc)
+            _log(team_id, {**base_entry, "action": "failed", "recipients": total,
+                           "reason": str(exc)[:200], "copies": copies})
+            raise
+        provider_id = provider_id or sent_id
+        copies[group] = len(emails)
     # A quarantine release is logged as "released" rather than "relayed" so
     # the coach's activity view shows one row per message, not two.
     action = "released" if base_entry.get("source") == "release" else "relayed"
-    log_id = _log(team_id, {**base_entry, "action": action, "recipients": len(emails),
+    log_id = _log(team_id, {**base_entry, "action": action, "recipients": total,
                             "reason": None, "providerId": provider_id,
-                            "senderKinds": decision.sender_kinds})
-    logger.info("mail: relayed %s from %s to %d recipient(s)", address, author_email, len(emails))
-    return RelayResult(address, team_id, "relay", None, len(emails), provider_id, log_id=log_id)
+                            "senderKinds": decision.sender_kinds,
+                            "copies": copies if decision.kind == "player" else None})
+    logger.info("mail: relayed %s from %s to %d recipient(s)", address, author_email, total)
+    return RelayResult(address, team_id, "relay", None, total, provider_id, log_id=log_id)
 
 
 def _quarantine(raw, team_id, directory, decision, local, domain, contacts, base_entry) -> RelayResult:

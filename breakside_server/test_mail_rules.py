@@ -292,6 +292,19 @@ class TestRewrite:
         assert rewrite.tagged_subject("", "[T]") == "[T]"
         assert rewrite.tagged_subject("Plain", "") == "Plain"
 
+    def test_subject_marker(self):
+        assert rewrite.marked_subject("Practice", "[T]", "[Parent copy]") == "[T] [Parent copy] Practice"
+        assert rewrite.marked_subject("Re: [T] Practice", "[T]", "[Parent copy]") == "Re: [T] [Parent copy] Practice"
+        assert rewrite.marked_subject("", "[T]", "[Parent copy]") == "[T] [Parent copy]"
+        assert rewrite.marked_subject("Re: Practice", "", "[Parent copy]") == "Re: [Parent copy] Practice"
+        # a parent's reply carries the marker in; it must not reach the player's copy
+        assert rewrite.marked_subject("Re: [T] [Parent copy] Practice", "[T]", "") == "Re: [T] Practice"
+        assert rewrite.marked_subject("Re: [T] [parent COPY] Practice", "[T]", "[Parent copy]") == "Re: [T] [Parent copy] Practice"
+        assert rewrite.strip_markers("[Parent copy]  Practice  [Parent copy]") == "Practice"
+        out = parsed(rewrite.rewrite_message(simple(subject="Practice"), list_address=LIST, list_display="X",
+                                             subject_tag="[X]", reply_to_mode="list", subject_marker="[Parent copy]"))
+        assert out["Subject"] == "[X] [Parent copy] Practice"
+
     def test_message_id_generated_when_missing(self):
         raw = b"From: a@b.test\r\nTo: parents-cudo@team.breakside.pro\r\nSubject: x\r\n\r\nbody\r\n"
         out = parsed(rewrite.rewrite_message(raw, list_address=LIST, list_display="X", subject_tag="", reply_to_mode="list"))
