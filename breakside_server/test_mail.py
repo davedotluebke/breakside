@@ -302,7 +302,7 @@ class TestRelay:
         guardians = by_recipients[("dad@x.test", "mom@x.test")]
         coaches = by_recipients[("coach2@x.test",)]
         assert guardians["Subject"] == "[CUDO] [Parent copy] Practice"
-        assert coaches["Subject"] == "[CUDO] Practice"
+        assert coaches["Subject"] == "[CUDO] [Coach copy] Practice"
         for out in (guardians, coaches):
             assert out["From"].addresses[0].display_name == "Coach Dave via CUDO (Alice Smith)"
             assert out["From"].addresses[0].addr_spec == f"alice-cudo@{DOMAIN}"
@@ -317,7 +317,7 @@ class TestRelay:
         subjects = {tuple(sorted(s["recipients"])): email_lib.message_from_bytes(s["raw"], policy=email_policy.default)["Subject"] for s in sends}
         assert subjects[("bob@x.test",)] == "Re: [CUDO] Practice"
         assert subjects[("dad@x.test",)] == "Re: [CUDO] [Parent copy] Practice"
-        assert subjects[("coach2@x.test", "coach@x.test")] == "Re: [CUDO] Practice"
+        assert subjects[("coach2@x.test", "coach@x.test")] == "Re: [CUDO] [Coach copy] Practice"
         results = relay.process_inbound(raw_mail("Mom <mom@x.test>", f"zed-cudo@{DOMAIN}"), envelope_recipients=[f"zed-cudo@{DOMAIN}"])
         assert (results[0].action, results[0].reason) == ("quarantine", "unknown-alias")
 

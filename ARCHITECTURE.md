@@ -864,9 +864,10 @@ Reply-To per list policy (author, list, or the coaches list), a subject tag,
 `X-Original-From`. Message-ID, References, attachments and HTML pass through
 untouched so threads stay intact. Recipients are envelope-only: nobody sees
 anyone else's address. Mail to a player's alias goes out as separate copies
-per group; the guardians' copy carries `[Parent copy]` after the list tag,
-and that marker is stripped from every inbound subject so a parent's reply
-does not hand the player a message labelled as a parent copy.
+per group: the guardians' copy carries `[Parent copy]` after the list tag
+and the coaches' copy `[Coach copy]`; both markers are stripped from every
+inbound subject so a reply does not hand the player a message labelled as
+somebody else's copy.
 
 **Data.** `data/mail/_slugs.json` maps slug → team for inbound routing;
 `data/mail/{teamId}/directory.json` holds the slug, per-list settings and the

@@ -38,12 +38,14 @@ _REPLY_PREFIX_RE = re.compile(
     r"^((?:\s*(?:re|fwd?|aw|sv|tr|wg)\s*:\s*)+)(.*)$", re.IGNORECASE | re.DOTALL
 )
 
-# Subject markers the relay adds to one recipient group's copy of a message
-# (today: the guardians' copy of mail to a player's alias). They are stripped
-# from every inbound subject first, so a parent replying to "[Parent copy]
-# Practice" does not send the player a message labelled as a parent copy.
+# Subject markers the relay adds to one recipient group's copy of a message:
+# mail to a player's alias reaches the guardians as "[Parent copy]" and the
+# coaches as "[Coach copy]". Both are stripped from every inbound subject
+# first, so a parent replying to "[Parent copy] Practice" does not send the
+# player a message labelled as a parent copy.
 PARENT_COPY_MARKER = "[Parent copy]"
-COPY_MARKERS = (PARENT_COPY_MARKER,)
+COACH_COPY_MARKER = "[Coach copy]"
+COPY_MARKERS = (PARENT_COPY_MARKER, COACH_COPY_MARKER)
 _MARKER_RE = re.compile(
     "|".join(re.escape(m) for m in COPY_MARKERS), re.IGNORECASE
 )

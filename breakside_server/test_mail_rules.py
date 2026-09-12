@@ -301,6 +301,8 @@ class TestRewrite:
         assert rewrite.marked_subject("Re: [T] [Parent copy] Practice", "[T]", "") == "Re: [T] Practice"
         assert rewrite.marked_subject("Re: [T] [parent COPY] Practice", "[T]", "[Parent copy]") == "Re: [T] [Parent copy] Practice"
         assert rewrite.strip_markers("[Parent copy]  Practice  [Parent copy]") == "Practice"
+        assert rewrite.strip_markers("Re: [T] [Coach copy] Practice") == "Re: [T] Practice"
+        assert rewrite.marked_subject("Practice", "[T]", rewrite.COACH_COPY_MARKER) == "[T] [Coach copy] Practice"
         out = parsed(rewrite.rewrite_message(simple(subject="Practice"), list_address=LIST, list_display="X",
                                              subject_tag="[X]", reply_to_mode="list", subject_marker="[Parent copy]"))
         assert out["Subject"] == "[X] [Parent copy] Practice"

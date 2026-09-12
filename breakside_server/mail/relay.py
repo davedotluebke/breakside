@@ -155,8 +155,9 @@ def _recipient_groups(decision: policy.Decision) -> List[tuple]:
     """``[(group, contacts, subject_marker), …]`` — one send per group.
 
     Mail to a player's alias goes out as separate copies: the player's own,
-    the guardians' (subject marked ``[Parent copy]`` so it reads as what it
-    is), and the coaches'. Every other list is a single unmarked send.
+    the guardians' (subject marked ``[Parent copy]``) and the coaches'
+    (``[Coach copy]``), so each reads as what it is. Every other list is a
+    single unmarked send.
     """
     if decision.kind != "player":
         return [("all", list(decision.recipients), "")]
@@ -166,7 +167,7 @@ def _recipient_groups(decision: policy.Decision) -> List[tuple]:
     return [
         ("player", by_kind.pop("player"), ""),
         ("guardian", by_kind.pop("guardian"), rewrite.PARENT_COPY_MARKER),
-        ("coach", by_kind.pop("coach"), ""),
+        ("coach", by_kind.pop("coach"), rewrite.COACH_COPY_MARKER),
     ] + [(kind, contacts, "") for kind, contacts in by_kind.items()]
 
 
