@@ -14,8 +14,8 @@ arrow (it turns to mud under ~64 px) and thickens the strokes.
 16 and 32 px are cut as an optical size rather than a shrink: at that scale
 the logo's X is ~6 px tall and fuses into a "k" whatever the spacing, so the
 line and the X are set further apart, the X is drawn half again larger than
-the logo's proportions, and the arrow at 32 px is a straight one-pixel line
-with a left-pointing head drawn at the target size. 16 px carries no arrow.
+the logo's proportions, and neither carries an arrow: a one-pixel arrow at
+32 px was tried and vanished in a real browser tab.
 
 Production is the orange mark on white (matching the app header); staging is a
 white mark on the staging purple. All geometry is in fractions of a 1024 px
@@ -50,7 +50,7 @@ BOLD = {16: 10, 32: 8, 48: 4}   # stroke dilation (px at 780 px mark height) for
 # Optical size for 16 and 32 px (see the docstring).
 SMALL_GAP = 0.14         # line-to-X gap, as a fraction of the line's height (logo: ~0.03)
 SMALL_X_SCALE = 1.5      # the X, relative to its size in the logo
-SMALL_ARROW = {32: dict(y=28, x0=4, x1=27, head=2)}   # straight pixel arrow; 16 px has none
+SMALL_ARROW = {}         # {size: dict(y, x0, x1, head)} to draw a straight pixel arrow; none survive a tab
 X_HEIGHT = 137 / 360     # the X's height and top edge relative to the line, in the logo
 X_TOP = 171 / 360
 
