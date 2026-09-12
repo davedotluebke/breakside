@@ -458,6 +458,28 @@
                         <div class="management-controls">
                             <input type="text" id="newPlayerInput" placeholder="Add player" />
                             <input type="text" id="newPlayerNumberInput" placeholder="#" class="player-number-input" />
+                            <!-- Position / default line for the new player, wide screens
+                                 only (.management-attrs in css/game-dialogs.css). Native
+                                 radio groups: one Tab stop each, arrows or Space pick.
+                                 Left unset they mean Hybrid / Crossover, as in Edit Player. -->
+                            <div class="management-attrs" id="newPlayerAttrs">
+                                <div class="attr-radio-group" role="radiogroup" aria-label="Position">
+                                    <input type="radio" name="newPlayerPosition" id="newPlayerPosHandler" value="handler" />
+                                    <label for="newPlayerPosHandler">Handler</label>
+                                    <input type="radio" name="newPlayerPosition" id="newPlayerPosCutter" value="cutter" />
+                                    <label for="newPlayerPosCutter">Cutter</label>
+                                    <input type="radio" name="newPlayerPosition" id="newPlayerPosHybrid" value="hybrid" />
+                                    <label for="newPlayerPosHybrid">Hybrid</label>
+                                </div>
+                                <div class="attr-radio-group" role="radiogroup" aria-label="Default line">
+                                    <input type="radio" name="newPlayerLine" id="newPlayerLineO" value="O" />
+                                    <label for="newPlayerLineO">O-line</label>
+                                    <input type="radio" name="newPlayerLine" id="newPlayerLineD" value="D" />
+                                    <label for="newPlayerLineD">D-line</label>
+                                    <input type="radio" name="newPlayerLine" id="newPlayerLineCrossover" value="Crossover" />
+                                    <label for="newPlayerLineCrossover">Crossover</label>
+                                </div>
+                            </div>
                             <div class="management-icons">
                                 <button id="addFMPPlayerBtn" class="icon-button gender-button fmp-button">
                                     +FMP
@@ -1075,18 +1097,22 @@
                 </div>
             </div>
             <div class="edit-player-dialog-buttons">
+                <div class="edit-player-dialog-actions">
+                    <button id="editPlayerCancelBtn" class="edit-player-cancel-btn">Cancel</button>
+                    <button id="editPlayerConfirmBtn" class="edit-player-confirm-btn" disabled>Confirm</button>
+                </div>
                 <!-- Two different actions, deliberately not one. Remove is the
                      everyday one and is reversible (the record survives, they
                      can be re-added); Erase destroys the person and cannot be
-                     undone. See teams/erasure.js. -->
-                <button id="editPlayerDeleteBtn" class="edit-player-delete-btn">Remove from roster</button>
-                <button id="editPlayerEraseBtn" class="edit-player-erase-btn">
-                    Erase record permanently…
-                </button>
-                <p id="editPlayerEraseBlocked" class="edit-player-erase-blocked" style="display: none;"></p>
-                <div class="edit-player-dialog-buttons-right">
-                    <button id="editPlayerCancelBtn" class="edit-player-cancel-btn">Cancel</button>
-                    <button id="editPlayerConfirmBtn" class="edit-player-confirm-btn" disabled>Confirm</button>
+                     undone. See teams/erasure.js. Both sit below Cancel /
+                     Confirm so the dialog's own actions come first and Remove
+                     is not the big target right under the fields. -->
+                <div class="edit-player-dialog-danger">
+                    <button id="editPlayerDeleteBtn" class="edit-player-delete-btn">Remove from roster</button>
+                    <button id="editPlayerEraseBtn" class="edit-player-erase-btn">
+                        Erase record permanently…
+                    </button>
+                    <p id="editPlayerEraseBlocked" class="edit-player-erase-blocked" style="display: none;"></p>
                 </div>
             </div>
         </div>

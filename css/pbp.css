@@ -924,11 +924,22 @@
     border-top: 1px solid var(--border-lighter);
 }
 
-.edit-player-dialog-buttons-right {
+.edit-player-dialog-actions {
     display: flex;
     gap: 1rem;
     justify-content: flex-end;
     flex-wrap: wrap;
+}
+
+/* Remove / Erase sit below the dialog's own Cancel / Confirm row, behind a
+   rule of their own, so Confirm is the first thing under the fields and
+   Remove is not a big target on the way there. */
+.edit-player-dialog-danger {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-lighter);
 }
 
 .edit-player-cancel-btn,
@@ -952,8 +963,8 @@
     width: 100%;
 }
 
-.edit-player-dialog-buttons-right .edit-player-cancel-btn,
-.edit-player-dialog-buttons-right .edit-player-confirm-btn {
+.edit-player-dialog-actions .edit-player-cancel-btn,
+.edit-player-dialog-actions .edit-player-confirm-btn {
     flex: 1 1 auto;
     min-width: 100px;
     max-width: calc(50% - 0.5rem);
