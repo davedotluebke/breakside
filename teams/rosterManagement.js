@@ -624,25 +624,46 @@ function validateJerseyNumber(input) {
 }
 
 (function setupRosterUI() {
+    // Position / default-line pickers beside the add-player inputs
+    // (#newPlayerAttrs). CSS shows them on wide screens only, so read them
+    // only while visible: a choice made before the window was narrowed must
+    // not ride along silently on the next player.
+    function readNewPlayerAttr(radioName) {
+        const attrs = document.getElementById('newPlayerAttrs');
+        if (!attrs || getComputedStyle(attrs).display === 'none') return null;
+        const checked = attrs.querySelector(`input[name="${radioName}"]:checked`);
+        return checked ? checked.value : null;
+    }
+    function resetNewPlayerAttrs() {
+        document.querySelectorAll('#newPlayerAttrs input[type="radio"]').forEach(radio => {
+            radio.checked = false;
+        });
+    }
+
     function addPlayerWithGender(gender) {
         const playerNameInput = document.getElementById('newPlayerInput');
         const playerNumberInput = document.getElementById('newPlayerNumberInput');
         const playerName = playerNameInput ? playerNameInput.value.trim() : '';
         const playerNumber = playerNumberInput ? (playerNumberInput.value.trim() || null) : null;
-        
+
         if (playerName && currentTeam.teamRoster.some(player => playerNamesMatch(player.name, playerName))) {
             alert('A player with this name already exists');
+            playerNameInput?.focus();
             return;
         }
         if (playerName) {
             const numberValue = validateJerseyNumber(playerNumber);
             // If validation was cancelled (returned null when input was provided), don't add player
             if (playerNumber && numberValue === null) {
+                playerNumberInput?.focus();
                 return;
             }
-            
+
             // Phase 4: Create player with ID and queue for cloud sync
             const newPlayer = new Player(playerName, "", gender, numberValue);
+            // Hybrid / Crossover are stored as null, as the Edit Player dialog does.
+            newPlayer.position = normalizePositionValue(readNewPlayerAttr('newPlayerPosition'));
+            newPlayer.defaultLine = normalizeDefaultLineValue(readNewPlayerAttr('newPlayerLine'));
             currentTeam.teamRoster.push(newPlayer);
             
             // Add player ID to team's playerIds array
@@ -661,6 +682,8 @@ function validateJerseyNumber(input) {
                     nickname: newPlayer.nickname,
                     gender: newPlayer.gender,
                     number: newPlayer.number,
+                    position: newPlayer.position,
+                    defaultLine: newPlayer.defaultLine,
                     createdAt: newPlayer.createdAt,
                     updatedAt: newPlayer.updatedAt,
                     // The team sync below is a separate request that lands
@@ -716,8 +739,13 @@ function validateJerseyNumber(input) {
         if (playerNumberInput) {
             playerNumberInput.value = '';
         }
+        resetNewPlayerAttrs();
+        // Rapid entry from a keyboard: name, Tab, number, Tab, Space on
+        // +FMP/+MMP — then straight back to the name field for the next
+        // player, with no Shift+Tab to get there.
+        playerNameInput?.focus();
     }
-    
+
     const addFMPPlayerBtn = document.getElementById('addFMPPlayerBtn');
     if (addFMPPlayerBtn) {
         addFMPPlayerBtn.addEventListener('click', () => {
