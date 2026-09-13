@@ -193,7 +193,7 @@ function renderDirectory() {
     return `
         <div class="settings-section">
             <h3>Directory</h3>
-            <p class="section-description">Who can send to and receive from the lists. Coaches come from the team's members automatically. Player addresses are in the roster section below.</p>
+            <p class="section-description">Who can send to and receive from the lists. Coaches come from the team's members automatically. Player addresses are in the roster section below. A person can have several addresses, comma-separated: each one receives list mail and any of them may post.</p>
             <div class="members-list">
                 ${coaches.map(renderContact).join('')}
                 ${others.map(renderContact).join('') || '<p class="info-message">No parents or managers yet.</p>'}
@@ -218,7 +218,7 @@ function renderDirectory() {
                 <h4>Add a parent, guardian or manager</h4>
                 <div class="mail-form-grid">
                     <label>Name <input type="text" name="name" class="url-input" maxlength="80" required></label>
-                    <label>Email <input type="email" name="email" class="url-input" required autocapitalize="none"></label>
+                    <label>Email (one or more, comma-separated) <input type="email" multiple name="email" class="url-input" required autocapitalize="none" placeholder="parent@example.com, other@example.com"></label>
                     <label>Role
                         <select name="kind">
                             <option value="guardian">Parent / guardian</option>
@@ -238,11 +238,26 @@ function renderDirectory() {
         </div>`;
 }
 
+function contactEmails(c) {
+    const list = Array.isArray(c.emails) && c.emails.length ? c.emails : [c.email];
+    return list.filter(Boolean);
+}
+
+function contactBounces(c) {
+    const map = c.bounces && typeof c.bounces === 'object' ? c.bounces : {};
+    const entries = Object.entries(map);
+    if (!entries.length && c.bounce && c.email) entries.push([c.email, c.bounce]);   // pre-multi-address shape
+    return entries;
+}
+
 function renderContact(c) {
     const playerNames = (c.playerIds || []).map(id => (state.roster || []).find(p => p.id === id)?.name || id);
     const flags = [];
     if (c.status && c.status !== 'active') flags.push(`<span class="mail-flag">${esc(c.status)}</span>`);
-    if (c.bounce) flags.push(`<span class="mail-flag mail-flag-bad" title="${escAttr(c.bounce.detail || '')}">${esc(c.bounce.kind === 'complaint' ? 'complained' : c.bounce.kind + ' bounce')}</span>`);
+    const bounces = contactBounces(c);
+    for (const [addr, b] of bounces) {
+        flags.push(`<span class="mail-flag mail-flag-bad" title="${escAttr((b.detail || '') + ' — ' + addr)}">${esc(b.kind === 'complaint' ? 'complained' : b.kind + ' bounce')}${contactEmails(c).length > 1 ? ': ' + esc(addr) : ''}</span>`);
+    }
     if ((c.optOut || []).length) flags.push(`<span class="mail-flag">opted out: ${esc(c.optOut.join(', '))}</span>`);
     const derived = c.derived;
     return `
@@ -251,13 +266,13 @@ function renderContact(c) {
                 <span class="member-icon">${c.kind === 'coach' ? '🎯' : c.kind === 'guardian' ? '👪' : c.kind === 'manager' ? '📋' : '✉️'}</span>
                 <div class="member-details">
                     <span class="member-name">${esc(c.name)} ${flags.join(' ')}</span>
-                    <span class="member-email">${esc(c.email || '(no email)')}${playerNames.length ? ` · ${esc(playerNames.join(', '))}` : ''}</span>
+                    <span class="member-email">${esc(contactEmails(c).join(', ') || '(no email)')}${playerNames.length ? ` · ${esc(playerNames.join(', '))}` : ''}</span>
                 </div>
                 <span class="member-role role-${c.kind === 'coach' ? 'coach' : 'viewer'}">${esc(KIND_LABELS[c.kind] || c.kind)}</span>
             </div>
             ${derived ? '' : `
             <div class="mail-contact-actions">
-                ${c.bounce ? `<button class="icon-button" data-action="clear-bounce" data-id="${escAttr(c.id)}" title="Deliver to this address again"><i class="fas fa-redo"></i></button>` : ''}
+                ${bounces.length ? `<button class="icon-button" data-action="clear-bounce" data-id="${escAttr(c.id)}" title="Deliver to this contact again"><i class="fas fa-redo"></i></button>` : ''}
                 <button class="icon-button" data-action="toggle-status" data-id="${escAttr(c.id)}" data-status="${escAttr(c.status || 'active')}" title="${c.status === 'active' ? 'Pause delivery' : 'Resume delivery'}"><i class="fas fa-${c.status === 'active' ? 'pause' : 'play'}"></i></button>
                 <button class="icon-button remove-member-btn" data-action="remove-contact" data-id="${escAttr(c.id)}" data-name="${escAttr(c.name)}" title="Remove from directory"><i class="fas fa-times"></i></button>
             </div>`}
@@ -272,7 +287,7 @@ function renderRoster() {
     return `
         <div class="settings-section">
             <h3>Player addresses</h3>
-            <p class="section-description">Writing to a player's address reaches the player (if they have an email), all of their guardians, and every coach. Set a player's own email here if they have one; edit the address name if two players share a first name.</p>
+            <p class="section-description">Writing to a player's address reaches the player (if they have an email), all of their guardians, and every coach. Set a player's own email here if they have one (several, comma-separated, is fine); edit the address name if two players share a first name.</p>
             ${missing.length ? `<button class="invite-btn viewer-invite" data-action="sync-aliases"><i class="fas fa-sync"></i> Add addresses for ${missing.length} new player${missing.length === 1 ? '' : 's'}</button>` : ''}
             <div class="members-list">
                 ${roster.map(p => {
@@ -283,14 +298,14 @@ function renderRoster() {
                     <div class="member-item mail-player-row" data-contact-id="${escAttr(c.id)}">
                         <div class="member-info">
                             <div class="member-details">
-                                <span class="member-name">${esc(p.name)} ${c.bounce ? '<span class="mail-flag mail-flag-bad">bounce</span>' : ''}</span>
+                                <span class="member-name">${esc(p.name)} ${contactBounces(c).length ? '<span class="mail-flag mail-flag-bad">bounce</span>' : ''}</span>
                                 <span class="member-email"><code>${esc(p.address || '')}</code></span>
                                 <span class="member-email">${guardians.length ? 'Guardians: ' + esc(guardians.join(', ')) : '<em>No guardians linked yet</em>'}</span>
                             </div>
                         </div>
                         <form class="mail-player-form" data-form="player" data-id="${escAttr(c.id)}">
                             <input type="text" name="alias" value="${escAttr(c.alias || '')}" maxlength="24" class="url-input mail-alias-input" autocapitalize="none" title="Address name" aria-label="Address name">
-                            <input type="email" name="email" value="${escAttr(c.email || '')}" placeholder="player's own email (optional)" class="url-input" autocapitalize="none" aria-label="Player email">
+                            <input type="email" multiple name="email" value="${escAttr(contactEmails(c).join(', '))}" placeholder="player's own email(s), optional" class="url-input" autocapitalize="none" aria-label="Player email">
                             <button type="submit" class="icon-button" title="Save"><i class="fas fa-save"></i></button>
                         </form>
                     </div>`;
@@ -427,7 +442,7 @@ async function onContentClick(event) {
             await api(`/contacts/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
             await refreshQuiet();
         } else if (action === 'clear-bounce') {
-            await api(`/contacts/${id}`, { method: 'PATCH', body: JSON.stringify({ bounce: null }) });
+            await api(`/contacts/${id}`, { method: 'PATCH', body: JSON.stringify({ bounces: null }) });
             await refreshQuiet();
         } else if (action === 'prefill') {
             const form = document.querySelector('form[data-form="add-contact"]');
@@ -520,13 +535,13 @@ async function onContentSubmit(event) {
             const body = {
                 kind: form.elements.kind.value,
                 name: form.elements.name.value.trim(),
-                email: form.elements.email.value.trim(),
+                emails: form.elements.email.value.trim(),      // the server splits on commas
                 playerIds: form.elements.kind.value === 'guardian' ? playerIds : [],
             };
             await api('/contacts', { method: 'POST', body: JSON.stringify(body) });
             await refreshQuiet();
         } else if (kind === 'player') {
-            const body = { alias: form.elements.alias.value.trim(), email: form.elements.email.value.trim() || null };
+            const body = { alias: form.elements.alias.value.trim(), emails: form.elements.email.value.trim() };
             await api(`/contacts/${form.dataset.id}`, { method: 'PATCH', body: JSON.stringify(body) });
             await refreshQuiet();
         } else if (kind === 'list') {

@@ -201,11 +201,51 @@ class TestStorage:
         tid = configured["team_id"]
         assert ms.record_mail_bounce("DAD@x.test", "hard", "550 no such user") == 1
         dad = ms.get_mail_contact(tid, configured["dad"]["id"])
-        assert dad["bounce"]["kind"] == "hard"
+        assert dad["bounces"]["dad@x.test"]["kind"] == "hard"
         assert ms.read_mail_log(tid, 1)[0]["action"] == "bounce"
-        ms.update_mail_contact(tid, dad["id"], {"bounce": None})
-        assert ms.get_mail_contact(tid, dad["id"])["bounce"] is None
+        ms.update_mail_contact(tid, dad["id"], {"bounce": None})          # old clear form still accepted
+        assert ms.get_mail_contact(tid, dad["id"])["bounces"] == {}
         assert ms.record_mail_bounce("nobody@x.test", "hard") == 0
+
+    def test_multiple_addresses(self, configured):
+        from storage import mail_storage as ms
+        tid = configured["team_id"]
+        gran = ms.add_mail_contact(tid, {"kind": "guardian", "name": "Gran", "email": "Gran@x.test, gran2@x.test; gran3@x.test",
+                                         "playerIds": [configured["alice"]]})
+        assert gran["emails"] == ["gran@x.test", "gran2@x.test", "gran3@x.test"] and gran["email"] == "gran@x.test"
+        with pytest.raises(ValueError):   # shares one address with an existing guardian
+            ms.add_mail_contact(tid, {"kind": "guardian", "name": "Dup", "emails": ["new@x.test", "gran2@x.test"], "playerIds": [configured["bob"]]})
+        with pytest.raises(ValueError):
+            ms.add_mail_contact(tid, {"kind": "manager", "name": "Bad", "emails": "ok@x.test, not-an-address"})
+        assert ms.record_mail_bounce("gran2@x.test", "hard") == 1
+        gran = ms.update_mail_contact(tid, gran["id"], {"emails": ["gran@x.test", "gran3@x.test"]})   # dropped address takes its bounce along
+        assert gran["emails"] == ["gran@x.test", "gran3@x.test"] and gran["bounces"] == {}
+        bob = next(c for c in ms.get_mail_directory(tid)["contacts"] if c["kind"] == "player" and c["playerIds"] == [configured["bob"]])
+        bob = ms.update_mail_contact(tid, bob["id"], {"emails": "bob@x.test bob.school@x.test"})
+        assert bob["emails"] == ["bob@x.test", "bob.school@x.test"]
+        bob = ms.update_mail_contact(tid, bob["id"], {"emails": ""})
+        assert bob["emails"] == [] and bob["email"] is None
+
+    def test_legacy_single_email_directory_reads_cleanly(self, configured):
+        """A directory written before multi-address support (one ``email``,
+        one ``bounce``) needs no migration."""
+        import json
+        from storage import mail_storage as ms
+        from mail import policy, relay
+        tid = configured["team_id"]
+        path = ms._directory_file(tid)
+        raw = json.loads(path.read_text())
+        for c in raw["contacts"]:
+            c.pop("emails", None); c.pop("bounces", None)
+            c["bounce"] = {"at": "x", "kind": "soft", "detail": "greylisted"} if c["name"] == "Mom Smith" else None
+        path.write_text(json.dumps(raw))
+        d = ms.get_mail_directory(tid)
+        mom = next(c for c in d["contacts"] if c["name"] == "Mom Smith")
+        assert mom["emails"] == ["mom@x.test"] and mom["email"] == "mom@x.test"
+        assert mom["bounces"] == {"mom@x.test": {"at": "x", "kind": "soft", "detail": "greylisted"}} and "bounce" not in mom
+        assert policy.find_contacts_by_email(d["contacts"], "mom@x.test")[0]["name"] == "Mom Smith"
+        r = relay.process_inbound(raw_mail("dad@x.test", f"parents-cudo@{DOMAIN}"), envelope_recipients=[f"parents-cudo@{DOMAIN}"])
+        assert r[0].action == "relay" and "mom@x.test" in configured["outbox"].sent()[-1]["recipients"]
 
 
 # =============================================================================
@@ -366,6 +406,30 @@ class TestRelay:
         assert sorted(sends[1]["recipients"]) == ["coach2@x.test", "coach@x.test"]
         assert "X-Breakside-List: coaches-cudo" in sends[1]["raw"].decode()
 
+    def test_contacts_with_several_addresses(self, configured):
+        from mail import relay
+        from storage import mail_storage as ms
+        tid = configured["team_id"]
+        bob = next(c for c in ms.get_mail_directory(tid)["contacts"] if c["kind"] == "player" and c["playerIds"] == [configured["bob"]])
+        ms.update_mail_contact(tid, bob["id"], {"emails": ["bob@x.test", "bob.school@x.test"]})
+        ms.update_mail_contact(tid, configured["dad"]["id"], {"emails": ["dad@x.test", "dad.work@x.test"]})
+        # Coach writes to Bob: Bob's copy goes to both of his addresses; Dad's copy to both of his.
+        r = relay.process_inbound(raw_mail("coach@x.test", f"bob-cudo@{DOMAIN}"), envelope_recipients=[f"bob-cudo@{DOMAIN}"])
+        assert r[0].recipients == 5
+        sends = {tuple(sorted(s["recipients"])) for s in configured["outbox"].sent()}
+        assert ("bob.school@x.test", "bob@x.test") in sends
+        assert ("dad.work@x.test", "dad@x.test") in sends
+        assert ("coach2@x.test",) in sends
+        # Dad posts from his work address: neither of his addresses gets the relay.
+        r = relay.process_inbound(raw_mail("Dad <dad.work@x.test>", f"parents-cudo@{DOMAIN}"), envelope_recipients=[f"parents-cudo@{DOMAIN}"])
+        assert r[0].action == "relay"
+        assert sorted(configured["outbox"].sent()[-1]["recipients"]) == ["carol@x.test", "coach2@x.test", "coach@x.test", "mom@x.test"]
+        # A hard bounce on one address leaves the other deliverable.
+        ms.record_mail_bounce("bob.school@x.test", "hard")
+        r = relay.process_inbound(raw_mail("mom@x.test", f"bob-cudo@{DOMAIN}"), envelope_recipients=[f"bob-cudo@{DOMAIN}"])
+        sends = {tuple(sorted(s["recipients"])) for s in configured["outbox"].sent()[-3:]}
+        assert ("bob@x.test",) in sends
+
     def test_header_fallback_when_no_envelope(self, configured):
         from mail import relay
         r = relay.process_inbound(raw_mail("mom@x.test", f"Parents <parents-cudo@{DOMAIN}>", extra=[f"Cc: coaches-cudo@{DOMAIN}"]))
@@ -442,9 +506,13 @@ class TestApi:
         assert client.patch(f"/api/teams/{tid}/mail/lists/all", json={"replyTo": "me"}).status_code == 400
         assert client.patch(f"/api/teams/{tid}/mail/lists/ghost", json={"enabled": True}).status_code == 400
 
-        r = client.post(f"/api/teams/{tid}/mail/contacts", json={"kind": "guardian", "name": "Gran", "email": "gran@x.test", "playerIds": [configured["alice"]]})
+        r = client.post(f"/api/teams/{tid}/mail/contacts", json={"kind": "guardian", "name": "Gran", "emails": "gran@x.test, gran.work@x.test", "playerIds": [configured["alice"]]})
         assert r.status_code == 200
         cid = r.json()["contact"]["id"]
+        assert r.json()["contact"]["emails"] == ["gran@x.test", "gran.work@x.test"]
+        view = client.get(f"/api/teams/{tid}/mail").json()
+        assert next(c for c in view["contacts"] if c["id"] == cid)["emails"] == ["gran@x.test", "gran.work@x.test"]
+        assert len([x for x in view["lists"]["parents"]["recipients"] if x["id"] == cid]) == 2   # one entry per address
         assert client.post(f"/api/teams/{tid}/mail/contacts", json={"kind": "guardian", "name": "X", "email": "x@x.test"}).status_code == 400
         r = client.patch(f"/api/teams/{tid}/mail/contacts/{cid}", json={"status": "alumni", "optOut": ["all"]})
         assert r.status_code == 200 and r.json()["contact"]["status"] == "alumni"
@@ -563,8 +631,8 @@ class TestInbound:
         assert sends[0]["from"] == f"parents-cudo@{DOMAIN}"                                    # k1 relayed
         assert ms.list_mail_quarantine(configured["team_id"])[0]["reason"] == "dmarc-fail"      # k2 held
         tid = configured["team_id"]
-        assert ms.get_mail_contact(tid, configured["dad"]["id"])["bounce"]["kind"] == "hard"
-        assert ms.get_mail_contact(tid, configured["mgr"]["id"])["bounce"]["kind"] == "complaint"
+        assert ms.get_mail_contact(tid, configured["dad"]["id"])["bounces"]["dad@x.test"]["kind"] == "hard"
+        assert ms.get_mail_contact(tid, configured["mgr"]["id"])["bounces"]["carol@x.test"]["kind"] == "complaint"
 
     def test_parse_and_verdicts(self):
         from mail import inbound

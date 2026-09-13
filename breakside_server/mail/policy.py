@@ -115,14 +115,23 @@ def verdict_reason(verdicts: Optional[Mapping[str, str]]) -> Optional[tuple]:
 # 3. Senders and posting
 # ==========================================================================
 
+def contact_addresses(contact: Mapping[str, Any]) -> List[str]:
+    """Every address on a contact, tolerating the pre-2026-09-12 single-``email`` shape."""
+    emails = contact.get("emails")
+    if isinstance(emails, list):
+        return [normalize_email(e) for e in emails if e]
+    single = normalize_email(contact.get("email") or "")
+    return [single] if single else []
+
+
 def find_contacts_by_email(contacts: Iterable[Dict[str, Any]], email: str) -> List[Dict[str, Any]]:
-    """Every ACTIVE contact with this address (a parent-coach matches twice)."""
+    """Every ACTIVE contact carrying this address (a parent-coach matches twice)."""
     email = normalize_email(email)
     if not email:
         return []
     return [
         c for c in contacts
-        if normalize_email(c.get("email") or "") == email and c.get("status", "active") == "active"
+        if email in contact_addresses(c) and c.get("status", "active") == "active"
     ]
 
 
@@ -137,26 +146,38 @@ def may_post(list_settings: Mapping[str, Any], sender_kinds: Iterable[str]) -> b
 # 4. Recipients
 # ==========================================================================
 
-def deliverable(contact: Mapping[str, Any]) -> bool:
+def deliverable_addresses(contact: Mapping[str, Any]) -> List[str]:
+    """The addresses on a contact that may be sent to right now: the contact
+    is active, and the address has no hard bounce or complaint on record."""
     if contact.get("status", "active") != "active":
-        return False
-    if not contact.get("email"):
-        return False
-    bounce = contact.get("bounce") or {}
-    if bounce.get("kind") in BLOCKING_BOUNCES:
-        return False
-    return True
+        return []
+    bounces = contact.get("bounces") if isinstance(contact.get("bounces"), dict) else {}
+    legacy = contact.get("bounce") or None
+    first = normalize_email(contact.get("email") or "")
+    out = []
+    for address in contact_addresses(contact):
+        record = bounces.get(address) or (legacy if legacy and address == first else None)
+        if record and record.get("kind") in BLOCKING_BOUNCES:
+            continue
+        out.append(address)
+    return out
 
 
-def _dedupe(contacts: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def deliverable(contact: Mapping[str, Any]) -> bool:
+    return bool(deliverable_addresses(contact))
+
+
+def _expand(contacts: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """One delivery entry per deliverable address: the contact's fields with
+    ``email`` set to that one address, deduplicated across contacts."""
     seen = set()
     out = []
     for c in contacts:
-        email = normalize_email(c.get("email") or "")
-        if not email or email in seen:
-            continue
-        seen.add(email)
-        out.append(c)
+        for address in deliverable_addresses(c):
+            if address in seen:
+                continue
+            seen.add(address)
+            out.append({**c, "email": address})
     return out
 
 
@@ -172,8 +193,10 @@ def recipients_for(kind: str, contacts: Iterable[Dict[str, Any]], *,
     """Expand a list into deliverable, deduplicated contacts.
 
     Returns None when a player alias does not exist (the caller quarantines
-    or drops). Does NOT remove the sender; ``decide`` does that, because the
-    same expansion serves the "who's on this list" view in the admin screen.
+    or drops). Each entry is a contact with ``email`` set to ONE of its
+    addresses (a contact with two addresses yields two entries). Does NOT
+    remove the sender; ``decide`` does that, because the same expansion
+    serves the "who's on this list" view in the admin screen.
     """
     contacts = list(contacts)
     if kind == "player":
@@ -191,8 +214,8 @@ def recipients_for(kind: str, contacts: Iterable[Dict[str, Any]], *,
             return None
         chosen = [c for c in contacts if c.get("kind") in kinds]
         opt_key = kind
-    chosen = [c for c in chosen if deliverable(c) and opt_key not in (c.get("optOut") or [])]
-    return _dedupe(chosen)
+    chosen = [c for c in chosen if opt_key not in (c.get("optOut") or [])]
+    return _expand(chosen)
 
 
 # ==========================================================================
@@ -242,8 +265,13 @@ def decide(directory: Mapping[str, Any], kind: str, alias: Optional[str],
     if kind == "player":
         decision.player = find_player_contact(contacts, alias or "")
 
-    sender_norm = normalize_email(sender_email)
-    recipients = [c for c in expanded if normalize_email(c.get("email") or "") != sender_norm]
+    # The sender's own copy is dropped at every address they hold, not just
+    # the one they wrote from: a parent posting from work should not get the
+    # relay at home.
+    sender_addresses = {normalize_email(sender_email)}
+    for match in matches:
+        sender_addresses.update(contact_addresses(match))
+    recipients = [c for c in expanded if normalize_email(c.get("email") or "") not in sender_addresses]
     if len(recipients) > MAX_RECIPIENTS:
         decision.action = "quarantine"
         decision.reason = "too-many-recipients"

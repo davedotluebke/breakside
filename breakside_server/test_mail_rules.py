@@ -138,6 +138,18 @@ class TestRecipients:
         assert emails(policy.recipients_for("parents", contacts)) == ["c1@x.test", "soft@x.test"]
         assert emails(policy.recipients_for("all", contacts)) == ["c1@x.test", "opt@x.test", "soft@x.test"]
 
+    def test_several_addresses_per_contact(self):
+        two = contact("guardian", "g1@x.test", playerIds=["Alice-1"], emails=["g1@x.test", "g2@x.test"],
+                      bounces={"g2@x.test": {"kind": "hard", "at": "x"}})
+        assert policy.contact_addresses(two) == ["g1@x.test", "g2@x.test"]
+        assert policy.deliverable_addresses(two) == ["g1@x.test"]
+        assert emails(policy.recipients_for("parents", [COACH1, two])) == ["c1@x.test", "g1@x.test"]
+        assert policy.find_contacts_by_email([two], "G2@x.test") == [two]
+        d = policy.decide(DIRECTORY, "parents", None, "g2@x.test", [COACH1, MOM, two])
+        assert emails(d.recipients) == ["c1@x.test", "mom@x.test"]      # excluded at g1 too
+        assert policy.contact_addresses({"email": "legacy@x.test"}) == ["legacy@x.test"]
+        assert policy.deliverable_addresses({"email": "legacy@x.test", "bounce": {"kind": "hard"}}) == []
+
     def test_dedupe_parent_coach(self):
         both = [COACH1, contact("guardian", "c1@x.test", playerIds=["Alice-1"])]
         assert emails(policy.recipients_for("parents", both)) == ["c1@x.test"]

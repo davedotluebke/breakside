@@ -28,11 +28,12 @@ def derived_coach_contacts(team_id: str) -> List[Dict[str, Any]]:
             "kind": "coach",
             "name": user.get("displayName") or email.split("@", 1)[0],
             "email": email,
+            "emails": [email],
             "playerIds": [],
             "alias": None,
             "status": "active",
             "optOut": [],
-            "bounce": None,
+            "bounces": {},
             "derived": True,
             "userId": membership["userId"],
         })
@@ -126,7 +127,7 @@ def directory_view(team_id: str) -> Dict[str, Any]:
         }
 
     contacts = effective_contacts(team_id, directory)
-    directory_emails = {c["email"] for c in contacts if c.get("email")}
+    directory_emails = {e for c in contacts for e in (c.get("emails") or [])}
     for member in members:
         member["inDirectory"] = bool(member["email"] and member["email"] in directory_emails)
     alias_by_player = {c["playerIds"][0]: c for c in directory["contacts"]

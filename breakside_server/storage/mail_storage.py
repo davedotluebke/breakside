@@ -37,9 +37,12 @@ LIST_KINDS = ("all", "parents", "coaches", "staff", "players", "player")
 POSTER_KINDS = ("coach", "manager", "guardian", "player", "other")
 REPLY_TO_MODES = ("author", "list", "coaches")
 
-# Editable per-contact fields. ``bounce`` may only be cleared (set to None)
-# through the API; the inbound path is what sets it.
-CONTACT_FIELDS = ("kind", "name", "email", "playerIds", "alias", "status", "optOut", "notes")
+# Editable per-contact fields. ``emails`` accepts a list or a string of
+# comma/semicolon/space-separated addresses; ``email`` (single) is accepted
+# as an alias for it and is always stored as the first address, so anything
+# reading the old shape keeps working. ``bounces`` (per address) may only be
+# cleared (set to None) through the API; the inbound path is what sets it.
+CONTACT_FIELDS = ("kind", "name", "email", "emails", "playerIds", "alias", "status", "optOut", "notes")
 LIST_FIELDS = ("enabled", "postPolicy", "subjectTag", "replyTo")
 
 QUARANTINE_TTL_DAYS = 14
@@ -130,12 +133,47 @@ def default_lists(display_name: str) -> Dict[str, Dict[str, Any]]:
     }
 
 
+def normalize_contact(contact: Dict[str, Any]) -> Dict[str, Any]:
+    """Bring a stored contact up to the current shape, in place.
+
+    Contacts written before 2026-09-12 carry a single ``email`` and a single
+    ``bounce``; the current shape is ``emails`` (list) plus ``bounces`` (a map
+    keyed by address). Normalizing on read means a directory never needs a
+    migration: old records read correctly and are rewritten in the new shape
+    the next time anything saves the directory. ``email`` is kept as the
+    first address for the old readers (and the admin screen's sort/filter).
+    """
+    emails = contact.get("emails")
+    if not isinstance(emails, list):
+        single = contact.get("email")
+        emails = [single] if single else []
+    cleaned: List[str] = []
+    for value in emails:
+        if isinstance(value, str) and value.strip():
+            address = value.strip().lower()
+            if address not in cleaned:
+                cleaned.append(address)
+    contact["emails"] = cleaned
+    contact["email"] = cleaned[0] if cleaned else None
+    bounces = contact.get("bounces")
+    if not isinstance(bounces, dict):
+        legacy = contact.pop("bounce", None)
+        bounces = {contact["email"]: legacy} if (legacy and contact["email"]) else {}
+    else:
+        contact.pop("bounce", None)
+    contact["bounces"] = {k: v for k, v in bounces.items() if k in cleaned and v}
+    return contact
+
+
 def get_mail_directory(team_id: str) -> Optional[Dict[str, Any]]:
     path = _directory_file(team_id)
     if not path.exists():
         return None
     with open(path, "r") as f:
-        return json.load(f)
+        directory = json.load(f)
+    for contact in directory.get("contacts") or []:
+        normalize_contact(contact)
+    return directory
 
 
 def _save_directory(directory: Dict[str, Any]) -> None:
@@ -221,9 +259,12 @@ def list_mail_directories() -> List[Dict[str, Any]]:
     for path in sorted(base.glob("*/directory.json")):
         try:
             with open(path, "r") as f:
-                found.append(json.load(f))
+                directory = json.load(f)
         except (json.JSONDecodeError, IOError):
             continue
+        for contact in directory.get("contacts") or []:
+            normalize_contact(contact)
+        found.append(directory)
     return found
 
 
@@ -278,13 +319,31 @@ def update_mail_list(team_id: str, kind: str, updates: Dict[str, Any]) -> Dict[s
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
-def _clean_email(value: Any) -> Optional[str]:
-    if value is None or value == "":
-        return None
-    email = str(value).strip().lower()
-    if not _EMAIL_RE.match(email):
-        raise ValueError(f"\"{value}\" is not a valid email address.")
-    return email
+def _clean_emails(value: Any) -> List[str]:
+    """Parse one address, a separated string, or a list into a clean list.
+
+    Accepts ``"a@x.test"``, ``"a@x.test, b@y.test"`` (commas, semicolons or
+    whitespace) or ``["a@x.test", "b@y.test"]``; lowercases, dedupes, keeps
+    order, and rejects anything that is not shaped like an address.
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        parts = re.split(r"[,;\s]+", value)
+    elif isinstance(value, list):
+        parts = [str(v) for v in value]
+    else:
+        raise ValueError("emails must be an address, a comma-separated string, or a list.")
+    cleaned: List[str] = []
+    for part in parts:
+        address = part.strip().lower()
+        if not address:
+            continue
+        if not _EMAIL_RE.match(address):
+            raise ValueError(f"\"{part.strip()}\" is not a valid email address.")
+        if address not in cleaned:
+            cleaned.append(address)
+    return cleaned
 
 
 def _clean_contact_updates(updates: Dict[str, Any]) -> Dict[str, Any]:
@@ -300,8 +359,10 @@ def _clean_contact_updates(updates: Dict[str, Any]) -> Dict[str, Any]:
         if len(name) > 80:
             raise ValueError("Name is too long (80 characters max).")
         clean["name"] = name
-    if "email" in updates:
-        clean["email"] = _clean_email(updates["email"])
+    if "emails" in updates or "email" in updates:
+        raw = updates["emails"] if "emails" in updates else updates["email"]
+        clean["emails"] = _clean_emails(raw)
+        clean["email"] = clean["emails"][0] if clean["emails"] else None
     if "playerIds" in updates:
         ids = updates["playerIds"] or []
         if not isinstance(ids, list) or not all(isinstance(i, str) and i for i in ids):
@@ -347,7 +408,8 @@ def _validate_contact(directory: Dict[str, Any], contact: Dict[str, Any],
             raise ValueError("Only player contacts have an address name.")
         if kind == "guardian" and not player_ids:
             raise ValueError("A guardian must be linked to at least one player.")
-    if not contact.get("email") and kind != "player":
+    emails = contact.get("emails") or []
+    if not emails and kind != "player":
         raise ValueError("An email address is required.")
     for other in directory["contacts"]:
         if other["id"] == exclude_id:
@@ -356,9 +418,10 @@ def _validate_contact(directory: Dict[str, Any], contact: Dict[str, Any],
             raise ValueError(f"The address name \"{alias}\" is already used by {other['name']}.")
         if kind == "player" and other["kind"] == "player" and other.get("playerIds") == player_ids:
             raise ValueError(f"{other['name']} already has an address on this team.")
-        if (contact.get("email") and other.get("email") == contact["email"]
-                and other["kind"] == kind):
-            raise ValueError(f"{contact['email']} is already in the directory as {other['name']}.")
+        if other["kind"] == kind:
+            shared = [e for e in emails if e in (other.get("emails") or [])]
+            if shared:
+                raise ValueError(f"{shared[0]} is already in the directory as {other['name']}.")
 
 
 def add_mail_contact(team_id: str, contact: Dict[str, Any]) -> Dict[str, Any]:
@@ -367,17 +430,19 @@ def add_mail_contact(team_id: str, contact: Dict[str, Any]) -> Dict[str, Any]:
     clean = _clean_contact_updates(contact)
     if "kind" not in clean or "name" not in clean:
         raise ValueError("kind and name are required.")
+    emails = clean.get("emails", [])
     record = {
         "id": _new_id("mc"),
         "kind": clean["kind"],
         "name": clean["name"],
-        "email": clean.get("email"),
+        "emails": emails,
+        "email": emails[0] if emails else None,
         "playerIds": clean.get("playerIds", []),
         "alias": clean.get("alias"),
         "status": clean.get("status", "active"),
         "optOut": clean.get("optOut", []),
         "notes": clean.get("notes", ""),
-        "bounce": None,
+        "bounces": {},
         "createdAt": _now(),
         "updatedAt": _now(),
     }
@@ -402,10 +467,11 @@ def get_mail_contact(team_id: str, contact_id: str) -> Optional[Dict[str, Any]]:
 
 
 def update_mail_contact(team_id: str, contact_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Edit a contact. ``{"bounce": None}`` clears a recorded bounce so the
-    address is delivered to again; nothing else may write ``bounce``."""
+    """Edit a contact. ``{"bounces": None}`` (or the old ``{"bounce": None}``)
+    clears every recorded bounce so the addresses are delivered to again;
+    nothing else may write bounce state."""
     clean = _clean_contact_updates(updates)
-    clear_bounce = "bounce" in updates and updates["bounce"] is None
+    clear_bounce = any(k in updates and updates[k] is None for k in ("bounce", "bounces"))
     with entity_lock(f"mail:{team_id}"):
         directory = get_mail_directory(team_id)
         if directory is None:
@@ -416,7 +482,11 @@ def update_mail_contact(team_id: str, contact_id: str, updates: Dict[str, Any]) 
             candidate = dict(contact)
             candidate.update(clean)
             if clear_bounce:
-                candidate["bounce"] = None
+                candidate["bounces"] = {}
+            elif "emails" in clean:
+                # An address that was removed takes its bounce record with it.
+                candidate["bounces"] = {k: v for k, v in (candidate.get("bounces") or {}).items()
+                                        if k in candidate["emails"]}
             _validate_contact(directory, candidate, exclude_id=contact_id)
             candidate["updatedAt"] = _now()
             contact.clear()
@@ -457,13 +527,14 @@ def add_player_contacts(team_id: str, players: Iterable[Tuple[str, str, str]]) -
                 "id": _new_id("mc"),
                 "kind": "player",
                 "name": name,
+                "emails": [],
                 "email": None,
                 "playerIds": [player_id],
                 "alias": alias,
                 "status": "active",
                 "optOut": [],
                 "notes": "",
-                "bounce": None,
+                "bounces": {},
                 "createdAt": _now(),
                 "updatedAt": _now(),
             }
@@ -499,8 +570,8 @@ def record_mail_bounce(email: str, kind: str, detail: str = "") -> int:
                 continue
             changed = False
             for contact in directory["contacts"]:
-                if contact.get("email") == email:
-                    contact["bounce"] = {"at": _now(), "kind": kind, "detail": detail[:200]}
+                if email in (contact.get("emails") or []):
+                    contact.setdefault("bounces", {})[email] = {"at": _now(), "kind": kind, "detail": detail[:200]}
                     contact["updatedAt"] = _now()
                     changed = True
                     touched += 1
@@ -686,8 +757,7 @@ def scrub_player_from_mail(player_id: str, *, dry_run: bool = False) -> Dict[str
                     counts["contacts"] += 1
                     if contact.get("alias"):
                         removed_aliases.add(contact["alias"])
-                    if contact.get("email"):
-                        removed_emails.add(contact["email"])
+                    removed_emails.update(contact.get("emails") or [])
                     continue
                 remaining = [i for i in ids if i != player_id]
                 if remaining or contact["kind"] != "guardian":
@@ -696,8 +766,7 @@ def scrub_player_from_mail(player_id: str, *, dry_run: bool = False) -> Dict[str
                     kept.append(contact)
                 else:
                     counts["contacts"] += 1
-                    if contact.get("email"):
-                        removed_emails.add(contact["email"])
+                    removed_emails.update(contact.get("emails") or [])
             if not dry_run and len(kept) != len(directory["contacts"]):
                 directory["contacts"] = kept
                 _save_directory(directory)

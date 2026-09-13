@@ -240,8 +240,8 @@ REASON_TEXT = {
 
 
 def _notify_quarantine(team_id: str, directory: Dict[str, Any], contacts, item: Dict[str, Any], domain: str) -> None:
-    coaches = [c for c in contacts if c.get("kind") == "coach" and policy.deliverable(c)]
-    if not coaches:
+    coach_addresses = [a for c in contacts if c.get("kind") == "coach" for a in policy.deliverable_addresses(c)]
+    if not coach_addresses:
         return
     now = time.time()
     with _notify_lock:
@@ -272,7 +272,7 @@ def _notify_quarantine(team_id: str, directory: Dict[str, Any], contacts, item: 
         list_local=f"coaches-{directory['slug']}",
     )
     try:
-        get_transport().send(from_addr=coaches_address, recipients=[c["email"] for c in coaches], raw=raw)
+        get_transport().send(from_addr=coaches_address, recipients=coach_addresses, raw=raw)
     except TransportError as exc:
         logger.error("mail: quarantine notice for %s failed: %s", team_id, exc)
 

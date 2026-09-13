@@ -872,6 +872,11 @@ somebody else's copy.
 **Data.** `data/mail/_slugs.json` maps slug → team for inbound routing;
 `data/mail/{teamId}/directory.json` holds the slug, per-list settings and the
 contacts (guardians, players with their aliases, managers, "other").
+A contact may carry several addresses (`emails`, with `email` kept as the
+first for the older shape; bounces are recorded per address); every address
+receives list mail, any of them may post, and the sender's own copy is
+dropped at all of them. Directories written with the single-address shape
+are normalized on read, so no migration is needed.
 **Coaches are never stored** — they are derived from team memberships on
 every use, so the coaches list cannot go stale. `log/{YYYY-MM}.jsonl` records
 every relayed, held, dropped and bounced message; `quarantine/` holds
