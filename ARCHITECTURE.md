@@ -851,7 +851,8 @@ list|bulk`, `Auto-Submitted`, mail from a list address) → SES verdicts
 (spam/virus FAIL dropped; DMARC FAIL or SPF+DKIM FAIL quarantined even from
 a known sender, since that is what a spoof looks like) → sender must be in
 the directory → the list's post policy → recipients expanded, deduplicated,
-minus the sender, minus opt-outs, paused/alumni and hard-bounced addresses.
+the author included, minus opt-outs, paused/alumni and hard-bounced
+addresses.
 Unknown senders are **quarantined, never bounced** (bouncing to unknown
 senders is backscatter); coaches get a rate-limited notice and release or
 discard from the screen. Held mail expires after 14 days.
@@ -874,8 +875,9 @@ somebody else's copy.
 contacts (guardians, players with their aliases, managers, "other").
 A contact may carry several addresses (`emails`, with `email` kept as the
 first for the older shape; bounces are recorded per address); every address
-receives list mail, any of them may post, and the sender's own copy is
-dropped at all of them. Directories written with the single-address shape
+receives list mail and any of them may post. The author receives their own
+post too, like any mailing list (Gmail merges it with the Sent copy).
+Directories written with the single-address shape
 are normalized on read, so no migration is needed.
 **Coaches are never stored** — they are derived from team memberships on
 every use, so the coaches list cannot go stale. `log/{YYYY-MM}.jsonl` records

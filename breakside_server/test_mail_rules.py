@@ -146,7 +146,7 @@ class TestRecipients:
         assert emails(policy.recipients_for("parents", [COACH1, two])) == ["c1@x.test", "g1@x.test"]
         assert policy.find_contacts_by_email([two], "G2@x.test") == [two]
         d = policy.decide(DIRECTORY, "parents", None, "g2@x.test", [COACH1, MOM, two])
-        assert emails(d.recipients) == ["c1@x.test", "mom@x.test"]      # excluded at g1 too
+        assert emails(d.recipients) == ["c1@x.test", "g1@x.test", "mom@x.test"]   # author included; g2 is hard-bounced
         assert policy.contact_addresses({"email": "legacy@x.test"}) == ["legacy@x.test"]
         assert policy.deliverable_addresses({"email": "legacy@x.test", "bounce": {"kind": "hard"}}) == []
 
@@ -168,10 +168,11 @@ DIRECTORY = {
 
 
 class TestDecide:
-    def test_relay_excludes_sender(self):
+    def test_relay_includes_author(self):
+        """The author gets their own copy, like on any mailing list."""
         d = policy.decide(DIRECTORY, "parents", None, "mom@x.test", ALL)
         assert d.action == "relay" and d.reason is None
-        assert "mom@x.test" not in emails(d.recipients)
+        assert "mom@x.test" in emails(d.recipients)
         assert d.sender is MOM and d.sender_kinds == ["guardian"]
 
     def test_unknown_sender_quarantined(self):

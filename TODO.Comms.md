@@ -42,7 +42,7 @@ The apex `breakside.pro` MX points at Google Workspace, which is how `help@break
   ```
 
   `Message-ID`, `In-Reply-To`, `References`, attachments and HTML pass through untouched so threads stay intact.
-- **Policy, in order**: drop loops (our own `X-Breakside-List`, `Precedence: list`/`bulk`, `Auto-Submitted`); resolve the slug → team; look up the sender's address in the directory (unknown → quarantine); check the list's post policy (forbidden → quarantine, different reason); expand recipients, dedupe, drop the sender's own copy, honor per-contact opt-outs; relay; log with the SES auth verdicts.
+- **Policy, in order**: drop loops (our own `X-Breakside-List`, `Precedence: list`/`bulk`, `Auto-Submitted`); resolve the slug → team; look up the sender's address in the directory (unknown → quarantine); check the list's post policy (forbidden → quarantine, different reason); expand recipients (the author included, as on any list), dedupe, honor per-contact opt-outs; relay; log with the SES auth verdicts.
 - **Loop/abuse guards**: never relay from a list address; recipient cap; per-sender hourly cap; oversize (SES limits) → notify the (known) sender.
 - **Transport abstraction** so nothing needs AWS locally: `ses` in production, `file` (writes `.eml` to an outbox dir) for dev and tests, plus a dev-only endpoint that accepts a raw MIME body as if it had arrived from the queue.
 

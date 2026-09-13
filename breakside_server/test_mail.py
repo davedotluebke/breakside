@@ -259,18 +259,19 @@ class TestRelay:
         results = relay.process_inbound(raw_mail("Mom Smith <mom@x.test>", f"parents-cudo@{DOMAIN}"),
                                         envelope_recipients=[f"parents-cudo@{DOMAIN}"], source="test")
         assert [r.action for r in results] == ["relay"]
-        assert results[0].recipients == 4
+        assert results[0].recipients == 5
         sends = configured["outbox"].sent()
         assert len(sends) == 1
         assert sends[0]["from"] == f"parents-cudo@{DOMAIN}"
-        assert sorted(sends[0]["recipients"]) == ["carol@x.test", "coach2@x.test", "coach@x.test", "dad@x.test"]
+        # the author is on the envelope too (Gmail merges it with her Sent copy)
+        assert sorted(sends[0]["recipients"]) == ["carol@x.test", "coach2@x.test", "coach@x.test", "dad@x.test", "mom@x.test"]
         head = sends[0]["raw"].split(b"\r\n\r\n")[0].decode()
         assert f"From: Mom Smith via CUDO Parents <parents-cudo@{DOMAIN}>" in head
         assert "Subject: [CUDO Parents] Carpool Saturday" in head
         assert f"Reply-To: CUDO Parents <parents-cudo@{DOMAIN}>" in head
         assert f"To: parents-cudo@{DOMAIN}" in head
         entry = ms.read_mail_log(configured["team_id"], 1)[0]
-        assert entry["action"] == "relayed" and entry["recipients"] == 4 and entry["senderKinds"] == ["guardian"]
+        assert entry["action"] == "relayed" and entry["recipients"] == 5 and entry["senderKinds"] == ["guardian"]
 
     def test_all_list_reply_to_coaches_and_player_blocked(self, configured):
         from mail import relay
@@ -278,7 +279,7 @@ class TestRelay:
         assert results[0].action == "relay"
         head = configured["outbox"].sent()[-1]["raw"].split(b"\r\n\r\n")[0].decode()
         assert f"Reply-To: CUDO coaches <coaches-cudo@{DOMAIN}>" in head
-        assert sorted(configured["outbox"].sent()[-1]["recipients"]) == ["bob@x.test", "carol@x.test", "coach2@x.test", "coach@x.test", "mom@x.test"]
+        assert sorted(configured["outbox"].sent()[-1]["recipients"]) == ["bob@x.test", "carol@x.test", "coach2@x.test", "coach@x.test", "dad@x.test", "mom@x.test"]
         results = relay.process_inbound(raw_mail("Bob <bob@x.test>", f"cudo@{DOMAIN}"), envelope_recipients=[f"cudo@{DOMAIN}"])
         assert (results[0].action, results[0].reason) == ("quarantine", "not-allowed-to-post")
 
@@ -315,7 +316,7 @@ class TestRelay:
         held = ms.list_mail_quarantine(tid)[0]
         before = len(configured["outbox"].sent())
         results = relay.release_quarantine(tid, held["id"], add_sender={"kind": "guardian", "name": "New Parent", "playerIds": [configured["bob"]]})
-        assert results[0].action == "relay" and results[0].recipients == 5
+        assert results[0].action == "relay" and results[0].recipients == 6      # the newly added sender included
         assert ms.list_mail_quarantine(tid) == []
         assert any(c["email"] == "newp@x.test" for c in ms.get_mail_directory(tid)["contacts"])
         assert len(configured["outbox"].sent()) == before + 1
@@ -331,16 +332,16 @@ class TestRelay:
         from mail import relay
         results = relay.process_inbound(raw_mail("Coach Dave <coach@x.test>", f"alice-cudo@{DOMAIN}", subject="Practice"),
                                         envelope_recipients=[f"alice-cudo@{DOMAIN}"])
-        assert results[0].action == "relay" and results[0].recipients == 3
+        assert results[0].action == "relay" and results[0].recipients == 4
         import email as email_lib
         from email import policy as email_policy
-        # Alice has no email; the sender is excluded; guardians and coaches get SEPARATE copies,
-        # and only the guardians' copy carries the marker.
+        # Alice has no email; guardians and coaches (the author among them) get SEPARATE copies,
+        # each group's copy carrying its own marker.
         sends = configured["outbox"].sent()
         assert len(sends) == 2
         by_recipients = {tuple(sorted(s["recipients"])): email_lib.message_from_bytes(s["raw"], policy=email_policy.default) for s in sends}
         guardians = by_recipients[("dad@x.test", "mom@x.test")]
-        coaches = by_recipients[("coach2@x.test",)]
+        coaches = by_recipients[("coach2@x.test", "coach@x.test")]
         assert guardians["Subject"] == "[CUDO] [Parent copy] Practice"
         assert coaches["Subject"] == "[CUDO] [Coach copy] Practice"
         for out in (guardians, coaches):
@@ -348,7 +349,7 @@ class TestRelay:
             assert out["From"].addresses[0].addr_spec == f"alice-cudo@{DOMAIN}"
             assert out["Message-ID"] == "<m1@x.test>"
         from storage import mail_storage as ms
-        assert ms.read_mail_log(configured["team_id"], 1)[0]["copies"] == {"guardian": 2, "coach": 1}
+        assert ms.read_mail_log(configured["team_id"], 1)[0]["copies"] == {"guardian": 2, "coach": 2}
         # A parent's reply carries the marker; the player's own copy must not.
         results = relay.process_inbound(raw_mail("Mom <mom@x.test>", f"bob-cudo@{DOMAIN}", subject="Re: [CUDO] [Parent copy] Practice"),
                                         envelope_recipients=[f"bob-cudo@{DOMAIN}"])
@@ -388,7 +389,7 @@ class TestRelay:
         ms.update_mail_list(configured["team_id"], "players", {"enabled": True})
         r = relay.process_inbound(raw_mail("coach@x.test", f"players-cudo@{DOMAIN}"), envelope_recipients=[f"players-cudo@{DOMAIN}"])
         assert r[0].action == "relay"
-        assert sorted(configured["outbox"].sent()[-1]["recipients"]) == ["bob@x.test", "coach2@x.test"]
+        assert sorted(configured["outbox"].sent()[-1]["recipients"]) == ["bob@x.test", "coach2@x.test", "coach@x.test"]
 
     def test_optout_bounce_dedupe_and_multiple_targets(self, configured):
         from mail import relay
@@ -402,7 +403,7 @@ class TestRelay:
                                   envelope_recipients=[f"parents-cudo@{DOMAIN}", f"coaches-cudo@{DOMAIN}"])
         assert [x.action for x in r] == ["relay", "relay"]
         sends = configured["outbox"].sent()
-        assert sorted(sends[0]["recipients"]) == ["coach2@x.test", "coach@x.test"]        # mom opted out, carol bounced, dad is sender
+        assert sorted(sends[0]["recipients"]) == ["coach2@x.test", "coach@x.test", "dad@x.test"]   # mom opted out, carol bounced, dad (author) included
         assert sorted(sends[1]["recipients"]) == ["coach2@x.test", "coach@x.test"]
         assert "X-Breakside-List: coaches-cudo" in sends[1]["raw"].decode()
 
@@ -415,15 +416,15 @@ class TestRelay:
         ms.update_mail_contact(tid, configured["dad"]["id"], {"emails": ["dad@x.test", "dad.work@x.test"]})
         # Coach writes to Bob: Bob's copy goes to both of his addresses; Dad's copy to both of his.
         r = relay.process_inbound(raw_mail("coach@x.test", f"bob-cudo@{DOMAIN}"), envelope_recipients=[f"bob-cudo@{DOMAIN}"])
-        assert r[0].recipients == 5
+        assert r[0].recipients == 6
         sends = {tuple(sorted(s["recipients"])) for s in configured["outbox"].sent()}
         assert ("bob.school@x.test", "bob@x.test") in sends
         assert ("dad.work@x.test", "dad@x.test") in sends
-        assert ("coach2@x.test",) in sends
-        # Dad posts from his work address: neither of his addresses gets the relay.
+        assert ("coach2@x.test", "coach@x.test") in sends
+        # Dad posts from his work address: both of his addresses get the relay, like everyone else's.
         r = relay.process_inbound(raw_mail("Dad <dad.work@x.test>", f"parents-cudo@{DOMAIN}"), envelope_recipients=[f"parents-cudo@{DOMAIN}"])
         assert r[0].action == "relay"
-        assert sorted(configured["outbox"].sent()[-1]["recipients"]) == ["carol@x.test", "coach2@x.test", "coach@x.test", "mom@x.test"]
+        assert sorted(configured["outbox"].sent()[-1]["recipients"]) == ["carol@x.test", "coach2@x.test", "coach@x.test", "dad.work@x.test", "dad@x.test", "mom@x.test"]
         # A hard bounce on one address leaves the other deliverable.
         ms.record_mail_bounce("bob.school@x.test", "hard")
         r = relay.process_inbound(raw_mail("mom@x.test", f"bob-cudo@{DOMAIN}"), envelope_recipients=[f"bob-cudo@{DOMAIN}"])

@@ -19,8 +19,9 @@ The rules, in the order relay.py applies them:
 3. Sender. Unknown address → quarantine. Known but the list's post policy
    excludes their kind → quarantine (different reason, so the coach can see
    "Alice's dad tried to post to the coaches list").
-4. Recipients. Expanded from the directory, minus the sender, minus opt-outs,
-   minus paused / alumni / hard-bounced contacts, deduplicated by address.
+4. Recipients. Expanded from the directory, the author included, minus
+   opt-outs, minus paused / alumni / hard-bounced contacts, deduplicated by
+   address.
 """
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Mapping, Optional
@@ -194,9 +195,8 @@ def recipients_for(kind: str, contacts: Iterable[Dict[str, Any]], *,
 
     Returns None when a player alias does not exist (the caller quarantines
     or drops). Each entry is a contact with ``email`` set to ONE of its
-    addresses (a contact with two addresses yields two entries). Does NOT
-    remove the sender; ``decide`` does that, because the same expansion
-    serves the "who's on this list" view in the admin screen.
+    addresses (a contact with two addresses yields two entries). The same
+    expansion serves the "who's on this list" view in the admin screen.
     """
     contacts = list(contacts)
     if kind == "player":
@@ -265,13 +265,14 @@ def decide(directory: Mapping[str, Any], kind: str, alias: Optional[str],
     if kind == "player":
         decision.player = find_player_contact(contacts, alias or "")
 
-    # The sender's own copy is dropped at every address they hold, not just
-    # the one they wrote from: a parent posting from work should not get the
-    # relay at home.
-    sender_addresses = {normalize_email(sender_email)}
-    for match in matches:
-        sender_addresses.update(contact_addresses(match))
-    recipients = [c for c in expanded if normalize_email(c.get("email") or "") not in sender_addresses]
+    # Everyone on the list gets the relay, the author included — the same as
+    # any mailing list. The author's own copy is what confirms delivery and
+    # keeps the thread whole for someone reading forwarded mail elsewhere;
+    # Gmail folds it into the Sent copy by Message-ID, so Gmail users never
+    # see it twice. (2.1.1 dropped the author's copy at every address they
+    # held, which meant a parent who is also a coach never saw their own
+    # posts at all.)
+    recipients = list(expanded)
     if len(recipients) > MAX_RECIPIENTS:
         decision.action = "quarantine"
         decision.reason = "too-many-recipients"
