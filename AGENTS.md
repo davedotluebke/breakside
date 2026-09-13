@@ -52,7 +52,7 @@ Deploys the **working directory** of the checkout containing the script (not com
 
 ### Production deployment
 - **Frontend**: push to `main`. GitHub Actions syncs S3 and invalidates CloudFront. No restart.
-- **Staging moves with production.** Every production deploy (a push to `main` that CI deploys, and any backend deploy) is followed by `./scripts/deploy-staging.sh "<what shipped>"` from the main checkout, so staging always carries the same tree as production. Staging is still where uncommitted work is tried first, but it must never be left behind what is live.
+- **Staging is deployed only when asked.** A push to `main` never triggers a staging deploy on its own: another session may own staging for a feature in progress, and some changes (backend-only, or already checked) go to production without a staging pass. After every production deploy, say that staging is now behind (what it carries versus what just shipped) so the maintainer can ask for `./scripts/deploy-staging.sh "<label>"` if wanted.
 - **Backend**: push to `main` **first** (the box pulls from origin), then:
   ```bash
   ssh breakside 'sudo bash -s' < scripts/deploy-backend.sh
