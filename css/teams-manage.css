@@ -1768,3 +1768,40 @@
 #teamMailContent .icon-status.success {
     color: var(--color-success, var(--text-muted));
 }
+
+/* Inline editing on the Email Lists screen: fields save when you leave them */
+.mail-editable-row {
+    flex-wrap: wrap;
+}
+
+.mail-contact-editor {
+    flex: 1 1 100%;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-lighter);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.mail-field-status {
+    font-size: 0.8rem;
+    margin-left: 6px;
+    white-space: nowrap;
+}
+
+.mail-dialog .modal-content {
+    text-align: left;
+}
+
+.mail-dialog p {
+    margin: 8px 0 16px;
+    overflow-wrap: anywhere;
+}
+
+.mail-dialog .modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}

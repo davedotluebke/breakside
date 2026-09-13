@@ -13,6 +13,7 @@ import { authFetch, API_BASE_URL } from '../store/sync.js';
 import { showScreen } from '../screens/navigation.js';
 import { showTeamSettingsScreen } from './teamSettings.js';
 import { log } from '../utils/logger.js';
+import { parseEmailList } from './mailAddressInput.js';
 
 const KIND_LABELS = {
     coach: 'Coach', guardian: 'Parent / guardian', player: 'Player', manager: 'Team manager', other: 'Other',
@@ -41,6 +42,15 @@ const REASON_LABELS = {
 
 let state = null;          // last /mail payload
 let busy = false;
+// Contact ids whose inline editor is open. Field saves update the row in
+// place (a full re-render would steal the focus mid-tab), so the set only
+// matters when something structural re-renders the screen.
+const openEditors = new Set();
+// Fields save when you leave them; a save in flight must land before a
+// structural refresh reads the directory back, or the refresh shows stale
+// data and the editor closes on top of it.
+let pendingSave = Promise.resolve();
+let dialogOpen = false;
 
 // =============================================================================
 // Screen
@@ -61,6 +71,7 @@ function initializeTeamMail() {
     document.getElementById('teamMailContent')?.addEventListener('click', onContentClick);
     document.getElementById('teamMailContent')?.addEventListener('change', onContentChange);
     document.getElementById('teamMailContent')?.addEventListener('submit', onContentSubmit);
+    document.getElementById('teamMailContent')?.addEventListener('focusout', onFieldBlur);
 }
 
 async function api(path, options = {}) {
@@ -260,23 +271,62 @@ function renderContact(c) {
     }
     if ((c.optOut || []).length) flags.push(`<span class="mail-flag">opted out: ${esc(c.optOut.join(', '))}</span>`);
     const derived = c.derived;
+    const editing = !derived && openEditors.has(c.id);
     return `
-        <div class="member-item" data-contact-id="${escAttr(c.id)}">
+        <div class="member-item mail-editable-row" data-contact-id="${escAttr(c.id)}">
             <div class="member-info">
                 <span class="member-icon">${c.kind === 'coach' ? '🎯' : c.kind === 'guardian' ? '👪' : c.kind === 'manager' ? '📋' : '✉️'}</span>
                 <div class="member-details">
                     <span class="member-name">${esc(c.name)} ${flags.join(' ')}</span>
-                    <span class="member-email">${esc(contactEmails(c).join(', ') || '(no email)')}${playerNames.length ? ` · ${esc(playerNames.join(', '))}` : ''}</span>
+                    <span class="member-email">${esc(contactSummary(c))}</span>
                 </div>
                 <span class="member-role role-${c.kind === 'coach' ? 'coach' : 'viewer'}">${esc(KIND_LABELS[c.kind] || c.kind)}</span>
             </div>
             ${derived ? '' : `
             <div class="mail-contact-actions">
                 ${bounces.length ? `<button class="icon-button" data-action="clear-bounce" data-id="${escAttr(c.id)}" title="Deliver to this contact again"><i class="fas fa-redo"></i></button>` : ''}
+                <button class="icon-button" data-action="${editing ? 'close-editor' : 'edit-contact'}" data-id="${escAttr(c.id)}" title="${editing ? 'Done editing' : 'Edit name, email addresses, role or players'}"><i class="fas fa-${editing ? 'check' : 'pen'}"></i></button>
                 <button class="icon-button" data-action="toggle-status" data-id="${escAttr(c.id)}" data-status="${escAttr(c.status || 'active')}" title="${c.status === 'active' ? 'Pause delivery' : 'Resume delivery'}"><i class="fas fa-${c.status === 'active' ? 'pause' : 'play'}"></i></button>
                 <button class="icon-button remove-member-btn" data-action="remove-contact" data-id="${escAttr(c.id)}" data-name="${escAttr(c.name)}" title="Remove from directory"><i class="fas fa-times"></i></button>
-            </div>`}
+            </div>
+            ${editing ? renderContactEditor(c) : ''}`}
         </div>`;
+}
+
+function contactSummary(c) {
+    const playerNames = (c.playerIds || []).map(id => (state.roster || []).find(p => p.id === id)?.name || id);
+    return `${contactEmails(c).join(', ') || '(no email)'}${playerNames.length ? ` · ${playerNames.join(', ')}` : ''}`;
+}
+
+/**
+ * Inline editor under a parent / manager row. Every field saves when you
+ * leave it (see saveField); "Done" just closes the editor.
+ */
+function renderContactEditor(c) {
+    const ids = c.playerIds || [];
+    return `
+        <form class="mail-contact-editor" data-form="contact-edit" data-id="${escAttr(c.id)}">
+            <div class="mail-form-grid">
+                <label>Name <input type="text" name="name" data-field="name" data-saved="${escAttr(c.name)}" value="${escAttr(c.name)}" maxlength="80" class="url-input"></label>
+                <label>Email (one or more, comma-separated) <input type="email" multiple name="emails" data-field="emails" data-saved="${escAttr(contactEmails(c).join(', '))}" value="${escAttr(contactEmails(c).join(', '))}" class="url-input" autocapitalize="none" placeholder="parent@example.com, other@example.com"></label>
+                <label>Role
+                    <select name="kind" data-field="kind" data-saved="${escAttr(c.kind)}">
+                        <option value="guardian" ${c.kind === 'guardian' ? 'selected' : ''}>Parent / guardian</option>
+                        <option value="manager" ${c.kind === 'manager' ? 'selected' : ''}>Team manager (staff)</option>
+                        <option value="other" ${c.kind === 'other' ? 'selected' : ''}>Other (everyone list only)</option>
+                    </select>
+                </label>
+                <label data-player-picker ${c.kind === 'guardian' ? '' : 'hidden'}>Player(s)
+                    <select name="playerIds" data-field="playerIds" data-saved="${escAttr(ids.join(','))}" multiple size="4">
+                        ${(state.roster || []).map(p => `<option value="${escAttr(p.id)}" ${ids.includes(p.id) ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+                    </select>
+                </label>
+            </div>
+            <div class="mail-list-actions">
+                <button type="button" class="invite-btn viewer-invite" data-action="close-editor" data-id="${escAttr(c.id)}"><i class="fas fa-check"></i> Done</button>
+                <span class="icon-status mail-field-status" data-status></span>
+            </div>
+        </form>`;
 }
 
 function renderRoster() {
@@ -287,7 +337,7 @@ function renderRoster() {
     return `
         <div class="settings-section">
             <h3>Player addresses</h3>
-            <p class="section-description">Writing to a player's address reaches the player (if they have an email), all of their guardians, and every coach. Set a player's own email here if they have one (several, comma-separated, is fine); edit the address name if two players share a first name.</p>
+            <p class="section-description">Writing to a player's address reaches the player (if they have an email), all of their guardians, and every coach. Set a player's own email here if they have one (several, comma-separated, is fine); edit the address name if two players share a first name. Changes save when you leave the box.</p>
             ${missing.length ? `<button class="invite-btn viewer-invite" data-action="sync-aliases"><i class="fas fa-sync"></i> Add addresses for ${missing.length} new player${missing.length === 1 ? '' : 's'}</button>` : ''}
             <div class="members-list">
                 ${roster.map(p => {
@@ -295,18 +345,18 @@ function renderRoster() {
                     if (!c) return `<div class="member-item"><div class="member-info"><div class="member-details"><span class="member-name">${esc(p.name)}</span><span class="member-email">no address yet</span></div></div></div>`;
                     const guardians = (state.contacts || []).filter(g => g.kind === 'guardian' && (g.playerIds || []).includes(p.id)).map(g => g.name);
                     return `
-                    <div class="member-item mail-player-row" data-contact-id="${escAttr(c.id)}">
+                    <div class="member-item mail-player-row mail-editable-row" data-contact-id="${escAttr(c.id)}">
                         <div class="member-info">
                             <div class="member-details">
                                 <span class="member-name">${esc(p.name)} ${contactBounces(c).length ? '<span class="mail-flag mail-flag-bad">bounce</span>' : ''}</span>
-                                <span class="member-email"><code>${esc(p.address || '')}</code></span>
+                                <span class="member-email"><code data-player-address>${esc(p.address || '')}</code></span>
                                 <span class="member-email">${guardians.length ? 'Guardians: ' + esc(guardians.join(', ')) : '<em>No guardians linked yet</em>'}</span>
                             </div>
                         </div>
                         <form class="mail-player-form" data-form="player" data-id="${escAttr(c.id)}">
-                            <input type="text" name="alias" value="${escAttr(c.alias || '')}" maxlength="24" class="url-input mail-alias-input" autocapitalize="none" title="Address name" aria-label="Address name">
-                            <input type="email" multiple name="email" value="${escAttr(contactEmails(c).join(', '))}" placeholder="player's own email(s), optional" class="url-input" autocapitalize="none" aria-label="Player email">
-                            <button type="submit" class="icon-button" title="Save"><i class="fas fa-save"></i></button>
+                            <input type="text" name="alias" data-field="alias" data-saved="${escAttr(c.alias || '')}" value="${escAttr(c.alias || '')}" maxlength="24" class="url-input mail-alias-input" autocapitalize="none" title="Address name" aria-label="Address name">
+                            <input type="email" multiple name="email" data-field="emails" data-saved="${escAttr(contactEmails(c).join(', '))}" value="${escAttr(contactEmails(c).join(', '))}" placeholder="player's own email(s), optional" class="url-input" autocapitalize="none" aria-label="Player email">
+                            <span class="icon-status mail-field-status" data-status></span>
                         </form>
                     </div>`;
                 }).join('') || '<p class="info-message">No players on the roster.</p>'}
@@ -441,6 +491,13 @@ async function onContentClick(event) {
             const status = button.dataset.status === 'active' ? 'paused' : 'active';
             await api(`/contacts/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
             await refreshQuiet();
+        } else if (action === 'edit-contact') {
+            openEditors.add(id);
+            render();
+            document.querySelector(`form[data-form="contact-edit"][data-id="${CSS.escape(id)}"] input[name="name"]`)?.focus();
+        } else if (action === 'close-editor') {
+            openEditors.delete(id);
+            await refreshQuiet();
         } else if (action === 'clear-bounce') {
             await api(`/contacts/${id}`, { method: 'PATCH', body: JSON.stringify({ bounces: null }) });
             await refreshQuiet();
@@ -505,6 +562,9 @@ function reportRelease(r) {
 }
 
 function onContentChange(event) {
+    if (event.target.dataset?.field && event.target.tagName === 'SELECT') {
+        queueSave(event.target);
+    }
     // "Anyone" disables the per-kind boxes in a list's post policy.
     if (event.target.name === 'anyone') {
         const fieldset = event.target.closest('fieldset');
@@ -540,10 +600,9 @@ async function onContentSubmit(event) {
             };
             await api('/contacts', { method: 'POST', body: JSON.stringify(body) });
             await refreshQuiet();
-        } else if (kind === 'player') {
-            const body = { alias: form.elements.alias.value.trim(), emails: form.elements.email.value.trim() };
-            await api(`/contacts/${form.dataset.id}`, { method: 'PATCH', body: JSON.stringify(body) });
-            await refreshQuiet();
+        } else if (kind === 'player' || kind === 'contact-edit') {
+            // Fields save on leaving them; Enter just leaves the field.
+            document.activeElement?.blur?.();
         } else if (kind === 'list') {
             const anyone = form.elements.anyone.checked;
             const postPolicy = anyone ? ['anyone'] : POSTER_KINDS.filter(k => form.elements[`kind:${k}`].checked);
@@ -564,9 +623,170 @@ async function onContentSubmit(event) {
 
 async function refreshQuiet() {
     const y = window.scrollY;
+    await pendingSave;
     state = await api('');
     render();
     window.scrollTo(0, y);
+}
+
+// =============================================================================
+// Save-on-leave fields (player rows and the inline contact editor)
+// =============================================================================
+
+function onFieldBlur(event) {
+    const input = event.target;
+    if (!(input instanceof HTMLElement) || !input.dataset?.field) return;
+    if (input.tagName === 'SELECT') return;             // selects save on change
+    if (dialogOpen) return;                             // the dialog took the focus, not the user
+    if (!document.hasFocus()) return;                   // switched windows mid-typing; save on the real leave
+    queueSave(input);
+}
+
+function queueSave(input) {
+    pendingSave = pendingSave.then(() => saveField(input)).catch(error => log.error('teamMail: save failed', error));
+    return pendingSave;
+}
+
+function fieldValue(input) {
+    if (input.tagName === 'SELECT' && input.multiple) {
+        return Array.from(input.selectedOptions).map(o => o.value);
+    }
+    return input.value;
+}
+
+function serialize(value) {
+    return Array.isArray(value) ? value.join(',') : String(value ?? '').trim();
+}
+
+function restoreField(input) {
+    const saved = input.dataset.saved ?? '';
+    if (input.tagName === 'SELECT' && input.multiple) {
+        const ids = saved ? saved.split(',') : [];
+        Array.from(input.options).forEach(o => { o.selected = ids.includes(o.value); });
+    } else {
+        input.value = saved;
+    }
+}
+
+async function saveField(input) {
+    const form = input.closest('form[data-id]');
+    const id = form?.dataset.id;
+    const field = input.dataset.field;
+    if (!id || !field || !input.isConnected) return;
+    let value = fieldValue(input);
+    if (serialize(value) === (input.dataset.saved ?? '')) return;
+
+    if (field === 'emails') {
+        const parsed = parseEmailList(value);
+        if (parsed.invalid.length) {
+            const bad = parsed.invalid.map(v => `"${v}"`).join(', ');
+            const choice = await askDialog({
+                title: 'Check that address',
+                message: `${bad} ${parsed.invalid.length === 1 ? 'is not a well-formed email address' : 'are not well-formed email addresses'} and will be dropped.`
+                    + (parsed.valid.length ? ` Keeping ${parsed.valid.join(', ')}.` : ''),
+                retryLabel: 'Go back and edit',
+                discardLabel: parsed.valid.length ? 'Drop it, keep the rest' : 'Drop it',
+            });
+            if (choice === 'retry') { input.focus(); return; }
+        }
+        value = parsed.normalized;
+        input.value = value;
+    } else if (field === 'alias') {
+        value = value.trim().toLowerCase();
+    } else if (field === 'name') {
+        value = value.trim();
+    }
+
+    try {
+        const r = await api(`/contacts/${id}`, { method: 'PATCH', body: JSON.stringify({ [field]: value }) });
+        applyContactUpdate(r.contact, form);
+        const contact = r.contact;
+        input.dataset.saved = field === 'emails' ? contactEmails(contact).join(', ')
+            : field === 'playerIds' ? (contact.playerIds || []).join(',')
+            : String(contact[field] ?? '');
+        if (field === 'emails') input.value = contactEmails(contact).join(', ');
+        else if (field === 'alias' || field === 'name') input.value = contact[field] ?? '';
+        flashStatus(form, 'Saved');
+    } catch (error) {
+        const choice = await askDialog({
+            title: 'Not saved',
+            message: error.message,
+            retryLabel: 'Go back and edit',
+            discardLabel: 'Revert',
+        });
+        if (choice === 'retry') input.focus();
+        else restoreField(input);
+    }
+}
+
+/** Reflect a saved contact in `state` and in the row's summary, without re-rendering. */
+function applyContactUpdate(contact, form) {
+    const list = state?.contacts || [];
+    const at = list.findIndex(c => c.id === contact.id);
+    if (at >= 0) list[at] = { ...list[at], ...contact };
+    const row = form?.closest('[data-contact-id]');
+    if (!row) return;
+    const nameEl = row.querySelector('.member-name');
+    if (nameEl && nameEl.firstChild && contact.kind !== 'player') nameEl.firstChild.nodeValue = `${contact.name} `;
+    if (contact.kind === 'player') {
+        const roster = (state?.roster || []).find(p => p.contactId === contact.id);
+        const address = `${contact.alias}-${state.slug}@${state.domain}`;
+        if (roster) { roster.alias = contact.alias; roster.address = address; }
+        const code = row.querySelector('[data-player-address]');
+        if (code) code.textContent = address;
+    } else {
+        const summary = row.querySelector('.member-email');
+        if (summary) summary.textContent = contactSummary(contact);
+        const role = row.querySelector('.member-role');
+        if (role) role.textContent = KIND_LABELS[contact.kind] || contact.kind;
+        const picker = form.querySelector('[data-player-picker]');
+        if (picker) picker.hidden = contact.kind !== 'guardian';
+    }
+}
+
+function flashStatus(form, text) {
+    const el = form?.querySelector('[data-status]');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'icon-status mail-field-status success';
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => { el.textContent = ''; }, 1800);
+}
+
+/**
+ * A two-button modal. Resolves "retry" (go back to the field) or "discard".
+ * Escape and the backdrop count as "retry" — the safe choice keeps the text.
+ */
+function askDialog({ title, message, retryLabel, discardLabel }) {
+    return new Promise(resolve => {
+        const modal = document.createElement('div');
+        modal.className = 'modal mail-dialog';
+        modal.innerHTML = `
+            <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="mailDialogTitle">
+                <h3 id="mailDialogTitle">${esc(title)}</h3>
+                <p>${esc(message)}</p>
+                <div class="modal-buttons">
+                    <button type="button" class="invite-btn viewer-invite" data-choice="retry">${esc(retryLabel)}</button>
+                    <button type="button" class="invite-btn coach-invite" data-choice="discard">${esc(discardLabel)}</button>
+                </div>
+            </div>`;
+        const finish = choice => {
+            document.removeEventListener('keydown', onKey);
+            modal.remove();
+            dialogOpen = false;
+            resolve(choice);
+        };
+        const onKey = e => { if (e.key === 'Escape') finish('retry'); };
+        modal.addEventListener('click', e => {
+            const button = e.target.closest('[data-choice]');
+            if (button) finish(button.dataset.choice);
+            else if (e.target === modal) finish('retry');
+        });
+        document.addEventListener('keydown', onKey);
+        dialogOpen = true;
+        document.body.appendChild(modal);
+        modal.querySelector('[data-choice="retry"]')?.focus();
+    });
 }
 
 function setStatus(id, text, cls) {
