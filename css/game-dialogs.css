@@ -264,12 +264,13 @@
 
 /* Position / default-line pickers for a new player (#newPlayerAttrs). Wide
    screens only: at phone widths the row is already full, and those
-   attributes get set later in the Edit Player dialog. Native radio groups
-   rather than the dialog's toggle buttons because each group is a single
-   Tab stop (Space or the arrow keys pick a value), which keeps the keyboard
-   roster-entry flow — name, Tab, number, Tab, Tab, Space on +FMP/+MMP —
-   short. The radios are visually hidden but stay in the Tab order; the
-   labels are the buttons and `:checked + label` paints the selection. */
+   attributes get set later in the Edit Player dialog. They come AFTER the
+   +FMP/+MMP buttons so the basic keyboard flow — name, Tab, number, Tab,
+   Space — never crosses them; a pick still applies to the next add. Native
+   radio groups rather than the dialog's toggle buttons because each group
+   is a single Tab stop (Space or the arrow keys pick a value). The radios
+   are visually hidden but stay in the Tab order; the labels are the
+   buttons and `:checked + label` paints the selection. */
 .management-attrs {
     display: none;
 }
@@ -278,7 +279,7 @@
     .management-attrs {
         display: flex;
         gap: 8px;
-        margin: 0 6px;
+        margin-left: 12px;
         flex-shrink: 0;
     }
 }

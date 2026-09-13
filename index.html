@@ -458,10 +458,21 @@
                         <div class="management-controls">
                             <input type="text" id="newPlayerInput" placeholder="Add player" />
                             <input type="text" id="newPlayerNumberInput" placeholder="#" class="player-number-input" />
+                            <div class="management-icons">
+                                <button id="addFMPPlayerBtn" class="icon-button gender-button fmp-button">
+                                    +FMP
+                                </button>
+                                <button id="addMMPPlayerBtn" class="icon-button gender-button mmp-button">
+                                    +MMP
+                                </button>
+                            </div>
                             <!-- Position / default line for the new player, wide screens
-                                 only (.management-attrs in css/game-dialogs.css). Native
-                                 radio groups: one Tab stop each, arrows or Space pick.
-                                 Left unset they mean Hybrid / Crossover, as in Edit Player. -->
+                                 only (.management-attrs in css/game-dialogs.css). Deliberately
+                                 after +FMP/+MMP: the basic keyboard flow (name, Tab, number,
+                                 Tab, Space) never has to cross them. A pick still applies to
+                                 the NEXT add, so choose before pressing +FMP/+MMP. Native
+                                 radio groups: one Tab stop each, arrows or Space pick. Left
+                                 unset they mean Hybrid / Crossover, as in Edit Player. -->
                             <div class="management-attrs" id="newPlayerAttrs">
                                 <div class="attr-radio-group" role="radiogroup" aria-label="Position">
                                     <input type="radio" name="newPlayerPosition" id="newPlayerPosHandler" value="handler" />
@@ -479,14 +490,6 @@
                                     <input type="radio" name="newPlayerLine" id="newPlayerLineCrossover" value="Crossover" />
                                     <label for="newPlayerLineCrossover">Crossover</label>
                                 </div>
-                            </div>
-                            <div class="management-icons">
-                                <button id="addFMPPlayerBtn" class="icon-button gender-button fmp-button">
-                                    +FMP
-                                </button>
-                                <button id="addMMPPlayerBtn" class="icon-button gender-button mmp-button">
-                                    +MMP
-                                </button>
                             </div>
                         </div>
                         <!-- Inside the management-row so it hides for viewers along
