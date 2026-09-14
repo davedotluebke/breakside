@@ -862,8 +862,13 @@ message must not keep the author's From. Like Google Groups we send
 `From: "Name via CUDO Parents" <parents-cudo@team.breakside.pro>` with
 Reply-To per list policy (author, list, or the coaches list), a subject tag,
 `List-Id`/`List-Post`/`Precedence: list`, and the original From preserved in
-`X-Original-From`. Message-ID, References, attachments and HTML pass through
-untouched so threads stay intact. Recipients are envelope-only: nobody sees
+`X-Original-From`, plus RFC 2369 `List-Unsubscribe` / `List-Help` /
+`List-Owner` pointing at the coaches list, since coaches manage membership.
+When the author is not among the list's recipients (a parent writing to
+the coaches, a coach writing to another player's alias), Reply-To names the
+author as well as the list, so a reply reaches them. Message-ID,
+References, attachments and HTML pass through untouched so threads stay
+intact. Recipients are envelope-only: nobody sees
 anyone else's address. Mail to a player's alias goes out as separate copies
 per group: the guardians' copy carries `[Parent copy]` after the list tag
 and the coaches' copy `[Coach copy]`; both markers are stripped from every

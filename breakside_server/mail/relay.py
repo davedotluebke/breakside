@@ -178,6 +178,13 @@ def _relay(raw, team_id, directory, decision, local, domain, author_name, author
     total = len(decision.recipients)
     copies: Dict[str, int] = {}
     provider_id: Optional[str] = None
+    # An author who is not on the list (a parent writing to the coaches, a
+    # coach writing to another player's alias) would otherwise never see a
+    # reply: Reply-To is the list, and they are not on it. Add them.
+    recipient_addresses = {addresses.normalize_email(c.get("email") or "") for c in decision.recipients}
+    also_reply_to = None
+    if author_email and addresses.normalize_email(author_email) not in recipient_addresses:
+        also_reply_to = (author_name, author_email)
     for group, contacts, marker in _recipient_groups(decision):
         if not contacts:
             continue
@@ -190,6 +197,7 @@ def _relay(raw, team_id, directory, decision, local, domain, author_name, author
             coaches_address=coaches_address,
             author=(author_name, author_email),
             subject_marker=marker,
+            also_reply_to=also_reply_to,
         )
         emails = [c["email"] for c in contacts]
         try:

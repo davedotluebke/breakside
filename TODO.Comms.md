@@ -34,7 +34,8 @@ The apex `breakside.pro` MX points at Google Workspace, which is how `help@break
 
   ```
   From: "Bob Smith via CUDO Parents" <parents-cudo@team.breakside.pro>
-  Reply-To: <per list policy: original author, or the list>
+  Reply-To: <per list policy: original author, or the list — plus the author when they are not on the list>
+  List-Unsubscribe: <mailto:coaches-cudo@team.breakside.pro?subject=unsubscribe%20parents-cudo>
   Subject: [CUDO Parents] Carpool for Saturday
   List-Id: <parents-cudo.team.breakside.pro>
   X-Breakside-List: parents-cudo

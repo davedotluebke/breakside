@@ -431,6 +431,37 @@ class TestRelay:
         sends = {tuple(sorted(s["recipients"])) for s in configured["outbox"].sent()[-3:]}
         assert ("bob@x.test",) in sends
 
+    def test_reply_to_includes_author_only_when_outside_the_list(self, configured):
+        import email as email_lib
+        from email import policy as email_policy
+        from mail import relay
+        from storage import mail_storage as ms
+        tid = configured["team_id"]
+        ms.add_mail_contact(tid, {"kind": "other", "name": "Director", "email": "director@x.test"})
+
+        def reply_to_of(send):
+            msg = email_lib.message_from_bytes(send["raw"], policy=email_policy.default)
+            return [a.addr_spec for a in msg["Reply-To"].addresses]
+
+        # A coach writing to the coaches list is on it: Reply-To is just the list.
+        relay.process_inbound(raw_mail("coach@x.test", f"coaches-cudo@{DOMAIN}"), envelope_recipients=[f"coaches-cudo@{DOMAIN}"])
+        assert reply_to_of(configured["outbox"].sent()[-1]) == [f"coaches-cudo@{DOMAIN}"]
+        # Someone off the list writing to the coaches: the reply must reach them too.
+        relay.process_inbound(raw_mail("Director <director@x.test>", f"coaches-cudo@{DOMAIN}"), envelope_recipients=[f"coaches-cudo@{DOMAIN}"])
+        assert reply_to_of(configured["outbox"].sent()[-1]) == [f"coaches-cudo@{DOMAIN}", "director@x.test"]
+        # Mom (Alice's guardian, not Bob's) writes to Bob's alias: every group's copy names her.
+        relay.process_inbound(raw_mail("Mom <mom@x.test>", f"bob-cudo@{DOMAIN}"), envelope_recipients=[f"bob-cudo@{DOMAIN}"])
+        for send in configured["outbox"].sent()[-3:]:
+            assert reply_to_of(send) == [f"bob-cudo@{DOMAIN}", "mom@x.test"]
+        # A released message from an unknown sender: same rule.
+        relay.process_inbound(raw_mail("Stranger <stranger@x.test>", f"parents-cudo@{DOMAIN}"), envelope_recipients=[f"parents-cudo@{DOMAIN}"])
+        held = ms.list_mail_quarantine(tid)[0]
+        relay.release_quarantine(tid, held["id"])
+        assert reply_to_of(configured["outbox"].sent()[-1]) == [f"parents-cudo@{DOMAIN}", "stranger@x.test"]
+        # And the RFC 2369 headers ride along on every relay.
+        msg = email_lib.message_from_bytes(configured["outbox"].sent()[-1]["raw"], policy=email_policy.default)
+        assert msg["List-Unsubscribe"].strip() == f"<mailto:coaches-cudo@{DOMAIN}?subject=unsubscribe%20parents-cudo>"
+
     def test_header_fallback_when_no_envelope(self, configured):
         from mail import relay
         r = relay.process_inbound(raw_mail("mom@x.test", f"Parents <parents-cudo@{DOMAIN}>", extra=[f"Cc: coaches-cudo@{DOMAIN}"]))

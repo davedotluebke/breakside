@@ -134,7 +134,8 @@ def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
                     subject_tag: str, reply_to_mode: str,
                     coaches_address: Optional[str] = None,
                     author: Optional[Tuple[str, str]] = None,
-                    subject_marker: str = "") -> bytes:
+                    subject_marker: str = "",
+                    also_reply_to: Optional[Tuple[str, str]] = None) -> bytes:
     """Return the relayed form of ``raw``.
 
     Args:
@@ -148,6 +149,10 @@ def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
         author: (name, email) if the caller already parsed it.
         subject_marker: e.g. ``[Parent copy]`` for one recipient group's copy;
             placed after the tag (see ``marked_subject``).
+        also_reply_to: (name, email) added to Reply-To in ``list`` and
+            ``coaches`` modes — the relay passes the author when they are not
+            among the list's recipients, so a reply reaches them as well as
+            the list. Ignored in ``author`` mode, where they already are.
     """
     msg = parse_message(raw)
     name, addr = author or sender_of(msg)
@@ -170,10 +175,15 @@ def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
     msg["From"] = Address(display_name=f"{display} via {list_display}", addr_spec=list_address)
     msg["Sender"] = Address(addr_spec=list_address)
 
+    extra = None
+    if also_reply_to and also_reply_to[1]:
+        extra = Address(display_name=(also_reply_to[0] or "").strip(), addr_spec=also_reply_to[1])
     if reply_to_mode == "coaches" and coaches_address:
-        msg["Reply-To"] = Address(display_name=f"{list_display} coaches", addr_spec=coaches_address)
+        primary = Address(display_name=f"{list_display} coaches", addr_spec=coaches_address)
+        msg["Reply-To"] = _reply_to(primary, extra)
     elif reply_to_mode == "list":
-        msg["Reply-To"] = Address(display_name=list_display, addr_spec=list_address)
+        primary = Address(display_name=list_display, addr_spec=list_address)
+        msg["Reply-To"] = _reply_to(primary, extra)
     else:
         if original_reply_to:
             msg["Reply-To"] = original_reply_to
@@ -189,10 +199,24 @@ def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
 
     msg["List-Id"] = f"{_quote_display(list_display)} <{local}.{domain}>"
     msg["List-Post"] = f"<mailto:{list_address}>"
+    # RFC 2369 contact headers. Membership is managed by the coaches, so the
+    # unsubscribe and help addresses are the coaches list; Gmail and friends
+    # weigh the presence of these on anything that carries List-Id.
+    owner = coaches_address or list_address
+    msg["List-Unsubscribe"] = f"<mailto:{owner}?subject=unsubscribe%20{local}>"
+    msg["List-Help"] = f"<mailto:{owner}?subject=help%20{local}>"
+    msg["List-Owner"] = f"<mailto:{owner}>"
     msg["Precedence"] = "list"
     msg["X-Breakside-List"] = local
 
     return msg.as_bytes()
+
+
+def _reply_to(primary: Address, extra: Optional[Address]) -> str:
+    """Reply-To value: the list, plus the author when they are outside it."""
+    if extra is None or extra.addr_spec.lower() == primary.addr_spec.lower():
+        return str(primary)
+    return f"{primary}, {extra}"
 
 
 def _quote_display(text: str) -> str:

@@ -286,6 +286,35 @@ class TestRewrite:
                                              reply_to_mode="coaches", coaches_address="coaches-cudo@team.breakside.pro"))
         assert out["Reply-To"].addresses[0].addr_spec == "coaches-cudo@team.breakside.pro"
 
+    def test_reply_to_adds_author_outside_the_list(self):
+        out = parsed(rewrite.rewrite_message(simple(), list_address=LIST, list_display="X", subject_tag="",
+                                             reply_to_mode="list", also_reply_to=("Zed Q", "zed@x.test")))
+        assert [a.addr_spec for a in out["Reply-To"].addresses] == [LIST, "zed@x.test"]
+        assert out["Reply-To"].addresses[1].display_name == "Zed Q"
+        out = parsed(rewrite.rewrite_message(simple(), list_address=LIST, list_display="X", subject_tag="",
+                                             reply_to_mode="coaches", coaches_address="coaches-cudo@team.breakside.pro",
+                                             also_reply_to=("", "zed@x.test")))
+        assert [a.addr_spec for a in out["Reply-To"].addresses] == ["coaches-cudo@team.breakside.pro", "zed@x.test"]
+        # author mode: they are the Reply-To already
+        out = parsed(rewrite.rewrite_message(simple(), list_address=LIST, list_display="X", subject_tag="",
+                                             reply_to_mode="author", also_reply_to=("Zed Q", "zed@x.test")))
+        assert [a.addr_spec for a in out["Reply-To"].addresses] == ["bob@yahoo.com"]
+        # no duplicate when the extra address is the list itself
+        out = parsed(rewrite.rewrite_message(simple(), list_address=LIST, list_display="X", subject_tag="",
+                                             reply_to_mode="list", also_reply_to=("", LIST.upper())))
+        assert [a.addr_spec for a in out["Reply-To"].addresses] == [LIST]
+
+    def test_rfc2369_headers_point_at_the_coaches(self):
+        out = parsed(rewrite.rewrite_message(simple(extra=["List-Unsubscribe: <http://evil.example/unsub>"]),
+                                             list_address=LIST, list_display="X", subject_tag="", reply_to_mode="list",
+                                             coaches_address="coaches-cudo@team.breakside.pro"))
+        # Long values fold after the colon when serialized; strip the fold's leading space.
+        assert [v.strip() for v in out.get_all("List-Unsubscribe")] == ["<mailto:coaches-cudo@team.breakside.pro?subject=unsubscribe%20parents-cudo>"]
+        assert out["List-Help"].strip() == "<mailto:coaches-cudo@team.breakside.pro?subject=help%20parents-cudo>"
+        assert out["List-Owner"].strip() == "<mailto:coaches-cudo@team.breakside.pro>"
+        out = parsed(rewrite.rewrite_message(simple(), list_address=LIST, list_display="X", subject_tag="", reply_to_mode="list"))
+        assert out["List-Owner"].strip() == f"<mailto:{LIST}>"     # no coaches address known: the list itself
+
     def test_strips_dangerous_headers(self):
         raw = simple(extra=["DKIM-Signature: v=1; d=yahoo.com; b=abc", "Disposition-Notification-To: bob@yahoo.com",
                             "List-Id: other <other.example.com>", "Precedence: first-class", "Bcc: secret@x.test",
