@@ -95,7 +95,7 @@ def process_inbound(raw: bytes, *, envelope_recipients: Optional[Sequence[str]] 
         address = f"{local}@{domain}"
         parsed = addresses.parse_local_part(local, slugs.keys())
         if parsed is None:
-            logger.info("mail: dropped message to unknown address %s from %s", address, author_email)
+            logger.info("mail: dropped message to unknown address %s from %s", address, addresses.mask_address(author_email))
             results.append(RelayResult(address, None, "drop", "unknown-address"))
             continue
         kind, slug, alias = parsed
@@ -216,7 +216,7 @@ def _relay(raw, team_id, directory, decision, local, domain, author_name, author
                             "reason": None, "providerId": provider_id,
                             "senderKinds": decision.sender_kinds,
                             "copies": copies if decision.kind == "player" else None})
-    logger.info("mail: relayed %s from %s to %d recipient(s)", address, author_email, total)
+    logger.info("mail: relayed %s from %s to %d recipient(s)", address, addresses.mask_address(author_email), total)
     return RelayResult(address, team_id, "relay", None, total, provider_id, log_id=log_id)
 
 
@@ -231,7 +231,7 @@ def _quarantine(raw, team_id, directory, decision, local, domain, contacts, base
     }, raw)
     log_id = _log(team_id, {**base_entry, "action": "quarantined", "recipients": 0,
                             "reason": decision.reason, "quarantineId": item["id"]})
-    logger.info("mail: held message to %s from %s (%s)", address, base_entry["from"], decision.reason)
+    logger.info("mail: held message to %s from %s (%s)", address, addresses.mask_address(base_entry["from"]), decision.reason)
     _notify_quarantine(team_id, directory, contacts, item, domain)
     return RelayResult(address, team_id, "quarantine", decision.reason, quarantine_id=item["id"], log_id=log_id)
 

@@ -19,7 +19,7 @@ from typing import Any, Callable, Dict, List, Optional
 from fastapi.concurrency import run_in_threadpool
 
 from ._shared import config, storage
-from . import relay
+from . import addresses, relay
 
 logger = logging.getLogger(__name__)
 
@@ -140,13 +140,13 @@ class InboundPoller:
             for r in recipients:
                 diag = r.get("diagnosticCode") or detail
                 n = storage.record_mail_bounce(r.get("emailAddress", ""), bounce_kind, diag)
-                logger.info("mail: %s bounce for %s recorded on %d contact(s)", bounce_kind, r.get("emailAddress"), n)
+                logger.info("mail: %s bounce for %s recorded on %d contact(s)", bounce_kind, addresses.mask_address(r.get("emailAddress")), n)
         else:
             complaint = note.get("complaint") or {}
             detail = complaint.get("complaintFeedbackType") or "complaint"
             for r in complaint.get("complainedRecipients") or []:
                 n = storage.record_mail_bounce(r.get("emailAddress", ""), "complaint", detail)
-                logger.warning("mail: complaint from %s recorded on %d contact(s)", r.get("emailAddress"), n)
+                logger.warning("mail: complaint from %s recorded on %d contact(s)", addresses.mask_address(r.get("emailAddress")), n)
 
     # ---------------------------------------------------------------- the loop
 

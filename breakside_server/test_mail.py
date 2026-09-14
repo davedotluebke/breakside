@@ -462,6 +462,18 @@ class TestRelay:
         msg = email_lib.message_from_bytes(configured["outbox"].sent()[-1]["raw"], policy=email_policy.default)
         assert msg["List-Unsubscribe"].strip() == f"<mailto:coaches-cudo@{DOMAIN}?subject=unsubscribe%20parents-cudo>"
 
+    def test_journal_lines_carry_masked_addresses_only(self, configured, caplog):
+        """The system journal is root-readable for weeks; full addresses stay
+        in the coach-visible activity log, not in journald."""
+        import logging
+        from mail import relay
+        with caplog.at_level(logging.INFO, logger="mail.relay"):
+            relay.process_inbound(raw_mail("Mom Smith <mom@x.test>", f"parents-cudo@{DOMAIN}"), envelope_recipients=[f"parents-cudo@{DOMAIN}"])
+            relay.process_inbound(raw_mail("Stranger <stranger@x.test>", f"parents-cudo@{DOMAIN}"), envelope_recipients=[f"parents-cudo@{DOMAIN}"])
+        assert "mom@x.test" not in caplog.text and "stranger@x.test" not in caplog.text
+        assert "mo…@x.test" in caplog.text and "st…@x.test" in caplog.text
+        assert "held message" in caplog.text and "relayed parents-cudo" in caplog.text
+
     def test_header_fallback_when_no_envelope(self, configured):
         from mail import relay
         r = relay.process_inbound(raw_mail("mom@x.test", f"Parents <parents-cudo@{DOMAIN}>", extra=[f"Cc: coaches-cudo@{DOMAIN}"]))

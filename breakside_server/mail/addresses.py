@@ -191,6 +191,24 @@ def parse_local_part(local: str, slugs: Iterable[str]) -> Optional[Tuple[str, st
     return None
 
 
+def mask_address(addr: Optional[str]) -> str:
+    """``dave@example.org`` → ``da…@example.org``, for log lines.
+
+    The system journal is root-readable and retained for weeks; it needs to
+    say which list a message went to and roughly who wrote it, not carry
+    every parent's full address. The coach-visible activity log (storage)
+    keeps the real one.
+    """
+    if not addr:
+        return "(none)"
+    addr = normalize_email(addr)
+    if "@" not in addr:
+        return addr[:2] + "…" if len(addr) > 2 else addr
+    local, domain = addr.rsplit("@", 1)
+    head = local[:2] if len(local) > 2 else local[:1]
+    return f"{head}…@{domain}"
+
+
 def split_address(addr: str) -> Tuple[str, str]:
     """``local@domain`` → (local, domain), both folded. Missing domain → ''."""
     addr = normalize_email(addr)

@@ -77,6 +77,13 @@ class TestParse:
     def test_parse(self, local, expected):
         assert addresses.parse_local_part(local, self.SLUGS) == expected
 
+    @pytest.mark.parametrize("raw,masked", [
+        ("dave@luebke.us", "da…@luebke.us"), ("Mom.Smith@Example.org", "mo…@example.org"),
+        ("a@x.test", "a…@x.test"), ("", "(none)"), (None, "(none)"), ("not-an-address", "no…"),
+    ])
+    def test_mask_address(self, raw, masked):
+        assert addresses.mask_address(raw) == masked
+
     def test_address(self):
         assert addresses.address("parents", "cudo", "team.example") == "parents-cudo@team.example"
         assert addresses.address("all", "cudo", "team.example") == "cudo@team.example"
