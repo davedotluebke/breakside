@@ -133,6 +133,7 @@ def marked_subject(subject: str, tag: str, marker: str = "") -> str:
 def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
                     subject_tag: str, reply_to_mode: str,
                     coaches_address: Optional[str] = None,
+                    coaches_display: Optional[str] = None,
                     author: Optional[Tuple[str, str]] = None,
                     subject_marker: str = "",
                     also_reply_to: Optional[Tuple[str, str]] = None) -> bytes:
@@ -146,6 +147,8 @@ def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
         reply_to_mode: ``author`` (the person who wrote it; honours their own
             Reply-To if they set one), ``list``, or ``coaches``.
         coaches_address: needed for ``coaches`` mode.
+        coaches_display: display name for that address ("Coaches CUDO F26");
+            defaults to "Coaches <list_display>".
         author: (name, email) if the caller already parsed it.
         subject_marker: e.g. ``[Parent copy]`` for one recipient group's copy;
             placed after the tag (see ``marked_subject``).
@@ -179,7 +182,7 @@ def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
     if also_reply_to and also_reply_to[1]:
         extra = Address(display_name=(also_reply_to[0] or "").strip(), addr_spec=also_reply_to[1])
     if reply_to_mode == "coaches" and coaches_address:
-        primary = Address(display_name=f"{list_display} coaches", addr_spec=coaches_address)
+        primary = Address(display_name=coaches_display or f"Coaches {list_display}", addr_spec=coaches_address)
         msg["Reply-To"] = _reply_to(primary, extra)
     elif reply_to_mode == "list":
         primary = Address(display_name=list_display, addr_spec=list_address)

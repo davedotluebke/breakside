@@ -266,9 +266,9 @@ class TestRelay:
         # the author is on the envelope too (Gmail merges it with her Sent copy)
         assert sorted(sends[0]["recipients"]) == ["carol@x.test", "coach2@x.test", "coach@x.test", "dad@x.test", "mom@x.test"]
         head = sends[0]["raw"].split(b"\r\n\r\n")[0].decode()
-        assert f"From: Mom Smith via CUDO Parents <parents-cudo@{DOMAIN}>" in head
+        assert f"From: Mom Smith via Parents CUDO <parents-cudo@{DOMAIN}>" in head
         assert "Subject: [CUDO Parents] Carpool Saturday" in head
-        assert f"Reply-To: CUDO Parents <parents-cudo@{DOMAIN}>" in head
+        assert f"Reply-To: Parents CUDO <parents-cudo@{DOMAIN}>" in head
         assert f"To: parents-cudo@{DOMAIN}" in head
         entry = ms.read_mail_log(configured["team_id"], 1)[0]
         assert entry["action"] == "relayed" and entry["recipients"] == 5 and entry["senderKinds"] == ["guardian"]
@@ -278,7 +278,7 @@ class TestRelay:
         results = relay.process_inbound(raw_mail("Dad <dad@x.test>", f"cudo@{DOMAIN}"), envelope_recipients=[f"cudo@{DOMAIN}"])
         assert results[0].action == "relay"
         head = configured["outbox"].sent()[-1]["raw"].split(b"\r\n\r\n")[0].decode()
-        assert f"Reply-To: CUDO coaches <coaches-cudo@{DOMAIN}>" in head
+        assert f"Reply-To: Coaches CUDO <coaches-cudo@{DOMAIN}>" in head
         assert sorted(configured["outbox"].sent()[-1]["recipients"]) == ["bob@x.test", "carol@x.test", "coach2@x.test", "coach@x.test", "dad@x.test", "mom@x.test"]
         results = relay.process_inbound(raw_mail("Bob <bob@x.test>", f"cudo@{DOMAIN}"), envelope_recipients=[f"cudo@{DOMAIN}"])
         assert (results[0].action, results[0].reason) == ("quarantine", "not-allowed-to-post")
@@ -295,6 +295,7 @@ class TestRelay:
         assert len(sends) == 1 and sorted(sends[0]["recipients"]) == ["coach2@x.test", "coach@x.test"]
         notice = sends[0]["raw"].decode()
         assert "Subject: [Held] Buy stuff" in notice and "not in the team directory" in notice
+        assert 'From: "Breakside (CUDO)" <coaches-cudo@' in notice     # parentheses force a quoted display name
         assert "Auto-Submitted: auto-generated" in notice
         # Feeding the notice back in must never relay it (loop guard).
         back = relay.process_inbound(sends[0]["raw"], envelope_recipients=[f"coaches-cudo@{DOMAIN}"])
@@ -345,7 +346,7 @@ class TestRelay:
         assert guardians["Subject"] == "[CUDO] [Parent copy] Practice"
         assert coaches["Subject"] == "[CUDO] [Coach copy] Practice"
         for out in (guardians, coaches):
-            assert out["From"].addresses[0].display_name == "Coach Dave via CUDO (Alice Smith)"
+            assert out["From"].addresses[0].display_name == "Coach Dave via Alice Smith (CUDO)"
             assert out["From"].addresses[0].addr_spec == f"alice-cudo@{DOMAIN}"
             assert out["Message-ID"] == "<m1@x.test>"
         from storage import mail_storage as ms

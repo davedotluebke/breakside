@@ -859,7 +859,7 @@ discard from the screen. Held mail expires after 14 days.
 
 **From rewrite.** Yahoo, AOL and Apple publish DMARC `p=reject`, so a relayed
 message must not keep the author's From. Like Google Groups we send
-`From: "Name via CUDO Parents" <parents-cudo@team.breakside.pro>` with
+`From: "Name via Parents CUDO" <parents-cudo@team.breakside.pro>` with
 Reply-To per list policy (author, list, or the coaches list), a subject tag,
 `List-Id`/`List-Post`/`Precedence: list`, and the original From preserved in
 `X-Original-From`, plus RFC 2369 `List-Unsubscribe` / `List-Help` /

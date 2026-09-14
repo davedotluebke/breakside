@@ -142,13 +142,23 @@ def process_inbound(raw: bytes, *, envelope_recipients: Optional[Sequence[str]] 
     return results
 
 
+def _team_display(directory: Dict[str, Any]) -> str:
+    return directory.get("displayName") or directory["slug"]
+
+
 def _list_display(directory: Dict[str, Any], decision: policy.Decision) -> str:
-    name = directory.get("displayName") or directory["slug"]
+    """The list's human name, role first: "Coaches CUDO F26", "Cyrus Luebke (CUDO F26)".
+
+    Gmail's threaded view abbreviates a sender to the first word of the
+    display name, so the word that carries the information has to come
+    first: "Coaches", "Parents", or the player's name — not the team.
+    """
+    name = _team_display(directory)
     kind = decision.kind
     if kind == "player" and decision.player:
-        return f"{name} ({decision.player['name']})"
-    suffix = {"parents": "Parents", "coaches": "Coaches", "staff": "Staff", "players": "Players"}.get(kind)
-    return f"{name} {suffix}" if suffix else name
+        return f"{decision.player['name']} ({name})"
+    prefix = {"parents": "Parents", "coaches": "Coaches", "staff": "Staff", "players": "Players"}.get(kind)
+    return f"{prefix} {name}" if prefix else name
 
 
 def _recipient_groups(decision: policy.Decision) -> List[tuple]:
@@ -195,6 +205,7 @@ def _relay(raw, team_id, directory, decision, local, domain, author_name, author
             subject_tag=settings.get("subjectTag", ""),
             reply_to_mode=settings.get("replyTo", "list"),
             coaches_address=coaches_address,
+            coaches_display=f"Coaches {_team_display(directory)}",
             author=(author_name, author_email),
             subject_marker=marker,
             also_reply_to=also_reply_to,
@@ -273,7 +284,7 @@ def _notify_quarantine(team_id: str, directory: Dict[str, Any], contacts, item: 
     )
     raw = rewrite.build_notice(
         from_address=coaches_address,
-        from_display=f"{directory.get('displayName') or directory['slug']} team mail",
+        from_display=f"Breakside ({_team_display(directory)})",
         to_address=coaches_address,
         subject=f"[Held] {item.get('subject') or '(no subject)'}",
         body=body,
@@ -319,7 +330,7 @@ def send_test_message(team_id: str, to_email: str, requester: str) -> str:
     )
     raw = rewrite.build_notice(
         from_address=from_address,
-        from_display=f"{directory.get('displayName') or directory['slug']} team mail",
+        from_display=f"Breakside ({_team_display(directory)})",
         to_address=to_email,
         subject=f"{directory['lists'].get('all', {}).get('subjectTag', '')} Test message".strip(),
         body=body,
