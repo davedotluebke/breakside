@@ -728,3 +728,53 @@ class TestErasure:
         assert preview["counts"]["mailContacts"] == 6
         erasure.erase_team(tid)
         assert ms.get_mail_directory(tid) is None and ms.resolve_mail_slug("cudo") is None
+
+
+class FakeSesClient:
+    """Records every sesv2 ``send_email`` call; ``fail`` makes it raise."""
+
+    def __init__(self, fail=False):
+        self.calls = []
+        self.fail = fail
+
+    def send_email(self, **kwargs):
+        self.calls.append(kwargs)
+        if self.fail:
+            raise RuntimeError("throttled")
+        return {"MessageId": f"ses-{len(self.calls)}"}
+
+
+class TestSesTransport:
+    RAW = b'From: "Bob Smith via Coaches CUDO" <coaches-cudo@team.breakside.pro>\r\n\r\nhi\r\n'
+
+    def test_raw_from_header_is_authoritative(self):
+        """No FromEmailAddress in the call: SES applies that parameter over the
+        raw message's From header, and the "Name via List" display name every
+        recipient relies on is lost (the bare-address From of 2.1.0–2.1.7)."""
+        from mail import transport
+        client = FakeSesClient()
+        ses = transport.SesTransport("us-east-1", "team-mail", client=client)
+        assert ses.send(from_addr="coaches-cudo@team.breakside.pro",
+                        recipients=["a@x.test"], raw=self.RAW) == "ses-1"
+        (call,) = client.calls
+        assert "FromEmailAddress" not in call
+        assert call["Content"] == {"Raw": {"Data": self.RAW}}
+        assert call["Destination"] == {"ToAddresses": ["a@x.test"]}
+        assert call["ConfigurationSetName"] == "team-mail"
+
+    def test_batches_of_fifty_envelope_recipients(self):
+        from mail import transport
+        client = FakeSesClient()
+        ses = transport.SesTransport("us-east-1", client=client)
+        recipients = [f"r{i}@x.test" for i in range(120)]
+        assert ses.send(from_addr="coaches-cudo@team.breakside.pro",
+                        recipients=recipients, raw=self.RAW) == "ses-1"
+        assert [len(c["Destination"]["ToAddresses"]) for c in client.calls] == [50, 50, 20]
+        assert all("ConfigurationSetName" not in c and "FromEmailAddress" not in c
+                   for c in client.calls)
+
+    def test_provider_failure_is_a_transport_error(self):
+        from mail import transport
+        ses = transport.SesTransport("us-east-1", client=FakeSesClient(fail=True))
+        with pytest.raises(transport.TransportError):
+            ses.send(from_addr="coaches-cudo@team.breakside.pro", recipients=["a@x.test"], raw=self.RAW)

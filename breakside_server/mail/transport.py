@@ -87,12 +87,18 @@ class SesTransport:
         return self._client
 
     def send(self, *, from_addr: str, recipients: Sequence[str], raw: bytes) -> str:
+        # Deliberately no FromEmailAddress. When that parameter is set, SES
+        # applies it over the raw message's From header, so the rewritten
+        # '"Name via Coaches CUDO" <coaches-cudo@…>' reached inboxes as the bare
+        # list address and nobody could see who wrote the message (2.1.0
+        # through 2.1.7). With it omitted, SES takes the From from the raw
+        # message, whose domain is the verified identity. ``from_addr`` is
+        # only for the log line here.
         first_id: Optional[str] = None
         recipients = list(recipients)
         for start in range(0, len(recipients), SES_BATCH):
             batch = recipients[start:start + SES_BATCH]
             kwargs: Dict[str, Any] = {
-                "FromEmailAddress": from_addr,
                 "Destination": {"ToAddresses": batch},
                 "Content": {"Raw": {"Data": raw}},
             }
@@ -101,7 +107,7 @@ class SesTransport:
             try:
                 response = self.client.send_email(**kwargs)
             except Exception as exc:  # noqa: BLE001 — botocore raises many types
-                raise TransportError(f"SES send failed: {exc}") from exc
+                raise TransportError(f"SES send failed from {from_addr}: {exc}") from exc
             first_id = first_id or response.get("MessageId")
         return first_id or "ses"
 

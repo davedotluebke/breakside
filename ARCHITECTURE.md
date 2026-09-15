@@ -868,8 +868,10 @@ When the author is not among the list's recipients (a parent writing to
 the coaches, a coach writing to another player's alias), Reply-To names the
 author as well as the list, so a reply reaches them. Message-ID,
 References, attachments and HTML pass through untouched so threads stay
-intact. Recipients are envelope-only: nobody sees
-anyone else's address. Mail to a player's alias goes out as separate copies
+intact. The SESv2 send passes no `FromEmailAddress`: when that parameter is
+set, SES applies it over the raw message's From header and the display name
+is lost (every inbox showed the bare list address from 2.1.0 to 2.1.7).
+Recipients are envelope-only: nobody sees anyone else's address. Mail to a player's alias goes out as separate copies
 per group: the guardians' copy carries `[Parent copy]` after the list tag
 and the coaches' copy `[Coach copy]`; both markers are stripped from every
 inbound subject so a reply does not hand the player a message labelled as
