@@ -1,0 +1,218 @@
+/*
+ * Game Flow (ui/gameFlowChart.js): the score-margin chart, its headline
+ * lines, and the Connections block on the Review / post-game summary, plus
+ * the Connections block alone on Event Roster + Stats. Every color is a
+ * token from css/tokens.css so both themes hold; the SVG is styled from here
+ * (fill/stroke on classes) rather than with presentation attributes for the
+ * same reason. Buttons reset the global `button { margin: 10px }` (see
+ * ARCHITECTURE.md § CSS Styling Gotchas).
+ */
+
+.gf-host {
+    margin: 0 10px;
+    min-width: 0;
+}
+
+/* ---- headline lines ("Biggest run: …") ---- */
+.gf-lines {
+    margin: 0 0 8px;
+    padding: 6px 10px;
+    font-size: 0.9em;
+    text-align: left;
+    color: var(--text-primary);
+    background-color: var(--surface-page);
+    border-left: 3px solid var(--border-heavy);
+    border-radius: 2px;
+}
+.gf-line { line-height: 1.45; }
+
+/* ---- chart ---- */
+.gf-chart {
+    position: relative;      /* the tooltip is positioned inside it */
+    background: var(--surface-card);
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    padding: 6px 4px 2px;
+}
+.gf-caption {
+    font-size: 0.8em;
+    color: var(--text-muted);
+    padding: 0 8px 2px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.gf-caption b { color: var(--text-primary); font-weight: 600; }
+.gf-svg-host { width: 100%; min-width: 0; }
+.gf-svg-host svg { display: block; width: 100%; height: auto; touch-action: manipulation; }
+
+.gf-grid   { stroke: var(--ink-faint); stroke-width: 1; }
+.gf-zero   { stroke: var(--ink-dim); stroke-width: 1.25; }
+.gf-area-us   { fill: var(--flow-us-tint); }
+.gf-area-them { fill: var(--flow-them-tint); }
+.gf-line-path { fill: none; stroke: var(--text-primary); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.gf-run-us    { fill: none; stroke: var(--pbp-green-ink); stroke-width: 5; stroke-opacity: 0.45; stroke-linejoin: round; stroke-linecap: round; }
+.gf-run-them  { fill: none; stroke: var(--pbp-red-ink); stroke-width: 5; stroke-opacity: 0.45; stroke-linejoin: round; stroke-linecap: round; }
+.gf-half   { stroke: var(--text-faint); stroke-width: 1.25; stroke-dasharray: 4 3; }
+.gf-label  { fill: var(--text-muted); font-size: 11px; font-family: inherit; }
+.gf-label-strong { fill: var(--text-primary); font-size: 11px; font-weight: 600; font-family: inherit; }
+.gf-to-us   { fill: var(--pbp-green-ink); font-size: 10px; font-weight: 700; font-family: inherit; }
+.gf-to-them { fill: var(--pbp-red-ink); font-size: 10px; font-weight: 700; font-family: inherit; }
+
+/* point markers: color = how the point went (matches the log badges) */
+.gf-pt { stroke-width: 2; }
+.gf-pt-break   { fill: var(--pbp-blue-ink);  stroke: var(--pbp-blue-ink); }
+.gf-pt-hold    { fill: var(--pbp-green-ink); stroke: var(--pbp-green-ink); }
+.gf-pt-broken  { fill: var(--pbp-red-ink);   stroke: var(--pbp-red-ink); }
+.gf-pt-opphold { fill: none;                 stroke: var(--text-faint); }
+.gf-pt-active  { stroke: var(--text-strong); stroke-width: 3; }
+/* invisible, generous hit area over each marker */
+.gf-hit { fill: none; pointer-events: all; cursor: pointer; }
+
+.gf-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    padding: 4px 8px 6px;
+    font-size: 0.78em;
+    color: var(--text-muted);
+}
+.gf-legend span::before {
+    content: '';
+    display: inline-block;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: -1px;
+    border: 2px solid transparent;
+    box-sizing: border-box;
+}
+.gf-legend .gf-lg-break::before   { background: var(--pbp-blue-ink);  border-color: var(--pbp-blue-ink); }
+.gf-legend .gf-lg-hold::before    { background: var(--pbp-green-ink); border-color: var(--pbp-green-ink); }
+.gf-legend .gf-lg-broken::before  { background: var(--pbp-red-ink);   border-color: var(--pbp-red-ink); }
+.gf-legend .gf-lg-opphold::before { border-color: var(--border-heavy); }
+
+/* tooltip pinned to a marker */
+.gf-tip {
+    position: absolute;
+    z-index: 3;
+    max-width: min(280px, 90%);
+    padding: 8px 10px;
+    font-size: 0.82em;
+    line-height: 1.4;
+    color: var(--on-overlay);
+    background: var(--overlay-tooltip);
+    border-radius: 6px;
+    box-shadow: var(--shadow-md);
+    pointer-events: auto;
+}
+.gf-tip[hidden] { display: none; }
+.gf-tip-title { font-weight: 700; }
+.gf-tip-line { color: var(--on-overlay-muted); }
+.gf-tip button {
+    margin: 6px 0 0;
+    padding: 4px 8px;
+    font-size: 0.95em;
+    color: var(--on-overlay);
+    background: var(--wash-on-color);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* the log line a "Show in log" tap lands on */
+.game-summary-event-log .gf-flash {
+    outline: 2px solid var(--brand-orange);
+    outline-offset: 1px;
+    transition: outline-color 1.5s ease-out;
+}
+.game-summary-event-log .gf-flash.gf-flash-fade { outline-color: transparent; }
+
+/* ---- connections ---- */
+.gf-conn-head {
+    text-align: left;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 0 0 6px;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+.gf-conn-head button,
+.gf-conn-more {
+    margin: 0;
+    padding: 4px 10px;
+    font-size: 0.85em;
+    color: var(--text-primary);
+    background: var(--surface-light);
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+    cursor: pointer;
+}
+.gf-conn-head button[aria-pressed="true"] { background: var(--surface-sorted); border-color: var(--color-primary-ink); }
+.gf-conn-more { display: block; margin: 6px auto 0; }
+
+.gf-pairs { display: flex; flex-direction: column; gap: 3px; }
+.gf-pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(40px, 1fr) auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 6px;
+    font-size: 0.9em;
+    border-radius: 4px;
+    color: var(--text-primary);
+}
+.gf-pair:nth-child(odd) { background: var(--surface-subtle); }
+.gf-pair-names { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.gf-pair-names .gf-arrow { color: var(--text-faint); padding: 0 3px; }
+.gf-pair-bar { height: 8px; background: var(--surface-dim); border-radius: 4px; overflow: hidden; min-width: 0; }
+.gf-pair-bar i { display: block; height: 100%; background: var(--pbp-blue-ink); border-radius: 4px; }
+.gf-pair-num { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; text-align: right; }
+.gf-pair-num small { font-weight: 400; color: var(--text-muted); }
+.gf-pair-badges { font-size: 0.8em; color: var(--text-muted); white-space: nowrap; min-width: 3.5em; text-align: right; }
+.gf-pair-badges .gf-goal { color: var(--pbp-green-ink); font-weight: 600; }
+
+/* matrix: throwers down, receivers across; scrolls sideways on a phone */
+.gf-matrix-scroll { overflow: auto; max-width: 100%; border: 1px solid var(--border-light); border-radius: 6px; }
+.gf-matrix { border-collapse: separate; border-spacing: 0; font-size: 0.82em; width: max-content; min-width: 100%; }
+.gf-matrix th, .gf-matrix td {
+    padding: 4px 6px;
+    text-align: center;
+    border-bottom: 1px solid var(--border-lighter);
+    border-right: 1px solid var(--border-lighter);
+    background-color: var(--surface-card);   /* sticky cells must be opaque */
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+.gf-matrix th { font-weight: 600; background-color: var(--surface-header-cell); }
+.gf-matrix thead th.gf-col {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    text-align: left;
+    padding: 6px 4px;
+    max-height: 110px;
+    font-weight: 500;
+}
+.gf-matrix th.gf-row, .gf-matrix thead th.gf-corner, .gf-matrix tfoot th.gf-row {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    text-align: left;
+    box-shadow: inset -1px 0 0 var(--table-sticky-edge-soft);
+}
+.gf-matrix thead th.gf-corner { z-index: 3; }
+.gf-matrix .gf-total { color: var(--text-muted); font-weight: 600; background-color: var(--surface-subtle); }
+.gf-matrix td.gf-cell { font-variant-numeric: tabular-nums; min-width: 2em; }
+.gf-matrix td.gf-miss { color: var(--text-faint); }
+.gf-matrix td.gf-heat-1 { background-color: color-mix(in srgb, var(--pbp-blue) 12%, var(--surface-card)); }
+.gf-matrix td.gf-heat-2 { background-color: color-mix(in srgb, var(--pbp-blue) 26%, var(--surface-card)); }
+.gf-matrix td.gf-heat-3 { background-color: color-mix(in srgb, var(--pbp-blue) 42%, var(--surface-card)); color: var(--white); }
+.gf-matrix td.gf-heat-4 { background-color: color-mix(in srgb, var(--pbp-blue) 62%, var(--surface-card)); color: var(--white); }
+.gf-matrix td.gf-heat-5 { background-color: var(--pbp-blue); color: var(--white); font-weight: 700; }
+.gf-matrix td.gf-cell .gf-cell-goals { font-size: 0.75em; opacity: 0.85; }
+
+.gf-empty { font-size: 0.85em; color: var(--text-muted); padding: 4px 6px; }

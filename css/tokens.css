@@ -326,6 +326,11 @@
     --mic-ok-pulse: rgba(46, 204, 113, 0.6);
     --mic-ok-pulse-out: rgba(46, 204, 113, 0);
     --mic-info-tint: rgba(52, 152, 219, 0.25);
+
+    /* Game Flow chart (ui/gameFlowChart.css): the half-plane washes behind
+       the score-margin line — green while we lead, red while they do. */
+    --flow-us-tint: rgba(40, 167, 69, 0.16);
+    --flow-them-tint: rgba(220, 53, 69, 0.14);
 }
 
 /* ============================================================================
@@ -630,4 +635,7 @@
     --mic-ok-pulse: rgba(46, 204, 113, 0.55);
     --mic-ok-pulse-out: rgba(46, 204, 113, 0);
     --mic-info-tint: rgba(52, 152, 219, 0.3);
+
+    --flow-us-tint: rgba(63, 196, 95, 0.2);
+    --flow-them-tint: rgba(255, 107, 120, 0.18);
 }

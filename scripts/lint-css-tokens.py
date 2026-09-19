@@ -30,7 +30,7 @@ TOKENS = ROOT / 'css' / 'tokens.css'
 # Every stylesheet that participates in the app's theme. The landing page, the
 # invite page and the public viewer are self-contained and deliberately absent.
 SHEETS = (sorted(glob.glob(str(ROOT / 'css' / '*.css')))
-          + [str(ROOT / 'ui' / 'panelSystem.css')]
+          + sorted(glob.glob(str(ROOT / 'ui' / '*.css')))
           + sorted(glob.glob(str(ROOT / 'narration' / '*.css')))
           + sorted(glob.glob(str(ROOT / 'playByPlay' / '*.css'))))
 

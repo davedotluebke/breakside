@@ -144,6 +144,7 @@
     <link rel="stylesheet" href="playByPlay/fullPbp.css">
     <link rel="stylesheet" href="playByPlay/fieldPbp.css">
     <link rel="stylesheet" href="playByPlay/replayView.css">
+    <link rel="stylesheet" href="ui/gameFlowChart.css">
     <link rel="stylesheet" href="narration/micButton.css">
     <link rel="stylesheet" href="narration/lineupNarration.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
@@ -692,6 +693,10 @@
             </table>
         </div>
         <div id="eventRosterTeamStats" class="team-stats-line" style="display:none;"></div>
+        <div id="eventConnectionsSection" style="display:none;">
+            <h3 class="event-connections-heading">Connections</h3>
+            <div id="eventConnectionsHost" class="gf-host"></div>
+        </div>
         <div class="management-row">
             <div class="management-container full-width">
                 <div class="management-controls">
@@ -1176,6 +1181,16 @@
                 </table>
             </div>
             <div id="gameSummaryTeamStats" class="team-stats-line" style="display:none;"></div>
+        </div>
+
+        <!-- Game Flow: the score-margin chart with its headline lines, and the
+             thrower→receiver Connections block (ui/gameFlowChart.js). Hidden
+             until the game has two completed points / one recorded pass. -->
+        <div id="gameFlowSection" style="display:none;">
+            <h3>Game Flow</h3>
+            <div id="gameFlowChartHost" class="gf-host"></div>
+            <h3 id="gameConnectionsHeading">Connections</h3>
+            <div id="gameConnectionsHost" class="gf-host"></div>
         </div>
 
         <!-- Game Event Log -->

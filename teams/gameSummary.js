@@ -19,6 +19,7 @@ import {
 } from '../utils/eventStats.js';
 import { buildGameLogEntries, renderGameLogEntriesHTML } from '../utils/gameLogRenderer.js';
 import { mountReplayView } from '../playByPlay/replayView.js';
+import { mountGameFlow, mountConnections } from '../ui/gameFlowChart.js';
 import { createTableSortController } from '../utils/tableSort.js';
 import { attachStatsColumnHelp } from '../utils/statsHelp.js';
 import { wireStatsLevelSelect } from '../utils/statsLevel.js';
@@ -82,6 +83,7 @@ function refreshGameSummaryForShare(game) {
     renderSummaryScore(game);
     renderGameSummaryStatsTable(game);
     renderGameSummaryTeamStats(game);
+    renderGameSummaryFlow(game);
     if (summaryReplayView) {
         _summaryLookup = buildPointPlayerLookup(game);
         _entryOptions = buildSummaryEntryOptions(game, _summaryLookup);
@@ -137,6 +139,7 @@ function renderGameSummary(game, { guest = false, live = false } = {}) {
     renderGameSummaryStatsTable(game);
     renderGameSummaryTeamStats(game);
     renderGameSummaryEventLog(game, { live, editable: !guest });
+    renderGameSummaryFlow(game);
 
     // Show the export button (and its player menu) if there are stats
     const exportBtn = document.getElementById('exportGameSummaryBtn');
@@ -307,6 +310,60 @@ function renderGameSummaryTeamStats(game) {
 }
 
 /**
+ * Game Flow (ui/gameFlowChart.js): the score-margin chart and headline lines
+ * plus the Connections block, between the team stats line and the log. Each
+ * mount hides itself when the game has nothing to show yet (fewer than two
+ * completed points; no pass with both ends recorded), and the whole section
+ * hides when neither drew. Re-mounted on every render, like the stats table.
+ */
+let summaryFlowView = null;
+let summaryConnView = null;
+function renderGameSummaryFlow(game) {
+    const section = document.getElementById('gameFlowSection');
+    const flowHost = document.getElementById('gameFlowChartHost');
+    const connHost = document.getElementById('gameConnectionsHost');
+    const connHeading = document.getElementById('gameConnectionsHeading');
+    if (!section || !flowHost || !connHost) return;
+    if (summaryFlowView) { try { summaryFlowView.destroy(); } catch (e) { /* gone */ } summaryFlowView = null; }
+    if (summaryConnView) { try { summaryConnView.destroy(); } catch (e) { /* gone */ } summaryConnView = null; }
+    const connView = summaryConnView && summaryConnView.view ? summaryConnView.view() : 'list';
+
+    summaryFlowView = mountGameFlow(flowHost, game, {
+        teamName: game.team || 'My Team',
+        opponentName: game.opponent || 'Opponent',
+        // point.players entries may be ids (id-era games) — same lookup the
+        // "Point N roster:" log lines use, read at tap time.
+        resolvePlayerName: entry => (_summaryLookup ? _summaryLookup(entry).name : entry),
+        onPointTap: pointIdx => scrollSummaryLogToPoint(pointIdx),
+    });
+    summaryConnView = mountConnections(connHost, game, { view: connView });
+    if (connHeading) connHeading.style.display = summaryConnView ? '' : 'none';
+    connHost.style.display = summaryConnView ? '' : 'none';
+    section.style.display = (summaryFlowView || summaryConnView) ? '' : 'none';
+}
+
+/**
+ * "Show in log" from a chart marker: scroll the log to that point's roster
+ * line, flash it, and click it so a mounted replay seeks there too
+ * (playByPlay/replayView.js listens for clicks on data-entry lines).
+ */
+function scrollSummaryLogToPoint(pointIdx) {
+    const logEl = document.getElementById('gameSummaryEventLog');
+    if (!logEl || !_lastRenderedGame || !_entryOptions) return;
+    const entries = buildGameLogEntries(_lastRenderedGame, _entryOptions);
+    let i = entries.findIndex(e => e.kind === 'roster' && e.pointIdx === pointIdx);
+    if (i < 0) i = entries.findIndex(e => e.pointIdx === pointIdx);
+    const line = i >= 0 ? logEl.querySelector(`[data-entry="${i}"]`) : null;
+    if (!line) return;
+    logEl.querySelectorAll('.gf-flash').forEach(n => n.classList.remove('gf-flash', 'gf-flash-fade'));
+    line.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    line.classList.add('gf-flash');
+    setTimeout(() => line.classList.add('gf-flash-fade'), 900);
+    setTimeout(() => line.classList.remove('gf-flash', 'gf-flash-fade'), 2600);
+    line.click();
+}
+
+/**
  * Human-readable label for a point classification.
  * @param {string} kind - return value of classifyPoint
  * @returns {string|null}
@@ -364,6 +421,7 @@ function renderGameSummaryEventLog(game, { live = false, editable = true } = {})
                     renderSummaryLogLines();
                     renderGameSummaryStatsTable(_lastRenderedGame);
                     renderGameSummaryTeamStats(_lastRenderedGame);
+                    renderGameSummaryFlow(_lastRenderedGame);
                 },
             });
         }

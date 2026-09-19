@@ -37,6 +37,10 @@ tests/*
 *.py
 *.sh
 
+# Session scratch files (gitignored; a staging deploy syncs the working
+# directory, so exclude them here too)
+scratchpad/*
+
 # Docs and license
 *.md
 LICENSE
