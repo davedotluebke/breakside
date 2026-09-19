@@ -120,8 +120,10 @@ function toggleQrPanel(row, show) {
     }
     panel.hidden = !open;
     if (btn) {
-        btn.textContent = open ? 'Hide QR' : 'QR';
+        // The label stays "QR" — a wider "Hide QR" would reflow the row on a
+        // phone; the expanded state is carried by aria-expanded and its style.
         btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        btn.title = open ? 'Hide the QR code' : 'Show this link as a QR code for someone to scan';
     }
 }
 

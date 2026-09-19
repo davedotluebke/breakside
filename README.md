@@ -85,6 +85,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 - **Game Summary** - Review completed games with sortable player stats table and full event log
 - **Excel (.xlsx) Export** - Export player + team statistics from game summaries, event rosters, and team rosters. Multi-sheet workbooks split by phase (event roster) or by event (team roster), with real Excel number/percent types and click-to-sort column headers
 - **JSON Export** - Export complete game data for analysis
+- **QR Codes** - Every share link and team invite can be shown as a QR code, so a parent on the sideline or a new coach scans the coach's phone instead of receiving a link. Generated in the app with no third-party code
 - **Local Storage** - Automatic saving of all team and game data
 - **Resume Games** - Pick up where you left off with in-progress games
 - **Game History** - View and manage past games for each team

@@ -1837,6 +1837,12 @@ the static origins have no `/api/*` — `landing/join.js` maps breakside
 hostnames to `https://api.breakside.pro` itself (mirrors `getApiBaseUrl()`);
 same-origin API calls only work when the page is served by the API host.
 
+The Invite Created modal also renders the invite link as a QR code under the
+link field (`teams/teamSettings.js showInviteModal`, encoder in
+[utils/qrCode.js](utils/qrCode.js) — see § Share Links for its contract), so
+the phone that is joining can scan it off the coach's screen instead of
+typing the code.
+
 ### Multi-User Polling Strategy
 
 **Controller polling** (via `POST /ping`):
@@ -1943,6 +1949,25 @@ How it is off, layer by layer:
 
 Shares minted while listing was on keep `listed: true` on disk; nothing
 reads it while the flag is off.
+
+**QR codes.** Every row in the Share Game dialog has a QR button that shows
+the link as a code under the row (rendered lazily, once per row), and a link
+that was just created opens with its code showing — the coach made it to hand
+to someone standing right there. The code is the share URL and nothing else,
+so a phone camera opens the viewer directly; it also sidesteps the clipboard,
+which iOS Safari has been known to refuse after the `await` in the create
+call. The encoder is [utils/qrCode.js](utils/qrCode.js): a pure,
+dependency-free byte-mode encoder for versions 1–10 at all four
+error-correction levels (a share URL is ~43 bytes, a version-4 symbol), with
+`qrSvg()` producing an inline SVG that carries its own white field and
+four-module quiet zone. That field is literal black-on-white in both themes
+on purpose — a scanner wants a dark code on a light ground, and the quiet
+zone is part of the symbol — which is why the SVG holds raw colours rather
+than tokens (the token lint covers stylesheets, not SVG text). Versions above
+10 are deliberately unsupported; `encodeQr` throws rather than emit a symbol
+it has not been tested against, and the unit test round-trips every level,
+version and mask through an independent decoder (`jsqr`, a devDependency of
+`tests/`).
 
 **If it comes back, it should come back admin-only.** The backlog entry in
 TODO.md sketches it: listing as an action only a Breakside admin
