@@ -45,6 +45,7 @@ import { powerManager } from '../utils/powerManager.js';
 import { standbyLabels, countdownState } from '../utils/standbyView.js';
 import { currentTeam } from '../store/storage.js';
 import { currentGame } from '../utils/helpers.js';
+import { applyTheme } from '../utils/theme.js';
 import { log } from '../utils/logger.js';
 
 const standbyScreen = (function() {
@@ -192,17 +193,31 @@ const standbyScreen = (function() {
     // for the duration and hand it back to the theme afterwards. (iOS reads
     // its standalone status-bar style once at launch, so this helps Android
     // and in-browser use; harmless elsewhere.)
+    //
+    // Handing back means re-running the theme rather than restoring the value
+    // we saw on the way in: utils/theme.js may have re-resolved in between (an
+    // `auto` preference following the OS flipping at dusk, mid-game), and the
+    // saved value would then be the wrong theme's. The saved copy is only the
+    // fallback for a theme module that isn't there.
     function setChromeBlack(on) {
         const meta = document.querySelector('meta[name="theme-color"]');
         if (!meta) return;
         if (on) {
-            savedThemeColor = meta.getAttribute('content');
+            if (savedThemeColor === null) savedThemeColor = meta.getAttribute('content');
             meta.setAttribute('content', STANDBY_THEME_COLOR);
-        } else if (savedThemeColor !== null) {
-            meta.setAttribute('content', savedThemeColor);
+        } else {
+            const saved = savedThemeColor;
             savedThemeColor = null;
+            if (typeof applyTheme === 'function') applyTheme();
+            else if (saved !== null) meta.setAttribute('content', saved);
         }
     }
+
+    // A theme change while standby is up rewrites theme-color underneath us;
+    // put it back to black until we leave.
+    document.addEventListener('breakside:theme-changed', () => {
+        if (isActive()) setChromeBlack(true);
+    });
 
     // ─── Enter / exit ───────────────────────────────────────────────────────
 
