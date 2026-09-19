@@ -354,11 +354,11 @@ const advancedSettings = (function() {
         },
         {
             group: 'Battery',
-            note: 'Phones don’t always survive a full tournament day. These help.',
+            note: 'Phones don’t always survive a full tournament day. These help — so does the ☀ in the game header: tap it for a true-black standby screen that shows only the score, and tap the screen to come back. On an OLED phone unlit pixels draw no power.',
             fields: [
                 {
                     key: 'power.keepScreenAwake', label: 'Keep screen awake in a game',
-                    help: 'Stops the display sleeping while you’re on the game screen, so you can turn your brightness right down — which saves far more power than the wake lock costs. Tap the ☀ in the game header to release it when you pocket the phone.',
+                    help: 'Stops the display sleeping while you’re on the game screen, so you can turn your brightness right down — which saves far more power than the wake lock costs. Press and hold the ☀ in the game header to release it when you pocket the phone.',
                     type: 'toggle'
                 }
             ]

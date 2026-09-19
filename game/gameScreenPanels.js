@@ -22,9 +22,11 @@
 import { currentTeam } from '../store/storage.js';
 import { currentGame } from '../utils/helpers.js';
 import { createPanelTitleBar } from '../ui/panelSystem.js';
-import { isLineCoach } from './controllerState.js';
+import { isLineCoach, showControllerToast } from './controllerState.js';
 import { wireGameScreenEvents } from './gameScreenEvents.js';
 import { refreshThemedImages } from '../utils/theme.js';
+import { powerManager } from '../utils/powerManager.js';
+import { standbyScreen } from '../ui/standbyScreen.js';
 import { log } from '../utils/logger.js';
 
 // =============================================================================
@@ -129,7 +131,7 @@ function createHeaderContent() {
         </div>
         
         <button class="header-wake-lock-btn" id="gameWakeLockBtn" hidden
-                title="Screen is being kept awake — tap to release">
+                title="Tap for a black standby screen; press and hold to let the screen sleep">
             <i class="fas fa-sun"></i>
         </button>
 
@@ -631,41 +633,88 @@ function initGameScreen() {
 }
 
 /**
- * Wake-lock indicator in the game header.
+ * The ☀ in the game header: tap for standby, press and hold to let the
+ * screen sleep.
  *
- * Visible only while the lock is actually held or the coach has released it —
- * so on a browser without the API (or with the setting off) it never appears
- * and costs nothing. Tapping toggles: the released state is sticky for the
- * rest of the game so pocketing the phone isn't undone by an app switch.
+ * Shown in every game, whether or not this browser has a wake lock — the
+ * standby screen (ui/standbyScreen.js) needs neither. The icon still reports
+ * the lock: lit while it is held, dimmed when the coach released it or the
+ * API is absent.
+ *
+ * The hold is what the tap used to be. Releasing the lock is sticky for the
+ * rest of the game so pocketing the phone isn't undone by an app switch; it
+ * moved to a long press because the tap is the gesture a coach reaches for
+ * on the line, and what they want there is a black screen, not a sleeping
+ * one they have to unlock. A toast confirms each hold — a dimmed icon under
+ * a thumb is easy to miss.
  */
+const WAKE_LOCK_HOLD_MS = 450;
+
 function wireWakeLockIndicator() {
     const btn = document.getElementById('gameWakeLockBtn');
     if (!btn) return;
 
-    function render() {
+    function render(inGame) {
         const wl = window.wakeLockManager;
-        if (!wl || !wl.isSupported() || !wl.isEnabled()) {
-            btn.hidden = true;
-            return;
-        }
-        const held = wl.isHeld();
-        const released = wl.isUserReleased();
-        // Nothing to say when we're not in a game and the coach hasn't
-        // explicitly opted out.
-        btn.hidden = !held && !released;
+        btn.hidden = !inGame;
+        const held = !!(wl && wl.isHeld());
         btn.classList.toggle('wake-lock-off', !held);
-        btn.title = held
-            ? 'Screen is being kept awake — tap to release'
-            : 'Screen may sleep — tap to keep it awake';
+        btn.title = (held ? 'Screen is being kept awake. ' : 'Screen may sleep. ')
+            + 'Tap for a black standby screen; press and hold to '
+            + (held ? 'let the screen sleep.' : 'keep the screen awake.');
     }
 
+    let holdTimer = null;
+    let holdFired = false;   // the hold handled this gesture; swallow its click
+
+    const hold = () => {
+        holdTimer = null;
+        holdFired = true;
+        const wl = window.wakeLockManager;
+        if (!wl || !wl.isSupported()) {
+            showControllerToast('This browser can’t keep the screen awake — use your phone’s auto-lock setting.', 'info', 4000);
+            return;
+        }
+        if (!wl.isEnabled()) {
+            showControllerToast('“Keep screen awake” is off in Advanced Settings → Battery.', 'info', 4000);
+            return;
+        }
+        const keepAwake = wl.toggleByUser();
+        showControllerToast(keepAwake
+            ? 'Screen will be kept awake for the rest of the game.'
+            : 'Screen may sleep now. Press and hold ☀ to keep it awake again.',
+            'info', 3500);
+    };
+    const startHold = () => {
+        holdFired = false;
+        if (holdTimer) clearTimeout(holdTimer);
+        holdTimer = setTimeout(hold, WAKE_LOCK_HOLD_MS);
+    };
+    const cancelHold = () => {
+        if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+    };
+
+    btn.addEventListener('touchstart', startHold, { passive: true });
+    btn.addEventListener('touchend', cancelHold);
+    btn.addEventListener('touchcancel', cancelHold);
+    btn.addEventListener('touchmove', cancelHold);
+    btn.addEventListener('mousedown', startHold);
+    btn.addEventListener('mouseup', cancelHold);
+    btn.addEventListener('mouseleave', cancelHold);
+    btn.addEventListener('contextmenu', (e) => { e.preventDefault(); });
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        window.wakeLockManager?.toggleByUser?.();
+        if (holdFired) {
+            holdFired = false;
+            e.preventDefault();
+            return;
+        }
+        standbyScreen.enter();
     });
-    document.addEventListener('breakside:wake-lock-changed', render);
-    document.addEventListener('breakside:power-plan', render);
-    render();
+
+    document.addEventListener('breakside:wake-lock-changed', () => render(powerManager.getContext().inGame));
+    document.addEventListener('breakside:power-plan', (e) => render(!!(e.detail && e.detail.ctx && e.detail.ctx.inGame)));
+    render(powerManager.getContext().inGame);
 }
 
 /**

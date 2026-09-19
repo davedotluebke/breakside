@@ -1,0 +1,145 @@
+/* =============================================================================
+   Standby screen — ui/standbyScreen.js
+
+   Theme-invariant on purpose. The whole point is an unlit OLED panel, so the
+   backdrop is literal --black in both themes and the text is the on-overlay
+   white family, which is likewise invariant (see css/tokens.css "Overlays").
+   Every text run is translucent white rather than a grey token: on OLED the
+   emitted light scales with the pixel value, so the dimmer the better, and
+   the brightest thing on the screen is the one the coach glances at (the
+   score). No animation runs while it is up — the only transition is the
+   one-shot fade on the way out, which doubles as the tap guard.
+   ============================================================================= */
+
+.standby-screen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    /* Above the game screen container (100, which also contains the Field
+       landscape takeover), the countdown box (1000), dialogs (1000) and the
+       mic button (2000); below toasts (10000), which a coach in standby must
+       still see — a handoff request arrives as one. */
+    z-index: 9000;
+    background: var(--black);
+    color: var(--on-overlay-dim);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding-top: env(safe-area-inset-top, 0);
+    padding-right: env(safe-area-inset-right, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    padding-left: env(safe-area-inset-left, 0);
+    box-sizing: border-box;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+    opacity: 1;
+    transition: opacity 180ms ease-out;
+}
+
+.standby-screen--active {
+    display: flex;
+}
+
+/* Fading out. Still display:flex and still the hit target, so a second tap
+   that lands during the fade is absorbed rather than reaching the game UI. */
+.standby-screen--leaving {
+    opacity: 0;
+}
+
+/* Nothing else may scroll or bounce under a finger on the black screen. */
+body.standby-active {
+    overflow: hidden !important;
+}
+
+.standby-score {
+    display: flex;
+    align-items: baseline;
+    gap: 0.18em;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: var(--on-overlay-soft);
+    /* Read at arm's length from across a sideline. */
+    font-size: clamp(72px, 24vmin, 160px);
+}
+
+.standby-score-sep {
+    font-weight: 300;
+    color: var(--on-overlay-dim);
+}
+
+.standby-labels {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5em;
+    max-width: 90vw;
+    font-family: 'Poppins', sans-serif;
+    font-size: clamp(16px, 4.5vmin, 24px);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--on-overlay-dim);
+    text-align: center;
+}
+
+.standby-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.standby-labels-sep {
+    flex: 0 0 auto;
+}
+
+.standby-countdown {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    margin-top: 6vmin;
+    color: var(--on-overlay-dim);
+}
+
+.standby-countdown[hidden] {
+    display: none;
+}
+
+.standby-countdown-label {
+    font-family: 'Poppins', sans-serif;
+    font-size: clamp(13px, 3.5vmin, 18px);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+
+.standby-countdown-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(36px, 11vmin, 72px);
+    line-height: 1.1;
+}
+
+/* Last seconds before the next pull: the one moment the number should be as
+   bright as the score. */
+.standby-countdown--urgent .standby-countdown-value {
+    color: var(--on-overlay-bright);
+}
+
+.standby-hint {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0));
+    text-align: center;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.9rem;
+    letter-spacing: 0.04em;
+    color: var(--on-overlay-dim);
+    opacity: 0.7;
+}
