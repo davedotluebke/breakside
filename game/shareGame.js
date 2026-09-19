@@ -12,6 +12,7 @@
 import { log } from '../utils/logger.js';
 import { getApiBaseUrl, authFetch } from '../store/sync.js';
 import { showControllerToast } from './controllerState.js';
+import { encodeQr, qrSvg } from '../utils/qrCode.js';
 
 /*
  * Public listing switch. false since 2026-09-07: letting any coach of any
@@ -82,12 +83,50 @@ function renderShareRow(share) {
                 <span class="share-link-url">…/view/${esc(share.hash)}</span>
                 <span class="share-link-meta">${expiry}${listedBadge ? ' · ' : ''}${listedBadge}</span>
             </div>
+            <button class="share-qr-btn" title="Show this link as a QR code for someone to scan" aria-expanded="false">QR</button>
             <button class="share-copy-btn" title="Copy link">Copy</button>
             <button class="share-revoke-btn" title="Turn off this link — it stops working for everyone who has it">Turn off</button>
-        </div>`;
+        </div>
+        <div class="share-qr-panel" data-share-id="${esc(share.id)}" hidden></div>`;
 }
 
-async function loadShareList(modal, gameId) {
+/**
+ * Fill a row's QR panel (once) and show or hide it.
+ *
+ * The code is the share URL itself, so a parent on the sideline points their
+ * camera at the coach's phone instead of typing or receiving a link — and it
+ * sidesteps the clipboard entirely, which iOS Safari has been known to refuse
+ * after the await in createShare. Rendered lazily: a dialog listing several
+ * links shouldn't pay for codes nobody opens.
+ */
+function toggleQrPanel(row, show) {
+    const panel = row.nextElementSibling;
+    const btn = row.querySelector('.share-qr-btn');
+    if (!panel || !panel.classList.contains('share-qr-panel')) return;
+    const url = row.dataset.shareUrl;
+    const open = show === undefined ? panel.hidden : !!show;
+    if (open && !panel.dataset.rendered) {
+        try {
+            const svg = qrSvg(encodeQr(url), { label: `QR code for ${url}` });
+            panel.innerHTML = `
+                ${svg}
+                <span class="share-qr-caption">Scan to watch live</span>
+                <span class="share-qr-url">${esc(url)}</span>`;
+            panel.dataset.rendered = '1';
+        } catch (err) {
+            log('QR render failed:', err);
+            panel.innerHTML = '<span class="share-qr-caption">Couldn\'t draw a QR code for this link.</span>';
+        }
+    }
+    panel.hidden = !open;
+    if (btn) {
+        btn.textContent = open ? 'Hide QR' : 'QR';
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+}
+
+async function loadShareList(modal, gameId, opts) {
+    const openQrFor = opts && opts.openQrFor;
     const listEl = modal.querySelector('#shareLinksList');
     listEl.innerHTML = '<p class="share-list-note">Loading links…</p>';
     try {
@@ -111,6 +150,16 @@ async function loadShareList(modal, gameId) {
             return;
         }
         listEl.innerHTML = active.map(renderShareRow).join('');
+
+        listEl.querySelectorAll('.share-qr-btn').forEach(btn => {
+            btn.addEventListener('click', () => toggleQrPanel(btn.closest('.share-link-row')));
+        });
+        // A link that was just created opens with its code showing: the
+        // coach made it to hand to someone standing right there.
+        if (openQrFor) {
+            const row = listEl.querySelector(`.share-link-row[data-share-id="${CSS.escape(String(openQrFor))}"]`);
+            if (row) toggleQrPanel(row, true);
+        }
 
         listEl.querySelectorAll('.share-copy-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
@@ -172,7 +221,7 @@ async function createShare(modal, gameId) {
             copied ? 'Share link created and copied' : 'Share link created',
             'success', 3000
         );
-        loadShareList(modal, gameId);
+        loadShareList(modal, gameId, { openQrFor: data.id || (data.share && data.share.id) });
     } catch (err) {
         log('Share create failed:', err);
         showControllerToast('Couldn\'t create the link — check your connection', 'error');
@@ -217,7 +266,7 @@ function showShareGameDialog(game) {
                 <p class="share-intro">
                     Anyone with a share link can watch
                     <strong>${esc(game.team || 'this game')} vs ${esc(game.opponent || 'TBD')}</strong>
-                    live — score and play-by-play, no account needed.
+                    live — score and play-by-play, no account needed. Copy a link, or show its QR code for someone to scan.
                 </p>
                 <div id="shareLinksList"></div>
                 <div class="share-create-row">
