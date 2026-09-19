@@ -12,7 +12,9 @@
  *   │
  *   ├── utils/                   # Utility functions
  *   │   ├── helpers.js          # Pure utility functions and current state accessors
- *   │   └── eventStats.js       # Player/team stats from game events (id-keyed)
+ *   │   ├── eventStats.js       # Player/team stats from game events (id-keyed)
+ *   │   ├── gameFlow.js         # Score margin by point, runs, leads, halves (pure)
+ *   │   └── connections.js      # Thrower→receiver pair counts (pure)
  *   │
  *   ├── screens/                 # Screen management
  *   │   └── navigation.js       # Screen navigation and state management
@@ -40,6 +42,7 @@
  *   ├── ui/                      # UI update functions
  *   │   ├── activePlayersDisplay.js # Line-tab helpers (running scores); table itself lives in game/selectLine.js
  *   │   ├── eventLogDisplay.js   # Event log management and display
+ *   │   ├── gameFlowChart.js     # Game Flow chart + Connections block on the Review screen
  *   │   └── buttonLayout.js      # UI consistency functions (button width matching)
  *   │
  *   ├── main.js                  # Application bootstrap (~200 lines)
