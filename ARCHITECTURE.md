@@ -1264,6 +1264,57 @@ All stats are computed on demand from the event stream — none are stored on pl
 - **Player stats** (`accumulateGameStats`): goals, assists, **hockey assists** (the thrower of the pass *before* the assist) and **huck hockey assists** (a hockey assist that was itself a huck — counted in the HA total too), completions, completion %, hucks, defensive plays, turnovers, +/-, points/time played.
 - **Team point classification** (`classifyPoint`): each completed point is one of `break` (scored on D), `cleanHold` (scored on O, no turnover), `hold`/dirty (scored on O after ≥1 turnover), `broken` (started O, lost), or `opponentHold` (started D, lost). Surfaced as per-point badges in the game log and as a per-game / per-event summary line.
 - **Break denominators.** `getGameTeamStats` reports breaks per D-point *and* per D-possession. A D-point can contain multiple defensive possessions (turnover-back), so the per-possession rate is the truer measure of D-line conversion.
+- **Game flow** (`utils/gameFlow.js`, pure): the point-by-point score margin recounted from point winners (in-progress points skipped), each point's classification and start side, runs (maximal streaks by one side; only 2+ are reported, and the biggest per side), lead changes (a tie never changes the leader), ties, largest leads, the halftime split (the first point carrying an `Other{halftime}` event ends the first half), timeouts by side from `Other{timeout, calledBy}`, and the longest timed point. `describeGameFlow` turns that into the headline lines the Review screen and the xlsx footer print. Drawn by `ui/gameFlowChart.js` as an inline SVG; see § Game Flow below.
+- **Connections** (`utils/connections.js`, pure): every thrower→receiver pair with completions, attempts, goals, hucks, drops and throwaways, for one game or a list. Attribution follows `accumulateGameStats`: a `Throw` with both refs is a completion; a `Turnover` with `drop_flag` and both refs, or a throwaway that recorded an intended receiver, is an attempt the pair did not complete; a receiver-less turnover belongs to no pair. Note the one deliberate difference from the per-player table: a drop is *not* in the thrower's Throws/Comp% (fault ruling), but it *is* in the pair's attempts, because "how often do these two connect" is a question about the pair. Ids come from the same `buildPlayerNameResolver` the stats use, so bare-name and `{name, id}` refs land on one pair.
+
+### Game Flow (Review screen)
+
+The Review / post-game summary (`teams/gameSummary.js`) shows a **Game Flow**
+section between the team stats line and the log — the share viewer's guests
+see it too, since that is the same screen. `ui/gameFlowChart.js` draws it;
+`utils/gameFlow.js` and `utils/connections.js` compute it (§ Derived
+Statistics above).
+
+- **The chart** is an inline SVG of the score margin (us minus them) after
+  every completed point: a polyline from 0–0, the half-plane above zero washed
+  green and below washed red (`--flow-us-tint` / `--flow-them-tint`), a marker
+  per point coloured by `classifyPoint` (break blue, hold green, broken red,
+  their hold hollow — the same reading as the log badges), the biggest run of
+  each side as a thick translucent segment, a dashed `½` at halftime, `T`
+  markers for timeouts (above for ours, below for theirs), and the final
+  score beside the last marker. The vertical range is the margins actually
+  reached plus one step past zero, so a wire-to-wire game uses the whole
+  height. Colours are CSS classes on the SVG nodes (`ui/gameFlowChart.css`),
+  never presentation attributes, so both themes hold and the token lint sees
+  them.
+- **Sizing.** The SVG is built as a string at the host's real pixel width
+  (`viewBox` = width × 190) and rebuilt by a `ResizeObserver`. That is what
+  makes the first draw work at all: `renderGameSummary` runs while the screen
+  is still `display: none`, so the width is 0 until `showScreen` flips it,
+  and the observer fires then.
+- **Tooltip.** Hover previews, tap pins (a second tap or a tap elsewhere
+  unpins); it lists the score, the point's classification and start side,
+  its duration, timeouts, and the line, resolved through the same
+  `buildPointPlayerLookup` the "Point N roster:" lines use. **Show in log**
+  scrolls the log to that point's roster line, flashes it, and clicks it, so
+  a mounted replay (§ Replay viewer) seeks there as well.
+- **Connections** shows the top six pairs as bars (completions / attempts,
+  goals and hucks as badges) with "Show all", or the full thrower × receiver
+  matrix: throwers down by passes thrown, receivers across (vertical
+  headings), cells shaded in five steps of `--pbp-blue` by completions with
+  `★` per goal connection, a sticky row-header column, and Thrown / Caught
+  totals. The block hides when no pass has both ends recorded; the whole
+  section hides below two completed points. **Event Roster + Stats** mounts
+  the same Connections block over the games in the scope menu.
+- **Export.** A whole-team xlsx export of a game gains a **Game Flow** sheet
+  (one row per point, the headline lines as a footer) and a **Connections**
+  sheet (one row per pair). A single-player export gets neither, since both
+  name other players and that export is the privacy-narrowed handout
+  (§ Single-player exports).
+
+Unit tests: `tests/unit/gameFlow.test.mjs`, `tests/unit/connections.test.mjs`;
+e2e: the multi-point game in `tests/scenarios/02-scoring-and-events.spec.ts`
+asserts the section draws. Design notes: `docs/dev-notes/game-flow.md`.
 
 ### Possession Sets (zone tracking)
 
@@ -1418,7 +1469,7 @@ cells read `—`, matching what the plain `+/-` total does there.
 
 | Screen | Workbook layout |
 |--------|-----------------|
-| Game Summary / Review | One sheet (titled by opponent) |
+| Game Summary / Review | Stats sheet (titled by opponent), plus **Game Flow** and **Connections** sheets on a whole-team export (see § Game Flow) |
 | Event Roster | "All phases" sheet + one sheet per phase; only attending players; team-stats footer per sheet |
 | Team Roster (Edit Roster) | "All games" sheet + one sheet per event the team played + a "Standalone" sheet |
 

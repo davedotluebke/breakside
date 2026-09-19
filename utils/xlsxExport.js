@@ -9,6 +9,8 @@
 import { formatTeamStatsLine, sumPlayerStats } from './eventStats.js';
 import { getStatsLevel } from './statsLevel.js';
 import { sheetStatsColumns } from './statsColumns.js';
+import { buildGameFlow, describeGameFlow } from './gameFlow.js';
+import { buildConnections } from './connections.js';
 
 /**
  * The column specs a sheet exports, honouring the active stats level. The
@@ -131,6 +133,91 @@ function aoaToFormattedSheet(sheet) {
 }
 
 /**
+ * A plain 2D array → worksheet with column widths and optional percent /
+ * decimal formats, for the sheets that don't follow the stats-column specs
+ * (Game Flow, Connections). `fmts` maps 0-based column index → 'pct' | 'dec'.
+ * @param {Array<Array>} aoa
+ * @param {number[]} widths - character widths per column
+ * @param {Object<number, string>} [fmts]
+ * @param {string} [autofilterRef] - A1 range for a sort/filter dropdown row
+ */
+function aoaToPlainSheet(aoa, widths, fmts = {}, autofilterRef = null) {
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = widths.map(wch => ({ wch }));
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let R = range.s.r; R <= range.e.r; R++) {
+        Object.entries(fmts).forEach(([c, fmt]) => {
+            const cell = ws[`${XLSX.utils.encode_col(Number(c))}${R + 1}`];
+            if (cell && typeof cell.v === 'number') {
+                cell.t = 'n';
+                cell.z = fmt === 'pct' ? '0%' : '0.00';
+            }
+        });
+    }
+    if (autofilterRef) ws['!autofilter'] = { ref: autofilterRef };
+    return ws;
+}
+
+/**
+ * The "Game Flow" sheet: one row per completed point with the running score
+ * and margin, how the point went, and its timing; the headline lines
+ * (biggest run, lead changes, halves…) as a footer. Null when the game has
+ * fewer than two completed points — nothing to chart yet.
+ * @param {object} game
+ * @param {{teamName: string, opponentName: string}} names
+ * @returns {{ws: object, name: string}|null}
+ */
+function buildGameFlowSheet(game, { teamName, opponentName }) {
+    const flow = buildGameFlow(game);
+    if (flow.points.length < 2) return null;
+    const kindLabel = { break: 'Break', cleanHold: 'Clean hold', hold: 'Hold', broken: 'Broken', opponentHold: 'Their hold' };
+    const aoa = [[`Game flow: ${teamName} vs ${opponentName}`]];
+    const header = ['Point', teamName, opponentName, 'Margin', 'Scored by', 'Started on', 'Result', 'Minutes', 'Halftime after', `Timeouts (${teamName})`, `Timeouts (${opponentName})`];
+    aoa.push(header);
+    flow.points.forEach(p => {
+        aoa.push([
+            p.number, p.us, p.them, p.diff, p.winner === 'us' ? teamName : opponentName,
+            p.startedOn === 'O' ? 'Offense' : 'Defense', kindLabel[p.kind] || '',
+            p.durationMs ? Math.round(p.durationMs / 600) / 100 : '',
+            p.halftimeAfter ? 'Yes' : '', p.timeoutsUs || '', p.timeoutsThem || '',
+        ]);
+    });
+    const lines = describeGameFlow(flow, { teamName, opponentName });
+    if (lines.length) {
+        aoa.push([]);
+        lines.forEach(line => aoa.push([line]));
+    }
+    const filter = XLSX.utils.encode_range({ r: 1, c: 0 }, { r: flow.points.length, c: header.length - 1 });
+    const ws = aoaToPlainSheet(aoa, [7, 12, 12, 8, 14, 11, 11, 9, 14, 12, 12], { 7: 'dec' }, filter);
+    return { ws, name: 'Game Flow' };
+}
+
+/**
+ * The "Connections" sheet: one row per thrower→receiver pair, most
+ * completions first, over one game or a list of games. Null when no pass
+ * has both ends recorded.
+ * @param {object|Array<object>} games
+ * @param {string} [title]
+ * @returns {{ws: object, name: string}|null}
+ */
+function buildConnectionsSheet(games, title = 'Connections') {
+    const conn = buildConnections(games);
+    if (!conn.pairs.length) return null;
+    const aoa = [[title]];
+    const header = ['Thrower', 'Receiver', 'Completions', 'Attempts', 'Comp%', 'Goals', 'Hucks', 'Drops', 'Throwaways'];
+    aoa.push(header);
+    conn.pairs.forEach(p => {
+        aoa.push([p.throwerName, p.receiverName, p.completions, p.attempts,
+            p.attempts ? p.completions / p.attempts : '', p.goals, p.hucks, p.drops, p.throwaways]);
+    });
+    aoa.push(['Team', '', conn.totals.completions, conn.totals.attempts,
+        conn.totals.attempts ? conn.totals.completions / conn.totals.attempts : '', conn.totals.goals, '', '', '']);
+    const filter = XLSX.utils.encode_range({ r: 1, c: 0 }, { r: conn.pairs.length + 1, c: header.length - 1 });
+    const ws = aoaToPlainSheet(aoa, [16, 16, 12, 10, 8, 7, 7, 7, 11], { 4: 'pct' }, filter);
+    return { ws, name: 'Connections' };
+}
+
+/**
  * Trigger a download of the given SheetJS workbook with the given filename.
  */
 function downloadWorkbook(wb, filename) {
@@ -174,6 +261,9 @@ function safeFilename(name) {
 export {
     buildStatsSheetAoA,
     aoaToFormattedSheet,
+    aoaToPlainSheet,
+    buildGameFlowSheet,
+    buildConnectionsSheet,
     downloadWorkbook,
     safeSheetName,
     uniqueSheetName,

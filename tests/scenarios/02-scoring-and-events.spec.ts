@@ -84,5 +84,13 @@ test.describe('scoring and events', () => {
     // End game and verify summary
     await endGame(page);
     await expectFinalScore(page, 2, 1);
+
+    // Game Flow (ui/gameFlowChart.js) draws once two points are complete:
+    // one marker per point, the headline lines above the chart, and the
+    // Connections block for the attributed score.
+    await expect(page.locator('#gameFlowSection')).toBeVisible();
+    await expect(page.locator('#gameFlowChartHost .gf-pt')).toHaveCount(3);
+    await expect(page.locator('#gameFlowChartHost .gf-line', { hasText: 'Lead changes' })).toBeVisible();
+    await expect(page.locator('#gameConnectionsHost .gf-pair').first()).toBeVisible();
   });
 });

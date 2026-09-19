@@ -30,6 +30,7 @@ import {
 } from './exportPlayerPicker.js';
 import {
     buildStatsSheetAoA, aoaToFormattedSheet, downloadWorkbook,
+    buildGameFlowSheet, buildConnectionsSheet,
     safeSheetName, safeFilename,
 } from '../utils/xlsxExport.js';
 import { showScreen } from '../screens/navigation.js';
@@ -491,6 +492,15 @@ function exportGameSummaryXLSX() {
     const ws = aoaToFormattedSheet(aoa);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, safeSheetName(player ? player.name : opponent));
+    // Game Flow and Connections ride along on a whole-team export. A
+    // single-player sheet is a privacy-narrowed handout (see ARCHITECTURE.md
+    // § Single-player exports), and both extra sheets name other players.
+    if (!player) {
+        const flowSheet = buildGameFlowSheet(game, { teamName, opponentName: opponent });
+        if (flowSheet) XLSX.utils.book_append_sheet(wb, flowSheet.ws, flowSheet.name);
+        const connSheet = buildConnectionsSheet(game, `Connections: ${teamName} vs ${opponent}`);
+        if (connSheet) XLSX.utils.book_append_sheet(wb, connSheet.ws, connSheet.name);
+    }
     downloadWorkbook(wb, `${safeFilename(exportFilename(player, opponent))}-stats.xlsx`);
 }
 

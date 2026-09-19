@@ -53,10 +53,12 @@ function chartSVG(flow, width) {
     const plotH = CHART_H - PAD.top - PAD.bottom;
     const step = plotW / n;
     const x = i => PAD.left + (i + 1) * step;       // i = -1 is the 0–0 start
-    const maxAbs = pts.reduce((m, p) => Math.max(m, Math.abs(p.diff)), 0);
-    const M = Math.max(2, maxAbs);
-    const yMid = PAD.top + plotH / 2;
-    const y = d => yMid - d * (plotH / 2) / M;
+    // Vertical range: the margins the game actually reached, plus one step
+    // past zero on the other side so the baseline never sits on an edge. A
+    // wire-to-wire game thus uses the whole height instead of half of it.
+    const maxD = Math.max(1, ...pts.map(p => p.diff));
+    const minD = Math.min(-1, ...pts.map(p => p.diff));
+    const y = d => PAD.top + (maxD - d) * plotH / (maxD - minD);
     const f = v => Math.round(v * 10) / 10;
 
     const linePts = [[x(-1), y(0)], ...pts.map((p, i) => [x(i), y(p.diff)])];
@@ -71,15 +73,16 @@ function chartSVG(flow, width) {
     </defs>`;
 
     // Grid: integer margins, thinned when the range is wide.
-    const gridStep = M <= 6 ? 1 : M <= 12 ? 2 : 5;
-    for (let d = -M; d <= M; d += gridStep) {
+    const span = maxD - minD;
+    const gridStep = span <= 12 ? 1 : span <= 24 ? 2 : 5;
+    for (let d = Math.ceil(minD / gridStep) * gridStep; d <= maxD; d += gridStep) {
         if (d === 0) continue;
         out += `<line class="gf-grid" x1="${PAD.left}" x2="${f(PAD.left + plotW)}" y1="${f(y(d))}" y2="${f(y(d))}"/>`;
     }
     out += `<line class="gf-zero" x1="${PAD.left}" x2="${f(PAD.left + plotW)}" y1="${f(y(0))}" y2="${f(y(0))}"/>`;
-    out += `<text class="gf-label" x="${PAD.left - 6}" y="${f(y(M) + 4)}" text-anchor="end">+${M}</text>`;
+    out += `<text class="gf-label" x="${PAD.left - 6}" y="${f(y(maxD) + 4)}" text-anchor="end">+${maxD}</text>`;
     out += `<text class="gf-label" x="${PAD.left - 6}" y="${f(y(0) + 4)}" text-anchor="end">0</text>`;
-    out += `<text class="gf-label" x="${PAD.left - 6}" y="${f(y(-M) + 4)}" text-anchor="end">−${M}</text>`;
+    out += `<text class="gf-label" x="${PAD.left - 6}" y="${f(y(minD) + 4)}" text-anchor="end">−${-minD}</text>`;
 
     // Half-plane washes, then the biggest runs, then the line itself.
     out += `<polygon class="gf-area-us" points="${areaStr}" clip-path="url(#${id}a)"/>`;
