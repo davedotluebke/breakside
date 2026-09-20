@@ -24,6 +24,7 @@ The rules, in the order relay.py applies them:
    address.
 """
 from dataclasses import dataclass, field
+from email.utils import parseaddr
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 from .addresses import normalize_email
@@ -64,11 +65,26 @@ class Decision:
 # 1. Loops
 # ==========================================================================
 
-def loop_reason(headers: Mapping[str, str], own_domain: str) -> Optional[str]:
+def _is_null_sender(value: Optional[str]) -> bool:
+    """True for the SMTP null sender (``<>`` or empty); False when unknown."""
+    return value is not None and value.strip().strip("<>").strip() == ""
+
+
+def loop_reason(headers: Mapping[str, str], own_domain: str,
+                envelope_from: Optional[str] = None) -> Optional[str]:
     """Return why this message must not be relayed, or None if it may be.
 
     ``headers`` is a case-insensitive-ish mapping (relay.py passes a dict of
-    lowercased header names to their first value).
+    lowercased header names to their first value). ``envelope_from`` is the
+    SMTP MAIL FROM when the caller knows it.
+
+    Two families: our own mail coming back (``loop-*``) and mail no human
+    wrote (``auto-*``). The important case of the second is a delivery
+    report: a mail server's Delivery Status Notification for a bounce is
+    addressed to the message's From, which for relayed mail is the list
+    address, so it arrives here looking like a stranger's post. It must be
+    dropped, not held: the bounce itself reaches inbound.py as an SES
+    notification and is recorded on the contact there.
     """
     lower = {str(k).lower(): (v or "") for k, v in headers.items()}
     if lower.get("x-breakside-list"):
@@ -81,7 +97,15 @@ def loop_reason(headers: Mapping[str, str], own_domain: str) -> Optional[str]:
         return "loop-auto-submitted"
     if lower.get("x-auto-response-suppress") or lower.get("x-autoreply"):
         return "loop-auto-reply"
+    content_type = lower.get("content-type", "").lower().replace(" ", "").replace('"', "")
+    if content_type.startswith("multipart/report"):
+        return "auto-delivery-report" if "report-type=delivery-status" in content_type else "auto-report"
     sender_from = lower.get("from", "")
+    sender_local = parseaddr(sender_from)[1].split("@", 1)[0].strip().lower()
+    if sender_local in ("mailer-daemon", "postmaster"):
+        return "auto-mailer-daemon"
+    if _is_null_sender(envelope_from) or _is_null_sender(lower.get("return-path")):
+        return "auto-null-sender"
     if own_domain and f"@{own_domain.lower()}" in sender_from.lower():
         return "loop-own-address"
     return None

@@ -244,15 +244,53 @@ JSON
 }
 
 # ---------- 5. configuration set --
+# ---------- 5. identity feedback ----
+ensure_identity_feedback() {
+    bold "5. SES identity feedback (bounce/complaint notifications → topic, feedback emails off)"
+    # By default SES also *emails* a Delivery Status Notification for every
+    # bounce to the message's From. For relayed mail that is the list
+    # address, so the DSN comes back through the receipt rule looking like a
+    # post from MAILER-DAEMON (the relay drops it, but it is noise and once
+    # ended up in quarantine). Forwarding can only be switched off once the
+    # identity has SNS topics for both bounces and complaints, which only the
+    # v1 API sets. Those notifications replace the configuration set's
+    # BOUNCE/COMPLAINT events (step 6) so each bounce is recorded once.
+    local kind current
+    for kind in Bounce Complaint; do
+        current=$(aws ses get-identity-notification-attributes --identities "$MAIL_DOMAIN" \
+            --query "NotificationAttributes.\"$MAIL_DOMAIN\".${kind}Topic" --output text 2>/dev/null || echo None)
+        if [[ "$current" == "$TOPIC_ARN" ]]; then
+            have "$kind notifications → topic"
+        else
+            doing "send $kind notifications to the topic"
+            apply aws ses set-identity-notification-topic --identity "$MAIL_DOMAIN" \
+                --notification-type "$kind" --sns-topic "$TOPIC_ARN"
+        fi
+    done
+    current=$(aws ses get-identity-notification-attributes --identities "$MAIL_DOMAIN" \
+        --query "NotificationAttributes.\"$MAIL_DOMAIN\".ForwardingEnabled" --output text 2>/dev/null || echo True)
+    if [[ "$current" == "False" ]]; then
+        have "feedback emails off"
+    else
+        doing "turn feedback emails off"
+        apply aws sesv2 put-email-identity-feedback-attributes --email-identity "$MAIL_DOMAIN" \
+            --no-email-forwarding-enabled
+    fi
+    return 0
+}
+
+# ---------- 6. configuration set ----
 ensure_configuration_set() {
-    bold "5. SES configuration set $NAME (bounces/complaints → topic)"
+    bold "6. SES configuration set $NAME (rejects → topic)"
     if aws sesv2 get-configuration-set --configuration-set-name "$NAME" >/dev/null 2>&1; then
         have "configuration set exists"
     else
         doing "create configuration set"
         apply aws sesv2 create-configuration-set --configuration-set-name "$NAME" >/dev/null
     fi
-    local dest="{\"Enabled\":true,\"MatchingEventTypes\":[\"BOUNCE\",\"COMPLAINT\",\"REJECT\"],\"SnsDestination\":{\"TopicArn\":\"$TOPIC_ARN\"}}"
+    # Bounces and complaints arrive as identity notifications (step 5);
+    # listing them here too would record every bounce twice.
+    local dest="{\"Enabled\":true,\"MatchingEventTypes\":[\"REJECT\"],\"SnsDestination\":{\"TopicArn\":\"$TOPIC_ARN\"}}"
     # A set with no destinations omits the key; the CLI then prints "None",
     # which is why this compares the name rather than grepping for any output.
     local existing
@@ -272,7 +310,7 @@ ensure_configuration_set() {
 
 # ---------- 6. IAM policy ---
 ensure_iam() {
-    bold "6. IAM policy $POLICY_NAME on role $ROLE"
+    bold "7. IAM policy $POLICY_NAME on role $ROLE"
     local doc arn
     doc=$(cat <<JSON
 {"Version":"2012-10-17","Statement":[
@@ -313,8 +351,11 @@ JSON
 print_status() {
     bold "Identity"
     aws sesv2 get-email-identity --email-identity "$MAIL_DOMAIN" \
-        --query '{Verified:VerifiedForSendingStatus,DkimStatus:DkimAttributes.Status,MailFrom:MailFromAttributes.MailFromDomain,MailFromStatus:MailFromAttributes.MailFromDomainStatus}' \
+        --query '{Verified:VerifiedForSendingStatus,DkimStatus:DkimAttributes.Status,MailFrom:MailFromAttributes.MailFromDomain,MailFromStatus:MailFromAttributes.MailFromDomainStatus,FeedbackEmails:FeedbackForwardingStatus}' \
         --output table 2>/dev/null || note "identity not created yet"
+    aws ses get-identity-notification-attributes --identities "$MAIL_DOMAIN" \
+        --query "NotificationAttributes.\"$MAIL_DOMAIN\".{BounceTopic:BounceTopic,ComplaintTopic:ComplaintTopic}" \
+        --output table 2>/dev/null || true
     local tokens
     tokens=$(aws sesv2 get-email-identity --email-identity "$MAIL_DOMAIN" --query 'DkimAttributes.Tokens' --output text 2>/dev/null || true)
     bold "DNS records to publish for $MAIL_DOMAIN (at the registrar that hosts the zone)"
@@ -355,6 +396,7 @@ ensure_identity
 ensure_bucket
 ensure_topic_and_queues
 ensure_receipt_rule
+ensure_identity_feedback
 ensure_configuration_set
 ensure_iam
 echo

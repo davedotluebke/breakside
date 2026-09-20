@@ -38,6 +38,15 @@ const REASON_LABELS = {
     'list-disabled': 'List is turned off',
     'unknown-alias': 'No player has this address',
     'too-many-recipients': 'Too many recipients',
+    'loop-own-header': 'Already relayed by Breakside (loop)',
+    'loop-precedence': 'Bulk or list mail',
+    'loop-auto-submitted': 'Auto-generated mail',
+    'loop-auto-reply': 'Auto-reply',
+    'loop-own-address': 'Sent from a list address',
+    'auto-delivery-report': 'Delivery report from a mail server (the bounce is noted on the contact)',
+    'auto-report': 'Automated report from a mail server',
+    'auto-mailer-daemon': 'Automated mail from a mail server',
+    'auto-null-sender': 'Automated mail (no sender address)',
 };
 
 let state = null;          // last /mail payload

@@ -29,7 +29,7 @@ The apex `breakside.pro` MX points at Google Workspace, which is how `help@break
 ### Architecture
 
 - **Inbound**: SES email receiving (us-east-1). A receipt rule for `team.breakside.pro` stores the raw MIME in S3 and notifies an SNS topic; an SQS queue subscribes. The API box **long-polls the queue** from a background task in the FastAPI lifespan, fetches the object, applies policy, relays. No inbound webhook, no port 25 on the box; SES does spam/virus scanning first; if the box is down, mail waits in the queue.
-- **Outbound**: SES `SendRawEmail` from the box. `team.breakside.pro` verified with Easy DKIM and a custom MAIL FROM (`bounce.team.breakside.pro`) so SPF aligns too. Bounces and complaints flow through a configuration set to the same queue and are recorded per contact.
+- **Outbound**: SES `SendRawEmail` from the box. `team.breakside.pro` verified with Easy DKIM and a custom MAIL FROM (`bounce.team.breakside.pro`) so SPF aligns too. Bounces and complaints flow as identity notifications to the same queue and are recorded per contact; SES's feedback *emails* are off, since a DSN is addressed to the From (the list address) and would come back as a post.
 - **From rewriting** (the non-obvious part): Yahoo/AOL/Apple publish DMARC `p=reject`, so relaying `From: parent@yahoo.com` unchanged gets rejected everywhere. Like Google Groups, we rewrite:
 
   ```
@@ -43,7 +43,7 @@ The apex `breakside.pro` MX points at Google Workspace, which is how `help@break
   ```
 
   `Message-ID`, `In-Reply-To`, `References`, attachments and HTML pass through untouched so threads stay intact.
-- **Policy, in order**: drop loops (our own `X-Breakside-List`, `Precedence: list`/`bulk`, `Auto-Submitted`); resolve the slug → team; look up the sender's address in the directory (unknown → quarantine); check the list's post policy (forbidden → quarantine, different reason); expand recipients (the author included, as on any list), dedupe, honor per-contact opt-outs; relay; log with the SES auth verdicts.
+- **Policy, in order**: drop loops (our own `X-Breakside-List`, `Precedence: list`/`bulk`, `Auto-Submitted`) and automated mail (delivery reports, `mailer-daemon`/`postmaster`, the null sender); resolve the slug → team; look up the sender's address in the directory (unknown → quarantine); check the list's post policy (forbidden → quarantine, different reason); expand recipients (the author included, as on any list), dedupe, honor per-contact opt-outs; relay; log with the SES auth verdicts.
 - **Loop/abuse guards**: never relay from a list address; recipient cap; per-sender hourly cap; oversize (SES limits) → notify the (known) sender.
 - **Transport abstraction** so nothing needs AWS locally: `ses` in production, `file` (writes `.eml` to an outbox dir) for dev and tests, plus a dev-only endpoint that accepts a raw MIME body as if it had arrived from the queue.
 

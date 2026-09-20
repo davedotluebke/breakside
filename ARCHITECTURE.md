@@ -842,12 +842,18 @@ app long-polls that queue from a background task started in the lifespan
 (`mail/inbound.py`), fetches the object, and hands it to `mail/relay.py`,
 which applies policy (`mail/policy.py`), rewrites headers
 (`mail/rewrite.py`) and sends through SES (`mail/transport.py`). Bounce and
-complaint events from the SES configuration set land on the same queue and
-are recorded on the contact. There is no inbound HTTP endpoint and no port
+complaint notifications from the SES identity land on the same queue and
+are recorded on the contact; SES's own feedback *emails* are switched off,
+because a Delivery Status Notification is addressed to the message's From,
+which for relayed mail is the list address, and would come back through
+the receipt rule as a post. There is no inbound HTTP endpoint and no port
 25 on the box; if the API is down, mail waits in the queue.
 
 **Policy order.** Loop guards (our own `X-Breakside-List`, `Precedence:
-list|bulk`, `Auto-Submitted`, mail from a list address) → SES verdicts
+list|bulk`, `Auto-Submitted`, mail from a list address) and automated-mail
+guards (`multipart/report` delivery reports, `mailer-daemon`/`postmaster`
+senders, the SMTP null sender; dropped with an `auto-*` reason, never held,
+since the bounce itself arrives as a notification) → SES verdicts
 (spam/virus FAIL dropped; DMARC FAIL or SPF+DKIM FAIL quarantined even from
 a known sender, since that is what a spoof looks like) → sender must be in
 the directory → the list's post policy → recipients expanded, deduplicated,

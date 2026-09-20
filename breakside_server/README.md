@@ -51,7 +51,7 @@ Set via environment variables or in `.env` file:
 | `BREAKSIDE_MAIL_DOMAIN` | `team.breakside.pro` | Domain the list addresses live at |
 | `BREAKSIDE_MAIL_QUEUE_URL` | | SQS queue fed by SES receiving; the inbound poller runs only when set (with `ses`) |
 | `BREAKSIDE_MAIL_INBOUND_BUCKET` | | S3 bucket SES stores received mail in |
-| `BREAKSIDE_MAIL_CONFIGURATION_SET` | | SES configuration set for bounce/complaint events |
+| `BREAKSIDE_MAIL_CONFIGURATION_SET` | | SES configuration set stamped on every send (reject events; bounces and complaints arrive as identity notifications) |
 | `BREAKSIDE_MAIL_REGION` | `us-east-1` | AWS region for SES/S3/SQS |
 
 These were prefixed `ULTISTATS_` until the project settled on its name

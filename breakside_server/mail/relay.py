@@ -112,7 +112,7 @@ def process_inbound(raw: bytes, *, envelope_recipients: Optional[Sequence[str]] 
             "verdicts": verdicts or None,
         }
 
-        loop = policy.loop_reason(headers, domain)
+        loop = policy.loop_reason(headers, domain, envelope_from=envelope_from)
         if loop:
             log_id = _log(team_id, {**base_entry, "action": "dropped", "recipients": 0, "reason": loop})
             results.append(RelayResult(address, team_id, "drop", loop, log_id=log_id))

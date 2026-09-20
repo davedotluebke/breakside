@@ -227,9 +227,24 @@ class TestLoopsAndVerdicts:
         ({"auto-submitted": "no"}, None),
         ({"from": "List <cudo@team.breakside.pro>"}, "loop-own-address"),
         ({"from": "Bob <bob@x.test>", "precedence": "first-class"}, None),
+        # SES's own Delivery Status Notification, as received on 2026-09-20.
+        ({"from": "MAILER-DAEMON@amazonses.com",
+          "content-type": 'multipart/report; \n\tboundary="----=_Part_1"; \n\treport-type=delivery-status'}, "auto-delivery-report"),
+        ({"from": "Bob <bob@x.test>", "content-type": 'multipart/report; report-type="feedback-report"; boundary=y'}, "auto-report"),
+        ({"from": "Mail Delivery System <postmaster@x.test>"}, "auto-mailer-daemon"),
+        ({"from": "mailer-daemon@x.test"}, "auto-mailer-daemon"),
+        ({"from": "Bob <bob@x.test>", "return-path": "<>"}, "auto-null-sender"),
+        ({"from": "Bob <bob@x.test>", "return-path": "<bob@x.test>", "content-type": "multipart/mixed; boundary=z"}, None),
     ])
     def test_loop_reason(self, headers, expected):
         assert policy.loop_reason(headers, "team.breakside.pro") == expected
+
+    def test_null_envelope_sender(self):
+        h = {"from": "Bob <bob@x.test>"}
+        assert policy.loop_reason(h, "team.breakside.pro", envelope_from="<>") == "auto-null-sender"
+        assert policy.loop_reason(h, "team.breakside.pro", envelope_from="") == "auto-null-sender"
+        assert policy.loop_reason(h, "team.breakside.pro", envelope_from="bob@x.test") is None
+        assert policy.loop_reason(h, "team.breakside.pro", envelope_from=None) is None
 
     @pytest.mark.parametrize("verdicts,expected", [
         (None, None),

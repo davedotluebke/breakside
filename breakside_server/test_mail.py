@@ -382,6 +382,53 @@ class TestRelay:
         sends = configured["outbox"].sent()
         assert len(sends) == 1 and sends[0]["from"] == f"coaches-cudo@{DOMAIN}"
 
+    def test_delivery_report_is_dropped_not_held(self, configured):
+        """SES emails a Delivery Status Notification for a bounce to the
+        message's From, i.e. the list address. It must be dropped quietly
+        (the bounce itself arrives as an SES notification), not held as a
+        stranger's post with a notice to the coaches."""
+        from mail import relay
+        from storage import mail_storage as ms
+        tid = configured["team_id"]
+        boundary = "----=_Part_1_2.3"
+        dsn = "\r\n".join([
+            "From: MAILER-DAEMON@amazonses.com",
+            f"To: Coach via CUDO <cudo@{DOMAIN}>",
+            "Subject: Delivery Status Notification (Failure)",
+            "Message-ID: <dsn1@email.amazonses.com>",
+            "MIME-Version: 1.0",
+            f'Content-Type: multipart/report; boundary="{boundary}"; report-type=delivery-status',
+            "",
+            f"--{boundary}",
+            "Content-Type: text/plain; charset=us-ascii",
+            "",
+            "An error occurred while trying to deliver the mail to the following recipients:",
+            "bob@x.test",
+            f"--{boundary}",
+            "Content-Type: message/delivery-status",
+            "",
+            "Reporting-MTA: dns; a8-87.smtp-out.amazonses.com",
+            "",
+            "Action: failed",
+            "Final-Recipient: rfc822; bob@x.test",
+            "Diagnostic-Code: smtp; 552 5.2.2 <bob@x.test>: user is over quota",
+            "Status: 5.2.2",
+            f"--{boundary}--",
+            "",
+        ]).encode()
+        r = relay.process_inbound(dsn, envelope_recipients=[f"cudo@{DOMAIN}"],
+                                  envelope_from="postmaster@a14-86.smtp-out.amazonses.com")
+        assert (r[0].action, r[0].reason) == ("drop", "auto-delivery-report")
+        assert ms.list_mail_quarantine(tid) == []
+        assert configured["outbox"].sent() == []                       # and no coach notice
+        entry = ms.read_mail_log(tid, 1)[0]
+        assert (entry["action"], entry["reason"], entry["from"]) == ("dropped", "auto-delivery-report", "mailer-daemon@amazonses.com")
+        # An out-of-office from the null envelope sender is dropped the same way.
+        r = relay.process_inbound(raw_mail("Bob <bob@x.test>", f"cudo@{DOMAIN}", subject="Out of office"),
+                                  envelope_recipients=[f"cudo@{DOMAIN}"], envelope_from="<>")
+        assert (r[0].action, r[0].reason) == ("drop", "auto-null-sender")
+        assert ms.list_mail_quarantine(tid) == [] and configured["outbox"].sent() == []
+
     def test_disabled_players_list_then_enabled(self, configured):
         from mail import relay
         from storage import mail_storage as ms
