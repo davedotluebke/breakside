@@ -128,7 +128,7 @@ const wakeLockManager = (function() {
             // knows about doesn't get anyone to dim their screen.
             window.hints?.maybeShow?.(
                 'wake-lock-dim',
-                'Screen stays awake during the game — turn your brightness down to save battery.'
+                'Screen stays awake during the game — turn your brightness down to save battery. Tap ☀ for a black standby screen.'
             );
         } else if (!want && sentinel) {
             release();

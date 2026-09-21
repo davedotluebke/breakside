@@ -41,7 +41,9 @@ const powerLog = (function() {
         visible: { total: 0, since: null },
         wakeLock: { total: 0, since: null },
         mic: { total: 0, since: null },
-        inGame: { total: 0, since: null }
+        inGame: { total: 0, since: null },
+        /** the black standby screen (ui/standbyScreen.js) was up */
+        standby: { total: 0, since: null }
     };
 
     /** @type {Array<{t: number, level: number, charging: boolean, note: string}>} */
@@ -126,6 +128,7 @@ const powerLog = (function() {
             inGameMs: spanMs('inGame'),
             wakeLockMs: spanMs('wakeLock'),
             micMs: spanMs('mic'),
+            standbyMs: spanMs('standby'),
             hides: counters.hides,
             loopStarts: counters.loopStarts,
             loopStops: counters.loopStops,
@@ -165,6 +168,7 @@ const powerLog = (function() {
         lines.push(`Backgrounded ${snap.hides}×`);
         lines.push(`Screen kept awake: ${fmtDuration(snap.wakeLockMs)}`);
         if (snap.micMs > 0) lines.push(`Mic open: ${fmtDuration(snap.micMs)}`);
+        if (snap.standbyMs > 0) lines.push(`Standby screen: ${fmtDuration(snap.standbyMs)}`);
 
         const perHour = snap.elapsedMs > 0
             ? Math.round(snap.totalWakeups / (snap.elapsedMs / 3600000))
@@ -218,6 +222,13 @@ const powerLog = (function() {
         document.addEventListener('breakside:wake-lock-changed', (e) => {
             if (e.detail?.held) openSpan('wakeLock');
             else closeSpan('wakeLock');
+        });
+
+        // How much of the game was spent on the black screen — the number
+        // that says whether standby is being used at all in the field.
+        document.addEventListener('breakside:standby-changed', (e) => {
+            if (e.detail?.active) openSpan('standby');
+            else closeSpan('standby');
         });
     }
 

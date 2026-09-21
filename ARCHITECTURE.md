@@ -2316,6 +2316,59 @@ why the wake lock re-evaluates on every power plan instead of tracking whether
 it "already has" a lock, and why it lives next to the visibility owner.
 Support: Chrome/Edge and Safari 16.4+; a silent no-op elsewhere.
 
+### Standby screen
+
+The wake lock keeps the screen alive; standby makes keeping it alive cheap.
+Tapping the ☀ covers the game with [ui/standbyScreen.js](ui/standbyScreen.js):
+a `position: fixed` overlay that is literal `#000` in both themes, showing the
+score and, between points, the next-point countdown, in translucent white. On
+an OLED panel a black pixel is an unlit pixel, so the saving scales with how
+little is drawn — which is why the overlay replaces the UI rather than
+scrimming it, why its text is dim, and why the labels are text rather than the
+team icon. On an LCD it is merely a calmer display; the settings copy says
+"OLED" for that reason. Tap anywhere to come back.
+
+Three things about it are load-bearing:
+
+- **The waking tap is swallowed.** The overlay is the tap's own target, so the
+  control under the thumb never sees it. Exit happens on `click`, not
+  `pointerup`: hide the overlay on pointerup and the browser's synthesized
+  click lands on whatever is under the finger by then — a They Score, say.
+  The overlay then fades for ~180 ms and keeps intercepting through the fade,
+  which absorbs a bounced second tap.
+- **It mirrors; it does not compute.** Score and countdown are read off the
+  header elements the game already keeps current (`#gameScoreUs`,
+  `#gameScoreThem`, `#timerDisplay`, and the countdown box's inline `display`)
+  through a `MutationObserver`. Standby owns no timer and no copy of the game
+  state, so it adds zero wakeups; the battery report gains a `Standby screen:`
+  span instead. The read rules are pure, in
+  [utils/standbyView.js](utils/standbyView.js). Note the countdown only runs
+  after a point ends (`moveToNextPoint`), never before the first pull, so a
+  fresh game shows the score alone.
+- **It never outlives the game screen.** It listens for the power plan's
+  `inGame` going false and tears down at once, so no leave/end path has to
+  remember it.
+
+Stacking: z-index 9000 — above the game container (whose own stacking context
+holds the Field landscape takeover), the countdown box, the dialogs and the
+mic button, and **below toasts**. A handoff request from another coach arrives
+as a toast, and a coach in standby has to see it. Being backgrounded does not
+leave standby; a coach who pocketed the phone black comes back to black. The
+`theme-color` meta goes to black for the duration and is handed back by
+re-running the theme, not by restoring the value seen on the way in (an `auto`
+preference may have re-resolved meanwhile).
+
+The ☀ itself changed contract when this landed: a **tap** enters standby and a
+**press-and-hold** is the old release-the-lock toggle (still sticky for the
+game, now with a confirming toast). The button shows in every game whether or
+not the browser has a wake lock, since standby needs neither; the icon still
+reports the lock (dimmed when not held).
+
+Deliberately not built: an idle timeout that enters standby by itself. It is
+the bigger saving but needs gating — never for the Active Coach mid-point on
+offense; fine between points or for a Line Coach — and the explicit tap has no
+failure mode. Revisit after field use (TODO.md § UI/UX).
+
 ### Measuring
 
 `navigator.getBattery()` does not exist on iOS — the Battery Status API was

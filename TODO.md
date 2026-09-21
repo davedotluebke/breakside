@@ -1526,9 +1526,19 @@ Higher-leverage interventions, in roughly priority order:
       groups fields, so this is mostly regrouping plus a section divider) and
       the menu label in `game/gameScreenPanels.js` (`#menuSettings`). Pairs
       naturally with the dark-mode session, since that adds a setting.
-- [ ] **Black standby screen between/during points** (design settled 2026-08-09,
-      not built). The biggest OLED saving available, and a better between-points
-      display than the full UI anyway.
+- [x] **Black standby screen between/during points** — *built on branch
+      `standby-screen`, 2026-09-19*, to the design settled 2026-08-09 (kept
+      below). Tap ☀ in the game header for a `#000` overlay showing the score
+      and, between points, the next-point countdown; tap anywhere to return,
+      and that tap is swallowed (exit on `click`, overlay keeps intercepting
+      through its fade). The release-the-wake-lock toggle moved to
+      press-and-hold on the same button, with a confirming toast. Mirrors the
+      header via a MutationObserver, so zero extra wakeups; the battery report
+      gains a `Standby screen:` line. ARCHITECTURE.md § Standby screen,
+      docs/dev-notes/standby-screen.md, `tests/scenarios/15-standby-screen.spec.ts`.
+      **Still open: the idle timeout** (the open question below) — decide
+      after a field day with the tap version. The biggest OLED saving
+      available, and a better between-points display than the full UI anyway.
   - **Trigger:** repurpose the ☀ indicator in the game header (added by the
     `battery` branch) to enable/disable standby, with a toast confirming the new
     state on each tap.

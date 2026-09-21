@@ -26,3 +26,4 @@ These notes were seeded on 2026-09-05 from an AI agent's per-project memory, ver
 | [possession-sets.md](possession-sets.md) | Set tracking: the design call and three bug patterns |
 | [preview-testing.md](preview-testing.md) | Driving game flows in an in-IDE browser preview |
 | [share-links.md](share-links.md) | Same-origin viewer chain and its deploy corollaries |
+| [standby-screen.md](standby-screen.md) | Black standby screen: the tap/hold split on ☀, why exit is on `click`, how to verify |

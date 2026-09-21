@@ -630,13 +630,22 @@ body.game-screen-active header {
     background: var(--success-solid-80);
 }
 
-/* Wake-lock indicator. Sits beside the timer; `margin: 0` because the global
-   `button { margin: 10px }` rule would otherwise push it out of the header
-   (see ARCHITECTURE.md § CSS Styling Gotchas). */
+/* ☀ button: wake-lock indicator, standby trigger. Sits beside the timer;
+   `margin: 0` because the global `button { margin: 10px }` rule would
+   otherwise push it out of the header (see ARCHITECTURE.md § CSS Styling
+   Gotchas). Lit while the wake lock is held; dimmed (.wake-lock-off) when the
+   coach released it or the browser has no wake lock — the button stays,
+   because standby needs neither. */
 .header-wake-lock-btn {
     width: 26px;
     height: 26px;
     padding: 0;
+    /* Tap = standby, hold = release the wake lock (game/gameScreenPanels.js).
+       A held button must not raise the OS text callout or select anything. */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
     /* Sits to the LEFT of the timer, so the staging pill (anchored to the
        right of the title row) can't cover it. */
     margin: 0 6px 0 0;
