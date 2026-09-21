@@ -53,8 +53,8 @@ restart breakside`; confirm that happened before treating anything here as broke
 - [ ] **Copy-to-clipboard on iOS Safari.** The dialog copies *after* awaiting the
       create call, and Safari can revoke the user-gesture context across an `await`.
       There's an `execCommand` fallback and the URL is visible in the row, but
-      confirm the copy actually lands on a real iPhone. *Since branch `qr-codes`
-      (2026-09-19) a created link also opens with its QR code showing, so the
+      confirm the copy actually lands on a real iPhone. *Since 2.2.0 (branch
+      `qr-codes`, merged 2026-09-20) a created link also opens with its QR code showing, so the
       sideline hand-off no longer depends on the clipboard at all; the copy
       path still wants the real-iPhone check for the message-a-link case.*
 - [ ] **Expiry + revoke on a live link**: a revoked link should leave a watcher on
@@ -1529,9 +1529,9 @@ Higher-leverage interventions, in roughly priority order:
       groups fields, so this is mostly regrouping plus a section divider) and
       the menu label in `game/gameScreenPanels.js` (`#menuSettings`). Pairs
       naturally with the dark-mode session, since that adds a setting.
-- [x] **Black standby screen between/during points** — *built on branch
-      `standby-screen`, 2026-09-19*, to the design settled 2026-08-09 (kept
-      below). Tap ☀ in the game header for a `#000` overlay showing the score
+- [x] **Black standby screen between/during points** — *shipped in 2.2.0
+      (branch `standby-screen`, merged 2026-09-20)*, to the design settled
+      2026-08-09 (kept below). Tap ☀ in the game header for a `#000` overlay showing the score
       and, between points, the next-point countdown; tap anywhere to return,
       and that tap is swallowed (exit on `click`, overlay keeps intercepting
       through its fade). The release-the-wake-lock toggle moved to

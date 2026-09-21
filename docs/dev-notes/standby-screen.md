@@ -1,6 +1,6 @@
 # Standby screen
 
-Status: built on branch `standby-screen`, 2026-09-19 (unmerged at the time of writing). The mechanism, the stacking order and the ☀ contract are in ARCHITECTURE.md § Power Management → Standby screen. This note holds the decisions behind them and the verification recipe.
+Status: shipped — built on branch `standby-screen` 2026-09-19, merged to main 2026-09-20 (2.2.0). The mechanism, the stacking order and the ☀ contract are in ARCHITECTURE.md § Power Management → Standby screen. This note holds the decisions behind them and the verification recipe.
 
 ## Decisions
 

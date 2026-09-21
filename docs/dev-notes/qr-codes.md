@@ -1,6 +1,6 @@
 # QR codes
 
-Status: built on branch `qr-codes`, 2026-09-19 (unmerged at the time of writing). Where the codes appear and the encoder's contract are in ARCHITECTURE.md § Share Links and § Invite Codes. This note holds the decisions and how the encoder was verified.
+Status: shipped — built on branch `qr-codes` 2026-09-19, merged to main 2026-09-20 (2.2.0). Where the codes appear and the encoder's contract are in ARCHITECTURE.md § Share Links and § Invite Codes. This note holds the decisions and how the encoder was verified.
 
 ## Decisions
 
