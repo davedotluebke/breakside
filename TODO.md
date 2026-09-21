@@ -126,7 +126,7 @@ docs/dev-notes/game-flow.md. Follow-ups, none blocking:
       menu (all / phase / one game); a per-half split for a single game would
       need `halftimeAfter` from `buildGameFlow` threaded into
       `buildConnections`.
-- [ ] **Copy Summary** could carry the headline lines (`describeGameFlow`)
+- [ ] **Copy Game Log (text)** could carry the headline lines (`describeGameFlow`)
       under the log text; today only the screen and the xlsx have them.
 - [ ] **Docs-site clip** for the section (docs/DOCS_SITE.md conventions).
 

@@ -5,7 +5,7 @@
  * Phase 4 update: Games use teamId and create rosterSnapshot
  */
 import { Role, Game, createRosterSnapshot, isTestGame } from '../store/models.js';
-import { currentTeam, currentEvent, saveAllTeamsData, serializeTeam } from '../store/storage.js';
+import { currentTeam, currentEvent, saveAllTeamsData, serializeGame } from '../store/storage.js';
 import { syncGameToCloud, deleteGameFromCloud } from '../store/sync.js';
 import {
     currentGame, getLatestPoint, getActivePossession, getPlayerFromName,
@@ -13,6 +13,7 @@ import {
 } from '../utils/helpers.js';
 import { applyPointPlayerStats, revertPointPlayerStats } from './pointStats.js';
 import { buildGameLogEntries } from '../utils/gameLogRenderer.js';
+import { safeFilename } from '../utils/xlsxExport.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { updatePanelsForGameState } from '../ui/panelSystem.js';
 import { clearNextLineSelections } from '../ui/activePlayersDisplay.js';
@@ -242,16 +243,28 @@ function updateScore(winner) {
 // panel UI (gameScreen.js) handles all game events.
 
 
+// Review-screen footer (index.html #gameSummaryScreen footer). Both act on
+// the game the summary shows: the post-game flow's current game, or a
+// reviewed game, which teams/teamList.js appends to currentTeam.games before
+// rendering so currentGame() resolves to it. (The whole-team download lives
+// on the team screen, teams/teamList.js #downloadTeamBtn.)
 document.getElementById('downloadGameBtn').addEventListener('click', function() {
-    const teamData = serializeTeam(currentTeam); // Assuming serializeTeam returns a JSON string
-    downloadJSON(teamData, 'teamData.json');
+    const game = currentGame();
+    if (!game) { showControllerToast('No game to download', 'warning'); return; }
+    const started = new Date(game.gameStartTimestamp || Date.now());
+    const day = (Number.isNaN(started.getTime()) ? new Date() : started).toISOString().split('T')[0];
+    const filename = `${safeFilename(game.team || 'Team')}_vs_${safeFilename(game.opponent || 'Opponent')}_${day}.json`;
+    downloadJSON(JSON.stringify(serializeGame(game), null, 2), filename);
 });
 
-document.getElementById('copySummaryBtn').addEventListener('click', function() {
-    const summary = summarizeGame();
-    navigator.clipboard.writeText(summary).then(() => {
-        alert('Game summary copied to clipboard');
-    });
+document.getElementById('copySummaryBtn').addEventListener('click', async function() {
+    const text = summarizeGame();
+    try {
+        await navigator.clipboard.writeText(text);
+        showControllerToast('Game log copied to the clipboard', 'success');
+    } catch (e) {
+        showControllerToast('Couldn’t copy — the browser blocked clipboard access', 'error');
+    }
 });
 
 document.getElementById('anotherGameBtn').addEventListener('click', function() {
@@ -305,7 +318,7 @@ function downloadJSON(jsonData, filename) {
 }
 
 /**
- * Build the full game-log text for the current game (Copy Summary clipboard;
+ * Build the full game-log text for the current game (Copy Game Log clipboard;
  * also feeds the in-game Log tab via gameScreenSync.updateGameLogEvents).
  * The line format itself lives in utils/gameLogRenderer.js — shared with the
  * post-game summary renderer (G6 merge); make format changes there.

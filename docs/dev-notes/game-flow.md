@@ -34,5 +34,5 @@ How it works is in ARCHITECTURE.md § Game Flow (Review screen) and § Derived S
 ## Not built
 
 - Per-half or per-phase connections, and a flow chart for a whole event (the run/lead stats are per game by definition).
-- The Copy Summary clipboard text does not carry the headline lines.
+- The Copy Game Log (text) clipboard text does not carry the headline lines.
 - A docs-site clip; docs.html describes the section in text.

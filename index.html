@@ -1211,10 +1211,13 @@
             </div>
         </div>
 
+        <!-- Footer actions (game/gameLogic.js): this game as JSON, the log as
+             text, and New Game (post-game flow only; hidden when reviewing
+             from the team list). Styled in css/tables.css. -->
         <footer>
-            <button id="downloadGameBtn">Download Game (JSON)</button>
-            <button id="copySummaryBtn"><i class="fas fa-clipboard"></i> Copy Summary</button>
-            <button id="anotherGameBtn">New Game</button>
+            <button id="downloadGameBtn" title="Download this game as a JSON file"><i class="fas fa-download"></i> Download Game (JSON)</button>
+            <button id="copySummaryBtn" title="Copy the game log to the clipboard as plain text"><i class="fas fa-clipboard"></i> Copy Game Log (text)</button>
+            <button id="anotherGameBtn" class="summary-footer-primary"><i class="fas fa-plus"></i> New Game</button>
         </footer>
 
         <!-- Share-guest footer: the disclosure a spectator actually needs
