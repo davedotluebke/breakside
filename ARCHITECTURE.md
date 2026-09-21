@@ -1291,7 +1291,17 @@ Statistics above).
   (`viewBox` = width × 190) and rebuilt by a `ResizeObserver`. That is what
   makes the first draw work at all: `renderGameSummary` runs while the screen
   is still `display: none`, so the width is 0 until `showScreen` flips it,
-  and the observer fires then.
+  and the observer fires then. The same path covers the collapsed section:
+  the chart is drawn the first time the coach opens Game Flow.
+- **Collapsible sections** (`ui/summarySections.js`). Player Stats, Game
+  Flow and Game Log are each a `.summary-section` whose heading toggles its
+  body (`collapsed` class on the section; CSS in `css/tables.css`). Stats
+  and log start open, Game Flow starts collapsed, and every tap is
+  remembered per device in `localStorage.breakside_summary_sections`, so a
+  coach who opens Game Flow once finds it open on the next game. The replay
+  stage mounts inside the log section's body, so it hides with the log and
+  re-measures (`onShown`) when the section opens. Keyboard: the headings
+  are `role="button"`, Enter/Space toggles.
 - **Tooltip.** Hover previews, tap pins (a second tap or a tap elsewhere
   unpins); it lists the score, the point's classification and start side,
   its duration, timeouts, and the line, resolved through the same

@@ -43,6 +43,7 @@
  *   │   ├── activePlayersDisplay.js # Line-tab helpers (running scores); table itself lives in game/selectLine.js
  *   │   ├── eventLogDisplay.js   # Event log management and display
  *   │   ├── gameFlowChart.js     # Game Flow chart + Connections block on the Review screen
+ *   │   ├── summarySections.js   # Collapsible Review-screen sections, remembered per device
  *   │   └── buttonLayout.js      # UI consistency functions (button width matching)
  *   │
  *   ├── main.js                  # Application bootstrap (~200 lines)
@@ -109,6 +110,7 @@ import './ui/activePlayersDisplay.js';
 import './ui/eventLogDisplay.js';
 import './ui/setPicker.js';
 import './ui/gameFlowChart.js';
+import './ui/summarySections.js';
 import { matchButtonWidths } from './ui/buttonLayout.js';
 import { isGameScreenVisible } from './ui/panelSystem.js';
 import { showScreen, showEditRosterScreen, showEditRosterSubscreen } from './screens/navigation.js';

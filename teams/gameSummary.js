@@ -20,6 +20,7 @@ import {
 import { buildGameLogEntries, renderGameLogEntriesHTML } from '../utils/gameLogRenderer.js';
 import { mountReplayView } from '../playByPlay/replayView.js';
 import { mountGameFlow, mountConnections } from '../ui/gameFlowChart.js';
+import { initSummarySections } from '../ui/summarySections.js';
 import { createTableSortController } from '../utils/tableSort.js';
 import { attachStatsColumnHelp } from '../utils/statsHelp.js';
 import { wireStatsLevelSelect } from '../utils/statsLevel.js';
@@ -157,6 +158,10 @@ function renderGameSummary(game, { guest = false, live = false } = {}) {
     }
 
     showScreen('gameSummaryScreen');
+    // The chart could only measure 0 while the screen was hidden; draw it now
+    // that the screen has a width, rather than waiting on its ResizeObserver
+    // (whose callback needs a rendering opportunity — see ui/gameFlowChart.js).
+    if (summaryFlowView) summaryFlowView.redraw();
 }
 
 /**
@@ -428,10 +433,9 @@ function renderGameSummaryEventLog(game, { live = false, editable = true } = {})
         }
         summaryReplayView = mountReplayView(cfg);
         if (summaryReplayView) {
-            // Keep the section heading above the stage: mountReplayView
-            // prepends to its host, so re-home the root after the <h3>.
-            const h3 = host.querySelector('h3');
-            if (h3 && summaryReplayView.root.parentElement === host) h3.insertAdjacentElement('afterend', summaryReplayView.root);
+            // mountReplayView prepends to its host — the section's collapsible
+            // body (ui/summarySections.js) — so the stage lands under the
+            // heading and above the log lines, and hides with them.
             summaryReplayView.onShown();
         }
     }
@@ -510,6 +514,17 @@ function exportGameSummaryXLSX() {
 function getGameSummaryBackTarget() {
     return gameSummaryOrigin;
 }
+
+// Collapsible sections (stats / Game Flow / log), remembered per device.
+// A replay stage mounted while the log was collapsed measures itself once
+// the section opens.
+initSummarySections();
+document.getElementById('gameSummaryEventLogSection')?.addEventListener('summary-section-toggle', ev => {
+    if (ev.detail && ev.detail.open && summaryReplayView) summaryReplayView.onShown();
+});
+document.getElementById('gameFlowSection')?.addEventListener('summary-section-toggle', ev => {
+    if (ev.detail && ev.detail.open && summaryFlowView) summaryFlowView.redraw();
+});
 
 // Wire up XLSX export button
 document.getElementById('exportGameSummaryBtn')?.addEventListener('click', exportGameSummaryXLSX);

@@ -10,7 +10,10 @@
  * the SVG nodes, never presentation attributes) so both themes hold. The
  * chart draws at the host's real width and re-draws on width changes via
  * ResizeObserver: the summary screen renders while still display:none, so
- * the first real draw happens when the screen appears.
+ * the first real draw happens when the screen appears. The observer's
+ * callback is delivered at a rendering opportunity, which a page nobody is
+ * looking at may not get for a while, so the summary screen also calls
+ * redraw() itself once the screen is shown and when the section is opened.
  */
 import { buildGameFlow, describeGameFlow, formatDuration } from '../utils/gameFlow.js';
 import { buildConnections, buildConnectionMatrix } from '../utils/connections.js';

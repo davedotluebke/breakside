@@ -1161,43 +1161,53 @@
         </div>
 
         <!-- Player Statistics -->
-        <div id="playerStats">
-            <h3>Player Stats</h3>
-            <div class="stats-filter-row">
-                <span class="stats-filter-group">
-                    <label for="gameSummaryStatsLevel">Stats:</label>
-                    <select id="gameSummaryStatsLevel" class="event-dialog-select"></select>
-                </span>
-                <span class="stats-filter-group" id="gameSummaryExportGroup" style="display:none;">
-                    <label for="gameSummaryExportPlayer">Export:</label>
-                    <select id="gameSummaryExportPlayer" class="export-player-select" title="Who the export covers — a single player's sheet still carries the team totals"></select>
-                </span>
+        <!-- Each summary section collapses from its heading (ui/summarySections.js);
+             stats and log start open, Game Flow starts collapsed, per device. -->
+        <div id="playerStats" class="summary-section" data-section="stats">
+            <h3 class="summary-section-toggle" aria-expanded="true"><span>Player Stats</span><i class="fas fa-chevron-down summary-section-chevron" aria-hidden="true"></i></h3>
+            <div class="summary-section-body">
+                <div class="stats-filter-row">
+                    <span class="stats-filter-group">
+                        <label for="gameSummaryStatsLevel">Stats:</label>
+                        <select id="gameSummaryStatsLevel" class="event-dialog-select"></select>
+                    </span>
+                    <span class="stats-filter-group" id="gameSummaryExportGroup" style="display:none;">
+                        <label for="gameSummaryExportPlayer">Export:</label>
+                        <select id="gameSummaryExportPlayer" class="export-player-select" title="Who the export covers — a single player's sheet still carries the team totals"></select>
+                    </span>
+                </div>
+                <div class="roster-table-container">
+                    <table id="gameSummaryTable">
+                        <tbody id="gameSummaryRosterList">
+                            <!-- Player stats will be dynamically populated here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="gameSummaryTeamStats" class="team-stats-line" style="display:none;"></div>
             </div>
-            <div class="roster-table-container">
-                <table id="gameSummaryTable">
-                    <tbody id="gameSummaryRosterList">
-                        <!-- Player stats will be dynamically populated here -->
-                    </tbody>
-                </table>
-            </div>
-            <div id="gameSummaryTeamStats" class="team-stats-line" style="display:none;"></div>
         </div>
 
         <!-- Game Flow: the score-margin chart with its headline lines, and the
              thrower→receiver Connections block (ui/gameFlowChart.js). Hidden
              until the game has two completed points / one recorded pass. -->
-        <div id="gameFlowSection" style="display:none;">
-            <h3>Game Flow</h3>
-            <div id="gameFlowChartHost" class="gf-host"></div>
-            <h3 id="gameConnectionsHeading">Connections</h3>
-            <div id="gameConnectionsHost" class="gf-host"></div>
+        <div id="gameFlowSection" class="summary-section" data-section="flow" style="display:none;">
+            <h3 class="summary-section-toggle" aria-expanded="false"><span>Game Flow</span><i class="fas fa-chevron-down summary-section-chevron" aria-hidden="true"></i></h3>
+            <div class="summary-section-body">
+                <div id="gameFlowChartHost" class="gf-host"></div>
+                <h3 id="gameConnectionsHeading">Connections</h3>
+                <div id="gameConnectionsHost" class="gf-host"></div>
+            </div>
         </div>
 
         <!-- Game Event Log -->
-        <div id="gameSummaryEventLogSection">
-            <h3>Game Log</h3>
-            <div id="gameSummaryEventLog" class="game-summary-event-log">
-                <!-- Event log will be dynamically populated here -->
+        <div id="gameSummaryEventLogSection" class="summary-section" data-section="log">
+            <h3 class="summary-section-toggle" aria-expanded="true"><span>Game Log</span><i class="fas fa-chevron-down summary-section-chevron" aria-hidden="true"></i></h3>
+            <div class="summary-section-body">
+                <!-- The replay view (playByPlay/replayView.js) mounts at the top of
+                     this body, above the log lines. -->
+                <div id="gameSummaryEventLog" class="game-summary-event-log">
+                    <!-- Event log will be dynamically populated here -->
+                </div>
             </div>
         </div>
 

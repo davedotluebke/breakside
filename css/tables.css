@@ -32,6 +32,34 @@ th {
     margin: 16px 0 8px;
 }
 
+/* Collapsible sections on the Review screen (ui/summarySections.js): the
+   heading is the toggle; the chevron turns when the body is hidden. */
+.summary-section-toggle {
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+.summary-section-toggle:focus-visible {
+    outline: 2px solid var(--brand-orange);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+.summary-section-chevron {
+    font-size: 0.7em;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+}
+.summary-section.collapsed > .summary-section-toggle .summary-section-chevron {
+    transform: rotate(-90deg);
+}
+.summary-section.collapsed > .summary-section-body {
+    display: none;
+}
+
 /* Styling for team aggregate row in game summary */
 .team-aggregate-row {
     border-top: 2px solid var(--border-emphasis);

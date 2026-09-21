@@ -84,7 +84,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 - **Event Logging** - Detailed logging of all throws, turnovers, defensive plays, and violations
 
 ### Data & Export
-- **Game Summary** - Review completed games with sortable player stats table, the Game Flow chart and Connections, and full event log
+- **Game Summary** - Review completed games with sortable player stats table, the Game Flow chart and Connections, and full event log. Each section collapses from its heading; Game Flow starts collapsed, and the app remembers what you open
 - **Excel (.xlsx) Export** - Export player + team statistics from game summaries, event rosters, and team rosters. Multi-sheet workbooks split by phase (event roster) or by event (team roster), with real Excel number/percent types and click-to-sort column headers. A game's export also carries a Game Flow sheet (one row per point) and a Connections sheet (one row per pair)
 - **JSON Export** - Export complete game data for analysis
 - **Local Storage** - Automatic saving of all team and game data
