@@ -9,6 +9,7 @@ import { showGameScreen } from '../ui/panelSystem.js';
 import { updateTeamRosterDisplay } from './rosterManagement.js';
 import { showSelectTeamScreen } from './teamList.js';
 import { log } from '../utils/logger.js';
+import { encodeQr, qrSvg } from '../utils/qrCode.js';
 
 // =============================================================================
 // State
@@ -492,8 +493,24 @@ function showInviteModal(data, role) {
         codeText.textContent = data.code;
     }
     
+    const inviteUrl = data.url || `https://www.breakside.pro/join/${data.code}`;
     if (linkInput) {
-        linkInput.value = data.url || `https://www.breakside.pro/join/${data.code}`;
+        linkInput.value = inviteUrl;
+    }
+
+    // The same link as a QR code, so the new coach can scan it off this
+    // screen instead of typing a code or waiting for a message.
+    const qrBox = document.getElementById('inviteQrCode');
+    if (qrBox) {
+        try {
+            qrBox.innerHTML = `${qrSvg(encodeQr(inviteUrl), { label: `QR code for ${inviteUrl}` })}` +
+                '<span class="invite-qr-caption">Or scan this with the phone that\'s joining</span>';
+            qrBox.hidden = false;
+        } catch (err) {
+            console.warn('Invite QR render failed:', err);
+            qrBox.innerHTML = '';
+            qrBox.hidden = true;
+        }
     }
     
     if (expiryText && data.invite?.expiresAt) {

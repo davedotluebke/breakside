@@ -76,6 +76,7 @@ import './store/pointTimerNormalizer.js';
 import './store/localTeamView.js';
 import './utils/helpers.js';
 import './utils/changeStamp.js';
+import './utils/qrCode.js';
 import './utils/diagnosticSurface.js';
 import './utils/apiOrigin.js';
 import { currentTeam } from './store/storage.js';

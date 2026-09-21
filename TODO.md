@@ -53,7 +53,10 @@ restart breakside`; confirm that happened before treating anything here as broke
 - [ ] **Copy-to-clipboard on iOS Safari.** The dialog copies *after* awaiting the
       create call, and Safari can revoke the user-gesture context across an `await`.
       There's an `execCommand` fallback and the URL is visible in the row, but
-      confirm the copy actually lands on a real iPhone.
+      confirm the copy actually lands on a real iPhone. *Since branch `qr-codes`
+      (2026-09-19) a created link also opens with its QR code showing, so the
+      sideline hand-off no longer depends on the clipboard at all; the copy
+      path still wants the real-iPhone check for the message-a-link case.*
 - [ ] **Expiry + revoke on a live link**: a revoked link should leave a watcher on
       the last-known state under the "expired" banner, not a blank or error page.
 - [x] ~~**"List publicly"**: game appears in the landing page's "Happening on

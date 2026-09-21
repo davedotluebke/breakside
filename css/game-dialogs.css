@@ -509,6 +509,7 @@
 }
 
 /* Icon buttons: neutralize the global button margin/size presets */
+.share-qr-btn,
 .share-copy-btn,
 .share-revoke-btn {
     background: none;
@@ -524,6 +525,70 @@
 .share-revoke-btn {
     color: var(--color-danger-ink);
     border-color: var(--color-danger-surface-deep);
+}
+
+/* The QR toggle shows its state as a colour, not a wider label. */
+.share-qr-btn[aria-expanded="true"] {
+    color: var(--text-strong);
+    font-weight: 700;
+    border-color: var(--brand-orange);
+    box-shadow: 0 0 0 1px var(--brand-orange);
+}
+
+/* Three buttons beside the link left the URL and expiry no room on a phone
+   (the row was already at capacity with two): wrap the buttons under the
+   text below 480px instead of ellipsizing the text to nothing. */
+@media (max-width: 480px) {
+    .share-link-row {
+        flex-wrap: wrap;
+    }
+
+    .share-link-info {
+        flex: 1 1 100%;
+    }
+
+    .share-qr-btn,
+    .share-copy-btn,
+    .share-revoke-btn {
+        flex: 1 1 auto;
+    }
+}
+
+/* QR panel under a share row (game/shareGame.js toggleQrPanel). The SVG
+   carries its own white field and quiet zone — a scanner wants dark-on-light
+   whatever the app theme — so the panel only sizes and centres it. */
+.share-qr-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 6px 14px;
+    border-bottom: 1px solid var(--border-lighter);
+}
+
+.share-qr-panel[hidden] {
+    display: none;
+}
+
+.share-qr-panel svg {
+    width: min(68vw, 260px);
+    height: auto;
+    border-radius: 8px;
+    box-shadow: var(--shadow-sm);
+}
+
+.share-qr-caption {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.share-qr-url {
+    font-family: monospace;
+    font-size: 0.78em;
+    color: var(--text-muted);
+    text-align: center;
+    word-break: break-all;
 }
 
 .share-create-row {
