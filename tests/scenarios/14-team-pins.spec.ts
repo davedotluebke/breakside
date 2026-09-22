@@ -6,6 +6,11 @@
  * This drives the real screen, because the order only matters as rendered:
  * opening a team, pinning it and reloading the page must move the cards the
  * way a coach expects, and the group labels must come and go with the pins.
+ *
+ * Order is always asserted as an eventual state. Returning to the teams
+ * screen redraws the previous list at once and replaces it when the refetch
+ * lands, so a one-shot read can catch the list from before a team was
+ * created.
  */
 import { test, expect, Page } from '@playwright/test';
 import { TEST_PARAMS } from '../helpers/constants';
@@ -24,17 +29,20 @@ async function goToTeams(page: Page) {
   await expect(page.locator('#splashScreen')).toHaveCount(0, { timeout: 10_000 });
 }
 
-/** Back from the roster flow to a freshly rendered teams list. */
+/** Back from the roster flow to the teams list. */
 async function backToTeams(page: Page) {
   await page.click('#backFromStartGameBtn');
   await expect(page.locator('#selectTeamScreen')).toBeVisible({ timeout: 10_000 });
 }
 
-/** Team names in the order the list shows them. */
-async function listedTeams(page: Page): Promise<string[]> {
-  const cards = page.locator('#cloudTeamsList .team-section');
-  await expect(cards.first()).toBeVisible({ timeout: 15_000 });
-  return cards.locator('.team-header-name').allTextContents();
+/** The list settles on exactly these team names, top to bottom. */
+async function expectOrder(page: Page, names: string[]) {
+  await expect
+    .poll(
+      () => page.locator('#cloudTeamsList .team-section .team-header-name').allTextContents(),
+      { timeout: 15_000 },
+    )
+    .toEqual(names);
 }
 
 function card(page: Page, name: string) {
@@ -52,7 +60,7 @@ test.describe('teams screen order and pins', () => {
     await backToTeams(page);
     await createTeam(page, BRAVO);
     await backToTeams(page);
-    expect(await listedTeams(page)).toEqual([BRAVO, ALPHA]);
+    await expectOrder(page, [BRAVO, ALPHA]);
 
     // Nothing pinned yet: no group labels at all.
     await expect(page.locator('.team-group-label')).toHaveCount(0);
@@ -62,24 +70,24 @@ test.describe('teams screen order and pins', () => {
     await card(page, ALPHA).locator('.new-game-btn', { hasText: 'New Game' }).click();
     await expect(page.locator('#teamRosterScreen')).toBeVisible({ timeout: 8_000 });
     await backToTeams(page);
-    expect(await listedTeams(page)).toEqual([ALPHA, BRAVO]);
+    await expectOrder(page, [ALPHA, BRAVO]);
 
     // Pin Bravo: it moves into a labelled group above everything else,
     // redrawn in place without leaving the screen.
     await card(page, BRAVO).locator('.team-pin-btn').click();
     await expect(page.locator('.team-group-label')).toHaveText(['Pinned', 'Other teams']);
-    expect(await listedTeams(page)).toEqual([BRAVO, ALPHA]);
+    await expectOrder(page, [BRAVO, ALPHA]);
     await expect(card(page, BRAVO).locator('.team-pin-btn')).toHaveAttribute('aria-pressed', 'true');
     await expect(card(page, ALPHA).locator('.team-pin-btn')).toHaveAttribute('aria-pressed', 'false');
 
     // The pin is per device: a reload keeps it.
     await goToTeams(page);
-    expect(await listedTeams(page)).toEqual([BRAVO, ALPHA]);
+    await expectOrder(page, [BRAVO, ALPHA]);
     await expect(page.locator('.team-group-label').first()).toHaveText('Pinned');
 
     // A newly pinned team lands at the top of the pinned group.
     await card(page, ALPHA).locator('.team-pin-btn').click();
-    expect(await listedTeams(page)).toEqual([ALPHA, BRAVO]);
+    await expectOrder(page, [ALPHA, BRAVO]);
     // Everything pinned: only the one label.
     await expect(page.locator('.team-group-label')).toHaveText(['Pinned']);
 
@@ -87,6 +95,6 @@ test.describe('teams screen order and pins', () => {
     await card(page, ALPHA).locator('.team-pin-btn').click();
     await card(page, BRAVO).locator('.team-pin-btn').click();
     await expect(page.locator('.team-group-label')).toHaveCount(0);
-    expect(await listedTeams(page)).toEqual([ALPHA, BRAVO]);
+    await expectOrder(page, [ALPHA, BRAVO]);
   });
 });

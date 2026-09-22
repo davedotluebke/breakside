@@ -126,6 +126,12 @@ function showSelectTeamScreen(firsttime = false) {
     accountSection.innerHTML = buildAccountSectionHTML();
     teamListElement.appendChild(accountSection);
 
+    // A kept list is redrawn from the last fetch before the refetch starts:
+    // the order depends on this device's prefs, not on the server, so the
+    // team the coach just opened is already at the top when the screen
+    // appears instead of hopping there when the fresh data lands.
+    if (keepPrevious) renderCloudTeamsList();
+
     // Populate teams and games asynchronously
     populateCloudTeamsAndGames();
 
