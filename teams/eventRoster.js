@@ -21,6 +21,7 @@ import {
     uniqueSheetName, safeFilename,
 } from '../utils/xlsxExport.js';
 import { updateEventOnCloud } from '../store/sync.js';
+import { mountConnections } from '../ui/gameFlowChart.js';
 import { showScreen } from '../screens/navigation.js';
 import { buildRosterRow } from './rosterRowHelpers.js';
 import {
@@ -230,6 +231,7 @@ async function renderEventRosterTable() {
     let eventPlayerStats = {};
     let record = null;
     let teamStats = null;
+    let scopedGames = [];
     const eventId = event?.id;
     const hasGameIds = (event?.gameIds || []).length > 0;
 
@@ -245,6 +247,7 @@ async function renderEventRosterTable() {
             }
         }
         const games = filterGames(cachedEventGames.games, eventRosterFilter);
+        scopedGames = games;
         eventPlayerStats = getGamesPlayerStats(games);
         record = getGamesRecord(games);
         teamStats = getGamesTeamStats(games);
@@ -283,6 +286,11 @@ async function renderEventRosterTable() {
             teamStatsEl.textContent = '';
         }
     }
+
+    // Connections (ui/gameFlowChart.js): who threw to whom across the games
+    // in scope. Follows the scope menu like the stats do; hidden when no
+    // game in scope recorded a pass with both ends.
+    renderEventConnections(scopedGames);
 
     // Header row
     const headerRow = document.createElement('tr');
@@ -377,6 +385,17 @@ async function renderEventRosterTable() {
     if (typeof attachStatsColumnHelp === 'function') {
         attachStatsColumnHelp(tbody.querySelector('tr:first-child'));
     }
+}
+
+let eventConnectionsView = null;
+function renderEventConnections(games) {
+    const section = document.getElementById('eventConnectionsSection');
+    const host = document.getElementById('eventConnectionsHost');
+    if (!section || !host) return;
+    const view = eventConnectionsView && eventConnectionsView.view ? eventConnectionsView.view() : 'list';
+    if (eventConnectionsView) { try { eventConnectionsView.destroy(); } catch (e) { /* gone */ } eventConnectionsView = null; }
+    eventConnectionsView = games.length ? mountConnections(host, games, { view }) : null;
+    section.style.display = eventConnectionsView ? '' : 'none';
 }
 
 /**

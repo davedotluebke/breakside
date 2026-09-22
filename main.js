@@ -12,7 +12,9 @@
  *   │
  *   ├── utils/                   # Utility functions
  *   │   ├── helpers.js          # Pure utility functions and current state accessors
- *   │   └── eventStats.js       # Player/team stats from game events (id-keyed)
+ *   │   ├── eventStats.js       # Player/team stats from game events (id-keyed)
+ *   │   ├── gameFlow.js         # Score margin by point, runs, leads, halves (pure)
+ *   │   └── connections.js      # Thrower→receiver pair counts (pure)
  *   │
  *   ├── screens/                 # Screen management
  *   │   └── navigation.js       # Screen navigation and state management
@@ -40,6 +42,8 @@
  *   ├── ui/                      # UI update functions
  *   │   ├── activePlayersDisplay.js # Line-tab helpers (running scores); table itself lives in game/selectLine.js
  *   │   ├── eventLogDisplay.js   # Event log management and display
+ *   │   ├── gameFlowChart.js     # Game Flow chart + Connections block on the Review screen
+ *   │   ├── summarySections.js   # Collapsible Review-screen sections, remembered per device
  *   │   └── buttonLayout.js      # UI consistency functions (button width matching)
  *   │
  *   ├── main.js                  # Application bootstrap (~200 lines)
@@ -91,6 +95,8 @@ import './utils/powerLog.js';
 import './utils/wakeLockManager.js';
 import './utils/statAccumulator.js';
 import './utils/eventStats.js';
+import './utils/gameFlow.js';
+import './utils/connections.js';
 import './utils/gameLogRenderer.js';
 import './utils/possessionSets.js';
 import './utils/tableSort.js';
@@ -104,6 +110,8 @@ import { dismissSplash } from './ui/splashScreen.js';
 import './ui/activePlayersDisplay.js';
 import './ui/eventLogDisplay.js';
 import './ui/setPicker.js';
+import './ui/gameFlowChart.js';
+import './ui/summarySections.js';
 import { matchButtonWidths } from './ui/buttonLayout.js';
 import { isGameScreenVisible } from './ui/panelSystem.js';
 import { showScreen, showEditRosterScreen, showEditRosterSubscreen } from './screens/navigation.js';

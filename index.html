@@ -145,6 +145,7 @@
     <link rel="stylesheet" href="playByPlay/fullPbp.css">
     <link rel="stylesheet" href="playByPlay/fieldPbp.css">
     <link rel="stylesheet" href="playByPlay/replayView.css">
+    <link rel="stylesheet" href="ui/gameFlowChart.css">
     <link rel="stylesheet" href="narration/micButton.css">
     <link rel="stylesheet" href="narration/lineupNarration.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
@@ -693,6 +694,10 @@
             </table>
         </div>
         <div id="eventRosterTeamStats" class="team-stats-line" style="display:none;"></div>
+        <div id="eventConnectionsSection" style="display:none;">
+            <h3 class="event-connections-heading">Connections</h3>
+            <div id="eventConnectionsHost" class="gf-host"></div>
+        </div>
         <div class="management-row">
             <div class="management-container full-width">
                 <div class="management-controls">
@@ -1158,40 +1163,63 @@
         </div>
 
         <!-- Player Statistics -->
-        <div id="playerStats">
-            <h3>Player Stats</h3>
-            <div class="stats-filter-row">
-                <span class="stats-filter-group">
-                    <label for="gameSummaryStatsLevel">Stats:</label>
-                    <select id="gameSummaryStatsLevel" class="event-dialog-select"></select>
-                </span>
-                <span class="stats-filter-group" id="gameSummaryExportGroup" style="display:none;">
-                    <label for="gameSummaryExportPlayer">Export:</label>
-                    <select id="gameSummaryExportPlayer" class="export-player-select" title="Who the export covers — a single player's sheet still carries the team totals"></select>
-                </span>
+        <!-- Each summary section collapses from its heading (ui/summarySections.js);
+             stats and log start open, Game Flow starts collapsed, per device. -->
+        <div id="playerStats" class="summary-section" data-section="stats">
+            <h3 class="summary-section-toggle" aria-expanded="true"><span>Player Stats</span><i class="fas fa-chevron-down summary-section-chevron" aria-hidden="true"></i></h3>
+            <div class="summary-section-body">
+                <div class="stats-filter-row">
+                    <span class="stats-filter-group">
+                        <label for="gameSummaryStatsLevel">Stats:</label>
+                        <select id="gameSummaryStatsLevel" class="event-dialog-select"></select>
+                    </span>
+                    <span class="stats-filter-group" id="gameSummaryExportGroup" style="display:none;">
+                        <label for="gameSummaryExportPlayer">Export:</label>
+                        <select id="gameSummaryExportPlayer" class="export-player-select" title="Who the export covers — a single player's sheet still carries the team totals"></select>
+                    </span>
+                </div>
+                <div class="roster-table-container">
+                    <table id="gameSummaryTable">
+                        <tbody id="gameSummaryRosterList">
+                            <!-- Player stats will be dynamically populated here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="gameSummaryTeamStats" class="team-stats-line" style="display:none;"></div>
             </div>
-            <div class="roster-table-container">
-                <table id="gameSummaryTable">
-                    <tbody id="gameSummaryRosterList">
-                        <!-- Player stats will be dynamically populated here -->
-                    </tbody>
-                </table>
+        </div>
+
+        <!-- Game Flow: the score-margin chart with its headline lines, and the
+             thrower→receiver Connections block (ui/gameFlowChart.js). Hidden
+             until the game has two completed points / one recorded pass. -->
+        <div id="gameFlowSection" class="summary-section" data-section="flow" style="display:none;">
+            <h3 class="summary-section-toggle" aria-expanded="false"><span>Game Flow</span><i class="fas fa-chevron-down summary-section-chevron" aria-hidden="true"></i></h3>
+            <div class="summary-section-body">
+                <div id="gameFlowChartHost" class="gf-host"></div>
+                <h3 id="gameConnectionsHeading">Connections</h3>
+                <div id="gameConnectionsHost" class="gf-host"></div>
             </div>
-            <div id="gameSummaryTeamStats" class="team-stats-line" style="display:none;"></div>
         </div>
 
         <!-- Game Event Log -->
-        <div id="gameSummaryEventLogSection">
-            <h3>Game Log</h3>
-            <div id="gameSummaryEventLog" class="game-summary-event-log">
-                <!-- Event log will be dynamically populated here -->
+        <div id="gameSummaryEventLogSection" class="summary-section" data-section="log">
+            <h3 class="summary-section-toggle" aria-expanded="true"><span>Game Log</span><i class="fas fa-chevron-down summary-section-chevron" aria-hidden="true"></i></h3>
+            <div class="summary-section-body">
+                <!-- The replay view (playByPlay/replayView.js) mounts at the top of
+                     this body, above the log lines. -->
+                <div id="gameSummaryEventLog" class="game-summary-event-log">
+                    <!-- Event log will be dynamically populated here -->
+                </div>
             </div>
         </div>
 
+        <!-- Footer actions (game/gameLogic.js): this game as JSON, the log as
+             text, and New Game (post-game flow only; hidden when reviewing
+             from the team list). Styled in css/tables.css. -->
         <footer>
-            <button id="downloadGameBtn">Download Game (JSON)</button>
-            <button id="copySummaryBtn"><i class="fas fa-clipboard"></i> Copy Summary</button>
-            <button id="anotherGameBtn">New Game</button>
+            <button id="downloadGameBtn" title="Download this game as a JSON file"><i class="fas fa-download"></i> Download Game (JSON)</button>
+            <button id="copySummaryBtn" title="Copy the game log to the clipboard as plain text"><i class="fas fa-clipboard"></i> Copy Game Log (text)</button>
+            <button id="anotherGameBtn" class="summary-footer-primary"><i class="fas fa-plus"></i> New Game</button>
         </footer>
 
         <!-- Share-guest footer: the disclosure a spectator actually needs

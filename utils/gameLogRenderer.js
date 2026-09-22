@@ -5,7 +5,7 @@
  * ENTRIES (buildGameLogEntries), from which the shared "game log" line format
  * (buildGameLogText) and the classed HTML lines (renderGameLogHTML /
  * renderGameLogEntriesHTML) both derive. Consumed by:
- *   - game/gameLogic.js summarizeGame()            (Copy Summary clipboard text)
+ *   - game/gameLogic.js summarizeGame()            (Copy Game Log clipboard text)
  *   - game/gameScreenSync.js updateGameLogEvents() (in-game Log tab HTML)
  *   - teams/gameSummary.js renderGameSummaryEventLog() (post-game summary HTML)
  *   - playByPlay/replayEngine.js                   (replay timeline — the entry

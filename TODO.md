@@ -109,6 +109,30 @@ MVP shipped. Coach speaks naturally; the system extracts structured game events.
 
 ## Near Term
 
+### 📈 Game Flow + Connections (branch `game-flow`, built 2026-09-19, on staging, unmerged)
+
+The Review screen gained a **Game Flow** section (score-margin chart with
+runs, lead changes, halftime and timeouts, plus headline lines) and a
+**Connections** block (thrower→receiver pairs, list or matrix), also on Event
+Roster + Stats and as two extra sheets in the game xlsx export. How it works:
+ARCHITECTURE.md § Game Flow (Review screen); design calls and traps:
+docs/dev-notes/game-flow.md. Follow-ups, none blocking:
+
+- [ ] **Field-test on a real tournament game.** The chart was built against a
+      synthetic full-mode game and the sample data. Things to look at on a
+      real one: the `T` markers when both sides call a timeout on the same
+      point (they stack above/below, but a busy point may crowd the label);
+      a 25+ point game's axis labels (every k-th point is labelled, k = ⌈N/12⌉);
+      the matrix on a phone with a 20-player event roster (it scrolls
+      sideways; the thrower column is sticky).
+- [ ] **Connections per phase / per half.** The event screen follows the scope
+      menu (all / phase / one game); a per-half split for a single game would
+      need `halftimeAfter` from `buildGameFlow` threaded into
+      `buildConnections`.
+- [ ] **Copy Game Log (text)** could carry the headline lines (`describeGameFlow`)
+      under the log text; today only the screen and the xlsx have them.
+- [ ] **Docs-site clip** for the section (docs/DOCS_SITE.md conventions).
+
 ### 🔑 Password change and reset (merged 2026-09-12)
 
 Design and test recipe: docs/dev-notes/password-change.md.

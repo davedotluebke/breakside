@@ -65,6 +65,8 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 - **Set Tracking (zone, vert, ho-stack…)** - Opt in per team, name your own sets, then tag each possession with the set you played. The stats screens and every Excel export gain a **By set** breakdown answering "is it working?" on each set's own terms — `Zone (D): 8/12 stops, 4 breaks`, `Ho-stack (O): 5/8 scored`. Entirely invisible for teams that don't turn it on
 - **Playing Time Tracking** - Monitor exact time on field for each player
 - **Point-by-Point Analysis** - See which players were active in each point, with per-point break/hold badges in the game log
+- **Game Flow** - The Review screen charts the score margin point by point: every point coloured by how it went (break, hold, broken, their hold), the biggest run of each side marked, halftime and timeouts on the axis, and headline lines above it — biggest run, lead changes and ties, largest lead, the score at half, longest point. Tap a point for its line and jump to it in the log
+- **Connections** - Who throws to whom: the top thrower→receiver pairs with completions, attempts, goals and hucks, or the full thrower × receiver matrix shaded by volume. On the game Review screen and across an event's games on Event Roster + Stats
 - **Game vs. Season Stats** - Toggle between current game and cumulative statistics
 
 ### Advanced Game Features
@@ -82,8 +84,8 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 - **Event Logging** - Detailed logging of all throws, turnovers, defensive plays, and violations
 
 ### Data & Export
-- **Game Summary** - Review completed games with sortable player stats table and full event log
-- **Excel (.xlsx) Export** - Export player + team statistics from game summaries, event rosters, and team rosters. Multi-sheet workbooks split by phase (event roster) or by event (team roster), with real Excel number/percent types and click-to-sort column headers
+- **Game Summary** - Review completed games with sortable player stats table, the Game Flow chart and Connections, and full event log. Each section collapses from its heading; Game Flow starts collapsed, and the app remembers what you open
+- **Excel (.xlsx) Export** - Export player + team statistics from game summaries, event rosters, and team rosters. Multi-sheet workbooks split by phase (event roster) or by event (team roster), with real Excel number/percent types and click-to-sort column headers. A game's export also carries a Game Flow sheet (one row per point) and a Connections sheet (one row per pair)
 - **JSON Export** - Export complete game data for analysis
 - **QR Codes** - Every share link and team invite can be shown as a QR code, so a parent on the sideline or a new coach scans the coach's phone instead of receiving a link. Generated in the app with no third-party code
 - **Local Storage** - Automatic saving of all team and game data

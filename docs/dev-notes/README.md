@@ -17,6 +17,7 @@ These notes were seeded on 2026-09-05 from an AI agent's per-project memory, ver
 | [e2e-and-unit-tests.md](e2e-and-unit-tests.md) | Per-worktree e2e ports, the `node --check` trap, data-dir hygiene |
 | [es-modules-migration.md](es-modules-migration.md) | What the ESM migration changed and the bugs it shook out |
 | [fastpass-eval.md](fastpass-eval.md) | Narration fast-pass Phase 1 results (branch `fastpass-eval`, unmerged) |
+| [game-flow.md](game-flow.md) | Game Flow chart + Connections: design calls, the hidden-width trap, the sample-team name collision |
 | [invite-url-flow.md](invite-url-flow.md) | Why `/join/<code>` works the way it does, and how to test it locally |
 | [logo-wordmark.md](logo-wordmark.md) | Wordmark rollout, iOS notch decision, remaining spots |
 | [on-deck-line.md](on-deck-line.md) | Design convergence and conventions for `pendingNextLine` fields |

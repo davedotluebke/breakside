@@ -84,5 +84,26 @@ test.describe('scoring and events', () => {
     // End game and verify summary
     await endGame(page);
     await expectFinalScore(page, 2, 1);
+
+    // Game Flow (ui/gameFlowChart.js) is collapsed by default
+    // (ui/summarySections.js); opening it draws the chart — one marker per
+    // point — with the headline lines and the Connections block for the
+    // attributed score. Stats and log start open and collapse on tap.
+    const flowSection = page.locator('#gameFlowSection');
+    await expect(flowSection).toBeVisible();
+    await expect(flowSection).toHaveClass(/collapsed/);
+    await expect(page.locator('#gameFlowChartHost .gf-pt')).toHaveCount(0);
+    await flowSection.locator('.summary-section-toggle').click();
+    await expect(flowSection).not.toHaveClass(/collapsed/);
+    await expect(page.locator('#gameFlowChartHost .gf-pt')).toHaveCount(3);
+    await expect(page.locator('#gameFlowChartHost .gf-line', { hasText: 'Lead changes' })).toBeVisible();
+    await expect(page.locator('#gameConnectionsHost .gf-pair').first()).toBeVisible();
+
+    await expect(page.locator('#playerStats')).not.toHaveClass(/collapsed/);
+    await expect(page.locator('#gameSummaryEventLog')).toBeVisible();
+    await page.locator('#gameSummaryEventLogSection .summary-section-toggle').click();
+    await expect(page.locator('#gameSummaryEventLog')).toBeHidden();
+    await page.locator('#gameSummaryEventLogSection .summary-section-toggle').click();
+    await expect(page.locator('#gameSummaryEventLog')).toBeVisible();
   });
 });
