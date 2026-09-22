@@ -20,6 +20,7 @@
  */
 import { authFetch, getSyncStatus, getDeadLetterCount, DEAD_LETTER_KEY } from '../store/sync.js';
 import { makeSignOutBackup } from './signOutBackup.js';
+import { TEAM_LIST_PREFS_KEY } from '../store/teamListPrefs.js';
 import { log } from '../utils/logger.js';
 
 // =============================================================================
@@ -391,6 +392,9 @@ const LOCAL_DATA_KEYS = [
     'breakside_local_teams',
     'breakside_local_games',
     DEAD_LETTER_KEY,
+    // Pins and last-opened times for the teams screen. Team ids embed team
+    // names, so they leave with the rest (store/teamListPrefs.js).
+    TEAM_LIST_PREFS_KEY,
 ];
 
 // The snapshot's whole lifecycle — when it may be written, and the two events

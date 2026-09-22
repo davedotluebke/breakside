@@ -46,6 +46,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 ### Team Management
 - **Multi-team support** - Create and manage multiple teams with different rosters
 - **Cloud-first team/game selection** - Teams and games stored in the cloud with automatic 10-second refresh; unified bidirectional sync (push local changes + pull cloud updates in a single button)
+- **Recent and pinned teams** - The teams list shows the teams you opened most recently first. Pin any team (the pin next to its settings gear) to keep it in a group at the top; the most recently pinned team sits highest. Pins and recency are per device.
 - **Roster management** - Add, remove, and edit player information including nicknames
 - **Team data export/import** - Download team data as JSON files for backup or sharing
 - **Tournament Events** - Group games under an event (tournament/league) for aggregate stats and a shared event roster. Tag games with free-form **phases** (Day 1, Day 2, Pool Play, Bracket, …) retroactively — or auto-label by day — then filter and group stats by phase

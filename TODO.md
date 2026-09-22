@@ -1537,6 +1537,14 @@ Higher-leverage interventions, in roughly priority order:
 
 ### UI/UX
 - [ ] Comprehensive UI redesign
+- [ ] **Teams view arrangement: revisit if the simple model chafes.** Since
+      2026-09-15 the list is most-recently-opened first with a pinned group on
+      top. A newly pinned team lands at the top of that group, so arranging
+      the group means unpinning and re-pinning in the wanted order; there is
+      deliberately no drag handle. If coaches want more control, candidates
+      are drag-to-reorder within the pinned group, an explicit sort choice
+      (recent / alphabetical / most recent game), and season or archive
+      grouping. Design notes: docs/dev-notes/team-list-order.md.
 - [ ] **Dark mode support** — *in progress in its own session (2026-08-09)*.
       Note the battery angle: on an OLED phone (iPhone X and later except XR/11,
       most flagship Androids) a black pixel is simply off, so dark mode is a
