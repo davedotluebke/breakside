@@ -2445,15 +2445,37 @@ re-running the theme, not by restoring the value seen on the way in (an `auto`
 preference may have re-resolved meanwhile).
 
 The ☀ itself changed contract when this landed: a **tap** enters standby and a
-**press-and-hold** is the old release-the-lock toggle (still sticky for the
-game, now with a confirming toast). The button shows in every game whether or
-not the browser has a wake lock, since standby needs neither; the icon still
-reports the lock (dimmed when not held).
+**press-and-hold** turns the idle timer below on or off (persisted, with a
+confirming toast). The button shows in every game whether or not the browser
+has a wake lock, since standby needs neither; the icon still reports the lock
+(dimmed when not held). Letting the screen sleep is the "Keep screen awake"
+setting under Advanced Settings → Battery, no longer a gesture on the button.
 
-Deliberately not built: an idle timeout that enters standby by itself. It is
-the bigger saving but needs gating — never for the Active Coach mid-point on
-offense; fine between points or for a Line Coach — and the explicit tap has no
-failure mode. Revisit after field use (TODO.md § UI/UX).
+**The idle timer** ([ui/standbyTimer.js](ui/standbyTimer.js)) enters standby
+by itself. After `power.standbyIdleSec` seconds with no tap or key (default
+60, a Battery setting), a persistent toast counts down five seconds — "Idle
+for 60 seconds, entering standby in 5 seconds", with "Long-press ☀ to toggle
+standby timer" on a smaller line — and then the overlay fades in over 700 ms
+**without taking the tap** (`pointer-events: none` for the fade, the
+`standby-screen--entering` state). Only once opaque does it become the
+tap-swallowing screen above. Any tap or key during the countdown or the fade
+cancels the entry and restarts the idle clock; dismissing the toast (tap, ×
+or swipe) is itself a tap. A cancelled fade-in hides at once rather than
+fading out, because the tap that cancelled it has already reached the UI and
+a swallowing fade would eat the next one.
+
+The gate is pure ([utils/standbyPolicy.js](utils/standbyPolicy.js)), checked
+when the idle clock fires and again on every countdown tick: never for the
+**Active Coach mid-point** (a coach who is not Active Coach is never held for
+the point), never with a **dialog, popover or menu open**, never while the
+**mic** is recording or connecting. Between points nobody is held, on any tab:
+waking is a tap, and a tap's delay before Start Point is nothing. A held gate
+just re-arms the clock, so the idle period is always measured from the last
+input and the moment the point ends the clock is already running. The timer owns no recurring loop: one
+`setTimeout` re-armed on input, then five 1-second ticks; the input listeners
+run in the capture phase so a tap the overlay swallows still resets the clock.
+It is armed only while the page is visible and in a game (the power plan), so
+a hidden page never counts as idle. Wakeups are counted under `standbyIdle`.
 
 ### Measuring
 

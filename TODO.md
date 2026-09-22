@@ -1566,9 +1566,13 @@ Higher-leverage interventions, in roughly priority order:
       header via a MutationObserver, so zero extra wakeups; the battery report
       gains a `Standby screen:` line. ARCHITECTURE.md § Standby screen,
       docs/dev-notes/standby-screen.md, `tests/scenarios/15-standby-screen.spec.ts`.
-      **Still open: the idle timeout** (the open question below) — decide
-      after a field day with the tap version. The biggest OLED saving
-      available, and a better between-points display than the full UI anyway.
+      **Idle timeout added on branch `standby-timer`, 2026-09-22** (the open
+      question below, resolved): after `power.standbyIdleSec` idle a toast
+      counts down five seconds, then a non-swallowing fade-in any tap cancels;
+      gated for the Active Coach mid-point, any open dialog, and the mic;
+      press-and-hold ☀ toggles it. ARCHITECTURE.md § Standby
+      screen. The biggest OLED saving available, and a better between-points
+      display than the full UI anyway.
   - **Trigger:** repurpose the ☀ indicator in the game header (added by the
     `battery` branch) to enable/disable standby, with a toast confirming the new
     state on each tap.
