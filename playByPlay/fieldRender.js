@@ -248,11 +248,11 @@ export function stablePointKey(game, point) {
 }
 
 // Which side of the disc an event represents: O for our offense (Throw /
-// Turnover), D for our defense (Pull / Defense). Violation/Other are
+// Turnover / Pickup), D for our defense (Pull / Defense). Violation/Other are
 // transparent — they attach to the surrounding run.
 export function eventSide(e) {
     if (!e) return null;
-    if (e.type === 'Throw' || e.type === 'Turnover') return 'O';
+    if (e.type === 'Throw' || e.type === 'Turnover' || e.type === 'Pickup') return 'O';
     if (e.type === 'Pull' || e.type === 'Defense') return 'D';
     return null;
 }
@@ -391,6 +391,7 @@ export function arrowColor(e) {
 }
 export function markerStyle(e, idx) {
     if (e.type === 'Pull') return { cls: 'pull', glyph: 'P' };
+    if (e.type === 'Pickup') return { cls: 'pickup', glyph: '·' };   // where the pull was caught / picked up
     if (e.type === 'Throw') return e.score_flag ? { cls: 'score', glyph: 'G' } : { cls: 'completion', glyph: String(idx + 1) };
     if (e.type === 'Turnover') return { cls: 'turn', glyph: '✗' };
     if (e.type === 'Defense') {

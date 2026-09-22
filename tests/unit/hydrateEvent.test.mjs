@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { hydrateEvent, hydrateGame, Throw, Pull, Event } from '../../store/models.js';
+import { hydrateEvent, hydrateGame, Throw, Pull, Pickup, Event } from '../../store/models.js';
 import { buildGameLogEntries } from '../../utils/gameLogRenderer.js';
 import { createReplayEngine } from '../../playByPlay/replayEngine.js';
 
@@ -26,6 +26,23 @@ test('hydrateEvent builds the right class with {name, id} player refs and keeps 
     assert.equal(t.at, 1700000000000);
     assert.equal(t.summarize(), 'Alice hucks to Bob for the score!');
     assert.equal(rawThrow.thrower, 'Alice', 'input not mutated');
+});
+
+test('hydrateEvent: a Pickup keeps its receiver / flag / spot; a thrower-less drop reads as a dropped pull', () => {
+    const pk = hydrateEvent({ type: 'Pickup', receiver: 'Alice', receiverId: 'Alice-1a2b', pullCatch_flag: true, to: { x: .3, y: .5 }, at: 5 });
+    assert.ok(pk instanceof Pickup);
+    assert.deepEqual(pk.receiver, { name: 'Alice', id: 'Alice-1a2b' });
+    assert.equal(pk.pullCatch_flag, true);
+    assert.deepEqual(pk.to, { x: .3, y: .5 });
+    assert.equal(pk.at, 5);
+    assert.equal(pk.summarize(), 'Alice catches the pull');
+    assert.equal(hydrateEvent({ type: 'Pickup', receiver: 'Bob' }).summarize(), 'Bob picks up the disc');
+    const pullDrop = hydrateEvent({ type: 'Turnover', drop_flag: true, receiver: 'Cara' });
+    assert.equal(pullDrop.thrower, null);
+    assert.equal(pullDrop.isPullDrop(), true);
+    assert.equal(pullDrop.summarize(), 'Cara drops the pull');
+    const drop = hydrateEvent({ type: 'Turnover', drop_flag: true, thrower: 'Unknown Player', receiver: 'Cara' });
+    assert.equal(drop.isPullDrop(), false);
 });
 
 test('hydrateEvent: absent refs stay null, assist only when present, ids resolve to names via the hook', () => {

@@ -13,6 +13,7 @@ import { canEditPlayByPlay, showControllerToast } from './controllerState.js';
 // eventLogDisplay/panelSystem) never reaches back into this file, and
 // showPullDialog is only called at point-start time — safe back-edge import.
 import { showPullDialog } from '../playByPlay/pullDialog.js';
+import { clockWaitsForFirstTouch, armPointClock } from '../store/pointClock.js';
 import { log } from '../utils/logger.js';
 
 let countdownInterval = null;
@@ -149,11 +150,23 @@ function startNextPoint() {
     const point = new Point(activePlayersForThisPoint, startPointOn);
     currentGame().points.push(point);
 
-    // Start timing
+    // Start timing — or, on offense with the Full / Field tab as the
+    // recording surface, arm the clock and let the first touch (the pickup /
+    // pull catch / dropped pull those tabs record) start it, so point time
+    // excludes the pull's flight. store/pointClock.js has the rules. The
+    // surface is read before the Line-tab switch below, but getCurrentMode
+    // already maps 'line' to the last PBP tab, which is where that switch
+    // lands, so the answer is the same.
     if (point.startTimestamp !== null) {
         console.warn("Warning: startTimestamp was already set when starting point");
     }
-    point.startTimestamp = new Date();
+    const recordingMode = (typeof window.getCurrentMode === 'function') ? window.getCurrentMode() : 'simple';
+    if (clockWaitsForFirstTouch(point, recordingMode)) {
+        armPointClock(point);
+        log(`⏱ Point clock armed (${recordingMode}) — starts on the first touch`);
+    } else {
+        point.startTimestamp = new Date();
+    }
 
     // Enter the panel-based game screen
     // late-bound back-edge (gameScreenSync lives "above" this layer); see

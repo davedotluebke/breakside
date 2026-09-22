@@ -11,9 +11,11 @@
  *     who has the disc".
  *   - findLastEditableEvent(): the most recent Throw/Turnover/Defense, used by
  *     the modifier strip ("Last throw was a:").
- *   - createThrow / createTurnover / createDefense / createPull: append a real
- *     event to the current point, update stats, advance the score/point where
- *     appropriate, persist, and publish on the narration event bus.
+ *   - createThrow / createTurnover / createDefense / createPull / createPickup:
+ *     append a real event to the current point, update stats, advance the
+ *     score/point where appropriate, start an armed point clock (the first
+ *     touch — store/pointClock.js), persist, and publish on the narration
+ *     event bus.
  *   - amendEvent(): edit a recorded event in place (players, catch spot,
  *     modifier flags) — the one chokepoint every editing surface goes
  *     through (replay editor, Full-tab modifier strip, Field-tab marker
@@ -31,9 +33,10 @@
  */
 
 import {
-    Throw, Turnover, Defense, Pull, Role, UNKNOWN_PLAYER,
+    Throw, Turnover, Defense, Pull, Pickup, Role, UNKNOWN_PLAYER,
 } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
+import { startPointClock, awaitingPull } from '../store/pointClock.js';
 import { getLatestPoint, getPlayerFromName, currentGame } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { updateScore } from '../game/gameLogic.js';
@@ -100,6 +103,10 @@ const pbpPossession = (function() {
                 // no holder of ours.
                 mode = 'defense';
                 holder = null;
+            } else if (lastEvent.type === 'Pickup') {
+                // Our player caught / picked up the pull → offense, they hold.
+                mode = 'offense';
+                holder = lastEvent.receiver || null;
             }
             // (Violation / Other never reach here — the scan above skips them.)
         }
@@ -129,6 +136,18 @@ const pbpPossession = (function() {
         return (typeof getPlayerFromName === 'function')
             ? getPlayerFromName(UNKNOWN_PLAYER)
             : null;
+    }
+
+    /**
+     * First touch: an armed point clock (offense, waiting for the pull to be
+     * caught / picked up / dropped) starts on the first recorded touch of any
+     * kind. Every creator below calls this right after appending its event.
+     */
+    function touch() {
+        const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
+        if (startPointClock(point)) {
+            if (typeof logEvent === 'function') logEvent('Point clock started');
+        }
     }
 
     function publishAdded(evt, source) {
@@ -278,6 +297,7 @@ const pbpPossession = (function() {
         });
         const possession = ensurePossessionExists(true);
         possession.addEvent(evt);
+        touch();
 
         // Stats: every throw is a completed pass; a score adds an assist for
         // the (explicit) assist holder and a goal for the receiver.
@@ -302,14 +322,21 @@ const pbpPossession = (function() {
     }
 
     /**
-     * @param opts {throwaway, drop, goodDefense, stall, huck, from, to, inferred}
+     * @param opts {throwaway, drop, goodDefense, stall, huck, from, to, inferred,
+     *              pullDrop}
+     *   pullDrop: the receiver dropped the PULL — written with no thrower, which
+     *   is what marks a dropped pull (Turnover.isPullDrop). Any other drop with
+     *   an unknown thrower is credited to Unknown Player, keeping null
+     *   unambiguous.
      */
     function createTurnover(thrower, receiver, opts) {
         opts = opts || {};
         if (typeof ensurePossessionExists !== 'function') return null;
 
+        let throwerRef = thrower || null;
+        if (opts.drop) throwerRef = opts.pullDrop ? null : (throwerRef || getUnknown());
         const evt = new Turnover({
-            thrower: thrower || null,
+            thrower: throwerRef,
             receiver: receiver || null,
             throwaway: !!opts.throwaway,
             huck: !!opts.huck,
@@ -324,6 +351,7 @@ const pbpPossession = (function() {
         // Turnovers live in the offensive possession that just ended.
         const possession = ensurePossessionExists(true);
         possession.addEvent(evt);
+        touch();
 
         if (typeof logEvent === 'function') logEvent(evt.summarize());
         publishAdded(evt, opts.source);
@@ -357,6 +385,7 @@ const pbpPossession = (function() {
 
         const possession = ensurePossessionExists(false);
         possession.addEvent(evt);
+        touch();
 
         if (typeof logEvent === 'function') logEvent(evt.summarize());
         publishAdded(evt, opts.source);
@@ -396,6 +425,38 @@ const pbpPossession = (function() {
 
         const possession = ensurePossessionExists(false);
         possession.addEvent(evt);
+        touch();
+
+        if (typeof logEvent === 'function') logEvent(evt.summarize());
+        publishAdded(evt, opts.source);
+
+        persist();
+        return evt;
+    }
+
+    /**
+     * Record our player taking possession of the pull: catching it in the
+     * air (opts.pullCatch) or picking it up off the ground. Opens the
+     * offensive possession, establishes the holder (reconstructState reads
+     * it), and — as the first touch — starts an armed point clock. No stats.
+     * @param receiver Player (Unknown Player when unseen)
+     * @param opts {pullCatch, to, inferred, source}
+     */
+    function createPickup(receiver, opts) {
+        opts = opts || {};
+        if (typeof ensurePossessionExists !== 'function') return null;
+        if (!receiver) return null;
+
+        const evt = new Pickup({
+            receiver,
+            pullCatch: !!opts.pullCatch,
+            to: opts.to || null
+        });
+        if (opts.inferred) evt.inferred_flag = true;
+
+        const possession = ensurePossessionExists(true);
+        possession.addEvent(evt);
+        touch();
 
         if (typeof logEvent === 'function') logEvent(evt.summarize());
         publishAdded(evt, opts.source);
@@ -416,6 +477,10 @@ const pbpPossession = (function() {
         createTurnover,
         createDefense,
         createPull,
+        createPickup,
+        // Event-stream predicate (store/pointClock.js), re-exported for
+        // window-qualified callers: an offensive point nobody has touched.
+        awaitingPull,
         amendEvent,
         // Shared modifier tables (playByPlay/eventAmend.js), re-exported for
         // window-qualified callers.

@@ -696,6 +696,12 @@ body.game-screen-active header {
     opacity: 0.7;
 }
 
+/* Armed, waiting for the first touch of an offensive point (the pickup /
+   pull catch starts it — store/pointClock.js): 0:00, visibly not running. */
+.header-timer-value.timer-pending {
+    opacity: 0.5;
+}
+
 @keyframes timerPulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }

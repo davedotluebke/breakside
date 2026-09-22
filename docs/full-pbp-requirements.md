@@ -24,6 +24,8 @@ A new **Full** play-by-play tab that lets a coach log every event of a point (ev
 
 | Tap | Event | Flip? |
 |---|---|---|
+| *Pull not yet received* — `Catches Pull` / `Picks Up` / player name (2026-09) | `Pickup{receiver=tapped, pullCatch if caught}` | no; tapped becomes holder; the point clock starts (first touch) |
+| *Pull not yet received* — `Drops Pull` (2026-09) | `Turnover{drop, thrower=null, receiver=tapped}` — a dropped pull is a drop with no thrower | O→D, no holder; the point clock starts |
 | Other player name | `Throw{thrower=holder, receiver=tapped, break if armed}` | no; tapped becomes new holder |
 | `drop` on other row | `Turnover{drop, thrower=holder, receiver=tapped}` | O→D, no holder |
 | `score` on other row | `Throw{score, thrower=holder, receiver=tapped}` | end point |
@@ -53,7 +55,8 @@ The retroactive-modifier UX is **tentative**. We may instead mock and try: pre-a
 
 ## Start state & transitions
 
-- No holder at point start. The first player-name tap establishes the holder with **no** event logged.
+- No holder at point start. On an **offensive** point every row shows `Drops Pull` / `Catches Pull` / `Picks Up` until the first touch is recorded, and a name tap is `Picks Up` (added 2026-09; see ARCHITECTURE.md § Point clock and the first touch). Start Point arms the point clock on this surface; that first touch starts it, so point time excludes the pull's flight.
+- After a turnover-back (no holder, mid-point) the first player-name tap establishes the holder with **no** event logged.
 - After any O↔D flip *except* an interception: no holder; first tap establishes holder with no event logged.
 - The existing pull dialog still gates point entry exactly as today.
 
@@ -65,7 +68,7 @@ The retroactive-modifier UX is **tentative**. We may instead mock and try: pre-a
   - If Offense: skips the pull dialog.
   - When one coach holds both Line and Active Coach roles, pressing the button auto-navigates to whichever PBP tab (Full or Simple) they last used.
 - Opponent Callahan is **not** modeled. Log as a throwaway followed by an opponent score. Proper opponent-Callahan tracking is on the future-enhancements list.
-- Full PBP reuses existing `Throw` / `Turnover` / `Defense` models and `Possession` boundaries. No new event types.
+- Full PBP reuses existing `Throw` / `Turnover` / `Defense` models and `Possession` boundaries. The one addition since v1 is the `Pickup` event for pull reception (2026-09).
 - The `…` menu opens as a popover anchored to its button (v1).
 
 ## Deferred / future enhancements

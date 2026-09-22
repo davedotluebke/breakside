@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createReplayEngine } from '../../playByPlay/replayEngine.js';
-import { Throw, Turnover, Defense, Pull } from '../../store/models.js';
+import { Throw, Turnover, Defense, Pull, Pickup } from '../../store/models.js';
 
 const P = Object.fromEntries(['Alice', 'Bob', 'Cara', 'Dev'].map(n => [n, { name: n, id: n.toLowerCase() }]));
 const roster = Object.keys(P);
@@ -34,6 +34,16 @@ function locatedPoint(t0 = 100000) {
                 at(new Throw({ thrower: P.Dev, receiver: P.Alice, score: true, from: { x: .86, y: .55 }, to: { x: 1.06, y: .5 } }), t0 + 36000),
             ], t0 + 21500),
         ],
+    });
+}
+/** O point opened by a located pull catch (Pickup), then one throw. */
+function pickupPoint(t0 = 500000) {
+    return point({
+        startingPosition: 'offense',
+        possessions: [poss(true, [
+            at(new Pickup({ receiver: P.Alice, pullCatch: true, to: { x: .25, y: .5 } }), t0),
+            at(new Throw({ thrower: P.Alice, receiver: P.Bob, from: { x: .25, y: .5 }, to: { x: .5, y: .5 } }), t0 + 3000),
+        ], t0)],
     });
 }
 /** Legacy O point: no timestamps, no locations. */
@@ -216,4 +226,22 @@ test('pointSummaries: timing span, winner, located; rebuild picks up new events'
     assert.equal(eng.isFinished(), false);
     eng.rebuild(game([legacyPoint()], { gameEndTimestamp: new Date() }));
     assert.equal(eng.isFinished(), true);
+});
+
+test('fieldStateAt: a located Pickup makes its receiver the holder and puts the disc at the spot', () => {
+    const eng = createReplayEngine(game([pickupPoint()], { startingPosition: 'offense' }), OPTS);
+    const i = eng.entries.findIndex(e => e.kind === 'event' && e.event && e.event.type === 'Pickup');
+    assert.ok(i >= 0, 'the Pickup is a log entry');
+    assert.equal(eng.entries[i].text, 'Alice catches the pull');
+    const st = eng.fieldStateAt(i);
+    assert.equal(st.holder, 'Alice');
+    assert.deepEqual(st.disc, { x: .25, y: .5 });
+    assert.deepEqual(st.players.Alice, { x: .25, y: .5 });
+    assert.equal(st.who, 'us');
+    assert.equal(st.arrows.length, 0, 'a pickup draws no arrow');
+    const after = eng.fieldStateAt(i + 1);
+    assert.equal(after.holder, 'Bob');
+    assert.equal(after.arrows.length, 1, 'the first throw starts from the pickup spot');
+    assert.deepEqual(after.arrows[0].a, { x: .25, y: .5 });
+    assert.equal(eng.hasLocations(0), true);
 });

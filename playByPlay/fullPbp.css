@@ -381,6 +381,10 @@
 .full-pbp-row-action-break        { color: var(--pbp-blue-ink); }   /* blue — modifier */
 .full-pbp-row-action-block        { color: var(--pbp-green-ink); }   /* green — defender win */
 .full-pbp-row-action-interception { color: var(--pbp-green-ink); font-weight: 700; }
+/* Pull reception — start of an O point, before anyone has touched the disc */
+.full-pbp-row-action-pulldrop     { color: var(--pbp-red-ink); }     /* red — dropped the pull */
+.full-pbp-row-action-pullcatch    { color: var(--pbp-green-ink); }   /* green — caught the pull */
+.full-pbp-row-action-pickup       { color: var(--pbp-green-ink); }   /* green — picked it up */
 
 .full-pbp-row-action.armed {
     background: var(--pbp-blue-deep);

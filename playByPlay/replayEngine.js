@@ -27,8 +27,10 @@
  * Field-state rule (Decision 2): only events place players. A Throw puts the
  * thrower at `from` and the receiver at `to`; a Turnover puts the thrower at
  * `from` and the disc at `to` in opponent hands; a Defense puts the defender
- * at `to`; a Pull puts the puller at `from` and the disc at `to`. A 'roster'
- * entry resets everyone to the strip. Events without locations move nobody.
+ * at `to`; a Pull puts the puller at `from` and the disc at `to`; a Pickup
+ * (pull caught / picked up) puts its receiver — now the holder — and the disc
+ * at `to`. A 'roster' entry resets everyone to the strip. Events without
+ * locations move nobody.
  */
 import { buildGameLogEntries } from '../utils/gameLogRenderer.js';
 
@@ -178,6 +180,9 @@ function createReplayEngine(game, options = {}) {
                     if (hasLoc(e.from) && hasLoc(e.to)) {
                         st.arrows.push({ a: copyLoc(e.from), b: copyLoc(e.to), kind: 'pull', poss: st.possSeq });
                     }
+                    if (hasLoc(e.to)) st.disc = copyLoc(e.to);
+                } else if (e.type === 'Pickup') {
+                    st.holder = place(e.receiver, e.to);
                     if (hasLoc(e.to)) st.disc = copyLoc(e.to);
                 }
             }

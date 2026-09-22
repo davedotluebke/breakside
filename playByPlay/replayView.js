@@ -211,6 +211,7 @@ function mountReplayView(cfg) {
             else if (e.type === 'Turnover') set(e.thrower, e.from, gi);
             else if (e.type === 'Defense') set(e.defender, e.to, gi);
             else if (e.type === 'Pull') set(e.puller, e.from, gi);
+            else if (e.type === 'Pickup') set(e.receiver, e.to, gi);
         });
         return placed;
     }

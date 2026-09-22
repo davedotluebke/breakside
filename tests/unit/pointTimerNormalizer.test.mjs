@@ -192,3 +192,19 @@ test('full Team-E replay: every stored marker is repaired, banked times survive'
     // Idempotent: a second pass finds nothing left to repair.
     assert.equal(normalizePointTimers(points, NOW), 0);
 });
+
+test('an armed clock (clockPending) survives on the live last point, is cleared on concluded and non-last points', () => {
+    const points = [
+        makePoint({ winner: 'team', endTimestamp: new Date(NOW - 30 * MINUTES), totalPointTime: 65000, clockPending: true }),
+        makePoint({ clockPending: true }),
+        makePoint({ clockPending: true }),
+    ];
+    assert.equal(normalizePointTimers(points, NOW), 2);
+    assert.equal(points[0].clockPending, false, 'concluded');
+    assert.equal(points[0].totalPointTime, 65000, 'banked time untouched');
+    assert.equal(points[1].clockPending, false, 'a later point exists');
+    assert.equal(points[2].clockPending, true, 'the live last point keeps waiting for its first touch');
+    assert.equal(points[2].startTimestamp, null);
+    // Legacy data carries no flag at all — nothing to repair.
+    assert.equal(normalizePointTimers([makePoint({})], NOW), 0);
+});

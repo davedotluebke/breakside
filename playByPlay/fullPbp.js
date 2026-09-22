@@ -11,7 +11,15 @@
  *       holder row     → throwaway / break / …
  *       non-holder row → drop / score / …
  *   - O-mode interactions:
- *       tap player name (no holder) → set initial holder, no event
+ *       start of an O point (nobody has touched the pull yet —
+ *       store/pointClock.js awaitingPull): every row shows
+ *       Drops Pull / Catches Pull / Picks Up; a name tap is Picks Up.
+ *         Catches Pull / Picks Up → Pickup{receiver=tapped, pullCatch?};
+ *                                    tapped becomes holder
+ *         Drops Pull              → Turnover{drop, thrower=null} (a dropped
+ *                                    pull is a drop with no thrower)
+ *       Any of these is the point's first touch and starts its armed clock.
+ *       tap player name (no holder, after a turnover-back) → set holder, no event
  *       tap player name (has holder) → Throw{thrower=holder, receiver=tapped,
  *                                            break_flag if armed}; tapped becomes new holder
  *       tap drop on other row    → Turnover{drop, holder→tapped}
@@ -34,6 +42,7 @@
  */
 import { UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData, currentTeam } from '../store/storage.js';
+import { awaitingPull } from '../store/pointClock.js';
 import {
     currentGame, getLatestPoint, getPlayerFromName, isPointInProgress,
     formatPlayerName, buildPointPlayerLookup,
@@ -111,6 +120,8 @@ const fullPbp = (function() {
      *   - last is Defense
      *       interception      → 'offense', holder = defender
      *       block/stall/UE/Callahan → 'offense' (or next point on Callahan), no holder
+     *   - last is Pickup      → 'offense', holder = whoever caught / picked
+     *                           up the pull
      *
      * Returns { mode, holder } where holder is a Player or null.
      */
@@ -288,6 +299,9 @@ const fullPbp = (function() {
             } else {
                 const holder = inPoint ? effectiveHolder(state) : null;
                 const isOffense = state.mode === 'offense';
+                // Start of an O point, pull not yet received: rows offer the
+                // pull-reception outcomes instead of drop / score.
+                const pullPending = inPoint && isOffense && !holder && awaitingPull(state.point);
                 const entries = [UNKNOWN_PLAYER, ...state.point.players];
 
                 // point.players entries may be current names, player ids
@@ -298,7 +312,7 @@ const fullPbp = (function() {
                 entries.forEach(entry => {
                     const { name, obj } = lookup(entry);
                     const isHolder = !!(holder && holder.name === name);
-                    const row = renderPlayerRow(obj, isHolder, isOffense);
+                    const row = renderPlayerRow(obj, isHolder, isOffense, pullPending);
                     if (!inPoint) row.classList.add('between-points');
                     rows.appendChild(row);
                 });
@@ -649,11 +663,12 @@ const fullPbp = (function() {
 
     /**
      * Build one player row. The per-row button set is contextual:
+     *   - O-mode, pull not yet received → Drops Pull / Catches Pull / Picks Up
      *   - O-mode holder      → throwaway / break / …
      *   - O-mode non-holder  → drop / score / …
      *   - D-mode any row     → block / Interception / …
      */
-    function renderPlayerRow(player, isHolder, isOffense) {
+    function renderPlayerRow(player, isHolder, isOffense, pullPending) {
         const isUnknown = (player.name === UNKNOWN_PLAYER);
         const row = document.createElement('div');
         row.className = 'full-pbp-player-row';
@@ -683,6 +698,16 @@ const fullPbp = (function() {
                 () => handleBlockTap(player)));
             actions.appendChild(makeRowActionBtn('interception', 'Interception',
                 () => handleInterceptionTap(player)));
+        } else if (pullPending) {
+            // How did this player first touch the pull? (A name tap is
+            // Picks Up as well.) Drops Pull is red, the other two green.
+            actions.classList.add('full-pbp-row-actions-pull');
+            actions.appendChild(makeRowActionBtn('pulldrop', 'Drops Pull',
+                () => handlePullDropTap(player)));
+            actions.appendChild(makeRowActionBtn('pullcatch', 'Catches Pull',
+                () => handlePullCatchTap(player)));
+            actions.appendChild(makeRowActionBtn('pickup', 'Picks Up',
+                () => handlePickupTap(player)));
         } else if (isHolder) {
             actions.appendChild(makeRowActionBtn('throwaway', 'Throwaway',
                 () => handleThrowawayTap()));
@@ -739,10 +764,14 @@ const fullPbp = (function() {
 
     /**
      * Tap on a player's name.
-     *   - In O-mode, no holder yet  → set initial holder, no event.
+     *   - In O-mode at the start of the point (pull not yet received) → a
+     *     Pickup event: the tapped player picks up the disc, becomes holder,
+     *     and the point clock starts (first touch).
+     *   - In O-mode, no holder after a turnover-back → set holder, no event.
      *   - In O-mode, holder exists  → log a Throw (holder → tapped); tapped
      *     becomes new holder.
-     *   - In D-mode → noop for phase 2 (D-mode interactions land in phase 3).
+     *   - In D-mode → noop (the row's Block / Interception buttons carry
+     *     the intent).
      */
     function handlePlayerNameTap(player) {
         if (!requireActiveCoach()) return;
@@ -760,7 +789,13 @@ const fullPbp = (function() {
 
         const holder = effectiveHolder(state);
         if (!holder) {
-            // No holder yet — this tap establishes it. No event logged.
+            if (awaitingPull(state.point)) {
+                // Start of an O point: the tap is the pull being picked up.
+                createPickup(player, {});
+                return;
+            }
+            // Turnover-back with no holder yet — this tap establishes it.
+            // No event logged.
             manualHolder = player;
             render();
             return;
@@ -779,7 +814,10 @@ const fullPbp = (function() {
         if (!requireActiveCoach()) return;
         const state = reconstructState();
         const holder = effectiveHolder(state);
-        if (!holder) {
+        if (!holder && awaitingPull(state.point)) {
+            // Nobody has touched the pull: this is the pull being dropped.
+            createTurnover(null, player, { drop: true, pullDrop: true });
+        } else if (!holder) {
             // No holder = no thrower. Drop without a thrower is just a
             // generic turnover; defer to throwaway semantics (Unknown
             // thrower, this player as receiver).
@@ -787,6 +825,27 @@ const fullPbp = (function() {
         } else {
             createTurnover(holder, player, { drop: true });
         }
+    }
+
+    /**
+     * Pull reception — the three ways our player first touches the pull.
+     * "Drops Pull" is a drop with no thrower (Turnover.isPullDrop: nobody on
+     * our team threw it); the other two are Pickup events. Each is the
+     * point's first touch, which starts its armed clock.
+     */
+    function handlePullDropTap(player) {
+        if (!requireActiveCoach()) return;
+        createTurnover(null, player, { drop: true, pullDrop: true });
+    }
+
+    function handlePullCatchTap(player) {
+        if (!requireActiveCoach()) return;
+        createPickup(player, { pullCatch: true });
+    }
+
+    function handlePickupTap(player) {
+        if (!requireActiveCoach()) return;
+        createPickup(player, {});
     }
 
     function handleThrowawayTap() {
@@ -1074,8 +1133,25 @@ const fullPbp = (function() {
         const evt = window.pbpPossession.createTurnover(thrower, receiver, {
             throwaway: !!opts.throwaway,
             drop: !!opts.drop,
+            pullDrop: !!opts.pullDrop,
             goodDefense: !!opts.goodDefense,
             stall: !!opts.stall
+        });
+        if (!evt) return;
+        manualHolder = null;
+        breakArmed = false;
+        render();
+    }
+
+    /**
+     * Our player takes possession of the pull (caught in the air when
+     * `pullCatch`, else picked up). The holder derives from the event, so no
+     * manual override is needed afterwards.
+     */
+    function createPickup(receiver, opts) {
+        opts = opts || {};
+        const evt = window.pbpPossession.createPickup(receiver, {
+            pullCatch: !!opts.pullCatch
         });
         if (!evt) return;
         manualHolder = null;
