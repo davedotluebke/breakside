@@ -29,3 +29,4 @@ These notes were seeded on 2026-09-05 from an AI agent's per-project memory, ver
 | [qr-codes.md](qr-codes.md) | Hand-rolled QR encoder: why not vendored, the capacity trap, how it was verified |
 | [share-links.md](share-links.md) | Same-origin viewer chain and its deploy corollaries |
 | [standby-screen.md](standby-screen.md) | Black standby screen: the tap/hold split on ☀, why exit is on `click`, how to verify |
+| [team-list-order.md](team-list-order.md) | Teams screen order (most recently opened, pinned group on top): the decisions and how to verify |

@@ -186,6 +186,46 @@
     }
 }
 
+/* Header action cluster: [pin] [gear] [trash]. The pin is there for every
+   role; the gear and trash only for coaches. */
+.team-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+/* Pin toggle: quiet until the team is pinned, brand orange once it is. */
+.team-pin-btn i {
+    color: var(--text-muted);
+    opacity: 0.55;
+    transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.team-pin-btn:hover i {
+    opacity: 1;
+}
+
+.team-pin-btn.pinned i {
+    color: var(--brand-orange);
+    opacity: 1;
+}
+
+/* "Pinned" / "Other teams" group labels. Only rendered once something is
+   pinned; with nothing pinned the list reads as one plain list. */
+.team-group-label {
+    padding: 12px 4px 4px;
+    font-size: 0.8em;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.team-group-label:first-child {
+    padding-top: 0;
+}
+
 .team-games-container {
     border-top: 1px solid var(--border-light);
     background: var(--surface-card);

@@ -78,6 +78,7 @@ import './store/pendingLineLogic.js';
 import './store/authFetchLogic.js';
 import './store/pointTimerNormalizer.js';
 import './store/localTeamView.js';
+import './store/teamListPrefs.js';
 import './utils/helpers.js';
 import './utils/changeStamp.js';
 import './utils/qrCode.js';

@@ -10,6 +10,10 @@
 import { Team, isTestTeam } from '../store/models.js';
 import { buildLocalTeamData } from '../store/localTeamView.js';
 import {
+    readTeamListPrefs, writeTeamListPrefs, isTeamPinned, pinTeam, unpinTeam,
+    markTeamViewed, arrangeTeams,
+} from '../store/teamListPrefs.js';
+import {
     teams, currentTeam, setCurrentTeam, setCurrentEvent, setCurrentTeamRole,
     saveAllTeamsData, serializeTeam, deserializeTeams, deserializePlayer,
     deserializeTournamentEvent,
@@ -122,6 +126,12 @@ function showSelectTeamScreen(firsttime = false) {
     accountSection.innerHTML = buildAccountSectionHTML();
     teamListElement.appendChild(accountSection);
 
+    // A kept list is redrawn from the last fetch before the refetch starts:
+    // the order depends on this device's prefs, not on the server, so the
+    // team the coach just opened is already at the top when the screen
+    // appears instead of hopping there when the fresh data lands.
+    if (keepPrevious) renderCloudTeamsList();
+
     // Populate teams and games asynchronously
     populateCloudTeamsAndGames();
 
@@ -163,7 +173,8 @@ function teamHasActiveGames(games) {
  *
  * Features:
  * - Collapsible team sections (click to expand/collapse)
- * - Teams sorted by most recent game
+ * - Pinned teams first, then teams most recently opened on this device
+ *   (rules in store/teamListPrefs.js)
  * - Games sorted by most recent within each team
  * - Active game indicator showing coaching names
  * - Teams with active games are auto-expanded
@@ -174,6 +185,30 @@ let _expandStateInitialized = false;
 
 // Cached team objects from last populateCloudTeamsAndGames() (read by activeGamePolling.js)
 let _cloudTeamsCache = [];
+
+// Everything the last fetch returned, so a pin toggle can redraw the list
+// without a round trip (renderCloudTeamsList).
+let _lastListData = null;
+
+/** Flip a team's pin and redraw from the last fetch. */
+function toggleTeamPinned(teamId) {
+    const prefs = readTeamListPrefs(localStorage);
+    const next = isTeamPinned(prefs, teamId) ? unpinTeam(prefs, teamId) : pinTeam(prefs, teamId);
+    writeTeamListPrefs(localStorage, next);
+    renderCloudTeamsList();
+}
+
+/**
+ * Note that the coach opened this team, for the most-recently-opened order.
+ * Called from every path that leaves the teams screen for a team (roster,
+ * settings, starting, joining or reviewing a game: all via selectCloudTeam)
+ * and when a team is created or joined. Never for expanding a card in place,
+ * which would reorder the list under the coach's finger on the next redraw.
+ */
+function recordTeamViewed(teamId) {
+    if (!teamId) return;
+    writeTeamListPrefs(localStorage, markTeamViewed(readTeamListPrefs(localStorage), teamId));
+}
 
 async function populateCloudTeamsAndGames() {
     const listElement = document.getElementById('cloudTeamsList');
@@ -245,6 +280,7 @@ async function populateCloudTeamsAndGames() {
         }
 
         if (userTeams.length === 0) {
+            _lastListData = null;
             listElement.innerHTML = `
                 <p>No teams yet. Create your first team to get started!</p>
                 <p class="text-hint">
@@ -254,292 +290,355 @@ async function populateCloudTeamsAndGames() {
             return;
         }
 
-        // Group games by teamId
-        const gamesByTeamId = {};
-        allGames.forEach(game => {
-            const teamId = game.teamId || null;
-            if (!gamesByTeamId[teamId]) {
-                gamesByTeamId[teamId] = [];
-            }
-            gamesByTeamId[teamId].push(game);
-        });
-
-        // Sort games within each team by date (newest first)
-        for (const teamId in gamesByTeamId) {
-            gamesByTeamId[teamId].sort((a, b) => {
-                const dateA = new Date(a.game_start_timestamp || 0);
-                const dateB = new Date(b.game_start_timestamp || 0);
-                return dateB - dateA;
-            });
-        }
-
-        // Sort teams by most recent game (newest first)
-        const sortedTeams = [...userTeams].sort((a, b) => {
-            const aGames = gamesByTeamId[a.team.id] || [];
-            const bGames = gamesByTeamId[b.team.id] || [];
-            const aRecent = getMostRecentGameTimestamp(aGames);
-            const bRecent = getMostRecentGameTimestamp(bGames);
-            return bRecent - aRecent;
-        });
-
-        // Build the collapsible team list
-        const container = document.createElement('div');
-        container.className = 'teams-list-container';
-
-        // Say so, rather than letting a local list pass for a synced one. The
-        // difference matters: another coach's games won't be here, and neither
-        // will anything this device hasn't recorded itself.
-        if (servedFromLocal) {
-            const notice = document.createElement('p');
-            notice.className = 'text-hint offline-list-notice';
-            notice.textContent =
-                "Offline — showing games saved on this device. They'll sync when you're back online.";
-            container.appendChild(notice);
-        }
-
-        sortedTeams.forEach(({ team, role }) => {
-            const teamGames = gamesByTeamId[team.id] || [];
-            const hasActiveGames = teamHasActiveGames(teamGames);
-
-            // Team section container
-            const teamSection = document.createElement('div');
-            teamSection.className = 'team-section';
-            if (hasActiveGames) {
-                teamSection.classList.add('has-active-games');
-            }
-
-            // Team header (collapsible, two-line layout)
-            const teamHeader = document.createElement('div');
-            teamHeader.className = 'team-header';
-
-            // --- Top row ---
-            const topRow = document.createElement('div');
-            topRow.className = 'team-header-top';
-
-            // Left side of top row
-            const topLeft = document.createElement('div');
-            topLeft.className = 'team-header-top-left';
-
-            if (hasActiveGames) {
-                const activeIndicator = document.createElement('span');
-                activeIndicator.className = 'team-active-indicator';
-                activeIndicator.textContent = '🟢';
-                activeIndicator.title = 'Has active games';
-                topLeft.appendChild(activeIndicator);
-            }
-
-            if (team.iconUrl) {
-                const teamIcon = document.createElement('img');
-                teamIcon.src = team.iconUrl;
-                teamIcon.className = 'team-header-icon';
-                teamIcon.alt = team.name;
-                topLeft.appendChild(teamIcon);
-            }
-
-            const teamNameSpan = document.createElement('span');
-            teamNameSpan.className = 'team-header-name';
-            teamNameSpan.textContent = team.name;
-            topLeft.appendChild(teamNameSpan);
-
-            topRow.appendChild(topLeft);
-
-            // Right side buttons (coaches only)
-            if (role === 'coach') {
-                const topRight = document.createElement('div');
-                topRight.style.display = 'flex';
-                topRight.style.gap = '4px';
-
-                const settingsBtn = document.createElement('button');
-                settingsBtn.innerHTML = '<i class="fas fa-cog"></i><span class="icon-button-label">Team settings</span>';
-                settingsBtn.classList.add('icon-button', 'team-settings-btn');
-                settingsBtn.title = 'Team Settings';
-                settingsBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    selectCloudTeam(team).then(() => {
-                        if (typeof showTeamSettingsScreen === 'function') {
-                            showTeamSettingsScreen('selectTeamScreen');
-                        }
-                    });
-                };
-                topRight.appendChild(settingsBtn);
-
-                const deleteTeamBtn = document.createElement('button');
-                deleteTeamBtn.innerHTML = '<i class="fas fa-trash icon-danger"></i>';
-                deleteTeamBtn.classList.add('icon-button');
-                deleteTeamBtn.title = 'Erase team permanently';
-                deleteTeamBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    deleteCloudTeam(team);
-                };
-                topRight.appendChild(deleteTeamBtn);
-
-                topRow.appendChild(topRight);
-            }
-
-            teamHeader.appendChild(topRow);
-
-            // --- Bottom row ---
-            const bottomRow = document.createElement('div');
-            bottomRow.className = 'team-header-bottom';
-
-            if (role === 'coach') {
-                const roleBadge = document.createElement('span');
-                roleBadge.className = 'role-badge coach-badge';
-                roleBadge.innerHTML = '<i class="fas fa-clipboard"></i> <span class="role-badge-text">Coach</span>';
-                roleBadge.title = 'Coach';
-                bottomRow.appendChild(roleBadge);
-            } else if (role === 'viewer') {
-                const roleBadge = document.createElement('span');
-                roleBadge.className = 'role-badge viewer-badge';
-                roleBadge.innerHTML = '<i class="fas fa-eye"></i> <span class="role-badge-text">Viewer</span>';
-                roleBadge.title = 'Viewer';
-                bottomRow.appendChild(roleBadge);
-            }
-
-            const gameCount = document.createElement('span');
-            gameCount.className = 'game-count';
-            gameCount.textContent = `${teamGames.length} game${teamGames.length !== 1 ? 's' : ''}`;
-            bottomRow.appendChild(gameCount);
-
-            const rosterBtn = document.createElement('button');
-            rosterBtn.innerHTML = '<i class="fas fa-users"></i> Roster';
-            rosterBtn.classList.add('icon-button', 'text-icon-button');
-            rosterBtn.title = 'View Roster';
-            rosterBtn.onclick = (e) => {
-                e.stopPropagation();
-                setCurrentTeamRole(role);
-                selectCloudTeam(team, { landOn: 'roster' });
-            };
-            bottomRow.appendChild(rosterBtn);
-
-            teamHeader.appendChild(bottomRow);
-            teamSection.appendChild(teamHeader);
-
-            // Games list (collapsible content)
-            const gamesContainer = document.createElement('div');
-            gamesContainer.className = 'team-games-container';
-
-            // On first render, expand teams with active games; after that, preserve user's choice
-            if (!_expandStateInitialized) {
-                if (hasActiveGames) _expandedTeams.add(team.id);
-            }
-            gamesContainer.style.display = _expandedTeams.has(team.id) ? 'block' : 'none';
-
-            // Get events for this team
-            const teamEvents = eventsByTeamId[team.id] || [];
-            const eventMap = {};
-            teamEvents.forEach(ev => { eventMap[ev.id] = ev; });
-
-            // Group games by eventId
-            const eventGameIds = new Set();
-            const gamesByEventId = {};
-            teamGames.forEach(game => {
-                const eid = game.eventId || null;
-                if (eid && eventMap[eid]) {
-                    if (!gamesByEventId[eid]) gamesByEventId[eid] = [];
-                    gamesByEventId[eid].push(game);
-                    eventGameIds.add(game.game_id);
-                }
-            });
-            const standaloneGames = teamGames.filter(g => !eventGameIds.has(g.game_id));
-
-            // Build interleaved list: events and standalone games sorted by most recent activity
-            const renderItems = [];
-
-            // Add events with their latest game timestamp
-            teamEvents.forEach(ev => {
-                const evGames = gamesByEventId[ev.id] || [];
-                const latestTs = getMostRecentGameTimestamp(evGames);
-                renderItems.push({ type: 'event', event: ev, games: evGames, sortTs: latestTs || new Date(ev.createdAt || 0).getTime() });
-            });
-
-            // Add standalone games
-            standaloneGames.forEach(game => {
-                const ts = game.game_start_timestamp ? new Date(game.game_start_timestamp).getTime() : 0;
-                renderItems.push({ type: 'game', game: game, sortTs: ts });
-            });
-
-            // Sort newest first
-            renderItems.sort((a, b) => b.sortTs - a.sortTs);
-
-            if (renderItems.length === 0 && teamEvents.length === 0) {
-                const noGamesMsg = document.createElement('div');
-                noGamesMsg.className = 'no-games-message';
-                noGamesMsg.textContent = 'No games yet';
-                gamesContainer.appendChild(noGamesMsg);
-            } else {
-                renderItems.forEach(item => {
-                    if (item.type === 'event') {
-                        gamesContainer.appendChild(renderEventContainer(item.event, item.games, team, role));
-                    } else {
-                        const gamesList = document.createElement('ul');
-                        gamesList.className = 'games-list';
-                        gamesList.appendChild(renderGameItem(item.game, team, role));
-                        gamesContainer.appendChild(gamesList);
-                    }
-                });
-            }
-
-            // Buttons row for coaches
-            if (role === 'coach') {
-                const btnRow = document.createElement('div');
-                btnRow.className = 'team-action-buttons';
-
-                const newGameBtn = document.createElement('button');
-                newGameBtn.className = 'new-game-btn';
-                newGameBtn.innerHTML = '<i class="fas fa-plus"></i> New Game';
-                newGameBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    selectCloudTeam(team, { landOn: 'startGame' });
-                };
-                btnRow.appendChild(newGameBtn);
-
-                const newEventBtn = document.createElement('button');
-                newEventBtn.className = 'new-game-btn new-event-btn';
-                newEventBtn.innerHTML = '<i class="fas fa-trophy"></i> New Event';
-                newEventBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    showCreateEventDialog(team);
-                };
-                btnRow.appendChild(newEventBtn);
-
-                gamesContainer.appendChild(btnRow);
-            }
-
-            teamSection.appendChild(gamesContainer);
-
-            // Toggle expand/collapse on header click
-            teamHeader.onclick = () => {
-                const isExpanded = gamesContainer.style.display !== 'none';
-                gamesContainer.style.display = isExpanded ? 'none' : 'block';
-                if (isExpanded) {
-                    _expandedTeams.delete(team.id);
-                } else {
-                    _expandedTeams.add(team.id);
-                }
-            };
-
-            container.appendChild(teamSection);
-        });
-
-        // Preserve scroll position across the rebuild. The teams screen
-        // auto-refreshes every ~10s; without this, emptying then refilling the
-        // list collapses page height and the browser resets scroll, yanking the
-        // user back up while they're reading older teams near the bottom.
-        const scroller = document.scrollingElement || document.documentElement;
-        const prevScrollTop = scroller.scrollTop;
-
-        listElement.innerHTML = '';
-        listElement.appendChild(container);
-        _expandStateInitialized = true;
-
-        // Restore after the new content is in place (clamped to the new max).
-        scroller.scrollTop = prevScrollTop;
+        _lastListData = { userTeams, allGames, eventsByTeamId, servedFromLocal };
+        renderCloudTeamsList(_lastListData);
 
     } catch (error) {
         console.error('Error populating cloud teams:', error);
         listElement.innerHTML = '<p>Error loading teams. Check connection and try again.</p>';
     }
+}
+
+/**
+ * Draw the team list from already-fetched data. Split from the fetch so a
+ * pin toggle can redraw at once from the last fetch instead of waiting on
+ * the network; the periodic refresh still comes in through
+ * populateCloudTeamsAndGames().
+ *
+ * @param {{userTeams: Array, allGames: Array, eventsByTeamId: Object,
+ *          servedFromLocal: boolean}} [data] - defaults to the last fetch
+ */
+function renderCloudTeamsList(data = _lastListData) {
+    const listElement = document.getElementById('cloudTeamsList');
+    if (!listElement || !data) return;
+    const { userTeams, allGames, eventsByTeamId, servedFromLocal } = data;
+
+    // Group games by teamId
+    const gamesByTeamId = {};
+    allGames.forEach(game => {
+        const teamId = game.teamId || null;
+        if (!gamesByTeamId[teamId]) {
+            gamesByTeamId[teamId] = [];
+        }
+        gamesByTeamId[teamId].push(game);
+    });
+
+    // Sort games within each team by date (newest first)
+    for (const teamId in gamesByTeamId) {
+        gamesByTeamId[teamId].sort((a, b) => {
+            const dateA = new Date(a.game_start_timestamp || 0);
+            const dateB = new Date(b.game_start_timestamp || 0);
+            return dateB - dateA;
+        });
+    }
+
+    // Pinned teams first, then most recently opened on this device; teams
+    // never opened here keep the old order, most recent game first. The
+    // rules live in store/teamListPrefs.js.
+    const prefs = readTeamListPrefs(localStorage);
+    const { pinned, others } = arrangeTeams(userTeams, prefs,
+        (teamId) => getMostRecentGameTimestamp(gamesByTeamId[teamId] || []));
+
+    // Build the collapsible team list
+    const container = document.createElement('div');
+    container.className = 'teams-list-container';
+
+    // Say so, rather than letting a local list pass for a synced one. The
+    // difference matters: another coach's games won't be here, and neither
+    // will anything this device hasn't recorded itself.
+    if (servedFromLocal) {
+        const notice = document.createElement('p');
+        notice.className = 'text-hint offline-list-notice';
+        notice.textContent =
+            "Offline — showing games saved on this device. They'll sync when you're back online.";
+        container.appendChild(notice);
+    }
+
+    const appendGroup = (entries, label) => {
+        if (label) {
+            const groupLabel = document.createElement('div');
+            groupLabel.className = 'team-group-label';
+            groupLabel.textContent = label;
+            container.appendChild(groupLabel);
+        }
+        entries.forEach(({ team, role }) => {
+            container.appendChild(buildTeamSection(team, role, {
+                teamGames: gamesByTeamId[team.id] || [],
+                teamEvents: eventsByTeamId[team.id] || [],
+                pinned: isTeamPinned(prefs, team.id),
+            }));
+        });
+    };
+
+    // Group labels appear only once something is pinned; with nothing
+    // pinned the list reads as the one plain list it always was.
+    if (pinned.length > 0) {
+        appendGroup(pinned, 'Pinned');
+        if (others.length > 0) appendGroup(others, 'Other teams');
+    } else {
+        appendGroup(others, null);
+    }
+
+    // Preserve scroll position across the rebuild. The teams screen
+    // auto-refreshes every ~10s; without this, emptying then refilling the
+    // list collapses page height and the browser resets scroll, yanking the
+    // user back up while they're reading older teams near the bottom.
+    const scroller = document.scrollingElement || document.documentElement;
+    const prevScrollTop = scroller.scrollTop;
+
+    listElement.innerHTML = '';
+    listElement.appendChild(container);
+    _expandStateInitialized = true;
+
+    // Restore after the new content is in place (clamped to the new max).
+    scroller.scrollTop = prevScrollTop;
+}
+
+/**
+ * One team's card: the two-row header, then the collapsible games/events
+ * list with the coach action buttons.
+ *
+ * @param {object} team - team as the API returns it
+ * @param {string} role - 'coach' | 'viewer'
+ * @param {{teamGames: Array, teamEvents: Array, pinned: boolean}} ctx
+ * @returns {HTMLElement}
+ */
+function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
+    const hasActiveGames = teamHasActiveGames(teamGames);
+
+    // Team section container
+    const teamSection = document.createElement('div');
+    teamSection.className = 'team-section';
+    if (hasActiveGames) {
+        teamSection.classList.add('has-active-games');
+    }
+
+    // Team header (collapsible, two-line layout)
+    const teamHeader = document.createElement('div');
+    teamHeader.className = 'team-header';
+
+    // --- Top row ---
+    const topRow = document.createElement('div');
+    topRow.className = 'team-header-top';
+
+    // Left side of top row
+    const topLeft = document.createElement('div');
+    topLeft.className = 'team-header-top-left';
+
+    if (hasActiveGames) {
+        const activeIndicator = document.createElement('span');
+        activeIndicator.className = 'team-active-indicator';
+        activeIndicator.textContent = '🟢';
+        activeIndicator.title = 'Has active games';
+        topLeft.appendChild(activeIndicator);
+    }
+
+    if (team.iconUrl) {
+        const teamIcon = document.createElement('img');
+        teamIcon.src = team.iconUrl;
+        teamIcon.className = 'team-header-icon';
+        teamIcon.alt = team.name;
+        topLeft.appendChild(teamIcon);
+    }
+
+    const teamNameSpan = document.createElement('span');
+    teamNameSpan.className = 'team-header-name';
+    teamNameSpan.textContent = team.name;
+    topLeft.appendChild(teamNameSpan);
+
+    topRow.appendChild(topLeft);
+
+    // Right side: [pin] for everyone, then [gear] [trash] for coaches.
+    const topRight = document.createElement('div');
+    topRight.className = 'team-header-actions';
+
+    // Pinning is a per-device view preference, not a team permission, so a
+    // viewer gets it too. A newly pinned team lands at the top of the pinned
+    // group (store/teamListPrefs.js pinTeam); tapping a pinned team unpins it.
+    const pinBtn = document.createElement('button');
+    pinBtn.innerHTML = '<i class="fas fa-thumbtack"></i>';
+    pinBtn.classList.add('icon-button', 'team-pin-btn');
+    if (pinned) pinBtn.classList.add('pinned');
+    pinBtn.title = pinned ? 'Unpin team' : 'Pin team to the top';
+    pinBtn.setAttribute('aria-label', pinBtn.title);
+    pinBtn.setAttribute('aria-pressed', String(pinned));
+    pinBtn.onclick = (e) => {
+        e.stopPropagation();
+        toggleTeamPinned(team.id);
+    };
+    topRight.appendChild(pinBtn);
+
+    if (role === 'coach') {
+        const settingsBtn = document.createElement('button');
+        settingsBtn.innerHTML = '<i class="fas fa-cog"></i><span class="icon-button-label">Team settings</span>';
+        settingsBtn.classList.add('icon-button', 'team-settings-btn');
+        settingsBtn.title = 'Team Settings';
+        settingsBtn.onclick = (e) => {
+            e.stopPropagation();
+            selectCloudTeam(team).then(() => {
+                if (typeof showTeamSettingsScreen === 'function') {
+                    showTeamSettingsScreen('selectTeamScreen');
+                }
+            });
+        };
+        topRight.appendChild(settingsBtn);
+
+        const deleteTeamBtn = document.createElement('button');
+        deleteTeamBtn.innerHTML = '<i class="fas fa-trash icon-danger"></i>';
+        deleteTeamBtn.classList.add('icon-button');
+        deleteTeamBtn.title = 'Erase team permanently';
+        deleteTeamBtn.onclick = (e) => {
+            e.stopPropagation();
+            deleteCloudTeam(team);
+        };
+        topRight.appendChild(deleteTeamBtn);
+    }
+
+    topRow.appendChild(topRight);
+
+    teamHeader.appendChild(topRow);
+
+    // --- Bottom row ---
+    const bottomRow = document.createElement('div');
+    bottomRow.className = 'team-header-bottom';
+
+    if (role === 'coach') {
+        const roleBadge = document.createElement('span');
+        roleBadge.className = 'role-badge coach-badge';
+        roleBadge.innerHTML = '<i class="fas fa-clipboard"></i> <span class="role-badge-text">Coach</span>';
+        roleBadge.title = 'Coach';
+        bottomRow.appendChild(roleBadge);
+    } else if (role === 'viewer') {
+        const roleBadge = document.createElement('span');
+        roleBadge.className = 'role-badge viewer-badge';
+        roleBadge.innerHTML = '<i class="fas fa-eye"></i> <span class="role-badge-text">Viewer</span>';
+        roleBadge.title = 'Viewer';
+        bottomRow.appendChild(roleBadge);
+    }
+
+    const gameCount = document.createElement('span');
+    gameCount.className = 'game-count';
+    gameCount.textContent = `${teamGames.length} game${teamGames.length !== 1 ? 's' : ''}`;
+    bottomRow.appendChild(gameCount);
+
+    const rosterBtn = document.createElement('button');
+    rosterBtn.innerHTML = '<i class="fas fa-users"></i> Roster';
+    rosterBtn.classList.add('icon-button', 'text-icon-button');
+    rosterBtn.title = 'View Roster';
+    rosterBtn.onclick = (e) => {
+        e.stopPropagation();
+        setCurrentTeamRole(role);
+        selectCloudTeam(team, { landOn: 'roster' });
+    };
+    bottomRow.appendChild(rosterBtn);
+
+    teamHeader.appendChild(bottomRow);
+    teamSection.appendChild(teamHeader);
+
+    // Games list (collapsible content)
+    const gamesContainer = document.createElement('div');
+    gamesContainer.className = 'team-games-container';
+
+    // On first render, expand teams with active games; after that, preserve user's choice
+    if (!_expandStateInitialized) {
+        if (hasActiveGames) _expandedTeams.add(team.id);
+    }
+    gamesContainer.style.display = _expandedTeams.has(team.id) ? 'block' : 'none';
+
+    // Index this team's events by id
+    const eventMap = {};
+    teamEvents.forEach(ev => { eventMap[ev.id] = ev; });
+
+    // Group games by eventId
+    const eventGameIds = new Set();
+    const gamesByEventId = {};
+    teamGames.forEach(game => {
+        const eid = game.eventId || null;
+        if (eid && eventMap[eid]) {
+            if (!gamesByEventId[eid]) gamesByEventId[eid] = [];
+            gamesByEventId[eid].push(game);
+            eventGameIds.add(game.game_id);
+        }
+    });
+    const standaloneGames = teamGames.filter(g => !eventGameIds.has(g.game_id));
+
+    // Build interleaved list: events and standalone games sorted by most recent activity
+    const renderItems = [];
+
+    // Add events with their latest game timestamp
+    teamEvents.forEach(ev => {
+        const evGames = gamesByEventId[ev.id] || [];
+        const latestTs = getMostRecentGameTimestamp(evGames);
+        renderItems.push({ type: 'event', event: ev, games: evGames, sortTs: latestTs || new Date(ev.createdAt || 0).getTime() });
+    });
+
+    // Add standalone games
+    standaloneGames.forEach(game => {
+        const ts = game.game_start_timestamp ? new Date(game.game_start_timestamp).getTime() : 0;
+        renderItems.push({ type: 'game', game: game, sortTs: ts });
+    });
+
+    // Sort newest first
+    renderItems.sort((a, b) => b.sortTs - a.sortTs);
+
+    if (renderItems.length === 0 && teamEvents.length === 0) {
+        const noGamesMsg = document.createElement('div');
+        noGamesMsg.className = 'no-games-message';
+        noGamesMsg.textContent = 'No games yet';
+        gamesContainer.appendChild(noGamesMsg);
+    } else {
+        renderItems.forEach(item => {
+            if (item.type === 'event') {
+                gamesContainer.appendChild(renderEventContainer(item.event, item.games, team, role));
+            } else {
+                const gamesList = document.createElement('ul');
+                gamesList.className = 'games-list';
+                gamesList.appendChild(renderGameItem(item.game, team, role));
+                gamesContainer.appendChild(gamesList);
+            }
+        });
+    }
+
+    // Buttons row for coaches
+    if (role === 'coach') {
+        const btnRow = document.createElement('div');
+        btnRow.className = 'team-action-buttons';
+
+        const newGameBtn = document.createElement('button');
+        newGameBtn.className = 'new-game-btn';
+        newGameBtn.innerHTML = '<i class="fas fa-plus"></i> New Game';
+        newGameBtn.onclick = (e) => {
+            e.stopPropagation();
+            selectCloudTeam(team, { landOn: 'startGame' });
+        };
+        btnRow.appendChild(newGameBtn);
+
+        const newEventBtn = document.createElement('button');
+        newEventBtn.className = 'new-game-btn new-event-btn';
+        newEventBtn.innerHTML = '<i class="fas fa-trophy"></i> New Event';
+        newEventBtn.onclick = (e) => {
+            e.stopPropagation();
+            showCreateEventDialog(team);
+        };
+        btnRow.appendChild(newEventBtn);
+
+        gamesContainer.appendChild(btnRow);
+    }
+
+    teamSection.appendChild(gamesContainer);
+
+    // Toggle expand/collapse on header click
+    teamHeader.onclick = () => {
+        const isExpanded = gamesContainer.style.display !== 'none';
+        gamesContainer.style.display = isExpanded ? 'none' : 'block';
+        if (isExpanded) {
+            _expandedTeams.delete(team.id);
+        } else {
+            _expandedTeams.add(team.id);
+        }
+    };
+
+    return teamSection;
 }
 
 /**
@@ -615,6 +714,7 @@ async function selectCloudTeam(cloudTeam, options = {}) {
         }
 
         setCurrentTeam(localTeam);
+        recordTeamViewed(localTeam.id);
 
         if (typeof updateTeamRosterDisplay === 'function') {
             updateTeamRosterDisplay();
@@ -884,6 +984,7 @@ function initializeTeamSelection() {
                 const newTeam = new Team(newTeamName);
                 teams.push(newTeam);
                 setCurrentTeam(newTeam);
+                recordTeamViewed(newTeam.id);
 
                 if (typeof createTeamOffline === 'function') {
                     createTeamOffline({
@@ -946,6 +1047,7 @@ function initializeTeamSelection() {
                 // Add to local state
                 teams.push(newTeam);
                 setCurrentTeam(newTeam);
+                recordTeamViewed(newTeam.id);
 
                 if (typeof saveAllTeamsData === 'function') {
                     saveAllTeamsData();
@@ -1140,6 +1242,7 @@ async function handleJoinCodeFromTeamsScreen() {
         }
 
         const result = await redeemResponse.json();
+        recordTeamViewed(result.team?.id);
         input.value = '';
         closeJoinTeamModal();
         alert(`Joined ${result.team?.name || 'the team'} as ${result.membership?.role || 'member'}!`);
