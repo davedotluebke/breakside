@@ -25,8 +25,17 @@ const warning = (page: Page) => page.locator('#toastContainer .toast-standby');
 const sun = (page: Page) => page.locator('#gameWakeLockBtn');
 
 const IDLE_SECONDS = 2;
-/** Idle time plus the 5-second countdown, with slack for a loaded machine. */
-const ENTRY_TIMEOUT = (IDLE_SECONDS + 5 + 4) * 1000;
+/**
+ * Slack on every "the warning should be up by now" wait. Generous on purpose:
+ * under the pre-merge hook with another suite running alongside, a single
+ * attempt of one scenario here stretched to over a minute and a 4-second
+ * margin missed the toast twice. A wait ends the moment the toast appears,
+ * so a healthy run pays nothing for the headroom.
+ */
+const IDLE_SLACK_SECONDS = 10;
+const WARNING_TIMEOUT = (IDLE_SECONDS + IDLE_SLACK_SECONDS) * 1000;
+/** Idle time plus the 5-second countdown, with the same slack. */
+const ENTRY_TIMEOUT = (IDLE_SECONDS + 5 + IDLE_SLACK_SECONDS) * 1000;
 
 async function setIdleSeconds(page: Page, seconds: number) {
   await page.evaluate((s) => {
@@ -59,7 +68,7 @@ test.describe('standby timer', () => {
     await setIdleSeconds(page, IDLE_SECONDS);
 
     // Between points, idle: the warning appears, with the countdown and the hint.
-    await expect(warning(page)).toBeVisible({ timeout: (IDLE_SECONDS + 4) * 1000 });
+    await expect(warning(page)).toBeVisible({ timeout: WARNING_TIMEOUT });
     await expect(warning(page)).toContainText(`Idle for ${IDLE_SECONDS} seconds`);
     await expect(warning(page)).toContainText('entering standby in');
     await expect(warning(page).locator('.toast-sub')).toHaveText('Long-press ☀ to toggle standby timer');
@@ -75,7 +84,7 @@ test.describe('standby timer', () => {
     // The clock re-armed: left alone, the warning returns, runs out, and the
     // overlay fades in (not yet the tap target) and then becomes the ordinary
     // standby screen.
-    await expect(warning(page)).toBeVisible({ timeout: (IDLE_SECONDS + 4) * 1000 });
+    await expect(warning(page)).toBeVisible({ timeout: WARNING_TIMEOUT });
     await expect(overlay(page)).toHaveClass(/standby-screen--active/, { timeout: ENTRY_TIMEOUT });
     await expect(overlay(page)).not.toHaveClass(/standby-screen--entering/, { timeout: 4_000 });
     await expect(warning(page)).toBeHidden();
@@ -87,11 +96,11 @@ test.describe('standby timer', () => {
     await expect(overlay(page)).toBeHidden();
 
     // Dismissing the warning with its × cancels as well, and re-arms.
-    await expect(warning(page)).toBeVisible({ timeout: (IDLE_SECONDS + 4) * 1000 });
+    await expect(warning(page)).toBeVisible({ timeout: WARNING_TIMEOUT });
     await warning(page).locator('.toast-close').click();
     await expect(warning(page)).toBeHidden();
     await expect(overlay(page)).toBeHidden();
-    await expect(warning(page)).toBeVisible({ timeout: (IDLE_SECONDS + 4) * 1000 });
+    await expect(warning(page)).toBeVisible({ timeout: WARNING_TIMEOUT });
     await page.keyboard.press('Shift');
     await expect(warning(page)).toBeHidden();
   });
@@ -148,7 +157,7 @@ test.describe('standby timer', () => {
     // the warning follows within one idle period of the last tap.
     await weScoreSkip(page);
     await expectScore(page, 1, 0);
-    await expect(warning(page)).toBeVisible({ timeout: (IDLE_SECONDS + 4) * 1000 });
+    await expect(warning(page)).toBeVisible({ timeout: WARNING_TIMEOUT });
   });
 
   test('press-and-hold ☀ turns the timer off (with a toast) and on again', async ({ page }) => {
@@ -172,6 +181,6 @@ test.describe('standby timer', () => {
     await longPressSun(page);
     await expect(page.locator('#toastContainer .toast').filter({ hasText: 'Standby timer on' })).toBeVisible();
     expect(await page.evaluate(() => (window as any).standbyTimer.isEnabled())).toBe(true);
-    await expect(warning(page)).toBeVisible({ timeout: (IDLE_SECONDS + 4) * 1000 });
+    await expect(warning(page)).toBeVisible({ timeout: WARNING_TIMEOUT });
   });
 });
