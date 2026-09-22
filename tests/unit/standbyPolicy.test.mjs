@@ -4,8 +4,9 @@
  * Contract under test:
  *  - the gate: standby may enter by itself only in a visible game, with the
  *    timer on, no standby already up, no dialog open, no mic running, and —
- *    for the Active Coach only — not mid-point and not on the Full/Field
- *    tabs. Anyone who is not the Active Coach is never held for those two.
+ *    for the Active Coach only — not mid-point. Between points nobody is
+ *    held, on any tab; anyone who is not the Active Coach is never held for
+ *    the point either.
  *  - the first blocking reason wins, and an allowed result carries no reason
  *  - the idle-time setting normalises: strings from the select, 0/garbage as
  *    "never", a cap rather than a rejection
@@ -26,7 +27,7 @@ import {
 const OPEN = Object.freeze({
     enabled: true, inGame: true, visible: true, standbyActive: false,
     dialogOpen: false, micBusy: false,
-    activeCoach: true, pointInProgress: false, activeTab: 'all',
+    activeCoach: true, pointInProgress: false,
 });
 
 // ─── gate ───────────────────────────────────────────────────────────────────
@@ -44,8 +45,6 @@ test('each guard blocks on its own with a named reason', () => {
         [{ dialogOpen: true }, 'dialog-open'],
         [{ micBusy: true }, 'mic-busy'],
         [{ pointInProgress: true }, 'active-coach-mid-point'],
-        [{ activeTab: 'full' }, 'active-coach-pbp-tab'],
-        [{ activeTab: 'field' }, 'active-coach-pbp-tab'],
     ];
     for (const [override, reason] of cases) {
         const r = idleStandbyGate({ ...OPEN, ...override });
@@ -54,18 +53,18 @@ test('each guard blocks on its own with a named reason', () => {
     }
 });
 
-test('the Active Coach is allowed between points on the other tabs', () => {
-    for (const tab of ['simple', 'line', 'log', 'all']) {
+test('between points the Active Coach is allowed whatever tab is showing', () => {
+    // The tab is deliberately not an input: a first version held the Active
+    // Coach on Full/Field between points, and that hold was unwanted.
+    for (const tab of ['full', 'field', 'simple', 'line', 'log', 'all']) {
         assert.equal(idleStandbyGate({ ...OPEN, activeTab: tab }).allowed, true, tab);
     }
 });
 
-test('a coach who is not Active Coach is never held for the point or the tab', () => {
-    for (const tab of ['full', 'field', 'simple', 'line', 'log', 'all']) {
-        for (const pointInProgress of [true, false]) {
-            const r = idleStandbyGate({ ...OPEN, activeCoach: false, pointInProgress, activeTab: tab });
-            assert.equal(r.allowed, true, `${tab} pointInProgress=${pointInProgress}`);
-        }
+test('a coach who is not Active Coach is never held for the point', () => {
+    for (const pointInProgress of [true, false]) {
+        const r = idleStandbyGate({ ...OPEN, activeCoach: false, pointInProgress });
+        assert.equal(r.allowed, true, `pointInProgress=${pointInProgress}`);
     }
 });
 
@@ -73,7 +72,7 @@ test('the earliest guard names the reason when several apply', () => {
     const r = idleStandbyGate({ ...OPEN, dialogOpen: true, micBusy: true, pointInProgress: true });
     assert.equal(r.reason, 'dialog-open');
     assert.equal(idleStandbyGate({ ...OPEN, enabled: false, inGame: false }).reason, 'disabled');
-    assert.equal(idleStandbyGate({ ...OPEN, micBusy: true, activeTab: 'full' }).reason, 'mic-busy');
+    assert.equal(idleStandbyGate({ ...OPEN, micBusy: true, pointInProgress: true }).reason, 'mic-busy');
 });
 
 test('a missing context blocks rather than throws', () => {

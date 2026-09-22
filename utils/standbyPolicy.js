@@ -38,6 +38,11 @@ export function normalizeIdleSeconds(raw) {
  * state change during the five-second warning (a dialog opening, the point
  * starting) cancels it.
  *
+ * Between points there is no hold at all, whoever you are and whatever tab
+ * you are on: waking is a tap, and a tap's delay before Start Point is
+ * nothing (a first version also held the Active Coach on the Full/Field tabs
+ * between points; a staging test showed that to be a hold nobody wanted).
+ *
  * @param {object} ctx
  * @param {boolean} ctx.enabled         - the timer is on and the idle time is > 0
  * @param {boolean} ctx.inGame          - the game screen is mounted
@@ -47,7 +52,6 @@ export function normalizeIdleSeconds(raw) {
  * @param {boolean} ctx.micBusy         - a narration recording is running or connecting
  * @param {boolean} ctx.activeCoach     - this device holds Active Coach
  * @param {boolean} ctx.pointInProgress - a point is being played
- * @param {string}  ctx.activeTab       - 'simple' | 'full' | 'field' | 'line' | 'log' | 'all'
  * @returns {{allowed: boolean, reason: string|null}}
  */
 export function idleStandbyGate(ctx) {
@@ -63,12 +67,9 @@ export function idleStandbyGate(ctx) {
     // The mic is a deliberate, attended act, and its button lives under the overlay.
     if (c.micBusy) return block('mic-busy');
     // The Active Coach mid-point is recording throws; a swallowed wake tap
-    // there costs an event.
+    // there costs an event. Every other coach, and the Active Coach between
+    // points, is free to go black.
     if (c.activeCoach && c.pointInProgress) return block('active-coach-mid-point');
-    // Full and Field are the Active Coach's working surfaces between points
-    // too. Anyone else on those tabs is most likely there by accident, so
-    // they are not held.
-    if (c.activeCoach && (c.activeTab === 'full' || c.activeTab === 'field')) return block('active-coach-pbp-tab');
 
     return { allowed: true, reason: null };
 }

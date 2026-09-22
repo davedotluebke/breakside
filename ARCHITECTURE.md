@@ -2466,12 +2466,12 @@ a swallowing fade would eat the next one.
 
 The gate is pure ([utils/standbyPolicy.js](utils/standbyPolicy.js)), checked
 when the idle clock fires and again on every countdown tick: never for the
-**Active Coach mid-point** or **on the Full/Field tabs** (a coach who is not
-Active Coach is never held for either — anyone else on those tabs is there by
-accident), never with a **dialog, popover or menu open**, never while the
-**mic** is recording or connecting. A held gate just re-arms the clock, so the
-idle period is always measured from the last input and the moment the point
-ends the clock is already running. The timer owns no recurring loop: one
+**Active Coach mid-point** (a coach who is not Active Coach is never held for
+the point), never with a **dialog, popover or menu open**, never while the
+**mic** is recording or connecting. Between points nobody is held, on any tab:
+waking is a tap, and a tap's delay before Start Point is nothing. A held gate
+just re-arms the clock, so the idle period is always measured from the last
+input and the moment the point ends the clock is already running. The timer owns no recurring loop: one
 `setTimeout` re-armed on input, then five 1-second ticks; the input listeners
 run in the capture phase so a tap the overlay swallows still resets the clock.
 It is armed only while the page is visible and in a game (the power plan), so

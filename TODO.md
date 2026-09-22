@@ -1569,8 +1569,8 @@ Higher-leverage interventions, in roughly priority order:
       **Idle timeout added on branch `standby-timer`, 2026-09-22** (the open
       question below, resolved): after `power.standbyIdleSec` idle a toast
       counts down five seconds, then a non-swallowing fade-in any tap cancels;
-      gated for the Active Coach mid-point or on Full/Field, any open dialog,
-      and the mic; press-and-hold ☀ toggles it. ARCHITECTURE.md § Standby
+      gated for the Active Coach mid-point, any open dialog, and the mic;
+      press-and-hold ☀ toggles it. ARCHITECTURE.md § Standby
       screen. The biggest OLED saving available, and a better between-points
       display than the full UI anyway.
   - **Trigger:** repurpose the ☀ indicator in the game header (added by the

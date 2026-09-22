@@ -86,8 +86,8 @@ const advancedSettings = (function() {
         'power.keepScreenAwake': true,
         // Enter the black standby screen by itself after this many seconds
         // with no tap (ui/standbyTimer.js): a 5-second warning toast, then a
-        // fade any tap cancels. Never for the Active Coach mid-point or on
-        // Full/Field, never with a dialog open or the mic on. Press-and-hold
+        // fade any tap cancels. Never for the Active Coach mid-point, never
+        // with a dialog open or the mic on. Press-and-hold
         // ☀ in the game header flips the on/off half of this.
         'power.standbyTimer': true,
         'power.standbyIdleSec': 60,
@@ -370,7 +370,7 @@ const advancedSettings = (function() {
                 },
                 {
                     key: 'power.standbyTimer', label: 'Standby after sitting idle',
-                    help: 'After the idle time with no taps, a 5-second warning counts down, then the screen fades to the black standby screen. Any tap cancels it. Never while you’re the Active Coach mid-point or on the Full/Field tabs, with a dialog open, or while the mic is on. Press and hold the ☀ in the game header to toggle this without opening settings.',
+                    help: 'After the idle time with no taps, a 5-second warning counts down, then the screen fades to the black standby screen. Any tap cancels it. Never while you’re the Active Coach mid-point, with a dialog open, or while the mic is on. Press and hold the ☀ in the game header to toggle this without opening settings.',
                     type: 'toggle'
                 },
                 {

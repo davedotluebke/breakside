@@ -18,10 +18,10 @@
  *     (persisted, so it stays off until turned back on)
  *
  * The gate (utils/standbyPolicy.js) is checked when the idle clock fires and
- * again on every countdown tick: never for the Active Coach mid-point or on
- * the Full/Field tabs, never with a dialog open or the mic on. A held gate
- * just re-arms the clock — the next idle period is measured from the last
- * input, so the moment the point ends the clock is already running.
+ * again on every countdown tick: never for the Active Coach mid-point, never
+ * with a dialog open or the mic on; between points nobody is held. A held
+ * gate just re-arms the clock — the next idle period is measured from the
+ * last input, so the moment the point ends the clock is already running.
  *
  * Power: this owns no recurring loop. The idle clock is one setTimeout,
  * re-armed on input; the countdown is five 1-second ticks. Both are counted
@@ -34,7 +34,6 @@ import {
     COUNTDOWN_SECONDS, DEFAULT_IDLE_SECONDS,
 } from '../utils/standbyPolicy.js';
 import { isPointInProgress } from '../utils/helpers.js';
-import { getActiveTab } from './panelSystem.js';
 import { standbyScreen } from './standbyScreen.js';
 import { isActiveCoach, showControllerToast, dismissToast } from '../game/controllerState.js';
 import { log } from '../utils/logger.js';
@@ -122,8 +121,7 @@ const standbyTimer = (function() {
             dialogOpen: anyDialogOpen(),
             micBusy: micBusy(),
             activeCoach: !!isActiveCoach(),
-            pointInProgress: !!isPointInProgress(),
-            activeTab: getActiveTab()
+            pointInProgress: !!isPointInProgress()
         };
     }
 
