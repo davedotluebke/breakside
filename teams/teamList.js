@@ -43,6 +43,12 @@ function showSelectTeamScreen(firsttime = false) {
         return;
     }
 
+    // A re-render (boot fires two: the first draw, then again once the team
+    // sync lands) keeps showing the teams already drawn until the refetch
+    // replaces them, rather than blanking to "Loading..." and back each time.
+    const previousList = document.getElementById('cloudTeamsList');
+    const keepPrevious = !!previousList?.querySelector('.teams-list-container');
+
     teamListElement.innerHTML = '';
 
     // Check if user is authenticated
@@ -100,7 +106,11 @@ function showSelectTeamScreen(firsttime = false) {
 
     const teamsList = document.createElement('div');
     teamsList.id = 'cloudTeamsList';
-    teamsList.textContent = 'Loading...';
+    if (keepPrevious) {
+        teamsList.replaceChildren(...previousList.childNodes);
+    } else {
+        teamsList.textContent = 'Loading...';
+    }
     teamsContainer.appendChild(teamsList);
 
     teamListElement.appendChild(teamsContainer);

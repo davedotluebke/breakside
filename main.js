@@ -475,11 +475,18 @@ async function initializeApp() {
 /**
  * Handle auth state changes
  */
-function handleAuthStateChange(event, session) {
+function handleAuthStateChange(event, user) {
     log('Auth state change:', event);
     
     switch (event) {
         case 'SIGNED_IN':
+            // supabase-js re-announces SIGNED_IN for the session it already
+            // has every time the page becomes visible again (_recoverAndRefresh
+            // on visibilitychange). Only a sign-in by someone other than the
+            // account the app is already showing is news; acting on the echo
+            // yanked the coach back to the Teams screen on every app switch
+            // and rebuilt the team list each time.
+            if (appShownForUserId && user?.id === appShownForUserId) break;
             hideAuthScreenAndShowApp();
             // Mark that user just signed in (for PWA prompt)
             sessionStorage.setItem('breakside_just_signed_in', 'true');
@@ -503,10 +510,14 @@ function handleAuthStateChange(event, session) {
 /**
  * Hide auth screen and show the main app
  */
+// The signed-in user the app was last opened for (see handleAuthStateChange).
+let appShownForUserId = null;
+
 function hideAuthScreenAndShowApp() {
     if (window.breakside?.loginScreen?.hideAuthScreen) {
         window.breakside.loginScreen.hideAuthScreen();
     }
+    appShownForUserId = window.breakside?.auth?.getCurrentUser?.()?.id || null;
     showSelectTeamScreen(true);
 }
 
