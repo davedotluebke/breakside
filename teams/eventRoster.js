@@ -594,7 +594,14 @@ async function saveEventRoster() {
  * Navigate back from event roster without saving
  */
 function backFromEventRoster() {
-    showScreen('selectTeamScreen');
+    // Rebuild the list like every other "back to teams" path does.
+    // late-bound back-edge (teams/teamList lives "above" this module); see
+    // ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
+    if (typeof window.showSelectTeamScreen === 'function') {
+        window.showSelectTeamScreen();
+    } else {
+        showScreen('selectTeamScreen');
+    }
 }
 
 /**

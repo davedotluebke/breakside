@@ -843,6 +843,10 @@ document.addEventListener('DOMContentLoaded', function() {
         backFromSummaryBtn.addEventListener('click', () => {
             const target = typeof getGameSummaryBackTarget === 'function'
                 ? getGameSummaryBackTarget() : 'teamRosterScreen';
+            if (target === 'selectTeamScreen' && typeof showSelectTeamScreen === 'function') {
+                showSelectTeamScreen();
+                return;
+            }
             if (target === 'teamRosterScreen' && typeof updateTeamRosterDisplay === 'function') {
                 updateTeamRosterDisplay();
             }

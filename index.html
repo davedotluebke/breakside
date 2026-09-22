@@ -386,7 +386,7 @@
         <div id="startGameSubscreen">
             <div class="panel-title-bar not-draggable">
                 <button class="title-bar-back-btn" id="backFromStartGameBtn">
-                    <i class="fas fa-arrow-left"></i>
+                    <i class="fas fa-arrow-left"></i><span class="title-bar-back-label">Back</span>
                 </button>
                 <span class="panel-title" id="startGameHeader">Start Game</span>
             </div>
@@ -425,7 +425,7 @@
         <div id="editRosterSubscreen" style="display: none;">
             <div class="panel-title-bar not-draggable">
                 <button class="title-bar-back-btn" id="backToStartGameBtn">
-                    <i class="fas fa-arrow-left"></i>
+                    <i class="fas fa-arrow-left"></i><span class="title-bar-back-label">Back</span>
                 </button>
                 <span class="panel-title" id="teamRosterHeader">Roster + Stats</span>
                 <button id="exportTeamRosterBtn" class="back-button" title="Export team roster + lifetime stats to Excel (.xlsx)">
@@ -528,7 +528,7 @@
     <section id="teamSettingsScreen" style="display: none;">
         <div class="panel-title-bar not-draggable">
             <button class="title-bar-back-btn" id="backFromSettingsBtn">
-                <i class="fas fa-arrow-left"></i>
+                <i class="fas fa-arrow-left"></i><span class="title-bar-back-label">Back</span>
             </button>
             <span class="panel-title">Team Settings</span>
         </div>
@@ -654,7 +654,7 @@
     <section id="teamMailScreen" style="display: none;">
         <div class="panel-title-bar not-draggable">
             <button class="title-bar-back-btn" id="backFromTeamMailBtn">
-                <i class="fas fa-arrow-left"></i>
+                <i class="fas fa-arrow-left"></i><span class="title-bar-back-label">Back</span>
             </button>
             <span class="panel-title">Email Lists</span>
         </div>
@@ -665,11 +665,11 @@
 
     <!-- Event Roster Screen -->
     <section id="eventRosterScreen" style="display: none;">
-        <div class="settings-header">
-            <button id="backFromEventRosterBtn" class="back-button">
-                <i class="fas fa-arrow-left"></i> Back
+        <div class="panel-title-bar not-draggable">
+            <button class="title-bar-back-btn" id="backFromEventRosterBtn">
+                <i class="fas fa-arrow-left"></i><span class="title-bar-back-label">Back</span>
             </button>
-            <h2 id="eventRosterHeader">Event Roster + Stats</h2>
+            <span class="panel-title" id="eventRosterHeader">Event Roster + Stats</span>
             <button id="exportEventRosterBtn" class="back-button" title="Export attending players to Excel (.xlsx) — one sheet per phase and per game" style="display:none;">
                 <i class="fas fa-file-excel"></i> Export
             </button>
@@ -1132,7 +1132,7 @@
     <section id="gameSummaryScreen" style="display: none;">
         <div class="panel-title-bar not-draggable">
             <button class="title-bar-back-btn" id="backFromSummaryBtn">
-                <i class="fas fa-arrow-left"></i>
+                <i class="fas fa-arrow-left"></i><span class="title-bar-back-label">Back</span>
             </button>
             <span class="panel-title">Game Summary</span>
             <!-- Share-guest chrome (teams/shareGuest.js): live/final badge and

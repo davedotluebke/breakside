@@ -11,7 +11,7 @@
 import { currentTeam } from '../store/storage.js';
 import { authFetch, API_BASE_URL } from '../store/sync.js';
 import { showScreen } from '../screens/navigation.js';
-import { showTeamSettingsScreen } from './teamSettings.js';
+import { showTeamSettingsScreen, getTeamSettingsReturnScreen } from './teamSettings.js';
 import { log } from '../utils/logger.js';
 import { parseEmailList } from './mailAddressInput.js';
 
@@ -76,7 +76,7 @@ function showTeamMailScreen() {
 
 function initializeTeamMail() {
     document.getElementById('openTeamMailBtn')?.addEventListener('click', showTeamMailScreen);
-    document.getElementById('backFromTeamMailBtn')?.addEventListener('click', () => showTeamSettingsScreen('teamRosterScreen'));
+    document.getElementById('backFromTeamMailBtn')?.addEventListener('click', () => showTeamSettingsScreen(getTeamSettingsReturnScreen()));
     document.getElementById('teamMailContent')?.addEventListener('click', onContentClick);
     document.getElementById('teamMailContent')?.addEventListener('change', onContentChange);
     document.getElementById('teamMailContent')?.addEventListener('submit', onContentSubmit);

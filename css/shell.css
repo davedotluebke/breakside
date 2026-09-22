@@ -93,6 +93,16 @@ section > .panel-title-bar {
     margin: 0 -5px; /* Extend to edges (counters body padding) */
 }
 
+/* Screen titles can be long (an event name plus its W-L record); let them
+   wrap rather than push the bar's Export/Share buttons off-screen. The
+   in-game panels keep the nowrap default from panelSystem.css. */
+section > .panel-title-bar .panel-title {
+    white-space: normal;
+    text-align: left;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
 .title-bar-back-btn {
     background: none;
     border: none;
@@ -100,11 +110,20 @@ section > .panel-title-bar {
     font-size: 1rem;
     padding: 4px 8px;
     margin: 0 4px 0 0;
+    flex-shrink: 0;
+    white-space: nowrap;
     cursor: pointer;
     border-radius: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+/* Spelled-out "Back" beside the arrow: the bare arrow was easy to miss. */
+.title-bar-back-label {
+    margin-left: 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
 }
 
 .title-bar-back-btn:hover {

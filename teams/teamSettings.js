@@ -68,6 +68,12 @@ function showTeamSettingsScreen(returnScreen) {
     showScreen('teamSettingsScreen');
 }
 
+// Sub-screens of Team Settings (Email Lists) re-show it on Back without
+// losing where Settings itself should return to.
+function getTeamSettingsReturnScreen() {
+    return _settingsReturnScreen;
+}
+
 function initializeTeamSettings() {
     // Team Settings button
     const teamSettingsBtn = document.getElementById('teamSettingsBtn');
@@ -1196,5 +1202,5 @@ if (document.readyState === 'loading') {
 }
 
 // --- ES-module exports ---
-export { showTeamSettingsScreen };
+export { showTeamSettingsScreen, getTeamSettingsReturnScreen };
 
