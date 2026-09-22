@@ -326,3 +326,52 @@ test('lone EMPTY possession on a scored point resolves via branch 1, not branch 
     assert.equal(alice.totalPointsPlayed, 5);
     assert.equal(game.scores[Role.TEAM], 3);
 });
+
+test('pop the only event of an OFFENSIVE point → possession removed, point KEPT (pull not yet received again)', () => {
+    const alice = makePlayer('Alice');
+    const pickup = { type: 'Pickup', receiver: alice, pullCatch_flag: true };
+    const point = Object.assign(makePoint({ possessions: [makePossession([pickup])] }), { startingPosition: 'offense' });
+    const game = makeGame({ points: [point] });
+    const { deps, calls } = makeDeps({ Alice: alice });
+
+    const result = applyUndoToGame(game, deps);
+
+    assert.equal(result.outcome, 'event-undone');
+    assert.equal(result.undoneEvent, pickup);
+    assert.equal(result.pointRemoved, false);
+    assert.equal(game.points.length, 1, 'the live point survives its first touch being undone');
+    assert.equal(point.possessions.length, 0);
+    assert.equal(calls.revertPointScore.length, 0, 'unscored — nothing to revert');
+});
+
+test('pop the only event of a scored OFFENSIVE point → score reverted, point KEPT and live', () => {
+    const alice = makePlayer('Alice'), bob = makePlayer('Bob');
+    const goal = new Throw({ thrower: alice, receiver: bob, score: true });
+    const point = Object.assign(makePoint({ winner: Role.TEAM, possessions: [makePossession([goal])] }), { startingPosition: 'offense' });
+    const game = makeGame({ points: [point] });
+    const { deps, calls } = makeDeps({ Alice: alice, Bob: bob });
+
+    const result = applyUndoToGame(game, deps);
+
+    assert.equal(result.outcome, 'event-undone');
+    assert.equal(result.pointRemoved, false);
+    assert.equal(game.points.length, 1);
+    assert.equal(point.winner, '', 'revertPointScore ran');
+    assert.equal(calls.revertPointScore.length, 1);
+    assert.equal(bob.goals, 1);
+    assert.equal(alice.assists, 1);
+});
+
+test('pop the only event of a DEFENSIVE point → point removed, as before', () => {
+    const alice = makePlayer('Alice');
+    const pull = { type: 'Pull', puller: alice };
+    const point = Object.assign(makePoint({ possessions: [makePossession([pull])] }), { startingPosition: 'defense' });
+    const game = makeGame({ points: [point] });
+    const { deps } = makeDeps({ Alice: alice });
+
+    const result = applyUndoToGame(game, deps);
+
+    assert.equal(result.outcome, 'event-undone');
+    assert.equal(result.pointRemoved, true);
+    assert.equal(game.points.length, 0);
+});

@@ -36,8 +36,9 @@ function decrementStat(obj, field) {
  *  2. Active possession has events: pop the last event, revert its player
  *     stats (and the point score if it was the scoring event); if the
  *     possession is now empty, clean it up (removing the point when it was
- *     the only possession, else stepping back to the previous possession).
- *     → outcome 'event-undone'
+ *     the only possession — unless the point started on offense, whose
+ *     empty state is simply "pull not yet received" — else stepping back to
+ *     the previous possession). → outcome 'event-undone'
  *  3. Active possession has no events: pop it; if the point has no
  *     possessions left, revert player point stats / game score (only if the
  *     point was scored) and remove the point, else step back to the
@@ -130,6 +131,17 @@ function applyUndoToGame(game, deps) {
                     // offense point has none yet). A mid-point with zero
                     // possessions is the normal freshly-started-offense-point
                     // state — do NOT remove the live point.
+                } else if (point.startingPosition === 'offense') {
+                    // The point's first touch was undone — the pull catch /
+                    // pickup / dropped pull the Full and Field tabs record,
+                    // or a Simple-mode first throw. Same reasoning: an
+                    // offensive point with no possessions is its normal
+                    // just-started state (the clock re-arms, see
+                    // store/pointClock.js), so a mis-tap costs one tap, not
+                    // the point start. Backing out the point itself stays
+                    // the empty-point Undo double-tap in gameLogic.undoEvent.
+                    // A scored point reaches here with its score already
+                    // reverted above, so it is live again.
                 } else {
                     // No possessions left — remove the point and go to
                     // between-points. Don't decrement player point stats:
