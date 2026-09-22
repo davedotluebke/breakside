@@ -627,6 +627,149 @@
 }
 
 
+/* =============================================================================
+   Export dialog (ui/exportDialog.js) — behind every Export button. A column of
+   format choices, then the options that format uses (scope, breakdown, stats
+   level, players), then a status line and the buttons. Margins reset the
+   global button { margin: 10px }.
+   ============================================================================= */
+
+.export-dialog-content {
+    max-width: 440px;
+    width: calc(100% - 32px);
+}
+
+.export-dialog-body {
+    padding: 0 16px 16px;
+}
+
+.export-subject {
+    margin: 0 0 12px;
+    font-size: 0.95em;
+    font-weight: 600;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+.export-formats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.export-format {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas: "icon label" "hint hint";
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 2px;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    cursor: pointer;
+}
+.export-format input {
+    /* The whole tile is the control; the radio stays for keyboard + a11y. */
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+.export-format i { grid-area: icon; font-size: 1.1em; }
+.export-format-label { grid-area: label; font-weight: 600; font-size: 0.92em; }
+.export-format-hint {
+    grid-area: hint;
+    font-size: 0.75em;
+    line-height: 1.3;
+    color: var(--text-muted);
+}
+.export-format.selected {
+    border-color: var(--color-primary);
+    box-shadow: inset 0 0 0 1px var(--color-primary);
+    background: var(--color-primary-surface);
+}
+.export-format.disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+.export-format:focus-within {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.export-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 0.9em;
+}
+.export-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+.export-option[hidden] { display: none; }
+.export-option > span:first-child { flex: 0 0 4.5em; color: var(--text-muted); }
+.export-option select {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 5px 6px;
+}
+.export-breakdown { padding-left: calc(4.5em + 10px); }
+.export-breakdown > span:first-child { flex: none; color: inherit; }
+.export-breakdown input { margin: 0; }
+
+.export-status {
+    margin: 12px 0 0;
+    font-size: 0.88em;
+    line-height: 1.4;
+    min-height: 1.4em;
+    overflow-wrap: anywhere;
+}
+.export-status-ok { color: var(--color-success-ink); }
+.export-status-error { color: var(--color-danger); }
+.export-status a { font-weight: 600; }
+.export-text-fallback {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    height: 9em;
+    margin-top: 8px;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 0.8em;
+}
+
+.export-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 14px;
+}
+.export-actions button {
+    margin: 0;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
+.export-cancel-btn {
+    background: var(--surface-light);
+    color: var(--text-primary);
+}
+.export-go-btn {
+    background: var(--brand-orange, #eb8232);
+    color: var(--white);
+}
+.export-go-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+
 /* Long-press popover for the possession set picker (ui/setPicker.js). Modelled
    on the Field tab's .fp-picker rather than a modal — it's a quick "show me the
    options" affordance, positioned in JS against the control with viewport

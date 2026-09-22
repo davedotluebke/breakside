@@ -37,7 +37,7 @@ import {
 } from '../utils/helpers.js';
 import {
     getGamePlayerStats, getEventPlayerStats, getTeamPlayerStats,
-    accumulateGameStats, getGamesTeamStats, sumPlayerStats,
+    sumPlayerStats, loadEventGames, formatGameLabel,
 } from '../utils/eventStats.js';
 import {
     StatsLevel, columnsForLevel, getStatsLevel, wireStatsLevelSelect,
@@ -47,15 +47,11 @@ import {
     checkForUpdates, syncUserTeams, listServerGames, listTeamEvents,
     loadGameFromCloud,
 } from '../store/sync.js';
-import {
-    buildStatsSheetAoA, aoaToFormattedSheet, downloadWorkbook,
-    safeSheetName, safeFilename,
-} from '../utils/xlsxExport.js';
+import { buildTeamWorkbook, buildEventWorkbook, buildGameWorkbook } from '../utils/exportWorkbook.js';
+import { openExportDialog } from '../ui/exportDialog.js';
+import { gameLogText } from './gameSummary.js';
 import { showErasePlayerDialog, erasureBlockedReason } from './erasure.js';
 import { appendRosterCell, buildRosterRow } from './rosterRowHelpers.js';
-import {
-    wireExportPlayerSelect, exportSelection, exportTitle, exportFilename,
-} from './exportPlayerPicker.js';
 import {
     formatSigned, formatSignedFixed, formatPercentOrDash, formatPullQuality,
 } from '../utils/statsColumns.js';
@@ -396,7 +392,6 @@ function renderRosterTable(scope, statsById, loading) {
     rosterElement.innerHTML = '';
 
     const roster = currentTeam ? currentTeam.teamRoster.slice() : [];
-    wireExportPlayerSelect(document.getElementById('teamRosterExportPlayer'), roster);
     const visibleColumns = columnsForLevel(ROSTER_COLUMNS);
     // Narrowing the stats level can hide the column being sorted on; fall
     // back to Name rather than sorting by an invisible column.
@@ -802,11 +797,10 @@ function validateJerseyNumber(input) {
         });
     }
 
-    // Team roster xlsx export — lifetime team stats with one sheet per
-    // tournament event plus an "All games" sheet at the front.
+    // Export dialog (all-time / event / game, starting at the scope shown)
     const exportTeamBtn = document.getElementById('exportTeamRosterBtn');
     if (exportTeamBtn) {
-        exportTeamBtn.addEventListener('click', exportTeamRosterXLSX);
+        exportTeamBtn.addEventListener('click', openTeamRosterExport);
     }
 
     // Stats scope toggle (All-time / Event / Game)
@@ -833,97 +827,67 @@ function validateJerseyNumber(input) {
 })();
 
 /**
- * Export the current team's roster + lifetime stats to .xlsx.
- * Sheets: "All games" first, then one per TournamentEvent the team has
- * played in (using its full event-level stats), then an "Other" sheet
- * for any games not attached to an event (if any exist).
- *
- * The player menu beside the button narrows every sheet to one player's row;
- * the Team totals and breaks/holds footers still describe the whole team.
+ * Every game this team has on the server, fetched five at a time.
+ * @param {(msg: string) => void} progress
  */
-async function exportTeamRosterXLSX() {
-    if (!currentTeam) { alert('No team selected.'); return; }
-    const btn = document.getElementById('exportTeamRosterBtn');
-    const origHTML = btn ? btn.innerHTML : '';
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading…'; }
-
-    try {
-        // Roster = current team players (no pickups in the team-level view)
-        const { player, sheetPlayers, totalsPlayers } = exportSelection(
-            document.getElementById('teamRosterExportPlayer'), currentTeam.teamRoster || []);
-
-        // Load all team games (cloud list) and all team events in parallel
-        const [allCloudGames, teamEvents] = await Promise.all([
-            typeof listServerGames === 'function' ? listServerGames() : [],
-            typeof listTeamEvents === 'function' ? listTeamEvents(currentTeam.id) : []
-        ]);
-        const teamGameList = allCloudGames.filter(g =>
-            g.team_id === currentTeam.id || g.teamId === currentTeam.id || g.team === currentTeam.name
-        );
-
-        if (teamGameList.length === 0) {
-            alert('No games found for this team.');
-            return;
-        }
-
-        if (btn) btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Loading 0/${teamGameList.length}…`;
-
-        // Fetch each game in parallel batches of 5 to keep responsive
-        const games = [];
-        const batchSize = 5;
-        for (let i = 0; i < teamGameList.length; i += batchSize) {
-            const slice = teamGameList.slice(i, i + batchSize);
-            const fetched = await Promise.all(slice.map(async g => {
-                try { return await loadGameFromCloud(g.game_id); }
-                catch (e) { console.warn('Skip game', g.game_id, e); return null; }
-            }));
-            fetched.forEach(g => { if (g) games.push(g); });
-            if (btn) btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Loading ${Math.min(i + batchSize, teamGameList.length)}/${teamGameList.length}…`;
-        }
-
-        const wb = XLSX.utils.book_new();
-        const level = getStatsLevel();   // columns follow the Stats menu
-
-        // Helper: build a sheet from a set of games
-        const buildSheet = (sheetGames, label) => {
-            const playerStats = {};
-            sheetGames.forEach(g => accumulateGameStats(g, playerStats));
-            // Shared aggregator rather than a local re-sum — it also carries
-            // the per-set breakdown, which a hand-rolled numeric merge drops.
-            const teamStats = getGamesTeamStats(sheetGames);
-            const titleRow = exportTitle(player,
-                `${currentTeam.name} — ${label} (${sheetGames.length} game${sheetGames.length === 1 ? '' : 's'})`);
-            const aoa = buildStatsSheetAoA(sheetPlayers, playerStats, teamStats,
-                { titleRow, level, totalsPlayers });
-            return aoaToFormattedSheet(aoa);
-        };
-
-        // "All games" sheet first
-        XLSX.utils.book_append_sheet(wb, buildSheet(games, 'All games'), safeSheetName('All games'));
-
-        // One sheet per event (in the order the server returned them)
-        const usedGameIds = new Set();
-        for (const ev of teamEvents) {
-            const evGameIds = new Set(ev.gameIds || []);
-            const evGames = games.filter(g => evGameIds.has(g.id));
-            if (evGames.length === 0) continue;
-            evGames.forEach(g => usedGameIds.add(g.id));
-            XLSX.utils.book_append_sheet(wb, buildSheet(evGames, ev.name), safeSheetName(ev.name));
-        }
-
-        // Standalone games (not part of any event)
-        const orphans = games.filter(g => !usedGameIds.has(g.id) && !g.eventId);
-        if (orphans.length > 0 && orphans.length < games.length) {
-            XLSX.utils.book_append_sheet(wb, buildSheet(orphans, 'Standalone games'), safeSheetName('Standalone'));
-        }
-
-        downloadWorkbook(wb, `${safeFilename(exportFilename(player, currentTeam.name))}-stats.xlsx`);
-    } catch (e) {
-        console.error('Team xlsx export failed:', e);
-        alert('Export failed: ' + e.message);
-    } finally {
-        if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
+async function loadAllTeamGames(progress) {
+    const list = (await listServerGames()).filter(g =>
+        g.team_id === currentTeam.id || g.teamId === currentTeam.id || g.team === currentTeam.name);
+    const games = [];
+    const batchSize = 5;
+    for (let i = 0; i < list.length; i += batchSize) {
+        progress(`Loading games ${i}/${list.length}…`);
+        const fetched = await Promise.all(list.slice(i, i + batchSize).map(async g => {
+            try { return await loadGameFromCloud(g.game_id); }
+            catch (e) { console.warn('Skip game', g.game_id, e); return null; }
+        }));
+        fetched.forEach(g => { if (g) games.push(g); });
     }
+    return games;
+}
+
+/**
+ * Open the Export dialog for the team roster. The scope choices mirror the
+ * All-time / Event / Game toggle and start at the one shown:
+ *
+ *   All-time  "All games", optionally a sheet per event + standalone games
+ *   Event     the current event, optionally a sheet per phase and per game
+ *   Game      the current game, with Game Flow + Connections; also JSON / log
+ */
+function openTeamRosterExport() {
+    if (!currentTeam) return;
+    const event = currentEvent || null;
+    const game = currentGame() || null;
+    const players = currentTeam.teamRoster || [];
+    openExportDialog({
+        subject: currentTeam.name,
+        scopes: [
+            { value: 'all', label: 'All-time', breakdown: 'Add a sheet per event' },
+            { value: 'event', label: event ? `Event: ${event.name}` : 'Event (none current)', disabled: !event,
+              breakdown: 'Add a sheet per phase and per game' },
+            { value: 'game', label: game ? `Game: ${formatGameLabel(game)}` : 'Game (none current)', disabled: !game,
+              singleGame: true },
+        ],
+        scope: effectiveRosterScope(),
+        level: getStatsLevel(),
+        players,
+        buildWorkbook: async (choice, progress) => {
+            const opts = { players, playerId: choice.playerId, level: choice.level, breakdown: choice.breakdown };
+            if (choice.scope === 'game') return buildGameWorkbook(game, opts);
+            if (choice.scope === 'event') {
+                progress('Loading the event’s games…');
+                return buildEventWorkbook(event, await loadEventGames(event), {}, opts);
+            }
+            const [games, events] = await Promise.all([
+                loadAllTeamGames(progress),
+                choice.breakdown ? listTeamEvents(currentTeam.id) : [],
+            ]);
+            if (games.length === 0) throw new Error('No games found for this team.');
+            return buildTeamWorkbook(currentTeam, games, events, opts);
+        },
+        gameFor: (choice) => (choice.scope === 'game' ? game : null),
+        gameText: gameLogText,
+    });
 }
 
 /**

@@ -17,23 +17,17 @@ import {
     getGamePlayerStats, getGameTeamStats, formatTeamStatsLine, classifyPoint,
     sumPlayerStats,
 } from '../utils/eventStats.js';
-import { buildGameLogEntries, renderGameLogEntriesHTML } from '../utils/gameLogRenderer.js';
+import { buildGameLogEntries, buildGameLogText, renderGameLogEntriesHTML } from '../utils/gameLogRenderer.js';
 import { mountReplayView } from '../playByPlay/replayView.js';
 import { mountGameFlow, mountConnections } from '../ui/gameFlowChart.js';
 import { initSummarySections } from '../ui/summarySections.js';
 import { createTableSortController } from '../utils/tableSort.js';
 import { attachStatsColumnHelp } from '../utils/statsHelp.js';
-import { wireStatsLevelSelect } from '../utils/statsLevel.js';
+import { getStatsLevel, wireStatsLevelSelect } from '../utils/statsLevel.js';
 import { screenStatsColumns } from '../utils/statsColumns.js';
 import { buildRosterRow } from './rosterRowHelpers.js';
-import {
-    wireExportPlayerSelect, exportSelection, exportTitle, exportFilename,
-} from './exportPlayerPicker.js';
-import {
-    buildStatsSheetAoA, aoaToFormattedSheet, downloadWorkbook,
-    buildGameFlowSheet, buildConnectionsSheet,
-    safeSheetName, safeFilename,
-} from '../utils/xlsxExport.js';
+import { buildGameWorkbook } from '../utils/exportWorkbook.js';
+import { openExportDialog } from '../ui/exportDialog.js';
 import { showScreen } from '../screens/navigation.js';
 import { showShareGameDialog } from '../game/shareGame.js';
 
@@ -143,12 +137,10 @@ function renderGameSummary(game, { guest = false, live = false } = {}) {
     renderGameSummaryEventLog(game, { live, editable: !guest });
     renderGameSummaryFlow(game);
 
-    // Show the export button (and its player menu) if there are stats
+    // Export (stats workbook, JSON, game log) once a point has been played
     const exportBtn = document.getElementById('exportGameSummaryBtn');
-    const exportPlayerGroup = document.getElementById('gameSummaryExportGroup');
     const hasStats = !!(game.points && game.points.some(p => p.winner));
     if (exportBtn) exportBtn.style.display = hasStats ? '' : 'none';
-    if (exportPlayerGroup) exportPlayerGroup.style.display = hasStats ? '' : 'none';
 
     // Share button: any game with a server id can be shared (the dialog
     // handles the never-synced case with a friendly nudge).
@@ -192,7 +184,6 @@ function renderGameSummaryStatsTable(game) {
     const statsColumns = screenStatsColumns();
 
     const players = resolveSummaryPlayers(game, playerStats);
-    wireExportPlayerSelect(document.getElementById('gameSummaryExportPlayer'), players);
 
     // Header row
     const headerRow = document.createElement('tr');
@@ -465,47 +456,37 @@ function renderSummaryLogLines() {
 }
 
 /**
- * Export game summary stats to an .xlsx workbook (single sheet) and
- * trigger download. Builds the same player table + team-stats footer
- * shown on screen, with proper Excel number / percent / time types.
- * The player menu beside the button narrows the sheet to one player's row
- * while leaving the Team total and footer intact.
+ * A game's log as plain text, in the Review screen's line format (point
+ * classifications on the "scores!" lines, roster ids resolved to names).
+ * Shared with the roster screens' single-game exports.
  */
-function exportGameSummaryXLSX() {
+function gameLogText(game) {
+    return buildGameLogText(game, buildSummaryEntryOptions(game, buildPointPlayerLookup(game)));
+}
+
+/**
+ * Open the Export dialog for the game on screen. One game, so there is no
+ * scope to choose; a share guest gets the stats workbook and the log, but
+ * not the raw game JSON.
+ */
+function openGameSummaryExport() {
     const game = _lastRenderedGame || (typeof currentGame === 'function' ? currentGame() : null);
-    if (!game) { alert('No game to export.'); return; }
-
-    const playerStats = typeof getGamePlayerStats === 'function'
-        ? getGamePlayerStats(game) : {};
-    const teamStats = typeof getGameTeamStats === 'function'
-        ? getGameTeamStats(game) : null;
-
-    // Same roster resolution the on-screen table uses, so the workbook can
-    // never list a different set of players than the screen does.
-    const players = resolveSummaryPlayers(game, playerStats);
-    const { player, sheetPlayers, totalsPlayers } = exportSelection(
-        document.getElementById('gameSummaryExportPlayer'), players);
-
-    const teamName = game.team || 'Team';
-    const opponent = game.opponent || 'Opponent';
-    const teamScore = game.scores?.[Role.TEAM] || game.scores?.team || 0;
-    const oppScore = game.scores?.[Role.OPPONENT] || game.scores?.opponent || 0;
-    const titleRow = exportTitle(player, `${teamName} ${teamScore} — ${oppScore} ${opponent}`);
-
-    const aoa = buildStatsSheetAoA(sheetPlayers, playerStats, teamStats, { titleRow, totalsPlayers });
-    const ws = aoaToFormattedSheet(aoa);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, safeSheetName(player ? player.name : opponent));
-    // Game Flow and Connections ride along on a whole-team export. A
-    // single-player sheet is a privacy-narrowed handout (see ARCHITECTURE.md
-    // § Single-player exports), and both extra sheets name other players.
-    if (!player) {
-        const flowSheet = buildGameFlowSheet(game, { teamName, opponentName: opponent });
-        if (flowSheet) XLSX.utils.book_append_sheet(wb, flowSheet.ws, flowSheet.name);
-        const connSheet = buildConnectionsSheet(game, `Connections: ${teamName} vs ${opponent}`);
-        if (connSheet) XLSX.utils.book_append_sheet(wb, connSheet.ws, connSheet.name);
-    }
-    downloadWorkbook(wb, `${safeFilename(exportFilename(player, opponent))}-stats.xlsx`);
+    if (!game) return;
+    const players = resolveSummaryPlayers(game, getGamePlayerStats(game));
+    const guest = document.body.classList.contains('share-guest');
+    openExportDialog({
+        subject: `${game.team || 'Team'} vs ${game.opponent || 'Opponent'}`,
+        scopes: [{ value: 'game', label: 'This game', singleGame: true }],
+        scope: 'game',
+        level: getStatsLevel(),
+        players,
+        formats: guest ? ['xlsx', 'sheets', 'text'] : undefined,
+        buildWorkbook: async (choice) => buildGameWorkbook(game, {
+            players, playerId: choice.playerId, level: choice.level,
+        }),
+        gameFor: () => game,
+        gameText: gameLogText,
+    });
 }
 
 /**
@@ -526,8 +507,7 @@ document.getElementById('gameFlowSection')?.addEventListener('summary-section-to
     if (ev.detail && ev.detail.open && summaryFlowView) summaryFlowView.redraw();
 });
 
-// Wire up XLSX export button
-document.getElementById('exportGameSummaryBtn')?.addEventListener('click', exportGameSummaryXLSX);
+document.getElementById('exportGameSummaryBtn')?.addEventListener('click', openGameSummaryExport);
 
 // Wire up Share button (public live-link dialog for the rendered game)
 document.getElementById('shareGameSummaryBtn')?.addEventListener('click', () => {
@@ -537,5 +517,5 @@ document.getElementById('shareGameSummaryBtn')?.addEventListener('click', () => 
 // --- ES-module exports ---
 export {
     showGameSummaryFromList, showGameSummaryPostGame, getGameSummaryBackTarget,
-    showGameSummaryForShare, refreshGameSummaryForShare,
+    showGameSummaryForShare, refreshGameSummaryForShare, gameLogText,
 };

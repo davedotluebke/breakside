@@ -5,7 +5,7 @@
  * Phase 4 update: Games use teamId and create rosterSnapshot
  */
 import { Role, Game, createRosterSnapshot, isTestGame } from '../store/models.js';
-import { currentTeam, currentEvent, saveAllTeamsData, serializeGame } from '../store/storage.js';
+import { currentTeam, currentEvent, saveAllTeamsData } from '../store/storage.js';
 import { syncGameToCloud, deleteGameFromCloud } from '../store/sync.js';
 import {
     currentGame, getLatestPoint, getActivePossession, getPlayerFromName,
@@ -13,7 +13,6 @@ import {
 } from '../utils/helpers.js';
 import { applyPointPlayerStats, revertPointPlayerStats } from './pointStats.js';
 import { buildGameLogEntries } from '../utils/gameLogRenderer.js';
-import { safeFilename } from '../utils/xlsxExport.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { updatePanelsForGameState } from '../ui/panelSystem.js';
 import { clearNextLineSelections } from '../ui/activePlayersDisplay.js';
@@ -248,30 +247,7 @@ function updateScore(winner) {
 // panel UI (gameScreen.js) handles all game events.
 
 
-// Review-screen footer (index.html #gameSummaryScreen footer). Both act on
-// the game the summary shows: the post-game flow's current game, or a
-// reviewed game, which teams/teamList.js appends to currentTeam.games before
-// rendering so currentGame() resolves to it. (The whole-team download lives
-// on the team screen, teams/teamList.js #downloadTeamBtn.)
-document.getElementById('downloadGameBtn').addEventListener('click', function() {
-    const game = currentGame();
-    if (!game) { showControllerToast('No game to download', 'warning'); return; }
-    const started = new Date(game.gameStartTimestamp || Date.now());
-    const day = (Number.isNaN(started.getTime()) ? new Date() : started).toISOString().split('T')[0];
-    const filename = `${safeFilename(game.team || 'Team')}_vs_${safeFilename(game.opponent || 'Opponent')}_${day}.json`;
-    downloadJSON(JSON.stringify(serializeGame(game), null, 2), filename);
-});
-
-document.getElementById('copySummaryBtn').addEventListener('click', async function() {
-    const text = summarizeGame();
-    try {
-        await navigator.clipboard.writeText(text);
-        showControllerToast('Game log copied to the clipboard', 'success');
-    } catch (e) {
-        showControllerToast('Couldn’t copy — the browser blocked clipboard access', 'error');
-    }
-});
-
+// Review-screen footer (index.html #gameSummaryScreen footer): New Game.
 document.getElementById('anotherGameBtn').addEventListener('click', function() {
     stopCountdown();
     setIsPaused(false);

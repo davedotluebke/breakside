@@ -44,6 +44,7 @@
  *   │   ├── eventLogDisplay.js   # Event log management and display
  *   │   ├── gameFlowChart.js     # Game Flow chart + Connections block on the Review screen
  *   │   ├── summarySections.js   # Collapsible Review-screen sections, remembered per device
+ *   │   ├── exportDialog.js      # The Export dialog behind every Export button
  *   │   └── buttonLayout.js      # UI consistency functions (button width matching)
  *   │
  *   ├── main.js                  # Application bootstrap (~200 lines)
@@ -104,7 +105,9 @@ import './utils/tableSort.js';
 import './utils/statsHelp.js';
 import './utils/statsLevel.js';
 import './utils/statsColumns.js';
+import './utils/exportWorkbook.js';
 import './utils/xlsxExport.js';
+import './utils/sheetsExport.js';
 // Evaluated before anything can show a screen, so its breakside:screen-shown
 // listener never misses the first navigation.
 import { dismissSplash } from './ui/splashScreen.js';
@@ -113,11 +116,11 @@ import './ui/eventLogDisplay.js';
 import './ui/setPicker.js';
 import './ui/gameFlowChart.js';
 import './ui/summarySections.js';
+import './ui/exportDialog.js';
 import { matchButtonWidths } from './ui/buttonLayout.js';
 import { isGameScreenVisible } from './ui/panelSystem.js';
 import { showScreen, showEditRosterScreen, showEditRosterSubscreen } from './screens/navigation.js';
 import './teams/rosterRowHelpers.js';
-import './teams/exportPlayerPicker.js';
 import { updateTeamRosterDisplay } from './teams/rosterManagement.js';
 import { showChangePasswordDialog } from './teams/accountPassword.js';
 import './teams/accountDeletion.js';

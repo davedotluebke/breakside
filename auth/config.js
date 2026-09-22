@@ -12,12 +12,21 @@ const BREAKSIDE_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3
 // API base URL
 const BREAKSIDE_API_BASE_URL = 'https://api.breakside.pro';
 
+// Google OAuth web client for "Export → Google Sheets" (utils/sheetsExport.js).
+// Public by design, like the anon key above. Empty = the Google Sheets option
+// is hidden from the Export dialog. The client needs the Sheets API enabled,
+// the drive.file scope on its consent screen, and each origin the PWA is
+// served from as an authorized JavaScript origin. See ARCHITECTURE.md
+// § Statistics Export.
+const BREAKSIDE_GOOGLE_CLIENT_ID = '';
+
 // --- ES-module export. landing/ pages do NOT load this file — they carry
 // --- their own config.
 export const BREAKSIDE_AUTH = {
     SUPABASE_URL: BREAKSIDE_SUPABASE_URL,
     SUPABASE_ANON_KEY: BREAKSIDE_SUPABASE_ANON_KEY,
     API_BASE_URL: BREAKSIDE_API_BASE_URL,
+    GOOGLE_CLIENT_ID: BREAKSIDE_GOOGLE_CLIENT_ID,
 };
 
 // window survivor: auth namespace surface (read window-qualified by
