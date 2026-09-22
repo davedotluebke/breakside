@@ -83,9 +83,11 @@ breakside/
 │   ├── statsHelp.js        # Long-press column-header help modal for stats tables
 │   ├── statsLevel.js       # Basic/Advanced/Full stats menu (persisted setting)
 │   ├── statsColumns.js     # The stats columns — one definition, every table
-│   │                       # and every .xlsx export
+│   │                       # and every export
 │   ├── tableSort.js        # Click-to-sort controller for on-screen stats tables
-│   └── xlsxExport.js       # Excel (.xlsx) export builders (SheetJS-backed)
+│   ├── exportWorkbook.js   # Format-neutral export workbooks (pure)
+│   ├── xlsxExport.js       # Excel (.xlsx) writer (SheetJS-backed)
+│   └── sheetsExport.js     # Google Sheets writer (GIS token + Sheets API)
 │
 ├── vendor/                  # Third-party libraries (vendored for offline use)
 │   └── xlsx.mini.min.js    # SheetJS community build (xlsx read/write)
@@ -1334,7 +1336,7 @@ Statistics above).
   totals. The block hides when no pass has both ends recorded; the whole
   section hides below two completed points. **Event Roster + Stats** mounts
   the same Connections block over the games in the scope menu.
-- **Export.** A whole-team xlsx export of a game gains a **Game Flow** sheet
+- **Export.** A whole-team, single-game export (Excel or Google Sheets) gains a **Game Flow** sheet
   (one row per point, the headline lines as a footer) and a **Connections**
   sheet (one row per pair). A single-player export gets neither, since both
   name other players and that export is the privacy-narrowed handout
@@ -1457,8 +1459,8 @@ Three screens show a roster + stats table, and each can export the same table to
 | Review | the **Review** button on a completed game in the team/event list |
 | Team Roster + Stats | Edit Roster |
 
-Each pairs its table with a toolbar row holding the **Stats:** level menu and an
-**Export:** player menu (see Single-player exports below).
+Each pairs its table with a toolbar row holding the **Stats:** level menu, and an
+**Export** button in its title bar that opens the Export dialog (§ Statistics Export).
 
 They all read their columns from **`utils/statsColumns.js`**, which holds two
 lists side by side: `STATS_COLUMNS` (what the tables render — display strings
@@ -1491,25 +1493,38 @@ rating from the D-line points they also took. The team roster screen only shows
 its scoreline-based O/D totals in Game scope; in Event/All-time scope those
 cells read `—`, matching what the plain `+/-` total does there.
 
-### Statistics Export (.xlsx)
+### Statistics Export
 
-`utils/xlsxExport.js` builds Excel workbooks via the vendored SheetJS (`vendor/xlsx.mini.min.js`, precached by the service worker for offline use). Three entry points:
+Every Export button (Review, Event Roster + Stats, Team Roster + Stats) opens one dialog, `ui/exportDialog.js`. It asks for a **format**, then the options that format uses:
 
-| Screen | Workbook layout |
-|--------|-----------------|
-| Game Summary / Review | Stats sheet (titled by opponent), plus **Game Flow** and **Connections** sheets on a whole-team export (see § Game Flow) |
-| Event Roster | "All phases" sheet + one sheet per phase; only attending players; team-stats footer per sheet |
-| Team Roster (Edit Roster) | "All games" sheet + one sheet per event the team played + a "Standalone" sheet |
+| Option | Choices | Starts at |
+|--------|---------|-----------|
+| Format | Excel (.xlsx) · Google Sheets · Game JSON · Game log (text) | the last format used on this device |
+| Scope | Team roster: All-time / Event / Game. Event roster: All games / each phase / each game. Review: the game. | the scope the screen shows |
+| Breakdown | "Add a sheet per event" (all-time), "per phase and per game" (event), "per game" (phase) | off; remembered per device |
+| Stats | Basic / Advanced / Full | the screen's Stats menu |
+| Players | All players, or one | All players |
 
-Each sheet is a header + player rows + a Team aggregate row + a breaks/holds footer. Numbers are written as real Excel types (percentages, decimal minutes), and an `!autofilter` scoped to just the header+player rows gives click-to-sort/filter column dropdowns without dragging the title or footer into the sort. Honored by Google Sheets on import.
+**Nothing writes back.** The Stats menu is one persisted setting shared by all three screens (`utils/statsLevel.js`); the dialog passes its level into the builders as an argument and never calls `setStatsLevel`, so exporting at Full leaves a table showing Basic alone. Game JSON and the game log need a single game, so their tiles are disabled for any wider scope; stats-only rows (level, players, breakdown) hide for those two formats. A share guest gets Excel, Google Sheets and the log, not the raw game JSON.
+
+**Build, then write.** Each screen hands the dialog a `buildWorkbook(choice, progress)` callback that loads the games the scope needs and returns a format-neutral model from `utils/exportWorkbook.js`: `{stem, sheets: [{name, rows, widths, formats, filter, frozenRows}]}`. That module is pure (no SheetJS, no DOM) and covered by `tests/unit/exportWorkbook.test.mjs`. The dialog passes the model to a writer:
+
+- `utils/xlsxExport.js`: SheetJS (`vendor/xlsx.mini.min.js`, precached for offline use). Real number types, percent / 0.00 formats, and an `!autofilter` over the header + player rows only, so sorting never drags the title, Team row or footer.
+- `utils/sheetsExport.js`: Google Sheets, entirely client-side. One `spreadsheets.create` writes every tab with typed cells (strings as `stringValue`, so a name beginning with `=` stays text), bold title/header rows, frozen rows and column widths; a `batchUpdate` of `setBasicFilter` adds the sort ranges (a failure there is logged, not fatal). The sheet link appears in the dialog rather than opening a tab, since a `window.open` after the awaits would be popup-blocked.
+
+Each stats sheet is a title row, header, player rows, a Team aggregate row and the breaks/holds footer. A single-game, whole-team export adds the **Game Flow** and **Connections** sheets (§ Game Flow).
+
+#### Google Sheets sign-in
+
+Separate from Breakside sign-in, so an email/password account or a share guest can export to their own Drive. Google Identity Services (`accounts.google.com/gsi/client`, loaded when the dialog opens) issues an access token for the **`drive.file`** scope, which lets Breakside create spreadsheets and open only the ones it created. The token is kept in memory (about an hour) and never reaches our API. Google opens its consent popup from `requestAccessToken()`, which browsers allow only inside a user gesture, so the Export click calls `getAccessToken()` synchronously before any `await`; that is why the script is preloaded when the dialog opens.
+
+Configuration: `GOOGLE_CLIENT_ID` in `auth/config.js`. Empty hides the Google Sheets tile. The OAuth client needs the Google Sheets API enabled, `drive.file` on its consent screen, and every origin the PWA is served from (production, staging, localhost dev ports) as an authorized JavaScript origin. `privacy.html` carries the Google API Services User Data Policy disclosure the consent-screen review requires.
 
 #### Single-player exports
 
-Every export screen carries an **Export:** menu (`teams/exportPlayerPicker.js`) in its toolbar row — default "All players", or any one player. Picking a player narrows the *rows* of every sheet in the workbook to that player, while `buildStatsSheetAoA`'s `opts.totalsPlayers` keeps the Team row summing the whole roster, and the breaks/holds footer is unchanged. The title row and filename gain the player's name.
+Picking one player narrows the *rows* of every stats sheet to that player, while the Team row still sums the whole roster (`exportSelection` in `utils/exportWorkbook.js`) and the breaks/holds footer is unchanged. The title row and filename gain the player's name, and the Game Flow and Connections sheets are left out because both name other players.
 
 The point is privacy. A coach who wants to give a player (or a parent) their numbers shouldn't have to hand over the whole team's playing time and error counts, which is what invites comparison — but the numbers are meaningless without team context, so the Team row and footer stay.
-
-The menu lives in the toolbar row rather than beside the Export button: those header bars already carry a back button, a title and one or two icon buttons, and a fifth control overflows a phone. The event roster's menu also refreshes when an attendance checkbox flips, since that changes who the export covers without redrawing the table.
 
 ---
 

@@ -132,9 +132,29 @@ docs/dev-notes/game-flow.md. Follow-ups, none blocking:
       menu (all / phase / one game); a per-half split for a single game would
       need `halftimeAfter` from `buildGameFlow` threaded into
       `buildConnections`.
-- [ ] **Copy Game Log (text)** could carry the headline lines (`describeGameFlow`)
+- [ ] **Game log (text)** in the Export dialog could carry the headline lines (`describeGameFlow`)
       under the log text; today only the screen and the xlsx have them.
 - [ ] **Docs-site clip** for the section (docs/DOCS_SITE.md conventions).
+
+### 📤 Export dialog + Google Sheets (branch `export-dialog`, 2026-09-22)
+
+One dialog behind every Export button: format (Excel / Google Sheets / game
+JSON / game log), scope with optional breakdown, stats level, players. See
+ARCHITECTURE.md § Statistics Export.
+
+- [ ] **Google Cloud setup (Dave).** OAuth web client with the Sheets API
+      enabled, `drive.file` on the consent screen, authorized JS origins for
+      www, staging and the localhost dev ports; paste the client id into
+      `GOOGLE_CLIENT_ID` in `auth/config.js`. Until then the Google Sheets tile
+      is hidden. Test users work in "Testing" mode; submit for brand
+      verification before announcing it.
+- [ ] **End-to-end Sheets test** on staging once the client exists: consent
+      popup on iOS Safari (must open from the click), large all-time
+      workbook, filters and percent formats, the 401 → re-consent path.
+- [ ] **Review the privacy.html Google Sheets paragraph** (Limited Use
+      disclosure) and bump its "Last updated" date.
+- [ ] **Connections sheet for multi-game scopes?** Only single-game exports
+      carry it today, though the event screen shows Connections.
 
 ### 🔑 Password change and reset (merged 2026-09-12)
 

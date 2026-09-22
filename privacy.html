@@ -292,6 +292,19 @@
                             which case Google handles that sign-in.
                         </li>
                         <li>
+                            <strong>Google Sheets</strong> — only when you export to Google Sheets. Your
+                            browser sends the stats you chose to export straight to Google, which creates
+                            the sheet in your own Google Drive. Breakside asks Google only for permission
+                            to create files and to open the ones it created (the <code>drive.file</code>
+                            permission); it cannot see anything else in your Drive. The access Google grants
+                            stays in your browser for about an hour and is never sent to Breakside's server.
+                            Breakside's use of information received from Google APIs adheres to the
+                            <a href="https://developers.google.com/terms/api-services-user-data-policy">Google
+                            API Services User Data Policy</a>, including its Limited Use requirements. You can
+                            withdraw the permission at any time in your Google Account's third-party access
+                            settings.
+                        </li>
+                        <li>
                             <strong>OpenAI</strong> — only while voice narration is recording.
                             Receives live microphone audio, plus player names and nicknames as a
                             spelling hint. See <a href="#narration">Voice narration</a>.
@@ -585,9 +598,9 @@
                         downloaded.
                     </p>
                     <p>
-                        <strong>Spreadsheets and JSON files exported before an erasure still contain
-                        the original name.</strong> They are on somebody's laptop, in an email, or in a
-                        shared drive, and Breakside has no way to find them, change them, or ask for
+                        <strong>Spreadsheets, Google Sheets and JSON files exported before an erasure
+                        still contain the original name.</strong> They are on somebody's laptop, in an
+                        email, or in somebody's Google Drive, and Breakside has no way to find them, change them, or ask for
                         them back. The same goes for a screenshot, or a stat sheet printed out for a
                         tournament.
                     </p>
