@@ -87,47 +87,66 @@ body.staging .header-staging-pill {
     text-shadow: var(--shadow-text);
 }
 
-/* Panel title bars in non-game screens */
-section > .panel-title-bar {
+/* Title bars of the non-game screens (index.html .screen-title-bar),
+   including the two roster subscreens nested one level below their section */
+.panel-title-bar.screen-title-bar { /* two classes: outranks panelSystem.css, which loads later */
     cursor: default;
     margin: 0 -5px; /* Extend to edges (counters body padding) */
+    /* No in-game expand button here, so drop its 36px right gutter; and
+       let Share / Export drop to a second row on a narrow phone rather
+       than crush the title. */
+    padding-right: 8px;
+    flex-wrap: wrap;
+    row-gap: 4px;
 }
 
 /* Screen titles can be long (an event name plus its W-L record); let them
-   wrap rather than push the bar's Export/Share buttons off-screen. The
-   in-game panels keep the nowrap default from panelSystem.css. */
-section > .panel-title-bar .panel-title {
+   wrap between words rather than push the bar's Export/Share buttons
+   off-screen. No min-width: 0, so a single word never gets squeezed
+   under a neighbouring button. The in-game panels keep the nowrap default
+   from panelSystem.css. */
+.screen-title-bar .panel-title {
     white-space: normal;
     text-align: left;
-    flex-shrink: 1;
-    min-width: 0;
+    /* Zero basis: the title gives up width (wrapping between words) before
+       the buttons are pushed to a second row, and takes any spare width so
+       Share / Export sit at the right edge. */
+    flex: 1 1 0;
 }
 
+/* Share / Export pills in a screen title bar: drop the global
+   button { margin: 10px } so three buttons and a title fit a phone. */
+.screen-title-bar .back-button {
+    margin: 0 0 0 6px;
+    padding: 6px 12px;
+}
+
+/* Styled as a real button — the same pill as the bar's Export / Share
+   buttons (.back-button) — so it reads as a control, not as part of the
+   title text beside it. */
 .title-bar-back-btn {
-    background: none;
+    background: var(--color-secondary);
     border: none;
     color: var(--white);
-    font-size: 1rem;
-    padding: 4px 8px;
-    margin: 0 4px 0 0;
+    font-size: 0.9rem;
+    padding: 6px 12px;
+    margin: 0 10px 0 0;
     flex-shrink: 0;
     white-space: nowrap;
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-/* Spelled-out "Back" beside the arrow: the bare arrow was easy to miss. */
 .title-bar-back-label {
     margin-left: 6px;
-    font-size: 0.9rem;
     font-weight: 600;
 }
 
 .title-bar-back-btn:hover {
-    background: var(--wash-on-color);
+    background: var(--color-secondary-hover);
 }
 
 /* Roster navigation button on Start Game subscreen */
