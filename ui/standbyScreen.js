@@ -37,9 +37,12 @@
  * see. Being backgrounded does not leave standby — a coach who pocketed the
  * phone in standby comes back to standby.
  *
- * Deliberately not built: an idle timeout that enters standby on its own.
- * That is the bigger saving but needs gating (never for the Active Coach
- * mid-point on offense); the explicit tap has no failure mode. TODO.md.
+ * ui/standbyTimer.js enters standby by itself after an idle spell, through
+ * `enter({ soft: true })`: the overlay fades in without taking the tap
+ * (`pointer-events: none` for the fade), so a touch during it reaches the
+ * game UI and the timer cancels the entry. Only once fully in does it become
+ * the tap-swallowing screen above. The gate on when that may happen is
+ * utils/standbyPolicy.js.
  */
 import { powerManager } from '../utils/powerManager.js';
 import { standbyLabels, countdownState } from '../utils/standbyView.js';
@@ -59,6 +62,10 @@ const standbyScreen = (function() {
     let overlay = null;
     let active = false;
     let leaving = false;
+    // Soft entry in progress: visible, fading in, not yet the tap target.
+    let entering = false;
+    let enterTimer = null;
+    const ENTER_FALLBACK_MS = 1000;
     /** @type {MutationObserver|null} */
     let observer = null;
     let fadeTimer = null;
@@ -66,6 +73,11 @@ const standbyScreen = (function() {
 
     function isActive() {
         return active && !leaving;
+    }
+
+    /** Fading in by itself (ui/standbyTimer.js); a tap still reaches the game. */
+    function isEntering() {
+        return entering;
     }
 
     function inGame() {
@@ -126,7 +138,9 @@ const standbyScreen = (function() {
         // A long press on the black screen must not raise the OS callout.
         overlay.addEventListener('contextmenu', (e) => { e.preventDefault(); });
         overlay.addEventListener('transitionend', (e) => {
-            if (e.target === overlay) finishLeave();
+            if (e.target !== overlay) return;
+            if (entering) finishEnter();
+            else finishLeave();
         });
 
         document.body.appendChild(overlay);
@@ -223,7 +237,7 @@ const standbyScreen = (function() {
 
     function notify() {
         document.dispatchEvent(new CustomEvent(CHANGED_EVENT, {
-            detail: { active: isActive() }
+            detail: { active: isActive(), entering }
         }));
     }
 
@@ -236,9 +250,22 @@ const standbyScreen = (function() {
 
     /**
      * Cover the game with the standby screen.
-     * @returns {boolean} whether standby is now on (false outside a game)
+     *
+     * `soft` is the idle timer's entry: a slower fade-in during which the
+     * overlay is not the tap target, so a touch reaches the UI underneath
+     * (and, via the timer's input listener, cancels the entry). A deliberate
+     * ☀ tap during a soft fade completes it at once.
+     *
+     * @param {object} [opts]
+     * @param {boolean} [opts.soft=false]
+     * @returns {boolean} whether standby is now on or on its way (false outside a game)
      */
-    function enter() {
+    function enter(opts) {
+        const soft = !!(opts && opts.soft);
+        if (entering) {
+            if (!soft) finishEnter();
+            return true;
+        }
         if (isActive()) return true;
         if (!inGame()) return false;
         if (!overlay) build();
@@ -252,11 +279,54 @@ const standbyScreen = (function() {
         syncFromDom();
         observe();
         overlay.classList.remove('standby-screen--leaving');
-        overlay.classList.add('standby-screen--active');
+        if (soft) {
+            entering = true;
+            // Commit the transparent start state, then let the class change
+            // drive the transition to opaque.
+            overlay.classList.add('standby-screen--entering', 'standby-screen--entering-start', 'standby-screen--active');
+            void overlay.getBoundingClientRect();
+            overlay.classList.remove('standby-screen--entering-start');
+            enterTimer = setTimeout(finishEnter, ENTER_FALLBACK_MS);
+        } else {
+            overlay.classList.add('standby-screen--active');
+        }
         document.body.classList.add('standby-active');
         setChromeBlack(true);
         document.addEventListener('keydown', onKey);
-        log('🌙 Standby on');
+        log(soft ? '🌙 Standby fading in (idle)' : '🌙 Standby on');
+        notify();
+        return true;
+    }
+
+    /** The soft fade-in reached opaque: become the ordinary standby screen. */
+    function finishEnter() {
+        if (!entering) return;
+        entering = false;
+        if (enterTimer) { clearTimeout(enterTimer); enterTimer = null; }
+        overlay.classList.remove('standby-screen--entering', 'standby-screen--entering-start');
+        log('🌙 Standby on (idle)');
+        notify();
+    }
+
+    /**
+     * Abandon a soft fade-in: the coach touched something. Immediate, with
+     * no fade-out, because the tap that cancelled it has already reached the
+     * UI and a swallowing fade here would eat the next one.
+     * @param {string} reason
+     * @returns {boolean} whether there was a fade-in to cancel
+     */
+    function cancelEntering(reason) {
+        if (!entering) return false;
+        entering = false;
+        if (enterTimer) { clearTimeout(enterTimer); enterTimer = null; }
+        active = false;
+        leaving = false;
+        unobserve();
+        setChromeBlack(false);
+        document.removeEventListener('keydown', onKey);
+        overlay.classList.remove('standby-screen--active', 'standby-screen--entering', 'standby-screen--entering-start');
+        document.body.classList.remove('standby-active');
+        log(`🌙 Standby fade-in cancelled (${reason || 'input'})`);
         notify();
         return true;
     }
@@ -268,6 +338,7 @@ const standbyScreen = (function() {
      * @returns {boolean} whether a leave was started
      */
     function exit(reason) {
+        if (entering) return cancelEntering(reason);
         if (!isActive()) return false;
         leaving = true;
         unobserve();
@@ -297,14 +368,14 @@ const standbyScreen = (function() {
     // the whole context, so a missed edge still converges on the next one.
     document.addEventListener('breakside:power-plan', (e) => {
         const ctx = e.detail && e.detail.ctx;
-        if (ctx && !ctx.inGame && (active || leaving)) {
+        if (ctx && !ctx.inGame && (active || leaving || entering)) {
             exit('game-exit');
             // No fade to wait for here: the screen underneath is changing.
             finishLeave();
         }
     });
 
-    return { enter, exit, toggle, isActive, CHANGED_EVENT };
+    return { enter, exit, toggle, isActive, isEntering, cancelEntering, CHANGED_EVENT };
 })();
 
 // --- ES-module export ---

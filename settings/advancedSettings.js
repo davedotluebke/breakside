@@ -84,6 +84,13 @@ const advancedSettings = (function() {
         // On by default: it's what lets a coach dim the screen right down,
         // which is the single biggest battery saving available.
         'power.keepScreenAwake': true,
+        // Enter the black standby screen by itself after this many seconds
+        // with no tap (ui/standbyTimer.js): a 5-second warning toast, then a
+        // fade any tap cancels. Never for the Active Coach mid-point or on
+        // Full/Field, never with a dialog open or the mic on. Press-and-hold
+        // ☀ in the game header flips the on/off half of this.
+        'power.standbyTimer': true,
+        'power.standbyIdleSec': 60,
         // --- Display ---
         // auto | light | dark. Applied by utils/theme.js (and by an inline
         // copy of its resolve step in index.html, so the first paint is already
@@ -358,9 +365,29 @@ const advancedSettings = (function() {
             fields: [
                 {
                     key: 'power.keepScreenAwake', label: 'Keep screen awake in a game',
-                    help: 'Stops the display sleeping while you’re on the game screen, so you can turn your brightness right down — which saves far more power than the wake lock costs. Press and hold the ☀ in the game header to release it when you pocket the phone.',
+                    help: 'Stops the display sleeping while you’re on the game screen, so you can turn your brightness right down — which saves far more power than the wake lock costs. Turn it off to let the display sleep on its own.',
                     type: 'toggle'
-                }
+                },
+                {
+                    key: 'power.standbyTimer', label: 'Standby after sitting idle',
+                    help: 'After the idle time with no taps, a 5-second warning counts down, then the screen fades to the black standby screen. Any tap cancels it. Never while you’re the Active Coach mid-point or on the Full/Field tabs, with a dialog open, or while the mic is on. Press and hold the ☀ in the game header to toggle this without opening settings.',
+                    type: 'toggle'
+                },
+                {
+                    key: 'power.standbyIdleSec', label: 'Idle time before standby',
+                    help: 'How long with no taps before the warning appears.',
+                    type: 'select',
+                    showWhen: 'power.standbyTimer',
+                    options: [
+                        ['30', '30 seconds'],
+                        ['45', '45 seconds'],
+                        ['60', '1 minute'],
+                        ['90', '90 seconds'],
+                        ['120', '2 minutes'],
+                        ['180', '3 minutes'],
+                        ['300', '5 minutes']
+                    ]
+                },
             ]
         },
         {
@@ -618,6 +645,11 @@ const advancedSettings = (function() {
                 // the coach may well be mid-game with the modal open.
                 if (key === 'power.keepScreenAwake') {
                     window.wakeLockManager?.reconcile?.();
+                }
+                // So does the standby timer: the coach may be mid-game with
+                // the modal open, and the toggle/idle time should apply now.
+                if (key === 'power.standbyTimer' || key === 'power.standbyIdleSec') {
+                    window.standbyTimer?.refresh?.();
                 }
                 // Theme is the other: the user is looking at the thing they
                 // just changed.

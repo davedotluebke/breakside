@@ -27,6 +27,7 @@ import { wireGameScreenEvents } from './gameScreenEvents.js';
 import { refreshThemedImages } from '../utils/theme.js';
 import { powerManager } from '../utils/powerManager.js';
 import { standbyScreen } from '../ui/standbyScreen.js';
+import { standbyTimer } from '../ui/standbyTimer.js';
 import { log } from '../utils/logger.js';
 
 // =============================================================================
@@ -131,7 +132,7 @@ function createHeaderContent() {
         </div>
         
         <button class="header-wake-lock-btn" id="gameWakeLockBtn" hidden
-                title="Tap for a black standby screen; press and hold to let the screen sleep">
+                title="Tap for a black standby screen; press and hold to turn the idle standby timer on or off">
             <i class="fas fa-sun"></i>
         </button>
 
@@ -633,20 +634,19 @@ function initGameScreen() {
 }
 
 /**
- * The ☀ in the game header: tap for standby, press and hold to let the
- * screen sleep.
+ * The ☀ in the game header: tap for standby, press and hold to turn the
+ * idle standby timer on or off.
  *
  * Shown in every game, whether or not this browser has a wake lock — the
  * standby screen (ui/standbyScreen.js) needs neither. The icon still reports
- * the lock: lit while it is held, dimmed when the coach released it or the
- * API is absent.
+ * the lock: lit while it is held, dimmed when the API is absent or the
+ * setting is off. (Letting the screen sleep is the "Keep screen awake"
+ * setting under Advanced Settings → Battery; it is no longer on this
+ * button.)
  *
- * The hold is what the tap used to be. Releasing the lock is sticky for the
- * rest of the game so pocketing the phone isn't undone by an app switch; it
- * moved to a long press because the tap is the gesture a coach reaches for
- * on the line, and what they want there is a black screen, not a sleeping
- * one they have to unlock. A toast confirms each hold — a dimmed icon under
- * a thumb is easy to miss.
+ * The hold flips `power.standbyTimer` (ui/standbyTimer.js), persisted, and a
+ * toast confirms it — a coach whom the countdown has just interrupted wants
+ * a one-gesture way to make it stop, and to know it worked.
  */
 const WAKE_LOCK_HOLD_MS = 450;
 
@@ -670,19 +670,12 @@ function wireWakeLockIndicator() {
     const hold = () => {
         holdTimer = null;
         holdFired = true;
-        const wl = window.wakeLockManager;
-        if (!wl || !wl.isSupported()) {
-            showControllerToast('This browser can’t keep the screen awake — use your phone’s auto-lock setting.', 'info', 4000);
-            return;
-        }
-        if (!wl.isEnabled()) {
-            showControllerToast('“Keep screen awake” is off in Advanced Settings → Battery.', 'info', 4000);
-            return;
-        }
-        const keepAwake = wl.toggleByUser();
-        showControllerToast(keepAwake
-            ? 'Screen will be kept awake for the rest of the game.'
-            : 'Screen may sleep now. Press and hold ☀ to keep it awake again.',
+        const on = !standbyTimer.isEnabled();
+        standbyTimer.setEnabled(on);
+        const secs = standbyTimer.idleSeconds();
+        showControllerToast(on
+            ? `Standby timer on: standby after ${secs} seconds idle. Hold ☀ again to turn it off.`
+            : 'Standby timer off. Tap ☀ any time for standby; hold ☀ again to turn the timer back on.',
             'info', 3500);
     };
     const startHold = () => {

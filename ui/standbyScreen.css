@@ -50,6 +50,21 @@
     opacity: 0;
 }
 
+/* Fading in by itself after the idle timer (ui/standbyTimer.js). Visible but
+   NOT the hit target, so a tap during the fade reaches the game UI — and
+   cancels the standby. Slower than the exit fade on purpose: it is the
+   coach's last chance to say "not now". The -start class is the transparent
+   first frame the transition runs from. */
+.standby-screen--entering {
+    pointer-events: none;
+    transition-duration: 700ms;
+}
+
+.standby-screen--entering-start {
+    opacity: 0;
+    transition: none;
+}
+
 /* Nothing else may scroll or bounce under a finger on the black screen. */
 body.standby-active {
     overflow: hidden !important;

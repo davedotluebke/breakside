@@ -99,7 +99,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 - **Touch-Optimized** - Large buttons and gestures designed for sideline use
 - **Offline Capability** - Once you're signed in, record a whole tournament with no signal; everything syncs when you reconnect. Signing in itself needs a connection
 - **Dark Theme** - The default. True black, so on an OLED phone the unlit pixels draw no power — a battery strategy as much as a look. Switch to Light, or to Auto to follow the phone, in Advanced Settings
-- **Standby Screen** - Tap ☀ in the game header for a true-black screen that shows only the score, plus the next-point countdown between points; tap anywhere to come back. On an OLED phone unlit pixels draw no power, so this is the cheapest way to keep the app up for a whole game. Press and hold ☀ instead to let the screen sleep
+- **Standby Screen** - Tap ☀ in the game header for a true-black screen that shows only the score, plus the next-point countdown between points; tap anywhere to come back. On an OLED phone unlit pixels draw no power, so this is the cheapest way to keep the app up for a whole game. It also comes on by itself after a minute with no taps (adjustable): a 5-second warning counts down first, and any tap cancels it. Never mid-point for the Active Coach, with a dialog open, or while the mic is on. Press and hold ☀ to turn the idle timer off or on
 
 </details>
 

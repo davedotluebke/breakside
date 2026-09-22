@@ -141,6 +141,7 @@ import './game/controllerState.js';
 import './game/shareGame.js';
 import './ui/hints.js';
 import './ui/standbyScreen.js';
+import './ui/standbyTimer.js';
 import './game/gameScreenPanels.js';
 import './game/gameScreenEvents.js';
 import './game/gameTimer.js';
