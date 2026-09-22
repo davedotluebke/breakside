@@ -109,12 +109,15 @@ MVP shipped. Coach speaks naturally; the system extracts structured game events.
 
 ## Near Term
 
-### 📈 Game Flow + Connections (branch `game-flow`, built 2026-09-19, on staging, unmerged)
+### 📈 Game Flow + Connections (shipped in 2.3.0, 2026-09-22)
 
 The Review screen gained a **Game Flow** section (score-margin chart with
 runs, lead changes, halftime and timeouts, plus headline lines) and a
 **Connections** block (thrower→receiver pairs, list or matrix), also on Event
-Roster + Stats and as two extra sheets in the game xlsx export. How it works:
+Roster + Stats and as two extra sheets in the game xlsx export. The same
+release made the Review screen's sections collapsible (Game Flow starts
+collapsed, remembered per device) and restyled its footer actions, whose
+download button now saves the game rather than the team. How it works:
 ARCHITECTURE.md § Game Flow (Review screen); design calls and traps:
 docs/dev-notes/game-flow.md. Follow-ups, none blocking:
 

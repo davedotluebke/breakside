@@ -1,6 +1,6 @@
 # Game Flow and Connections
 
-Status: built on branch `game-flow`, on staging, unmerged. Last verified 2026-09-19.
+Status: shipped in 2.3.0 (branch `game-flow`, merged 2026-09-22). Last verified 2026-09-22.
 
 How it works is in ARCHITECTURE.md § Game Flow (Review screen) and § Derived Statistics. This note holds the design calls and the traps.
 
