@@ -1538,8 +1538,8 @@ Higher-leverage interventions, in roughly priority order:
 ### UI/UX
 - [ ] Comprehensive UI redesign
 - [ ] **Teams view arrangement: revisit if the simple model chafes.** Since
-      2026-09-15 the list is most-recently-opened first with a pinned group on
-      top. A newly pinned team lands at the top of that group, so arranging
+      2.5.0 (2026-09-22) the list is most-recently-opened first with a pinned
+      group on top. A newly pinned team lands at the top of that group, so arranging
       the group means unpinning and re-pinning in the wanted order; there is
       deliberately no drag handle. If coaches want more control, candidates
       are drag-to-reorder within the pinned group, an explicit sort choice

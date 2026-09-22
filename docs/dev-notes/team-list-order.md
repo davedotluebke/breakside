@@ -1,6 +1,6 @@
 # Teams screen order and pins
 
-Status: shipped (branch `team-pins`, built 2026-09-15). Code: `store/teamListPrefs.js` (the rules), `teams/teamList.js` (`renderCloudTeamsList`, `buildTeamSection`, `recordTeamViewed`, `toggleTeamPinned`), `css/teams.css` (`.team-pin-btn`, `.team-group-label`, `.team-header-actions`). Tests: `tests/unit/teamListPrefs.test.mjs`, `tests/scenarios/14-team-pins.spec.ts`.
+Status: shipped in 2.5.0 (branch `team-pins`, merged 2026-09-22). Code: `store/teamListPrefs.js` (the rules), `teams/teamList.js` (`renderCloudTeamsList`, `buildTeamSection`, `recordTeamViewed`, `toggleTeamPinned`), `css/teams.css` (`.team-pin-btn`, `.team-group-label`, `.team-header-actions`). Tests: `tests/unit/teamListPrefs.test.mjs`, `tests/scenarios/14-team-pins.spec.ts`.
 
 ## What it is
 
