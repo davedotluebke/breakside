@@ -1,6 +1,6 @@
 # Standby screen
 
-Status: shipped — built on branch `standby-screen` 2026-09-19, merged to main 2026-09-20 (2.2.0). The idle timer was added on branch `standby-timer` 2026-09-22 (see § Idle timer below). The mechanism, the stacking order and the ☀ contract are in ARCHITECTURE.md § Power Management → Standby screen. This note holds the decisions behind them and the verification recipe.
+Status: shipped — built on branch `standby-screen` 2026-09-19, merged to main 2026-09-20 (2.2.0). The idle timer was added on branch `standby-timer` 2026-09-22 and merged to main 2026-09-23 (2.4.0); see § Idle timer below. The mechanism, the stacking order and the ☀ contract are in ARCHITECTURE.md § Power Management → Standby screen. This note holds the decisions behind them and the verification recipe.
 
 ## Decisions
 
