@@ -18,7 +18,7 @@ const BREAKSIDE_API_BASE_URL = 'https://api.breakside.pro';
 // the drive.file scope on its consent screen, and each origin the PWA is
 // served from as an authorized JavaScript origin. See ARCHITECTURE.md
 // § Statistics Export.
-const BREAKSIDE_GOOGLE_CLIENT_ID = '';
+const BREAKSIDE_GOOGLE_CLIENT_ID = '328597433158-dgpl69c1p412pvmevtauqo0n856r3v6a.apps.googleusercontent.com';
 
 // --- ES-module export. landing/ pages do NOT load this file — they carry
 // --- their own config.
