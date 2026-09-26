@@ -67,7 +67,7 @@ Deploys the **working directory** of the checkout containing the script (not com
 
 Each agent session MUST work in its own worktree for code changes. Never edit code files directly on `main`.
 
-**Exception:** purely informational docs (`TODO.md`, `README.md`, `ARCHITECTURE.md`, and similar) may be edited directly on `main` and committed/pushed without a worktree.
+**Exception:** purely informational docs (`TODO.md`, `README.md`, `ARCHITECTURE.md`, and similar) may be edited directly on `main` and committed/pushed without a worktree. Fetch first and confirm `main` matches `origin/main` before that commit, exactly as before a merge (§ Merging to production).
 
 ### Starting a session
 ```bash
@@ -88,10 +88,22 @@ Commit early and often on feature branches; nothing bumps versions at commit tim
 ```bash
 cd /Users/luebke/src/ultistats    # main worktree; keep it clean
 git checkout main
+git fetch origin
+git status -sb                    # must read "## main...origin/main" with no ahead/behind
+git merge --ff-only origin/main   # only if it said "behind"
 git merge <feature>
 git push origin main
 ```
+**Fetch first, every time, including before a direct-to-main docs commit.** Local sessions, cloud sessions and the maintainer all land on `main`, and several of them edit the same `TODO.md` status lines right after their merges, so a `main` that is behind origin gets its push rejected and its rebase conflicts. A `main` that is *ahead* of origin with a commit that is not yours means another session has left unpushed work there: do not build on it (next paragraph).
+
 `.git/hooks/pre-merge-commit` runs the full Playwright e2e suite (about 2 minutes, a lot of output) on any non-fast-forward merge into `main` and aborts on failure; fast-forward merges skip it. Grep the output for `passed (` rather than reading it all.
+
+**If `main` is diverged by another session's commit**, do not merge your branch into it and do not resolve the other session's conflict. Rebase only your branch's own commits onto `origin/main` and push them from the branch, which fast-forwards the remote and leaves the local `main` alone:
+```bash
+git -C /Users/luebke/src/ultistats/.worktrees/<feature> rebase --onto origin/main main
+git -C /Users/luebke/src/ultistats/.worktrees/<feature> push origin <feature>:main
+```
+Then say so in your report. The stray commit belongs to whoever made it (or to the maintainer); once local `main` is rebased onto origin, any duplicate of your commit drops out on its own. This is what the 2026-09-26 `TODO.md` push race between three sessions came down to.
 
 ### If branches overlap
 ```bash
