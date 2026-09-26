@@ -1,0 +1,65 @@
+#!/bin/bash
+#
+# post-commit hook: tag a release when a commit bumps the version.
+#
+# Tracked copy: scripts/git-hooks/post-commit. Git does not version .git/hooks,
+# so a fresh clone installs it with
+#     ln -sf ../../scripts/git-hooks/post-commit .git/hooks/post-commit
+# See VERSIONING.md § Release Tagging.
+#
+# A release is the commit that raises `version` in version.json (normally
+# `python3 increment-version.py patch|minor|major`, committed as
+# `chore(version): X.Y.Z — ...`). The commit message plays no part: the old
+# hook keyed on the word "release", which fired on messages that merely
+# mentioned it and missed every real bump.
+#
+# Both versions are read from the commits themselves (git show <rev>:version.json),
+# not from a working tree, so the hook is also right from a linked worktree. It
+# never changes directory. Tags are local until pushed.
+
+set -u
+
+# version_at <rev>: print the version string in <rev>'s version.json, or nothing.
+version_at() {
+    git show "$1:version.json" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    print(json.load(sys.stdin)["version"])
+except Exception:
+    pass
+'
+}
+
+# is_newer <old> <new>: exit 0 when <new> sorts after <old>, numerically, dot by dot.
+is_newer() {
+    python3 -c '
+import sys
+def key(v):
+    return [int("".join(c for c in part if c.isdigit()) or 0) for part in v.split(".")]
+sys.exit(0 if key(sys.argv[2]) > key(sys.argv[1]) else 1)
+' "$1" "$2"
+}
+
+NEW="$(version_at HEAD)"
+[ -n "$NEW" ] || exit 0            # no version.json in this commit
+OLD="$(version_at 'HEAD^')"
+[ -n "$OLD" ] || exit 0            # root commit, or the parent had no version.json
+[ "$NEW" != "$OLD" ] || exit 0     # version unchanged: not a release
+if ! is_newer "$OLD" "$NEW"; then
+    echo "post-commit: version.json went $OLD -> $NEW (not a bump); no tag."
+    exit 0
+fi
+
+TAG="v$NEW"
+if AT="$(git rev-parse -q --verify "refs/tags/$TAG^{commit}")"; then
+    echo "post-commit: tag $TAG already exists at ${AT:0:7}."
+    if ! git merge-base --is-ancestor "$AT" HEAD; then
+        echo "  That commit is not an ancestor of HEAD (amended or rebased release?)."
+        echo "  To move the tag here:  git tag -f -a $TAG -m 'Release $NEW'"
+    fi
+    exit 0
+fi
+
+if git tag -a "$TAG" -m "Release $NEW"; then
+    echo "post-commit: tagged $TAG (version.json $OLD -> $NEW). Push it with:  git push origin $TAG"
+fi

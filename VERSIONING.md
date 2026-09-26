@@ -44,7 +44,8 @@ Both syncs share one exclude list: `scripts/deploy-excludes.txt`.
 - `increment-version.py` — semver bumps and the `stamp` command
 - `version.sh` — shell wrapper for `increment-version.py`
 - `scripts/deploy-excludes.txt` — shared S3 sync exclude list
-- `.git/hooks/post-commit` — creates release tags (see below)
+- `scripts/git-hooks/post-commit` — the post-commit hook that tags version
+  bumps; installed as a symlink at `.git/hooks/post-commit` (see below)
 
 The old pre-commit build-bump hook is retired; `.git/hooks/pre-commit` is a
 no-op stub. There is no bump on commit, anywhere.
@@ -66,17 +67,44 @@ python3 increment-version.py stamp --help
 
 ## Release Tagging
 
-To create a release tag, include "release" or "Release" in your commit message.
-The match is a plain substring, so a message that merely mentions "released",
-"the release tap" or an identifier like `releasedAt` mints a tag too — on
-whatever commit it was (a feature branch included). Delete a stray one with
-`git tag -d v<version>` before it gets pushed; the hook only creates local tags.
+A release is the commit that bumps `version` in `version.json` — normally the
+`chore(version): X.Y.Z — ...` commit that follows a merge. The post-commit hook
+compares `version.json` in the new commit with its first parent's and, when the
+version went up, creates an annotated tag `vX.Y.Z` on that commit. The commit
+message plays no part, so the word "release" is safe anywhere. Tags are local
+until pushed:
 
 ```bash
-git commit -m "Add new feature - release"
+python3 increment-version.py minor                      # 2.6.1 -> 2.7.0
+git commit -am "chore(version): 2.7.0 — what shipped"   # hook: tagged v2.7.0
+git push origin main v2.7.0
 ```
 
-The post-commit hook creates a git tag like `v1.9.0` from the version string.
+Details:
+
+- Versions are read from the commits (`git show HEAD:version.json`), not from a
+  working tree, so a bump committed in a linked worktree is tagged correctly.
+- If `vX.Y.Z` already exists the hook says so and leaves it alone. When the
+  tagged commit is no longer an ancestor of `HEAD` (the release commit was
+  amended or rebased) it prints the `git tag -f` that moves the tag.
+- A version *decrease* (reverting a bump) never tags.
+- `git merge` runs no post-commit hook. A bump committed on a branch keeps the
+  tag it got there, and the tag rides into `main` with the merge, fast-forward
+  or not. A squash merge is a new commit, so the hook runs and reports the
+  branch tag as "not an ancestor"; move it with the printed command.
+
+The hook is tracked at `scripts/git-hooks/post-commit`. `.git/hooks/` is not
+under version control, so each clone installs it once:
+
+```bash
+ln -sf ../../scripts/git-hooks/post-commit .git/hooks/post-commit
+```
+
+History: until 2026-09-26 the hook keyed on the substring "release" in the
+commit message, on any branch, reading the main checkout's `version.json`. It
+tagged unrelated commits that happened to mention the word and missed every
+`chore(version)` bump since 2.1.0, so releases 2.1.1 through 2.6.1 were not
+tagged at the time.
 
 ## Checking the current version
 
