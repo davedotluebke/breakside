@@ -28,12 +28,15 @@
  * Still to come: defense entry (4), offense entry + drag gestures (5),
  * score dialog (6), modifier strip / orientation flips / polish (7).
  *
- * Pull reception (start of an O point — store/pointClock.js awaitingPull):
- * the first chip tap / drag / field-first pick records a Pickup event
- * (Catches Pull when armed from the action row, else Picks Up) — the first
- * touch, which starts the armed point clock; Drops Pull writes a
- * thrower-less drop (Turnover.isPullDrop). After a turnover-back the chip
- * tap only re-establishes a holder, with no event, as before.
+ * Pickups: whenever nobody holds the disc on offense — the pull at the
+ * start of an O point (store/pointClock.js awaitingPull), or the loose disc
+ * after a block / stall / opponent error — the first chip tap / drag /
+ * field-first pick records a Pickup event (Catches Pull when armed from the
+ * action row during pull reception, else Picks Up); at the start of the
+ * point that is the first touch, which starts the armed point clock. Drops
+ * Pull writes a thrower-less drop (Turnover.isPullDrop). The holder is
+ * therefore always derived from the event stream; this tab keeps no holder
+ * state of its own.
  */
 import { UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData, currentTeam } from '../store/storage.js';
@@ -127,13 +130,7 @@ const fieldPbp = (function() {
         // shared placement: a player armed (picked) awaiting a field tap
         armed: null,         // Player object | null
         // offense flow
-        pending: null,       // null | 'drop' | 'throwaway' | 'score' | 'catch' (pull reception: next pick = Catches Pull)
-        // Manual holder override — set when the coach picks who picked up the
-        // disc (start of possession / after a block) where the event stream
-        // has no holder. Cleared whenever a real event is added or undone, so
-        // the derived state stays the source of truth otherwise.
-        manualHolder: null,  // Player object | null
-        pickupLoc: null      // {l,w} | null — where the pickup happened (next throw's from)
+        pending: null        // null | 'drop' | 'throwaway' | 'score' | 'catch' (pull reception: next pick = Catches Pull)
     };
     let pullTimer = null;
 
@@ -199,23 +196,11 @@ const fieldPbp = (function() {
         return renderPointKey(game, point);
     }
 
-    // Tracks the point last seen by reconstructState so we can detect
-    // crossing a point boundary and drop stale pickup state. Mirrors the
-    // guard in fullPbp.js: without it, a manual holder / pickup spot tapped
-    // in a prior point can survive into a new point when the point ends via
-    // a path that doesn't run Field's own handlers (Simple-mode "They
-    // Score", narration), so the next point would start with a phantom
-    // holder/disc. Keyed by stablePointKey, NOT object identity — a sync
-    // refresh mid-point must not wipe the coach's pickup selection.
-    let _lastSeenPointKey = null;
+    // Mode and holder come from the shared core. This tab keeps no holder
+    // state of its own (a pickup is an event — see the file header), so
+    // nothing needs resetting at point boundaries or on a cloud refresh.
     function reconstructState() {
         const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
-        const key = stablePointKey(point);
-        if (key !== _lastSeenPointKey) {
-            S.manualHolder = null;
-            S.pickupLoc = null;
-            _lastSeenPointKey = key;
-        }
         if (window.pbpPossession && typeof window.pbpPossession.reconstructState === 'function') {
             return window.pbpPossession.reconstructState();
         }
@@ -244,8 +229,8 @@ const fieldPbp = (function() {
 
     /**
      * The Pickup that established the current holder but has no spot yet
-     * (chip tapped at the start of an O point, field not yet tapped), else
-     * null. The next field tap places it — see handleFieldTap.
+     * (chip tapped, field not yet tapped), else null. The next field tap
+     * places it — see handleFieldTap.
      */
     function unplacedPickup(state) {
         const evs = pointEvents(state.point);
@@ -257,22 +242,17 @@ const fieldPbp = (function() {
         return null;
     }
 
-    /**
-     * Effective holder = event-stream-derived holder, falling back to the
-     * manual pickup override when derivation says "nobody" (start of
-     * possession, after a block, after the pull).
-     */
+    /** The holder, straight from the event stream (a pickup is an event). */
     function effectiveHolder(state) {
-        return state.holder || S.manualHolder;
+        return state.holder;
     }
 
     /**
-     * Where the disc currently is, for use as a throw's `from`: an explicit
-     * pickup spot if one was just recorded, else the last located event's
-     * landing point, else null (no arrow drawn for the first throw).
+     * Where the disc currently is, for use as a throw's `from`: the last
+     * located event's landing point — a placed Pickup's spot, a catch, a
+     * block — else null (no arrow drawn for the first throw).
      */
     function discLoc(state) {
-        if (S.pickupLoc) return S.pickupLoc;
         const le = lastLocatedEvent(state.point);
         return le ? le.to : null;
     }
@@ -281,22 +261,19 @@ const fieldPbp = (function() {
     function clearEntryState() {
         S.armed = null;
         S.pending = null;
-        S.manualHolder = null;
-        S.pickupLoc = null;
     }
 
     // -----------------------------------------------------------------
     // -----------------------------------------------------------------
     // Field rendering: static geometry + located-event arrows/markers/disc,
-    // drawn by the shared renderer. The disc override is this tab's pickup
-    // spot; the fade tracker is this tab's own instance.
+    // drawn by the shared renderer. The disc follows the last located event
+    // (a placed Pickup included); the fade tracker is this tab's own instance.
     // -----------------------------------------------------------------
     function fieldHTML(state) {
         return renderFieldHTML(view(), {
             events: pointEvents(state.point),
             mode: state.mode,
             pointKey: stablePointKey(state.point),
-            discLoc: S.pickupLoc,
             fade,
         });
     }
@@ -484,7 +461,7 @@ const fieldPbp = (function() {
         if (S.pending === 'score') return '<b>Score</b> — pick the receiver, then the spot';
         const holder = effectiveHolder(state);
         const pickup = unplacedPickup(state);
-        if (holder && (pickup || (S.manualHolder && !S.pickupLoc))) {
+        if (holder && pickup) {
             // Holder known but not yet placed — prompt for the spot.
             const verb = (pickup && pickup.pullCatch_flag) ? 'caught it' : 'picked it up';
             return `<b>${holder.name === UNKNOWN_PLAYER ? 'Unknown' : holder.name}</b> has the disc — tap where they ${verb}`;
@@ -788,17 +765,12 @@ const fieldPbp = (function() {
         if (state.mode !== 'offense') return;
         const holder = effectiveHolder(state);
         if (!holder && (!S.pending || S.pending === 'catch')) {
-            if (awaitingPull(state.point)) {
-                // Pull reception: the tap records who caught / picked up the
-                // pull — a Pickup event, the first touch that starts the
-                // clock. The spot comes from the next field tap.
-                commitPickup(p, null, S.pending === 'catch');
-                return;
-            }
-            // Turnover-back: this tap establishes who picked up the disc.
-            // No event is logged; the next throw starts from this player.
-            S.manualHolder = p;
-            render();
+            // Nobody on the disc: the tap records who picked it up — the pull
+            // at the start of the point (the first touch, which starts the
+            // clock) or the loose disc after a block / stall / opponent
+            // error. A Pickup event either way; the spot comes from the next
+            // field tap.
+            commitPickup(p, null, S.pending === 'catch');
             return;
         }
         if (holder && holder.name === name && holder.name !== UNKNOWN_PLAYER) {
@@ -825,28 +797,18 @@ const fieldPbp = (function() {
         if (state.mode !== 'offense') return;
         if (S.pending === 'throwaway') { placeThrowaway(loc); return; }
         if (S.armed) { placeOffense(S.armed, loc); return; }
-        // Pickup placement: a holder was chosen (tapped a chip) at the start of
-        // the possession but hasn't been placed yet. This field tap marks WHERE
-        // they picked it up — it anchors the first throw, it is NOT a throw, so
-        // don't open the receiver popover. A recorded Pickup (pull reception)
-        // takes the spot onto the event; a turnover-back holder keeps it here.
+        // Pickup placement: a Pickup was recorded (chip tapped) but has no
+        // spot yet. This field tap marks WHERE they picked it up — it anchors
+        // the first throw, it is NOT a throw, so don't open the receiver
+        // popover.
         const pickup = unplacedPickup(state);
         if (pickup && !S.pending) { placePickupSpot(pickup, loc); return; }
-        if (S.manualHolder && !S.pickupLoc && !S.pending) {
-            S.pickupLoc = toNorm(clampLoc(loc.l, loc.w));
-            render();
-            return;
-        }
         if (!effectiveHolder(state) && (!S.pending || S.pending === 'catch')) {
             // No holder yet — field-first tap picks who picked it up *and*
             // where, anchoring the next throw at that spot.
             const catching = S.pending === 'catch';
-            popPicker(cx, cy, player => {
-                if (awaitingPull(state.point)) { commitPickup(player, loc, catching); return; }
-                S.manualHolder = player;
-                S.pickupLoc = toNorm(clampLoc(loc.l, loc.w));
-                render();
-            }, catching ? 'Who caught the pull?' : 'Who picked it up?');
+            popPicker(cx, cy, player => commitPickup(player, loc, catching),
+                catching ? 'Who caught the pull?' : 'Who picked it up?');
             return;
         }
         // Nothing armed — field-first popover picks the receiver (or dropper).
@@ -859,9 +821,10 @@ const fieldPbp = (function() {
     // ---- Pull reception ----
 
     /**
-     * Record who caught (pullCatch) / picked up the pull, with the spot when
-     * the gesture supplied one (drag, field-first pick). The Pickup is the
-     * point's first touch — it starts the armed point clock.
+     * Record who caught the pull (pullCatch) / picked up the disc, with the
+     * spot when the gesture supplied one (drag, field-first pick). At the
+     * start of the point the Pickup is the first touch, which starts the
+     * armed point clock.
      */
     function commitPickup(player, loc, pullCatch) {
         if (!requireActiveCoach()) return;
@@ -1177,9 +1140,9 @@ const fieldPbp = (function() {
             return;
         }
         if (S.dPlacing) { cancelDPlacing(); return; }
-        if (S.armed || S.pending || S.manualHolder) {
-            // In-progress offense entry (armed receiver / pending action /
-            // pickup choice) — clear it rather than undoing a committed event.
+        if (S.armed || S.pending) {
+            // In-progress offense entry (armed receiver / pending action) —
+            // clear it rather than undoing a committed event.
             clearEntryState();
             render();
             return;
@@ -1366,16 +1329,8 @@ const fieldPbp = (function() {
         const state = reconstructState();
         if (state.mode !== 'offense') return;
         if (!effectiveHolder(state) && (!S.pending || S.pending === 'catch')) {
-            if (awaitingPull(state.point)) {
-                // Pull reception: player + spot in one gesture → Pickup event.
-                commitPickup(p, loc, S.pending === 'catch');
-                return;
-            }
-            // Turnover-back: dragging a player to a spot records the pickup
-            // (player + location), no event.
-            S.manualHolder = p;
-            S.pickupLoc = toNorm(clampLoc(loc.l, loc.w));
-            render();
+            // Nobody on the disc: player + spot in one gesture → Pickup event.
+            commitPickup(p, loc, S.pending === 'catch');
             return;
         }
         placeOffense(p, loc);

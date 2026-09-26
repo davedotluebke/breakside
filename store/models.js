@@ -619,8 +619,10 @@ class Pull extends Event {
 
 // Pickup event class — a player takes possession of a live disc without a
 // throw from a teammate: catching the pull (pullCatch_flag) or picking it up
-// off the ground (after the pull lands). The Full and Field tabs log it at
-// the start of an offensive point; it is the "first touch" that starts the
+// off the ground — after the pull lands, or after a block / stall / opponent
+// error left it there (an interception needs none: the defender holds). The
+// Full and Field tabs log it whenever nobody holds the disc on offense; at
+// the start of an offensive point it is the "first touch" that starts the
 // point clock (store/pointClock.js). The player lives in `receiver` so every
 // player-reference pipeline (serialization, hydration, erasure, id backfill,
 // lineup correction) covers it without learning a new role name.

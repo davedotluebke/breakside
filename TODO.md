@@ -1041,7 +1041,7 @@ Remaining work:
 
 ## Backlog
 
-- [ ] **Point clock / pull reception follow-ups** (built 2026-09-22, branch `first-touch-clock`; see ARCHITECTURE.md § Point clock and the first touch). D points still start the clock at Start Point, i.e. before the pull — starting it at the recorded Pull would match the O-point rule. Mid-point pickups after a turnover-back still set a tab-local manual holder with no event; logging them as `Pickup` events too would time turnover-to-pickup gaps and retire the manual-holder state. Pull catches (`Pickup.pullCatch_flag`) and dropped pulls (`Turnover.isPullDrop()`) are recorded but not yet counted anywhere in stats. The replay editor cannot edit a `Pickup` (not in its `EDITABLE_TYPES`).
+- [ ] **Point clock / pull reception follow-ups** (built 2026-09-22, branch `first-touch-clock`; see ARCHITECTURE.md § Point clock and the first touch). D points still start the clock at Start Point, i.e. before the pull — starting it at the recorded Pull would match the O-point rule. Mid-point pickups after a block / stall / opponent error log a `Pickup` too since 2026-09-26 (turnover-to-pickup gaps are therefore measurable). Pull catches (`Pickup.pullCatch_flag`) and dropped pulls (`Turnover.isPullDrop()`) are recorded but not yet counted anywhere in stats. The replay editor cannot edit a `Pickup` (not in its `EDITABLE_TYPES`).
 
 - [ ] **Public game listing, admin-only (the "Happening on Breakside" section).**
       The coach-side version shipped 2026-07-26 and was **disabled 2026-09-07**:

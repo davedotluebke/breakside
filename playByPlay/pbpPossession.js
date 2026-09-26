@@ -104,7 +104,7 @@ const pbpPossession = (function() {
                 mode = 'defense';
                 holder = null;
             } else if (lastEvent.type === 'Pickup') {
-                // Our player caught / picked up the pull → offense, they hold.
+                // Our player caught the pull / picked up the disc → offense, they hold.
                 mode = 'offense';
                 holder = lastEvent.receiver || null;
             }
@@ -435,10 +435,12 @@ const pbpPossession = (function() {
     }
 
     /**
-     * Record our player taking possession of the pull: catching it in the
-     * air (opts.pullCatch) or picking it up off the ground. Opens the
-     * offensive possession, establishes the holder (reconstructState reads
-     * it), and — as the first touch — starts an armed point clock. No stats.
+     * Record our player taking possession of a loose disc: the pull — caught
+     * in the air (opts.pullCatch) or picked up off the ground — or the disc
+     * after a block / stall / opponent error (an interception needs none:
+     * the defender already holds). Opens the offensive possession,
+     * establishes the holder (reconstructState reads it), and — at the start
+     * of the point — is the first touch that starts an armed clock. No stats.
      * @param receiver Player (Unknown Player when unseen)
      * @param opts {pullCatch, to, inferred, source}
      */

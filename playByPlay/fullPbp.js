@@ -19,7 +19,9 @@
  *         Drops Pull              → Turnover{drop, thrower=null} (a dropped
  *                                    pull is a drop with no thrower)
  *       Any of these is the point's first touch and starts its armed clock.
- *       tap player name (no holder, after a turnover-back) → set holder, no event
+ *       tap player name (no holder, after a block / stall / opponent
+ *         unforced error) → Pickup{receiver=tapped} opening the new offensive
+ *         possession; an interception already made the defender the holder
  *       tap player name (has holder) → Throw{thrower=holder, receiver=tapped,
  *                                            break_flag if armed}; tapped becomes new holder
  *       tap drop on other row    → Turnover{drop, holder→tapped}
@@ -69,33 +71,13 @@ const fullPbp = (function() {
     // Module-level state
     // -----------------------------------------------------------------
 
-    /**
-     * Manual holder override — set when the user taps a player name while
-     * the event-stream-derived holder is null (start of point or after a
-     * turnover/block). Cleared whenever a real event is added or retracted
-     * so the derivation stays the source of truth otherwise.
-     *
-     * To override an *incorrect* derived holder (e.g. coach mis-entered
-     * the previous receiver), the user should Undo and re-tap.
-     */
-    let manualHolder = null;
-    // Tracks the point last seen by reconstructState so we can detect
-    // crossing a point boundary and clear stale manualHolder. Without this,
-    // a user-tapped holder from the previous point survives into a new point
-    // (especially when the point ends via a path that doesn't pass through
-    // createThrow / createTurnover / createDefense — e.g. Simple-mode "They
-    // Score" or narration) and prevents tapping someone else to indicate the
-    // pull catcher on the new O point. Keyed by game id + point index, NOT
-    // object identity: cloud sync (refreshGameStateFromCloud — the 3s poll
-    // for non-Active-Coach sessions, wake recovery for everyone) REPLACES
-    // game.points with fresh objects, and that must not wipe the coach's
-    // holder selection mid-point.
-    let _lastSeenPointKey = null;
-    function stablePointKey(point) {
-        const game = (typeof currentGame === 'function') ? currentGame() : null;
-        if (!game || !point || !game.points) return null;
-        return `${game.id}#${game.points.indexOf(point)}`;
-    }
+    // The holder always derives from the event stream (pbpPossession
+    // .reconstructState). Whenever it is null on offense — the pull not yet
+    // received, or a block / stall / opponent error that left the disc on
+    // the ground — the first name tap records a Pickup event rather than
+    // setting a tab-local holder, so nothing here has to be reset at point
+    // boundaries or protected from a cloud refresh. To correct a wrong
+    // holder, Undo and re-tap.
 
     /**
      * Whether the next Throw will have its break_flag set. Toggled by the
@@ -128,17 +110,6 @@ const fullPbp = (function() {
     function reconstructState() {
         const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
 
-        // Point-boundary detection: when the stable key (game id + point
-        // index) changes, we've crossed a boundary — drop any stale
-        // manualHolder from the previous point. Done before delegating so
-        // it also covers point-end paths that bypass our event handlers
-        // (Simple-mode "They Score", narration). (main fix 1e995c5)
-        const key = stablePointKey(point);
-        if (key !== _lastSeenPointKey) {
-            manualHolder = null;
-            _lastSeenPointKey = key;
-        }
-
         // Delegate to the shared possession core (playByPlay/pbpPossession.js)
         // so the Full and Field tabs always agree on (mode, holder).
         if (window.pbpPossession && typeof window.pbpPossession.reconstructState === 'function') {
@@ -150,14 +121,9 @@ const fullPbp = (function() {
         return { mode, holder: null, point };
     }
 
-    /**
-     * Effective holder = derived holder, with the manual override applied
-     * only when derived is null (start of possession). This keeps "first
-     * tap establishes holder" working without letting the override stomp
-     * on the event stream.
-     */
+    /** The holder, straight from the event stream (see the note above). */
     function effectiveHolder(state) {
-        return state.holder || manualHolder;
+        return state.holder;
     }
 
     function getMode() {
@@ -764,10 +730,12 @@ const fullPbp = (function() {
 
     /**
      * Tap on a player's name.
-     *   - In O-mode at the start of the point (pull not yet received) → a
-     *     Pickup event: the tapped player picks up the disc, becomes holder,
-     *     and the point clock starts (first touch).
-     *   - In O-mode, no holder after a turnover-back → set holder, no event.
+     *   - In O-mode with no holder → a Pickup event: the tapped player picks
+     *     up the disc and becomes holder. At the start of the point that is
+     *     the pull (and the first touch, which starts the point clock);
+     *     after a block / stall / opponent unforced error it opens the new
+     *     offensive possession. An interception already made the defender
+     *     the holder, so no pickup is asked for there.
      *   - In O-mode, holder exists  → log a Throw (holder → tapped); tapped
      *     becomes new holder.
      *   - In D-mode → noop (the row's Block / Interception buttons carry
@@ -789,15 +757,10 @@ const fullPbp = (function() {
 
         const holder = effectiveHolder(state);
         if (!holder) {
-            if (awaitingPull(state.point)) {
-                // Start of an O point: the tap is the pull being picked up.
-                createPickup(player, {});
-                return;
-            }
-            // Turnover-back with no holder yet — this tap establishes it.
-            // No event logged.
-            manualHolder = player;
-            render();
+            // Nobody on the disc: the tap is this player picking it up — the
+            // pull at the start of the point, or the loose disc after a
+            // block / stall / opponent error. A Pickup event either way.
+            createPickup(player, {});
             return;
         }
 
@@ -985,7 +948,6 @@ const fullPbp = (function() {
 
         // Retract a most-recent inferred event if present.
         if (retractLastInferredEvent()) {
-            manualHolder = null;
             breakArmed = false;
             if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
             render();
@@ -1054,7 +1016,6 @@ const fullPbp = (function() {
             inferred: true
         });
         if (!evt) return;
-        manualHolder = null;
         breakArmed = false;
         render();
     }
@@ -1076,7 +1037,6 @@ const fullPbp = (function() {
         // pass it along on the bus for subscribers.
         const before = lastEventSnapshot();
         undoEvent();
-        manualHolder = null;
         breakArmed = false;
         render();
         if (before && window.narrationEventBus) {
@@ -1114,7 +1074,7 @@ const fullPbp = (function() {
     // These now delegate to the shared possession core
     // (playByPlay/pbpPossession.js): it appends the event, updates stats,
     // advances the score/point, logs, publishes, and persists. Full PBP only
-    // layers on its own UI state (manualHolder / breakArmed) and a re-render.
+    // layers on its own UI state (breakArmed) and a re-render.
 
     function createThrow(thrower, receiver, opts) {
         opts = opts || {};
@@ -1123,7 +1083,6 @@ const fullPbp = (function() {
             breakmark: !!breakArmed
         });
         if (!evt) return;
-        manualHolder = null;
         breakArmed = false;
         render();
     }
@@ -1138,15 +1097,14 @@ const fullPbp = (function() {
             stall: !!opts.stall
         });
         if (!evt) return;
-        manualHolder = null;
         breakArmed = false;
         render();
     }
 
     /**
-     * Our player takes possession of the pull (caught in the air when
-     * `pullCatch`, else picked up). The holder derives from the event, so no
-     * manual override is needed afterwards.
+     * Our player takes possession of a loose disc — the pull (caught in the
+     * air when `pullCatch`, else picked up) or the disc after a block /
+     * stall / opponent error. The holder derives from the event.
      */
     function createPickup(receiver, opts) {
         opts = opts || {};
@@ -1154,7 +1112,6 @@ const fullPbp = (function() {
             pullCatch: !!opts.pullCatch
         });
         if (!evt) return;
-        manualHolder = null;
         breakArmed = false;
         render();
     }
@@ -1176,7 +1133,6 @@ const fullPbp = (function() {
             inferred: !!opts.inferred
         });
         if (!evt) return;
-        manualHolder = null;
         breakArmed = false;
         render();
     }

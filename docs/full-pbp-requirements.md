@@ -56,8 +56,8 @@ The retroactive-modifier UX is **tentative**. We may instead mock and try: pre-a
 ## Start state & transitions
 
 - No holder at point start. On an **offensive** point every row shows `Drops Pull` / `Catches Pull` / `Picks Up` until the first touch is recorded, and a name tap is `Picks Up` (added 2026-09; see ARCHITECTURE.md § Point clock and the first touch). Start Point arms the point clock on this surface; that first touch starts it, so point time excludes the pull's flight.
-- After a turnover-back (no holder, mid-point) the first player-name tap establishes the holder with **no** event logged.
-- After any O↔D flip *except* an interception: no holder; first tap establishes holder with no event logged.
+- After a block / stall / opponent unforced error (no holder, mid-point) the first player-name tap records a `Pickup` in the new offensive possession (2026-09-26); after an interception the defender already holds.
+- After any O↔D flip *except* an interception: no holder; the first tap records a `Pickup` (since 2026-09-26 — it used to establish the holder with no event).
 - The existing pull dialog still gates point entry exactly as today.
 
 ## Cross-cutting behavior
