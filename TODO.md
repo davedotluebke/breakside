@@ -136,23 +136,26 @@ docs/dev-notes/game-flow.md. Follow-ups, none blocking:
       under the log text; today only the screen and the xlsx have them.
 - [ ] **Docs-site clip** for the section (docs/DOCS_SITE.md conventions).
 
-### 📤 Export dialog + Google Sheets (branch `export-dialog`, 2026-09-22)
+### 📤 Export dialog + Google Sheets (shipped to production 2026-09-26, no staging pass)
 
 One dialog behind every Export button: format (Excel / Google Sheets / game
 JSON / game log), scope with optional breakdown, stats level, players. See
 ARCHITECTURE.md § Statistics Export.
 
-- [ ] **Google Cloud setup (Dave).** OAuth web client with the Sheets API
-      enabled, `drive.file` on the consent screen, authorized JS origins for
-      www, staging and the localhost dev ports; paste the client id into
-      `GOOGLE_CLIENT_ID` in `auth/config.js`. Until then the Google Sheets tile
-      is hidden. Test users work in "Testing" mode; submit for brand
-      verification before announcing it.
-- [ ] **End-to-end Sheets test** on staging once the client exists: consent
-      popup on iOS Safari (must open from the click), large all-time
-      workbook, filters and percent formats, the 401 → re-consent path.
+- [x] **Google Cloud setup.** OAuth web client in the Breakside project,
+      Sheets API on, `drive.file` scope (Google: no scope verification needed),
+      support email help@breakside.pro (a Workspace group). Client id is in
+      `auth/config.js`. Tested end to end from localhost on 2026-09-26.
+- [ ] **Submit brand verification** (Google Auth Platform → Branding /
+      Verification Center). Until then the consent popup doesn't show the
+      Breakside name and logo. Check Audience is "In production".
+- [ ] **Field-test on iOS Safari**: the consent popup must open from the
+      Export tap; also a large all-time workbook, filters and percent
+      formats, and re-consent after the hour-long token expires.
 - [ ] **Review the privacy.html Google Sheets paragraph** (Limited Use
       disclosure) and bump its "Last updated" date.
+- [ ] **Frozen panes in the .xlsx**: the vendored SheetJS build can't write
+      them; Google Sheets exports freeze the name columns and header rows.
 - [ ] **Connections sheet for multi-game scopes?** Only single-game exports
       carry it today, though the event screen shows Connections.
 
