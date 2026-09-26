@@ -48,9 +48,17 @@ test('full-01-offense', async ({ page }) => {
   resetCursor();
   await markTrim(page, t0, 'full-01-offense');
 
-  // First tap establishes who has the disc — no event is logged for it.
-  await tapLocator(page, nameBtn(page, 'Alice'), { after: BEAT.notable });
+  // Until the pull is received every row offers Drops Pull / Catches Pull /
+  // Picks Up (2.6.0). Catching it logs a Pickup naming the receiver, makes
+  // them the holder, and starts the point clock; the rows then switch to the
+  // ordinary offense buttons. A beat on the untouched rows first, so the
+  // three pull buttons register before they disappear.
+  await expect(row(page, 'Alice').locator('.full-pbp-row-action-pullcatch')).toBeVisible();
+  await page.waitForTimeout(BEAT.notable);
+  await tapLocator(page, row(page, 'Alice').locator('.full-pbp-row-action-pullcatch'),
+    { after: BEAT.notable });
   await expect(row(page, 'Alice')).toHaveClass(/is-holder/);
+  await expect(page.locator('#fullPbpLogList')).toContainText('catches the pull');
 
   // Every tap after that is a completed pass to the tapped player.
   await tapLocator(page, nameBtn(page, 'Bob'), { after: BEAT.action });

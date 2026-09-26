@@ -76,7 +76,16 @@ test('field-01-offense', async ({ page }) => {
   resetCursor(240, 900);
   await markTrim(page, t0, 'field-01-offense');
 
-  // Pick up near our own end, then work it up the field. Nobody taps a
+  // Until the pull is received the action row reads Drops Pull / Catches Pull
+  // (2.6.0); a plain chip drag would record a Picks Up. Arm Catches Pull, then
+  // drag Alice to where she caught it: a Pickup at that spot, and the point
+  // clock starts. The row then shows the ordinary Drop / Throwaway / Score.
+  await expect(page.locator('.fp-ebtn.catch')).toHaveText('Catches Pull');
+  await page.waitForTimeout(BEAT.notable);
+  await tapLocator(page, page.locator('.fp-ebtn.catch'), { after: BEAT.notable });
+  await expect(page.locator('.fp-ebtn.catch')).toHaveClass(/on/);
+
+  // Catch near our own end, then work it up the field. Nobody taps a
   // modifier: the geometry classifies each throw as it lands. The wide ones to
   // Bob and Carol cross enough of the width to read as swings, and the last one
   // covers enough of the playing field to read as a huck.

@@ -1381,11 +1381,10 @@ and why, and DEMO_VIDEOS.md for how to record.
       round-trip makes the take slow and non-deterministic in a way the rest of
       the series isn't. Worth doing when narration itself is stable enough that
       a scripted phrase reliably produces the same events twice.
-- [ ] **Re-record `full-01-offense` and `field-01-offense`** so they show the
-      pull-reception buttons (Drops Pull / Catches Pull / Picks Up, 2.6.0); the
-      text entries already describe them. Clips for the point clock, standby
-      screen, pinned teams and Email Lists entries are optional (see
-      docs/DOCS_SITE.md).
+- [ ] **Clips for the point clock, standby screen, pinned teams and Email
+      Lists entries** are optional (see docs/DOCS_SITE.md). `full-01-offense`
+      and `field-01-offense` were re-recorded 2026-09-26 and now open on the
+      pull-reception buttons.
 
 ## Future Enhancements
 
