@@ -14,7 +14,7 @@
  * The token lives in memory only (about an hour) and is never sent to our
  * API. Google opens the consent popup from requestAccessToken(), which the
  * browser allows only inside a user gesture — so the dialog preloads the
- * script when it opens (preloadGoogleSheets) and calls getAccessToken()
+ * script once Google Sheets is selected (preloadGoogleSheets) and calls getAccessToken()
  * synchronously from the Export click. See ARCHITECTURE.md § Statistics Export.
  */
 

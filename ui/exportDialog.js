@@ -100,7 +100,6 @@ function openExportDialog(opts) {
         .filter(v => v !== 'sheets' || sheetsOk)
         .filter(v => !(FORMATS.find(f => f.value === v)?.singleGame) || opts.gameFor);
     const formats = FORMATS.filter(f => allowed.includes(f.value));
-    if (sheetsOk && allowed.includes('sheets')) preloadGoogleSheets();
 
     const scopes = opts.scopes || [];
     const startScope = scopes.find(s => s.value === opts.scope && !s.disabled) || scopes.find(s => !s.disabled) || scopes[0];
@@ -228,6 +227,12 @@ function openExportDialog(opts) {
             input.checked = input.value === state.format;
             input.closest('.export-format').classList.toggle('selected', input.checked);
         });
+
+        // Google's sign-in script loads only once Google Sheets is picked, so
+        // opening the dialog for an Excel export never contacts Google
+        // (privacy.html § Who else sees it). Picking the tile is a click
+        // before the Export click, which gives the script time to load.
+        if (state.format === 'sheets') preloadGoogleSheets();
 
         const statsFormat = state.format === 'xlsx' || state.format === 'sheets';
         $('[data-row="level"]').hidden = !statsFormat;

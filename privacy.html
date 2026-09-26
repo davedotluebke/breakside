@@ -65,7 +65,7 @@
                 see it, and what you can do about it. It should take about two minutes to read.
             </p>
             <p>
-                <strong>Last updated: 1 Sep 2026.</strong> Breakside is beta software and
+                <strong>Last updated: 26 Sep 2026.</strong> Breakside is beta software and
                 changes often; this page describes it as of that date.
             </p>
         </div>
@@ -292,12 +292,17 @@
                             which case Google handles that sign-in.
                         </li>
                         <li>
-                            <strong>Google Sheets</strong> — only when you export to Google Sheets. Your
-                            browser sends the stats you chose to export straight to Google, which creates
-                            the sheet in your own Google Drive. Breakside asks Google only for permission
-                            to create files and to open the ones it created (the <code>drive.file</code>
-                            permission); it cannot see anything else in your Drive. The access Google grants
-                            stays in your browser for about an hour and is never sent to Breakside's server.
+                            <strong>Google Sheets</strong> — only if you choose Google Sheets in the
+                            Export dialog. Picking it loads Google's sign-in, and Google asks you to
+                            approve access with a Google account of your choosing (it doesn't have to be
+                            the one you sign in to Breakside with). Your browser then sends the stats you
+                            chose to export, including the players' names, straight to Google, which
+                            creates the sheet in that account's Google Drive. Breakside asks Google only
+                            for permission to create files and to open the ones it created (the
+                            <code>drive.file</code> permission); it cannot see anything else in your Drive.
+                            The access Google grants stays in your browser for about an hour and is never
+                            sent to Breakside's server. Exporting to Excel, JSON or text involves no one
+                            but your own browser.
                             Breakside's use of information received from Google APIs adheres to the
                             <a href="https://developers.google.com/terms/api-services-user-data-policy">Google
                             API Services User Data Policy</a>, including its Limited Use requirements. You can
@@ -357,8 +362,8 @@
                         it, and it would be readable by anyone who found it posted somewhere public.
                     </p>
                     <p>
-                        Links expire — the coach picks between 1 and 365 days, and the default is 7 —
-                        and a coach can revoke a link at any time from the app.
+                        Links expire — the coach picks 1 day, 1 week, 1 month or 6 months, and the
+                        default is a week — and a coach can revoke a link at any time from the app.
                     </p>
                 </div>
             </article>
@@ -373,16 +378,21 @@
                         by name and nickname. Jersey numbers may be added in the future. 
                     </p>
                     <p>
+                        The page also shows the game's stats table and score chart, and anyone
+                        viewing it can export those stats and the game log to a spreadsheet or a
+                        Google Sheet of their own. A share link is only as private as the people
+                        you send it to.
+                    </p>
+                    <p>
                         It deliberately leaves out: the gender-preference marker, field position
                         coordinates, players who never took the field in that game, lines a
                         coach has queued but not yet called, coaches' names, and the free-text
                         descriptions attached to events.
                     </p>
                     <div class="docs-note">
-                        A coach can additionally tick <strong>listed</strong> when creating a share
-                        link, which puts the game on Breakside's public "recent games" list on the
-                        home page — team names and score, with a link to the same public viewer.
-                        This is off by default; a share link on its own stays unlisted.
+                        Share links are never listed anywhere by Breakside. An option to put a shared
+                        game on the home page's public "recent games" list existed earlier; it has been
+                        turned off since 7 Sep 2026.
                     </div>
                 </div>
             </article>
@@ -616,7 +626,7 @@
                     <h3>If you can't do it yourself</h3>
                     <p>
                         The three actions above provide self-service deletion for most erasure scenarios.
-                        <a href="#contact">Contact Breakside</a>) for cases they don't cover, such as:
+                        <a href="#contact">Contact Breakside</a> for cases they don't cover, such as:
                     </p>
                     <ul>
                         <li>
@@ -636,9 +646,10 @@
                     </p>
                     <p>
                         You can also ask for a copy of what's stored about you or your team.
-                        Coaches can mostly do this themselves: the app exports the team roster and
-                        game summaries to a spreadsheet, and a complete game — every event — to a
-                        JSON file.
+                        Coaches can mostly do this themselves: the <strong>Export</strong> button on
+                        the team roster, event roster and game summary saves stats as an Excel file or
+                        a Google Sheet, and for a single game it can also download the complete game —
+                        every event — as a JSON file.
                     </p>
                 </div>
             </article>
