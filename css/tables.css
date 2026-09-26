@@ -749,6 +749,8 @@ td.player-mmp,
 .roster-drops-column,
 .roster-pulls-column,
 .roster-pull-quality-column,
+.roster-pull-catches-column,
+.roster-pull-drops-column,
 .roster-plusminus-column,
 .roster-plusminus-per-point-column {
     text-align: center;

@@ -16,10 +16,16 @@
  * for a role that changes while the sheet is open.
  *
  * Receiver / thrower change (Decision 11): when the next throw in the
- * possession is thrown by someone other than the new receiver — or the
- * previous play left the disc with someone other than the new thrower —
- * an inline confirm offers "change the neighbour" or "insert two Unknown
- * Player passes"; nothing is written until one is picked.
+ * possession is thrown by someone other than the new receiver — of a pass,
+ * or of a Pickup (the pull caught / picked up, or the disc after a block)
+ * — or the previous play left the disc with someone other than the new
+ * thrower — an inline confirm offers "change the neighbour" or "insert two
+ * Unknown Player passes"; nothing is written until one is picked.
+ *
+ * A Pickup edits its receiver, its spot ("Move receiver": the catch /
+ * pick-up point, which cascades into the next release) and, for the
+ * pull reception only, the "caught the pull" flag (off = picked it up
+ * off the ground, which is what a mid-point pick-up always is).
  *
  * Not in v1 (deliberately): flipping score_flag from a spot that enters or
  * leaves the endzone — a goal change moves the score and the point boundary,
@@ -46,7 +52,7 @@ const toast = (msg, kind, ms) => {
 // the replay stack must stay importable by the public share viewer).
 const playerStub = name => ({ name, id: null, gender: Gender.UNKNOWN });
 
-const EDITABLE_TYPES = new Set(['Throw', 'Turnover', 'Defense', 'Pull']);
+const EDITABLE_TYPES = new Set(['Throw', 'Turnover', 'Defense', 'Pull', 'Pickup']);
 const ROLE_LABELS = { thrower: 'Thrower', receiver: 'Receiver', defender: 'Defender', puller: 'Puller' };
 
 /** Which player fields an event exposes for editing, in display order. */
@@ -61,6 +67,7 @@ function rolesFor(ev) {
     }
     if (ev.type === 'Defense') return ev.defender ? ['defender'] : [];
     if (ev.type === 'Pull') return ['puller'];
+    if (ev.type === 'Pickup') return ['receiver'];
     return [];
 }
 
@@ -80,6 +87,7 @@ function spotButtons(ev) {
     }
     if (ev.type === 'Defense') return [{ field: 'to', who: 'defender' }];
     if (ev.type === 'Pull') return [{ field: 'to', who: 'landing spot' }];
+    if (ev.type === 'Pickup') return [{ field: 'to', who: 'receiver' }];
     return [];
 }
 
@@ -185,7 +193,7 @@ function createReplayEditor(ctx) {
                     <div class="rv-edit-chips">${chipsHTML(point, nameOf(ev[role]))}</div>
                 </div>`;
             });
-            const mods = modifiersFor(ev);
+            const mods = modifiersFor(ev, point);
             if (mods.length) {
                 h += `<div class="rv-edit-row" data-role="modifiers">
                     <span class="rv-edit-lbl">Flags</span>

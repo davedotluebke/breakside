@@ -628,7 +628,7 @@ Round-trip tests: `tests/unit/eventTimestamps.test.mjs` (client) and
 - **Pull reception** — `awaitingPull(point)`, an offensive point with no touch yet — is what the Full tab's per-row *Drops Pull / Catches Pull / Picks Up* buttons and the Field tab's *Drops Pull / Catches Pull* action buttons key off. *Catches Pull* and *Picks Up* (and a plain name tap on Full, or a chip tap / drag / field-first pick on Field) write a **`Pickup`** event — the player in `receiver` so every player-reference pipeline (serialization, hydration, erasure, id backfill, lineup correction) covers it, `pullCatch_flag`, optional `to` — which `pbpPossession.reconstructState` reads as "offense, holder = receiver". *Drops Pull* writes a `Turnover{drop}` with **no thrower**: every entry path (Simple, Full, Field, narration) credits Unknown Player for a teammate's throw it cannot attribute, so a null thrower is unambiguous (`Turnover.isPullDrop()`, summarized "X drops the pull"), and `createTurnover` only writes one for `pullDrop: true`. After a block, stall or opponent unforced error — anything but an interception, whose defender already holds — the first name/chip tap likewise writes a `Pickup` into the new offensive possession (2026-09-26), so the holder always derives from the event stream and neither tab keeps holder state of its own.
 - **Persistence.** `clockPending` is serialized only while true and synced like any point field, so a reload or the Line Coach's device still sees the point in progress (`isPointInProgress` checks it) with the header chip at 0:00 in the `timer-pending` style. The pause button shows a play icon and starts the clock by hand — the escape hatch when a point started from Full/Field is then recorded in Simple mode. The zombie normalizer clears the flag on concluded and non-last points; `updateScore` clears it, so a point scored with the clock still armed simply ends untimed.
 - **Undo.** Undoing the first touch re-arms the clock on those surfaces and drops the time since the mistaken tap (`rearmPointClockIfUntouched`, called from `undoEvent`). The point itself survives: `undoLogic` used to remove a point whose only possession emptied, which for the new flow would have meant a mis-tapped pickup costs the point start, so an offensive point is now kept in that case (its empty state is "pull not yet received"); a defensive point whose lone pull is undone is still removed. Backing out an empty point remains the Undo double-tap.
-- **Consumers of the new type.** `deserializeEvent` / `hydrateEvent` know it (an older client cannot load a game containing a `Pickup`; beta compatibility rules apply), the replay engine places a located Pickup's receiver as holder with the disc at the spot, the Field renderer draws a `pickup` marker, and `eventAmend.throwerChainConflict` treats the Pickup as the source of the first throw's holder. Stats count nothing for it yet: pull catches and dropped pulls are derivable from `pullCatch_flag` and `isPullDrop()`.
+- **Consumers of the new type.** `deserializeEvent` / `hydrateEvent` know it (an older client cannot load a game containing a `Pickup`; beta compatibility rules apply), the replay engine places a located Pickup's receiver as holder with the disc at the spot, the Field renderer draws a `pickup` marker, and `eventAmend.throwerChainConflict` treats the Pickup as the source of the first throw's holder. **Stats** (`utils/statAccumulator.js`) count a `pullCatch_flag` Pickup as a *pull catch* and a thrower-less drop as a *pull drop* for the receiver: the dropped pull stays inside Drops and TOs (it is one, and TAs + Drops = TOs still holds), the pair surfaces at the Full level as *Pull catches* / *Pull drops* (§ Stats Columns), and a pick-up off the ground counts nothing. **The replay editor** edits a Pickup like any play: receiver chip, *Move receiver* (the catch / pick-up spot, cascading into the first release) and the *caught the pull* flag, offered only for the pull reception (`eventAmend.isPullReception`, the first touch of an offensive point) since a mid-point pick-up is never a catch; a receiver change chains into the first throw's thrower exactly as a pass's would (retarget / bridge). The Full tab's modifier strip still skips a Pickup (`findLastEditableEvent`), so a mis-tapped *Picks Up* / *Catches Pull* is corrected by Undo or in the Log tab.
 
 Tests: `tests/unit/pointClock.test.mjs`, plus the Pickup cases in the `hydrateEvent`, `replayEngine` and `pointTimerNormalizer` tests.
 
@@ -669,7 +669,8 @@ Layers, bottom-up (all under `playByPlay/`):
 - **`replayEdit.js`** — editing v1 (plan step 8, Decision 11). The ✎ button
   on the transport opens a sheet (paused only; Play / Go live close it) for
   the line under the playhead: roster chips per role (thrower / receiver /
-  defender / puller + Unknown), modifier chips, and per-player spot
+  defender / puller + Unknown; a Pickup's receiver), modifier chips (a
+  Pickup's *caught the pull*, for the pull reception only), and per-player spot
   buttons ("Move thrower" = the release point, "Move receiver" = the catch
   point) that arm a tap-or-drag on the pitch (live preview from the
   mutated event, restored before the write). A receiver change that contradicts the next
@@ -1492,6 +1493,15 @@ two halves always add back up to the whole. They surface at the Full level as
 rating from the D-line points they also took. The team roster screen only shows
 its scoreline-based O/D totals in Game scope; in Event/All-time scope those
 cells read `—`, matching what the plain `+/-` total does there.
+
+**Pull reception.** `pullCatches` (a `Pickup` with `pullCatch_flag`) and
+`pullDrops` (a drop with no thrower — `Turnover.isPullDrop`, inlined because
+the accumulator also sees plain deserialized objects) surface at the Full
+level as `Pull catches` / `Pull drops`, after the pull-quality columns. A
+dropped pull is a turnover and a drop like any other, so it stays inside
+`Drops` and `TOs` and the pair only says which drops were pulls; a pick-up off
+the ground counts nothing. Only the Full and Field tabs record who received
+the pull (§ Point clock and the first touch), so Simple-mode games show zeros.
 
 ### Statistics Export
 

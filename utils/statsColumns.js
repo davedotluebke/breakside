@@ -123,7 +123,13 @@ const STATS_COLUMNS = [
     { key: 'pulls',    label: 'Pulls',    level: StatsLevel.FULL,     type: 'number',
       value: ps => ps.pulls || 0 },
     { key: 'pullQuality', label: 'G/O/P/B', level: StatsLevel.FULL,   type: 'string',
-      value: ps => formatPullQuality(ps) }
+      value: ps => formatPullQuality(ps) },
+    // Pull reception: the pull caught in the air / dropped. A dropped pull
+    // is also inside Drops and TOs; this pair only says which were pulls.
+    { key: 'pullCatches', label: 'Pull catches', level: StatsLevel.FULL, type: 'number',
+      value: ps => ps.pullCatches || 0 },
+    { key: 'pullDrops',   label: 'Pull drops',   level: StatsLevel.FULL, type: 'number',
+      value: ps => ps.pullDrops || 0 }
 ];
 
 /** The on-screen stats columns the given (or active) level shows. */
@@ -169,7 +175,9 @@ const SHEET_STATS_COLUMNS = [
     { label: 'Good',        width: 6,  level: StatsLevel.FULL,     value: ps => ps.pullsGood || 0 },
     { label: 'Okay',        width: 6,  level: StatsLevel.FULL,     value: ps => ps.pullsOkay || 0 },
     { label: 'Poor',        width: 6,  level: StatsLevel.FULL,     value: ps => ps.pullsPoor || 0 },
-    { label: 'Brick',       width: 6,  level: StatsLevel.FULL,     value: ps => ps.pullsBrick || 0 }
+    { label: 'Brick',       width: 6,  level: StatsLevel.FULL,     value: ps => ps.pullsBrick || 0 },
+    { label: 'Pull catches', width: 12, level: StatsLevel.FULL,    value: ps => ps.pullCatches || 0 },
+    { label: 'Pull drops',   width: 10, level: StatsLevel.FULL,    value: ps => ps.pullDrops || 0 }
 ];
 
 /** The xlsx column specs the given (or active) level exports. */
