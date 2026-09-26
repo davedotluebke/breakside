@@ -62,7 +62,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 - **AI Speech Narration** - Tap a mic button and describe plays out loud ("Alice throws to Bob, deep huck to Carla for the score") — speech is transcribed live and converted to structured events on stop. Powered by OpenAI Realtime + Claude Sonnet. Optional, opt-in per session.
 
 ### Real-Time Statistics
-- **Player Performance Metrics** - Track goals, assists, hockey assists (incl. huck hockey assists), turnovers, completed passes, completion/huck percentages, and defensive plays
+- **Player Performance Metrics** - Track goals, assists, hockey assists (incl. huck hockey assists), turnovers, completed passes, completion/huck percentages, defensive plays, and (at the Full stats level) pull catches and dropped pulls
 - **Team Metrics** - Breaks (scoring on defense), clean holds (scoring on offense untouched), and dirty holds (scoring on offense after a turnover), reported per D-point and per D-possession
 - **Set Tracking (zone, vert, ho-stack…)** - Opt in per team, name your own sets, then tag each possession with the set you played. The stats screens and every Excel export gain a **By set** breakdown answering "is it working?" on each set's own terms — `Zone (D): 8/12 stops, 4 breaks`, `Ho-stack (O): 5/8 scored`. Entirely invisible for teams that don't turn it on
 - **Playing Time Tracking** - Monitor exact time on field for each player
