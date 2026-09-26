@@ -142,16 +142,19 @@ function getPointOf(targetEvent) {
 
 /**
  * Check if a point is currently in progress
- * A point is in progress if it has been started (has startTimestamp or possessions)
- * and hasn't ended (winner is empty)
+ * A point is in progress if it has been started (has startTimestamp, an
+ * armed clock waiting for the first touch — store/pointClock.js — or
+ * possessions) and hasn't ended (winner is empty)
  */
 function isPointInProgress() {
     const latestPoint = getLatestPoint();
     if (!latestPoint) { return false; }
     // Point hasn't ended yet
     if (latestPoint.winner !== "") { return false; }
-    // Point has been started (either has timestamp or has possessions)
-    const hasStarted = latestPoint.startTimestamp !== null || latestPoint.possessions.length > 0;
+    // Point has been started (timestamp, armed clock, or possessions)
+    const hasStarted = latestPoint.startTimestamp !== null
+        || latestPoint.clockPending === true
+        || latestPoint.possessions.length > 0;
     return hasStarted;
 }
 

@@ -325,6 +325,7 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 .fp-marker.turn { background: var(--fp-red); }
 .fp-marker.block { background: var(--emerald-btn-deeper); }
 .fp-marker.pull { background: rgba(80, 80, 80, .85); }
+.fp-marker.pickup { background: rgba(37, 99, 235, .55); }   /* pull caught / picked up here */
 /* Rendered markers are draggable for fine-tuning (incl. the fading previous
    possession, so a prior location can still be adjusted during the fade). */
 .fp-marker[data-mkidx] { pointer-events: auto; cursor: grab; touch-action: none; }
@@ -443,6 +444,7 @@ body.fp-landscape-takeover .panel-playByPlayField .panel-title-bar { display: no
 
 /* Offense bottom bar: Drop / Throwaway / Score toggles. `.on` = armed. */
 .fp-ebtn.drop, .fp-ebtn.throwaway { color: var(--pbp-red-ink); }
+.fp-ebtn.catch { color: var(--pbp-green-ink); }   /* Catches Pull (pull reception) */
 .fp-ebtn.score { color: var(--pbp-green-ink); border-color: var(--pbp-score-border); background: var(--color-success-surface-soft); }
 .fp-ebtn.on { background: var(--fp-blue); border-color: var(--fp-blue); color: var(--white); }
 

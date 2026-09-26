@@ -4,6 +4,7 @@
  * Split from the former monolithic gameScreen.js (refactor, no behavior change).
  */
 import { saveAllTeamsData } from '../store/storage.js';
+import { startPointClock } from '../store/pointClock.js';
 import { currentGame, getLatestPoint } from '../utils/helpers.js';
 import { isGameScreenVisible } from '../ui/panelSystem.js';
 import { updateSelectLineTimeCells } from './selectLine.js';
@@ -20,6 +21,11 @@ import { updateSelectLineTimeCells } from './selectLine.js';
  */
 let timerMode = 'point'; // 'point' or 'game'
 let pointTimerPaused = false;
+// Whether the chip last rendered the armed-clock state (point.clockPending,
+// store/pointClock.js). The clock is started by whichever surface records
+// the first touch, so the display loop watches for the transition itself and
+// refreshes the pause button (a play icon while armed) on change.
+let pendingShown = false;
 
 // Timer warning bands (seconds). Point timer counts up: orange past
 // POINT_WARNING_SECS, red past POINT_DANGER_SECS. Cap countdown counts
@@ -44,6 +50,10 @@ const ACTIVE_GAME_WINDOW_MS = 3 * 60 * 60 * 1000;
 // into totalPointTime and nulls startTimestamp; resuming starts a fresh
 // segment. startTimestamp must stay a Date object (storage/sync serialize it
 // via .toISOString()), so always assign `new Date()`, never an ISO string.
+// A third state, `point.clockPending` (armed: the point started on offense
+// but nobody has touched the pull yet), is owned by store/pointClock.js —
+// the first recorded touch starts the segment; here it only shapes the chip
+// and the pause button.
 
 function handleTimerToggle() {
     timerMode = timerMode === 'point' ? 'game' : 'point';
@@ -88,6 +98,19 @@ function handleTimerPauseClick(e) {
     }
 
     const point = getLatestPoint();
+    if (point && point.clockPending && !point.winner) {
+        // Armed, waiting for the first touch: the button is the manual
+        // override (e.g. the coach is recording on the Simple tab after
+        // starting the point from Full / Field). Start the clock now.
+        startPointClock(point);
+        pointTimerPaused = false;
+        updateTimerPauseButton();
+        updateTimerDisplay();
+        if (typeof saveAllTeamsData === 'function') {
+            saveAllTeamsData();
+        }
+        return;
+    }
     if (!point || (!point.startTimestamp && !pointTimerPaused)) {
         // No active point (and not currently paused), nothing to do
         return;
@@ -122,11 +145,16 @@ function updateTimerPauseButton() {
     }
     
     pauseBtn.style.display = 'flex';
+    // A play icon whenever the clock isn't running: paused, or armed and
+    // waiting for the first touch (tapping it then starts the clock).
+    const point = getLatestPoint();
+    const pending = !!(point && point.clockPending && !point.winner);
     const icon = pauseBtn.querySelector('i');
     if (icon) {
-        icon.className = pointTimerPaused ? 'fas fa-play' : 'fas fa-pause';
+        icon.className = (pointTimerPaused || pending) ? 'fas fa-play' : 'fas fa-pause';
     }
     pauseBtn.classList.toggle('paused', pointTimerPaused);
+    pauseBtn.classList.toggle('pending', pending);
 }
 
 /**
@@ -152,7 +180,7 @@ function updateTimerDisplay() {
     if (!valueEl || !labelEl) return;
     
     // Remove all timer state classes
-    valueEl.classList.remove('timer-warning', 'timer-danger', 'timer-negative', 'timer-paused');
+    valueEl.classList.remove('timer-warning', 'timer-danger', 'timer-negative', 'timer-paused', 'timer-pending');
     
     // Get game for cap calculation
     let game;
@@ -167,13 +195,25 @@ function updateTimerDisplay() {
         labelEl.textContent = 'point';
         
         const point = getLatestPoint();
+        // Armed clock (offense, nobody has touched the pull yet): 0:00 in the
+        // waiting style. An armed clock is by definition not paused — clear a
+        // pause flag left over from before an undo re-armed it — and refresh
+        // the pause button when the armed state changes under us.
+        const pending = !!(point && point.clockPending && !point.winner);
+        if (pending && pointTimerPaused) pointTimerPaused = false;
+        if (pending !== pendingShown) {
+            pendingShown = pending;
+            updateTimerPauseButton();
+        }
         // Elapsed = accumulated active time (totalPointTime) plus the current
         // running segment. A completed point (endTimestamp set) or a paused
         // point has its full active time already banked into totalPointTime,
         // so it shows that frozen value rather than ticking against `now`.
         let elapsedMs = null;
         if (point) {
-            if (point.endTimestamp) {
+            if (pending) {
+                elapsedMs = null;   // waits for the first touch
+            } else if (point.endTimestamp) {
                 elapsedMs = point.totalPointTime || 0;
             } else if (point.startTimestamp && !pointTimerPaused) {
                 elapsedMs = (point.totalPointTime || 0) +
@@ -198,6 +238,7 @@ function updateTimerDisplay() {
             }
         } else {
             valueEl.textContent = '0:00';
+            if (pending) valueEl.classList.add('timer-pending');
         }
     } else {
         // Show game clock (with cap countdown if applicable)

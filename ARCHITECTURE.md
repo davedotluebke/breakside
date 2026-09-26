@@ -475,7 +475,7 @@ Three layers, in order from least to most invasive:
 The in-game UI is organized into five tabs, switched via a segmented control in the orange header:
 
 - **Simple** — The legacy Key Play–driven Play-by-Play panel only, full-screen. Streamlined buttons (We Score / They Score / Key Play / Undo / Sub / Events / More) plus the Key Play modal for granular event entry.
-- **Full** — The new every-event-entry panel (`playByPlay/fullPbp.js`), full-screen. Player rows + per-row contextual action buttons (drop / score / throwaway / break / block / interception / …), a horizontal modifier-flag chip strip below, a bottom-row "They turnover / Events / They score" action set in D-mode, and a flex-sized mini event log at the bottom. See **docs/full-pbp-requirements.md** for the full design and **Full PBP integration** below for the runtime architecture.
+- **Full** — The new every-event-entry panel (`playByPlay/fullPbp.js`), full-screen. Player rows + per-row contextual action buttons (drop / score / throwaway / break / block / interception / …, and Drops Pull / Catches Pull / Picks Up while an offensive point's pull is unreceived — see *Point clock and the first touch* below), a horizontal modifier-flag chip strip below, a bottom-row "They turnover / Events / They score" action set in D-mode, and a flex-sized mini event log at the bottom. See **docs/full-pbp-requirements.md** for the full design and **Full PBP integration** below for the runtime architecture.
 - **Line** — Select Next Line panel only, full-screen (the O/D toggle switches the single panel between combined, O, D, and On Deck views).
 - **Log** — Game Log (Follow) panel only, full-screen.
 - **All** — The full vertical panel stack with drag-to-resize (see next section). Default tab. Uses Simple PBP — the Full PBP layout is excluded from All-view because its custom-shaped panel doesn't compose well with the drag-to-resize stack.
@@ -617,6 +617,18 @@ possession carries `startedAt`. Both were added 2026-09 for the replay viewer
 Round-trip tests: `tests/unit/eventTimestamps.test.mjs` (client) and
 `test_event_timestamps_survive_sync_round_trip` in
 `breakside_server/test_api.py` (server passes both fields through untouched).
+
+### Point clock and the first touch (`Point.clockPending`, `Pickup`)
+
+`Point.startTimestamp` is the point clock's running-segment marker and `totalPointTime` its banked play time (game/gameTimer.js). On an offensive point the pull is still in the air at Start Point, so the Full and Field tabs **arm** the clock instead of starting it (`point.clockPending = true`, no `startTimestamp`) and the first recorded touch starts it. Point time, and therefore per-player playing time, then measures actual play. The rules and the pure helpers are in `store/pointClock.js` (a leaf module, like the zombie normalizer, so game/, playByPlay/ and narration/ share it without cycles).
+
+- **The first touch** is any `Throw` / `Turnover` / `Defense` / `Pull` / `Pickup` appended through `pbpPossession.create*` or the narration engine (`startPointClock`). `Other` / `Violation` never start the clock. Simple mode has no pickup tap, so a point started with the Simple (or All) tab as the recording surface starts its clock at Start Point as before; defensive points always do (`clockWaitsForFirstTouch`). The surface is `getCurrentMode()` at Start Point, which already maps the Line tab to the last PBP tab.
+- **Pull reception** — `awaitingPull(point)`, an offensive point with no touch yet — is what the Full tab's per-row *Drops Pull / Catches Pull / Picks Up* buttons and the Field tab's *Drops Pull / Catches Pull* action buttons key off. *Catches Pull* and *Picks Up* (and a plain name tap on Full, or a chip tap / drag / field-first pick on Field) write a **`Pickup`** event — the player in `receiver` so every player-reference pipeline (serialization, hydration, erasure, id backfill, lineup correction) covers it, `pullCatch_flag`, optional `to` — which `pbpPossession.reconstructState` reads as "offense, holder = receiver". *Drops Pull* writes a `Turnover{drop}` with **no thrower**: every entry path (Simple, Full, Field, narration) credits Unknown Player for a teammate's throw it cannot attribute, so a null thrower is unambiguous (`Turnover.isPullDrop()`, summarized "X drops the pull"), and `createTurnover` only writes one for `pullDrop: true`. After a block, stall or opponent unforced error — anything but an interception, whose defender already holds — the first name/chip tap likewise writes a `Pickup` into the new offensive possession (2026-09-26), so the holder always derives from the event stream and neither tab keeps holder state of its own.
+- **Persistence.** `clockPending` is serialized only while true and synced like any point field, so a reload or the Line Coach's device still sees the point in progress (`isPointInProgress` checks it) with the header chip at 0:00 in the `timer-pending` style. The pause button shows a play icon and starts the clock by hand — the escape hatch when a point started from Full/Field is then recorded in Simple mode. The zombie normalizer clears the flag on concluded and non-last points; `updateScore` clears it, so a point scored with the clock still armed simply ends untimed.
+- **Undo.** Undoing the first touch re-arms the clock on those surfaces and drops the time since the mistaken tap (`rearmPointClockIfUntouched`, called from `undoEvent`). The point itself survives: `undoLogic` used to remove a point whose only possession emptied, which for the new flow would have meant a mis-tapped pickup costs the point start, so an offensive point is now kept in that case (its empty state is "pull not yet received"); a defensive point whose lone pull is undone is still removed. Backing out an empty point remains the Undo double-tap.
+- **Consumers of the new type.** `deserializeEvent` / `hydrateEvent` know it (an older client cannot load a game containing a `Pickup`; beta compatibility rules apply), the replay engine places a located Pickup's receiver as holder with the disc at the spot, the Field renderer draws a `pickup` marker, and `eventAmend.throwerChainConflict` treats the Pickup as the source of the first throw's holder. Stats count nothing for it yet: pull catches and dropped pulls are derivable from `pullCatch_flag` and `isPullDrop()`.
+
+Tests: `tests/unit/pointClock.test.mjs`, plus the Pickup cases in the `hydrateEvent`, `replayEngine` and `pointTimerNormalizer` tests.
 
 ### Replay viewer (Log tab field playback)
 
@@ -1374,7 +1386,7 @@ The whole feature is **invisible until a team opts in**.
   surface can drift from another. Simple mode is deliberately not tagged.
   Missing fields default to `false` / `[]` / `null`, so legacy games need no
   migration.
-  - Possessions are created on the first recorded event, so the control appears
+  - Possessions are created on the first recorded event (on an O point in Full / Field mode that is now the pull reception — the `Pickup` or dropped pull), so the control appears
     after the pull on a D point and after the first throw on an O point. A set
     tap never materializes a possession — empty possessions carry their own
     undo/cleanup edge cases.

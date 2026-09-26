@@ -12,7 +12,7 @@
 import {
     Role, Gender, PlayerPosition, DefaultLine, UNKNOWN_PLAYER,
     Player, Game, Team, TournamentEvent,
-    Throw, Turnover, Violation, Defense, Other, Pull,
+    Throw, Turnover, Violation, Defense, Other, Pull, Pickup,
     Possession, Point,
 } from './models.js';
 import { getPlayerFromName, currentGame } from '../utils/helpers.js';
@@ -169,6 +169,9 @@ function serializeGame(game) {
             endTimestamp: point.endTimestamp ? point.endTimestamp.toISOString() : null,
             totalPointTime: point.totalPointTime,
             lastPauseTime: point.lastPauseTime ? (typeof point.lastPauseTime === 'string' ? point.lastPauseTime : point.lastPauseTime.toISOString()) : null,
+            // Clock armed, waiting for the first touch (store/pointClock.js).
+            // Written only while true so stored games stay byte-identical.
+            ...(point.clockPending ? { clockPending: true } : {}),
             substitutedOutPlayers: point.substitutedOutPlayers || [],  // Players subbed out mid-point
             substitutedInPlayers: point.substitutedInPlayers || [],    // Players subbed in mid-point
             playerStatsCounted: !!point.playerStatsCounted,  // live counters applied id-aware (pointStats.js)
@@ -316,6 +319,7 @@ function deserializeEvent(eventData) {
         case 'Violation': event = new Violation({ /* default parameters */ }); break;
         case 'Defense': event = new Defense({ /* default parameters */ }); break;
         case 'Pull': event = new Pull({ /* default parameters */ }); break;
+        case 'Pickup': event = new Pickup({ /* default parameters */ }); break;
         case 'Other': event = new Other({ /* default parameters */ }); break;
         default:
             throw new Error(`Unknown event type: ${eventData.type}`);
@@ -365,6 +369,11 @@ function deserializeEvent(eventData) {
         case 'Pull':
             if (eventData.puller || eventData.pullerId) {
                 event.puller = resolvePlayerReference(eventData.pullerId, eventData.puller);
+            }
+            break;
+        case 'Pickup':
+            if (eventData.receiver || eventData.receiverId) {
+                event.receiver = resolvePlayerReference(eventData.receiverId, eventData.receiver);
             }
             break;
         // Add other event types here, if they refer to players
@@ -475,6 +484,7 @@ function deserializePointsFromServer(pointsData) {
         point.winner = pointData.winner;
         point.totalPointTime = pointData.totalPointTime || 0;
         point.lastPauseTime = pointData.lastPauseTime ? new Date(pointData.lastPauseTime) : null;
+        point.clockPending = pointData.clockPending === true;  // absent on legacy data
         point.substitutedOutPlayers = pointData.substitutedOutPlayers || [];  // Players subbed out mid-point
         point.substitutedInPlayers = pointData.substitutedInPlayers || [];    // Players subbed in mid-point
         point.playerStatsCounted = !!pointData.playerStatsCounted;  // absent on pre-fix data → legacy revert path

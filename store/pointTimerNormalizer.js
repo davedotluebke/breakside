@@ -24,6 +24,12 @@
  * totalPointTime is never touched. A live mid-game reload (last point,
  * unconcluded, fresh marker) passes through untouched, so in-progress timers
  * survive app restarts and cloud refreshes exactly as before.
+ *
+ * An armed clock (`clockPending`, store/pointClock.js — the point started
+ * but nobody has touched the pull yet) is cleared under the first two rules
+ * only: it has no marker to judge staleness by, and it inflates nothing (it
+ * reads 0:00 until touched), so an abandoned pending point is merely the
+ * game's live last point, as any untouched in-progress point already is.
  */
 
 export const STALE_RUNNING_TIMER_MS = 12 * 60 * 60 * 1000;
@@ -40,9 +46,14 @@ export function normalizePointTimers(points, now = Date.now()) {
     if (!Array.isArray(points)) { return 0; }
     let repaired = 0;
     points.forEach((point, index) => {
-        if (!point || !point.startTimestamp) { return; }
+        if (!point) { return; }
         const concluded = !!point.winner || !!point.endTimestamp;
         const hasLaterPoint = index < points.length - 1;
+        if (point.clockPending && (concluded || hasLaterPoint)) {
+            point.clockPending = false;
+            repaired += 1;
+        }
+        if (!point.startTimestamp) { return; }
         const startMs = new Date(point.startTimestamp).getTime();
         const stale = !Number.isFinite(startMs) ||
             Math.abs(now - startMs) > STALE_RUNNING_TIMER_MS;

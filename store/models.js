@@ -417,7 +417,19 @@ class Turnover extends Event {
         this.from = from;   // {l, w} | null
         this.to = to;       // {l, w} | null
     }
-    
+
+    /**
+     * A drop with no thrower is a dropped pull: nobody on our team threw it.
+     * Every entry path (Simple, Full, Field, narration) credits Unknown Player
+     * for a teammate's throw it can't attribute, so a null thrower is
+     * unambiguous and no separate flag is stored. pbpPossession.createTurnover
+     * enforces the convention: a drop is only written thrower-less when the
+     * caller says `pullDrop`.
+     */
+    isPullDrop() {
+        return !!this.drop_flag && !this.thrower;
+    }
+
     // Override summarize for Turnover events
     summarize() {
         const prefix = this.inferred_flag ? '(inferred) ' : '';
@@ -426,6 +438,7 @@ class Turnover extends Event {
         const hucktxt = this.huck_flag ? 'on a huck' : '';
         const defensetxt = this.defense_flag ? 'due to good defense' : '';
         if (this.throwaway_flag)    { return `${prefix}${t} throws it away ${hucktxt} ${defensetxt}`; }
+        if (this.isPullDrop())      { return `${prefix}${r} drops the pull`; }
         if (this.drop_flag){ return `${prefix}${r} misses the catch from ${t} ${hucktxt} ${defensetxt}`; }
         if (this.defense_flag)  { return `${prefix}Turnover ${defensetxt}`; }
         if (this.stall_flag)        { return `${prefix}${t} gets stalled ${defensetxt}`; }
@@ -604,6 +617,34 @@ class Pull extends Event {
     }
 }
 
+// Pickup event class — a player takes possession of a live disc without a
+// throw from a teammate: catching the pull (pullCatch_flag) or picking it up
+// off the ground — after the pull lands, or after a block / stall / opponent
+// error left it there (an interception needs none: the defender holds). The
+// Full and Field tabs log it whenever nobody holds the disc on offense; at
+// the start of an offensive point it is the "first touch" that starts the
+// point clock (store/pointClock.js). The player lives in `receiver` so every
+// player-reference pipeline (serialization, hydration, erasure, id backfill,
+// lineup correction) covers it without learning a new role name.
+class Pickup extends Event {
+    constructor({receiver = null, pullCatch = false, to = null}) {
+        super('Pickup');
+        this.receiver = receiver;       // Player object (Unknown Player when unseen)
+        this.pullCatch_flag = pullCatch; // caught the pull in the air, vs picked it up
+        // Field-position (canonical coords; see playByPlay/fieldPbp.js):
+        // where the disc was caught / picked up. Optional. A Pickup has no
+        // `from`; the next throw is released from this `to`.
+        this.to = to;       // {l, w} | null
+    }
+
+    // Override summarize for Pickup events
+    summarize() {
+        const prefix = this.inferred_flag ? '(inferred) ' : '';
+        const name = this.receiver ? this.receiver.name : UNKNOWN_PLAYER;
+        return `${prefix}${name} ${this.pullCatch_flag ? 'catches the pull' : 'picks up the disc'}`;
+    }
+}
+
 // Which play-by-play surface ('simple' | 'full' | 'field') is active right now,
 // per the UI. Returns null when the panel system hasn't loaded yet (e.g. during
 // deserialization), in which case nothing is stamped. Lives here so addEvent can
@@ -683,6 +724,10 @@ class Point {
         this.endTimestamp = null;
         this.totalPointTime = 0;  // Accumulated time tracking
         this.lastPauseTime = null;  // Track when the point was last paused
+        // True while a started offensive point waits for its first touch to
+        // start the clock (store/pointClock.js). Persisted; absent/false on
+        // points recorded before the field existed.
+        this.clockPending = false;
         this.substitutedOutPlayers = [];  // Players who were subbed out mid-point (for injury/fatigue)
         this.substitutedInPlayers = [];   // Players who came in mid-point (partial point, like subbed-out)
         // True once updateScore applied per-player live counters via id-aware
@@ -796,7 +841,7 @@ function isTestGame(game) {
 // replayEngine.js) only needs events that summarize() and carry {name}
 // player refs — that is what these build. Pure: no globals, no roster.
 // =============================================================================
-const EVENT_CLASSES = { Throw, Turnover, Violation, Defense, Pull, Other };
+const EVENT_CLASSES = { Throw, Turnover, Violation, Defense, Pull, Pickup, Other };
 const EVENT_PLAYER_REFS = [['thrower', 'throwerId'], ['receiver', 'receiverId'],
     ['defender', 'defenderId'], ['puller', 'pullerId'], ['assist', 'assistId']];
 
@@ -846,7 +891,7 @@ function hydrateGame(raw, resolveName) {
 export {
     Role, Gender, PlayerPosition, DefaultLine, UNKNOWN_PLAYER, stampEvent,
     Player, Game, Team, TournamentEvent,
-    Event, Throw, Turnover, Violation, Defense, Other, Pull,
+    Event, Throw, Turnover, Violation, Defense, Other, Pull, Pickup,
     Possession, Point,
     createRosterSnapshot, captureCurrentMode,
     generateShortId, generatePlayerId, generateTeamId, generateEventId,

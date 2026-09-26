@@ -187,8 +187,8 @@ export function holderSourceOf(point, event) {
 /**
  * The mirror of receiverChainConflict: would giving `event` (a Throw or
  * Turnover) the thrower `newThrower` contradict the previous play? The
- * previous Throw's receiver — or an interception's defender — is whoever
- * releases this one.
+ * previous Throw's receiver — an interception's defender, or the receiver
+ * of the Pickup that opened the point — is whoever releases this one.
  * @returns {{ prev: object, field: 'receiver'|'defender', holder: string }|null}
  *   the conflicting previous event, the field on it that names the
  *   holder, and that holder's name; null when consistent
@@ -200,6 +200,7 @@ export function throwerChainConflict(point, event, newThrower) {
     let field = null;
     if (prev.type === 'Throw' && !prev.score_flag) field = 'receiver';
     else if (prev.type === 'Defense' && prev.interception_flag && prev.defender) field = 'defender';
+    else if (prev.type === 'Pickup' && prev.receiver) field = 'receiver';
     if (!field) return null;
     const holder = nameOf(prev[field]);
     const thrower = nameOf(newThrower);

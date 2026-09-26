@@ -26,6 +26,7 @@ import {
 } from './pointManagement.js';
 import { showControllerToast } from './controllerState.js';
 import { applyUndoToGame } from './undoLogic.js';
+import { rearmPointClockIfUntouched } from '../store/pointClock.js';
 import { log } from '../utils/logger.js';
 
 let appVersion = null;
@@ -214,6 +215,10 @@ function updateScore(winner) {
         point.totalPointTime += (new Date() - point.startTimestamp);
         point.startTimestamp = null;
     }
+    // A clock still armed at the score (nobody touched the pull — a
+    // mis-entry, or Simple-mode recording after a Full/Field start) has
+    // nothing to bank; the point just ends untimed.
+    point.clockPending = false;
     point.endTimestamp = new Date();
     point.winner = winner; // Setting the winning team for the current point
     currentGame().scores[winner]++;
@@ -451,6 +456,17 @@ function undoEvent() {
         resolvePlayer: getPlayerFromName,
         revertPointScore,
     });
+
+    // Undoing the first touch of an offensive point puts the clock back to
+    // waiting for it (store/pointClock.js): the time since the mistaken tap
+    // is dropped. No-op unless the surviving point has no touch left, on a
+    // surface that defers the clock.
+    if (result.outcome !== 'none' && !result.pointRemoved) {
+        const mode = (typeof window.getCurrentMode === 'function') ? window.getCurrentMode() : 'simple';
+        if (rearmPointClockIfUntouched(getLatestPoint(), mode)) {
+            log('⏱ Point clock re-armed — first touch undone');
+        }
+    }
 
     if (result.outcome === 'score-reverted') {
         if (result.pointRemoved) moveToNextPoint();

@@ -30,6 +30,7 @@ import { updateScore } from '../game/gameLogic.js';
 import { moveToNextPoint } from '../game/pointManagement.js';
 import { ensurePossessionExists } from '../playByPlay/keyPlayDialog.js';
 import { closePullDialog } from '../playByPlay/pullDialog.js';
+import { startPointClock } from '../store/pointClock.js';
 import { advancedSettings } from '../settings/advancedSettings.js';
 import { summarizeDrops } from './dropReasons.js';
 import { narrationEventBus } from './eventBus.js';
@@ -289,6 +290,7 @@ Just listen. Transcription happens automatically.`;
         });
         const possession = ensurePossessionExists(true);
         possession.addEvent(evt);
+        startPointClock(getLatestPoint());   // first touch starts an armed point clock
 
         // Stats updates — match keyPlayDialog behaviour
         if (thrower) thrower.completedPasses = (thrower.completedPasses || 0) + 1;
@@ -332,6 +334,7 @@ Just listen. Transcription happens automatically.`;
         });
         const possession = ensurePossessionExists(true);
         possession.addEvent(evt);
+        startPointClock(getLatestPoint());   // first touch starts an armed point clock
 
         const provId = nextProvisionalId();
         provisionalEvents.push({ id: provId, event: evt, possession });
@@ -357,6 +360,7 @@ Just listen. Transcription happens automatically.`;
         });
         const possession = ensurePossessionExists(false);
         possession.addEvent(evt);
+        startPointClock(getLatestPoint());   // first touch starts an armed point clock
 
         const provId = nextProvisionalId();
         provisionalEvents.push({ id: provId, event: evt, possession, isCallahan: !!args.callahan });
@@ -417,6 +421,7 @@ Just listen. Transcription happens automatically.`;
         // opponent has the disc.
         const possession = ensurePossessionExists(false);
         possession.addEvent(evt);
+        startPointClock(getLatestPoint());   // first touch starts an armed point clock
 
         const provId = nextProvisionalId();
         provisionalEvents.push({ id: provId, event: evt, possession });
