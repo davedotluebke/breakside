@@ -366,7 +366,7 @@ same day. No backend change (no server restart).
   the view is NOT remounted, so the playhead survives). Both gate on
   `!isViewer()`.
 - `window.showControllerToast` is a new window survivor (controllerState).
-- 2026-09-26 (`pull-reception-stats`): a `Pickup` — the pull caught / picked
+- 2026-09-26 (`pull-reception-stats`, shipped in 2.6.2): a `Pickup` — the pull caught / picked
   up, or the disc after a block (2.6.0) — is editable too: receiver chip
   (chaining into the first throw's thrower like a pass's receiver), *Move
   receiver*, and the *caught the pull* flag for the pull reception only
