@@ -153,8 +153,9 @@ ARCHITECTURE.md § Statistics Export.
 - [ ] **Field-test on iOS Safari**: the consent popup must open from the
       Export tap; also a large all-time workbook, filters and percent
       formats, and re-consent after the hour-long token expires.
-- [ ] **Review the privacy.html Google Sheets paragraph** (Limited Use
-      disclosure) and bump its "Last updated" date.
+- [x] **Review the privacy.html Google Sheets paragraph** (Limited Use
+      disclosure) and bump its "Last updated" date. Done 2026-09-26 (1a2bba7):
+      Google's sign-in script now loads only once Google Sheets is picked.
 - [ ] **Frozen panes in the .xlsx**: the vendored SheetJS build can't write
       them; Google Sheets exports freeze the name columns and header rows.
 - [ ] **Connections sheet for multi-game scopes?** Only single-game exports
