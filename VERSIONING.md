@@ -66,7 +66,11 @@ python3 increment-version.py stamp --help
 
 ## Release Tagging
 
-To create a release tag, include "release" or "Release" in your commit message:
+To create a release tag, include "release" or "Release" in your commit message.
+The match is a plain substring, so a message that merely mentions "released",
+"the release tap" or an identifier like `releasedAt` mints a tag too — on
+whatever commit it was (a feature branch included). Delete a stray one with
+`git tag -d v<version>` before it gets pushed; the hook only creates local tags.
 
 ```bash
 git commit -m "Add new feature - release"

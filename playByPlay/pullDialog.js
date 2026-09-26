@@ -11,6 +11,7 @@ import {
 import { showControllerToast } from '../game/controllerState.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { getCurrentMode } from '../ui/panelSystem.js';
+import { startPointClock } from '../store/pointClock.js';
 import { log } from '../utils/logger.js';
 
 // Track Pull dialog state
@@ -25,6 +26,7 @@ let pullHangStart = 0;     // performance.now() at start
 let pullHangMs = null;     // captured hang in ms | null
 let pullHangRunning = false;
 let pullHangTimer = null;  // 100ms label updater while running
+let pullThrownAt = null;  // Date.now() at the stopwatch's release tap | null — dates the point clock's start
 
 // Defensive sets are NOT picked here. The picker used to live in this dialog
 // and was removed 2026-08-09: it overflowed the dialog on a phone, and at pull
@@ -53,6 +55,7 @@ function togglePullHang() {
     } else {
         pullHangRunning = true;
         pullHangStart = performance.now();
+        pullThrownAt = Date.now();
         pullHangMs = null;
         if (pullHangTimer) clearInterval(pullHangTimer);
         pullHangTimer = setInterval(refreshPullHangBtn, 100);
@@ -63,6 +66,7 @@ function togglePullHang() {
 function resetPullHang() {
     pullHangRunning = false;
     pullHangMs = null;
+    pullThrownAt = null;
     if (pullHangTimer) { clearInterval(pullHangTimer); pullHangTimer = null; }
     refreshPullHangBtn();
 }
@@ -514,6 +518,13 @@ function createPullEvent() {
     if (typeof getCurrentMode === 'function') { firstPossession.addMode(getCurrentMode()); }
     logEvent(pullEvent.summarize());
 
+    // The pull is a D point's first touch: start the armed clock, dated by
+    // the stopwatch's release tap when the coach timed the hang, else now
+    // (store/pointClock.js). No-op if the clock already runs.
+    if (startPointClock(point, pullThrownAt ? new Date(pullThrownAt) : new Date())) {
+        logEvent('Point clock started');
+    }
+
     // Sync to cloud for live viewer updates
     if (typeof saveAllTeamsData === 'function') {
         saveAllTeamsData();
@@ -528,6 +539,16 @@ function createPullEvent() {
 function closePullDialog() {
     log('closePullDialog() called');
     document.getElementById('pullDialog').style.display = 'none';
+
+    // Dismissing the dialog (X, tap outside, a narrated pull) is the point's
+    // first touch as well: the pull was thrown whether or not it was
+    // recorded. A release tap dates it; otherwise the clock starts now.
+    // No-op when Proceed already started it or the point isn't armed.
+    const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
+    if (startPointClock(point, pullThrownAt ? new Date(pullThrownAt) : new Date())) {
+        logEvent('Point clock started');
+        if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    }
 
     // Discard any running/captured hang time (cancel path; committed pulls
     // have already read pullHangMs in createPullEvent).

@@ -139,13 +139,17 @@ const pbpPossession = (function() {
     }
 
     /**
-     * First touch: an armed point clock (offense, waiting for the pull to be
-     * caught / picked up / dropped) starts on the first recorded touch of any
-     * kind. Every creator below calls this right after appending its event.
+     * First touch: an armed point clock (offense waiting for the pull to be
+     * caught / picked up / dropped, defense waiting for the pull) starts on
+     * the first recorded touch of any kind. Every creator below calls this
+     * right after appending its event.
+     * @param atMs epoch ms the touch actually happened, when the caller knows
+     *   it (a pull's stopwatch release tap); else now
      */
-    function touch() {
+    function touch(atMs) {
         const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
-        if (startPointClock(point)) {
+        const when = (typeof atMs === 'number' && atMs > 0) ? new Date(atMs) : new Date();
+        if (startPointClock(point, when)) {
             if (typeof logEvent === 'function') logEvent('Point clock started');
         }
     }
@@ -403,8 +407,11 @@ const pbpPossession = (function() {
     /**
      * Record a pull. Lives in a defensive possession (we just pulled; the
      * opponent now has the disc). Does NOT change score or advance the point.
+     * It is a D point's first touch: an armed clock starts, dated by
+     * `thrownAt` (epoch ms of the stopwatch's release tap) when given.
      * @param puller Player|null
-     * @param opts {from, to, hang, brick, roller, io, oi, flick, quality}
+     * @param opts {from, to, hang, brick, roller, io, oi, flick, quality,
+     *              thrownAt}
      */
     function createPull(puller, opts) {
         opts = opts || {};
@@ -425,7 +432,7 @@ const pbpPossession = (function() {
 
         const possession = ensurePossessionExists(false);
         possession.addEvent(evt);
-        touch();
+        touch(opts.thrownAt);
 
         if (typeof logEvent === 'function') logEvent(evt.summarize());
         publishAdded(evt, opts.source);

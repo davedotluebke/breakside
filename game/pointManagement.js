@@ -150,10 +150,11 @@ function startNextPoint() {
     const point = new Point(activePlayersForThisPoint, startPointOn);
     currentGame().points.push(point);
 
-    // Start timing — or, on offense with the Full / Field tab as the
-    // recording surface, arm the clock and let the first touch (the pickup /
-    // pull catch / dropped pull those tabs record) start it, so point time
-    // excludes the pull's flight. store/pointClock.js has the rules. The
+    // Start timing — or arm the clock and let the first touch start it, so
+    // point time excludes the pull's flight: on defense the pull itself
+    // (recorded from the pull dialog / in-field flow that opens below), on
+    // offense the pickup / pull catch / dropped pull the Full and Field tabs
+    // record. store/pointClock.js has the rules. The
     // surface is read before the Line-tab switch below, but getCurrentMode
     // already maps 'line' to the last PBP tab, which is where that switch
     // lands, so the answer is the same.

@@ -59,15 +59,29 @@ test('awaitingPull: an offensive point with no touch yet, whatever annotations i
     assert.equal(pointHasTouch(makePoint('offense', [new Other({ injury: true })])), false);
 });
 
-test('clockWaitsForFirstTouch: offense on the Full / Field surfaces only', () => {
+test('clockWaitsForFirstTouch: offense on the Full / Field surfaces; defense everywhere (the pull is always recorded)', () => {
     const o = makePoint('offense'), d = makePoint('defense');
     assert.equal(clockWaitsForFirstTouch(o, 'full'), true);
     assert.equal(clockWaitsForFirstTouch(o, 'field'), true);
     assert.equal(clockWaitsForFirstTouch(o, 'simple'), false, 'Simple mode has no pickup tap');
     assert.equal(clockWaitsForFirstTouch(o, 'all'), false);
     assert.equal(clockWaitsForFirstTouch(o, undefined), false);
-    assert.equal(clockWaitsForFirstTouch(d, 'full'), false, 'D points start the clock at Start Point');
+    for (const mode of ['full', 'field', 'simple', 'all', undefined]) {
+        assert.equal(clockWaitsForFirstTouch(d, mode), true, `a D point waits for the pull on ${mode}`);
+    }
     assert.equal(clockWaitsForFirstTouch(null, 'full'), false);
+    assert.equal(clockWaitsForFirstTouch(makePoint(undefined), 'full'), false, 'unknown side starts at Start Point');
+});
+
+test('a pull timed with the stopwatch starts the clock at the release tap, not at Proceed', () => {
+    const point = makePoint('defense');
+    armPointClock(point);
+    const release = new Date('2026-09-26T18:00:00Z');
+    assert.equal(startPointClock(point, release), true);
+    assert.equal(point.startTimestamp, release, 'the segment starts back at the release tap');
+    assert.equal(point.clockPending, false);
+    assert.equal(startPointClock(point), false, 'Proceed / dismissal afterwards is a no-op');
+    assert.equal(point.startTimestamp, release);
 });
 
 test('arm, then the first touch starts the running segment exactly once', () => {
@@ -111,7 +125,9 @@ test('rearm after undo: only an untouched, unconcluded offensive point on a defe
     assert.equal(rearmPointClockIfUntouched(scored, 'full'), false);
     const armed = makePoint('offense', [], { clockPending: true });
     assert.equal(rearmPointClockIfUntouched(armed, 'full'), false, 'already armed');
-    assert.equal(rearmPointClockIfUntouched(makePoint('defense', [], { startTimestamp: t0 }), 'field'), false);
+    const dUntouched = makePoint('defense', [], { startTimestamp: t0, totalPointTime: 900 });
+    assert.equal(rearmPointClockIfUntouched(dUntouched, 'simple'), true, 'a D point left with no pull waits for it again, on any surface');
+    assert.equal(dUntouched.totalPointTime, 0);
 });
 
 test('Pickup summarizes as a pull catch or a pick-up; Unknown when unseen', () => {
