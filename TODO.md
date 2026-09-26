@@ -146,9 +146,10 @@ ARCHITECTURE.md § Statistics Export.
       Sheets API on, `drive.file` scope (Google: no scope verification needed),
       support email help@breakside.pro (a Workspace group). Client id is in
       `auth/config.js`. Tested end to end from localhost on 2026-09-26.
-- [ ] **Submit brand verification** (Google Auth Platform → Branding /
-      Verification Center). Until then the consent popup doesn't show the
-      Breakside name and logo. Check Audience is "In production".
+- [x] **Brand verification** passed 2026-09-26: Google's sign-in page shows
+      the Breakside name, logo and privacy link (checked from the account
+      chooser). No Terms of Service URL is set, so Google shows that phrase
+      unlinked; add one if Breakside ever gets terms.
 - [ ] **Field-test on iOS Safari**: the consent popup must open from the
       Export tap; also a large all-time workbook, filters and percent
       formats, and re-consent after the hour-long token expires.
