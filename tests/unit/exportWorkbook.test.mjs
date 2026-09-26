@@ -121,6 +121,15 @@ test('the filter covers header + player rows, not the title or Team row', () => 
     assert.equal(s.filter.r0, 1, 'row 0 is the title');
     assert.equal(s.filter.r1, 3, 'two player rows');
     assert.equal(s.frozenRows, 2);
+    assert.equal(s.frozenCols, 1, 'the name column stays put');
+});
+
+test('frozen columns: names on stats, thrower + receiver on Connections, none on Game Flow', () => {
+    const wb = buildGameWorkbook(G1, { players: PLAYERS, level: 'basic' });
+    const frozen = Object.fromEntries(wb.sheets.map(s => [s.name, s.frozenCols || 0]));
+    assert.deepEqual(frozen, { Storm: 1, 'Game Flow': 0, Connections: 2 });
+    const body = buildSpreadsheetBody(wb, 't');
+    assert.deepEqual(body.sheets.map(s => s.properties.gridProperties.frozenColumnCount), [1, 0, 2]);
 });
 
 test('uniqueSheetName respects the 31-character limit', () => {

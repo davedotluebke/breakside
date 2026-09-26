@@ -16,6 +16,7 @@
  *   filter   { r0, c0, r1, c1 } (0-based, inclusive) — the sortable table,
  *            excluding the title above and the Team total + footer below; or null
  *   frozenRows  rows to pin at the top (title + header)
+ *   frozenCols  columns to pin at the left (the names), 0 for none
  *
  * What goes into a workbook is chosen by the Export dialog (ui/exportDialog.js):
  * a scope (one game, a phase, an event, all-time), a stats level, and either
@@ -138,6 +139,7 @@ function buildStatsSheet(players, playerStats, teamStats, opts) {
         formats,
         filter: { r0: headerRow, c0: 0, r1: Math.max(lastPlayerRow, headerRow), c1: cols.length - 1 },
         frozenRows: headerRow + 1,
+        frozenCols: 1,
     };
 }
 
@@ -199,6 +201,7 @@ function buildConnectionsSheet(games, title = 'Connections') {
         formats: { 4: 'pct' },
         filter: { r0: 1, c0: 0, r1: conn.pairs.length + 1, c1: header.length - 1 },
         frozenRows: 2,
+        frozenCols: 2,
     };
 }
 

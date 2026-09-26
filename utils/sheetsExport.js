@@ -141,6 +141,7 @@ function buildSpreadsheetBody(workbook, title) {
                         rowCount: Math.max(sheet.rows.length, 1),
                         columnCount: Math.max(width, (sheet.widths || []).length, 1),
                         frozenRowCount: sheet.frozenRows || 0,
+                        frozenColumnCount: sheet.frozenCols || 0,
                     },
                 },
                 data: [{
