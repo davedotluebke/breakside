@@ -370,7 +370,15 @@ same day. No backend change (no server restart).
   up, or the disc after a block (2.6.0) — is editable too: receiver chip
   (chaining into the first throw's thrower like a pass's receiver), *Move
   receiver*, and the *caught the pull* flag for the pull reception only
-  (`eventAmend.isPullReception`).
+  (`eventAmend.isPullReception`). Preview-verified the same day against a
+  local backend, on both mount sites: the flag toggle rewrote the line
+  ("catches the pull" ↔ "picks up the disc") and, on the summary, the
+  stats table's *Pull catches* followed it 1 → 0 → 1; a receiver change
+  raised the chain confirm, *retarget* rewrote the first throw's thrower
+  and *bridge* inserted the two inferred passes; a dropped pull's line
+  opened as a receiver-only Turnover. A Full-tab game carries no
+  locations, so the view (and the ✎) only mounts once some event has a
+  spot — the game log renders either way.
 
 ### Preview-verified behaviours (2026-09-04)
 
