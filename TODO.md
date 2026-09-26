@@ -412,8 +412,8 @@ The multi-user push is mostly done. A few items linger:
       "N pending updates waiting to sync" with a View / Clear… button opening
       the existing pending-sync dialog (reachable mid-game, unlike the
       teams-screen badge). Same branch (`share-links`).
-- [ ] Share-flow follow-ups (deliberately deferred): QR code in the Share
-      dialog (pairs with the invite-QR backlog item); central share-link
+- [ ] Share-flow follow-ups (deliberately deferred): ~~QR code in the Share
+      dialog~~ (shipped in 2.2.0, `qr-codes`); central share-link
       management outside the dialog (Team Settings list of all team shares);
       viewer polish (fade transition on score change).
 
@@ -1380,6 +1380,11 @@ and why, and DEMO_VIDEOS.md for how to record.
       round-trip makes the take slow and non-deterministic in a way the rest of
       the series isn't. Worth doing when narration itself is stable enough that
       a scripted phrase reliably produces the same events twice.
+- [ ] **Re-record `full-01-offense` and `field-01-offense`** so they show the
+      pull-reception buttons (Drops Pull / Catches Pull / Picks Up, 2.6.0); the
+      text entries already describe them. Clips for the point clock, standby
+      screen, pinned teams and Email Lists entries are optional (see
+      docs/DOCS_SITE.md).
 
 ## Future Enhancements
 
@@ -1425,7 +1430,7 @@ Bigger asks, deferred until current themes settle.
       Supabase tier. Once configured, drop the apologetic `.google-note` line.
 
 ### Team Management
-- [ ] QR code generation for invites
+- [x] QR code generation for invites (shipped in 2.2.0, branch `qr-codes`, 2026-09-20)
 - [ ] Role change (promote viewer to coach)
 - [ ] Invite via email (send directly from app)
 - [ ] Bulk invite (upload CSV of emails)

@@ -70,14 +70,18 @@
         <a href="#wholesale-auto">Wholesale &amp; Auto</a>
         <a href="#game-events">Game events</a>
         <a href="#pull">Pull details</a>
+        <a href="#point-clock">The point clock</a>
         <a href="#sets">Set tracking</a>
         <a href="#sets-tagging">Tagging possessions</a>
         <a href="#stats-scope">Stats scope</a>
         <a href="#export">Export</a>
+        <a href="#standby">Standby screen</a>
         <a href="#multi-coach">Multi-coach</a>
         <a href="#events">Tournaments</a>
         <a href="#phases">Phases</a>
         <a href="#narration">Speech narration</a>
+        <a href="#team-list">Recent and pinned teams</a>
+        <a href="#email-lists">Email lists</a>
     </nav>
 
     <main>
@@ -118,6 +122,9 @@
                         Each player needs a name; the jersey number is optional.
                         <strong>+FMP</strong> and <strong>+MMP</strong> add the player under their
                         gender-matching category, which drives ratio checks and the Auto line filler.
+                        The cursor goes back to the name box after each add, so a whole roster can be
+                        typed in one go. On a wide screen the same row also sets each player's
+                        <strong>Position</strong> and <strong>Default line</strong>.
                     </p>
                 </div>
                 <div class="docs-clip" data-clip="qs-01-create-team"></div>
@@ -257,9 +264,15 @@
                 <div>
                     <h3>Full play-by-play: offense</h3>
                     <p>
-                        One row per player on the field. After a pull or a turnover, your first tap on a
-                        name indicates who picks up the disc. Every tap after that records a completed
-                        pass to the player you tapped, and they become the holder.
+                        One row per player on the field. Until the pull is received, each row offers
+                        <strong>Drops Pull</strong>, <strong>Catches Pull</strong> and <strong>Picks Up</strong>;
+                        tapping the name is the same as Picks Up. After a block or an opponent's turnover,
+                        your first tap on a name says who picked up the disc. Every tap after that records
+                        a completed pass to the player you tapped, and they become the holder.
+                    </p>
+                    <p>
+                        A caught or picked-up pull shows in the log as a pickup by that player; a dropped
+                        pull is a turnover with nobody credited for the throw.
                     </p>
                     <p>
                         The holder's row offers <strong>Throwaway</strong> and <strong>Break</strong>;
@@ -352,6 +365,11 @@
                         Field records <em>where</em> each play happened. Tap a player, then tap the field
                         where the throw landed. Tapping an empty spot brings up a player picker; you can
                         also drag a player onto the field.
+                    </p>
+                    <p>
+                        On offense, before the pull is received, the action row offers
+                        <strong>Drops Pull</strong> and <strong>Catches Pull</strong>; placing a player
+                        without either is a pickup.
                     </p>
                     <p>
                         Huck, reset, and swing are classified from the geometry of each throw as it lands —
@@ -511,6 +529,24 @@
                 <div class="docs-clip" data-clip="adv-pull-hang"></div>
             </article>
 
+            <article class="docs-entry no-clip" id="point-clock">
+                <div>
+                    <h3>The point clock</h3>
+                    <p>
+                        Point time, and each player's playing time, count actual play rather than the
+                        wait for the pull. On defense the clock starts when the pull is thrown: at the
+                        stopwatch's first tap if you timed the hang, otherwise when you record the pull.
+                        On offense, recorded on the Full or Field tab, it starts on the first touch — the
+                        catch, the pickup, or the dropped pull. Until then the header timer sits at 0:00.
+                    </p>
+                    <p>
+                        Simple mode has no pickup tap, so an offensive point started there is timed from
+                        <strong>Start Point</strong>. Undoing the first touch resets the clock to waiting,
+                        and the pause button starts a waiting clock by hand.
+                    </p>
+                </div>
+            </article>
+
             <article class="docs-entry" id="sets">
                 <div>
                     <h3>Set tracking: turning it on</h3>
@@ -589,6 +625,25 @@
                 </div>
             </article>
 
+            <article class="docs-entry no-clip" id="standby">
+                <div>
+                    <h3>Standby screen</h3>
+                    <p>
+                        Tap <strong>☀</strong> in the game header for a black screen that shows only the
+                        score, plus the next-point countdown between points. Tap anywhere to come back.
+                        On a phone with an OLED screen, black pixels are switched off, so this is the
+                        cheapest way to keep the app open for a whole game.
+                    </p>
+                    <p>
+                        It also comes on by itself after a minute with no taps: a 5-second warning counts
+                        down first, and any tap cancels it. It never does this while you're the Active
+                        Coach mid-point, with a dialog open, or while the mic is on. Press and hold
+                        <strong>☀</strong> to turn the idle timer off or on; Advanced Settings sets how
+                        long it waits.
+                    </p>
+                </div>
+            </article>
+
             <article class="docs-entry" id="multi-coach">
                 <div>
                     <h3>Multi-coach</h3>
@@ -597,6 +652,10 @@
                         and <strong>Next Line</strong>. The role buttons stay hidden while you're coaching
                         solo and appear once a second coach connects. You can always show or hide the role
                         buttons from the menu. Tap a button to claim or release a role.
+                    </p>
+                    <p>
+                        To add a coach, Team Settings → <strong>Invite Coach</strong> makes a code, a link,
+                        and a QR code the new coach can scan straight off your phone.
                     </p>
                     <p>
                         The video clip is the line coach's phone: they take <strong>Next Line</strong>, and
@@ -663,6 +722,34 @@
                     <p>
                         Opt-in per session, and it needs a connection. Events it can't place are reported
                         rather than dropped silently.
+                    </p>
+                </div>
+            </article>
+
+            <article class="docs-entry no-clip" id="team-list">
+                <div>
+                    <h3>Recent and pinned teams</h3>
+                    <p>
+                        The Teams screen lists the teams you opened most recently first. The pin next to a
+                        team's settings gear keeps it in a group at the top, newest pin highest. Pins and
+                        the order are kept per device.
+                    </p>
+                </div>
+            </article>
+
+            <article class="docs-entry no-clip" id="email-lists">
+                <div>
+                    <h3>Email lists</h3>
+                    <p>
+                        Team Settings → <strong>Email Lists</strong> gives a team its own addresses on
+                        <code>team.breakside.pro</code>: one for everyone, one each for parents, coaches
+                        and staff, an optional players list, and one per player that reaches the player,
+                        all of their guardians, and every coach. Coaches manage the directory there; a
+                        contact can have several addresses.
+                    </p>
+                    <p>
+                        Only addresses in the directory can post. Mail from anyone else is held for a coach
+                        to release or discard, never bounced.
                     </p>
                 </div>
             </article>
