@@ -63,5 +63,11 @@ Each of these is a decision, not an oversight. Revisit as they change.
   needs a second viewport in the demo config. (The Field entry used to borrow the landing
   page's carousel video, which exists only in light — it now has its own clip in both
   themes, recorded by `tests/demo/field.spec.ts`.)
+- **Point clock, Standby screen, Recent and pinned teams, Email lists** are text-only
+  entries (added 2026-09-26). The clock and the pinned list are small state changes that
+  read poorly in a loop; standby is a black screen; Email Lists is a coach admin screen
+  whose real work happens in a mail client. The pull-reception buttons (Drops Pull /
+  Catches Pull / Picks Up) are described in the Full and Field entries, but the
+  `full-01-offense` and `field-01-offense` clips predate them and should be re-recorded.
 - **Scoring from the Full tab** is described but not filmed — `qs-04-we-score` already
   shows the attribution dialog it opens, and the Full-tab clip is about pass entry.
