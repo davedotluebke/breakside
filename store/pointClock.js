@@ -12,9 +12,14 @@
  * pick-up) or a dropped pull — so on those surfaces Start Point *arms* the
  * clock instead (`point.clockPending = true`, no startTimestamp) and the
  * first recorded touch starts it. Point time and per-player playing time then
- * measure actual play. Simple mode has no pickup tap, so its clock still
- * starts at Start Point; defensive points start at Start Point too (the pull
- * is recorded from the pull dialog / in-field pull flow moments later).
+ * measure actual play. Simple mode has no pickup tap, so its offensive
+ * clock still starts at Start Point. A defensive point is armed on every
+ * surface and starts on the pull: at the stopwatch's release tap when the
+ * coach timed the hang (the pull dialog and the Field tab note Date.now()
+ * at that tap and pass it as `thrownAt` / the Date to startPointClock),
+ * else when the pull is recorded (Proceed, or the landing / Brick tap), else
+ * when the dialog is dismissed or the in-field flow abandoned — the pull was
+ * thrown either way, so an armed D point is never left waiting.
  *
  * A pending clock is persisted point state (store/storage.js writes
  * `clockPending`, synced like any other point field): a reload or a second
@@ -47,12 +52,18 @@ export function awaitingPull(point) {
 }
 
 /**
- * Whether Start Point should arm the clock rather than start it: offense, on
- * a surface that records the first touch ('full' | 'field' — anything else,
- * 'simple', 'all' or unknown, starts the clock immediately as before).
+ * Whether Start Point should arm the clock rather than start it.
+ *   - Defense: always. The pull is recorded on every surface (the pull
+ *     dialog gates Simple / Full / All; the Field tab records it in-field),
+ *     and dismissing the dialog or abandoning the in-field flow starts the
+ *     clock too.
+ *   - Offense: only on a surface that records the first touch ('full' |
+ *     'field'); 'simple', 'all' or unknown start the clock at Start Point.
  */
 export function clockWaitsForFirstTouch(point, mode) {
-    return !!point && point.startingPosition === 'offense' && (mode === 'full' || mode === 'field');
+    if (!point) return false;
+    if (point.startingPosition === 'defense') return true;
+    return point.startingPosition === 'offense' && (mode === 'full' || mode === 'field');
 }
 
 /** Arm the clock: a started point with no running segment and nothing banked. */
@@ -66,6 +77,8 @@ export function armPointClock(point) {
 
 /**
  * First touch: start the running segment if the clock was armed.
+ * @param {Date} [now] when the touch happened — the pull flows pass the
+ *   stopwatch's release tap, so the segment starts back then
  * @returns {boolean} true when this call started the clock
  */
 export function startPointClock(point, now = new Date()) {

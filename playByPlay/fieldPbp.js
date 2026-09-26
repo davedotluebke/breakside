@@ -40,7 +40,7 @@
  */
 import { UNKNOWN_PLAYER } from '../store/models.js';
 import { saveAllTeamsData, currentTeam } from '../store/storage.js';
-import { awaitingPull } from '../store/pointClock.js';
+import { awaitingPull, startPointClock } from '../store/pointClock.js';
 import {
     setLabelsForSide, setControlLabel, taggablePossession,
 } from '../utils/possessionSets.js';
@@ -124,6 +124,7 @@ const fieldPbp = (function() {
         pullStart: 0,
         pullMs: null,
         pullMods: [],        // subset of PMODS
+        pullThrownAt: null, // Date.now() at the hang stopwatch's release tap | null — dates the point clock's start
         // defense flow
         dPlacing: null,      // 'block'|'interception'|'stall'|'callahan' | null
         dMods: [],           // subset of DMODS (Layout / Sky)
@@ -654,6 +655,7 @@ const fieldPbp = (function() {
         S.pullRunning = false;
         S.pullMs = null;
         S.pullMods = [];
+        S.pullThrownAt = null;
         S.pullScrollToTop = true;   // start at the top so "Pick Puller" + all
                                     // players are visible; we drop to the
                                     // modifiers once a puller is tapped.
@@ -671,6 +673,7 @@ const fieldPbp = (function() {
         } else {
             S.pullRunning = true;
             S.pullStart = performance.now();
+            S.pullThrownAt = Date.now();
             S.pullMs = 0;
             if (pullTimer) clearInterval(pullTimer);
             pullTimer = setInterval(() => {
@@ -707,7 +710,10 @@ const fieldPbp = (function() {
         const from = toNorm({ l: geom.EZ, w: W / 2 });
         const to = brick ? toNorm({ l: geom.BRICK[1], w: W / 2 }) : toNorm(clampLoc(l, w));
 
-        const opts = { from, to, hang: (typeof S.pullMs === 'number' && S.pullMs > 0) ? S.pullMs : null, brick: !!brick };
+        // thrownAt: the stopwatch's release tap dates the point clock's start
+        // (the pull is a D point's first touch — store/pointClock.js).
+        const opts = { from, to, hang: (typeof S.pullMs === 'number' && S.pullMs > 0) ? S.pullMs : null, brick: !!brick,
+            thrownAt: S.pullThrownAt };
         S.pullMods.forEach(label => {
             const m = PMODS.find(pm => pm.label === label);
             if (m) opts[m.prop] = true;
@@ -720,6 +726,7 @@ const fieldPbp = (function() {
         S.pullRunning = false;
         S.pullMs = null;
         S.pullMods = [];
+        S.pullThrownAt = null;
         if (pullTimer) { clearInterval(pullTimer); pullTimer = null; }
         render();
     }
@@ -1136,6 +1143,12 @@ const fieldPbp = (function() {
         if (S.pulling && S.pullMs === null && !S.puller) {
             S.pulling = false;
             if (pullTimer) { clearInterval(pullTimer); pullTimer = null; }
+            // Abandoning the pull flow is the Field-tab equivalent of
+            // dismissing the pull dialog: the pull was thrown, so the armed
+            // clock starts now (store/pointClock.js).
+            const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
+            if (startPointClock(point) && typeof saveAllTeamsData === 'function') saveAllTeamsData();
+            S.pullThrownAt = null;
             render();
             return;
         }
