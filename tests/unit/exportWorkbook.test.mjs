@@ -72,6 +72,24 @@ test('columns follow the level argument', () => {
     assert.equal(basic.widths.length, headerOf(basic).length);
 });
 
+test('the Full level carries pull catches / pull drops, summed on the Team row', () => {
+    const g = makeGame('g4', 'Storm', 'Pool');
+    g.points[0].possessions[0].events.unshift({ type: 'Pickup', receiver: ALICE, pullCatch_flag: true });
+    g.points.push(point('opponent', [{ type: 'Turnover', thrower: null, receiver: BOB, drop_flag: true }]));
+    const full = buildGameWorkbook(g, { players: PLAYERS, level: 'full' }).sheets[0];
+    const header = headerOf(full);
+    const ci = header.indexOf('Pull catches'), di = header.indexOf('Pull drops');
+    assert.ok(ci > header.indexOf('Brick') && di === ci + 1, 'after the pull-quality columns');
+    const rows = full.rows.slice(full.filter.r0 + 1, full.filter.r1 + 1);
+    assert.deepEqual(rows.map(r => [r[0], r[ci], r[di]]), [['Alice', 1, 0], ['Bob', 0, 1]]);
+    assert.deepEqual([teamRow(full)[ci], teamRow(full)[di]], [1, 1]);
+    // A dropped pull is still a drop and a turnover for the receiver.
+    assert.equal(rows[1][header.indexOf('Drops')], 1);
+    assert.equal(rows[1][header.indexOf('TOs')], 1);
+    const advanced = buildGameWorkbook(g, { players: PLAYERS, level: 'advanced' }).sheets[0];
+    assert.equal(headerOf(advanced).includes('Pull catches'), false, 'Full level only');
+});
+
 test('a whole-team game export carries Game Flow and Connections', () => {
     const wb = buildGameWorkbook(G1, { players: PLAYERS, level: 'advanced' });
     assert.deepEqual(wb.sheets.map(s => s.name), ['Storm', 'Game Flow', 'Connections']);

@@ -62,7 +62,15 @@ function accumulateGameStats(game, stats) {
                 pullsGood: 0,
                 pullsOkay: 0,
                 pullsPoor: 0,
-                pullsBrick: 0
+                pullsBrick: 0,
+                // Pull reception (ARCHITECTURE.md § Point clock and the
+                // first touch). A Pickup with pullCatch_flag is the pull
+                // caught in the air; a drop with no thrower is a dropped
+                // pull, which stays inside `drops` / `turnovers` (it is
+                // one) and is broken out here. Letting the pull land and
+                // picking it up is neither.
+                pullCatches: 0,
+                pullDrops: 0
             };
         }
         return stats[id];
@@ -158,6 +166,12 @@ function accumulateGameStats(game, stats) {
                             const s = ensurePlayer(receiver.id, receiver.name);
                             s.turnovers++;
                             s.drops++;
+                            // Turnover.isPullDrop, inlined: a drop nobody on
+                            // our team threw is the pull (every entry path
+                            // credits Unknown Player for a teammate's throw it
+                            // cannot attribute). Events here may be plain
+                            // deserialized objects without the method.
+                            if (!event.thrower) s.pullDrops++;
                         }
                     } else {
                         const thrower = resolveRef(event.thrower);
@@ -184,6 +198,14 @@ function accumulateGameStats(game, stats) {
                         else if (event.quality === 'Poor Pull') s.pullsPoor++;
                         else if (event.quality === 'Brick' || event.brick_flag) s.pullsBrick++;
                     }
+                } else if (event.type === 'Pickup') {
+                    // The pull caught in the air. A pick-up off the ground —
+                    // the pull landed, or the disc after a block / stall /
+                    // opponent error — is possession, not a stat.
+                    if (event.pullCatch_flag) {
+                        const receiver = resolveRef(event.receiver);
+                        if (receiver.name) ensurePlayer(receiver.id, receiver.name).pullCatches++;
+                    }
                 }
             });
         });
@@ -200,7 +222,8 @@ const SUMMABLE_STAT_FIELDS = [
     'dPlays', 'turnovers', 'throwaways', 'drops', 'plusMinus',
     'pointsPlayedO', 'pointsPlayedD', 'plusMinusO', 'plusMinusD',
     'pointsWon', 'pointsLost',
-    'pulls', 'pullsGood', 'pullsOkay', 'pullsPoor', 'pullsBrick'
+    'pulls', 'pullsGood', 'pullsOkay', 'pullsPoor', 'pullsBrick',
+    'pullCatches', 'pullDrops'
 ];
 
 /**

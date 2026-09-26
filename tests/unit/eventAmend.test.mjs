@@ -9,9 +9,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Throw, Turnover, Defense, Pull } from '../../store/models.js';
+import { Throw, Turnover, Defense, Pull, Pickup, Other } from '../../store/models.js';
 import {
-    THROW_MODIFIERS, TURNOVER_MODIFIERS, DEFENSE_MODIFIERS, modifiersFor,
+    THROW_MODIFIERS, TURNOVER_MODIFIERS, DEFENSE_MODIFIERS, PICKUP_MODIFIERS, modifiersFor, isPullReception,
     classifyThrowGeometry, reclassifyThrow,
     flattenPointEvents, locateEvent, pointOfEvent, nextInPossession, prevInPossession, holderSourceOf,
     receiverChainConflict, throwerChainConflict, applyEventPatch, insertUnknownBridge, insertUnknownBridgeBefore,
@@ -41,6 +41,82 @@ function makePoint() {
     };
 }
 const throws = point => point.possessions[1].events;
+
+/** O point opened by a pull catch: Alice catches, Alice→Bob, Bob→Cara (score). */
+function makePickupPoint() {
+    return {
+        players: Object.keys(P), startingPosition: 'offense', winner: 'team',
+        possessions: [
+            poss(true, [
+                new Pickup({ receiver: P.Alice, pullCatch: true, to: { x: .2, y: .5 } }),
+                new Throw({ thrower: P.Alice, receiver: P.Bob, from: { x: .2, y: .5 }, to: { x: .5, y: .5 } }),
+                new Throw({ thrower: P.Bob, receiver: P.Cara, score: true, from: { x: .5, y: .5 }, to: { x: 1.05, y: .5 } }),
+            ]),
+        ],
+    };
+}
+
+test('a Pickup: the "caught the pull" flag is offered for the pull reception only', () => {
+    const point = makePickupPoint();
+    const [pickup] = point.possessions[0].events;
+    assert.equal(modifiersFor(pickup), PICKUP_MODIFIERS, 'without a point every Pickup gets it');
+    assert.equal(modifiersFor(pickup, point), PICKUP_MODIFIERS);
+    assert.equal(isPullReception(point, pickup), true);
+    PICKUP_MODIFIERS.forEach(m => assert.ok(m.prop in new Pickup({}), m.prop));
+    // A timeout before the pull is an annotation, not a touch.
+    point.possessions[0].events.unshift(new Other({ timeout: true }));
+    assert.equal(isPullReception(point, pickup), true);
+    // A pick-up after a block on a D point is never a pull catch.
+    const d = makePoint();
+    const mid = new Pickup({ receiver: P.Bob, to: { x: .5, y: .5 } });
+    d.possessions[1].events.unshift(mid);
+    assert.equal(isPullReception(d, mid), false);
+    assert.deepEqual(modifiersFor(mid, d), []);
+    // Nor is a later pick-up on an O point (after we turned it over and got it back).
+    const o = makePickupPoint();
+    const later = new Pickup({ receiver: P.Dev });
+    o.possessions.push(poss(false, [new Defense({ defender: P.Dev, block: true })]));
+    o.possessions.push(poss(true, [later]));
+    assert.equal(isPullReception(o, later), false);
+    assert.equal(isPullReception(o, new Pickup({ receiver: P.Dev })), false, 'not in the point');
+    assert.equal(isPullReception(null, pickup), false);
+});
+
+test('receiverChainConflict: a Pickup whose next throw is by someone else, and its bridge', () => {
+    const point = makePickupPoint();
+    const [pickup, t0] = point.possessions[0].events;
+    assert.equal(receiverChainConflict(point, pickup, P.Alice), null);                   // unchanged
+    assert.deepEqual(receiverChainConflict(point, pickup, P.Dev), { next: t0, thrower: 'Alice' });
+    applyEventPatch(point, pickup, { receiver: P.Dev });
+    const ins = insertUnknownBridge(point, pickup, UNKNOWN);
+    assert.equal(ins.length, 2);
+    assert.deepEqual(point.possessions[0].events.slice(0, 4), [pickup, ins[0], ins[1], t0]);
+    assert.equal(ins[0].thrower, P.Dev); assert.equal(ins[0].receiver, UNKNOWN);
+    assert.equal(ins[1].thrower, UNKNOWN); assert.equal(ins[1].receiver, P.Alice);
+    assert.equal(receiverChainConflict(point, pickup, pickup.receiver), null, 'bridged chain is consistent');
+});
+
+test('applyEventPatch on a Pickup: receiver, the pull-catch flag, and the spot cascading into the first release', () => {
+    const point = makePickupPoint();
+    const [pickup, t0] = point.possessions[0].events;
+    const r = applyEventPatch(point, pickup, { receiver: P.Bob, pullCatch_flag: false });
+    assert.equal(r.previousEvent.receiver, P.Alice);
+    assert.equal(pickup.receiver, P.Bob);
+    assert.equal(pickup.pullCatch_flag, false);
+    assert.match(pickup.summarize(), /^Bob picks up the disc/);
+    assert.equal(adjustPlayerCounters(r.previousEvent, pickup), false, 'a pickup credits no live counter');
+    // The catch / pick-up spot is where the first throw is released from.
+    const r2 = applyEventPatch(point, pickup, { to: { x: .3, y: .4 } });
+    assert.deepEqual(pickup.to, { x: .3, y: .4 });
+    assert.deepEqual(t0.from, { x: .3, y: .4 });
+    assert.equal(r2.cascaded, t0);
+    // A Pickup has no `from`; the patch is ignored rather than invented.
+    applyEventPatch(point, pickup, { from: { x: 0, y: 0 } });
+    assert.equal('from' in pickup, false);
+    // The mirror chain: the first throw's thrower must be the Pickup's receiver.
+    assert.deepEqual(throwerChainConflict(point, t0, P.Cara), { prev: pickup, field: 'receiver', holder: 'Bob' });
+    assert.equal(throwerChainConflict(point, t0, P.Bob), null);
+});
 
 test('modifier tables: one per editable type, none for Pull / Other', () => {
     assert.equal(modifiersFor(new Throw({ thrower: P.Alice, receiver: P.Bob })), THROW_MODIFIERS);

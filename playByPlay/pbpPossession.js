@@ -43,7 +43,7 @@ import { updateScore } from '../game/gameLogic.js';
 import { moveToNextPoint } from '../game/pointManagement.js';
 import { ensurePossessionExists } from './keyPlayDialog.js';
 import {
-    THROW_MODIFIERS, TURNOVER_MODIFIERS, DEFENSE_MODIFIERS, modifiersFor,
+    THROW_MODIFIERS, TURNOVER_MODIFIERS, DEFENSE_MODIFIERS, PICKUP_MODIFIERS, modifiersFor,
     pointOfEvent, receiverChainConflict, throwerChainConflict, applyEventPatch,
     insertUnknownBridge, insertUnknownBridgeBefore, adjustPlayerCounters,
 } from './eventAmend.js';
@@ -209,11 +209,12 @@ const pbpPossession = (function() {
      *                eventAmend.applyEventPatch; score_flag is refused there
      * @param opts  {
      *   game:   the game holding the event (default: the current game),
-     *   chain:  how to reconcile a receiver change that contradicts the
-     *           next throw's thrower, or a thrower change that contradicts
-     *           the previous play's holder (eventAmend.receiverChainConflict /
-     *           throwerChainConflict): 'retarget' → the neighbour's
-     *           thrower / receiver (or interceptor) becomes the new player;
+     *   chain:  how to reconcile a receiver change (a Throw's, or a
+     *           Pickup's) that contradicts the next throw's thrower, or a
+     *           thrower change that contradicts the previous play's holder
+     *           (eventAmend.receiverChainConflict / throwerChainConflict):
+     *           'retarget' → the neighbour's thrower / receiver (or
+     *           interceptor, or the Pickup's receiver) becomes the new player;
      *           'bridge' → two inferred Unknown Player passes are inserted
      *           between them; undefined → leave the contradiction (the
      *           caller checked, or accepted it),
@@ -447,7 +448,9 @@ const pbpPossession = (function() {
      * after a block / stall / opponent error (an interception needs none:
      * the defender already holds). Opens the offensive possession,
      * establishes the holder (reconstructState reads it), and — at the start
-     * of the point — is the first touch that starts an armed clock. No stats.
+     * of the point — is the first touch that starts an armed clock. No live
+     * counters: the stats tables derive pull catches from the event itself
+     * (utils/statAccumulator.js).
      * @param receiver Player (Unknown Player when unseen)
      * @param opts {pullCatch, to, inferred, source}
      */
@@ -493,7 +496,7 @@ const pbpPossession = (function() {
         amendEvent,
         // Shared modifier tables (playByPlay/eventAmend.js), re-exported for
         // window-qualified callers.
-        THROW_MODIFIERS, TURNOVER_MODIFIERS, DEFENSE_MODIFIERS, modifiersFor,
+        THROW_MODIFIERS, TURNOVER_MODIFIERS, DEFENSE_MODIFIERS, PICKUP_MODIFIERS, modifiersFor,
     };
 })();
 

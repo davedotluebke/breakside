@@ -173,7 +173,70 @@ test('a pull by Unknown Player is not attributed to anyone', () => {
     Object.values(s).forEach(ps => assert.equal(ps.pulls, 0));
 });
 
+// ── pull reception ──────────────────────────────────────────────────────
+// A Pickup with pullCatch_flag is the pull caught in the air; a drop with no
+// thrower is a dropped pull (Turnover.isPullDrop — nobody on our team threw
+// it). ARCHITECTURE.md § Point clock and the first touch.
+
+test('a pull catch counts for the receiver and touches nothing else', () => {
+    const s = statsFor([{ type: 'Pickup', receiver: ALICE, pullCatch_flag: true }]);
+    assert.equal(s[ALICE.id].pullCatches, 1);
+    assert.equal(s[ALICE.id].pullDrops, 0);
+    assert.equal(s[ALICE.id].totalThrows, 0);
+    assert.equal(s[ALICE.id].completions, 0);
+    assert.equal(s[ALICE.id].turnovers, 0);
+});
+
+test('a pick-up off the ground is possession, not a stat', () => {
+    // The pull landed, or the disc after a block: neither a catch nor a drop.
+    const s = statsFor([
+        { type: 'Pickup', receiver: ALICE },
+        { type: 'Pickup', receiver: ALICE, pullCatch_flag: false }
+    ]);
+    assert.equal(s[ALICE.id].pullCatches, 0);
+    assert.equal(s[ALICE.id].pullDrops, 0);
+});
+
+test('a dropped pull is a turnover and a drop for the receiver, broken out as a pull drop', () => {
+    const s = statsFor([{ type: 'Turnover', thrower: null, receiver: BOB, drop_flag: true }]);
+    assert.equal(s[BOB.id].turnovers, 1);
+    assert.equal(s[BOB.id].drops, 1);
+    assert.equal(s[BOB.id].pullDrops, 1);
+    assert.equal(s[BOB.id].throwaways, 0);
+    // Nobody on our team threw it: no thrower is charged anything.
+    assert.equal(s[ALICE.id].turnovers, 0);
+    assert.equal(s[ALICE.id].totalThrows, 0);
+});
+
+test('a dropped pass is a drop but not a pull drop', () => {
+    const s = statsFor([{ type: 'Turnover', thrower: ALICE, receiver: BOB, drop_flag: true }]);
+    assert.equal(s[BOB.id].drops, 1);
+    assert.equal(s[BOB.id].pullDrops, 0);
+});
+
+test('with a dropped pull, throwaways + drops still equals turnovers', () => {
+    const s = statsFor([
+        { type: 'Turnover', thrower: null, receiver: BOB, drop_flag: true },
+        { type: 'Turnover', thrower: BOB, throwaway_flag: true },
+        { type: 'Turnover', thrower: ALICE, receiver: BOB, drop_flag: true }
+    ]);
+    assert.equal(s[BOB.id].turnovers, 3);
+    assert.equal(s[BOB.id].throwaways + s[BOB.id].drops, s[BOB.id].turnovers);
+    assert.equal(s[BOB.id].pullDrops, 1, 'only the thrower-less drop was the pull');
+});
+
 // ── aggregation ─────────────────────────────────────────────────────────
+
+test('sumPlayerStats adds pull catches and pull drops', () => {
+    const s = statsFor([
+        { type: 'Pickup', receiver: ALICE, pullCatch_flag: true },
+        { type: 'Pickup', receiver: BOB, pullCatch_flag: true },
+        { type: 'Turnover', thrower: null, receiver: BOB, drop_flag: true }
+    ]);
+    const tot = sumPlayerStats([s[ALICE.id], s[BOB.id]]);
+    assert.equal(tot.pullCatches, 2);
+    assert.equal(tot.pullDrops, 1);
+});
 
 test('sumPlayerStats adds the full-level counters across players', () => {
     const s = statsFor([

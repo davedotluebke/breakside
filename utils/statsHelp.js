@@ -29,11 +29,11 @@ const STATS_COLUMN_HELP = {
     'Ds':       { name: 'Defensive Plays',
                   desc: 'Blocks, layouts, skies, interceptions, Callahans, stalls forced.' },
     'TOs':      { name: 'Turnovers',
-                  desc: 'Throwaways and stalls by the player, plus passes they dropped. Every turnover is charged to exactly one player, so TAs + Drops = TOs.' },
+                  desc: 'Throwaways and stalls by the player, plus passes (and pulls) they dropped. Every turnover is charged to exactly one player, so TAs + Drops = TOs.' },
     'TAs':      { name: 'Throwaways',
                   desc: 'Turnovers charged to the thrower — throwaways and stalls. A dropped pass is the receiver\'s error, so it is charged to them instead and never appears here.' },
     'Drops':    { name: 'Drops',
-                  desc: 'Passes the player failed to catch. The throw was good, so the drop is charged to the intended receiver alone — the thrower gets no turnover and no hit to their Comp%.' },
+                  desc: 'Passes the player failed to catch, plus pulls they dropped. The throw was good, so the drop is charged to the intended receiver alone — the thrower gets no turnover and no hit to their Comp%. Dropped pulls are broken out again under Pull drops.' },
     '+/-':      { name: 'Plus / Minus',
                   desc: '+1 for each point won while on the field, −1 for each point lost.' },
     '..per pt': { name: '+/- per Point',
@@ -49,7 +49,11 @@ const STATS_COLUMN_HELP = {
     'Pulls':    { name: 'Pulls',
                   desc: 'Number of pulls the player threw.' },
     'G/O/P/B':  { name: 'Pull Quality',
-                  desc: 'Good / Okay / Poor / Brick, in that order. Only pulls that were rated appear in the breakdown, so the four can add up to less than Pulls.' }
+                  desc: 'Good / Okay / Poor / Brick, in that order. Only pulls that were rated appear in the breakdown, so the four can add up to less than Pulls.' },
+    'Pull catches': { name: 'Pull Catches',
+                  desc: 'Pulls the player caught in the air. Letting the pull land and picking it up is neither a catch nor a drop. Only the Full and Field tabs record who received the pull.' },
+    'Pull drops': { name: 'Pull Drops',
+                  desc: 'Pulls the player dropped. Each one is also a turnover and a drop — this column just says which of their drops were pulls. Only the Full and Field tabs record who received the pull.' }
 };
 
 /**

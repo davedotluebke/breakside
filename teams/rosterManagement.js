@@ -238,6 +238,22 @@ const ROSTER_COLUMNS = [
         num: false, level: StatsLevel.FULL,
         cell: (s, dash) => formatPullQuality(s, dash),
         total: ctx => ctx.detailAvailable ? formatPullQuality(ctx.totals, ctx.dash) : ctx.dash
+    },
+    // Pull reception: the pull caught in the air / dropped (a dropped pull
+    // is also inside Drops and TOs).
+    {
+        key: 'pullcatches', label: 'Pull catches', cls: 'roster-pull-catches-header',
+        colCls: 'roster-pull-catches-column',
+        num: true, level: StatsLevel.FULL,
+        cell: (s, dash) => s.pullCatches == null ? dash : s.pullCatches,
+        total: ctx => ctx.detailAvailable ? ctx.totals.pullCatches : ctx.dash
+    },
+    {
+        key: 'pulldrops', label: 'Pull drops', cls: 'roster-pull-drops-header',
+        colCls: 'roster-pull-drops-column',
+        num: true, level: StatsLevel.FULL,
+        cell: (s, dash) => s.pullDrops == null ? dash : s.pullDrops,
+        total: ctx => ctx.detailAvailable ? ctx.totals.pullDrops : ctx.dash
     }
 ];
 
@@ -426,6 +442,8 @@ function renderRosterTable(scope, statsById, loading) {
             case 'perpointd': return (s.pointsPlayedD > 0) ? (s.plusMinusD || 0) / s.pointsPlayedD : 0;
             case 'pulls': return s.pulls == null ? -1 : s.pulls;
             case 'pullquality': return formatPullQuality(s, '');
+            case 'pullcatches': return s.pullCatches == null ? -1 : s.pullCatches;
+            case 'pulldrops': return s.pullDrops == null ? -1 : s.pullDrops;
             default: return 0;
         }
     };

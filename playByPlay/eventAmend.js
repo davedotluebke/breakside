@@ -14,7 +14,8 @@
  *   - the modifier tables (which flags each event type exposes for editing)
  *   - throw geometry → huck / reset / swing flags (Field-mode classification)
  *   - the catch-spot cascade: a Throw's `to` is the next event's `from`
- *   - the throw chain, both ways: a receiver whose next throw has a
+ *   - the throw chain, both ways: a receiver (of a pass, or of the Pickup
+ *     that put the disc in someone's hands) whose next throw has a
  *     different thrower, or a thrower whom the previous play didn't leave
  *     the disc with, is a contradiction the caller must resolve — retarget
  *     the neighbour, or bridge with two Unknown Player passes
@@ -23,6 +24,7 @@
  *     what createThrow incremented
  */
 import { Throw } from '../store/models.js';
+import { isTouchEvent } from '../store/pointClock.js';
 
 // -----------------------------------------------------------------
 // Modifier tables. Keys are the visible chip label; values are the
@@ -46,14 +48,37 @@ export const DEFENSE_MODIFIERS = Object.freeze([
     { label: 'sky',    prop: 'sky_flag'    },
     { label: 'layout', prop: 'layout_flag' },
 ]);
+export const PICKUP_MODIFIERS = Object.freeze([
+    { label: 'caught the pull', prop: 'pullCatch_flag' },   // off = picked it up off the ground
+]);
 
-/** The editable modifier flags for an event, or [] for types without any. */
-export function modifiersFor(event) {
+/**
+ * The editable modifier flags for an event, or [] for types without any.
+ * A Pickup's one flag — the pull caught in the air, versus picked up off
+ * the ground — means nothing for a mid-point pick-up (after a block, a
+ * stall, an opponent error), so pass the `point` to offer it only for the
+ * pull reception; without a point every Pickup gets it.
+ */
+export function modifiersFor(event, point) {
     if (!event) return [];
     if (event.type === 'Throw') return THROW_MODIFIERS;
     if (event.type === 'Turnover') return TURNOVER_MODIFIERS;
     if (event.type === 'Defense') return DEFENSE_MODIFIERS;
+    if (event.type === 'Pickup') return (!point || isPullReception(point, event)) ? PICKUP_MODIFIERS : [];
     return [];
+}
+
+/**
+ * Is this Pickup the point's pull reception — the first touch of an
+ * offensive point (store/pointClock.js awaitingPull, seen after the fact)
+ * — rather than a mid-point pick-up after a block / stall / opponent
+ * error? Only the pull reception can have been caught in the air.
+ */
+export function isPullReception(point, event) {
+    if (!event || event.type !== 'Pickup' || !point || point.startingPosition !== 'offense') return false;
+    const flat = flattenPointEvents(point);
+    const idx = flat.findIndex(f => f.event === event);
+    return idx >= 0 && !flat.slice(0, idx).some(f => isTouchEvent(f.event));
 }
 
 // -----------------------------------------------------------------
@@ -140,15 +165,16 @@ export function nextInPossession(point, event) {
 }
 
 /**
- * Would giving `event` (a Throw) the receiver `newReceiver` contradict the
- * next play? The next Throw / Turnover in the possession is thrown by
- * whoever caught this one; if that thrower is someone else the caller must
+ * Would giving `event` (a Throw, or the Pickup that put the disc in a
+ * player's hands) the receiver `newReceiver` contradict the next play? The
+ * next Throw / Turnover in the possession is thrown by whoever caught (or
+ * picked up) this one; if that thrower is someone else the caller must
  * choose how to reconcile (see pbpPossession.amendEvent's `chain` option).
  * @returns {{ next: object, thrower: string }|null} the conflicting next
  *   event and its thrower's name, or null when consistent
  */
 export function receiverChainConflict(point, event, newReceiver) {
-    if (!event || event.type !== 'Throw' || event.score_flag) return null;
+    if (!event || (event.type !== 'Throw' && event.type !== 'Pickup') || event.score_flag) return null;
     const next = nextInPossession(point, event);
     if (!next || (next.type !== 'Throw' && next.type !== 'Turnover')) return null;
     const nextThrower = nameOf(next.thrower);
@@ -272,10 +298,11 @@ export function applyEventPatch(point, event, patch, fractions) {
 }
 
 /**
- * Bridge a receiver change: after `event` (Throw X→Y, now caught by Y) the
- * next play is thrown by Z ≠ Y, so insert Throw Y→Unknown and Throw
- * Unknown→Z, both inferred and unlocated (Decision 11). The two throws take
- * no `at`: timing is never synthesized, so the replay holds on them.
+ * Bridge a receiver change: after `event` (Throw X→Y, now caught by Y; or
+ * a Pickup now by Y) the next play is thrown by Z ≠ Y, so insert Throw
+ * Y→Unknown and Throw Unknown→Z, both inferred and unlocated (Decision
+ * 11). The two throws take no `at`: timing is never synthesized, so the
+ * replay holds on them.
  * @param {object} unknown - the Unknown Player ref
  * @returns {object[]} the inserted events (empty when there is nothing to bridge)
  */
