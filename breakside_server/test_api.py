@@ -653,12 +653,36 @@ class TestGameAPI:
         })
         
         response = client.get("/api/games")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert "games" in data
         assert len(data["games"]) >= 1
-    
+
+    def test_list_games_round_trips_scrimmage_fields(self, client):
+        """A synced squad-game lists with its scrimmage linkage intact."""
+        client.post("/api/games/scrim-list-x/sync", json={
+            "team": "Dark",
+            "teamId": "ScrimTeam-0001",
+            "opponent": "Light",
+            "scrimmageId": "Scrimmage-2026-09-27-ab12",
+            "scrimmageSquad": "X",
+            "scrimmageName": None,
+            "points": []
+        })
+
+        response = client.get("/api/games")
+
+        assert response.status_code == 200
+        listed = next(g for g in response.json()["games"] if g["game_id"] == "scrim-list-x")
+        assert listed["scrimmageId"] == "Scrimmage-2026-09-27-ab12"
+        assert listed["scrimmageSquad"] == "X"
+        assert listed["scrimmageName"] is None
+        # The stored document keeps them too (schema-loose JSON round-trip).
+        stored = client.get("/api/games/scrim-list-x").json()
+        assert stored["scrimmageId"] == "Scrimmage-2026-09-27-ab12"
+        assert stored["scrimmageSquad"] == "X"
+
     def test_delete_game(self, client):
         """Test DELETE /api/games/{game_id} removes game."""
         client.post("/api/games/delete-test-game/sync", json={
