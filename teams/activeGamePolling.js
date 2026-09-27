@@ -63,15 +63,19 @@ async function checkForActiveGames() {
 
             const coachNames = (game.activeCoaches || []).join(', ') || 'A coach';
             const opponent = game.opponent || 'Unknown';
-            const message = `${coachNames} coaching vs ${opponent}. Tap to join`;
+            // A scrimmage half is one squad's game: name the squad, so a coach
+            // meant to track the OTHER squad isn't nudged onto this one.
+            const what = game.scrimmageId
+                ? `coaching ${game.team || 'a squad'} vs ${opponent} (scrimmage)`
+                : `coaching vs ${opponent}`;
 
             const gameId = game.game_id;
             const cloudTeam = teamEntry.team;
             const teamRole = teamEntry.role || 'coach';
 
             const toastMessage = teamRole === 'viewer'
-                ? `${coachNames} coaching vs ${opponent}. Tap to watch`
-                : message;
+                ? `${coachNames} ${what}. Tap to watch`
+                : `${coachNames} ${what}. Tap to join`;
 
             if (typeof showControllerToast === 'function') {
                 showControllerToast(toastMessage, 'info', 8000, {

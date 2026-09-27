@@ -18,6 +18,7 @@ import {
 import { getPlayerFromName, currentGame } from '../utils/helpers.js';
 import { log } from '../utils/logger.js';
 import { normalizePointTimers } from './pointTimerNormalizer.js';
+import { isScrimmageGame, squadRoster } from './scrimmage.js';
 
 /**
  * Serialize an event to JSON
@@ -122,6 +123,10 @@ function serializeGame(game) {
         teamId: game.teamId,  // New: reference to team by ID
         eventId: game.eventId || null,  // TournamentEvent ID
         phase: game.phase || null,  // Optional phase label within the event
+        // Intrasquad scrimmage linkage (store/scrimmage.js); null on real games
+        scrimmageId: game.scrimmageId || null,
+        scrimmageSquad: game.scrimmageSquad || null,
+        scrimmageName: game.scrimmageName || null,
         team: game.team,       // Legacy: team name string
         opponent: game.opponent,
         startingPosition: game.startingPosition,
@@ -268,9 +273,12 @@ async function requestPersistentStorage() {
 }
 
 /**
- * Save all teams' data to local storage
+ * Persist every team (and its games) to localStorage, and push the current
+ * game to the cloud. `syncCurrentGame: false` skips that push — for a save
+ * whose point is that a game was just deleted, so the tail of team.games
+ * must not be re-synced into existence.
  */
-function saveAllTeamsData() {
+function saveAllTeamsData({ syncCurrentGame = true } = {}) {
     // Serialize each team in the global teams array
     const serializedTeams = teams.map(team => JSON.parse(serializeTeam(team)));
 
@@ -288,7 +296,7 @@ function saveAllTeamsData() {
     // syncGameToCloud is a late-bound back-edge (store/sync.js lives "above"
     // this layer; importing it here would add a storage↔sync eval-time cycle) —
     // resolved via the window shim sync.js keeps deliberately.
-    if (typeof window.syncGameToCloud === 'function' && typeof currentGame === 'function') {
+    if (syncCurrentGame && typeof window.syncGameToCloud === 'function' && typeof currentGame === 'function') {
         try {
             const game = currentGame();
             if (game) {
@@ -530,6 +538,9 @@ function deserializeGame(gameData) {
     game.id = gameData.id;
     game.eventId = gameData.eventId || null;
     game.phase = gameData.phase || null;
+    game.scrimmageId = gameData.scrimmageId || null;
+    game.scrimmageSquad = gameData.scrimmageSquad || null;
+    game.scrimmageName = gameData.scrimmageName || null;
     game.gameStartTimestamp = new Date(gameData.gameStartTimestamp);
     game.gameEndTimestamp = gameData.gameEndTimestamp ? new Date(gameData.gameEndTimestamp) : null;
     
@@ -756,10 +767,22 @@ function deserializeTournamentEvent(data) {
 
 /**
  * Get the active roster for the current game context.
- * Returns event roster players if currentEvent is set, else team roster.
+ * A scrimmage squad-game fields only its squad; otherwise the event roster
+ * when currentEvent is set, else the team roster.
  * @returns {Array} Array of player objects
  */
 function getActiveRoster() {
+    // The current game is the last one on the team (utils/helpers.js
+    // currentGame — not imported here: helpers sits above this module).
+    const game = currentTeam && currentTeam.games && currentTeam.games.length
+        ? currentTeam.games[currentTeam.games.length - 1] : null;
+    if (isScrimmageGame(game) && game.rosterSnapshot && game.rosterSnapshot.players) {
+        // The squad picked when the scrimmage was created (plus anyone added
+        // mid-game), resolved to live Players. Checked before the event
+        // branch: a stale currentEvent from an earlier session must not
+        // widen a squad back to the event roster.
+        return squadRoster(game, currentTeam.teamRoster);
+    }
     if (currentEvent && currentEvent.roster && currentTeam) {
         const eventPlayerIds = currentEvent.roster.playerIds || [];
         const teamPlayers = currentTeam.teamRoster.filter(p => eventPlayerIds.includes(p.id));

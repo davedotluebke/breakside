@@ -31,6 +31,7 @@ import { sheetStatsColumns } from './statsColumns.js';
 import { buildGameFlow, describeGameFlow } from './gameFlow.js';
 import { buildConnections } from './connections.js';
 import { formatPlayerName } from './helpers.js';
+import { SQUADS, groupScrimmages, scrimmageLabel } from '../store/scrimmage.js';
 
 // ── Names ───────────────────────────────────────────────────────────────
 
@@ -341,9 +342,47 @@ function buildTeamWorkbook(team, games, events, opts) {
     });
 }
 
+/**
+ * A team's intrasquad scrimmages (store/scrimmage.js): every squad-game of
+ * every scrimmage, or one scrimmage. Both squads' stats land on one sheet —
+ * every player is on exactly one squad per scrimmage. Breakdown: for all
+ * scrimmages, a sheet per scrimmage (skipped when no points were played in
+ * it); for one scrimmage, a sheet per squad, since each half is a game of
+ * its own with its own score.
+ *
+ * @param {object} team - {name}
+ * @param {Array<object>} games - the loaded squad-games
+ * @param {{scrimmageId?: string|null}} filter
+ * @param {{players: Array<object>, playerId?: string, level: string, breakdown: boolean}} opts
+ */
+function buildScrimmageWorkbook(team, games, filter, opts) {
+    const scrimmages = groupScrimmages(games);
+    const one = filter.scrimmageId ? scrimmages.find(s => s.id === filter.scrimmageId) : null;
+    const scoped = one ? one.games : games;
+    const count = list => `${list.length} squad-game${list.length === 1 ? '' : 's'}`;
+    const mainLabel = one ? scrimmageLabel(one) : 'All scrimmages';
+    const sheets = [{ label: mainLabel, title: `${team.name} — ${mainLabel} (${count(scoped)})`, games: scoped }];
+    if (opts.breakdown) {
+        if (one) {
+            SQUADS.forEach(squad => {
+                const g = one.squads[squad];
+                if (g) sheets.push({ label: g.team, title: `${team.name} — ${mainLabel} — ${g.team}`, games: [g] });
+            });
+        } else {
+            scrimmages.forEach(s => sheets.push({
+                label: scrimmageLabel(s), title: `${team.name} — ${scrimmageLabel(s)}`, games: s.games, skipIfEmpty: true,
+            }));
+        }
+    }
+    return buildStatsWorkbook({
+        stem: one ? `${team.name}-${mainLabel}-stats` : `${team.name}-scrimmages-stats`,
+        players: opts.players, playerId: opts.playerId, level: opts.level, sheets,
+    });
+}
+
 // --- ES-module exports ---
 export {
-    buildGameWorkbook, buildEventWorkbook, buildTeamWorkbook,
+    buildGameWorkbook, buildEventWorkbook, buildTeamWorkbook, buildScrimmageWorkbook,
     buildStatsSheet, buildGameFlowSheet, buildConnectionsSheet,
     exportSelection, exportTitle,
     safeSheetName, uniqueSheetName, safeFilename,

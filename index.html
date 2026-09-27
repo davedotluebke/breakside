@@ -707,6 +707,42 @@
         </div>
     </section>
 
+    <!-- Scrimmage Stats Screen (teams/scrimmageStats.js): per-player stats over
+         a team's intrasquad scrimmages, all of them or one. Read-only; the
+         table, Stats menu, Connections and Export match the event screen. -->
+    <section id="scrimmageStatsScreen" style="display: none;">
+        <div class="panel-title-bar not-draggable screen-title-bar">
+            <button class="title-bar-back-btn" id="backFromScrimmageStatsBtn">
+                <i class="fas fa-arrow-left"></i><span class="title-bar-back-label">Back</span>
+            </button>
+            <span class="panel-title" id="scrimmageStatsHeader">Scrimmages</span>
+            <button id="exportScrimmageStatsBtn" class="back-button" title="Export scrimmage stats to Excel or Google Sheets" style="display:none;">
+                <i class="fas fa-file-export"></i> Export
+            </button>
+        </div>
+        <div id="scrimmageStatsFilterRow" class="stats-filter-row">
+            <span id="scrimmageScopeWrap" class="stats-filter-group">
+                <label for="scrimmageScopeFilter">Show:</label>
+                <select id="scrimmageScopeFilter" class="event-dialog-select"></select>
+            </span>
+            <span class="stats-filter-group">
+                <label for="scrimmageStatsLevel">Stats:</label>
+                <select id="scrimmageStatsLevel" class="event-dialog-select"></select>
+            </span>
+        </div>
+        <p id="scrimmageStatsNote" class="text-hint scrimmage-stats-note"></p>
+        <div class="roster-table-container">
+            <table id="scrimmageStatsTable">
+                <tbody id="scrimmageStatsList"></tbody>
+            </table>
+        </div>
+        <div id="scrimmageStatsTeamStats" class="team-stats-line" style="display:none;"></div>
+        <div id="scrimmageConnectionsSection" style="display:none;">
+            <h3 class="event-connections-heading">Connections</h3>
+            <div id="scrimmageConnectionsHost" class="gf-host"></div>
+        </div>
+    </section>
+
     <!-- Invite Created Modal -->
     <div id="inviteCreatedModal" class="modal" style="display: none;">
         <div class="modal-content invite-modal">

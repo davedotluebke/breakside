@@ -40,9 +40,16 @@ export function buildLocalTeamData(localTeams) {
                 game_end_timestamp: game.gameEndTimestamp || null,
                 teamId: team.id,
                 eventId: game.eventId || null,
+                team: game.team,
                 opponent: game.opponent,
                 scores: game.scores,
                 phase: game.phase || null,
+                // Scrimmage halves group on these (store/scrimmage.js
+                // groupScrimmages); without them an offline list would show
+                // two stray "vs Light" / "vs Dark" games instead of the card.
+                scrimmageId: game.scrimmageId || null,
+                scrimmageSquad: game.scrimmageSquad || null,
+                scrimmageName: game.scrimmageName || null,
                 // Who is live in a game is in-memory on the server. Empty reads
                 // as "not active", which is correct offline — there is no live
                 // anything — and keeps isGameActive() honest rather than

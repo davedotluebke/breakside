@@ -10,6 +10,7 @@ import { Role } from '../store/models.js';
 import {
     currentTeam, currentEvent, setCurrentEvent, deserializeTournamentEvent,
 } from '../store/storage.js';
+import { isScrimmageGame } from '../store/scrimmage.js';
 import { currentGame, isPointInProgress } from '../utils/helpers.js';
 import { normalizeStamp, stampSaysChanged } from '../utils/changeStamp.js';
 import {
@@ -106,10 +107,15 @@ function updateGameLogTitleScore() {
 
     // Check for overflow and collapse names if needed
     if (titleTextEl.scrollWidth > titleTextEl.clientWidth) {
-        const shortTeam = (typeof currentTeam !== 'undefined' && currentTeam && currentTeam.teamSymbol)
-            ? currentTeam.teamSymbol
-            : teamName;
-        const shortOpp = 'Opp.';
+        // A scrimmage's "team" is a squad, so the team symbol would name the
+        // wrong thing; clip both squad names instead.
+        const scrimmage = isScrimmageGame(game);
+        const shortTeam = scrimmage
+            ? teamName.slice(0, 5)
+            : ((typeof currentTeam !== 'undefined' && currentTeam && currentTeam.teamSymbol)
+                ? currentTeam.teamSymbol
+                : teamName);
+        const shortOpp = scrimmage ? opponentName.slice(0, 5) : 'Opp.';
         titleTextEl.textContent = `${shortTeam} ${usScore} – ${shortOpp} ${themScore}`;
     }
 }

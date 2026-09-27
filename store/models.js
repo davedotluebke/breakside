@@ -143,6 +143,13 @@ function Game(teamName, opponentName, startOn, teamId = null) {
     this.id = null; // Unique Game ID (e.g., YYYY-MM-DD_Team_vs_Opponent_Timestamp)
     this.eventId = null; // TournamentEvent ID if game is part of an event
     this.phase = null; // Optional phase label within the event (e.g. "Day 1", "Pool play")
+    // Intrasquad scrimmage (store/scrimmage.js): a scrimmage is two Games,
+    // one per squad, sharing scrimmageId. Each is an ordinary game from its
+    // squad's side — `team` is this squad's name, `opponent` the other's,
+    // `rosterSnapshot` this squad's players. All three are null on a real game.
+    this.scrimmageId = null;
+    this.scrimmageSquad = null;   // 'X' | 'Y'
+    this.scrimmageName = null;    // optional label the coach gave the scrimmage
     this.points = [];  // An array of Point objects
     this.gameStartTimestamp = new Date();
     this.gameEndTimestamp = null;

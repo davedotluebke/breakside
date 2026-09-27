@@ -6,7 +6,8 @@
  * Split from the former monolithic gameScreen.js (refactor, no behavior change).
  */
 import { Role, Gender, Other, Possession, isTestGame, stampEvent } from '../store/models.js';
-import { teams, currentTeam, saveAllTeamsData } from '../store/storage.js';
+import { teams, currentTeam, saveAllTeamsData, getActiveRoster } from '../store/storage.js';
+import { isScrimmageGame } from '../store/scrimmage.js';
 import {
     currentGame, getLatestPoint, isPointInProgress,
     determineStartingPosition, formatPlayerName,
@@ -898,6 +899,17 @@ function hideSubPlayersModal() {
 }
 
 /**
+ * The players the injury-sub and correct-lineup dialogs offer. The whole
+ * team roster, as always — except in a scrimmage, where only this squad's
+ * players can come on (the other squad is the opposition).
+ */
+function substitutableRoster() {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (isScrimmageGame(game)) return getActiveRoster();
+    return (currentTeam && currentTeam.teamRoster) || [];
+}
+
+/**
  * Populate the Sub Players table with current roster
  * Current point players are checked, others are unchecked
  */
@@ -922,7 +934,7 @@ function populateSubPlayersTable() {
     const membership = buildPointMembership(currentGame());
 
     // Sort roster: current players first, then alphabetical
-    const sortedRoster = [...currentTeam.teamRoster].sort((a, b) => {
+    const sortedRoster = [...substitutableRoster()].sort((a, b) => {
         const aInPoint = membership.onList(currentPlayers, a);
         const bInPoint = membership.onList(currentPlayers, b);
         if (aInPoint && !bInPoint) return -1;
@@ -1499,7 +1511,7 @@ function populateCorrectLineupColumns() {
     if (!game || !point || !currentTeam || !currentTeam.teamRoster) return;
 
     const membership = buildPointMembership(game);
-    const sortedRoster = [...currentTeam.teamRoster].sort((a, b) => a.name.localeCompare(b.name));
+    const sortedRoster = [...substitutableRoster()].sort((a, b) => a.name.localeCompare(b.name));
     sortedRoster.forEach(player => {
         const onLine = membership.onLine(point, player);
         const btn = document.createElement('button');
