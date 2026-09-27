@@ -240,7 +240,9 @@ cleanup items are no longer scattered across this file's sections. Status snapsh
   prod (both via S3's ErrorDocument mechanism, which returns HTTP 404 with the SPA body —
   prod has always worked this way).
 - **✅ DONE 2026-07-19 — prod stats spot-check (G8).** Dave pulled a prod snapshot to
-  `.dev-data/prod-snapshot/` (gitignored; keep local) and the old-vs-new replay ran
+  `.dev-data/prod-snapshot/` (gitignored; deleted 2026-09-27 — a laptop copy of
+  production data ages out like any other snapshot, see the backup runbook in
+  breakside-ops) and the old-vs-new replay ran
   against all three teams: **Team A and Team B match exactly** (0 per-player
   diffs, 0 unresolved); **Team C's 23/24 per-player diffs are the id-keying fix
   working** — a mid-tournament mass rename on 2026-07-12 (jersey-number prefixes) split
