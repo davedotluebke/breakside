@@ -11,6 +11,7 @@
  */
 
 import { loadGameFromCloud, listServerGames } from '../store/sync.js';
+import { isScrimmageGame } from '../store/scrimmage.js';
 import {
     accumulateGameStats, sumPlayerStats, classifyPoint, getGameTeamStats,
     filterGames, getGamesPlayerStats, getGamesTeamStats, getGamesRecord,
@@ -69,6 +70,10 @@ async function getEventTeamStats(event, options = {}) {
  * session, including the current game) are used directly; the rest are loaded
  * from cloud by id and deduped.
  *
+ * Intrasquad scrimmages (store/scrimmage.js) are left out on purpose: a
+ * season of practice games would otherwise swamp a player's real record. They
+ * have their own screen (teams/scrimmageStats.js).
+ *
  * @param {object} team - Team object (needs id; games[] used when present)
  * @returns {Promise<Object>} Map of playerId → stats
  */
@@ -79,7 +84,7 @@ async function getTeamPlayerStats(team) {
 
     // 1. In-memory games (current session — full data, incl. the live game).
     (team.games || []).forEach(g => {
-        if (g && Array.isArray(g.points) && g.points.length > 0) {
+        if (g && Array.isArray(g.points) && g.points.length > 0 && !isScrimmageGame(g)) {
             accumulateGameStats(g, stats);
             if (g.id) seen.add(g.id);
         }
@@ -91,14 +96,16 @@ async function getTeamPlayerStats(team) {
         try { summaries = await listServerGames(); } catch (e) { summaries = []; }
     }
     const ids = summaries
-        .filter(g => g && g.teamId === team.id && g.game_id && !seen.has(g.game_id))
+        .filter(g => g && g.teamId === team.id && g.game_id && !seen.has(g.game_id) && !isScrimmageGame(g))
         .map(g => g.game_id);
 
     for (const gid of ids) {
         if (seen.has(gid)) continue;
         try {
             const game = (typeof loadGameFromCloud === 'function') ? await loadGameFromCloud(gid) : null;
-            if (game) { accumulateGameStats(game, stats); seen.add(gid); }
+            // Re-checked on the loaded game: a summary from an older server
+            // lacks the scrimmage fields, the game document never does.
+            if (game && !isScrimmageGame(game)) { accumulateGameStats(game, stats); seen.add(gid); }
         } catch (e) {
             console.debug('Skipping unavailable game', gid);
         }

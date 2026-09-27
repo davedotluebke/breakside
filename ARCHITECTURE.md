@@ -1278,6 +1278,26 @@ Events carry an ordered, free-form **phases** list, and each game carries an opt
 - **Phase writes are metadata-only.** The per-game phase picker calls `PATCH /api/games/{id}/phase` rather than a full game sync, so labeling doesn't spawn a version backup of the whole game.
 - **Stats are phase-aware.** `getEventPlayerStats`, `getEventRecord`, and `getEventTeamStats` take an optional `{ phase }` filter to scope aggregation to one phase ("Day 1 holds", "bracket-only hockey assists").
 
+### Intrasquad Scrimmages
+
+A scrimmage is a practice game between two squads drawn from one team's roster, tracked by two coaches at once (one per squad) and kept apart from the team's games and events. It is stored as **two ordinary Game objects, one per squad, linked by a shared `scrimmageId`** — there is no scrimmage entity on the server, no new endpoint, and nothing new to sync. Pure rules in `store/scrimmage.js` (unit-tested in `tests/unit/scrimmage.test.mjs`); the dialog and Game construction in `teams/scrimmageDialogs.js`; the card in `teams/teamList.js`; the stats screen in `teams/scrimmageStats.js`; the e2e loop in `tests/scenarios/18-intrasquad-scrimmage.spec.ts`.
+
+```javascript
+// Game — three fields, null on every real game
+{ /* … */ scrimmageId: "Scrimmage-2026-09-27-ab12",
+          scrimmageSquad: "X" | "Y",
+          scrimmageName: "Tuesday practice" | null,
+          team: "Dark",  opponent: "Light",           // this squad, the other squad
+          rosterSnapshot: { players: [ /* this squad only */ ] } }
+```
+
+- **Each half is a normal game from its squad's side.** `team` is this squad's name, `opponent` the other's, `rosterSnapshot` this squad's players, `startingPosition` from which squad pulls first. Everything downstream — line selection, the three play-by-play modes, undo, the point clock, `accumulateGameStats`, sync and versioning, the controller roles, Review, share links — runs unchanged. The one in-game switch is `getActiveRoster()` (`store/storage.js`): for a squad-game it returns the snapshot resolved to live Players (`squadRoster`), checked before the event branch so a stale `currentEvent` can never widen a squad. The injury-sub and correct-lineup dialogs read the same roster in a scrimmage; the header shows the squad name where the team icon would be; a player added mid-scrimmage is appended to the tracked half's snapshot.
+- **Both halves are created together**, by whichever coach opens New Scrimmage, and both are synced (`saveAllTeamsData` pushes the current game; the other half is pushed explicitly). The tracked half is pushed last onto `team.games` because `currentGame()` is the tail. The other coach opens the team and taps **Track** on their squad — that is `resumeCloudGame` on an ordinary game. Solo tracking is fine too: an untracked half simply stays at 0–0 with no points.
+- **Dealing squads** (`splitSquads`): players grouped by gender, ordered handlers → cutters → hybrid, dealt X, Y, X, Y…, each group starting with the currently smaller squad, so gender, positions and totals all balance within one. Shuffle re-deals only the players on a squad (absentees stay out). No gender-ratio rule is applied to a squad-game (`alternateGenderRatio: 'No'`).
+- **The team list** groups the team's game summaries with `groupScrimmages`, keys the real games through `withoutScrimmages`, and renders one card per scrimmage (label · date, the score, a Track / Review row per squad, Stats, delete-both). The score is read from whichever half has recorded points; only when *both* halves have points and disagree is the mismatch shown (`scrimmageScores`), since each coach records the full score independently and a missed point is the honest state, not something to reconcile silently. `list_all_games` (server) and the offline summaries (`localGameSummary`, `store/localTeamView.js`) all carry the three fields — the server must be deployed before clients, or squad-games list as plain "vs Light" games.
+- **Stats stay out of the team's record.** `getTeamPlayerStats` (Roster + Stats "All-time") and the all-time export skip scrimmage games, on the summary and again on the loaded game. The **Scrimmage Stats** screen (team card → Scrimmages, or a card's Stats) aggregates every squad-game of every scrimmage — or one scrimmage — through the same `getGamesPlayerStats` / `getGamesTeamStats`, the same column set, Connections, and an Export (`buildScrimmageWorkbook`: a sheet per scrimmage, or per squad for one scrimmage). Rows are everyone on a snapshot in scope, so a player who sat out a practice is absent from that practice's table rather than shown as zeros.
+- **Deleting** a scrimmage deletes both games and forgets them locally (`forgetLocalGames`): a deleted game left at the tail of `team.games` would be re-created by the next `saveAllTeamsData()`, because the sync endpoint creates what it does not find. The per-game delete on the list got the same guard.
+
 ### Derived Statistics
 
 All stats are computed on demand from the event stream — none are stored on players. The live aggregation path is `utils/eventStats.js` (the older `utils/statistics.js` is legacy):

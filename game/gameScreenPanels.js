@@ -20,6 +20,7 @@
  * 6. Follow Panel - Event log (fills remaining space)
  */
 import { currentTeam } from '../store/storage.js';
+import { isScrimmageGame } from '../store/scrimmage.js';
 import { currentGame } from '../utils/helpers.js';
 import { createPanelTitleBar } from '../ui/panelSystem.js';
 import { isLineCoach, showControllerToast } from './controllerState.js';
@@ -734,8 +735,12 @@ function updateHeaderTeamIdentities() {
         game = currentGame;
     }
     
-    // Update our team identity
-    const usDisplay = getTeamIdentityDisplay(team, 'Us');
+    // Update our team identity. In a scrimmage both squads are this team, so
+    // the team icon or symbol says nothing about which squad this is: show
+    // the squad's name the way an opponent's is shown instead.
+    const usDisplay = isScrimmageGame(game)
+        ? { ...getOpponentIdentityDisplay(game.team), canToggle: false }
+        : getTeamIdentityDisplay(team, 'Us');
     usContainer.innerHTML = usDisplay.html;
     usContainer.classList.toggle('can-toggle', usDisplay.canToggle);
     

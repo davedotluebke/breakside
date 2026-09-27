@@ -161,8 +161,15 @@ th {
 
 /* The scope menu can hold long game labels; let it shrink instead of
    pushing the Stats menu off-screen. */
-#eventRosterScopeFilter {
+#eventRosterScopeFilter,
+#scrimmageScopeFilter {
     max-width: 45vw;
+}
+
+/* The Scrimmage Stats screen's one-line summary under the filter row. */
+.scrimmage-stats-note {
+    margin: 0 20px 8px;
+    text-align: left;
 }
 
 /* Phase grouping in the event games list */
@@ -418,7 +425,7 @@ ul {
     box-sizing: border-box;
 }
 
-#rosterTable, #eventRosterTable, #gameSummaryTable {
+#rosterTable, #eventRosterTable, #gameSummaryTable, #scrimmageStatsTable {
     border-collapse: separate;  /* collapse breaks sticky cell backgrounds */
     border-spacing: 0;
     width: max-content;
@@ -427,7 +434,8 @@ ul {
 
 #rosterTable th, #rosterTable td,
 #eventRosterTable th, #eventRosterTable td,
-#gameSummaryTable th, #gameSummaryTable td {
+#gameSummaryTable th, #gameSummaryTable td,
+#scrimmageStatsTable th, #scrimmageStatsTable td {
     border: 1px solid var(--border-heavy);
     padding: 5px;
     white-space: nowrap;
@@ -492,7 +500,8 @@ ul {
 
 /* Sticky header row on stats tables */
 #eventRosterTable tr:first-child th,
-#gameSummaryTable tr:first-child th {
+#gameSummaryTable tr:first-child th,
+#scrimmageStatsTable tr:first-child th {
     position: sticky;
     top: 0;
     z-index: 2;
@@ -519,19 +528,23 @@ ul {
 }
 
 #gameSummaryTable tr td:nth-child(1),
-#gameSummaryTable tr th:nth-child(1) {
+#gameSummaryTable tr th:nth-child(1),
+#scrimmageStatsTable tr td:nth-child(1),
+#scrimmageStatsTable tr th:nth-child(1) {
     position: sticky;
     left: 0;
     z-index: 1;
     box-shadow: 2px 0 0 -1px var(--border-default);
 }
-#gameSummaryTable tr:first-child th:nth-child(1) {
+#gameSummaryTable tr:first-child th:nth-child(1),
+#scrimmageStatsTable tr:first-child th:nth-child(1) {
     z-index: 3;
 }
 
 /* Team aggregate cells need to stay opaque when sticky-overlapped */
 #eventRosterTable .team-aggregate-row td,
-#gameSummaryTable .team-aggregate-row td {
+#gameSummaryTable .team-aggregate-row td,
+#scrimmageStatsTable .team-aggregate-row td {
     background-color: var(--surface-raised);
 }
 

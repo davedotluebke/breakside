@@ -7,6 +7,7 @@
  *   breakside/
  *   ├── store/                   # Data layer
  *   │   ├── models.js           # Data structure definitions (Player, Game, Team, Point, Possession, Event classes)
+ *   │   ├── scrimmage.js        # Intrasquad scrimmages: dealing squads, grouping the two squad-games (pure)
  *   │   ├── storage.js          # Serialization/deserialization, local storage, shared app state
  *   │   └── sync.js             # Server sync + offline queue
  *   │
@@ -22,6 +23,8 @@
  *   ├── teams/                   # Team management
  *   │   ├── teamList.js         # Team/game/event list rendering, team CRUD, join/create dialogs
  *   │   ├── eventDialogs.js     # Event creation/settings dialogs, event-game start flow
+ *   │   ├── scrimmageDialogs.js # New Scrimmage dialog; creates the two linked squad-games
+ *   │   ├── scrimmageStats.js   # Scrimmage Stats screen (stats over a team's scrimmages)
  *   │   ├── syncStatusUI.js     # Sync status indicator, full-refresh, pending-sync dialog
  *   │   ├── activeGamePolling.js # Active-game polling and teams-screen auto-refresh
  *   │   ├── accountDeletion.js  # Account section + delete-account preview/confirm dialog
@@ -127,6 +130,8 @@ import './teams/accountDeletion.js';
 import './teams/erasure.js';
 import { showSelectTeamScreen } from './teams/teamList.js';
 import './teams/eventDialogs.js';
+import './teams/scrimmageDialogs.js';
+import './teams/scrimmageStats.js';
 import { showConnectionInfo } from './teams/syncStatusUI.js';
 import './teams/activeGamePolling.js';
 import { showTeamSettingsScreen } from './teams/teamSettings.js';

@@ -581,6 +581,33 @@ class TestGameStorage:
         assert game["opponent"] == "OpponentA"
         assert game["teamId"] == "TeamA-1234"
         assert game["points_count"] == 2
+        # Ordinary games carry the scrimmage fields as null, so the client
+        # can group on them without checking for presence.
+        assert game["scrimmageId"] is None
+        assert game["scrimmageSquad"] is None
+        assert game["scrimmageName"] is None
+
+    def test_list_all_games_carries_scrimmage_fields(self, isolate_test_data):
+        """A scrimmage's two squad-games list with the fields that link them."""
+        from storage.game_storage import save_game_version, list_all_games
+
+        for squad, team, opponent in (("X", "Dark", "Light"), ("Y", "Light", "Dark")):
+            save_game_version(f"2026-09-27_{team}_vs_{opponent}_1", {
+                "team": team,
+                "opponent": opponent,
+                "teamId": "TeamA-1234",
+                "scrimmageId": "Scrimmage-2026-09-27-ab12",
+                "scrimmageSquad": squad,
+                "scrimmageName": "Tuesday practice",
+                "points": [],
+            })
+
+        games = sorted(list_all_games(), key=lambda g: g["scrimmageSquad"])
+
+        assert [g["scrimmageSquad"] for g in games] == ["X", "Y"]
+        assert {g["scrimmageId"] for g in games} == {"Scrimmage-2026-09-27-ab12"}
+        assert {g["scrimmageName"] for g in games} == {"Tuesday practice"}
+        assert [(g["team"], g["opponent"]) for g in games] == [("Dark", "Light"), ("Light", "Dark")]
 
 
 # =============================================================================

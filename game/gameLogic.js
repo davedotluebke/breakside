@@ -5,7 +5,8 @@
  * Phase 4 update: Games use teamId and create rosterSnapshot
  */
 import { Role, Game, createRosterSnapshot, isTestGame } from '../store/models.js';
-import { currentTeam, currentEvent, saveAllTeamsData } from '../store/storage.js';
+import { currentTeam, currentEvent, saveAllTeamsData, getActiveRoster } from '../store/storage.js';
+import { isScrimmageGame } from '../store/scrimmage.js';
 import { syncGameToCloud, deleteGameFromCloud } from '../store/sync.js';
 import {
     currentGame, getLatestPoint, getActivePossession, getPlayerFromName,
@@ -327,11 +328,14 @@ function gameLogEntryOptions() {
     // "Point N roster:" entries may be player ids (id-era games) — resolve to
     // display names; event lines already carry resolved {name, id} refs.
     const lookup = buildPointPlayerLookup(game);
+    // The "<team> roster:" line names who this game can field: the squad in
+    // a scrimmage (store/scrimmage.js), the team roster otherwise.
+    const roster = isScrimmageGame(game) ? getActiveRoster() : currentTeam.teamRoster;
     return {
         teamName: game.team,
         opponentName: game.opponent,
         versionInfo,
-        rosterNames: currentTeam.teamRoster.map(player => player.name),
+        rosterNames: roster.map(player => player.name),
         resolvePlayerName: entry => lookup(entry).name,
     };
 }

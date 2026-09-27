@@ -1224,16 +1224,7 @@ async function syncGameToCloud(game) {
 async function listServerGames() {
     if (!isOnline) {
         // Return local games only
-        return Object.values(localGames).map(g => ({
-            game_id: g.id,
-            team: g.team,
-            opponent: g.opponent,
-            scores: g.scores,
-            game_start_timestamp: g.gameStartTimestamp,
-            game_end_timestamp: g.gameEndTimestamp,
-            points_count: g.points ? g.points.length : 0,
-            _localOnly: g._localOnly
-        }));
+        return Object.values(localGames).map(localGameSummary);
     }
 
     try {
@@ -1243,35 +1234,42 @@ async function listServerGames() {
         }
         const data = await response.json();
         const cloudGames = data.games || [];
-        
+
         // Merge with local-only games
         const localOnlyGames = Object.values(localGames)
             .filter(g => g._localOnly)
-            .map(g => ({
-                game_id: g.id,
-                team: g.team,
-                opponent: g.opponent,
-                scores: g.scores,
-                game_start_timestamp: g.gameStartTimestamp,
-                game_end_timestamp: g.gameEndTimestamp,
-                points_count: g.points ? g.points.length : 0,
-                _localOnly: true
-            }));
-        
+            .map(localGameSummary);
+
         return [...cloudGames, ...localOnlyGames];
     } catch (error) {
         console.error('Error listing server games:', error);
-        return Object.values(localGames).map(g => ({
-            game_id: g.id,
-            team: g.team,
-            opponent: g.opponent,
-            scores: g.scores,
-            game_start_timestamp: g.gameStartTimestamp,
-            game_end_timestamp: g.gameEndTimestamp,
-            points_count: g.points ? g.points.length : 0,
-            _localOnly: g._localOnly
-        }));
+        return Object.values(localGames).map(localGameSummary);
     }
+}
+
+/**
+ * A cached (not yet synced) game in the shape the server's list gives, so the
+ * team list renders it the same way. Mirror any field the list reads here as
+ * well as in store/localTeamView.js — the two are the offline half of
+ * list_all_games (breakside_server/storage/game_storage.py).
+ */
+function localGameSummary(g) {
+    return {
+        game_id: g.id,
+        team: g.team,
+        teamId: g.teamId,
+        opponent: g.opponent,
+        scores: g.scores,
+        game_start_timestamp: g.gameStartTimestamp,
+        game_end_timestamp: g.gameEndTimestamp,
+        points_count: g.points ? g.points.length : 0,
+        eventId: g.eventId || null,
+        phase: g.phase || null,
+        scrimmageId: g.scrimmageId || null,
+        scrimmageSquad: g.scrimmageSquad || null,
+        scrimmageName: g.scrimmageName || null,
+        _localOnly: !!g._localOnly
+    };
 }
 
 /**

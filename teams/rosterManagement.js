@@ -31,6 +31,7 @@ function setEditPlayerToggleValue(attrGroup, value) {
     });
 }
 import { currentTeam, currentEvent, saveAllTeamsData, isViewer } from '../store/storage.js';
+import { isScrimmageGame } from '../store/scrimmage.js';
 import {
     currentGame, formatPlayerName, formatPlayerNameWithRole, formatPlayTime, extractPlayerName,
     isPointInProgress,
@@ -729,6 +730,26 @@ function validateJerseyNumber(input) {
                 }
             }
 
+            // Same for a scrimmage squad-game, whose line selector reads the
+            // squad from the game's roster snapshot (store/scrimmage.js
+            // squadRoster): a player added mid-scrimmage joins this coach's
+            // squad. The snapshot rides the game's next sync.
+            const liveGame = (typeof currentGame === 'function') ? currentGame() : null;
+            if (isScrimmageGame(liveGame) && liveGame.rosterSnapshot
+                    && Array.isArray(liveGame.rosterSnapshot.players)
+                    && !liveGame.rosterSnapshot.players.some(p => p && p.id === newPlayer.id)) {
+                liveGame.rosterSnapshot.players.push({
+                    id: newPlayer.id,
+                    name: newPlayer.name,
+                    nickname: newPlayer.nickname || '',
+                    number: newPlayer.number || null,
+                    gender: newPlayer.gender || Gender.UNKNOWN,
+                    position: newPlayer.position || null,
+                    defaultLine: newPlayer.defaultLine || null,
+                });
+                saveAllTeamsData();
+            }
+
             updateTeamRosterDisplay();
 
             // If a game is live, refresh the line-selection panel so the new
@@ -849,8 +870,12 @@ function validateJerseyNumber(input) {
  * @param {(msg: string) => void} progress
  */
 async function loadAllTeamGames(progress) {
+    // Scrimmage squad-games are not the team's games (store/scrimmage.js);
+    // they have their own screen and export. Filtered on the summary and
+    // again on the loaded game, as getTeamPlayerStats does.
     const list = (await listServerGames()).filter(g =>
-        g.team_id === currentTeam.id || g.teamId === currentTeam.id || g.team === currentTeam.name);
+        (g.team_id === currentTeam.id || g.teamId === currentTeam.id || g.team === currentTeam.name)
+        && !isScrimmageGame(g));
     const games = [];
     const batchSize = 5;
     for (let i = 0; i < list.length; i += batchSize) {
@@ -859,7 +884,7 @@ async function loadAllTeamGames(progress) {
             try { return await loadGameFromCloud(g.game_id); }
             catch (e) { console.warn('Skip game', g.game_id, e); return null; }
         }));
-        fetched.forEach(g => { if (g) games.push(g); });
+        fetched.forEach(g => { if (g && !isScrimmageGame(g)) games.push(g); });
     }
     return games;
 }

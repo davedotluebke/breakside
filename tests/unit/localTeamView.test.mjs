@@ -54,6 +54,28 @@ test('a game is translated into every field the renderer reads', () => {
     assert.equal(g.eventId, null);
     assert.equal(g.phase, null);
     assert.deepEqual(g.activeCoaches, []);
+    // Ordinary games carry the scrimmage linkage as null, like the server.
+    assert.equal(g.scrimmageId, null);
+    assert.equal(g.scrimmageSquad, null);
+    assert.equal(g.scrimmageName, null);
+});
+
+test('a scrimmage squad-game keeps the fields the scrimmage card groups on', () => {
+    // store/scrimmage.js groupScrimmages folds the two halves on scrimmageId
+    // and labels each with `team` (the squad's name); drop either and the
+    // offline list shows two stray games instead of one scrimmage card.
+    const { allGames } = buildLocalTeamData([
+        localTeam({ games: [localGame({
+            id: '2026-09-27_Dark_vs_Light_1', team: 'Dark', opponent: 'Light',
+            scrimmageId: 'Scrimmage-2026-09-27-ab12', scrimmageSquad: 'X', scrimmageName: 'Tuesday',
+        })] }),
+    ]);
+    const g = allGames[0];
+    assert.equal(g.team, 'Dark');
+    assert.equal(g.opponent, 'Light');
+    assert.equal(g.scrimmageId, 'Scrimmage-2026-09-27-ab12');
+    assert.equal(g.scrimmageSquad, 'X');
+    assert.equal(g.scrimmageName, 'Tuesday');
 });
 
 test('a finished game keeps its end timestamp', () => {

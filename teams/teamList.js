@@ -32,6 +32,12 @@ import {
     showCreateEventDialog, showEventSettingsDialog, startNewEventGame,
     showEventRosterScreen,
 } from './eventDialogs.js';
+import {
+    groupScrimmages, withoutScrimmages, scrimmageSquadNames, scrimmageScores,
+    scrimmageLabel, formatShortDate, isScrimmageOver, SQUADS,
+} from '../store/scrimmage.js';
+import { showNewScrimmageDialog } from './scrimmageDialogs.js';
+import { showScrimmageStatsScreen } from './scrimmageStats.js';
 import { updateTeamRosterDisplay } from './rosterManagement.js';
 import { showTeamSettingsScreen } from './teamSettings.js';
 import { showGameSummaryFromList } from './gameSummary.js';
@@ -406,6 +412,12 @@ function renderCloudTeamsList(data = _lastListData) {
 function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
     const hasActiveGames = teamHasActiveGames(teamGames);
 
+    // Intrasquad scrimmages are pairs of squad-games sharing a scrimmageId
+    // (store/scrimmage.js). They get their own cards and their own count, and
+    // stay out of the games/events grouping below.
+    const scrimmages = groupScrimmages(teamGames);
+    const realGames = withoutScrimmages(teamGames);
+
     // Team section container
     const teamSection = document.createElement('div');
     teamSection.className = 'team-section';
@@ -518,7 +530,8 @@ function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
 
     const gameCount = document.createElement('span');
     gameCount.className = 'game-count';
-    gameCount.textContent = `${teamGames.length} game${teamGames.length !== 1 ? 's' : ''}`;
+    gameCount.textContent = `${realGames.length} game${realGames.length !== 1 ? 's' : ''}`
+        + (scrimmages.length ? ` · ${scrimmages.length} scrimmage${scrimmages.length !== 1 ? 's' : ''}` : '');
     bottomRow.appendChild(gameCount);
 
     const rosterBtn = document.createElement('button');
@@ -531,6 +544,21 @@ function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
         selectCloudTeam(team, { landOn: 'roster' });
     };
     bottomRow.appendChild(rosterBtn);
+
+    // Scrimmage stats across every practice, once the team has any. Viewers
+    // get it too: the screen only reads.
+    if (scrimmages.length > 0) {
+        const scrimBtn = document.createElement('button');
+        scrimBtn.innerHTML = '<i class="fas fa-people-arrows"></i> Scrimmages';
+        scrimBtn.classList.add('icon-button', 'text-icon-button', 'team-scrimmages-btn');
+        scrimBtn.title = 'Scrimmage stats, across all scrimmages';
+        scrimBtn.onclick = (e) => {
+            e.stopPropagation();
+            setCurrentTeamRole(role);
+            openScrimmageStats(team, teamGames);
+        };
+        bottomRow.appendChild(scrimBtn);
+    }
 
     teamHeader.appendChild(bottomRow);
     teamSection.appendChild(teamHeader);
@@ -552,7 +580,7 @@ function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
     // Group games by eventId
     const eventGameIds = new Set();
     const gamesByEventId = {};
-    teamGames.forEach(game => {
+    realGames.forEach(game => {
         const eid = game.eventId || null;
         if (eid && eventMap[eid]) {
             if (!gamesByEventId[eid]) gamesByEventId[eid] = [];
@@ -560,10 +588,15 @@ function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
             eventGameIds.add(game.game_id);
         }
     });
-    const standaloneGames = teamGames.filter(g => !eventGameIds.has(g.game_id));
+    const standaloneGames = realGames.filter(g => !eventGameIds.has(g.game_id));
 
-    // Build interleaved list: events and standalone games sorted by most recent activity
+    // Build interleaved list: events, scrimmages and standalone games sorted
+    // by most recent activity
     const renderItems = [];
+
+    scrimmages.forEach(scrimmage => {
+        renderItems.push({ type: 'scrimmage', scrimmage, sortTs: scrimmage.startTs });
+    });
 
     // Add events with their latest game timestamp
     teamEvents.forEach(ev => {
@@ -590,6 +623,8 @@ function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
         renderItems.forEach(item => {
             if (item.type === 'event') {
                 gamesContainer.appendChild(renderEventContainer(item.event, item.games, team, role));
+            } else if (item.type === 'scrimmage') {
+                gamesContainer.appendChild(renderScrimmageContainer(item.scrimmage, team, role, teamGames));
             } else {
                 const gamesList = document.createElement('ul');
                 gamesList.className = 'games-list';
@@ -622,6 +657,17 @@ function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
         };
         btnRow.appendChild(newEventBtn);
 
+        const newScrimmageBtn = document.createElement('button');
+        newScrimmageBtn.className = 'new-game-btn new-scrimmage-btn';
+        newScrimmageBtn.innerHTML = '<i class="fas fa-people-arrows"></i> New Scrimmage';
+        newScrimmageBtn.title = 'Split the roster into two squads and track both';
+        newScrimmageBtn.onclick = (e) => {
+            e.stopPropagation();
+            setCurrentTeamRole(role);
+            showNewScrimmageDialog(team);
+        };
+        btnRow.appendChild(newScrimmageBtn);
+
         gamesContainer.appendChild(btnRow);
     }
 
@@ -642,6 +688,37 @@ function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
 }
 
 /**
+ * Drop deleted games from local state, so nothing can sync them back.
+ *
+ * A game opened from this list is pushed to the tail of team.games, and every
+ * saveAllTeamsData() pushes that tail to the cloud — so deleting the game you
+ * just reviewed, then saving anything, would POST it straight back into
+ * existence (the sync endpoint creates what it doesn't find). Persisted
+ * without the cloud push for the same reason.
+ * @param {string[]} gameIds
+ */
+function forgetLocalGames(gameIds) {
+    const ids = new Set(gameIds || []);
+    let changed = false;
+    teams.forEach(team => {
+        if (!team || !Array.isArray(team.games)) return;
+        const kept = team.games.filter(g => !(g && (ids.has(g.id) || ids.has(g.game_id))));
+        if (kept.length !== team.games.length) {
+            team.games = kept;
+            changed = true;
+        }
+    });
+    if (changed) saveAllTeamsData({ syncCurrentGame: false });
+
+    // Redraw the list without them now, rather than after the refetch: the
+    // deletes are queued, so a refetch that races them still lists the games.
+    if (_lastListData && Array.isArray(_lastListData.allGames)) {
+        _lastListData.allGames = _lastListData.allGames.filter(g => !(g && ids.has(g.game_id)));
+        renderCloudTeamsList();
+    }
+}
+
+/**
  * Delete a cloud game with confirmation (used by new UI)
  */
 async function deleteCloudGameWithConfirm(gameId, team = null) {
@@ -651,6 +728,7 @@ async function deleteCloudGameWithConfirm(gameId, team = null) {
 
     try {
         await deleteGameFromCloud(gameId);
+        forgetLocalGames([gameId]);
         populateCloudTeamsAndGames(); // Refresh list
     } catch (error) {
         alert('Failed to delete game: ' + error.message);
@@ -663,7 +741,9 @@ async function deleteCloudGameWithConfirm(gameId, team = null) {
  */
 async function selectCloudTeam(cloudTeam, options = {}) {
     log('📥 Selecting cloud team:', cloudTeam.name);
-    // landOn: 'roster' opens the Edit Roster screen directly; anything else
+    // landOn: 'roster' opens the Edit Roster screen directly; 'none' loads the
+    // team into local state and stays on the current screen (a dialog over
+    // the team list needs the roster, not a navigation); anything else
     // (default) opens the Start/Continue Game screen.
     const landOn = options.landOn || 'startGame';
 
@@ -719,7 +799,9 @@ async function selectCloudTeam(cloudTeam, options = {}) {
         if (typeof updateTeamRosterDisplay === 'function') {
             updateTeamRosterDisplay();
         }
-        if (landOn === 'roster' && typeof showEditRosterScreen === 'function') {
+        if (landOn === 'none') {
+            // Caller keeps its screen (e.g. the New Scrimmage dialog).
+        } else if (landOn === 'roster' && typeof showEditRosterScreen === 'function') {
             showEditRosterScreen('selectTeamScreen');
         } else if (typeof showStartGameScreen === 'function') {
             showStartGameScreen('selectTeamScreen');
@@ -1555,6 +1637,182 @@ function renderEventContainer(event, games, team, role) {
     }
 
     return container;
+}
+
+// =============================================================================
+// Intrasquad scrimmages (store/scrimmage.js)
+// =============================================================================
+
+/**
+ * Open the scrimmage stats screen for a team, from this team's listed games.
+ * @param {object} team - team as the API returns it
+ * @param {Array} teamGames - the team's game summaries (both squad halves included)
+ * @param {string|null} [scrimmageId] - start narrowed to one scrimmage
+ */
+function openScrimmageStats(team, teamGames, scrimmageId = null) {
+    const scrimmageGames = (teamGames || []).filter(g => g && g.scrimmageId);
+    selectCloudTeam(team, { landOn: 'none' }).then(() => {
+        showScrimmageStatsScreen(team, scrimmageGames, { scrimmageId });
+    });
+}
+
+/**
+ * Delete both halves of a scrimmage (each is a game of its own on the
+ * server), after one confirmation.
+ */
+async function deleteScrimmageWithConfirm(scrimmage, team) {
+    const skipConfirm = typeof isTestTeam === 'function' && isTestTeam(team);
+    const label = scrimmageLabel(scrimmage);
+    if (!skipConfirm && !confirm(`Delete ${label}? Both squads' games and their stats will be deleted. This cannot be undone.`)) return;
+    try {
+        const ids = scrimmage.games.map(g => g.game_id);
+        for (const id of ids) {
+            await deleteGameFromCloud(id);
+        }
+        forgetLocalGames(ids);
+        populateCloudTeamsAndGames();
+    } catch (error) {
+        alert('Failed to delete scrimmage: ' + error.message);
+    }
+}
+
+/**
+ * One scrimmage's card: the label and date with the score as the two halves
+ * report it, then a row per squad with its Track / Review button. The card
+ * shape mirrors an event's so the list reads as one thing.
+ * @param {object} scrimmage - from groupScrimmages
+ * @param {object} team - team as the API returns it
+ * @param {string} role - 'coach' | 'viewer'
+ * @param {Array} teamGames - the team's game summaries, for the Stats button
+ */
+function renderScrimmageContainer(scrimmage, team, role, teamGames) {
+    const container = document.createElement('div');
+    container.className = 'event-container scrimmage-container';
+    if (isScrimmageOver(scrimmage)) container.classList.add('scrimmage-over');
+
+    const names = scrimmageSquadNames(scrimmage);
+    const scores = scrimmageScores(scrimmage);
+
+    const header = document.createElement('div');
+    header.className = 'event-header';
+
+    const headerTop = document.createElement('div');
+    headerTop.className = 'event-header-top';
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'event-name scrimmage-name';
+    const dateStr = scrimmage.startTs ? formatShortDate(scrimmage.startTs) : '';
+    nameSpan.textContent = scrimmage.name
+        ? `${scrimmage.name}${dateStr ? ` · ${dateStr}` : ''}`
+        : scrimmageLabel(scrimmage);
+    nameSpan.title = 'Intrasquad scrimmage';
+    headerTop.appendChild(nameSpan);
+
+    // The score as best known (a half nobody has tracked yet is left out);
+    // when both halves are being recorded and disagree, say so rather than
+    // pick one (a coach missed a point somewhere).
+    const record = document.createElement('span');
+    record.className = 'event-record scrimmage-score';
+    if (!scores.agree) {
+        record.textContent = `${names.X} ${scores.X.us}–${scores.X.them} · ${names.Y} ${scores.Y.us}–${scores.Y.them}`;
+        record.title = 'The two squads\' games disagree on the score';
+        record.classList.add('scrimmage-score-mismatch');
+    } else {
+        record.textContent = `${names.X} ${scores.score.us} – ${scores.score.them} ${names.Y}`;
+    }
+    headerTop.appendChild(record);
+    header.appendChild(headerTop);
+
+    const headerBtns = document.createElement('div');
+    headerBtns.className = 'event-header-btns';
+
+    const statsBtn = document.createElement('button');
+    statsBtn.innerHTML = '<i class="fas fa-chart-bar"></i><span class="ev-btn-label">Stats</span>';
+    statsBtn.classList.add('icon-button', 'event-header-btn');
+    statsBtn.title = 'Stats for this scrimmage';
+    statsBtn.onclick = (e) => {
+        e.stopPropagation();
+        setCurrentTeamRole(role);
+        openScrimmageStats(team, teamGames, scrimmage.id);
+    };
+    headerBtns.appendChild(statsBtn);
+
+    if (role === 'coach') {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.innerHTML = '<i class="fas fa-trash icon-danger"></i>';
+        deleteBtn.classList.add('icon-button', 'event-header-btn');
+        deleteBtn.title = 'Delete scrimmage (both squads\' games)';
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            deleteScrimmageWithConfirm(scrimmage, team);
+        };
+        headerBtns.appendChild(deleteBtn);
+    }
+    header.appendChild(headerBtns);
+    container.appendChild(header);
+
+    const list = document.createElement('ul');
+    list.className = 'games-list event-games-list';
+    SQUADS.forEach(squad => {
+        const game = scrimmage.squads[squad];
+        if (game) list.appendChild(renderSquadGameItem(game, names[squad], team, role));
+    });
+    container.appendChild(list);
+
+    return container;
+}
+
+/**
+ * One squad's row on a scrimmage card: the squad's name and its own score,
+ * then Track (a live half) or Review (an ended one) — Watch / Review for a
+ * viewer — and the live-coaches badge.
+ */
+function renderSquadGameItem(game, squadName, team, role) {
+    const item = document.createElement('li');
+    item.className = 'game-item scrimmage-squad-item';
+    if (isGameActive(game)) item.classList.add('game-active');
+
+    const line = document.createElement('div');
+    line.className = 'game-line2 scrimmage-squad-line';
+
+    const name = document.createElement('span');
+    name.className = 'scrimmage-squad-name';
+    name.textContent = squadName;
+    line.appendChild(name);
+
+    const score = document.createElement('span');
+    score.className = 'scrimmage-squad-score';
+    score.textContent = `${game.scores?.team || 0}–${game.scores?.opponent || 0}`;
+    score.title = `${squadName}'s score, as its coach recorded it`;
+    line.appendChild(score);
+
+    const ended = !!game.game_end_timestamp;
+    const btn = document.createElement('button');
+    btn.className = 'game-join-btn' + (ended || role === 'viewer' ? ' game-watch-btn' : '');
+    if (role === 'coach') {
+        btn.textContent = ended ? 'Review' : 'Track';
+        btn.title = ended ? `Review ${squadName}'s game` : `Keep stats for ${squadName}`;
+    } else {
+        btn.textContent = ended ? 'Review' : 'Watch';
+        btn.title = ended ? `Review ${squadName}'s game` : `Watch ${squadName} live`;
+    }
+    btn.onclick = (e) => {
+        e.stopPropagation();
+        if (ended) openCompletedGameSummary(team, game.game_id);
+        else resumeCloudGame(team, game.game_id, role);
+    };
+    line.appendChild(btn);
+
+    if (isGameActive(game)) {
+        const badge = document.createElement('span');
+        badge.className = 'game-active-badge';
+        badge.textContent = `🟢 ${(game.activeCoaches || []).join(', ')} coaching`;
+        badge.title = 'Active coaches on this squad';
+        line.appendChild(badge);
+    }
+
+    item.appendChild(line);
+    return item;
 }
 
 // --- ES-module exports ---

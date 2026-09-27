@@ -109,6 +109,34 @@ MVP shipped. Coach speaks naturally; the system extracts structured game events.
 
 ## Near Term
 
+### 🥏 Intrasquad scrimmages (branch `claude/serene-dirac-m6ef6u`, 2026-09-27 — not yet merged)
+
+**New Scrimmage** on a team card deals the roster onto two squads and starts
+two linked games at once, one per squad; two coaches each track one squad
+with the ordinary in-game toolkit, the card folds the halves back together,
+and a **Scrimmage Stats** screen aggregates them across practices, apart from
+the team's games, events and all-time stats. Design and data model:
+ARCHITECTURE.md § Intrasquad Scrimmages. The backend change is one listing
+field set (`list_all_games`), so **deploy the backend before the frontend**:
+against an older API, squad-games list as plain "vs Light" games.
+Verified: unit (`tests/unit/scrimmage.test.mjs`), backend, and the e2e loop
+`tests/scenarios/18-intrasquad-scrimmage.spec.ts`; no staging pass yet.
+Follow-ups, none blocking:
+
+- [ ] **Field-test with two phones at a practice.** The two-coach hand-off
+      (coach B opens the team, taps Track on the other squad) has only been
+      driven as one browser doing both halves in sequence.
+- [ ] **Edit a scrimmage's label / squad names after creation.** Both are
+      stored on the two games; a settings dialog would PATCH each (a metadata
+      patch like `/phase`, not a full sync).
+- [ ] **Score reconciliation.** When both halves have points and disagree,
+      the card shows both scores and nothing more. A "copy the other squad's
+      score" or per-point comparison would need the two games side by side.
+- [ ] **Per-squad breakdown on the stats screen** (who won when the squads
+      were re-dealt). The export already has a sheet per squad for one
+      scrimmage; the screen shows the two halves together.
+- [ ] **Docs-site clip** for the section (docs/DOCS_SITE.md conventions).
+
 ### 📈 Game Flow + Connections (shipped in 2.3.0, 2026-09-22)
 
 The Review screen gained a **Game Flow** section (score-margin chart with

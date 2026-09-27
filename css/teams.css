@@ -371,19 +371,289 @@
     background: var(--accent-purple-hover);
 }
 
+/* Same trick for the teal New Scrimmage button (classes 'new-game-btn
+   new-scrimmage-btn'). */
+.new-scrimmage-btn,
+.new-scrimmage-btn:active {
+    background: var(--color-info);
+}
+
+.new-scrimmage-btn:hover {
+    background: var(--color-info-hover);
+}
+
 .team-action-buttons {
     display: flex;
     gap: 8px;
     padding: 8px 15px;
     overflow: hidden;
+    /* Three buttons now; on a phone the third wraps onto its own full-width
+       row rather than squeezing the labels into two lines each. */
+    flex-wrap: wrap;
 }
 
 .team-action-buttons .new-game-btn {
     display: block;
     width: auto;
     min-width: 0;
-    flex: 1;
+    flex: 1 1 130px;
     margin: 0;
+}
+
+/* ── Intrasquad scrimmages (store/scrimmage.js, teams/scrimmageDialogs.js) ──
+   A scrimmage card reuses the event card's frame (.event-container /
+   .event-header); these rules cover what is scrimmage-specific: the score
+   readout, the per-squad rows, and the New Scrimmage dialog's squad picker. */
+.scrimmage-container {
+    border-color: var(--color-info);
+}
+
+.scrimmage-container.scrimmage-over {
+    border-color: var(--border-light);
+}
+
+.scrimmage-score {
+    white-space: nowrap;
+}
+
+/* The two halves disagree on the score: show both, flagged. */
+.scrimmage-score-mismatch {
+    color: var(--color-warning-text);
+}
+
+.scrimmage-squad-line {
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.scrimmage-squad-name {
+    font-weight: 600;
+    min-width: 4em;
+}
+
+.scrimmage-squad-score {
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    min-width: 2.5em;
+}
+
+/* The teal Scrimmages button on the team header's second row. */
+.team-scrimmages-btn i {
+    color: var(--color-info);
+}
+
+/* ── New Scrimmage dialog ── */
+.scrimmage-dialog {
+    max-width: 520px;
+    /* Taller than the other dialogs: start near the top so a phone shows
+       the header, the picker and the Start buttons without scrolling the
+       overlay first. */
+    margin-top: 4vh;
+    margin-bottom: 4vh;
+}
+
+.scrimmage-squad-names {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 0.5rem;
+}
+
+.scrimmage-squad-names .scrimmage-squad-name {
+    flex: 1;
+    min-width: 0;
+    margin-bottom: 0;
+    text-align: center;
+    font-weight: 600;
+}
+
+.scrimmage-vs {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.scrimmage-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.scrimmage-tool-btn {
+    margin: 0;              /* override global button margin */
+    padding: 5px 12px;
+    font-size: 0.85rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    background: var(--surface-light);
+    color: var(--text-primary);
+}
+
+.scrimmage-tool-btn:hover {
+    background: var(--surface-hover);
+}
+
+.scrimmage-sitting {
+    margin-left: auto;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+/* The picker: one row per player, a tap target per squad. Scrolls inside the
+   dialog so a 20-player roster still leaves the Start buttons reachable. */
+.scrimmage-picker-scroll {
+    max-height: min(45vh, 420px);
+    overflow-y: auto;
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+}
+
+/* A short phone viewport: the picker gives up height so the Start buttons
+   and the pull toggle stay on screen with it. */
+@media (max-height: 760px) {
+    .scrimmage-picker-scroll {
+        max-height: 32vh;
+    }
+}
+
+.scrimmage-picker {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+
+.scrimmage-picker th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--surface-raised);
+    padding: 6px 8px;
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.scrimmage-picker th.scrimmage-player-col {
+    text-align: left;
+}
+
+.scrimmage-col-name {
+    display: block;
+    font-weight: 600;
+}
+
+.scrimmage-col-count {
+    display: block;
+    font-weight: normal;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.scrimmage-picker td {
+    padding: 3px 8px;
+    border-top: 1px solid var(--border-lighter);
+    text-align: center;
+}
+
+.scrimmage-picker td.scrimmage-player-col {
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 40vw;
+}
+
+.scrimmage-squad-col,
+.scrimmage-squad-cell {
+    width: 26%;
+}
+
+.scrimmage-sitting-out td.scrimmage-player-col {
+    opacity: 0.55;
+}
+
+/* A pick button: an outlined circle, filled with a check when the player is
+   on that squad. Tall enough to hit on a phone. */
+.scrimmage-pick {
+    margin: 0;
+    width: 44px;
+    height: 34px;
+    padding: 0;
+    border: 2px solid var(--border-strong);
+    border-radius: 17px;
+    background: var(--surface-inset);
+    color: var(--white);
+    font-size: 0.95rem;
+}
+
+.scrimmage-pick.on {
+    background: var(--color-info);
+    border-color: var(--color-info);
+}
+
+.scrimmage-pick:hover {
+    border-color: var(--color-info-hover);
+}
+
+.scrimmage-pull-row {
+    justify-content: center;
+    font-size: 0.95rem;
+}
+
+.scrimmage-pull-toggle {
+    display: inline-flex;
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.scrimmage-pull-btn {
+    margin: 0;
+    padding: 4px 14px;
+    font-size: 0.85rem;
+    border: none;
+    border-radius: 0;
+    background: var(--surface-light);
+    color: var(--text-primary);
+}
+
+.scrimmage-pull-btn.active {
+    background: var(--blue-scope);
+    color: var(--white);
+    font-weight: bold;
+}
+
+.scrimmage-start-row {
+    display: flex;
+    gap: 8px;
+}
+
+.scrimmage-start-row .scrimmage-start-btn {
+    flex: 1;
+    min-width: 0;
+    margin-top: 0.5rem;
+    background: var(--color-info);
+}
+
+.scrimmage-start-row .scrimmage-start-btn:hover {
+    background: var(--color-info-hover);
+}
+
+.scrimmage-start-row .scrimmage-start-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.scrimmage-hint {
+    margin: 0.75rem 0 0;
+    text-align: left;
+}
+
+.scrimmage-loading {
+    color: var(--text-secondary);
+    padding: 12px;
+    text-align: center;
 }
 
 /* Event dialog styles — matches footer / game-settings look */

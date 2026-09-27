@@ -532,6 +532,12 @@ def list_all_games() -> List[Dict[str, Any]]:
                 "points_count": len(game_data.get("points", [])),
                 "eventId": game_data.get("eventId"),
                 "phase": game_data.get("phase"),
+                # Intrasquad scrimmage: two games share a scrimmageId, one
+                # per squad. The team list groups them by it, so the summary
+                # has to carry it; null on every ordinary game.
+                "scrimmageId": game_data.get("scrimmageId"),
+                "scrimmageSquad": game_data.get("scrimmageSquad"),
+                "scrimmageName": game_data.get("scrimmageName"),
             })
         except (json.JSONDecodeError, KeyError):
             # Skip invalid game files
