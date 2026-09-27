@@ -109,23 +109,32 @@ MVP shipped. Coach speaks naturally; the system extracts structured game events.
 
 ## Near Term
 
-### 🥏 Intrasquad scrimmages (branch `claude/serene-dirac-m6ef6u`, 2026-09-27 — not yet merged)
+### 🥏 Intrasquad scrimmages (merged 2026-09-27; field test 2026-09-28)
 
 **New Scrimmage** on a team card deals the roster onto two squads and starts
 two linked games at once, one per squad; two coaches each track one squad
 with the ordinary in-game toolkit, the card folds the halves back together,
 and a **Scrimmage Stats** screen aggregates them across practices, apart from
 the team's games, events and all-time stats. Design and data model:
-ARCHITECTURE.md § Intrasquad Scrimmages. The backend change is one listing
-field set (`list_all_games`), so **deploy the backend before the frontend**:
-against an older API, squad-games list as plain "vs Light" games.
-Verified: unit (`tests/unit/scrimmage.test.mjs`), backend, and the e2e loop
-`tests/scenarios/18-intrasquad-scrimmage.spec.ts`; no staging pass yet.
-Follow-ups, none blocking:
+ARCHITECTURE.md § Intrasquad Scrimmages. The backend half (the three
+`list_all_games` fields) went to production first as `67aacfa`; the frontend
+was checked on staging (`scrimmage v1`) before the merge. Verified: unit
+(`tests/unit/scrimmage.test.mjs`), backend, and the e2e loop
+`tests/scenarios/18-intrasquad-scrimmage.spec.ts`. Follow-ups, none blocking:
 
-- [ ] **Field-test with two phones at a practice.** The two-coach hand-off
-      (coach B opens the team, taps Track on the other squad) has only been
-      driven as one browser doing both halves in sequence.
+- [ ] **Field test, practice of 2026-09-28: four real coaches, two per
+      squad** (play-by-play + lines on each). Both Track the same squad; the
+      role buttons should appear on both phones once the second connects.
+      The multi-coach machinery is per game id and has no scrimmage-specific
+      code, so no surprise is expected, but this is its first outing on a
+      squad-game. Watch for: the role buttons appearing (a coach solo until
+      the second arrives is normal); the line coach's Next Line table showing
+      only the squad; a coach switching squads (leave one game, Track the
+      other — the old role releases on leave, or on the stale-claim timeout);
+      the card's score readout when the two halves disagree (both scores
+      shown, flagged — a missed point on one side is the honest state, not a
+      bug); and the Scrimmage Stats screen afterwards with all four halves'
+      data. Then delete this item or turn what broke into items below.
 - [ ] **Edit a scrimmage's label / squad names after creation.** Both are
       stored on the two games; a settings dialog would PATCH each (a metadata
       patch like `/phase`, not a full sync).
