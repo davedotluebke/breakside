@@ -43,6 +43,10 @@ cd <worktree>/tests && npm ci && npx playwright install chromium   # each worktr
 CI=1 npx playwright test                                            # CI=1 forces fresh servers from THIS worktree
 ```
 
+### A browser Playwright didn't download
+
+`BREAKSIDE_E2E_CHROMIUM=/path/to/chrome` makes both Playwright configs launch that binary instead of the build the installed `@playwright/test` expects. It exists for Claude Code cloud sessions: the container ships a Chromium at `/opt/pw-browsers/chromium`, forbids `playwright install`, and the pinned `@playwright/test` wants a newer build, so without the variable every spec dies at launch with "Executable doesn't exist". Set it in the cloud environment's variables; leave it unset on a laptop, where `npx playwright install chromium` is the right fix. The one caveat is version skew: a browser a few builds older than the package usually works (the whole suite passed on 1194 against a package expecting 1208), but a failure that only reproduces under the variable should be re-checked with a matching browser before anyone debugs the app.
+
 Flakiness was root-caused in July 2026: specs raced the offline-first first game sync (controller endpoints 404 until it lands; `waitForGameOnServer` in `tests/helpers/controllerApi.ts` fixes that) and slept fixed margins against server staleness (now condition-polls). `retries: 2` is still configured and could probably drop. Known gap: the `visibilitychange` wake handler is not exercised by spec 04. See also the multi-coach trap in [polling-and-multi-coach.md](polling-and-multi-coach.md).
 
 The pre-merge hook on the main checkout runs this whole suite on non-fast-forward merges into `main`.

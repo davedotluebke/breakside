@@ -18,6 +18,11 @@ import { FRONTEND_PORT, BACKEND_PORT } from './helpers/constants';
 
 const ROOT = path.resolve(__dirname, '..');
 
+// Same override as playwright.config.ts: a Chromium to launch instead of the
+// build the installed @playwright/test wants (Claude Code cloud sessions).
+const CHROMIUM = process.env.BREAKSIDE_E2E_CHROMIUM;
+const launchOptions = CHROMIUM ? { launchOptions: { executablePath: CHROMIUM } } : {};
+
 export default defineConfig({
   testDir: './demo',
   testMatch: '**/*.spec.ts',
@@ -46,6 +51,7 @@ export default defineConfig({
     screenshot: 'off',
     trace: 'off',
     storageState: undefined,
+    ...launchOptions,
   },
 
   projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],

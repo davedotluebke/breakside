@@ -13,6 +13,13 @@ import {
 
 const ROOT = path.resolve(__dirname, '..');
 
+// A Chromium to launch instead of Playwright's own download. For a machine
+// whose installed @playwright/test wants a browser build it doesn't have and
+// can't fetch — Claude Code cloud sessions ship /opt/pw-browsers/chromium and
+// block `playwright install`. Unset, Playwright uses its managed browser.
+const CHROMIUM = process.env.BREAKSIDE_E2E_CHROMIUM;
+const launchOptions = CHROMIUM ? { launchOptions: { executablePath: CHROMIUM } } : {};
+
 export default defineConfig({
   testDir: './scenarios',
   timeout: 30_000,
@@ -28,6 +35,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     trace: 'on-first-retry',
     storageState: undefined,
+    ...launchOptions,
   },
 
   projects: [
