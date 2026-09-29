@@ -779,6 +779,71 @@ class TestGameAPI:
         assert response.status_code == 400
         assert client.patch("/api/games/no-such-game/scrimmage", json={"scrimmageName": "x"}).status_code == 404
 
+    # ── PATCH /api/games/{id}/end — ending a game from the team card ──
+
+    def test_patch_end_stamps_the_game_and_the_first_end_wins(self, client):
+        gid = "scrim-end-1"
+        self._sync_squad_game(client, gid)
+        assert client.get(f"/api/games/{gid}").json().get("gameEndTimestamp") is None
+
+        response = client.patch(f"/api/games/{gid}/end", json={"gameEndTimestamp": "2026-09-28T20:15:00.000Z"})
+        assert response.status_code == 200
+        assert response.json() == {"status": "ended", "game_id": gid, "gameEndTimestamp": "2026-09-28T20:15:00.000Z"}
+
+        stored = client.get(f"/api/games/{gid}").json()
+        assert stored["gameEndTimestamp"] == "2026-09-28T20:15:00.000Z"
+        assert stored["scores"] == {"team": 2, "opponent": 1}       # play data untouched
+        listed = next(g for g in client.get("/api/games").json()["games"] if g["game_id"] == gid)
+        assert listed["game_end_timestamp"] == "2026-09-28T20:15:00.000Z"
+        # No version backup for a metadata patch.
+        assert len(client.get(f"/api/games/{gid}/versions").json()["versions"]) == 1
+
+        # A second end (the other coach, a second later) keeps the first stamp.
+        again = client.patch(f"/api/games/{gid}/end", json={"gameEndTimestamp": "2026-09-28T20:15:01.000Z"})
+        assert again.json()["gameEndTimestamp"] == "2026-09-28T20:15:00.000Z"
+
+    def test_patch_end_defaults_to_now_and_rejects_bad_bodies(self, client):
+        gid = "scrim-end-2"
+        self._sync_squad_game(client, gid)
+        for body in [{"gameEndTimestamp": 7}, {"gameEndTimestamp": "yesterday"}]:
+            assert client.patch(f"/api/games/{gid}/end", json=body).status_code == 400, body
+        assert client.get(f"/api/games/{gid}").json().get("gameEndTimestamp") is None
+
+        stamp = client.patch(f"/api/games/{gid}/end", json={}).json()["gameEndTimestamp"]
+        assert stamp.endswith("Z") and stamp[:4] == "2026" or stamp[:2] == "20"
+        assert client.patch("/api/games/no-such-game/end", json={}).status_code == 404
+
+    def test_patch_end_survives_the_active_coachs_next_sync(self, client):
+        """The tracking coach's phone syncs its pre-end copy a moment after
+        the card ended the scrimmage: the end stays, the points land."""
+        gid = "scrim-end-3"
+        self._sync_squad_game(client, gid)
+        client.patch(f"/api/games/{gid}/end", json={"gameEndTimestamp": "2026-09-28T20:15:00.000Z"})
+        self._sync_squad_game(client, gid, gameEndTimestamp=None,
+                              scores={"team": 3, "opponent": 1}, points=[{"i": i} for i in range(4)])
+
+        stored = client.get(f"/api/games/{gid}").json()
+        assert stored["gameEndTimestamp"] == "2026-09-28T20:15:00.000Z"
+        assert stored["scores"] == {"team": 3, "opponent": 1}
+        assert len(stored["points"]) == 4
+
+    def test_a_line_coachs_end_game_reaches_the_server(self, client):
+        """A coach who does not own the play data (another coach holds Active
+        Coach) ends the game from their phone: their sync is otherwise
+        ignored, but the end is adopted."""
+        from storage import claim_role, clear_game_state
+        gid = "scrim-end-4"
+        self._sync_squad_game(client, gid)
+        claim_role(gid, "activeCoach", "another-coach", "Another Coach")
+        try:
+            self._sync_squad_game(client, gid, gameEndTimestamp="2026-09-28T20:20:00.000Z",
+                                  scores={"team": 9, "opponent": 9})
+            stored = client.get(f"/api/games/{gid}").json()
+            assert stored["gameEndTimestamp"] == "2026-09-28T20:20:00.000Z"
+            assert stored["scores"] == {"team": 2, "opponent": 1}   # not theirs to change
+        finally:
+            clear_game_state(gid)
+
     def test_delete_game(self, client):
         """Test DELETE /api/games/{game_id} removes game."""
         client.post("/api/games/delete-test-game/sync", json={

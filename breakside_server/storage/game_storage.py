@@ -177,6 +177,26 @@ def _iso_ms(timestamp: float) -> str:
     return stamp.strftime("%Y-%m-%dT%H:%M:%S.") + f"{stamp.microsecond // 1000:03d}Z"
 
 
+def _adopt_game_end(final_data: dict, other: Optional[dict]) -> bool:
+    """An end, once recorded, sticks: when `other` carries a gameEndTimestamp
+    and `final_data` has none, copy it over.
+
+    Nothing in the app reopens an ended game, so a sync without the stamp
+    is a copy that never saw the end, not a decision to undo it. Two cases
+    depend on this. A scrimmage ended from the team card (end_game) lands
+    while the tracking coach's phone may still have a full sync in flight
+    with its pre-end copy; and a Line Coach's own End Game reaches the server
+    in a sync the merge otherwise ignores (non-authoritative writer).
+    Returns whether anything was adopted.
+    """
+    if not isinstance(other, dict) or not other.get("gameEndTimestamp"):
+        return False
+    if final_data.get("gameEndTimestamp"):
+        return False
+    final_data["gameEndTimestamp"] = other["gameEndTimestamp"]
+    return True
+
+
 def save_game_version(game_id: str, game_data: dict,
                       authoritative_game_data: bool = True,
                       merge_pending_lines: bool = True) -> str:
@@ -194,11 +214,15 @@ def save_game_version(game_id: str, game_data: dict,
         plus the squad names on a scrimmage half) keeps the newer side, so a
         squad edit patched in by another coach survives the Active Coach's
         next full sync (see _adopt_newer_squad).
+      - A gameEndTimestamp held by either side is kept (see _adopt_game_end):
+        an end recorded from the team card, or by a Line Coach, survives the
+        Active Coach's next sync of a copy that predates it.
       - When authoritative_game_data is False, the caller is a writer who does
         NOT own the game's play data (e.g. a Line Coach syncing while another
         coach holds the Active Coach role). Their points/scores/events are
         ignored and the server's existing game data is preserved; only their
-        merged line selections (and a newer squad definition) are applied.
+        merged line selections (a newer squad definition, and an end stamp)
+        are applied.
       - merge_pending_lines=False disables ALL merging: game_data is written
         verbatim as the new current state. Used by version restore, which must
         be a faithful rollback — a pendingNextLine newer than the snapshot
@@ -245,14 +269,17 @@ def save_game_version(game_id: str, game_data: dict,
             )
             if authoritative_game_data:
                 final_data = dict(game_data)
-                # A squad edit landed since this writer last pulled: keep it.
+                # A squad edit (or an end) landed since this writer last
+                # pulled: keep it.
                 _adopt_newer_squad(final_data, existing)
+                _adopt_game_end(final_data, existing)
             else:
                 # Preserve the play-data owner's game state; take only lines
-                # — and a squad edit this writer made (or carried) that the
-                # server hasn't seen.
+                # — and a squad edit or an end this writer made (or carried)
+                # that the server hasn't seen.
                 final_data = dict(existing)
                 _adopt_newer_squad(final_data, game_data)
+                _adopt_game_end(final_data, game_data)
             if merged_pnl is not None:
                 final_data["pendingNextLine"] = merged_pnl
         else:
@@ -568,6 +595,44 @@ def update_squad_definition(game_id: str, updates: dict) -> dict:
 
     update_index_for_game(game_id, game_data)
     return {key: game_data.get(key) for key in ("rosterSnapshot",) + _SQUAD_NAME_KEYS}
+
+
+def end_game(game_id: str, game_end_timestamp: str) -> str:
+    """
+    End a game from outside it: stamp gameEndTimestamp on the current
+    document. Metadata like update_game_metadata — no version backup — and
+    the first end wins: a game that already carries an end stamp keeps it,
+    so two coaches ending the same scrimmage a second apart agree on when.
+
+    The caller is usually not in this game (the team card's End Scrimmage
+    ends both squads' games, and the coach pressing it tracks at most one),
+    so a full sync would carry a stale copy of its play data; the stamp
+    survives the tracking coach's next sync through _adopt_game_end.
+
+    Args:
+        game_id: Unique game identifier
+        game_end_timestamp: ISO timestamp, already validated by the caller
+
+    Returns:
+        The gameEndTimestamp now on disk
+
+    Raises:
+        FileNotFoundError: If game doesn't exist
+    """
+    current_file = _safe_game_dir(game_id) / "current.json"
+    if not current_file.exists():
+        raise FileNotFoundError(f"Game {game_id} not found")
+
+    with _SAVE_LOCK:
+        with open(current_file, 'r') as f:
+            game_data = json.load(f)
+
+        if not game_data.get("gameEndTimestamp"):
+            game_data["gameEndTimestamp"] = game_end_timestamp
+            atomic_write_json(current_file, game_data)
+
+    update_index_for_game(game_id, game_data)
+    return game_data["gameEndTimestamp"]
 
 
 def game_exists(game_id: str) -> bool:

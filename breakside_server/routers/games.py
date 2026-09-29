@@ -5,7 +5,7 @@ Note: All API routes use /api/ prefix to avoid conflicts with PWA static file
 serving.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from ._shared import (
     add_game_to_event,
     delete_game,
+    end_game,
     event_exists,
     game_exists,
     get_controller_state,
@@ -308,6 +309,45 @@ async def patch_scrimmage_squad(
 
     stored = update_squad_definition(game_id, updates)
     return {"status": "updated", "game_id": game_id, **stored}
+
+
+@router.patch("/api/games/{game_id}/end")
+async def patch_game_end(
+    game_id: str,
+    body: dict,
+    user: dict = Depends(require_game_team_coach)
+):
+    """
+    End a game from outside it — the team card's End Scrimmage, which ends
+    both squads' games at once. Metadata, like /phase: no version backup.
+    The first end wins (an already-ended game keeps its stamp), and a coach
+    still tracking the game is sent back to the team list by their next
+    refresh, exactly as when another coach ends it from inside.
+
+    A full /sync is the wrong tool for the same reason as /scrimmage: the
+    coach pressing End is not in the game, so their copy of its play data
+    is stale. The stamp survives the tracking coach's next full sync through
+    the merge in save_game_version (_adopt_game_end).
+
+    Body: { "gameEndTimestamp": "2026-09-28T20:15:00.000Z" }  (optional; now)
+    Returns the gameEndTimestamp now stored.
+    """
+    if not game_exists(game_id):
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+    raw = body.get("gameEndTimestamp") if isinstance(body, dict) else None
+    if raw is None:
+        now = datetime.now(timezone.utc)
+        stamp = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+    else:
+        if not isinstance(raw, str):
+            raise HTTPException(status_code=400, detail="gameEndTimestamp must be an ISO timestamp")
+        try:
+            datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="gameEndTimestamp must be an ISO timestamp")
+        stamp = raw
+    stored = end_game(game_id, stamp)
+    return {"status": "ended", "game_id": game_id, "gameEndTimestamp": stored}
 
 
 @router.delete("/api/games/{game_id}")

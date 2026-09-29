@@ -1367,3 +1367,79 @@ class TestPendingLineMerge:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestGameEndMerge:
+    """An end, once recorded, sticks (_adopt_game_end): the team card's End
+    Scrimmage stamps a game the tracking coach is still syncing, and a Line
+    Coach's End Game rides a sync the merge otherwise ignores."""
+
+    def _game(self, **fields):
+        base = {"team": "Dark", "opponent": "Light", "teamId": "Team-0001",
+                "scores": {"team": 3, "opponent": 2}, "points": [{"i": i} for i in range(5)]}
+        base.update(fields)
+        return base
+
+    def test_end_game_stamps_once_and_keeps_the_first_stamp(self, isolate_test_data):
+        from storage.game_storage import save_game_version, get_game_current, end_game, list_game_versions
+
+        gid = "end-merge-001"
+        save_game_version(gid, self._game())
+        assert end_game(gid, "2026-09-28T20:15:00.000Z") == "2026-09-28T20:15:00.000Z"
+        assert end_game(gid, "2026-09-28T20:15:09.000Z") == "2026-09-28T20:15:00.000Z"
+        assert get_game_current(gid)["gameEndTimestamp"] == "2026-09-28T20:15:00.000Z"
+        assert len(list_game_versions(gid)) == 1     # metadata: no backup written
+
+    def test_end_game_on_a_missing_game_raises(self, isolate_test_data):
+        from storage.game_storage import end_game
+        with pytest.raises(FileNotFoundError):
+            end_game("no-such-game", "2026-09-28T20:15:00.000Z")
+
+    def test_authoritative_sync_without_the_end_keeps_it(self, isolate_test_data):
+        from storage.game_storage import save_game_version, get_game_current, end_game
+
+        gid = "end-merge-002"
+        save_game_version(gid, self._game())
+        end_game(gid, "2026-09-28T20:15:00.000Z")
+        save_game_version(gid, self._game(gameEndTimestamp=None, scores={"team": 4, "opponent": 2}))
+
+        cur = get_game_current(gid)
+        assert cur["gameEndTimestamp"] == "2026-09-28T20:15:00.000Z"
+        assert cur["scores"] == {"team": 4, "opponent": 2}
+
+    def test_a_writers_own_end_stands_and_an_earlier_one_is_not_overridden(self, isolate_test_data):
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "end-merge-003"
+        save_game_version(gid, self._game())
+        save_game_version(gid, self._game(gameEndTimestamp="2026-09-28T20:30:00.000Z"))
+        assert get_game_current(gid)["gameEndTimestamp"] == "2026-09-28T20:30:00.000Z"
+        # An authoritative writer carrying a different stamp keeps its own:
+        # the rule only fills a missing one.
+        save_game_version(gid, self._game(gameEndTimestamp="2026-09-28T20:31:00.000Z"))
+        assert get_game_current(gid)["gameEndTimestamp"] == "2026-09-28T20:31:00.000Z"
+
+    def test_non_authoritative_sync_carries_an_end_but_no_play_data(self, isolate_test_data):
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "end-merge-004"
+        save_game_version(gid, self._game())
+        save_game_version(gid, self._game(gameEndTimestamp="2026-09-28T20:40:00.000Z",
+                                          scores={"team": 0, "opponent": 0}, points=[]),
+                          authoritative_game_data=False)
+
+        cur = get_game_current(gid)
+        assert cur["gameEndTimestamp"] == "2026-09-28T20:40:00.000Z"
+        assert cur["scores"] == {"team": 3, "opponent": 2}
+        assert len(cur["points"]) == 5
+
+    def test_a_restore_is_verbatim(self, isolate_test_data):
+        """merge_pending_lines=False (version restore) writes the snapshot as
+        it was, ended or not — a rollback must be faithful."""
+        from storage.game_storage import save_game_version, get_game_current, end_game
+
+        gid = "end-merge-005"
+        save_game_version(gid, self._game())
+        end_game(gid, "2026-09-28T20:15:00.000Z")
+        save_game_version(gid, self._game(), merge_pending_lines=False)
+        assert get_game_current(gid).get("gameEndTimestamp") is None
