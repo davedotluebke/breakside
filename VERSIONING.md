@@ -100,6 +100,31 @@ under version control, so each clone installs it once:
 ln -sf ../../scripts/git-hooks/post-commit .git/hooks/post-commit
 ```
 
+### Tagging from CI
+
+A release that reaches `main` without passing through a laptop is tagged by
+`.github/workflows/tag-release.yml`. A Claude Code cloud session's credential
+can push only its own `claude/…` branch — never `main`, never a tag — so a
+release from one arrives as a merged pull request with no tag (v2.7.1, v2.7.2
+and v2.8.0 all did, until the backfill). The workflow runs on every push to
+`main` that touches `version.json` and applies the hook's rule to the commits
+the push brought (`scripts/tag-releases.sh`): each one that raised the version
+gets an annotated `vX.Y.Z` whose message is the commit subject, pushed with the
+Actions token. Existing tags are skipped, so a laptop release still tags at
+commit time and CI simply agrees; a release merged with a merge commit is
+tagged at the bump commit on the branch, not at the merge. Its manual trigger
+is the backfill: it tags every untagged release since the newest existing tag
+(or since a tag or commit you name; `all` for the whole history), with a
+dry-run option. Nine releases from 2025 predate the hook and have no tag; a
+few early tags sit near rather than on their bump commit. Both are left as
+they are unless someone asks for `all`. The script does the same from a
+checkout:
+
+```bash
+scripts/tag-releases.sh --dry-run v2.7.0..HEAD   # what the backfill would create
+scripts/tag-releases.sh --push v2.7.0..HEAD      # create and push them
+```
+
 History: until 2026-09-26 the hook keyed on the substring "release" in the
 commit message, on any branch, reading the main checkout's `version.json`. It
 tagged unrelated commits that happened to mention the word and missed every
