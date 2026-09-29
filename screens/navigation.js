@@ -194,10 +194,11 @@ function showEditRosterScreen(returnTarget) {
     setRosterFlowReturn(returnTarget);
     // Top-level entry: Back exits the roster screen, not to Start Game.
     _editRosterCameFromStartGame = false;
-    // Recompute scoped stats on entry so newly-played points / added games show.
+    // Recompute scoped stats on entry so newly-played points / added games show,
+    // and open on the All Time scope.
     // late-bound back-edge (teams/rosterManagement lives "above" this layer);
     // see ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
-    if (typeof window.invalidateRosterStatsCache === 'function') window.invalidateRosterStatsCache();
+    if (typeof window.resetRosterStatsView === 'function') window.resetRosterStatsView();
     showScreen('teamRosterScreen');
     showEditRosterSubscreen();
 }

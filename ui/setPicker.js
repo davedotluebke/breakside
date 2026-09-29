@@ -84,9 +84,9 @@ function wireSetControl(el, opts) {
     };
 
     el.addEventListener('touchstart', start, { passive: true });
-    el.addEventListener('touchend', cancel);
-    el.addEventListener('touchcancel', cancel);
-    el.addEventListener('touchmove', cancel);
+    el.addEventListener('touchend', cancel, { passive: true });
+    el.addEventListener('touchcancel', cancel, { passive: true });
+    el.addEventListener('touchmove', cancel, { passive: true });
     el.addEventListener('mousedown', start);
     el.addEventListener('mouseup', cancel);
     el.addEventListener('mouseleave', cancel);

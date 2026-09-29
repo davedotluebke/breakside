@@ -59,6 +59,7 @@ import {
 import { showScreen } from '../screens/navigation.js';
 import { showSelectTeamScreen } from './teamList.js';
 import { initializeGenderRatioDropdown } from '../game/genderRatioDropdown.js';
+import { showControllerToast } from '../game/controllerState.js';
 import { log } from '../utils/logger.js';
 
 // Whether developer debug affordances (e.g. the raw player-ID display in the
@@ -80,12 +81,10 @@ function isDebugEnabled() {
 //
 // Scope: 'all' (lifetime, from legacy per-player fields), 'event' (aggregate
 // across the current tournament event's games — async cloud load), or 'game'
-// (the current game only). Default 'event', falling back when none applies.
+// (the current game, labelled "Most Recent Game"). Every visit to the screen
+// opens on 'all'; a pick lasts until the coach leaves (not persisted).
 // ---------------------------------------------------------------------------
-let rosterStatsScope = (function () {
-    try { return localStorage.getItem('rosterStatsScope') || 'event'; }
-    catch (e) { return 'event'; }
-})();
+let rosterStatsScope = 'all';
 let rosterSortKey = 'name';
 let rosterSortDir = 1; // 1 = ascending, -1 = descending
 // Cache for the async scopes (event/all); keyed by scope+id so switching scope
@@ -94,6 +93,12 @@ let rosterSortDir = 1; // 1 = ascending, -1 = descending
 let _rosterStatsCache = { key: null, byId: {} };
 function invalidateRosterStatsCache() {
     _rosterStatsCache = { key: null, byId: {} };
+}
+
+// Screen (re)entry: fresh stats, back to the All Time scope.
+function resetRosterStatsView() {
+    invalidateRosterStatsCache();
+    rosterStatsScope = 'all';
 }
 
 // Column descriptors (everything after the checkbox). `num` columns default to
@@ -489,6 +494,8 @@ function renderRosterTable(scope, statsById, loading) {
 
     // --- Player rows ---
     const dash = '—';
+    // Ids in the order shown, so the edit dialog can step through the roster.
+    const rosterOrder = roster.map(p => p.id);
 
     roster.forEach(player => {
         const s = statsById[player.id] || {};
@@ -512,7 +519,7 @@ function renderRosterTable(scope, statsById, loading) {
             if (col.key === 'name') {
                 cells.push({
                     value: formatPlayerNameWithRole(player), className: nameClasses,
-                    onClick: () => showEditPlayerDialog(player)
+                    onClick: () => showEditPlayerDialog(player, { sequence: rosterOrder })
                 });
             } else if (col.key === 'gender') {
                 cells.push({ value: genderLabel(player), className: genderClasses });
@@ -566,7 +573,6 @@ function handleRosterHeaderSort(col) {
 // Switch the stats scope and re-render.
 function setRosterStatsScope(scope) {
     rosterStatsScope = scope;
-    try { localStorage.setItem('rosterStatsScope', scope); } catch (e) { /* ignore */ }
     updateTeamRosterDisplay();
 }
 
@@ -885,7 +891,7 @@ function addPlayerToRoster({
         exportTeamBtn.addEventListener('click', openTeamRosterExport);
     }
 
-    // Stats scope toggle (All-time / Event / Game)
+    // Stats scope toggle (All Time / Event / Most Recent Game)
     const scopeToggle = document.getElementById('rosterScopeToggle');
     if (scopeToggle) {
         scopeToggle.querySelectorAll('.roster-scope-btn').forEach(btn => {
@@ -1127,7 +1133,9 @@ let editPlayerDialogContext = {};  // Options for pickup context (onSave, onDele
  * Options: `context` ('pickup' | 'eventOverride') with its onSave / onDelete
  * callbacks, as before; and `onChanged(player|null)`, called after a roster
  * player is saved (the player) or removed (null) in the default context, for
- * a caller that draws the roster itself (the scrimmage dialog). The dialog is
+ * a caller that draws the roster itself (the scrimmage dialog); and
+ * `sequence` (player ids in display order), which turns on stepping to the
+ * previous / next player by swipe or the header arrows. The dialog is
  * moved to the end of <body> each time it opens, so it sits above whatever
  * modal opened it — two `.modal`s share a z-index and stack in DOM order.
  */
@@ -1246,8 +1254,99 @@ function showEditPlayerDialog(player, options = {}) {
         confirmBtn.disabled = true;
     }
 
+    updateEditPlayerNavButtons();
+
     // Show dialog
     dialog.style.display = 'block';
+}
+
+// ---------------------------------------------------------------------------
+// Stepping through the roster (swipe, or the header arrows)
+// ---------------------------------------------------------------------------
+
+// Where the open player sits in the roster order it was opened with, or -1
+// when the dialog was opened without one (pickup, event override, scrimmage).
+function editPlayerSequenceIndex() {
+    const seq = editPlayerDialogContext.sequence;
+    if (!Array.isArray(seq) || editPlayerDialogContext.context) return -1;
+    return seq.indexOf(editPlayerDialogPlayerId);
+}
+
+function updateEditPlayerNavButtons() {
+    const idx = editPlayerSequenceIndex();
+    const seq = editPlayerDialogContext.sequence || [];
+    const prevBtn = document.getElementById('editPlayerPrevBtn');
+    const nextBtn = document.getElementById('editPlayerNextBtn');
+    [prevBtn, nextBtn].forEach(btn => { if (btn) btn.hidden = idx < 0; });
+    if (prevBtn) prevBtn.disabled = idx <= 0;
+    if (nextBtn) nextBtn.disabled = idx < 0 || idx >= seq.length - 1;
+}
+
+/**
+ * Move to the previous (-1) or next (+1) player. Pending edits are saved
+ * first, exactly as Confirm would, and summarised in a toast; if the save is
+ * refused (empty or duplicate name, bad jersey number) the dialog stays put.
+ */
+function stepEditPlayer(dir) {
+    const idx = editPlayerSequenceIndex();
+    if (idx < 0) return;
+    const seq = editPlayerDialogContext.sequence;
+    const target = idx + dir;
+    if (target < 0 || target >= seq.length) return;
+
+    const changes = editPlayerFormChanges();
+    if (changes.length) {
+        const saved = commitRosterPlayerEdit();
+        if (!saved) return;
+        showControllerToast(
+            `Saved ${escapeToastText(saved.name)}: ${changes.map(escapeToastText).join(', ')}`,
+            'success', 3000
+        );
+        if (typeof editPlayerDialogContext.onChanged === 'function') {
+            editPlayerDialogContext.onChanged(saved);
+        }
+    }
+
+    // Look the next player up fresh: a sync may have replaced roster objects.
+    const next = currentTeam?.teamRoster?.find(p => p.id === seq[target]);
+    if (!next) return;
+    const options = editPlayerDialogContext;
+    showEditPlayerDialog(next, options);
+    const container = document.querySelector('#editPlayerDialog .edit-player-container');
+    if (container) {
+        container.classList.remove('edit-player-slide-next', 'edit-player-slide-prev');
+        void container.offsetWidth;  // restart the animation
+        container.classList.add(dir > 0 ? 'edit-player-slide-next' : 'edit-player-slide-prev');
+    }
+}
+
+// Toast text goes through innerHTML; player names are user input.
+function escapeToastText(text) {
+    return String(text).replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+}
+
+// A horizontal swipe on the dialog steps players: left for next, right for
+// previous. Mostly-vertical drags are left to scrolling.
+function wireEditPlayerSwipe(dialog) {
+    const content = dialog.querySelector('.edit-player-modal-content');
+    if (!content) return;
+    let start = null;
+    content.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1 || editPlayerSequenceIndex() < 0) { start = null; return; }
+        start = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }, { passive: true });
+    content.addEventListener('touchend', (e) => {
+        if (!start) return;
+        const t = e.changedTouches[0];
+        const dx = t.clientX - start.x;
+        const dy = t.clientY - start.y;
+        start = null;
+        if (Math.abs(dx) < 60 || Math.abs(dx) < 1.5 * Math.abs(dy)) return;
+        stepEditPlayer(dx < 0 ? 1 : -1);
+    }, { passive: true });
+    content.addEventListener('touchcancel', () => { start = null; }, { passive: true });
 }
 
 /**
@@ -1259,8 +1358,7 @@ function showEditPlayerDialog(player, options = {}) {
  * @param {boolean} hasOverride - whether an override currently exists
  */
 function applyEditPlayerDialogMode(isEventOverride, hasOverride) {
-    const nameField = document.getElementById('editPlayerName')?.closest('.edit-player-field');
-    const numberField = document.getElementById('editPlayerNumber')?.closest('.edit-player-field');
+    const identityRow = document.querySelector('#editPlayerDialog .edit-player-identity-row');
     const genderField = document.querySelector('#editPlayerDialog .edit-player-gender-field');
     const overrideField = document.getElementById('editPlayerOverrideField');
     const overrideToggle = document.getElementById('editPlayerOverrideToggle');
@@ -1270,8 +1368,7 @@ function applyEditPlayerDialogMode(isEventOverride, hasOverride) {
     const title = document.querySelector('#editPlayerDialog .dialog-header h2');
 
     const idHide = isEventOverride ? 'none' : '';
-    if (nameField) nameField.style.display = idHide;
-    if (numberField) numberField.style.display = idHide;
+    if (identityRow) identityRow.style.display = idHide;
     if (genderField) genderField.style.display = idHide;
     if (deleteBtn) deleteBtn.style.display = idHide;
     // Erase visibility is finished by applyEditPlayerEraseState(), which also
@@ -1322,13 +1419,8 @@ function updateEditPlayerDialogState() {
         return;
     }
 
-    const nameInput = document.getElementById('editPlayerName');
-    const numberInput = document.getElementById('editPlayerNumber');
-    const fmpBtn = document.getElementById('editPlayerFMPBtn');
-    const mmpBtn = document.getElementById('editPlayerMMPBtn');
     const confirmBtn = document.getElementById('editPlayerConfirmBtn');
-
-    if (!nameInput || !confirmBtn) {
+    if (!confirmBtn) {
         return;
     }
 
@@ -1345,34 +1437,53 @@ function updateEditPlayerDialogState() {
         return;
     }
 
-    // Get current form values
-    const currentName = nameInput.value.trim();
-    const currentNumber = numberInput.value.trim();
-    const currentNumberValue = currentNumber || null;
-    
-    // Determine current gender selection
-    let currentGender = Gender.UNKNOWN;
-    if (fmpBtn && fmpBtn.classList.contains('selected')) {
-        currentGender = Gender.FMP;
-    } else if (mmpBtn && mmpBtn.classList.contains('selected')) {
-        currentGender = Gender.MMP;
-    }
-
-    // Current position / default-line selections (normalized: hybrid/crossover => null)
-    const currentPosition = normalizePositionValue(getEditPlayerToggleValue('position'));
-    const currentDefaultLine = normalizeDefaultLineValue(getEditPlayerToggleValue('line'));
-
-    // Check if any changes were made
-    const nameChanged = currentName !== editPlayerDialogOriginalData.name;
-    const numberChanged = currentNumberValue !== editPlayerDialogOriginalData.number;
-    const genderChanged = currentGender !== editPlayerDialogOriginalData.gender;
-    const positionChanged = currentPosition !== editPlayerDialogOriginalData.position;
-    const lineChanged = currentDefaultLine !== editPlayerDialogOriginalData.defaultLine;
-
     // Enable confirm button if changes were made and name is not empty
-    confirmBtn.disabled =
-        !(nameChanged || numberChanged || genderChanged || positionChanged || lineChanged)
-        || currentName === '';
+    confirmBtn.disabled = editPlayerFormChanges().length === 0 || readEditPlayerForm().name === '';
+}
+
+/**
+ * The identity fields as the form currently shows them, in stored form
+ * (number null when blank; position / line normalized, hybrid/crossover => null).
+ */
+function readEditPlayerForm() {
+    const fmpBtn = document.getElementById('editPlayerFMPBtn');
+    const mmpBtn = document.getElementById('editPlayerMMPBtn');
+    let gender = Gender.UNKNOWN;
+    if (fmpBtn && fmpBtn.classList.contains('selected')) {
+        gender = Gender.FMP;
+    } else if (mmpBtn && mmpBtn.classList.contains('selected')) {
+        gender = Gender.MMP;
+    }
+    return {
+        name: (document.getElementById('editPlayerName')?.value || '').trim(),
+        number: (document.getElementById('editPlayerNumber')?.value || '').trim() || null,
+        gender,
+        position: normalizePositionValue(getEditPlayerToggleValue('position')),
+        defaultLine: normalizeDefaultLineValue(getEditPlayerToggleValue('line')),
+    };
+}
+
+/**
+ * What the form changes relative to the player as opened, one short phrase
+ * per field ("#12 → #21", "position Handler → Cutter"). Empty when nothing
+ * changed. Not meaningful in event-override mode, which edits an override.
+ */
+function editPlayerFormChanges() {
+    const orig = editPlayerDialogOriginalData;
+    if (!orig || editPlayerDialogContext.context === 'eventOverride') return [];
+    const cur = readEditPlayerForm();
+    const genderText = g => (g === Gender.FMP ? 'FMP' : g === Gender.MMP ? 'MMP' : 'unset');
+    const numberText = n => (n ? `#${n}` : 'no #');
+    const positionText = v => ({ [PlayerPosition.HANDLER]: 'Handler', [PlayerPosition.CUTTER]: 'Cutter' }[v] || 'Hybrid');
+    const lineText = v => ({ [DefaultLine.O]: 'O-line', [DefaultLine.D]: 'D-line' }[v] || 'Crossover');
+    const origNumber = (orig.number == null || orig.number === '') ? null : String(orig.number);
+    const changes = [];
+    if (cur.name !== orig.name) changes.push(`name ${orig.name} → ${cur.name}`);
+    if (cur.number !== origNumber) changes.push(`${numberText(origNumber)} → ${numberText(cur.number)}`);
+    if (cur.gender !== orig.gender) changes.push(`${genderText(orig.gender)} → ${genderText(cur.gender)}`);
+    if (cur.position !== orig.position) changes.push(`position ${positionText(orig.position)} → ${positionText(cur.position)}`);
+    if (cur.defaultLine !== orig.defaultLine) changes.push(`line ${lineText(orig.defaultLine)} → ${lineText(cur.defaultLine)}`);
+    return changes;
 }
 
 /**
@@ -1523,43 +1634,6 @@ function saveEditedPlayer() {
         return;
     }
 
-    const nameInput = document.getElementById('editPlayerName');
-    const numberInput = document.getElementById('editPlayerNumber');
-    const fmpBtn = document.getElementById('editPlayerFMPBtn');
-    const mmpBtn = document.getElementById('editPlayerMMPBtn');
-
-    if (!nameInput) {
-        console.error('Cannot save edited player: name input not found');
-        return;
-    }
-
-    const newName = nameInput.value.trim();
-    if (!newName) {
-        alert('Player name cannot be empty');
-        return;
-    }
-
-    // Get new values
-    const newNumber = numberInput.value.trim();
-    const newNumberValue = validateJerseyNumber(newNumber);
-
-    // If validation was cancelled (returned null when input was provided), don't save
-    if (newNumber && newNumberValue === null) {
-        return;
-    }
-
-    // Determine new gender
-    let newGender = Gender.UNKNOWN;
-    if (fmpBtn && fmpBtn.classList.contains('selected')) {
-        newGender = Gender.FMP;
-    } else if (mmpBtn && mmpBtn.classList.contains('selected')) {
-        newGender = Gender.MMP;
-    }
-
-    // Position / default-line (normalized: hybrid/crossover => null)
-    const newPosition = normalizePositionValue(getEditPlayerToggleValue('position'));
-    const newDefaultLine = normalizeDefaultLineValue(getEditPlayerToggleValue('line'));
-
     // Event-override context: only write the override (position/line), or clear
     // it when the coach unchecks "override". Never touches the base player.
     if (editPlayerDialogContext.context === 'eventOverride' && editPlayerDialogContext.onSave) {
@@ -1578,12 +1652,47 @@ function saveEditedPlayer() {
 
     // Pickup context: delegate to callback
     if (editPlayerDialogContext.context === 'pickup' && editPlayerDialogContext.onSave) {
-        editPlayerDialogContext.onSave({
-            name: newName, number: newNumberValue, gender: newGender,
-            position: newPosition, defaultLine: newDefaultLine
-        });
+        const form = readEditPlayerForm();
+        if (!form.name) {
+            alert('Player name cannot be empty');
+            return;
+        }
+        const number = validateJerseyNumber(form.number || '');
+        // If validation was cancelled (returned null when input was provided), don't save
+        if (form.number && number === null) return;
+        editPlayerDialogContext.onSave({ ...form, number });
         closeEditPlayerDialog();
         return;
+    }
+
+    const player = commitRosterPlayerEdit();
+    if (!player) return;
+
+    // A caller that shows the roster its own way (the scrimmage dialog) redraws.
+    const onChanged = editPlayerDialogContext.onChanged;
+
+    // Close dialog
+    closeEditPlayerDialog();
+    if (typeof onChanged === 'function') onChanged(player);
+}
+
+/**
+ * Write the dialog's fields to the roster player being edited: validate,
+ * update, sync, save, redraw the roster table. Leaves the dialog open, so
+ * both Confirm and stepping to the next player use it.
+ * @returns {Player|null} the saved player, or null if the save was refused.
+ */
+function commitRosterPlayerEdit() {
+    const { name: newName, number: newNumber, gender: newGender,
+        position: newPosition, defaultLine: newDefaultLine } = readEditPlayerForm();
+    if (!newName) {
+        alert('Player name cannot be empty');
+        return null;
+    }
+    const newNumberValue = validateJerseyNumber(newNumber || '');
+    // If validation was cancelled (returned null when input was provided), don't save
+    if (newNumber && newNumberValue === null) {
+        return null;
     }
 
     // Get the current player from roster by ID (handles roster refresh during edit)
@@ -1592,7 +1701,7 @@ function saveEditedPlayer() {
         console.error('Cannot save edited player: player not found in roster');
         alert('Error: Player not found. The roster may have been updated. Please try again.');
         closeEditPlayerDialog();
-        return;
+        return null;
     }
 
     // Check if name already exists (excluding current player).
@@ -1603,7 +1712,7 @@ function saveEditedPlayer() {
     );
     if (nameExists) {
         alert('A player with this name already exists');
-        return;
+        return null;
     }
 
     // Update player object (using fresh reference from roster)
@@ -1624,13 +1733,7 @@ function saveEditedPlayer() {
 
     // Refresh roster display
     updateTeamRosterDisplay();
-
-    // A caller that shows the roster its own way (the scrimmage dialog) redraws.
-    const onChanged = editPlayerDialogContext.onChanged;
-
-    // Close dialog
-    closeEditPlayerDialog();
-    if (typeof onChanged === 'function') onChanged(player);
+    return player;
 }
 
 // Initialize edit player dialog event handlers
@@ -1665,6 +1768,11 @@ function saveEditedPlayer() {
     if (confirmBtn) {
         confirmBtn.addEventListener('click', saveEditedPlayer);
     }
+
+    // Previous / next player: header arrows and a sideways swipe
+    document.getElementById('editPlayerPrevBtn')?.addEventListener('click', () => stepEditPlayer(-1));
+    document.getElementById('editPlayerNextBtn')?.addEventListener('click', () => stepEditPlayer(1));
+    wireEditPlayerSwipe(dialog);
 
     // Remove-from-roster button (reversible)
     const deleteBtn = document.getElementById('editPlayerDeleteBtn');
@@ -1923,7 +2031,7 @@ document.addEventListener('breakside:screen-shown', (e) => {
 
 // --- ES-module exports ---
 export {
-    updateTeamRosterDisplay, invalidateRosterStatsCache,
+    updateTeamRosterDisplay, invalidateRosterStatsCache, resetRosterStatsView,
     showEditPlayerDialog, closeEditPlayerDialog, validateJerseyNumber,
     addPlayerToRoster,
 };
@@ -1932,5 +2040,5 @@ export {
 // from it without a cycle/reorder)
 window.updateTeamRosterDisplay = updateTeamRosterDisplay;
 // window survivor: late-bound back-edge hook (called by screens/navigation.js)
-window.invalidateRosterStatsCache = invalidateRosterStatsCache;
+window.resetRosterStatsView = resetRosterStatsView;
 

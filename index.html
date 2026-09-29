@@ -435,9 +435,10 @@
             <div class="subscreen-content">
                 <div class="roster-scope-toggle" id="rosterScopeToggle">
                     <span class="roster-scope-label">Scope:</span>
-                    <button type="button" class="roster-scope-btn" data-scope="all">All-time</button>
+                    <button type="button" class="roster-scope-btn" data-scope="all">All Time</button>
                     <button type="button" class="roster-scope-btn" data-scope="event">Event</button>
-                    <button type="button" class="roster-scope-btn" data-scope="game">Game</button>
+                    <!-- Label shortens with the row width: see css/tables.css -->
+                    <button type="button" class="roster-scope-btn" data-scope="game" title="Most Recent Game"><span class="scope-label-long">Most Recent Game</span><span class="scope-label-mid">Latest Game</span><span class="scope-label-short">Game</span></button>
                     <span class="roster-stats-level-group">
                         <span class="roster-scope-label">Stats:</span>
                         <select id="rosterStatsLevel" class="event-dialog-select"></select>
@@ -1093,18 +1094,28 @@
     <!-- Edit Player Dialog (outside all sections so it's not hidden by showScreen) -->
     <div id="editPlayerDialog" class="modal" style="display: none;">
         <div class="modal-content edit-player-modal-content">
-            <div class="dialog-header prominent-dialog-header">
+            <div class="dialog-header prominent-dialog-header edit-player-header">
+                <!-- Previous / next player (swipe does the same); shown only
+                     when opened from the roster table. See teams/rosterManagement.js -->
+                <button type="button" id="editPlayerPrevBtn" class="edit-player-nav-btn" title="Previous player" aria-label="Previous player">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
                 <h2>Edit Player</h2>
+                <button type="button" id="editPlayerNextBtn" class="edit-player-nav-btn" title="Next player" aria-label="Next player">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
                 <span class="close">&times;</span>
             </div>
             <div class="edit-player-container">
-                <div class="edit-player-field">
-                    <label for="editPlayerName">Name:</label>
-                    <input type="text" id="editPlayerName" class="edit-player-input" />
-                </div>
-                <div class="edit-player-field">
-                    <label for="editPlayerNumber">Jersey Number:</label>
-                    <input type="text" id="editPlayerNumber" class="edit-player-input" placeholder="Optional" />
+                <div class="edit-player-identity-row">
+                    <div class="edit-player-field edit-player-inline-field edit-player-name-field">
+                        <label for="editPlayerName">Name:</label>
+                        <input type="text" id="editPlayerName" class="edit-player-input" />
+                    </div>
+                    <div class="edit-player-field edit-player-inline-field edit-player-number-field">
+                        <label for="editPlayerNumber" title="Jersey number (optional)">#</label>
+                        <input type="text" id="editPlayerNumber" class="edit-player-input" title="Jersey number (optional)" />
+                    </div>
                 </div>
                 <div class="edit-player-field edit-player-gender-field">
                     <label>Gender:</label>
