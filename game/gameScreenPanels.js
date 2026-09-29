@@ -710,9 +710,9 @@ function wireWakeLockIndicator() {
     };
 
     btn.addEventListener('touchstart', startHold, { passive: true });
-    btn.addEventListener('touchend', cancelHold);
-    btn.addEventListener('touchcancel', cancelHold);
-    btn.addEventListener('touchmove', cancelHold);
+    btn.addEventListener('touchend', cancelHold, { passive: true });
+    btn.addEventListener('touchcancel', cancelHold, { passive: true });
+    btn.addEventListener('touchmove', cancelHold, { passive: true });
     btn.addEventListener('mousedown', startHold);
     btn.addEventListener('mouseup', cancelHold);
     btn.addEventListener('mouseleave', cancelHold);

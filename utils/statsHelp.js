@@ -93,9 +93,9 @@ function attachStatsColumnHelp(headerRow) {
         };
 
         th.addEventListener('touchstart', start, { passive: true });
-        th.addEventListener('touchend', cancel);
-        th.addEventListener('touchcancel', cancel);
-        th.addEventListener('touchmove', cancel);
+        th.addEventListener('touchend', cancel, { passive: true });
+        th.addEventListener('touchcancel', cancel, { passive: true });
+        th.addEventListener('touchmove', cancel, { passive: true });
         th.addEventListener('mousedown', start);
         th.addEventListener('mouseup', cancel);
         th.addEventListener('mouseleave', cancel);
