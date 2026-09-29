@@ -1,0 +1,86 @@
+name: Tag releases
+
+# A release is the commit that raises `version` in version.json (VERSIONING.md
+# § Release Tagging). On a laptop the post-commit hook tags it at commit time
+# and the tag is pushed by hand. A release merged from a Claude Code cloud
+# session never gets that far: the session's credential can push only its own
+# branch, never main or a tag, which is how v2.7.1, v2.7.2 and v2.8.0 landed
+# untagged. So whatever bump reaches main is tagged here, with the Actions
+# token, which can push tags. Idempotent with the hook: an existing tag is
+# left alone, so a laptop release still tags immediately and this run agrees.
+#
+# Tags pushed with the Actions token do not trigger other workflows, and the
+# deploy workflow keys on pushes to main, so this never causes a deploy.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - version.json
+  # Manual run: the backfill. Tags every release since `since` that has no
+  # tag yet — by default since the newest existing v* tag, which is exactly
+  # the releases that landed without one. `all` walks the whole history
+  # (nine 2025 releases predate the hook and were never tagged). Tick
+  # dry_run to see what it would do first.
+  workflow_dispatch:
+    inputs:
+      since:
+        description: Examine releases after this tag or commit ("all" for the whole history; empty = the newest existing v* tag)
+        type: string
+        default: ''
+      dry_run:
+        description: Print what would be tagged; create nothing
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout with full history and tags
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Tag the releases
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          SINCE: ${{ inputs.since }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            # The backfill: since the newest existing tag unless told otherwise.
+            case "$SINCE" in
+              all) RANGE=HEAD ;;
+              "")  latest="$(git tag -l 'v*' --sort=-v:refname | head -1)"
+                   RANGE="${latest:+$latest..}HEAD" ;;
+              *)   RANGE="$SINCE..HEAD" ;;
+            esac
+          else
+            # A push examines just the commits it brought. Anything that makes
+            # that range meaningless — a first push, a rewritten main — falls
+            # back to the whole history, which is safe: existing tags are
+            # skipped.
+            RANGE=HEAD
+            if [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -q '^0*$' \
+               && git cat-file -e "$BEFORE^{commit}" 2>/dev/null \
+               && git merge-base --is-ancestor "$BEFORE" "$AFTER"; then
+              RANGE="$BEFORE..$AFTER"
+            fi
+          fi
+          echo "range: $RANGE"
+
+          if [ "$DRY_RUN" = "true" ]; then
+            scripts/tag-releases.sh --dry-run "$RANGE"
+          else
+            scripts/tag-releases.sh --push "$RANGE"
+          fi
