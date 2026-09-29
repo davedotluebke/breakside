@@ -65,6 +65,11 @@ const advancedSettings = (function() {
         // for their point type.
         'autoLine.crossoverSamePriority': true,
         // --- Audio Narration ---
+        // Where the floating mic button appears (narration/micButton.js):
+        //   all    — every game tab, plays and lineups
+        //   lineup — the Line and All tabs only, lineup narration only
+        //   off    — no button at all
+        'narration.mode': 'all',
         'narration.vadEagerness': 'medium',              // low | medium | high | auto
         'narration.noiseReduction': 'near_field',        // near_field | far_field | off
         'narration.transcriptionModel': 'gpt-4o-mini-transcribe', // or gpt-4o-transcribe
@@ -238,6 +243,18 @@ const advancedSettings = (function() {
         return y;
     }
 
+    const NARRATION_MODES = ['all', 'lineup', 'off'];
+
+    /**
+     * Where the mic button appears: 'all' | 'lineup' | 'off' (see DEFAULTS).
+     * A stale or hand-edited stored value reads as the default rather than
+     * hiding the button by accident.
+     */
+    function getNarrationMode() {
+        const mode = get('narration.mode');
+        return NARRATION_MODES.includes(mode) ? mode : DEFAULTS['narration.mode'];
+    }
+
     /** Narration settings bundled for narrationRealtimeSession.start(). */
     function getNarrationSessionOptions(rosterInfo) {
         return {
@@ -275,8 +292,18 @@ const advancedSettings = (function() {
         },
         {
             group: 'Audio Narration',
-            note: 'Changes apply the next time you tap the mic.',
+            note: 'The mic button setting applies at once; the rest apply the next time you tap the mic.',
             fields: [
+                {
+                    key: 'narration.mode', label: 'Mic button',
+                    help: '<b>Plays and lineups</b> shows the floating mic on every game tab. <b>Lineups only</b> keeps it just on the Line and All tabs, for calling the next line. <b>Off</b> removes it altogether — one less thing to mis-tap.',
+                    type: 'select',
+                    options: [
+                        ['all', 'Plays and lineups'],
+                        ['lineup', 'Lineups only'],
+                        ['off', 'Off (no mic button)']
+                    ]
+                },
                 {
                     key: 'narration.vadEagerness', label: 'Speech detection',
                     help: 'How eagerly it decides you have finished a phrase. Lower keeps multi-clause narrations together; higher reacts faster on stop.',
@@ -656,6 +683,13 @@ const advancedSettings = (function() {
                 if (key === 'display.theme' && window.theme) {
                     window.theme.applyTheme(el.value);
                 }
+                // And the mic button: the coach may be mid-game with the
+                // modal open, and the button should come or go right behind
+                // the dialog rather than at the next tab switch.
+                // window survivor: late-bound (narration/micButton.js imports us).
+                if (key === 'narration.mode') {
+                    window.narrationMicButton?.refreshVisibility?.();
+                }
                 // A toggle flip may unhide a gated row (e.g. flipping the
                 // vocabulary hint on reveals the prompt textarea).
                 if (type === 'toggle') refreshShowWhen();
@@ -745,6 +779,7 @@ const advancedSettings = (function() {
         getNarrationAudioConstraints,
         buildNarrationVocabularyPrompt,
         getNarrationSessionOptions,
+        getNarrationMode,
         getEndzoneYards,
         getReplaySettings,
         getAutoLinePriorityOrder,

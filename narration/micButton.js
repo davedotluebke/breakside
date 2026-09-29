@@ -9,16 +9,26 @@
  *   - during a point → event narration, except on the Line tab
  * The press handlers never branch on which one is live.
  *
+ * Where the button appears is a per-device setting (Advanced Settings →
+ * Audio Narration → Mic button; 'narration.mode' in settings/advancedSettings.js):
+ *   - 'all'     every game tab, both jobs (the default)
+ *   - 'lineup'  the Line and All tabs only, and only ever lineup narration —
+ *               a coach who wants the mic just for calling lines shouldn't
+ *               have a hot mic within thumb reach on the play tabs
+ *   - 'off'     no button at all: one less thing to mis-tap
+ * A running recording (or its follow-up work) keeps the button on screen
+ * whatever the setting or tab says, so it can always be stopped.
+ *
  * Interaction model:
  *   - Short tap (press+release < LONG_PRESS_MS): toggle recording on/off
  *   - Long press (held >= LONG_PRESS_MS):        temporary recording — records
  *                                                until finger lifts, then stops
  *
- * Visibility: shown only when the in-game screen is active. Uses polling
- * against isGameScreenVisible() since the existing enter/exit functions do
- * not emit events. The same poll notices target changes, which only ever
- * swap the tooltip — both targets look identical while idle, so a poll-length
- * lag is invisible. Correctness never rides on it: every press reads
+ * Visibility: shown only when the in-game screen is active and the setting
+ * allows it on the current tab. Game-screen enter/exit, tab changes
+ * (ui/panelSystem.js applyTabState), phase transitions in either narration
+ * layer, and the setting itself all call back into render(); nothing polls.
+ * Correctness never rides on the paint either way: every press reads
  * currentTarget() live.
  *
  * This module does not know anything about audio or LLMs — it delegates to
@@ -27,6 +37,7 @@
 import { isGameScreenVisible, getActiveTab } from '../ui/panelSystem.js';
 import { showControllerToast } from '../game/controllerState.js';
 import { isPointInProgress } from '../utils/helpers.js';
+import { advancedSettings } from '../settings/advancedSettings.js';
 import { narrationEngine } from './narrationEngine.js';
 import { lineupNarration } from './lineupNarration.js';
 
@@ -124,6 +135,40 @@ const narrationMicButton = (function() {
     }
 
     /**
+     * The per-device setting: 'all' | 'lineup' | 'off'. Read live on every
+     * render and every press, so a change in Advanced Settings mid-game
+     * takes effect at once.
+     */
+    function narrationMode() {
+        return (advancedSettings && advancedSettings.getNarrationMode)
+            ? advancedSettings.getNarrationMode()
+            : 'all';
+    }
+
+    // Tabs the button stays on in 'lineup' mode: Line is where a line gets
+    // called, and All shows the same Select Line panel beside play-by-play.
+    const LINEUP_ONLY_TABS = ['line', 'all'];
+
+    /**
+     * Whether the setting allows the button on the current tab. A busy
+     * target overrides this (see render): whatever the coach just changed,
+     * they must be able to stop what is running.
+     */
+    function isEnabledOnTab() {
+        const mode = narrationMode();
+        if (mode === 'off') return false;
+        if (mode === 'lineup') {
+            const tab = typeof getActiveTab === 'function' ? getActiveTab() : null;
+            return LINEUP_ONLY_TABS.includes(tab);
+        }
+        return true;
+    }
+
+    function anyTargetBusy() {
+        return lineupTarget.phase() !== 'idle' || eventTarget.phase() !== 'idle';
+    }
+
+    /**
      * Which target the button drives right now.
      *
      * A non-idle target always wins over the context: the game clock and the
@@ -132,10 +177,14 @@ const narrationMicButton = (function() {
      * (both share the realtime-session singleton, so the second would fail
      * anyway). In particular this keeps a lineup recording stoppable through
      * the point start that would otherwise flip the context under it.
+     *
+     * In 'lineup' mode the button never drives event narration, even
+     * mid-point on the All tab — that is the whole point of the setting.
      */
     function currentTarget() {
         if (lineupTarget.phase() !== 'idle') return lineupTarget;
         if (eventTarget.phase() !== 'idle') return eventTarget;
+        if (narrationMode() === 'lineup') return lineupTarget;
         return isLineupContext() ? lineupTarget : eventTarget;
     }
 
@@ -148,8 +197,6 @@ const narrationMicButton = (function() {
     // Target captured at press-start and held for the whole press, so a phase
     // transition mid-press can't route the release to the other subsystem.
     let pressTarget = null;
-    // Last target rendered, so the visibility poll can notice tab changes.
-    let renderedTarget = null;
 
     /**
      * Whether narration is available at all (engine loaded + browser supports
@@ -163,18 +210,26 @@ const narrationMicButton = (function() {
     }
 
     /**
-     * Update the button's visual state to match the current target's phase /
-     * availability state. Does not change visibility (show/hide).
+     * Paint the button: shown or hidden, then colour and tooltip for the
+     * current target's phase. The one entry point for every "something
+     * changed" signal — game-screen enter/exit, tab change, phase
+     * transition, setting change — so none of them can disagree about what
+     * is on screen. Cheap enough (a few class flips) to run unconditionally.
      */
-    function refreshButtonState() {
+    function render() {
         if (!btn) return;
-        btn.classList.remove(...ALL_PHASE_CLASSES);
+        const inGame = typeof isGameScreenVisible === 'function' && isGameScreenVisible();
+        // The setting (and, for lineups only, the tab) decides — unless a
+        // recording or its follow-up work is running, in which case the
+        // button stays until that is idle: the coach must be able to stop
+        // what they started, and see it finish, whatever they just changed.
+        btn.classList.toggle('visible', !!inGame && (isEnabledOnTab() || anyTargetBusy()));
 
+        btn.classList.remove(...ALL_PHASE_CLASSES);
         if (!isNarrationAvailable()) {
             btn.classList.add('mic-disabled');
             btn.title = 'Narration unavailable (no microphone support)';
             btn.setAttribute('aria-label', 'Narration unavailable');
-            renderedTarget = null;
             return;
         }
 
@@ -185,18 +240,6 @@ const narrationMicButton = (function() {
         btn.classList.add(PHASE_CLASS[phase] || 'mic-idle');
         btn.title = title;
         btn.setAttribute('aria-label', label);
-        renderedTarget = target;
-    }
-
-    /**
-     * Show or hide the button based on whether the game screen is visible,
-     * and re-render if the active tab has swapped the target under us.
-     */
-    function refreshVisibility() {
-        if (!btn) return;
-        const visible = typeof isGameScreenVisible === 'function' && isGameScreenVisible();
-        btn.classList.toggle('visible', !!visible);
-        if (visible && renderedTarget !== currentTarget()) refreshButtonState();
     }
 
     // ---------------------------------------------------------------------
@@ -355,7 +398,7 @@ const narrationMicButton = (function() {
                 } catch (_) { /* storage disabled — they will see this again */ }
                 onAccept();
             } else {
-                refreshButtonState();
+                render();
             }
             return;
         }
@@ -372,7 +415,7 @@ const narrationMicButton = (function() {
                 // Not remembered: declining once should not be read as a
                 // permanent answer, and they get asked again next tap.
                 closeDisclosure();
-                refreshButtonState();
+                render();
             });
         }
 
@@ -416,12 +459,16 @@ const narrationMicButton = (function() {
     }
 
     function beginRecording(target) {
-        refreshButtonState();  // Show connecting state immediately
+        render();  // Show connecting state immediately
         Promise.resolve(target.start())
-            .then(() => refreshButtonState())
+            .then(() => render())
             .catch(err => {
                 console.error(`[micButton] ${target.name} start failed:`, err);
-                refreshButtonState();
+                render();
+                if (isPermissionDenied(err)) {
+                    showMicBlockedToast();
+                    return;
+                }
                 if (typeof showControllerToast === 'function') {
                     // Not always a mic problem — the realtime socket can die
                     // during setup too (G5). Keep the message cause-neutral.
@@ -432,12 +479,52 @@ const narrationMicButton = (function() {
 
     function stopRecording(target) {
         Promise.resolve(target.stop())
-            .then(() => refreshButtonState())
+            .then(() => render())
             .catch(err => {
                 console.error(`[micButton] ${target.name} stop failed:`, err);
-                refreshButtonState();
+                render();
             });
-        refreshButtonState();
+        render();
+    }
+
+    // ---------------------------------------------------------------------
+    // Microphone permission denied
+    //
+    // A denied getUserMedia rejects with a DOMException named NotAllowedError
+    // (PermissionDeniedError in old Chrome). Browsers don't ask twice: WebKit
+    // remembers the answer for the life of the page and Chrome for the site,
+    // so every later tap fails the same way at once — which reads as "the
+    // mic is broken" to a coach who hit Deny by accident. So this toast says
+    // how to get the prompt back, stays up long enough to be read, and
+    // offers the coach who meant it a way to be rid of the button.
+    // ---------------------------------------------------------------------
+
+    const MIC_BLOCKED_TOAST_MS = 15000;
+
+    function isPermissionDenied(err) {
+        const name = (err && err.name) || (err && err.cause && err.cause.name);
+        return name === 'NotAllowedError' || name === 'PermissionDeniedError';
+    }
+
+    function showMicBlockedToast() {
+        if (typeof showControllerToast !== 'function') return;
+        showControllerToast(
+            'Microphone access was denied, so narration can\'t start. '
+            + 'Reload Breakside (or close and reopen it), then tap the mic to be asked again — '
+            + 'if it still doesn\'t ask, allow the microphone for this site in your browser settings.',
+            'error',
+            MIC_BLOCKED_TOAST_MS,
+            { actions: [{ label: 'Hide mic button', onClick: hideMicButton }] }
+        );
+    }
+
+    /** The toast's way out: narration off, button gone, and where it went. */
+    function hideMicButton() {
+        if (advancedSettings && advancedSettings.set) advancedSettings.set('narration.mode', 'off');
+        render();
+        if (typeof showControllerToast === 'function') {
+            showControllerToast('Mic button hidden. Advanced Settings → Audio Narration brings it back.', 'info', 6000);
+        }
     }
 
     // ---------------------------------------------------------------------
@@ -476,15 +563,14 @@ const narrationMicButton = (function() {
     function init() {
         btn = createButton();
         initDisclosure();
-        refreshVisibility();
-        refreshButtonState();
+        render();
 
         // Visibility used to be discovered by polling isGameScreenVisible()
         // twice a second, forever, because "enterGameScreen/exitGameScreen
         // don't emit events". They do now: both call refreshVisibility()
         // directly (game/gameScreenSync.js), and this listener catches every
         // other navigation path.
-        document.addEventListener('breakside:screen-shown', refreshVisibility);
+        document.addEventListener('breakside:screen-shown', render);
     }
 
     if (document.readyState === 'loading') {
@@ -494,11 +580,14 @@ const narrationMicButton = (function() {
     }
 
     // Public API: the refresh hook both narration layers call on phase
-    // transitions. (There's no dedicated bus channel for phase; they invoke
-    // window.narrationMicButton.refresh() directly.)
+    // transitions (there's no dedicated bus channel for phase; they invoke
+    // window.narrationMicButton.refresh() directly), and the visibility hook
+    // the game screen, the tab switch and Advanced Settings call. Both paint
+    // the same thing now; two names are kept because the callers are split
+    // by which signal they carry.
     return {
-        refresh: refreshButtonState,
-        refreshVisibility: refreshVisibility,
+        refresh: render,
+        refreshVisibility: render,
         // Debug/e2e seam: which subsystem a tap would drive right now.
         _currentTargetName: () => currentTarget().name
     };

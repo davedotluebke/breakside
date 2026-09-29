@@ -1315,9 +1315,10 @@ function applyTabState() {
     }
 
     // The mic FAB drives lineup narration on the Line tab and event
-    // narration everywhere else, so its tooltip/label changes with the tab.
-    // It also polls, but only every 500ms and background tabs throttle that
-    // hard — refresh here so the swap lands with the tab change.
+    // narration everywhere else, so its tooltip/label changes with the tab —
+    // and with narration set to lineups only, so does whether it shows at
+    // all (Line and All tabs only). Nothing polls; this call is how the
+    // swap lands with the tab change.
     // window survivor: late-bound (narration/micButton.js imports panelSystem).
     if (typeof window.narrationMicButton?.refresh === 'function') {
         window.narrationMicButton.refresh();

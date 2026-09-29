@@ -1106,12 +1106,23 @@ function getHandoffKey(handoff) {
     return `${handoff.requesterId}-${handoff.role}-${handoff.requestedAt}`;
 }
 
+/** Escape text destined for a toast's innerHTML (action labels). */
+function escapeToastText(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 /**
  * Show a toast notification for controller events
  * @param {string} message - Message to display
  * @param {string} type - 'success', 'info', 'warning', 'error'
  * @param {number} duration - Duration in ms (default 4000)
- * @param {object} options - Optional callbacks: { onTap, onDismiss }
+ * @param {object} options - Optional: { onTap, onDismiss, actions }, where
+ *   actions is [{label, onClick}] — pill buttons under the message; tapping
+ *   one dismisses the toast and runs onClick.
  */
 function showControllerToast(message, type = 'info', duration = 4000, options = {}) {
     const container = document.getElementById('toastContainer');
@@ -1132,16 +1143,40 @@ function showControllerToast(message, type = 'info', duration = 4000, options = 
         error: 'fa-times-circle'
     };
     
+    // Optional pill buttons under the message (options.actions, an array of
+    // {label, onClick}); tapping one dismisses the toast and runs its
+    // handler. They live inside .toast-message so the icon | message | ×
+    // row is unchanged. Styles: css/toasts.css .toast-actions.
+    const actions = Array.isArray(options.actions) ? options.actions : [];
+    const actionsHtml = actions.length
+        ? `<span class="toast-actions">${actions.map((a, i) =>
+            `<button type="button" class="toast-action-btn" data-action-index="${i}">${escapeToastText(a.label)}</button>`
+        ).join('')}</span>`
+        : '';
+
     toast.innerHTML = `
         <i class="fas ${icons[type] || icons.info}"></i>
-        <span class="toast-message">${message}</span>
+        <span class="toast-message">${message}${actionsHtml}</span>
         <button class="toast-close">
             <i class="fas fa-times"></i>
         </button>
     `;
-    
+
     // Close button handler
     toast.querySelector('.toast-close').addEventListener('click', () => dismissToast(toast));
+
+    toast.querySelectorAll('.toast-action-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();  // not a body tap (options.onTap)
+            const action = actions[parseInt(btn.dataset.actionIndex, 10)];
+            dismissToast(toast);
+            try {
+                if (action && typeof action.onClick === 'function') action.onClick();
+            } catch (err) {
+                console.error('[toast] action failed:', err);
+            }
+        });
+    });
 
     // Actionable toast: tap body (excluding close button) to trigger onTap
     if (options.onTap) {

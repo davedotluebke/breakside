@@ -285,7 +285,11 @@ const lineupNarration = (function() {
             abortRequested = false;
             setPhase('idle');
             console.error('[lineupNarration] start failed:', err);
-            toast('Lineup narration failed to start: ' + (err && err.message ? err.message : err), 'error');
+            // Rethrown rather than toasted here, the same as narrationEngine's
+            // startRecording: the mic button reports start failures for both
+            // layers, and it is the one that tells a denied microphone apart
+            // from everything else (narration/micButton.js).
+            throw err;
         }
     }
 

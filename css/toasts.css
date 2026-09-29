@@ -203,6 +203,37 @@
     opacity: 1;
 }
 
+/* Pill buttons under a toast's message (showControllerToast's
+   options.actions — the mic-blocked toast's "Hide mic button"). Outlined in
+   the toast's own text colour so they read on every toast type, and sized
+   for a thumb on the sideline. */
+.toast-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.toast-action-btn {
+    margin: 0;   /* the global button { margin: 10px } */
+    padding: 6px 14px;
+    min-height: 36px;
+    border-radius: 999px;
+    border: 1.5px solid currentColor;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+.toast-action-btn:hover,
+.toast-action-btn:active {
+    background: rgba(255, 255, 255, 0.2);
+}
+
 .toast.toast-swiping {
     transition: none;
 }
