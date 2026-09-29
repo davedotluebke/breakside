@@ -20,7 +20,7 @@
  * teams/scrimmageDialogs.js owns the dialog and the Game construction; this
  * module is what tests/unit/scrimmage.test.mjs pins.
  */
-import { Gender, PlayerPosition, Player, generateShortId } from './models.js';
+import { Gender, PlayerPosition, DefaultLine, Player, generateShortId } from './models.js';
 
 /** The two squads. Stable keys; the coach names them (see DEFAULT_SQUAD_NAMES). */
 const SQUADS = ['X', 'Y'];
@@ -349,17 +349,38 @@ function pruneLinesToSquad(pendingNextLine, snapshot, now = new Date()) {
 }
 
 // ── dealing players onto squads ─────────────────────────────────────────
-
-function positionRank(player) {
-    if (player.position === PlayerPosition.HANDLER) return 0;
-    if (player.position === PlayerPosition.CUTTER) return 1;
-    return 2;   // hybrid / unset: fills either slot
-}
+//
+// The dialog's Auto button, and the deal a new scrimmage opens with. Like the
+// Line tab's Auto it fills only the empty spots, one pick at a time, and
+// weighs the same two things that mean anything before a game — position
+// (handlers / cutters) and O/D line — in the order the coach set in Advanced
+// Settings (rest and playing time are meaningless here and are skipped).
+// Unlike the Line tab, which builds one line for a known side, a scrimmage
+// builds two lines that should mirror each other, so each factor is read as
+// balance ACROSS the squads: the squad picking prefers whoever it trails the
+// other squad in. Gender comes first, as the ratio does on the Line tab. And
+// where the Line tab breaks every remaining tie by name, here ties are
+// random — Clear then Auto is how a coach gets a fresh deal, so the same
+// roster must not come out the same way twice.
 
 function genderGroup(player) {
     if (player.gender === Gender.FMP) return Gender.FMP;
     if (player.gender === Gender.MMP) return Gender.MMP;
     return Gender.UNKNOWN;
+}
+
+/** handler | cutter | hybrid — unset reads as hybrid (fills either), as on the Line tab. */
+function positionGroup(player) {
+    if (player.position === PlayerPosition.HANDLER) return PlayerPosition.HANDLER;
+    if (player.position === PlayerPosition.CUTTER) return PlayerPosition.CUTTER;
+    return PlayerPosition.HYBRID;
+}
+
+/** O | D | Crossover — unset reads as Crossover, as on the Line tab. */
+function lineGroup(player) {
+    if (player.defaultLine === DefaultLine.O) return DefaultLine.O;
+    if (player.defaultLine === DefaultLine.D) return DefaultLine.D;
+    return DefaultLine.CROSSOVER;
 }
 
 function shuffled(list, random) {
@@ -371,39 +392,79 @@ function shuffled(list, random) {
     return out;
 }
 
+/** The Auto factors (Advanced Settings `autoLine.priorityOrder`) that apply before a game. */
+const SQUAD_AUTO_FACTORS = ['position', 'od'];
+const DEFAULT_AUTO_PRIORITY = ['position', 'rest', 'od', 'pt'];
+const FACTOR_GROUP = { position: positionGroup, od: lineGroup };
+
 /**
- * Deal players onto two squads, balanced by gender and position.
+ * Fill the two squads with every player not on one yet, one pick at a time.
  *
- * Players are grouped by gender, so a mixed team's ratio comes out the same
- * on both sides; each group is ordered handlers → cutters → hybrid/unset, so
- * the positions alternate too; then it is dealt X, Y, X, Y… Each group starts
- * with whichever squad is currently smaller, so the totals differ by at most
- * one however the groups divide. `shuffle` randomizes the order within each
- * position bucket (a different split next practice) and keeps the balance;
- * `random` is injectable for tests.
+ * Each pick goes to the smaller squad (X first when they are level, then
+ * alternating). Among the candidates, the pick is whoever the picking squad
+ * trails the other squad in the most — by gender first, then by the coach's
+ * Auto factors in their order (position, O/D line; hybrid and Crossover are
+ * groups of their own, so they spread evenly too), then at random. Players
+ * already assigned stay where they are; the balance is judged with them
+ * counted. So an empty assignment is a full deal, balanced within one in
+ * every group, and a partial one is topped up around the coach's choices.
  *
- * @param {Array<object>} players - roster Players (id, gender, position, name)
- * @param {{shuffle?: boolean, random?: () => number}} [opts]
- * @returns {{X: string[], Y: string[]}} player ids per squad
+ * @param {Array<object>} players - the players to deal: roster Players who
+ *        are here (id, gender, position, defaultLine), in roster order
+ * @param {Map<string, 'X'|'Y'>|null} assignment - who is on a squad already
+ * @param {{priorityOrder?: string[], random?: () => number}} [opts] -
+ *        priorityOrder as Advanced Settings gives it (keys other than
+ *        position / od are ignored; a missing key goes last); random is
+ *        injectable for tests
+ * @returns {{X: string[], Y: string[]}} player ids per squad, in roster order
  */
-function splitSquads(players, { shuffle = false, random = Math.random } = {}) {
-    const squads = { X: [], Y: [] };
+function autoFillSquads(players, assignment, { priorityOrder = DEFAULT_AUTO_PRIORITY, random = Math.random } = {}) {
     const valid = (players || []).filter(p => p && p.id);
-    [Gender.FMP, Gender.MMP, Gender.UNKNOWN].forEach(g => {
-        const group = valid.filter(p => genderGroup(p) === g);
-        if (group.length === 0) return;
-        const base = shuffle
-            ? shuffled(group, random)
-            : group.slice().sort((a, b) => String(a.name).localeCompare(String(b.name)));
-        // Array.prototype.sort is stable, so within a position bucket the
-        // shuffled (or alphabetical) order survives.
-        base.sort((a, b) => positionRank(a) - positionRank(b));
-        let side = squads.X.length <= squads.Y.length ? 'X' : 'Y';
-        base.forEach(p => {
-            squads[side].push(p.id);
-            side = otherSquad(side);
-        });
+    const assigned = id => {
+        const squad = assignment && typeof assignment.get === 'function' ? assignment.get(id) : null;
+        return SQUADS.includes(squad) ? squad : null;
+    };
+    const squads = { X: [], Y: [] };       // ids
+    const members = { X: [], Y: [] };      // players, for the tallies
+    valid.forEach(p => {
+        const squad = assigned(p.id);
+        if (squad) { squads[squad].push(p.id); members[squad].push(p); }
     });
+    const pool = shuffled(valid.filter(p => !assigned(p.id)), random);
+
+    const factors = (Array.isArray(priorityOrder) ? priorityOrder : DEFAULT_AUTO_PRIORITY)
+        .filter(k => SQUAD_AUTO_FACTORS.includes(k));
+    SQUAD_AUTO_FACTORS.forEach(k => { if (!factors.includes(k)) factors.push(k); });
+    const groups = [genderGroup, ...factors.map(k => FACTOR_GROUP[k])];
+
+    // How far `side` is ahead of the other squad in the candidate's group:
+    // negative means the side trails there, so the candidate is wanted.
+    const lead = (side, group, p) => {
+        const g = group(p);
+        return members[side].filter(m => group(m) === g).length
+            - members[otherSquad(side)].filter(m => group(m) === g).length;
+    };
+
+    let last = 'Y';   // X picks first when the squads are level
+    while (pool.length) {
+        const side = squads.X.length < squads.Y.length ? 'X'
+            : squads.Y.length < squads.X.length ? 'Y'
+            : otherSquad(last);
+        let best = 0;
+        for (let i = 1; i < pool.length; i++) {
+            for (const group of groups) {
+                const d = lead(side, group, pool[i]) - lead(side, group, pool[best]);
+                if (d) { if (d < 0) best = i; break; }
+            }
+        }
+        const [pick] = pool.splice(best, 1);
+        squads[side].push(pick.id);
+        members[side].push(pick);
+        last = side;
+    }
+
+    const order = new Map(valid.map((p, i) => [p.id, i]));
+    SQUADS.forEach(s => squads[s].sort((a, b) => order.get(a) - order.get(b)));
     return squads;
 }
 
@@ -515,7 +576,7 @@ export {
     SQUADS, DEFAULT_SQUAD_NAMES,
     isScrimmageGame, withoutScrimmages, otherSquad,
     normalizeSquadNames, generateScrimmageId, formatShortDate,
-    squadGameFields, buildSquadSnapshot, squadRoster, splitSquads,
+    squadGameFields, buildSquadSnapshot, squadRoster, autoFillSquads,
     gameStartMs, groupScrimmages, scrimmageSquadNames, scrimmageScores,
     scrimmageLabel, isScrimmageOver,
     SQUAD_DEFINITION_KEYS, squadStamp, squadDefinition, newerSquadDefinition,

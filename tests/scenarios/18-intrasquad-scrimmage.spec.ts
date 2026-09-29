@@ -197,11 +197,26 @@ test.describe('intrasquad scrimmage', () => {
     await expect(modal.locator('th[data-squad="Y"] .scrimmage-col-count')).toHaveText('4 · 2F / 2M');
     await expect(modal.locator('#scrimmageSitting')).toHaveText('Everyone is on a squad');
 
-    // Jake didn't show up: tap his squad again to sit him out.
+    // Jake didn't show up: untick his "here" box. He leaves his squad, his
+    // pick buttons disable, and Auto leaves him out from now on.
     const jakeRow = modal.locator('#scrimmagePickerBody tr', { hasText: 'Jake' });
-    await jakeRow.locator('.scrimmage-pick.on').click();
-    await expect(jakeRow).toHaveClass(/scrimmage-sitting-out/);
-    await expect(modal.locator('#scrimmageSitting')).toHaveText('1 sitting out');
+    await jakeRow.locator('.scrimmage-present').uncheck();
+    await expect(jakeRow).toHaveClass(/scrimmage-absent/);
+    await expect(jakeRow.locator('.scrimmage-pick.on')).toHaveCount(0);
+    await expect(jakeRow.locator('.scrimmage-pick').first()).toBeDisabled();
+    await expect(modal.locator('#scrimmageSitting')).toHaveText('1 absent');
+
+    // Clear, then Auto: a fresh deal of the seven who are here — X picks
+    // first when the squads are level, so it gets the extra player, and the
+    // genders (4F, 3M) split within one.
+    await modal.locator('#scrimmageClearBtn').click();
+    await expect(modal.locator('#scrimmageSitting')).toHaveText('7 sitting out · 1 absent');
+    await expect(modal.locator('#scrimmagePickerBody .scrimmage-pick.on')).toHaveCount(0);
+    await modal.locator('#scrimmageAutoBtn').click();
+    await expect(modal.locator('#scrimmageSitting')).toHaveText('1 absent');
+    await expect(modal.locator('th[data-squad="X"] .scrimmage-col-count')).toHaveText('4 · 2F / 2M');
+    await expect(modal.locator('th[data-squad="Y"] .scrimmage-col-count')).toHaveText('3 · 2F / 1M');
+    await expect(jakeRow).toHaveClass(/scrimmage-absent/);
 
     // Name the squads; the headers, pull toggle and Start buttons follow.
     await modal.locator('#scrimmageSquadNameX').fill('Red');

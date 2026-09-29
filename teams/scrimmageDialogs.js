@@ -27,7 +27,7 @@ import {
 } from '../store/sync.js';
 import {
     SQUADS, DEFAULT_SQUAD_NAMES, normalizeSquadNames, generateScrimmageId,
-    squadGameFields, buildSquadSnapshot, splitSquads, otherSquad, squadRoster,
+    squadGameFields, buildSquadSnapshot, autoFillSquads, otherSquad, squadRoster,
     groupScrimmages, scrimmageSquadNames, squadAssignments, squadPatch,
     squadDefinition, applySquadDefinition, describeSquadChange,
 } from '../store/scrimmage.js';
@@ -47,7 +47,9 @@ import { log } from '../utils/logger.js';
 //   roster      the players the picker lists: the team roster, plus (edit mode)
 //               anyone still on a squad but no longer on the team ("ghosts")
 //   ghosts      ids of those
-//   assignment  playerId → 'X' | 'Y' (absent = sitting out)
+//   assignment  playerId → 'X' | 'Y' (not in the map = sitting out)
+//   absent      ids whose "here" box is unticked: never on a squad, and Auto
+//               skips them (default: everyone is here)
 //   names       the squad names as typed
 //   pulling     which squad pulls first (new mode)
 //   edit        { scrimmageId, games: {X?, Y?} } — the halves being edited:
@@ -81,6 +83,23 @@ function applySplit(split) {
 }
 
 /**
+ * Auto: put everyone who is here and not on a squad onto one, balanced
+ * around the coach's own picks (store/scrimmage.js autoFillSquads), with
+ * the factor order from Advanced Settings. Also the deal a new scrimmage
+ * opens with.
+ */
+function autoFill() {
+    const here = state.roster.filter(p => !state.absent.has(p.id));
+    applySplit(autoFillSquads(here, state.assignment, { priorityOrder: autoPriorityOrder() }));
+}
+
+/** The Line tab's Auto factor order, as Advanced Settings holds it (undefined → the default). */
+function autoPriorityOrder() {
+    const adv = typeof window !== 'undefined' ? window.advancedSettings : null;
+    return adv && typeof adv.getAutoLinePriorityOrder === 'function' ? adv.getAutoLinePriorityOrder() : undefined;
+}
+
+/**
  * The picker's rows: the team roster as it stands now and, when editing,
  * anyone still on a squad who has since left the team (shown marked, so the
  * coach can sit them out). Assignments of players who are gone are dropped.
@@ -103,6 +122,9 @@ function rebuildRoster() {
     state.ghosts = ghosts;
     [...state.assignment.keys()].forEach(id => {
         if (!roster.some(p => p.id === id)) state.assignment.delete(id);
+    });
+    [...state.absent].forEach(id => {
+        if (!roster.some(p => p.id === id)) state.absent.delete(id);
     });
 }
 
@@ -139,11 +161,11 @@ function openDialog(mode, team) {
                            value="${DEFAULT_SQUAD_NAMES.Y}" maxlength="20" aria-label="Second squad name">
                 </div>
                 <div class="scrimmage-tools">
-                    <button type="button" id="scrimmageShuffleBtn" class="scrimmage-tool-btn" title="Re-deal the players on a squad, balanced by gender and position">
-                        <i class="fas fa-random"></i> Shuffle
-                    </button>
                     <button type="button" id="scrimmageClearBtn" class="scrimmage-tool-btn" title="Take everyone off both squads">
                         Clear
+                    </button>
+                    <button type="button" id="scrimmageAutoBtn" class="scrimmage-tool-btn" title="Put everyone who is here onto a squad, balanced by gender, position and O/D line (Clear first for a fresh deal)">
+                        <i class="fas fa-bolt"></i> Auto
                     </button>
                     <span class="scrimmage-sitting" id="scrimmageSitting"></span>
                 </div>
@@ -210,6 +232,7 @@ function openDialog(mode, team) {
         roster: [],
         ghosts: new Set(),
         assignment: new Map(),
+        absent: new Set(),
         names: { ...DEFAULT_SQUAD_NAMES },
         pulling: 'X',
         busy: false,
@@ -234,15 +257,12 @@ function openDialog(mode, team) {
             renderNames();
         });
     });
-    modal.querySelector('#scrimmageShuffleBtn').addEventListener('click', () => {
-        // Re-deal only the players who are on a squad — the coach may have
-        // taken absentees off first. Nobody on a squad yet: deal everyone.
-        const onSquad = state.roster.filter(p => state.assignment.get(p.id));
-        applySplit(splitSquads(onSquad.length ? onSquad : state.roster, { shuffle: true }));
-        renderTable();
-    });
     modal.querySelector('#scrimmageClearBtn').addEventListener('click', () => {
         state.assignment = new Map();
+        renderTable();
+    });
+    modal.querySelector('#scrimmageAutoBtn').addEventListener('click', () => {
+        autoFill();
         renderTable();
     });
     modal.querySelectorAll('.scrimmage-start-btn[data-squad]').forEach(btn => {
@@ -292,7 +312,7 @@ function showNewScrimmageDialog(team) {
     selectCloudTeam(team, { landOn: 'none' }).then(() => {
         if (!stillOpen(modal)) return;   // closed meanwhile
         rebuildRoster();
-        applySplit(splitSquads(state.roster));
+        autoFill();
         renderTable();
     }).catch(err => {
         console.error('Could not load the team for a scrimmage:', err);
@@ -523,9 +543,13 @@ function renderNames() {
     if (save) save.disabled = state.busy || !state.edit;
     const sitting = modal.querySelector('#scrimmageSitting');
     if (sitting) {
-        const out = state.roster.length - ids.X.length - ids.Y.length;
+        const absent = state.roster.filter(p => state.absent.has(p.id)).length;
+        const out = state.roster.length - ids.X.length - ids.Y.length - absent;
+        const parts = [];
+        if (out > 0) parts.push(`${out} sitting out`);
+        if (absent > 0) parts.push(`${absent} absent`);
         sitting.textContent = state.roster.length
-            ? (out > 0 ? `${out} sitting out` : 'Everyone is on a squad')
+            ? (parts.length ? parts.join(' · ') : 'Everyone is on a squad')
             : '';
     }
 }
@@ -556,11 +580,37 @@ function renderTable() {
     state.roster.forEach(player => {
         const tr = document.createElement('tr');
         tr.dataset.playerId = player.id;
+        const absent = state.absent.has(player.id);
         const nameTd = document.createElement('td');
         nameTd.className = 'scrimmage-player-col';
         if (player.gender === Gender.FMP) nameTd.classList.add('player-fmp');
         else if (player.gender === Gender.MMP) nameTd.classList.add('player-mmp');
-        nameTd.textContent = formatPlayerName(player);
+
+        // Here today? Unticked = absent or injured: off both squads, and Auto
+        // skips them. Everyone starts ticked.
+        const here = document.createElement('input');
+        here.type = 'checkbox';
+        here.className = 'scrimmage-present';
+        here.checked = !absent;
+        here.title = absent ? 'Absent — tick to put them back in play' : 'Here today — untick if absent or injured';
+        here.setAttribute('aria-label', `${player.name} is here`);
+        here.addEventListener('click', e => e.stopPropagation());   // the cell opens Edit Player
+        here.addEventListener('change', () => {
+            if (!state) return;
+            if (here.checked) {
+                state.absent.delete(player.id);
+            } else {
+                state.absent.add(player.id);
+                state.assignment.delete(player.id);
+            }
+            renderTable();
+        });
+        nameTd.appendChild(here);
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'scrimmage-player-name';
+        nameSpan.textContent = formatPlayerName(player);
+        nameTd.appendChild(nameSpan);
         if (state.ghosts.has(player.id)) {
             // Still on a squad, no longer on the team roster.
             const mark = document.createElement('span');
@@ -599,6 +649,9 @@ function renderTable() {
             if (!squadHasGame(squad)) {
                 btn.disabled = true;
                 btn.title = `${names[squad]} has no game to edit`;
+            } else if (absent) {
+                btn.disabled = true;
+                btn.title = 'Absent — tick the box by their name first';
             }
             btn.addEventListener('click', () => {
                 // Tap a squad to put the player there; tap it again to sit them out.
@@ -609,7 +662,8 @@ function renderTable() {
             td.appendChild(btn);
             tr.appendChild(td);
         });
-        if (!current) tr.classList.add('scrimmage-sitting-out');
+        if (absent) tr.classList.add('scrimmage-absent');
+        else if (!current) tr.classList.add('scrimmage-sitting-out');
         if (player.id === state.justAdded) {
             tr.classList.add('scrimmage-just-added');
             addedRow = tr;

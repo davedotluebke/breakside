@@ -16,7 +16,7 @@ import {
     DEFAULT_SQUAD_NAMES,
     isScrimmageGame, withoutScrimmages, otherSquad, normalizeSquadNames,
     generateScrimmageId, formatShortDate, squadGameFields, buildSquadSnapshot,
-    squadRoster, splitSquads, groupScrimmages, scrimmageSquadNames,
+    squadRoster, autoFillSquads, groupScrimmages, scrimmageSquadNames,
     scrimmageScores, scrimmageLabel, isScrimmageOver,
     squadStamp, squadDefinition, newerSquadDefinition, applySquadDefinition,
     squadAssignments, squadPatch, describeSquadChange, pruneLinesToSquad,
@@ -124,65 +124,136 @@ test('squadGameFields: team is this squad, opponent the other', () => {
 
 // ── dealing ─────────────────────────────────────────────────────────────
 
-function countBy(ids, fn) {
+function countBy(ids, fn, lookup = byId) {
     const out = {};
-    ids.forEach(id => { const k = fn(byId[id]); out[k] = (out[k] || 0) + 1; });
+    ids.forEach(id => { const k = fn(lookup[id]); out[k] = (out[k] || 0) + 1; });
     return out;
 }
 
-test('split: every player lands on exactly one squad', () => {
-    const { X, Y } = splitSquads(ROSTER);
+/** A deterministic random from a seed, so a property holds across many deals. */
+function seededRandom(seed) {
+    let s = seed >>> 0 || 1;
+    return () => {
+        s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+        return s / 4294967296;
+    };
+}
+
+/** Every group of `fn` differs by at most `within` between the squads. */
+function assertBalanced({ X, Y }, fn, label, lookup = byId, within = 1) {
+    const cx = countBy(X, fn, lookup), cy = countBy(Y, fn, lookup);
+    new Set([...Object.keys(cx), ...Object.keys(cy)]).forEach(k => {
+        assert.ok(Math.abs((cx[k] || 0) - (cy[k] || 0)) <= within, `${label} ${k}: ${cx[k] || 0} vs ${cy[k] || 0}`);
+    });
+}
+
+test('auto: every player lands on exactly one squad, in roster order', () => {
+    const { X, Y } = autoFillSquads(ROSTER, new Map());
     assert.equal(X.length + Y.length, ROSTER.length);
     assert.equal(new Set([...X, ...Y]).size, ROSTER.length);
+    const order = ROSTER.map(p => p.id);
+    [X, Y].forEach(ids => assert.deepEqual(ids, ids.slice().sort((a, b) => order.indexOf(a) - order.indexOf(b))));
 });
 
-test('split: totals within one, genders balanced across the squads', () => {
-    const { X, Y } = splitSquads(ROSTER);
-    assert.ok(Math.abs(X.length - Y.length) <= 1);
-    const gx = countBy(X, p => p.gender), gy = countBy(Y, p => p.gender);
-    assert.ok(Math.abs((gx.FMP || 0) - (gy.FMP || 0)) <= 1, `FMP ${gx.FMP} vs ${gy.FMP}`);
-    assert.ok(Math.abs((gx.MMP || 0) - (gy.MMP || 0)) <= 1, `MMP ${gx.MMP} vs ${gy.MMP}`);
+test('auto: totals, genders, positions and lines all balance within one, whatever the random', () => {
+    const roster = ROSTER.map((p, i) => ({ ...p, defaultLine: ['O', 'D', null][i % 3] }));
+    const here = Object.fromEntries(roster.map(p => [p.id, p]));
+    for (let seed = 1; seed <= 60; seed++) {
+        const deal = autoFillSquads(roster, new Map(), { random: seededRandom(seed) });
+        assert.ok(Math.abs(deal.X.length - deal.Y.length) <= 1, `seed ${seed}: totals`);
+        assertBalanced(deal, p => p.gender, `seed ${seed} gender`, here);
+        assertBalanced(deal, p => p.position || 'hybrid', `seed ${seed} position`, here);
+        assertBalanced(deal, p => p.defaultLine || 'Crossover', `seed ${seed} line`, here);
+    }
 });
 
-test('split: handlers are spread over both squads', () => {
-    const { X, Y } = splitSquads(ROSTER);
-    const hx = countBy(X, p => p.position || 'none').handler || 0;
-    const hy = countBy(Y, p => p.position || 'none').handler || 0;
+test('auto: handlers are spread over both squads', () => {
+    const { X, Y } = autoFillSquads(ROSTER, new Map());
     // Four handlers on the roster (two per gender): two a side.
-    assert.equal(hx, 2);
-    assert.equal(hy, 2);
+    assert.equal(countBy(X, p => p.position || 'none').handler || 0, 2);
+    assert.equal(countBy(Y, p => p.position || 'none').handler || 0, 2);
 });
 
-test('split: odd gender groups still leave the totals within one', () => {
-    // 3 FMP + 3 MMP + 1 unknown: each group would give one squad the extra
-    // player; starting each group with the smaller squad evens it out.
+test('auto: odd gender groups still leave the totals within one', () => {
     const roster = [
         player('Alice', 'FMP'), player('Dana', 'FMP'), player('Eve', 'FMP'),
         player('Bob', 'MMP'), player('Hank', 'MMP'), player('Jake', 'MMP'),
         player('Morgan Vale', 'Unknown'),
     ];
-    const { X, Y } = splitSquads(roster);
+    const { X, Y } = autoFillSquads(roster, new Map());
     assert.equal(X.length + Y.length, 7);
     assert.ok(Math.abs(X.length - Y.length) <= 1);
+    assert.equal(X.length, 4);   // X picks first when the squads are level
 });
 
-test('split: deterministic without shuffle, and stable under a fixed random', () => {
-    assert.deepEqual(splitSquads(ROSTER), splitSquads(ROSTER));
-    const seq = [0.1, 0.9, 0.3, 0.7, 0.5, 0.2, 0.8, 0.4, 0.6, 0.05];
-    const mk = () => { let i = 0; return () => seq[i++ % seq.length]; };
-    const a = splitSquads(ROSTER, { shuffle: true, random: mk() });
-    const b = splitSquads(ROSTER, { shuffle: true, random: mk() });
-    assert.deepEqual(a, b);
-    // Shuffled or not, the balance holds.
-    assert.ok(Math.abs(a.X.length - a.Y.length) <= 1);
-    const gx = countBy(a.X, p => p.gender), gy = countBy(a.Y, p => p.gender);
-    assert.ok(Math.abs((gx.FMP || 0) - (gy.FMP || 0)) <= 1);
+test('auto: keeps what the coach assigned and fills only the rest, around it', () => {
+    // Two handlers already on X: Auto sends the other two handlers to Y.
+    const handlers = ROSTER.filter(p => p.position === 'handler').map(p => p.id);
+    const assignment = new Map([[handlers[0], 'X'], [handlers[1], 'X']]);
+    const { X, Y } = autoFillSquads(ROSTER, assignment);
+    assert.ok(X.includes(handlers[0]) && X.includes(handlers[1]));
+    assert.ok(Y.includes(handlers[2]) && Y.includes(handlers[3]));
+    assert.ok(Math.abs(X.length - Y.length) <= 1);
+    assert.equal(X.length + Y.length, ROSTER.length);
 });
 
-test('split: ignores entries without an id and copes with an empty roster', () => {
-    assert.deepEqual(splitSquads([]), { X: [], Y: [] });
-    assert.deepEqual(splitSquads(null), { X: [], Y: [] });
-    const { X, Y } = splitSquads([{ name: 'ghost' }, player('Alice', 'FMP')]);
+test('auto: an assigned player not in the list is ignored, not dealt', () => {
+    const present = ROSTER.slice(0, 6);
+    const absent = ROSTER[9].id;
+    const { X, Y } = autoFillSquads(present, new Map([[absent, 'X']]));
+    assert.equal(X.length + Y.length, 6);
+    assert.ok(!X.includes(absent) && !Y.includes(absent));
+});
+
+test('auto: unset position and line count as hybrid and Crossover, and spread evenly', () => {
+    const roster = [
+        player('Alice', 'FMP', 'handler'), player('Dana', 'FMP', 'handler'),
+        player('Eve', 'FMP', null), player('Iris', 'FMP', null),
+    ];
+    const here = Object.fromEntries(roster.map(p => [p.id, p]));
+    for (let seed = 1; seed <= 20; seed++) {
+        const { X, Y } = autoFillSquads(roster, new Map(), { random: seededRandom(seed) });
+        assert.equal(countBy(X, p => p.position || 'hybrid', here).handler, 1, `seed ${seed}`);
+        assert.equal(countBy(Y, p => p.position || 'hybrid', here).handler, 1, `seed ${seed}`);
+    }
+});
+
+test("auto: the coach's factor order decides when position and O/D line disagree", () => {
+    // X holds a handler on the O line, Y a cutter on the D line. The two
+    // left: a handler on the D line and a cutter on the O line. Position
+    // balance wants the cutter on X; line balance wants the D player on X.
+    const a = { ...player('Alice', 'FMP', 'handler'), defaultLine: 'O' };
+    const b = { ...player('Bob', 'MMP', 'cutter'), defaultLine: 'D' };
+    const c = { ...player('Charlie', 'MMP', 'handler'), defaultLine: 'D' };
+    const d = { ...player('Dana', 'FMP', 'cutter'), defaultLine: 'O' };
+    const assignment = new Map([[a.id, 'X'], [b.id, 'Y']]);
+    // Genders are level either way (a and d are FMP; b and c MMP) — wait,
+    // they are not: X has one FMP, Y one MMP, so gender would pull Dana to
+    // Y and Charlie to X regardless. Use one gender throughout.
+    [a, b, c, d].forEach(p => { p.gender = 'MMP'; });
+    const positionFirst = autoFillSquads([a, b, c, d], assignment, { priorityOrder: ['position', 'rest', 'od', 'pt'] });
+    assert.ok(positionFirst.X.includes(d.id), 'position first: the cutter joins the handler');
+    const lineFirst = autoFillSquads([a, b, c, d], assignment, { priorityOrder: ['od', 'position'] });
+    assert.ok(lineFirst.X.includes(c.id), 'line first: the D player joins the O player');
+    // A malformed order falls back to the default (position first).
+    assert.ok(autoFillSquads([a, b, c, d], assignment, { priorityOrder: 'junk' }).X.includes(d.id));
+});
+
+test('auto: ties are random — different randoms give different deals, the same random the same deal', () => {
+    const deals = new Set();
+    for (let seed = 1; seed <= 12; seed++) {
+        deals.add(JSON.stringify(autoFillSquads(ROSTER, new Map(), { random: seededRandom(seed) })));
+    }
+    assert.ok(deals.size > 1, 'a fresh deal each time');
+    assert.deepEqual(
+        autoFillSquads(ROSTER, new Map(), { random: seededRandom(7) }),
+        autoFillSquads(ROSTER, new Map(), { random: seededRandom(7) }));
+});
+
+test('auto: ignores entries without an id and copes with an empty roster', () => {
+    assert.deepEqual(autoFillSquads([], new Map()), { X: [], Y: [] });
+    assert.deepEqual(autoFillSquads(null, null), { X: [], Y: [] });
+    const { X, Y } = autoFillSquads([{ name: 'ghost' }, player('Alice', 'FMP')], null);
     assert.equal(X.length + Y.length, 1);
 });
 

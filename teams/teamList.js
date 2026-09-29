@@ -2054,8 +2054,7 @@ function renderScrimmageContainer(scrimmage, team, role, teamGames, item) {
         const hint = document.createElement('p');
         hint.className = 'text-hint scrimmage-score-hint';
         hint.textContent = 'Each coach records their own squad\'s game, and the two disagree on the score: '
-            + `${names.X}'s game has it ${scores.X.us}–${scores.X.them}, ${names.Y}'s ${scores.Y.us}–${scores.Y.them}. `
-            + 'A point was missed on one side.';
+            + `${names.X}'s game has it ${scores.X.us}–${scores.X.them}, ${names.Y}'s ${scores.Y.us}–${scores.Y.them}.`;
         body.appendChild(hint);
     }
 

@@ -588,6 +588,7 @@
     margin: 0;              /* override global button margin */
     padding: 5px 12px;
     font-size: 0.85rem;
+    white-space: nowrap;    /* "⚡ Auto" stays on one line; the summary text wraps instead */
     border: 1px solid var(--border-strong);
     border-radius: 14px;
     background: var(--surface-light);
@@ -677,6 +678,29 @@
 
 .scrimmage-sitting-out td.scrimmage-player-col {
     opacity: 0.55;
+}
+
+/* The "here today" box by each name. Unticked = absent or injured: the row
+   fades, the name is struck, the pick buttons disable, and Auto skips them. */
+.scrimmage-present {
+    width: 18px;
+    height: 18px;
+    margin: 0 8px 0 0;
+    vertical-align: middle;
+    accent-color: var(--color-info);
+    cursor: pointer;
+}
+
+.scrimmage-absent td.scrimmage-player-col {
+    opacity: 0.45;
+}
+
+.scrimmage-absent .scrimmage-player-name {
+    text-decoration: line-through;
+}
+
+.scrimmage-absent .scrimmage-pick:disabled {
+    opacity: 0.25;
 }
 
 /* A pick button: an outlined circle, filled with a check when the player is

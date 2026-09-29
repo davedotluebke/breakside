@@ -144,7 +144,11 @@ own reading, when both halves have points and disagree) is flagged and
 explained under the squad rows. Backend: `PATCH /api/games/{id}/end` and
 the sticky end stamp in `save_game_version` — deploy the backend before the
 frontend, or End Scrimmage's PATCH 404s. Design and the reasons scrimmages
-stay out of the event model: ARCHITECTURE.md § Team list groups.
+stay out of the event model: ARCHITECTURE.md § Team list groups. The same
+branch replaced the dialog's Shuffle with **Clear** / **Auto** (Auto fills
+the empty spots the way the Line tab's Auto does, position and O/D line in
+the Advanced Settings order, balanced across the squads, random ties) and
+added a "here today" box by each name for absentees.
 Follow-ups, none blocking:
 
 - [ ] **Field test the squad edits** at the next practice: change a squad
