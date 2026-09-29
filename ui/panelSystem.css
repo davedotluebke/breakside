@@ -2146,6 +2146,35 @@ body.game-screen-active header {
     cursor: pointer;
 }
 
+/* Sort icons beside "Player" and the Game/Event/Total label: stacked ▲▼,
+   the active direction solid, the rest faded. Padding widens the tap target
+   without growing the icon; the negative vertical margin keeps the header
+   row from getting taller. */
+.panel-player-table .select-line-controls-row th {
+    white-space: nowrap;
+}
+.panel-player-table .select-line-sort-btn {
+    display: inline-block;
+    vertical-align: middle;
+    padding: 6px 4px;
+    margin: -6px 0 -6px 2px;
+    cursor: pointer;
+    color: var(--color-primary-ink);
+    line-height: 0;
+}
+.panel-player-table .select-line-sort-btn svg {
+    width: 8px;
+    height: 11px;
+    fill: currentColor;
+}
+.panel-player-table .select-line-sort-btn path {
+    opacity: 0.3;
+}
+.panel-player-table .select-line-sort-btn.is-asc .sort-up,
+.panel-player-table .select-line-sort-btn.is-desc .sort-down {
+    opacity: 1;
+}
+
 .panel-player-table .select-line-th-wholesale {
     cursor: pointer;
     color: var(--ink-700);

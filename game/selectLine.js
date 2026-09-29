@@ -16,6 +16,7 @@ import {
     buildPointMembership, buildPointPlayerLookup,
 } from '../utils/helpers.js';
 import { getEventPlayerStats } from '../utils/eventStats.js';
+import { DEFAULT_ROSTER_SORT, nextRosterSort, sortLineRoster } from '../utils/lineRosterSort.js';
 import { clearNextLineSelections, getRunningScores } from '../ui/activePlayersDisplay.js';
 import { setPanelSubtitle, setPanelTitle, isGameScreenVisible } from '../ui/panelSystem.js';
 import { resolveEffectiveLine } from '../store/pendingLineLogic.js';
@@ -40,6 +41,10 @@ let panelStatsMode = 'game'; // 'game', 'event', or 'total'
 // when 'event' mode is entered and cached here; the synchronous table
 // renderers read this cache rather than calling the async function inline.
 let cachedPanelEventStats = null;
+// Coach-chosen roster order from the sort icons in the controls header row
+// (utils/lineRosterSort.js). Device-local and session-only: it survives the
+// periodic table rebuilds but not a reload, and is never synced.
+let panelRosterSort = { ...DEFAULT_ROSTER_SORT };
 
 // Track conflict detection state
 let lastConflictToastPointIndex = -1;  // Prevent multiple toasts per point
@@ -112,6 +117,9 @@ function wireSelectLineEvents() {
         // Delegated clicks for the controls header row (Wholesale icon and the
         // Game/Event stats toggle), which are rebuilt with the table each refresh.
         tableContainer.addEventListener('click', (e) => {
+            // Sort icons first: the time one sits inside the stats toggle cell.
+            const sortBtn = e.target.closest('.select-line-sort-btn');
+            if (sortBtn) { handlePanelSortTap(sortBtn.dataset.sortKey); return; }
             if (e.target.closest('.select-line-th-stats')) { handlePanelStatsToggle(); return; }
             if (e.target.closest('.select-line-th-wholesale')) { clearLineSelection('main'); return; }
         });
@@ -126,6 +134,52 @@ function wireSelectLineEvents() {
     if (mmpRadio) {
         mmpRadio.addEventListener('change', handlePanelStartingRatioChange);
     }
+}
+
+/**
+ * Sort icon tap: cycle that column's sort (asc → desc → default) and re-render.
+ * @param {'name'|'time'} key
+ */
+function handlePanelSortTap(key) {
+    if (key !== 'name' && key !== 'time') return;
+    panelRosterSort = nextRosterSort(panelRosterSort, key);
+    updateSelectLineTable();
+}
+
+/**
+ * Sort icon markup for the controls header row: stacked ▲▼ with the active
+ * direction solid and the other faded; both faded when this column isn't the
+ * sort key.
+ * @param {'name'|'time'} key
+ * @param {string} label - accessible name, e.g. "Sort by name"
+ * @returns {string}
+ */
+function panelSortButtonHtml(key, label) {
+    const active = panelRosterSort.key === key ? panelRosterSort.dir : null;
+    const state = active === 'asc' ? 'ascending' : active === 'desc' ? 'descending' : 'default order';
+    return `<span class="select-line-sort-btn${active ? ' is-' + active : ''}" data-sort-key="${key}"`
+        + ` role="button" aria-label="${label} (${state})" title="${label}">`
+        + '<svg viewBox="0 0 10 14" aria-hidden="true">'
+        + '<path class="sort-up" d="M5 1 L9 6 H1 Z"/>'
+        + '<path class="sort-down" d="M5 13 L9 8 H1 Z"/>'
+        + '</svg></span>';
+}
+
+/**
+ * Time the Select Line table's time column shows for a player, per the
+ * Game/Event/Total mode.
+ * @param {object} player
+ * @param {object} game
+ * @returns {number} ms
+ */
+function panelDisplayedTime(player, game) {
+    const gameTime = typeof getPlayerGameTime === 'function' ? getPlayerGameTime(player) : 0;
+    if (panelStatsMode === 'event' && game && game.eventId) {
+        const ps = (cachedPanelEventStats && cachedPanelEventStats[player.id]) || {};
+        return (ps.timePlayed || 0) + gameTime;
+    }
+    if (panelShowingTotalStats) return (player.totalTimePlayed || 0) + gameTime;
+    return gameTime;
 }
 
 /**
@@ -1749,7 +1803,8 @@ function updateSelectLineTable() {
 
     const playerTh = document.createElement('th');
     playerTh.className = 'active-name-column';
-    playerTh.textContent = 'Player';
+    playerTh.innerHTML = '<span class="select-line-th-label">Player</span>'
+        + panelSortButtonHtml('name', 'Sort by name');
     controlsRow.appendChild(playerTh);
 
     const statsTh = document.createElement('th');
@@ -1757,7 +1812,8 @@ function updateSelectLineTable() {
     statsTh.title = 'Toggle the time column between this game and the whole event';
     const statsLabels = { game: 'Game', event: 'Event', total: 'Total' };
     statsTh.innerHTML = '<span class="select-line-stats-toggle" id="panelStatsToggle">'
-        + (statsLabels[panelStatsMode] || 'Game') + '</span>';
+        + (statsLabels[panelStatsMode] || 'Game') + '</span>'
+        + panelSortButtonHtml('time', 'Sort by time');
     controlsRow.appendChild(statsTh);
 
     // Blank cells matching the per-point score columns, plus the On Deck
@@ -1780,8 +1836,9 @@ function updateSelectLineTable() {
         ? game.points[game.points.length - 1]
         : null;
 
-    // Sort roster (played last point, played any points, not played)
-    const sortedRoster = [...activeRoster].sort((a, b) => {
+    // Default order: played last point, played any points, not played. The
+    // header sort icons override it (by name, or by the time column's value).
+    const defaultCompare = (a, b) => {
         const aLastPoint = membership.onLine(lastPoint, a);
         const bLastPoint = membership.onLine(lastPoint, b);
         // Include players who were substituted out mid-point
@@ -1793,8 +1850,12 @@ function updateSelectLineTable() {
         if (aPlayedAny && !bPlayedAny) return -1;
         if (!aPlayedAny && bPlayedAny) return 1;
         return a.name.localeCompare(b.name);
+    };
+    const sortedRoster = sortLineRoster(activeRoster, panelRosterSort, {
+        defaultCompare,
+        timeOf: p => panelDisplayedTime(p, game),
     });
-    
+
     // Create player rows
     sortedRoster.forEach((player, idx) => {
         const row = document.createElement('tr');
@@ -1829,25 +1890,9 @@ function updateSelectLineTable() {
         // Time column
         const timeCell = document.createElement('td');
         timeCell.classList.add('active-time-column');
-        const gameTime = typeof getPlayerGameTime === 'function'
-            ? getPlayerGameTime(player)
-            : 0;
-        if (panelStatsMode === 'event' && game.eventId) {
-            const ps = (cachedPanelEventStats && cachedPanelEventStats[player.id]) || {};
-            const eventTime = (ps.timePlayed || 0) + gameTime;
-            timeCell.textContent = typeof formatPlayTime === 'function'
-                ? formatPlayTime(eventTime)
-                : '0:00';
-        } else if (panelShowingTotalStats) {
-            const totalTime = (player.totalTimePlayed || 0) + gameTime;
-            timeCell.textContent = typeof formatPlayTime === 'function'
-                ? formatPlayTime(totalTime)
-                : '0:00';
-        } else {
-            timeCell.textContent = typeof formatPlayTime === 'function'
-                ? formatPlayTime(gameTime)
-                : '0:00';
-        }
+        timeCell.textContent = typeof formatPlayTime === 'function'
+            ? formatPlayTime(panelDisplayedTime(player, game))
+            : '0:00';
         row.appendChild(timeCell);
 
         // Point participation columns
@@ -1935,30 +1980,11 @@ function updateSelectLineTimeCells() {
         const player = activeRoster?.find(p => p.name === playerName);
         if (!player) return;
 
-        const gameTime = typeof getPlayerGameTime === 'function'
-            ? getPlayerGameTime(player)
-            : 0;
-
-        // Calculate time based on current display mode
-        if (panelStatsMode === 'event') {
-            const game = typeof currentGame === 'function' ? currentGame() : null;
-            if (game && game.eventId) {
-                const ps = (cachedPanelEventStats && cachedPanelEventStats[playerName]) || {};
-                const eventTime = (ps.timePlayed || 0) + gameTime;
-                cell.textContent = typeof formatPlayTime === 'function'
-                    ? formatPlayTime(eventTime)
-                    : '0:00';
-            }
-        } else if (panelShowingTotalStats) {
-            const totalTime = (player.totalTimePlayed || 0) + gameTime;
-            cell.textContent = typeof formatPlayTime === 'function'
-                ? formatPlayTime(totalTime)
-                : '0:00';
-        } else {
-            cell.textContent = typeof formatPlayTime === 'function'
-                ? formatPlayTime(gameTime)
-                : '0:00';
-        }
+        // Same value the full render shows (event stats are keyed by player id).
+        const game = typeof currentGame === 'function' ? currentGame() : null;
+        cell.textContent = typeof formatPlayTime === 'function'
+            ? formatPlayTime(panelDisplayedTime(player, game))
+            : '0:00';
     });
 }
 
