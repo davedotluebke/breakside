@@ -556,5 +556,26 @@ test.describe('intrasquad scrimmage', () => {
     expect(healed.scrimmageName).toBe('Tuesday practice');
     expect(healed.team).toBe('Crimson');
     expect(healed.opponent).toBe('Blue');
+
+    // ── In-game End Game on a squad-game ends the other half too ──
+    await scrimCard.locator('.scrimmage-squad-item', { hasText: 'Crimson' }).locator('.game-join-btn', { hasText: 'Track' }).click();
+    await expect(page.locator('.game-screen-container')).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator('#headerTeamUs')).toHaveText('Crimson');
+    page.once('dialog', d => d.accept());
+    await page.click('#gameMenuBtn');
+    await expect(page.locator('#gameMenuDropdown')).toBeVisible();
+    await expect(page.locator('#menuEndGame')).toBeEnabled({ timeout: 10_000 });
+    await page.click('#menuEndGame');
+    await expect(page.locator('#gameSummaryScreen')).toBeVisible({ timeout: 8_000 });
+    for (const g of [redGame, blueGame]) {
+      await expect
+        .poll(async () => (await serverGame(page, g.game_id, EDITOR)).gameEndTimestamp || null,
+          { message: `${g.team}'s half never ended on the server`, timeout: 20_000, intervals: [250] })
+        .toBeTruthy();
+    }
+    // Blue's half was ended from outside it: its play data is untouched.
+    const blueEnded = await serverGame(page, blueGame.game_id, EDITOR);
+    expect(blueEnded.points).toEqual([]);
+    expect(blueEnded.scrimmageName).toBe('Tuesday practice');
   });
 });

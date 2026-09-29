@@ -1640,10 +1640,16 @@ async function endGameOnCloud(gameId, gameEndTimestamp) {
                 log(`📤 Game ${gameId} ended on the server (${data.gameEndTimestamp})`);
                 return data.gameEndTimestamp || gameEndTimestamp;
             }
-            if (response.status >= 400 && response.status < 500) {
+            if (response.status === 404) {
+                // Not on the server yet: the other half of a scrimmage
+                // created moments ago is still in this queue behind its
+                // first sync (the in-game End Game ends both halves). Queue
+                // the end; it lands right after the create does.
+                log(`📤 Game ${gameId} is not on the server yet — queueing its end`);
+            } else if (response.status >= 400 && response.status < 500) {
                 throw new Error(`Server returned ${response.status}: ${await response.text()}`);
             }
-            // 5xx: queue and retry below.
+            // 404 or 5xx: queue and retry below.
         } catch (error) {
             if (!isOfflineError(error)) throw error;
         }

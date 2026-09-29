@@ -136,7 +136,8 @@ Branch `scrimmage-cards` (2026-09-29, unmerged) reworks the team card after
 the first practice's screenshot: scrimmages sit in a **Scrimmages group**,
 a collapsible card like an event's with the all-scrimmages stats on its
 header and one collapsible sub-card per scrimmage (Stats, Squads, **End
-Scrimmage**, delete); events fold the same way, the newest group open and
+Scrimmage**, delete; in-game End Game on a squad-game ends the other half
+too); events fold the same way, the newest group open and
 the rest one line each; the team header's Scrimmages button opens the
 group in place. The score mismatch ("Orange 2–0 · Black 3–3": each squad's
 own reading, when both halves have points and disagree) is flagged and

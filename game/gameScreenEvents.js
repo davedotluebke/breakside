@@ -24,7 +24,7 @@ import {
     showScreen, showEditRosterScreen, showEditRosterSubscreen,
     showStartGameScreen,
 } from '../screens/navigation.js';
-import { showSelectTeamScreen } from '../teams/teamList.js';
+import { showSelectTeamScreen, endOtherScrimmageHalves } from '../teams/teamList.js';
 import { showEditSquadsDialog } from '../teams/scrimmageDialogs.js';
 import { showTeamSettingsScreen } from '../teams/teamSettings.js';
 import { showGameSummaryPostGame } from '../teams/gameSummary.js';
@@ -544,12 +544,22 @@ function handleEndGame() {
  * Shared end-game flow (menu End Game + Game Events modal End Game).
  * Confirms (skipped for test games), stops timers, stamps
  * gameEndTimestamp, exits to the post-game summary, and saves.
+ *
+ * On a squad-game the scrimmage ends as one thing: the other squad's game
+ * is ended too (teams/teamList.js endOtherScrimmageHalves — a metadata
+ * PATCH, like the card's End Scrimmage), and a coach tracking it is
+ * returned to the team list by their next refresh.
  */
 function endGameFlow() {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    const scrimmage = isScrimmageGame(game);
+
     // Skip the confirm for test games (throwaway dev data).
-    const skipEndConfirm = typeof isTestGame === 'function'
-        && typeof currentGame === 'function' && isTestGame(currentGame());
-    if (!skipEndConfirm && !confirm('Are you sure you want to end the game?')) {
+    const skipEndConfirm = typeof isTestGame === 'function' && game && isTestGame(game);
+    const question = scrimmage
+        ? "End the scrimmage? Both squads' games will be ended, and a coach tracking the other squad is returned to the team list."
+        : 'Are you sure you want to end the game?';
+    if (!skipEndConfirm && !confirm(question)) {
         return;
     }
 
@@ -559,8 +569,9 @@ function endGameFlow() {
     }
 
     // Set game end timestamp
-    if (typeof currentGame === 'function' && currentGame()) {
-        currentGame().gameEndTimestamp = new Date();
+    const at = new Date();
+    if (game) {
+        game.gameEndTimestamp = at;
     }
 
     // Exit game screen
@@ -574,6 +585,14 @@ function endGameFlow() {
     // Save data
     if (typeof saveAllTeamsData === 'function') {
         saveAllTeamsData();
+    }
+
+    if (scrimmage) {
+        endOtherScrimmageHalves(game, at.toISOString()).then(ended => {
+            if (ended > 0 && typeof showControllerToast === 'function') {
+                showControllerToast(`${game.opponent}'s game is ended too`, 'info', 3500);
+            }
+        }).catch(err => console.warn('Could not end the other squad:', err));
     }
 }
 

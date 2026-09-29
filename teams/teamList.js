@@ -1840,6 +1840,55 @@ function markLocalGameEnded(gameId, at) {
 }
 
 /**
+ * End the other half of the scrimmage `game` belongs to — what the in-game
+ * End Game on a squad-game does after ending its own half, so a scrimmage
+ * ends as one thing from wherever it is ended. The sibling is found on this
+ * device first (the coach who created the scrimmage holds both halves),
+ * else in the server's game list; its local copies are stamped and the
+ * server is PATCHed (endGameOnCloud), exactly as the card's End Scrimmage
+ * does. Offline with no local copy of the sibling, nothing can be reached:
+ * this half ends alone and the card's End Scrimmage finishes the job later.
+ * Never throws — the caller has already ended its own game.
+ * @param {object} game - the squad-game just ended on this device
+ * @param {string} at - the ISO end stamp it was given
+ * @returns {Promise<number>} how many other halves were ended
+ */
+async function endOtherScrimmageHalves(game, at) {
+    if (!game || !game.scrimmageId) return 0;
+    const ids = new Set();
+    teams.forEach(t => (t?.games || []).forEach(g => {
+        if (g && g.scrimmageId === game.scrimmageId && g.id && !gameMatchesId(g, game.id)) ids.add(g.id);
+    }));
+    if (ids.size === 0) {
+        try {
+            (await listServerGames()).forEach(g => {
+                if (g && g.scrimmageId === game.scrimmageId && g.game_id && g.game_id !== game.id) ids.add(g.game_id);
+            });
+        } catch (err) {
+            log(`Could not list the scrimmage's other half: ${err.message}`);
+        }
+    }
+    let ended = 0;
+    for (const id of ids) {
+        markLocalGameEnded(id, at);
+        try {
+            await endGameOnCloud(id, at);
+            ended++;
+        } catch (err) {
+            console.error(`Could not end the other squad's game ${id}:`, err);
+        }
+        if (_lastListData && Array.isArray(_lastListData.allGames)) {
+            _lastListData.allGames.forEach(g => {
+                if (g && g.game_id === id && !g.game_end_timestamp) g.game_end_timestamp = at;
+            });
+        }
+    }
+    if (ids.size) saveAllTeamsData({ syncCurrentGame: false });
+    if (ended) log(`🏁 Scrimmage ${game.scrimmageId}: the other half ended too`);
+    return ended;
+}
+
+/**
  * Open a team's Scrimmages group in place: expand the card and the group,
  * and scroll it into view. The team header's Scrimmages button.
  */
@@ -2070,7 +2119,7 @@ function renderSquadGameItem(game, squadName, team, role) {
 // _cloudTeamsCache is a live binding read by teams/activeGamePolling.js.
 export {
     showSelectTeamScreen, isGameActive, populateCloudTeamsAndGames,
-    selectCloudTeam, resumeCloudGame, _cloudTeamsCache,
+    selectCloudTeam, resumeCloudGame, endOtherScrimmageHalves, _cloudTeamsCache,
 };
 // window survivor: late-bound back-edge hook (called by auth/loginScreen.js,
 // store/sync.js, screens/navigation.js — all evaluate before this file and
