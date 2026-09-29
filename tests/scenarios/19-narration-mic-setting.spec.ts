@@ -15,8 +15,11 @@
  * The denial leg stubs the two network legs a session needs before it
  * reaches the microphone — the token POST (page.route) and the OpenAI
  * WebSocket (a fake installed by an init script, scoped to that host) — and
- * then lets headless Chromium refuse getUserMedia, which it does without a
- * prompt (docs/dev-notes/preview-testing.md).
+ * stubs getUserMedia itself to reject with the NotAllowedError a real Deny
+ * produces. Headless Chromium can't be made to deny: an ungranted request
+ * just sits pending (the button stayed amber for the whole timeout when
+ * this spec first relied on it), and Playwright can grant permissions but
+ * not refuse them.
  */
 import { test, expect, Page } from '@playwright/test';
 import {
@@ -121,6 +124,9 @@ test.describe('mic button setting', () => {
       (FakeSocket as any).CLOSING = 2;
       (FakeSocket as any).CLOSED = 3;
       (window as any).WebSocket = FakeSocket;
+      // What a real Deny produces (name and all); see the header comment.
+      navigator.mediaDevices.getUserMedia = () =>
+        Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
     });
     await page.route('**/api/narration/token', (route) => route.fulfill({
       status: 200,
