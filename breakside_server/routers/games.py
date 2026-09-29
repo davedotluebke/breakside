@@ -36,6 +36,7 @@ from ._shared import (
     save_game_version,
     scrub_erased_from_game,
     update_game_metadata,
+    update_squad_definition,
     validate_id,
 )
 
@@ -229,6 +230,84 @@ async def patch_game_phase(
         raise HTTPException(status_code=400, detail="phase must be a string or null")
     updated = update_game_metadata(game_id, {"phase": phase})
     return {"status": "updated", "game_id": game_id, "phase": updated.get("phase")}
+
+
+# The squad-definition fields of a scrimmage half, and how each is validated.
+_SQUAD_NAME_FIELDS = ("team", "opponent")
+
+
+def _validate_roster_snapshot(snapshot) -> dict:
+    """A rosterSnapshot as the client writes it: {players: [{id, name, …}],
+    capturedAt}. Loose on purpose (the document is schema-free JSON), strict
+    on the two things the app relies on — every player has a string id and
+    name, and the snapshot is stamped."""
+    if not isinstance(snapshot, dict):
+        raise HTTPException(status_code=400, detail="rosterSnapshot must be an object")
+    players = snapshot.get("players")
+    if not isinstance(players, list) or not players:
+        raise HTTPException(status_code=400, detail="rosterSnapshot.players must be a non-empty list")
+    for player in players:
+        if (not isinstance(player, dict)
+                or not isinstance(player.get("id"), str) or not player["id"]
+                or not isinstance(player.get("name"), str) or not player["name"]):
+            raise HTTPException(status_code=400, detail="each rosterSnapshot player needs a string id and name")
+    if not isinstance(snapshot.get("capturedAt"), str):
+        raise HTTPException(status_code=400, detail="rosterSnapshot.capturedAt must be an ISO timestamp")
+    return snapshot
+
+
+@router.patch("/api/games/{game_id}/scrimmage")
+async def patch_scrimmage_squad(
+    game_id: str,
+    body: dict,
+    user: dict = Depends(require_game_team_coach)
+):
+    """
+    Update the squad definition of one half of an intrasquad scrimmage:
+    `rosterSnapshot` (who is on this squad), `team` / `opponent` (this
+    squad's name and the other's) and `scrimmageName` (the label). Metadata,
+    like /phase: no version backup.
+
+    A full /sync is the wrong tool for this. The editing coach is usually not
+    in this game — they track the other squad, or are on the team list — so
+    the copy of its play data they hold is stale, and a sync would either
+    roll the game back (no Active Coach claimed) or be ignored (one is). The
+    stored snapshot's capturedAt versions the squad; see
+    update_squad_definition for the stamp rule and ARCHITECTURE.md
+    § Intrasquad Scrimmages for the whole flow.
+
+    Body: any of { "rosterSnapshot": {players: [...], capturedAt},
+                   "team": "Dark", "opponent": "Light",
+                   "scrimmageName": "Tuesday practice" | null }
+    Returns the stored squad definition.
+    """
+    if not game_exists(game_id):
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+    if not get_game_current(game_id).get("scrimmageId"):
+        raise HTTPException(status_code=400, detail="Not a scrimmage game")
+
+    updates: Dict[str, Any] = {}
+    if "rosterSnapshot" in body:
+        updates["rosterSnapshot"] = _validate_roster_snapshot(body["rosterSnapshot"])
+    for key in _SQUAD_NAME_FIELDS:
+        if key in body:
+            if not isinstance(body[key], str) or not body[key].strip():
+                raise HTTPException(status_code=400, detail=f"{key} must be a non-empty string")
+            updates[key] = body[key].strip()
+    if "scrimmageName" in body:
+        label = body["scrimmageName"]
+        if label is not None and not isinstance(label, str):
+            raise HTTPException(status_code=400, detail="scrimmageName must be a string or null")
+        updates["scrimmageName"] = (label or "").strip() or None
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+
+    # Erasure guard, as on /sync: a squad built from a stale roster could
+    # carry an erased player's name back into the game document.
+    scrub_erased_from_game(updates)
+
+    stored = update_squad_definition(game_id, updates)
+    return {"status": "updated", "game_id": game_id, **stored}
 
 
 @router.delete("/api/games/{game_id}")

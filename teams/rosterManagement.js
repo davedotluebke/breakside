@@ -637,6 +637,139 @@ function validateJerseyNumber(input) {
     return confirmed ? trimmed : null;
 }
 
+/**
+ * Add a player to the current team's roster. The roster screen's +FMP / +MMP
+ * buttons and the scrimmage dialog's add row (teams/scrimmageDialogs.js) both
+ * come here: the Player is created, linked to the team, queued for the cloud
+ * with the team, persisted, and the roster screen redrawn.
+ *
+ * `joinLiveGame` (default true) also puts the player where a game in
+ * progress reads its roster from — the event roster of a tournament game, or
+ * the squad snapshot of a scrimmage half — so they can be on the very next
+ * line. The scrimmage dialog passes false: it decides squads itself.
+ *
+ * @param {{name: string, number?: string|null, gender?: string,
+ *          position?: string|null, defaultLine?: string|null,
+ *          joinLiveGame?: boolean}} spec
+ * @returns {{player: Player}|{error: 'empty'|'duplicate'|'number'}}
+ *          'number': the jersey number failed validation and the coach
+ *          declined to keep it anyway (validateJerseyNumber's confirm)
+ */
+function addPlayerToRoster({
+    name, number = null, gender = Gender.UNKNOWN, position = null, defaultLine = null,
+    joinLiveGame = true,
+} = {}) {
+    const playerName = (name || '').trim();
+    if (!playerName || !currentTeam) return { error: 'empty' };
+    if (currentTeam.teamRoster.some(player => playerNamesMatch(player.name, playerName))) {
+        return { error: 'duplicate' };
+    }
+    const playerNumber = (number || '').toString().trim() || null;
+    const numberValue = validateJerseyNumber(playerNumber);
+    if (playerNumber && numberValue === null) return { error: 'number' };
+
+    // Phase 4: Create player with ID and queue for cloud sync
+    const newPlayer = new Player(playerName, "", gender, numberValue);
+    // Hybrid / Crossover are stored as null, as the Edit Player dialog does.
+    newPlayer.position = normalizePositionValue(position);
+    newPlayer.defaultLine = normalizeDefaultLineValue(defaultLine);
+    currentTeam.teamRoster.push(newPlayer);
+
+    // Add player ID to team's playerIds array
+    if (!currentTeam.playerIds) {
+        currentTeam.playerIds = [];
+    }
+    if (!currentTeam.playerIds.includes(newPlayer.id)) {
+        currentTeam.playerIds.push(newPlayer.id);
+    }
+
+    // Queue player for cloud sync
+    if (typeof createPlayerOffline === 'function') {
+        createPlayerOffline({
+            id: newPlayer.id,
+            name: newPlayer.name,
+            nickname: newPlayer.nickname,
+            gender: newPlayer.gender,
+            number: newPlayer.number,
+            position: newPlayer.position,
+            defaultLine: newPlayer.defaultLine,
+            createdAt: newPlayer.createdAt,
+            updatedAt: newPlayer.updatedAt,
+            // The team sync below is a separate request that lands
+            // later. Naming the team here lets the server link the
+            // player immediately, so it is never a teamless record
+            // that authorization has to treat as an orphan.
+            teamId: currentTeam.id
+        });
+    }
+
+    // Update team on cloud
+    if (typeof syncTeamToCloud === 'function' && currentTeam.id) {
+        syncTeamToCloud(currentTeam);
+    }
+
+    if (joinLiveGame) {
+        // If a game in progress belongs to a tournament event, the line
+        // selector reads from the event roster (getActiveRoster filters
+        // team players down to currentEvent.roster.playerIds). A freshly
+        // added team player isn't in that list, so they'd stay
+        // unselectable for the next line even after a refresh — add them.
+        if (typeof currentEvent !== 'undefined' && currentEvent && currentEvent.roster) {
+            if (!Array.isArray(currentEvent.roster.playerIds)) {
+                currentEvent.roster.playerIds = [];
+            }
+            if (!currentEvent.roster.playerIds.includes(newPlayer.id)) {
+                currentEvent.roster.playerIds.push(newPlayer.id);
+                if (typeof syncEventToCloud === 'function') {
+                    syncEventToCloud(currentEvent);
+                }
+            }
+        }
+
+        // Same for a scrimmage squad-game, whose line selector reads the
+        // squad from the game's roster snapshot (store/scrimmage.js
+        // squadRoster): a player added mid-scrimmage joins this coach's
+        // squad. That is a squad edit, so the snapshot is re-stamped — the
+        // snapshot's capturedAt versions the squad, and the newer one wins on
+        // the server and on the other coaches' phones — and it rides the
+        // game's next sync.
+        const liveGame = (typeof currentGame === 'function') ? currentGame() : null;
+        if (isScrimmageGame(liveGame) && liveGame.rosterSnapshot
+                && Array.isArray(liveGame.rosterSnapshot.players)
+                && !liveGame.rosterSnapshot.players.some(p => p && p.id === newPlayer.id)) {
+            liveGame.rosterSnapshot.players.push({
+                id: newPlayer.id,
+                name: newPlayer.name,
+                nickname: newPlayer.nickname || '',
+                number: newPlayer.number || null,
+                gender: newPlayer.gender || Gender.UNKNOWN,
+                position: newPlayer.position || null,
+                defaultLine: newPlayer.defaultLine || null,
+            });
+            liveGame.rosterSnapshot.capturedAt = new Date().toISOString();
+            saveAllTeamsData();
+        }
+    }
+
+    updateTeamRosterDisplay();
+
+    // If a game is live, refresh the line-selection panel so the new
+    // player can be put on the very next line without leaving and
+    // re-entering the game.
+    // late-bound back-edge (game/selectLine lives "above" this layer);
+    // see ARCHITECTURE.md § ES modules — owner keeps the shim.
+    if (typeof currentGame === 'function' && currentGame() &&
+        typeof window.updateSelectLinePanel === 'function') {
+        window.updateSelectLinePanel();
+    }
+
+    // Save locally
+    if (typeof saveAllTeamsData === 'function') {
+        saveAllTeamsData();
+    }
+    return { player: newPlayer };
+}
+
 (function setupRosterUI() {
     // Position / default-line pickers beside the add-player inputs
     // (#newPlayerAttrs). CSS shows them on wide screens only, so read them
@@ -660,111 +793,21 @@ function validateJerseyNumber(input) {
         const playerName = playerNameInput ? playerNameInput.value.trim() : '';
         const playerNumber = playerNumberInput ? (playerNumberInput.value.trim() || null) : null;
 
-        if (playerName && currentTeam.teamRoster.some(player => playerNamesMatch(player.name, playerName))) {
-            alert('A player with this name already exists');
-            playerNameInput?.focus();
-            return;
-        }
         if (playerName) {
-            const numberValue = validateJerseyNumber(playerNumber);
-            // If validation was cancelled (returned null when input was provided), don't add player
-            if (playerNumber && numberValue === null) {
-                playerNumberInput?.focus();
+            const result = addPlayerToRoster({
+                name: playerName, number: playerNumber, gender,
+                position: readNewPlayerAttr('newPlayerPosition'),
+                defaultLine: readNewPlayerAttr('newPlayerLine'),
+            });
+            if (result.error === 'duplicate') {
+                alert('A player with this name already exists');
+                playerNameInput?.focus();
                 return;
             }
-
-            // Phase 4: Create player with ID and queue for cloud sync
-            const newPlayer = new Player(playerName, "", gender, numberValue);
-            // Hybrid / Crossover are stored as null, as the Edit Player dialog does.
-            newPlayer.position = normalizePositionValue(readNewPlayerAttr('newPlayerPosition'));
-            newPlayer.defaultLine = normalizeDefaultLineValue(readNewPlayerAttr('newPlayerLine'));
-            currentTeam.teamRoster.push(newPlayer);
-            
-            // Add player ID to team's playerIds array
-            if (!currentTeam.playerIds) {
-                currentTeam.playerIds = [];
-            }
-            if (!currentTeam.playerIds.includes(newPlayer.id)) {
-                currentTeam.playerIds.push(newPlayer.id);
-            }
-            
-            // Queue player for cloud sync
-            if (typeof createPlayerOffline === 'function') {
-                createPlayerOffline({
-                    id: newPlayer.id,
-                    name: newPlayer.name,
-                    nickname: newPlayer.nickname,
-                    gender: newPlayer.gender,
-                    number: newPlayer.number,
-                    position: newPlayer.position,
-                    defaultLine: newPlayer.defaultLine,
-                    createdAt: newPlayer.createdAt,
-                    updatedAt: newPlayer.updatedAt,
-                    // The team sync below is a separate request that lands
-                    // later. Naming the team here lets the server link the
-                    // player immediately, so it is never a teamless record
-                    // that authorization has to treat as an orphan.
-                    teamId: currentTeam.id
-                });
-            }
-            
-            // Update team on cloud
-            if (typeof syncTeamToCloud === 'function' && currentTeam.id) {
-                syncTeamToCloud(currentTeam);
-            }
-
-            // If a game in progress belongs to a tournament event, the line
-            // selector reads from the event roster (getActiveRoster filters
-            // team players down to currentEvent.roster.playerIds). A freshly
-            // added team player isn't in that list, so they'd stay
-            // unselectable for the next line even after a refresh — add them.
-            if (typeof currentEvent !== 'undefined' && currentEvent && currentEvent.roster) {
-                if (!Array.isArray(currentEvent.roster.playerIds)) {
-                    currentEvent.roster.playerIds = [];
-                }
-                if (!currentEvent.roster.playerIds.includes(newPlayer.id)) {
-                    currentEvent.roster.playerIds.push(newPlayer.id);
-                    if (typeof syncEventToCloud === 'function') {
-                        syncEventToCloud(currentEvent);
-                    }
-                }
-            }
-
-            // Same for a scrimmage squad-game, whose line selector reads the
-            // squad from the game's roster snapshot (store/scrimmage.js
-            // squadRoster): a player added mid-scrimmage joins this coach's
-            // squad. The snapshot rides the game's next sync.
-            const liveGame = (typeof currentGame === 'function') ? currentGame() : null;
-            if (isScrimmageGame(liveGame) && liveGame.rosterSnapshot
-                    && Array.isArray(liveGame.rosterSnapshot.players)
-                    && !liveGame.rosterSnapshot.players.some(p => p && p.id === newPlayer.id)) {
-                liveGame.rosterSnapshot.players.push({
-                    id: newPlayer.id,
-                    name: newPlayer.name,
-                    nickname: newPlayer.nickname || '',
-                    number: newPlayer.number || null,
-                    gender: newPlayer.gender || Gender.UNKNOWN,
-                    position: newPlayer.position || null,
-                    defaultLine: newPlayer.defaultLine || null,
-                });
-                saveAllTeamsData();
-            }
-
-            updateTeamRosterDisplay();
-
-            // If a game is live, refresh the line-selection panel so the new
-            // player can be put on the very next line without leaving and
-            // re-entering the game.
-            // late-bound back-edge (game/selectLine lives "above" this layer);
-            // see ARCHITECTURE.md § ES modules — owner keeps the shim.
-            if (typeof currentGame === 'function' && currentGame() &&
-                typeof window.updateSelectLinePanel === 'function') {
-                window.updateSelectLinePanel();
-            }
-
-            // Save locally
-            if (typeof saveAllTeamsData === 'function') {
-                saveAllTeamsData();
+            // Number validation was cancelled: leave the inputs for a fix.
+            if (result.error === 'number') {
+                playerNumberInput?.focus();
+                return;
             }
         }
         if (playerNameInput) {
@@ -1079,7 +1122,14 @@ let editPlayerDialogOriginalData = null;
 let editPlayerDialogContext = {};  // Options for pickup context (onSave, onDelete callbacks)
 
 /**
- * Show the edit player dialog for a given player
+ * Show the edit player dialog for a given player.
+ *
+ * Options: `context` ('pickup' | 'eventOverride') with its onSave / onDelete
+ * callbacks, as before; and `onChanged(player|null)`, called after a roster
+ * player is saved (the player) or removed (null) in the default context, for
+ * a caller that draws the roster itself (the scrimmage dialog). The dialog is
+ * moved to the end of <body> each time it opens, so it sits above whatever
+ * modal opened it — two `.modal`s share a z-index and stack in DOM order.
  */
 function showEditPlayerDialog(player, options = {}) {
     if (!player) {
@@ -1109,6 +1159,9 @@ function showEditPlayerDialog(player, options = {}) {
     if (!dialog) {
         console.error('Edit player dialog element not found');
         return;
+    }
+    if (dialog.parentElement !== document.body || dialog !== document.body.lastElementChild) {
+        document.body.appendChild(dialog);
     }
 
     // Populate form fields with current player data
@@ -1453,8 +1506,12 @@ function deletePlayer() {
     // Refresh roster display
     updateTeamRosterDisplay();
 
+    // A caller that shows the roster its own way (the scrimmage dialog) redraws.
+    const onChanged = editPlayerDialogContext.onChanged;
+
     // Close dialog
     closeEditPlayerDialog();
+    if (typeof onChanged === 'function') onChanged(null);
 }
 
 /**
@@ -1568,8 +1625,12 @@ function saveEditedPlayer() {
     // Refresh roster display
     updateTeamRosterDisplay();
 
+    // A caller that shows the roster its own way (the scrimmage dialog) redraws.
+    const onChanged = editPlayerDialogContext.onChanged;
+
     // Close dialog
     closeEditPlayerDialog();
+    if (typeof onChanged === 'function') onChanged(player);
 }
 
 // Initialize edit player dialog event handlers
@@ -1864,6 +1925,7 @@ document.addEventListener('breakside:screen-shown', (e) => {
 export {
     updateTeamRosterDisplay, invalidateRosterStatsCache,
     showEditPlayerDialog, closeEditPlayerDialog, validateJerseyNumber,
+    addPlayerToRoster,
 };
 // window survivor: late-bound back-edge hook (called by store/sync.js,
 // screens/navigation.js — both evaluate before this file and cannot import

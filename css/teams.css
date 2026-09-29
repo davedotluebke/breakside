@@ -658,6 +658,63 @@
     text-align: center;
 }
 
+/* Edit Squads (teams/scrimmageDialogs.js, edit mode): one Save button where
+   the two Start buttons are. */
+.scrimmage-save-row .scrimmage-save-btn {
+    background: var(--color-info);
+}
+
+/* A squad whose game is gone (one half deleted) cannot take players. */
+.scrimmage-pick:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+/* Tap a name to open Edit Player over the dialog. */
+.scrimmage-player-editable {
+    cursor: pointer;
+}
+
+.scrimmage-player-editable:hover {
+    text-decoration: underline dotted;
+}
+
+/* Still on a squad, no longer on the team roster. */
+.scrimmage-ghost {
+    margin-left: 4px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* A player just added from the dialog's add row: a brief flash on the row
+   they landed in (sitting out, one tap from a squad). */
+.scrimmage-just-added td {
+    animation: scrimmage-added-flash 1.8s ease-out;
+}
+
+@keyframes scrimmage-added-flash {
+    from { background-color: var(--color-info); }
+    to   { background-color: transparent; }
+}
+
+/* The add-player row under the picker: the roster screen's controls
+   (css/game-dialogs.css .management-controls / .management-icons), sized for
+   the dialog. */
+.scrimmage-add-row {
+    margin: 6px 0 2px;
+}
+
+.scrimmage-add-row input.player-number-input {
+    flex: 0 0 44px;
+    width: 44px;
+    text-align: center;
+}
+
+/* The pencil on a scrimmage card's header (edit squads). */
+.scrimmage-edit-btn i {
+    color: var(--color-info);
+}
+
 /* Event dialog styles — matches footer / game-settings look */
 .event-dialog {
     color: var(--text-primary);

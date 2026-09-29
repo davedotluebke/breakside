@@ -7,7 +7,7 @@ import os
 import subprocess
 import threading
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import shutil
 
@@ -119,6 +119,64 @@ def merge_pending_next_line(existing: Optional[dict], incoming: Optional[dict]) 
     return merged
 
 
+# ── squad definition of an intrasquad scrimmage half ──────────────────────
+#
+# A scrimmage half's squad is its rosterSnapshot, and the snapshot's
+# `capturedAt` is the squad's version: every squad edit rewrites the whole
+# snapshot with a fresh stamp (client: store/scrimmage.js). The squad names
+# (`team` / `opponent`) and the label (`scrimmageName`) are edited the same
+# way and travel with the snapshot, so one stamp versions all four.
+#
+# Squad edits arrive by PATCH (update_squad_definition below), usually from a
+# coach who is NOT in this game. The coach who is — the Active Coach — keeps
+# syncing the whole game, with the snapshot their phone held when they last
+# pulled; without a rule that copy would revert the edit on the next sync.
+# So the merge keeps the newer squad definition whoever wrote it. A real game
+# never rewrites its snapshot, so for one the stamps are always equal and the
+# writer's own copy stands, exactly as before.
+_SQUAD_NAME_KEYS = ("team", "opponent", "scrimmageName")
+
+
+def _squad_stamp(game: Optional[dict]) -> Optional[float]:
+    """The rosterSnapshot's capturedAt as a comparable number; None when the
+    game has no stamped snapshot (nothing to compare)."""
+    snapshot = game.get("rosterSnapshot") if isinstance(game, dict) else None
+    if not isinstance(snapshot, dict) or snapshot.get("capturedAt") is None:
+        return None
+    stamp = _ts(snapshot.get("capturedAt"))
+    return stamp if stamp > 0 else None
+
+
+def _adopt_newer_squad(final_data: dict, other: Optional[dict]) -> bool:
+    """Replace final_data's squad definition with `other`'s when that one is
+    strictly newer by capturedAt.
+
+    `final_data` holds whichever side the merge defaults to (the writer's
+    body for an authoritative writer, the server's copy otherwise); `other`
+    is the opposite side. The names ride along only on a scrimmage half:
+    a real game's team and opponent are not the snapshot's business.
+    Returns whether anything was adopted.
+    """
+    if not isinstance(other, dict):
+        return False
+    theirs = _squad_stamp(other)
+    ours = _squad_stamp(final_data)
+    if theirs is None or ours is None or theirs <= ours:
+        return False
+    final_data["rosterSnapshot"] = other["rosterSnapshot"]
+    if other.get("scrimmageId") or final_data.get("scrimmageId"):
+        for key in _SQUAD_NAME_KEYS:
+            if key in other:
+                final_data[key] = other[key]
+    return True
+
+
+def _iso_ms(timestamp: float) -> str:
+    """Epoch seconds → the ISO form the client writes (`Date.toISOString()`)."""
+    stamp = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+    return stamp.strftime("%Y-%m-%dT%H:%M:%S.") + f"{stamp.microsecond // 1000:03d}Z"
+
+
 def save_game_version(game_id: str, game_data: dict,
                       authoritative_game_data: bool = True,
                       merge_pending_lines: bool = True) -> str:
@@ -132,11 +190,15 @@ def save_game_version(game_id: str, game_data: dict,
     concurrent coaches don't clobber each other:
       - pendingNextLine is merged per-field by timestamp (see
         merge_pending_next_line) — a stale line copy never reverts a newer one.
+      - The squad definition (rosterSnapshot, versioned by its capturedAt,
+        plus the squad names on a scrimmage half) keeps the newer side, so a
+        squad edit patched in by another coach survives the Active Coach's
+        next full sync (see _adopt_newer_squad).
       - When authoritative_game_data is False, the caller is a writer who does
         NOT own the game's play data (e.g. a Line Coach syncing while another
         coach holds the Active Coach role). Their points/scores/events are
         ignored and the server's existing game data is preserved; only their
-        merged line selections are applied.
+        merged line selections (and a newer squad definition) are applied.
       - merge_pending_lines=False disables ALL merging: game_data is written
         verbatim as the new current state. Used by version restore, which must
         be a faithful rollback — a pendingNextLine newer than the snapshot
@@ -183,9 +245,14 @@ def save_game_version(game_id: str, game_data: dict,
             )
             if authoritative_game_data:
                 final_data = dict(game_data)
+                # A squad edit landed since this writer last pulled: keep it.
+                _adopt_newer_squad(final_data, existing)
             else:
-                # Preserve the play-data owner's game state; take only lines.
+                # Preserve the play-data owner's game state; take only lines
+                # — and a squad edit this writer made (or carried) that the
+                # server hasn't seen.
                 final_data = dict(existing)
+                _adopt_newer_squad(final_data, game_data)
             if merged_pnl is not None:
                 final_data["pendingNextLine"] = merged_pnl
         else:
@@ -454,6 +521,53 @@ def update_game_metadata(game_id: str, updates: dict) -> dict:
 
     update_index_for_game(game_id, game_data)
     return game_data
+
+
+def update_squad_definition(game_id: str, updates: dict) -> dict:
+    """
+    Replace the squad definition of an intrasquad scrimmage half: any of
+    rosterSnapshot (the squad), team / opponent (the squad names) and
+    scrimmageName (the label). Metadata like update_game_metadata — no
+    version backup — but with one rule of its own: the incoming snapshot's
+    capturedAt must end up strictly newer than the stored one, or the merge
+    in save_game_version would let the Active Coach's next sync (carrying
+    the stored stamp) put the old squad back. A stamp that isn't newer — a
+    phone whose clock runs behind another coach's — is bumped to just past
+    the stored one, and the caller gets the stored definition back so its
+    own copy can carry the same stamp.
+
+    Args:
+        game_id: Unique game identifier
+        updates: Fields to replace, already validated by the caller
+
+    Returns:
+        The stored squad definition: rosterSnapshot, team, opponent,
+        scrimmageName as now on disk
+
+    Raises:
+        FileNotFoundError: If game doesn't exist
+    """
+    current_file = _safe_game_dir(game_id) / "current.json"
+    if not current_file.exists():
+        raise FileNotFoundError(f"Game {game_id} not found")
+
+    with _SAVE_LOCK:
+        with open(current_file, 'r') as f:
+            game_data = json.load(f)
+
+        snapshot = updates.get("rosterSnapshot")
+        if isinstance(snapshot, dict):
+            stored = _squad_stamp(game_data)
+            incoming = _ts(snapshot.get("capturedAt"))
+            if stored is not None and incoming <= stored:
+                snapshot = dict(snapshot, capturedAt=_iso_ms(stored + 0.001))
+            updates = dict(updates, rosterSnapshot=snapshot)
+
+        game_data.update(updates)
+        atomic_write_json(current_file, game_data)
+
+    update_index_for_game(game_id, game_data)
+    return {key: game_data.get(key) for key in ("rosterSnapshot",) + _SQUAD_NAME_KEYS}
 
 
 def game_exists(game_id: str) -> bool:

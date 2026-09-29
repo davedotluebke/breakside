@@ -25,6 +25,7 @@ import {
     showStartGameScreen,
 } from '../screens/navigation.js';
 import { showSelectTeamScreen } from '../teams/teamList.js';
+import { showEditSquadsDialog } from '../teams/scrimmageDialogs.js';
 import { showTeamSettingsScreen } from '../teams/teamSettings.js';
 import { showGameSummaryPostGame } from '../teams/gameSummary.js';
 import { showShareGameDialog } from './shareGame.js';
@@ -135,6 +136,17 @@ function wireGameScreenEvents() {
             if (typeof showStartGameScreen === 'function') {
                 showStartGameScreen('gameScreen');
             }
+        });
+    }
+
+    // Edit Squads (intrasquad scrimmage halves only; shown by handleGameMenuClick).
+    const editSquadsBtn = document.getElementById('menuEditSquads');
+    if (editSquadsBtn) {
+        editSquadsBtn.addEventListener('click', () => {
+            closeGameMenu();
+            const game = typeof currentGame === 'function' ? currentGame() : null;
+            if (!isScrimmageGame(game) || !currentTeam) return;
+            showEditSquadsDialog(currentTeam, game.scrimmageId);
         });
     }
 
@@ -352,6 +364,14 @@ function handleGameMenuClick(e) {
                   hasCurrentGame: !!(typeof currentGame === 'function' && currentGame()?.id) });
         } else {
             console.warn('🔌 Rejoin Game button not found in DOM — HTML may be stale');
+        }
+
+        // Edit Squads: a scrimmage half only, and not for viewers.
+        const editSquadsBtn = document.getElementById('menuEditSquads');
+        if (editSquadsBtn) {
+            const game = typeof currentGame === 'function' ? currentGame() : null;
+            const viewerMode = typeof window.isViewer === 'function' && window.isViewer();
+            editSquadsBtn.style.display = (isScrimmageGame(game) && !viewerMode) ? '' : 'none';
         }
 
         // Field orientation flips only make sense on the Field tab — show them
@@ -901,12 +921,21 @@ function hideSubPlayersModal() {
 /**
  * The players the injury-sub and correct-lineup dialogs offer. The whole
  * team roster, as always — except in a scrimmage, where only this squad's
- * players can come on (the other squad is the opposition).
+ * players can come on (the other squad is the opposition), plus anyone on
+ * the field right now who has since been moved off the squad: squads can be
+ * edited mid-point and the point keeps its line, so they must stay listed to
+ * be subbed out on purpose rather than dropped because the dialog forgot them.
  */
 function substitutableRoster() {
     const game = typeof currentGame === 'function' ? currentGame() : null;
-    if (isScrimmageGame(game)) return getActiveRoster();
-    return (currentTeam && currentTeam.teamRoster) || [];
+    if (!isScrimmageGame(game)) return (currentTeam && currentTeam.teamRoster) || [];
+    const squad = getActiveRoster();
+    const point = getLatestPoint();
+    if (!point || !Array.isArray(point.players)) return squad;
+    const lookup = buildPointPlayerLookup(game);
+    const onField = point.players.map(entry => lookup(entry).player)
+        .filter(player => player && !squad.includes(player));
+    return onField.length ? [...squad, ...onField] : squad;
 }
 
 /**

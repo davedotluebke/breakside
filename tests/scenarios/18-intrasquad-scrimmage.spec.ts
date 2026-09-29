@@ -25,7 +25,19 @@ import { coachHeaders } from '../helpers/controllerApi';
 // Own test user, so other specs' teams never show up in this list. "Test" in
 // the team name makes the app skip its leave / delete confirms (isTestTeam).
 const COACH = 'scrimmage-coach';
-const TEAM = 'Scrimmage Test Team';
+// Reassigned per test attempt (see uniqueTeamName); the helpers below read it
+// at call time, so their defaults follow.
+let TEAM = 'Scrimmage Test Team';
+
+/**
+ * A team name nobody has used on this backend yet. Nothing deletes a test's
+ * team, so a retry would otherwise find the previous attempt's team of the
+ * same name and the card locator would match two sections. "Test" stays in
+ * the name: it is what makes the app skip the leave / delete confirms.
+ */
+function uniqueTeamName(base: string) {
+  return `${base} ${Date.now().toString(36)}`;
+}
 
 // Four FMP, four MMP: the auto split should give each squad two of each.
 const ROSTER = [
@@ -41,24 +53,24 @@ const ROSTER = [
 
 test.describe.configure({ timeout: 150_000 });
 
-async function goToTeams(page: Page) {
-  await page.goto(`/?${TEST_PARAMS}&testUserId=${COACH}`);
+async function goToTeams(page: Page, coach = COACH) {
+  await page.goto(`/?${TEST_PARAMS}&testUserId=${coach}`);
   await expect(page.locator('#selectTeamScreen')).toBeVisible({ timeout: 10_000 });
   await expect(page.locator('#splashScreen')).toHaveCount(0, { timeout: 10_000 });
 }
 
-function card(page: Page) {
+function card(page: Page, team = TEAM) {
   return page.locator('#cloudTeamsList .team-section', {
-    has: page.locator('.team-header-name', { hasText: TEAM }),
+    has: page.locator('.team-header-name', { hasText: team }),
   });
 }
 
 /** The card's games container is collapsible; open it if it is closed. */
-async function expandCard(page: Page) {
-  await expect(card(page)).toBeVisible({ timeout: 15_000 });
-  const container = card(page).locator('.team-games-container');
+async function expandCard(page: Page, team = TEAM) {
+  await expect(card(page, team)).toBeVisible({ timeout: 15_000 });
+  const container = card(page, team).locator('.team-games-container');
   if (!(await container.isVisible())) {
-    await card(page).locator('.team-header').click();
+    await card(page, team).locator('.team-header').click();
   }
   await expect(container).toBeVisible();
 }
@@ -98,15 +110,38 @@ async function dialogSquads(page: Page) {
   });
 }
 
-/** This test team's games on the server, once the sync queue has landed them. */
-async function serverScrimmageGames(page: Page, expectCount: number) {
+/** The server's id for one of this coach's teams, once its first sync has landed. */
+async function serverTeamId(page: Page, coach: string, teamName: string): Promise<string> {
+  let id = '';
+  await expect
+    .poll(
+      async () => {
+        const resp = await page.request.get(`${BACKEND_URL}/api/auth/teams`, { headers: coachHeaders(coach) });
+        if (!resp.ok()) return '';
+        const entry = ((await resp.json()).teams || []).find((t: any) => t.team?.name === teamName);
+        id = entry?.team?.id || '';
+        return id;
+      },
+      { message: `team "${teamName}" never reached the server`, timeout: 20_000, intervals: [250] },
+    )
+    .not.toBe('');
+  return id;
+}
+
+/**
+ * This test team's squad-games on the server, once the sync queue has landed
+ * them. Filtered by team id, not squad name: earlier attempts' teams stay on
+ * the backend, and their halves carry the same names.
+ */
+async function serverScrimmageGames(page: Page, expectCount: number, coach = COACH, teamName = TEAM) {
+  const teamId = await serverTeamId(page, coach, teamName);
   let games: any[] = [];
   await expect
     .poll(
       async () => {
-        const resp = await page.request.get(`${BACKEND_URL}/api/games`, { headers: coachHeaders(COACH) });
+        const resp = await page.request.get(`${BACKEND_URL}/api/games`, { headers: coachHeaders(coach) });
         if (!resp.ok()) return -1;
-        games = (await resp.json()).games.filter((g: any) => g.team === 'Red' || g.team === 'Blue');
+        games = (await resp.json()).games.filter((g: any) => g.teamId === teamId && g.scrimmageId);
         return games.length;
       },
       { message: 'the two squad-games never reached the server', timeout: 20_000, intervals: [250] },
@@ -115,8 +150,29 @@ async function serverScrimmageGames(page: Page, expectCount: number) {
   return games;
 }
 
+/** One game's stored document. */
+async function serverGame(page: Page, gameId: string, coach: string) {
+  const resp = await page.request.get(`${BACKEND_URL}/api/games/${gameId}`, { headers: coachHeaders(coach) });
+  expect(resp.ok(), `GET game ${gameId}`).toBeTruthy();
+  return resp.json();
+}
+
+/** Poll until a squad-game's stored snapshot lists exactly these players. */
+async function expectServerSquad(page: Page, gameId: string, coach: string, names: string[]) {
+  await expect
+    .poll(
+      async () => {
+        const doc = await serverGame(page, gameId, coach);
+        return (doc.rosterSnapshot?.players || []).map((p: any) => p.name).sort();
+      },
+      { message: `the server never showed squad ${names.join(',')} on ${gameId}`, timeout: 20_000, intervals: [250] },
+    )
+    .toEqual([...names].sort());
+}
+
 test.describe('intrasquad scrimmage', () => {
   test('create, track one squad, track the other, review stats, delete', async ({ page }) => {
+    TEAM = uniqueTeamName('Scrimmage Test Team');
     await goToTeams(page);
     await createTeam(page, TEAM);
     await openEditRoster(page);
@@ -252,5 +308,191 @@ test.describe('intrasquad scrimmage', () => {
     await expect(card(page).locator('.scrimmage-container')).toHaveCount(0, { timeout: 15_000 });
     await serverScrimmageGames(page, 0);
     await expect(card(page).locator('.game-count')).toHaveText('0 games');
+  });
+
+  /**
+   * Squads change after creation (store/scrimmage.js § editing squads):
+   *   in-game Edit Squads → move a player, add a late arrival from the dialog,
+   *   save → the Line tab and both halves' snapshots follow → another coach
+   *   PATCHes this squad mid-point → toast, header, Line tab follow while the
+   *   point on the field keeps its line → the card's Squads button relabels.
+   */
+  test('edit squads after creation: from the game, from another coach, from the card', async ({ page }) => {
+    const EDITOR = 'scrimmage-editor';
+    const EDIT_TEAM = uniqueTeamName('Scrimmage Edit Test Team');
+
+    await goToTeams(page, EDITOR);
+    await createTeam(page, EDIT_TEAM);
+    await openEditRoster(page);
+    for (const p of ROSTER) await addPlayer(page, p.name, p.number, p.gender);
+    await backToStartGame(page);
+    await page.click('#backFromStartGameBtn');
+    await expect(page.locator('#selectTeamScreen')).toBeVisible({ timeout: 10_000 });
+
+    await expandCard(page, EDIT_TEAM);
+    await card(page, EDIT_TEAM).locator('.new-scrimmage-btn').click();
+    const modal = page.locator('#newScrimmageModal');
+    await expect(modal.locator('#scrimmagePickerBody tr[data-player-id]')).toHaveCount(ROSTER.length);
+    await modal.locator('#scrimmageSquadNameX').fill('Red');
+    await modal.locator('#scrimmageSquadNameY').fill('Blue');
+    await modal.locator('.scrimmage-pull-btn[data-squad="Y"]').click();   // Red starts on offense
+    let squads = await dialogSquads(page);
+    const red = [...squads.X].sort();
+    const blue = [...squads.Y].sort();
+    await modal.locator('#scrimmageStartX').click();
+    await expect(page.locator('.game-screen-container')).toBeVisible({ timeout: 8_000 });
+    const games = await serverScrimmageGames(page, 2, EDITOR, EDIT_TEAM);
+    const redGame = games.find(g => g.team === 'Red');
+    const blueGame = games.find(g => g.team === 'Blue');
+
+    // ── In-game: Edit Squads on the menu (a scrimmage half only) ──
+    await page.click('#gameMenuBtn');
+    await expect(page.locator('#gameMenuDropdown')).toBeVisible();
+    await expect(page.locator('#menuEditSquads')).toBeVisible();
+    await page.click('#menuEditSquads');
+    const edit = page.locator('#editSquadsModal');
+    await expect(edit).toBeVisible();
+    await expect(edit.locator('#scrimmagePickerBody tr[data-player-id]')).toHaveCount(ROSTER.length);
+    await expect(edit.locator('#scrimmageSquadNameX')).toHaveValue('Red');
+    await expect(edit.locator('#scrimmageSquadNameY')).toHaveValue('Blue');
+    squads = await dialogSquads(page);
+    expect([...squads.X].sort()).toEqual(red);
+    expect([...squads.Y].sort()).toEqual(blue);
+
+    // Move one Red player to Blue.
+    const mover = red[0];
+    await edit.locator('#scrimmagePickerBody tr', { hasText: mover }).locator('.scrimmage-pick[data-squad="Y"]').click();
+
+    // A late arrival, added without leaving the dialog: lands sitting out,
+    // then one tap puts them on Red.
+    await edit.locator('#scrimmageNewPlayerName').fill('Kris');
+    await edit.locator('#scrimmageNewPlayerNumber').fill('21');
+    await edit.locator('#scrimmageAddMMPBtn').click();
+    const krisRow = edit.locator('#scrimmagePickerBody tr', { hasText: 'Kris' });
+    await expect(krisRow).toHaveClass(/scrimmage-sitting-out/);
+    await expect(edit.locator('#scrimmageSitting')).toHaveText('1 sitting out');
+    await expect(edit.locator('#scrimmageNewPlayerName')).toHaveValue('');
+    await krisRow.locator('.scrimmage-pick[data-squad="X"]').click();
+
+    const redAfter = [...red.filter(n => n !== mover), 'Kris'].sort();
+    const blueAfter = [...blue, mover].sort();
+    squads = await dialogSquads(page);
+    expect([...squads.X].sort()).toEqual(redAfter);
+    expect([...squads.Y].sort()).toEqual(blueAfter);
+    expect(squads.out).toEqual([]);
+
+    await edit.locator('#scrimmageSaveBtn').click();
+    await expect(edit).toHaveCount(0);
+    await expect(page.locator('#toastContainer')).toContainText('Squads saved', { timeout: 5_000 });
+    await expect(page.locator('#toastContainer')).toContainText('Kris joined Red');
+    await expect(page.locator('#toastContainer')).toContainText(`${mover} left`);
+    // This game fields the new squad at once; both halves' snapshots follow on the server.
+    expect(await lineTabNames(page)).toEqual(redAfter);
+    await expectServerSquad(page, redGame.game_id, EDITOR, redAfter);
+    await expectServerSquad(page, blueGame.game_id, EDITOR, blueAfter);
+    const blueDoc = await serverGame(page, blueGame.game_id, EDITOR);
+    expect(blueDoc.team).toBe('Blue');
+    expect(blueDoc.opponent).toBe('Red');
+    expect(blueDoc.points).toEqual([]);
+    // Kris is a real roster player on the server too, not just a snapshot
+    // entry — once the queued player and team syncs land (the squad PATCH
+    // went straight through; those ride the sync queue).
+    await expect
+      .poll(
+        async () => {
+          const resp = await page.request.get(`${BACKEND_URL}/api/teams/${redGame.teamId}/players`, { headers: coachHeaders(EDITOR) });
+          return resp.ok() ? (await resp.json()).players.map((p: any) => p.name) : [];
+        },
+        { message: 'Kris never reached the server roster', timeout: 20_000, intervals: [250] },
+      )
+      .toContain('Kris');
+
+    // ── Another coach edits this squad mid-point ──
+    // Start a point with the whole squad on the field, then PATCH the half
+    // the way another phone's Edit Squads would: one on-field player moves to
+    // Blue, and the squads are renamed.
+    await selectAllPlayers(page);
+    await startPoint(page);
+    const onField: string[] = await page.evaluate(() => (window as any).currentGame().points.at(-1).players);
+    expect(onField.length).toBe(redAfter.length);
+
+    const redDoc = await serverGame(page, redGame.game_id, EDITOR);
+    const idOf = new Map<string, string>();
+    for (const doc of [redDoc, blueDoc]) {
+      for (const p of doc.rosterSnapshot.players) idOf.set(p.name, p.id);
+    }
+    const mover2 = redAfter.find(n => n !== 'Kris')!;
+    const redFinal = redAfter.filter(n => n !== mover2);
+    const patch = await page.request.patch(`${BACKEND_URL}/api/games/${redGame.game_id}/scrimmage`, {
+      headers: coachHeaders(EDITOR),
+      data: {
+        rosterSnapshot: {
+          players: redFinal.map(n => ({ id: idOf.get(n), name: n })),
+          capturedAt: new Date().toISOString(),
+        },
+        team: 'Crimson',
+        opponent: 'Navy',
+      },
+    });
+    expect(patch.ok()).toBeTruthy();
+
+    // The tracking phone adopts it on its next refresh: a toast that says
+    // what changed (and that the live point keeps its line), the header and
+    // the Line tab (the next point) follow; the point on the field does not.
+    await expect(page.locator('#toastContainer')).toContainText('Squads updated', { timeout: 20_000 });
+    await expect(page.locator('#toastContainer')).toContainText(`${mover2} left`);
+    await expect(page.locator('#toastContainer')).toContainText('Red is now Crimson');
+    await expect(page.locator('#toastContainer')).toContainText('keeps its line');
+    await expect(page.locator('#headerTeamUs')).toHaveText('Crimson');
+    await expect(page.locator('#headerTeamThem')).toHaveText('Navy');
+    expect(await lineTabNames(page)).toEqual([...redFinal].sort());
+    const stillOnField: string[] = await page.evaluate(() => (window as any).currentGame().points.at(-1).players);
+    expect(stillOnField).toEqual(onField);
+    // …and the edit survives this phone's own full syncs (it is the Active Coach).
+    await weScoreWithAttribution(page, mover2, redFinal[0]);
+    await expectScore(page, 1, 0);
+    await expect
+      .poll(async () => (await serverGame(page, redGame.game_id, EDITOR)).scores?.team, { timeout: 20_000, intervals: [250] })
+      .toBe(1);
+    const synced = await serverGame(page, redGame.game_id, EDITOR);
+    expect(synced.rosterSnapshot.players.map((p: any) => p.name).sort()).toEqual([...redFinal].sort());
+    expect(synced.team).toBe('Crimson');
+    expect(synced.opponent).toBe('Navy');
+    await leaveGame(page);
+
+    // ── From the card: the Squads button, a relabel ──
+    await goToTeams(page, EDITOR);   // a fresh load lists what the server has
+    await expandCard(page, EDIT_TEAM);
+    const scrimCard = card(page, EDIT_TEAM).locator('.scrimmage-container');
+    // The API-side edit touched Red's half only (the dialog patches both), so
+    // Blue's game still calls itself Blue and the card reads each half's own
+    // name: the honest state of an inconsistent pair.
+    await expect(scrimCard.locator('.scrimmage-squad-name')).toHaveText(['Crimson', 'Blue']);
+    await scrimCard.locator('.scrimmage-edit-btn').click();
+    const edit2 = page.locator('#editSquadsModal');
+    await expect(edit2).toBeVisible();
+    await expect(edit2.locator('#scrimmagePickerBody tr[data-player-id]')).toHaveCount(ROSTER.length + 1);
+    await expect(edit2.locator('#scrimmageSquadNameX')).toHaveValue('Crimson');
+    await expect(edit2.locator('#scrimmageSquadNameY')).toHaveValue('Blue');
+    squads = await dialogSquads(page);
+    expect([...squads.X].sort()).toEqual([...redFinal].sort());
+    // Blue's game was never told about the API-side move either: the dialog
+    // shows the halves as they are (mover2 is on neither).
+    expect([...squads.Y].sort()).toEqual(blueAfter);
+    expect(squads.out).toEqual([mover2]);
+    await edit2.locator('#newScrimmageName').fill('Tuesday practice');
+    await edit2.locator('#scrimmageSaveBtn').click();
+    await expect(edit2).toHaveCount(0);
+    await expect(card(page, EDIT_TEAM).locator('.scrimmage-name')).toContainText('Tuesday practice', { timeout: 15_000 });
+    // Both halves carry the label, and the save healed the pair's names: each
+    // half's opponent is the other's name again.
+    const relabelled = await serverGame(page, blueGame.game_id, EDITOR);
+    expect(relabelled.scrimmageName).toBe('Tuesday practice');
+    expect(relabelled.team).toBe('Blue');
+    expect(relabelled.opponent).toBe('Crimson');
+    const healed = await serverGame(page, redGame.game_id, EDITOR);
+    expect(healed.scrimmageName).toBe('Tuesday practice');
+    expect(healed.team).toBe('Crimson');
+    expect(healed.opponent).toBe('Blue');
   });
 });

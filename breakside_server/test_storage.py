@@ -673,6 +673,181 @@ class TestMergePendingNextLine:
 
 
 # =============================================================================
+# Squad definition merge (intrasquad scrimmages)
+# =============================================================================
+
+class TestSquadDefinitionMerge:
+    """The squad of a scrimmage half is its rosterSnapshot, versioned by
+    capturedAt; a squad edit is PATCHed in by a coach who is usually not in
+    the game, and must survive the Active Coach's next full sync."""
+
+    T0 = "2026-09-29T18:00:00.000Z"
+    T1 = "2026-09-29T18:10:00.000Z"
+
+    def _snapshot(self, names, captured_at):
+        return {"players": [{"id": f"{n}-0001", "name": n} for n in names],
+                "capturedAt": captured_at}
+
+    def _half(self, names, captured_at, **fields):
+        base = {"team": "Dark", "opponent": "Light", "teamId": "Team-0001",
+                "scrimmageId": "Scrimmage-2026-09-29-ab12", "scrimmageSquad": "X",
+                "scrimmageName": None,
+                "scores": {"team": 3, "opponent": 2}, "points": [{"i": i} for i in range(5)],
+                "rosterSnapshot": self._snapshot(names, captured_at)}
+        base.update(fields)
+        return base
+
+    def test_authoritative_sync_with_a_stale_snapshot_keeps_the_newer_squad(self, isolate_test_data):
+        """The Active Coach syncs the copy their phone held; another coach's
+        squad edit (newer capturedAt, patched in meanwhile) stays — with the
+        names it was saved with — while the play data is theirs."""
+        from storage.game_storage import save_game_version, get_game_current, update_squad_definition
+
+        gid = "squad-merge-001"
+        save_game_version(gid, self._half(["Alice", "Bob"], self.T0))
+        update_squad_definition(gid, {
+            "rosterSnapshot": self._snapshot(["Alice", "Bob", "Eve"], self.T1),
+            "team": "Red", "opponent": "Blue", "scrimmageName": "Tuesday",
+        })
+        # The AC records a point and syncs, still holding the T0 squad.
+        save_game_version(gid, self._half(["Alice", "Bob"], self.T0,
+                                          scores={"team": 4, "opponent": 2},
+                                          points=[{"i": i} for i in range(6)]))
+
+        cur = get_game_current(gid)
+        assert [p["name"] for p in cur["rosterSnapshot"]["players"]] == ["Alice", "Bob", "Eve"]
+        assert cur["rosterSnapshot"]["capturedAt"] == self.T1
+        assert (cur["team"], cur["opponent"], cur["scrimmageName"]) == ("Red", "Blue", "Tuesday")
+        assert cur["scores"] == {"team": 4, "opponent": 2}
+        assert len(cur["points"]) == 6
+
+    def test_authoritative_sync_with_the_same_stamp_is_the_writers_copy(self, isolate_test_data):
+        """Equal stamps: the writer's own snapshot stands (a player added
+        mid-game by the Active Coach rides their sync as it always has)."""
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "squad-merge-002"
+        save_game_version(gid, self._half(["Alice", "Bob"], self.T0))
+        save_game_version(gid, self._half(["Alice", "Bob", "Zoe"], self.T0))
+
+        assert [p["name"] for p in get_game_current(gid)["rosterSnapshot"]["players"]] == ["Alice", "Bob", "Zoe"]
+
+    def test_non_authoritative_sync_carries_a_newer_squad_but_no_play_data(self, isolate_test_data):
+        """A Line Coach who edited the squads offline: their sync applies the
+        newer squad definition and nothing else of theirs."""
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "squad-merge-003"
+        save_game_version(gid, self._half(["Alice", "Bob"], self.T0))
+        save_game_version(gid, self._half(["Alice", "Eve"], self.T1, team="Red", opponent="Blue",
+                                          scores={"team": 0, "opponent": 0}, points=[]),
+                          authoritative_game_data=False)
+
+        cur = get_game_current(gid)
+        assert [p["name"] for p in cur["rosterSnapshot"]["players"]] == ["Alice", "Eve"]
+        assert (cur["team"], cur["opponent"]) == ("Red", "Blue")
+        assert cur["scores"] == {"team": 3, "opponent": 2}
+        assert len(cur["points"]) == 5
+
+    def test_non_authoritative_sync_with_a_stale_snapshot_changes_nothing(self, isolate_test_data):
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "squad-merge-004"
+        save_game_version(gid, self._half(["Alice", "Eve"], self.T1, team="Red", opponent="Blue"))
+        save_game_version(gid, self._half(["Alice", "Bob"], self.T0),
+                          authoritative_game_data=False)
+
+        cur = get_game_current(gid)
+        assert [p["name"] for p in cur["rosterSnapshot"]["players"]] == ["Alice", "Eve"]
+        assert (cur["team"], cur["opponent"]) == ("Red", "Blue")
+
+    def test_a_real_game_keeps_a_newer_snapshot_but_never_its_names(self, isolate_test_data):
+        """Outside a scrimmage the rule is inert in practice (a real game's
+        snapshot is never rewritten); should a newer one ever land, team and
+        opponent are not the snapshot's to carry."""
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "squad-merge-005"
+        save_game_version(gid, self._half(["Alice"], self.T1, scrimmageId=None, scrimmageSquad=None,
+                                          team="Us", opponent="Them"))
+        save_game_version(gid, self._half(["Alice", "Bob"], self.T0, scrimmageId=None, scrimmageSquad=None,
+                                          team="Us renamed", opponent="Them"))
+
+        cur = get_game_current(gid)
+        assert [p["name"] for p in cur["rosterSnapshot"]["players"]] == ["Alice"]
+        assert cur["team"] == "Us renamed"
+
+    def test_unstamped_snapshots_leave_the_writer_in_charge(self, isolate_test_data):
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "squad-merge-006"
+        first = self._half(["Alice"], self.T1)
+        del first["rosterSnapshot"]["capturedAt"]
+        save_game_version(gid, first)
+        save_game_version(gid, self._half(["Bob"], self.T0))
+        assert [p["name"] for p in get_game_current(gid)["rosterSnapshot"]["players"]] == ["Bob"]
+
+        save_game_version(gid, dict(self._half(["Eve"], self.T0), rosterSnapshot=None))
+        assert get_game_current(gid)["rosterSnapshot"] is None
+
+    def test_restore_writes_the_snapshot_verbatim(self, isolate_test_data):
+        """merge_pending_lines=False is a faithful rollback: no squad merge."""
+        from storage.game_storage import save_game_version, get_game_current
+
+        gid = "squad-merge-007"
+        save_game_version(gid, self._half(["Alice", "Eve"], self.T1))
+        save_game_version(gid, self._half(["Alice", "Bob"], self.T0), merge_pending_lines=False)
+        assert [p["name"] for p in get_game_current(gid)["rosterSnapshot"]["players"]] == ["Alice", "Bob"]
+
+    def test_update_squad_definition_bumps_a_stamp_that_is_not_newer(self, isolate_test_data):
+        """A PATCH stamped at or before the stored snapshot (a phone whose
+        clock runs behind) lands with a stamp just past the stored one, so the
+        merge above cannot put the old squad back; the caller gets the stored
+        definition, stamp included."""
+        from storage.game_storage import save_game_version, get_game_current, update_squad_definition
+
+        gid = "squad-patch-001"
+        save_game_version(gid, self._half(["Alice", "Bob"], self.T1))
+        stored = update_squad_definition(gid, {
+            "rosterSnapshot": self._snapshot(["Alice", "Eve"], self.T0),
+        })
+
+        cur = get_game_current(gid)
+        assert [p["name"] for p in cur["rosterSnapshot"]["players"]] == ["Alice", "Eve"]
+        assert cur["rosterSnapshot"]["capturedAt"] == "2026-09-29T18:10:00.001Z"
+        assert stored["rosterSnapshot"] == cur["rosterSnapshot"]
+        assert (stored["team"], stored["opponent"], stored["scrimmageName"]) == ("Dark", "Light", None)
+        # No version backup: metadata, like /phase.
+        assert len(list((isolate_test_data / "games" / gid / "versions").glob("*.json"))) == 1
+
+    def test_update_squad_definition_keeps_a_newer_stamp_as_sent(self, isolate_test_data):
+        from storage.game_storage import save_game_version, update_squad_definition
+
+        gid = "squad-patch-002"
+        save_game_version(gid, self._half(["Alice", "Bob"], self.T0))
+        stored = update_squad_definition(gid, {"rosterSnapshot": self._snapshot(["Alice"], self.T1),
+                                               "scrimmageName": "Tuesday"})
+        assert stored["rosterSnapshot"]["capturedAt"] == self.T1
+        assert stored["scrimmageName"] == "Tuesday"
+
+    def test_update_squad_definition_reindexes_the_players(self, isolate_test_data):
+        """The player index (get_player_games) follows the new squad."""
+        from storage.game_storage import save_game_version, update_squad_definition
+        from storage.index_storage import rebuild_index, get_player_games
+
+        gid = "squad-patch-003"
+        save_game_version(gid, self._half(["Alice", "Bob"], self.T0))
+        rebuild_index()
+        update_squad_definition(gid, {"rosterSnapshot": self._snapshot(["Alice", "Eve"], self.T1)})
+        assert gid in get_player_games("Eve-0001")
+
+    def test_update_squad_definition_unknown_game(self, isolate_test_data):
+        from storage.game_storage import update_squad_definition
+        with pytest.raises(FileNotFoundError):
+            update_squad_definition("no-such-game", {"scrimmageName": "x"})
+
+
+# =============================================================================
 # Index Storage Tests
 # =============================================================================
 
