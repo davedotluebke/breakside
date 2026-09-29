@@ -223,7 +223,16 @@ const narrationMicButton = (function() {
         // recording or its follow-up work is running, in which case the
         // button stays until that is idle: the coach must be able to stop
         // what they started, and see it finish, whatever they just changed.
-        btn.classList.toggle('visible', !!inGame && (isEnabledOnTab() || anyTargetBusy()));
+        const visible = !!inGame && (isEnabledOnTab() || anyTargetBusy());
+        btn.classList.toggle('visible', visible);
+        // Mirrored on <body> for the layouts that keep the button's corner
+        // clear — the Field events bar's right padding, the Full tab's log
+        // strip, the Line tab's table bottom, the Field tab's mic
+        // placeholder (playByPlay/fieldPbp.css, fullPbp.css,
+        // ui/panelSystem.css). Gated on this class, that room exists only
+        // while the button does, so turning the mic off (or limiting it to
+        // lineups) gives the space back on the tabs it left.
+        document.body.classList.toggle('mic-button-visible', visible);
 
         btn.classList.remove(...ALL_PHASE_CLASSES);
         if (!isNarrationAvailable()) {

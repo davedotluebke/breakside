@@ -9,6 +9,9 @@
  *     drives lineup narration there even mid-point on the All tab, where the
  *     default drives event narration
  *   - off hides it everywhere, the moment the setting is written
+ *   - the room kept clear for the button follows it: body.mic-button-visible
+ *     mirrors the FAB, and on the Field tab the events bar's right padding
+ *     and the placeholder mic go and come back with it
  *   - a denied getUserMedia raises the mic-blocked toast, whose "Hide mic
  *     button" action turns narration off and removes the button
  *
@@ -88,9 +91,20 @@ test.describe('mic button setting', () => {
     await tab(page, 'all').click();
     await expect(mic(page)).toBeHidden();
 
-    // And back.
+    // The room kept clear for the button follows it (body.mic-button-visible):
+    // on the Field tab, the events bar's right padding and the placeholder
+    // mic go when the FAB does, and come back with it.
+    await setMode(page, 'lineup');
+    await tab(page, 'field').click();
+    await expect(mic(page)).toBeHidden();
+    await expect(page.locator('body')).not.toHaveClass(/mic-button-visible/);
+    await expect(page.locator('.fp-events')).toHaveCSS('padding-right', '8px');
+    await expect(page.locator('.fp-mic')).toBeHidden();
     await setMode(page, 'all');
     await expect(mic(page)).toBeVisible();
+    await expect(page.locator('body')).toHaveClass(/mic-button-visible/);
+    await expect(page.locator('.fp-events')).toHaveCSS('padding-right', '88px');
+    await expect(page.locator('.fp-mic')).toBeVisible();
   });
 
   test('a denied microphone raises the mic-blocked toast, whose action hides the button', async ({ page }) => {

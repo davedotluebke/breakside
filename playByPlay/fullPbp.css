@@ -462,11 +462,17 @@
 }
 
 /* Short screens: the log sits at its minimum and every pixel of it comes
- * out of the player rows, so give some back. Not below 88px: the mic FAB
- * (64px, 16px up from the bottom) has to fit inside the log strip, or it
- * lands on the They score button in the row above. */
+ * out of the player rows, so give some back — three log lines' worth. With
+ * the mic FAB on this tab, not below 88px: the FAB (64px, 16px up from the
+ * bottom) has to fit inside the log strip, or it lands on the They score
+ * button in the row above. body.mic-button-visible is narration/micButton.js
+ * render()'s, so a mic turned off (or kept for lineups only) gives the rows
+ * that room back. */
 @media (max-height: 700px) {
     .full-pbp-log-reserve {
+        min-height: 64px;
+    }
+    body.mic-button-visible .full-pbp-log-reserve {
         min-height: 88px;
     }
 }
@@ -475,10 +481,7 @@
     width: 100%;
     height: 100%;
     overflow-y: auto;
-    /* Left-justified; right padding leaves clearance for the mic FAB
-     * pinned in the bottom-right corner so log lines stay readable
-     * end-to-end without the disc icon obscuring them. */
-    padding: 4px 80px 4px 8px;
+    padding: 4px 8px;
     box-sizing: border-box;
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.78em;
@@ -487,6 +490,13 @@
     text-align: left;
     white-space: pre-wrap;
     word-break: break-word;
+}
+/* Left-justified; the right padding leaves clearance for the mic FAB pinned
+ * in the bottom-right corner, so log lines stay readable end-to-end without
+ * the disc icon obscuring them. Only while the FAB is on this tab (see the
+ * log-strip floor above). */
+body.mic-button-visible .full-pbp-log-list {
+    padding-right: 80px;
 }
 
 /* Offensive set cycling chip (per-possession set tagging) — distinct hue

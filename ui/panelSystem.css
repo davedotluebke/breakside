@@ -2086,8 +2086,14 @@ body.game-screen-active header {
 }
 
 /* Line tab: the table runs to the bottom of the screen, under the mic FAB,
-   so give it room to scroll its last rows up past the button. */
+   so give it room to scroll its last rows up past the button — only while
+   the FAB is there (body.mic-button-visible, narration/micButton.js
+   render()); with the mic off, a little clearance from the screen edge is
+   all the last row needs. */
 .panel-selectLine.tab-fullscreen .select-line-table-container {
+    padding-bottom: 12px;
+}
+body.mic-button-visible .panel-selectLine.tab-fullscreen .select-line-table-container {
     padding-bottom: 80px;
 }
 
