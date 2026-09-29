@@ -1,6 +1,6 @@
 # Small-phone layout: the viewport sweep and what it found
 
-Status: in progress (branch `claude/vibrant-bohr-hdb37l`, unmerged). Last verified 2026-09-29.
+Status: shipped in 2.7.1 (branch `claude/vibrant-bohr-hdb37l`, merged 2026-09-29). Last verified 2026-09-29, in Chromium emulation only; the Safari toolbar check at the end is still open.
 
 Prompted by a coach on an iPhone 13 mini: odd sizing, and text pushing the useful controls off the screen. The app had been tuned on an iPhone 15 Pro Max. This note covers the tool built to see the problem, what it found, what was fixed, and what was left as a design call.
 
