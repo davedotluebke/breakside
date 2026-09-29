@@ -445,10 +445,14 @@ test.describe('intrasquad scrimmage', () => {
     await expect(page.locator('#toastContainer')).toContainText('keeps its line');
     await expect(page.locator('#headerTeamUs')).toHaveText('Crimson');
     await expect(page.locator('#headerTeamThem')).toHaveText('Navy');
+    // Start Point moved the coach to the Simple tab (2.7.2); the Line tab
+    // holds the next point's table.
+    await page.locator('#headerSegControl button[data-tab="line"]').click();
     expect(await lineTabNames(page)).toEqual([...redFinal].sort());
     const stillOnField: string[] = await page.evaluate(() => (window as any).currentGame().points.at(-1).players);
     expect(stillOnField).toEqual(onField);
     // …and the edit survives this phone's own full syncs (it is the Active Coach).
+    await page.locator('#headerSegControl button[data-tab="simple"]').click();
     await weScoreWithAttribution(page, mover2, redFinal[0]);
     await expectScore(page, 1, 0);
     await expect
