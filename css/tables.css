@@ -315,12 +315,6 @@ th {
     align-items: stretch;
 }
 
-/* Ensure that the player buttons and action buttons are not too wide */
-.player-buttons, .action-buttons {
-    flex-basis: 45%; /* Adjust this percentage so that both columns together don't exceed 100% */
-    margin-right: 5%; /* Adds space between the two columns */
-}
-
 /* Adjust the width of the main action buttons to prevent overflow */
 .main-action-btn {
     width: auto; /* Or specify a fixed width if preferred */
@@ -401,11 +395,14 @@ input[type="text"], input[type="number"], select {
     border-radius: 4px;
 }
 
-/* Fixed width for gender ratio dropdown to prevent layout shifts */
+/* Gender ratio dropdown: sized by its row (shell.css .start-game-field-row
+   select: flex 1, min-width 0), capped at 280px, which fits "Alternating
+   (4:3 / 3:4)". It used to be a fixed 280px with min-width 280px, and
+   min-width beats max-width: on a phone 412px wide or narrower it ran past
+   the right edge, so the browser zoomed the whole Start Game screen out to
+   fit it. */
 #enforceGenderRatioSelect {
-    width: 280px; /* Width to accommodate "Alternating (4:3 / 3:4)" plus padding */
-    min-width: 280px;
-    max-width: 50%; /* Max width 50% of container for iPhone */
+    max-width: 280px;
     border-radius: 4px;
 }
 
@@ -416,12 +413,15 @@ ul {
 
 /* Roster table scrollable container — scrolls both axes so sticky header
    and sticky left columns work in the same container. max-height keeps
-   the table from pushing other UI off-screen on tall pages. */
+   the table from pushing other UI off-screen on tall pages. No side margin:
+   with width: 100% it pushed the box 20px past its parent's right edge
+   (ARCHITECTURE.md § CSS Styling Gotchas), which made every roster and
+   stats screen wider than the phone and zoomed it out. */
 .roster-table-container {
     overflow: auto;
     max-height: 70vh;
     width: 100%;
-    margin: 0 20px;
+    margin: 0;
     box-sizing: border-box;
 }
 
