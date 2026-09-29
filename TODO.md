@@ -105,6 +105,8 @@ while building the **Field tab** (`field-position` branch). Low risk (auth is a 
 
 MVP shipped. Coach speaks naturally; the system extracts structured game events. See **AI Narration** in [ARCHITECTURE.md](ARCHITECTURE.md) for the full design. Active work going forward is the post-MVP improvements list below.
 
+- [ ] **Mic button setting + denied-microphone toast** (branch `narration-mic-setting`, 2026-09-28, ready to merge; e2e `tests/scenarios/19-narration-mic-setting.spec.ts`). Advanced Settings → Audio Narration → *Mic button*: plays and lineups / lineups only (Line and All tabs) / off. A denied mic gets a 15 s toast with a *Hide mic button* action. **Verify on an iPhone (Dave):** after tapping Don't Allow, a reload (Safari) or close-and-reopen (home-screen app) should bring the permission prompt back on the next mic tap — that is WebKit's per-page denial cache as documented, not something checked on a device here. If it does *not* come back, the denial has been persisted and the toast's "browser settings" sentence is the operative one (Settings → Safari → Microphone, or the site's aA menu).
+
 ---
 
 ## Near Term
