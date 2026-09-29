@@ -1,0 +1,116 @@
+/* Saved narration clips — the manage-clips modal (narration/clipRecorder.js). */
+
+.clip-manager-modal {
+    max-width: 560px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    max-height: 85vh;
+}
+
+.clip-manager-note {
+    margin: 0 0 12px 0;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    color: var(--text-muted);
+}
+
+.clip-manager-note strong {
+    color: var(--text-primary);
+}
+
+.clip-manager-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    border-top: 1px solid var(--border-light);
+}
+
+.clip-manager-empty {
+    margin: 14px 0;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+}
+
+.clip-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.clip-row-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.clip-row-title {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.clip-row-when {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.clip-row-snippet {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.clip-row-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+.clip-row-btn {
+    margin: 0;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-default);
+    background: var(--surface-card);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.clip-row-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.clip-row-btn-danger {
+    color: var(--color-danger-text);
+    border-color: var(--color-danger-surface-deep);
+}
+
+.clip-manager-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding-top: 12px;
+}
+
+.clip-manager-total {
+    flex: 1 1 auto;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.clip-manager-footer .adv-done-btn {
+    margin: 0;
+}

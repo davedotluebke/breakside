@@ -203,6 +203,7 @@ const layer = createRosterNarration({
     voiceLabel: 'Voice lineup',
     unchanged: 'selection',
     endpoint: '/api/narration/lineup',
+    resultChannel: 'lineupResolved',
     statusId: 'lineupNarrationStatus',
     statusAnchor: () => document.querySelector('.panel-selectLine .select-line-toolbar'),
     listeningHint: () => 'Listening — name the line, or say "Kris in for Wes", "two more women", "auto the rest"',

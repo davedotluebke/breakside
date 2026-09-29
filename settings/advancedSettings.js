@@ -86,6 +86,9 @@ const advancedSettings = (function() {
         // amplifies wind/crowd noise, which hurts transcription far more than
         // it helps with a phone held near the coach's mouth.
         'narration.autoGainControl': false,
+        // Opt-in, device-local clip capture (narration/clipRecorder.js). The
+        // toggle persists true only once its own disclosure is accepted.
+        'narration.recordClips': false,
         // --- Sync ---
         'sync.refreshIntervalSec': 10,                   // cloud auto-refresh cadence (applies after reload)
         // --- Battery ---
@@ -375,6 +378,17 @@ const advancedSettings = (function() {
                     key: 'narration.echoCancellation', label: 'Echo cancellation',
                     help: 'The browser’s echo canceller. Rarely needs changing for sideline use.',
                     type: 'toggle'
+                },
+                {
+                    key: 'narration.recordClips', label: 'Keep narration clips on this device',
+                    help: 'Saves a copy of each narration’s audio, transcript and result in this browser so you can export it — for example to send a misheard clip to improve recognition. Nothing is uploaded; clips stay here until you export or delete them, and are trimmed after 30 days or 200 MB. Applies from the next narration.',
+                    type: 'toggle'
+                },
+                {
+                    key: 'narration.savedClips', label: 'Saved clips',
+                    help: 'Export clips as scenario bundles (share sheet or download), or delete them.',
+                    type: 'button', buttonLabel: 'Manage clips…',
+                    action: 'narrationClipRecorder.showClips'
                 }
             ]
         },
@@ -568,6 +582,18 @@ const advancedSettings = (function() {
                     </label>
                 </div>`;
         }
+        if (field.type === 'button') {
+            // No data-key: nothing to persist. The click dispatches to a
+            // window namespace, wired in showAdvancedSettings().
+            return `
+                <div class="adv-setting-row"${showWhenAttr}>
+                    <div class="adv-setting-text">
+                        <span class="adv-setting-label">${field.label}</span>
+                        <div class="adv-setting-help">${field.help}</div>
+                    </div>
+                    <button type="button" class="adv-action-btn" data-action="${field.action}">${field.buttonLabel}</button>
+                </div>`;
+        }
         if (field.type === 'textarea') {
             const rows = field.rows || 4;
             const resetBtn = field.resettable
@@ -713,7 +739,16 @@ const advancedSettings = (function() {
             const persist = () => {
                 const key = el.getAttribute('data-key');
                 const type = el.getAttribute('data-type');
-                if (type === 'toggle') {
+                if (type === 'toggle' && key === 'narration.recordClips' && el.checked
+                        && typeof window.narrationClipRecorder?.confirmOptIn === 'function') {
+                    // Keeping clips is a consent decision: the recorder shows
+                    // its own disclosure and the toggle sticks only on accept.
+                    set(key, false);
+                    Promise.resolve(window.narrationClipRecorder.confirmOptIn()).then(ok => {
+                        if (ok) set(key, true);
+                        else el.checked = false;
+                    });
+                } else if (type === 'toggle') {
                     set(key, el.checked);
                 } else {
                     set(key, el.value);
@@ -819,6 +854,16 @@ const advancedSettings = (function() {
                 set(key, def);
                 const ta = modal.querySelector(`#adv_${CSS.escape(key)}`);
                 if (ta) ta.value = def == null ? '' : String(def);
+            });
+        });
+
+        // Action buttons dispatch to late-bound window namespaces — the
+        // settings layer can't import the feature modules above it.
+        modal.querySelectorAll('.adv-action-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const [ns, fn] = (btn.getAttribute('data-action') || '').split('.');
+                const target = window[ns];
+                if (target && typeof target[fn] === 'function') target[fn]();
             });
         });
 

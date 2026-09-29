@@ -24,6 +24,7 @@
  */
 import { narrationRealtimeSession } from './realtimeSession.js';
 import { narrationEngine } from './narrationEngine.js';
+import { narrationEventBus } from './eventBus.js';
 import { advancedSettings } from '../settings/advancedSettings.js';
 import { authFetch, API_BASE_URL } from '../store/sync.js';
 import { showControllerToast, dismissToast } from '../game/controllerState.js';
@@ -69,6 +70,9 @@ function rosterForServer(roster, extra = () => ({})) {
  * @param {string} spec.voiceLabel      what a failed voice action is called ('Voice lineup')
  * @param {string} spec.unchanged       what stays as it was on failure ('selection', 'squads')
  * @param {string} spec.endpoint        '/api/narration/lineup'
+ * @param {string} [spec.resultChannel] event-bus channel on which a spoken
+ *        session's request and answer are announced ('lineupResolved'), for
+ *        the clip recorder (narration/clipRecorder.js)
  * @param {string} spec.statusId        DOM id of the status strip
  * @param {() => Element|null} spec.statusAnchor  element the strip is inserted after
  * @param {(ctx: object|null) => string} spec.listeningHint  strip text before any words arrive
@@ -308,7 +312,9 @@ function createRosterNarration(spec) {
         }
     }
 
-    async function processTranscript() {
+    /** `typed` marks the _narrate seam: no session was recorded, so there
+     *  is no result to announce for one. */
+    async function processTranscript({ typed = false } = {}) {
         if (!transcript.trim()) {
             // Same signature as a dead audio path (G5) — always say something.
             toast('No speech captured', 'warning');
@@ -323,9 +329,10 @@ function createRosterNarration(spec) {
         let data;
         try {
             const apiBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
+            const payload = spec.buildPayload(ctx, transcript);
             const resp = await authFetch(`${apiBase}${spec.endpoint}`, {
                 method: 'POST',
-                body: JSON.stringify(spec.buildPayload(ctx, transcript))
+                body: JSON.stringify(payload)
             });
             if (!resp.ok) {
                 const hint = resp.status === 503 ? 'not configured on the server'
@@ -335,6 +342,10 @@ function createRosterNarration(spec) {
                 return;
             }
             data = await resp.json();
+            // For the clip recorder: what the pass was asked, and its answer.
+            if (spec.resultChannel && !typed) {
+                narrationEventBus.publish(spec.resultChannel, { transcript, request: payload, response: data });
+            }
         } catch (err) {
             console.error(`[${spec.name}] request failed:`, err);
             toast(`${spec.label} processing failed (network) — ${spec.unchanged} unchanged`, 'error');
@@ -387,7 +398,7 @@ function createRosterNarration(spec) {
         _narrate: async (text) => {
             if (phase !== 'idle') return false;
             transcript = String(text || '');
-            await processTranscript();
+            await processTranscript({ typed: true });
             return true;
         },
         _getTranscript: () => transcript

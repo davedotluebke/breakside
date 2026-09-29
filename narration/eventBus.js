@@ -38,7 +38,12 @@ const narrationEventBus = (function() {
         'provisionalEventFinalized',
         'transcriptUpdated',
         'scoreChanged',
-        'pointChanged'
+        'pointChanged',
+        // Model results after a session, for the clip recorder
+        // (narration/clipRecorder.js): {transcript, roster, gameContext,
+        // operations, error} and {transcript, request, response}.
+        'narrationFinalized',
+        'lineupResolved'
     ];
 
     const subscribers = {};
