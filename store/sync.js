@@ -534,6 +534,15 @@ async function syncQueueItem(item) {
             body = JSON.stringify(cleanData);
             break;
 
+        case 'end':
+            // A game ended from the team card (End Scrimmage): the same
+            // metadata-PATCH shape as 'squad', for the same reason (see
+            // endGameOnCloud).
+            url = `${API_BASE_URL}/api/games/${id}/end`;
+            method = 'PATCH';
+            body = JSON.stringify(cleanData);
+            break;
+
         default:
             throw new Error(`Unknown entity type: ${type}`);
     }
@@ -1392,21 +1401,24 @@ async function refreshPendingLineFromCloud(gameId) {
         // with no planned line at all.
         adoptServerSquadDefinition(game, gameData);
 
-        if (!gameData.pendingNextLine) {
-            return null;
-        }
-
-        // Merge pendingNextLine - use server data if it's newer
-        const localPending = mergePendingNextLine(
-            gameData.pendingNextLine, game.pendingNextLine || {});
-
-        game.pendingNextLine = localPending;
+        // Merge pendingNextLine - use server data if it's newer. A game with
+        // no planned line yet (nobody has touched the Line tab) merges an
+        // empty one, so the end check below still runs for it: an End
+        // Scrimmage from the team card can land on exactly such a game.
+        const localPending = gameData.pendingNextLine
+            ? mergePendingNextLine(gameData.pendingNextLine, game.pendingNextLine || {})
+            : null;
+        if (localPending) game.pendingNextLine = localPending;
 
         // Detect if game was ended by another session/device
         if (gameData.gameEndTimestamp && !game.gameEndTimestamp) {
             game.gameEndTimestamp = new Date(gameData.gameEndTimestamp);
             log('📥 Refreshed pending line — game ended by another session');
-            return { gameJustEnded: true, pendingLine: localPending };
+            return { gameJustEnded: true, pendingLine: localPending || game.pendingNextLine || {} };
+        }
+
+        if (!localPending) {
+            return null;
         }
 
         log('📥 Refreshed pending line from cloud');
@@ -1590,6 +1602,54 @@ async function patchScrimmageGame(gameId, definition) {
     }
 
     addToSyncQueue('squad', 'patch', gameId, definition);
+    if (isOnline) processSyncQueue();
+    return null;
+}
+
+/**
+ * End a game from outside it — the team card's End Scrimmage, which ends
+ * both squads' games at once. A metadata PATCH (`PATCH /api/games/{id}/end`)
+ * rather than a full sync, for the reason patchScrimmageGame gives: the
+ * coach pressing End holds a stale copy of a game someone else is tracking.
+ * The server keeps the first end it is given, and its merge keeps the stamp
+ * through the tracking coach's next full sync; that coach's phone leaves the
+ * game screen on its next refresh, as when another coach ends the game from
+ * inside. Online: sent now (a 4xx is thrown for the caller to report).
+ * Offline, or the server unwell: queued as an 'end' item and retried.
+ * @param {string} gameId
+ * @param {string} gameEndTimestamp - ISO
+ * @returns {Promise<string|null>} the stamp the server stored, or null when queued
+ */
+async function endGameOnCloud(gameId, gameEndTimestamp) {
+    if (!gameId || !gameEndTimestamp) return null;
+    const body = { gameEndTimestamp };
+
+    if (localGames[gameId] && !localGames[gameId].gameEndTimestamp) {
+        localGames[gameId].gameEndTimestamp = gameEndTimestamp;
+        saveLocalGames();
+    }
+
+    if (isOnline) {
+        try {
+            const response = await authFetch(`${API_BASE_URL}/api/games/${gameId}/end`, {
+                method: 'PATCH',
+                body: JSON.stringify(body),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                log(`📤 Game ${gameId} ended on the server (${data.gameEndTimestamp})`);
+                return data.gameEndTimestamp || gameEndTimestamp;
+            }
+            if (response.status >= 400 && response.status < 500) {
+                throw new Error(`Server returned ${response.status}: ${await response.text()}`);
+            }
+            // 5xx: queue and retry below.
+        } catch (error) {
+            if (!isOfflineError(error)) throw error;
+        }
+    }
+
+    addToSyncQueue('end', 'patch', gameId, body);
     if (isOnline) processSyncQueue();
     return null;
 }
@@ -2263,7 +2323,7 @@ export {
     listServerGames, loadGameFromCloud,
     fetchGameStamp,
     refreshPendingLineFromCloud, refreshGameStateFromCloud, deleteGameFromCloud,
-    patchScrimmageGame,
+    patchScrimmageGame, endGameOnCloud,
     syncUserTeams, checkForUpdates, startAutoSync, stopAutoSync,
     syncAllData, pullFromCloud, getSyncStatus, checkIsOnline, clearSyncData,
     getSyncQueueItems, clearSyncQueue, getDeadLetterCount, DEAD_LETTER_KEY,

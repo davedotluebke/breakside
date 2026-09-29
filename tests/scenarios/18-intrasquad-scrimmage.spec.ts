@@ -8,14 +8,15 @@
  *   tracking one squad → that game fields only its squad → score a point →
  *   leave → the card shows both squads with the score → Track the other squad
  *   → it fields the other players → the Stats screen folds both halves
- *   together → delete removes both games.
+ *   together → End Scrimmage ends both halves and bounces a coach still
+ *   tracking one → delete removes both games.
  *
  * The pure rules (dealing, grouping, scores) are pinned in
  * tests/unit/scrimmage.test.mjs; this is about the wiring between the dialog,
  * the two Game objects, the server, the team list and the game screen.
  */
 import { test, expect, Page } from '@playwright/test';
-import { TEST_PARAMS, BACKEND_URL } from '../helpers/constants';
+import { TEST_PARAMS, BACKEND_URL, FRONTEND_URL } from '../helpers/constants';
 import {
   createTeam, openEditRoster, addPlayer, backToStartGame,
   selectAllPlayers, startPoint, weScoreWithAttribution, expectScore,
@@ -171,7 +172,7 @@ async function expectServerSquad(page: Page, gameId: string, coach: string, name
 }
 
 test.describe('intrasquad scrimmage', () => {
-  test('create, track one squad, track the other, review stats, delete', async ({ page }) => {
+  test('create, track one squad, track the other, review stats, end, delete', async ({ page, browser }) => {
     TEAM = uniqueTeamName('Scrimmage Test Team');
     await goToTeams(page);
     await createTeam(page, TEAM);
@@ -250,6 +251,8 @@ test.describe('intrasquad scrimmage', () => {
     await leaveGame(page);
 
     // ── The team card: one scrimmage, no games, both squads listed ──
+    // The scrimmage sits in the card's Scrimmages group, a collapsible card
+    // like an event's; the group and its newest scrimmage start open.
     await expect
       .poll(async () => {
         const resp = await page.request.get(`${BACKEND_URL}/api/games/${redGame.game_id}`, { headers: coachHeaders(COACH) });
@@ -259,11 +262,26 @@ test.describe('intrasquad scrimmage', () => {
     await goToTeams(page);   // a fresh load lists what the server has
     await expandCard(page);
     await expect(card(page).locator('.game-count')).toHaveText('0 games · 1 scrimmage');
+    const group = card(page).locator('.scrimmages-group');
+    await expect(group).toHaveCount(1);
+    await expect(group).not.toHaveClass(/collapsed/);
+    await expect(group.locator(':scope > .event-header .event-name')).toHaveText('Scrimmages (1)');
     const scrimCard = card(page).locator('.scrimmage-container');
     await expect(scrimCard).toHaveCount(1);
+    await expect(scrimCard).not.toHaveClass(/collapsed/);
     await expect(scrimCard.locator('.scrimmage-squad-name')).toHaveText(['Red', 'Blue']);
     await expect(scrimCard.locator('.scrimmage-score')).toHaveText('Red 1 – 0 Blue');
+    await expect(scrimCard.locator('.scrimmage-end-btn')).toBeVisible();
     await expect(card(page).locator('.games-list .game-item:not(.scrimmage-squad-item)')).toHaveCount(0);
+
+    // Tapping the group's top row folds it to one line and back; the choice
+    // survives the list's periodic redraw (store/teamListGroups.js).
+    await group.locator(':scope > .event-header .event-header-top').click();
+    await expect(group).toHaveClass(/collapsed/);
+    await expect(scrimCard).toBeHidden();
+    await group.locator(':scope > .event-header .event-header-top').click();
+    await expect(group).not.toHaveClass(/collapsed/);
+    await expect(scrimCard).toBeVisible();
 
     // ── Track Blue: the other half fields the other players ──
     await scrimCard.locator('.scrimmage-squad-item', { hasText: 'Blue' }).locator('.game-join-btn', { hasText: 'Track' }).click();
@@ -292,14 +310,54 @@ test.describe('intrasquad scrimmage', () => {
     await expect(page.locator('#exportScrimmageStatsBtn')).toBeVisible();
     await expect(page.locator('#scrimmageScopeFilter option')).toHaveCount(2);
 
-    // The team-header entry point opens the same screen across all scrimmages.
+    // The team header's Scrimmages button opens the card's Scrimmages group
+    // in place (folded shut here first, to prove it); the group's own
+    // Scrimmage stats button is the all-scrimmages screen.
     await page.click('#backFromScrimmageStatsBtn');
     await expect(page.locator('#selectTeamScreen')).toBeVisible({ timeout: 10_000 });
+    await expandCard(page);
+    await card(page).locator('.scrimmages-group > .event-header .event-header-top').click();
+    await expect(card(page).locator('.scrimmages-group')).toHaveClass(/collapsed/);
     await card(page).locator('.team-scrimmages-btn').click();
+    await expect(card(page).locator('.scrimmages-group')).not.toHaveClass(/collapsed/);
+    await expect(page.locator('#scrimmageStatsScreen')).toBeHidden();
+    await card(page).locator('.scrimmages-stats-btn').click();
     await expect(page.locator('#scrimmageStatsScreen')).toBeVisible({ timeout: 8_000 });
     await expect(page.locator('#scrimmageScopeFilter')).toHaveValue('');
     await expect(page.locator('#scrimmageStatsHeader')).toHaveText(`${TEAM} — Scrimmages`);
     await page.click('#backFromScrimmageStatsBtn');
+    await expect(page.locator('#selectTeamScreen')).toBeVisible({ timeout: 10_000 });
+
+    // ── End Scrimmage ends both halves, under a coach still tracking one ──
+    // A second phone (same coach account) tracks Red. The card's End
+    // Scrimmage stamps both games on the server by a metadata PATCH; the
+    // tracking phone's next refresh sends it back to the team list.
+    const phone2 = await (await browser.newContext()).newPage();
+    await phone2.goto(`${FRONTEND_URL}/?${TEST_PARAMS}&testUserId=${COACH}`);
+    await expect(phone2.locator('#selectTeamScreen')).toBeVisible({ timeout: 10_000 });
+    await expandCard(phone2);
+    await card(phone2).locator('.scrimmage-squad-item', { hasText: 'Red' }).locator('.game-join-btn', { hasText: 'Track' }).click();
+    await expect(phone2.locator('.game-screen-container')).toBeVisible({ timeout: 8_000 });
+    await expect(phone2.locator('#headerTeamUs')).toHaveText('Red');
+
+    await expandCard(page);
+    page.once('dialog', d => d.accept());
+    await card(page).locator('.scrimmage-end-btn').click();
+    await expect(card(page).locator('.scrimmage-container')).toHaveClass(/scrimmage-over/, { timeout: 10_000 });
+    await expect(card(page).locator('.scrimmage-end-btn')).toHaveCount(0);
+    await expect(card(page).locator('.scrimmage-squad-item .game-join-btn')).toHaveText(['Review', 'Review']);
+    for (const g of [redGame, blueGame]) {
+      await expect
+        .poll(async () => (await serverGame(page, g.game_id, COACH)).gameEndTimestamp || null,
+          { message: `${g.team}'s half never ended on the server`, timeout: 20_000, intervals: [250] })
+        .toBeTruthy();
+    }
+    // Red's score survived the end (the PATCH touches nothing else).
+    expect((await serverGame(page, redGame.game_id, COACH)).scores.team).toBe(1);
+
+    await expect(phone2.locator('#toastContainer')).toContainText('Game has ended', { timeout: 30_000 });
+    await expect(phone2.locator('#selectTeamScreen')).toBeVisible({ timeout: 10_000 });
+    await phone2.context().close();
 
     // ── Delete removes both halves ──
     await expandCard(page);

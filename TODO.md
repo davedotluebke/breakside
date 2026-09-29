@@ -131,6 +131,19 @@ changed, a player-add row in the dialog, and squad names / label editable
 the same way. Backend: `PATCH /api/games/{id}/scrimmage` plus the
 newer-squad rule in `save_game_version` — deploy the backend before the
 frontend, or a squad edit's PATCH 404s (the client queues it and retries).
+
+Branch `scrimmage-cards` (2026-09-29, unmerged) reworks the team card after
+the first practice's screenshot: scrimmages sit in a **Scrimmages group**,
+a collapsible card like an event's with the all-scrimmages stats on its
+header and one collapsible sub-card per scrimmage (Stats, Squads, **End
+Scrimmage**, delete); events fold the same way, the newest group open and
+the rest one line each; the team header's Scrimmages button opens the
+group in place. The score mismatch ("Orange 2–0 · Black 3–3": each squad's
+own reading, when both halves have points and disagree) is flagged and
+explained under the squad rows. Backend: `PATCH /api/games/{id}/end` and
+the sticky end stamp in `save_game_version` — deploy the backend before the
+frontend, or End Scrimmage's PATCH 404s. Design and the reasons scrimmages
+stay out of the event model: ARCHITECTURE.md § Team list groups.
 Follow-ups, none blocking:
 
 - [ ] **Field test the squad edits** at the next practice: change a squad

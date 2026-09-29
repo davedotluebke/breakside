@@ -93,11 +93,14 @@
     animation: pulse 2s infinite;
 }
 
-/* Bottom row: [coach badge] [game count] [roster btn] */
+/* Bottom row: [coach badge] [game count] [roster btn] [scrimmages btn].
+   Wraps rather than clipping the last button once the count reads
+   "6 games · 3 scrimmages" on a phone. */
 .team-header-bottom {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
+    gap: 4px 10px;
     font-size: 0.85em;
     color: var(--text-muted);
     padding-left: 2px;
@@ -305,16 +308,21 @@
 
 .event-header-btns {
     display: flex;
-    gap: 6px;
+    flex-wrap: wrap;
+    gap: 4px 8px;
 }
 
 /* Roster & settings controls on the event header's second row. Dark text for
-   contrast against the grey header band. */
+   contrast against the grey header band. Margin reset: the global
+   `button { margin: 10px }` would otherwise add 20px per button and push a
+   scrimmage's four (Stats, Squads, End, delete) onto two rows on a phone;
+   the row's gap does the spacing. */
 .event-header-btn {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     color: var(--text-strong);
+    margin: 0;
     padding: 3px 8px;
     border-radius: 4px;
     white-space: nowrap;
@@ -328,22 +336,23 @@
 /* Responsive label collapse. Widest: "Event roster" + "Event settings".
    Narrower in stages: settings label drops, then "Event roster + stats" →
    "Roster + stats", then roster label drops to icon-only. Thresholds are tuned
-   to the buttons' actual rendered widths so labels stay visible whenever
-   there's real room. */
+   to the buttons' actual rendered widths (193px and 147px at full label, no
+   margin, an 8px gap; the query measures the header's content box) so
+   labels stay visible whenever there's real room. */
 .event-header-btn .ev-roster-short {
     display: none;
 }
 
-@container event-header-row (max-width: 310px) {
+@container event-header-row (max-width: 350px) {
     .event-header-btn .ev-settings-label { display: none; }
 }
 
-@container event-header-row (max-width: 190px) {
+@container event-header-row (max-width: 230px) {
     .event-header-btn .ev-roster-full { display: none; }
     .event-header-btn .ev-roster-short { display: inline; }
 }
 
-@container event-header-row (max-width: 150px) {
+@container event-header-row (max-width: 185px) {
     .event-header-btn .ev-roster-short { display: none; }
 }
 
@@ -440,6 +449,101 @@
 /* The teal Scrimmages button on the team header's second row. */
 .team-scrimmages-btn i {
     color: var(--color-info);
+}
+
+/* ── Collapsible groups (teams/teamList.js buildGroupCard) ──
+   Events, the Scrimmages group and each scrimmage sub-card share the
+   .event-container frame; the header's top row toggles the group, and while
+   it is collapsed the button row and the body are hidden, so a closed group
+   is one line: name, record, chevron. */
+.event-header-top {
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.event-header-top:focus-visible {
+    outline: 2px solid var(--brand-orange);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.group-chevron {
+    flex-shrink: 0;
+    font-size: 0.7em;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+}
+
+.event-container.collapsed > .event-header .group-chevron {
+    transform: rotate(-90deg);
+}
+
+.event-container.collapsed > .event-header .event-header-btns,
+.event-container.collapsed > .group-body {
+    display: none;
+}
+
+/* A group with a coach in one of its games right now: the same green as a
+   team card with active games, and the 🟢 on its top row. */
+.event-container.group-active {
+    border-color: var(--color-success);
+}
+
+.event-container.group-active > .event-header {
+    background: var(--surface-game-active);
+}
+
+.event-name .group-icon {
+    color: var(--color-info);
+    margin-right: 6px;
+}
+
+/* The Scrimmages group is teal like its button; the scrimmage sub-cards
+   nest inside its body, one thinner frame each. */
+.scrimmages-group {
+    border-color: var(--color-info);
+}
+
+.scrimmages-group > .group-body {
+    padding-bottom: 4px;
+}
+
+.scrimmages-group .scrimmage-container {
+    border-width: 1px;
+    margin: 8px 8px 4px;
+}
+
+.scrimmages-group .scrimmage-container.group-active {
+    border-width: 2px;
+}
+
+/* The mismatch hint under the squad rows (the two halves disagree). */
+.scrimmage-score-hint {
+    margin: 0;
+    padding: 4px 20px 10px;
+    font-size: 0.8em;
+}
+
+.scrimmage-score-mismatch i {
+    font-size: 0.85em;
+}
+
+/* A scrimmage sub-card's four buttons (Stats, Squads, End Scrimmage, delete)
+   on one row down to a 375px phone: tighter padding, and "End Scrimmage" →
+   "End" once the sub-card's header is narrower than the full label needs.
+   Narrower still (a 320px phone), the row wraps. */
+.scrimmage-container .event-header-btn {
+    padding: 3px 6px;
+}
+
+.event-header-btn .ev-end-short {
+    display: none;
+}
+
+@container event-header-row (max-width: 360px) {
+    .event-header-btn .ev-end-full { display: none; }
+    .event-header-btn .ev-end-short { display: inline; }
 }
 
 /* ── New Scrimmage dialog ── */

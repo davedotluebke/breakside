@@ -21,8 +21,9 @@ import {
 import {
     authFetch, API_BASE_URL, listServerGames, listTeamEvents, updateGamePhase,
     deleteGameFromCloud, loadGameFromCloud, syncUserTeams,
-    createTeamOffline, getSyncStatus,
+    createTeamOffline, getSyncStatus, endGameOnCloud,
 } from '../store/sync.js';
+import { seedGroupStates, isGroupOpen, setGroupOpen } from '../store/teamListGroups.js';
 import { getPlayerFromName, isPointInProgress } from '../utils/helpers.js';
 import { showScreen, showEditRosterScreen, showStartGameScreen } from '../screens/navigation.js';
 import { buildSyncStatusHTML } from './syncStatusUI.js';
@@ -188,6 +189,13 @@ function teamHasActiveGames(games) {
 // Track which teams the user has manually expanded/collapsed (survives re-renders)
 const _expandedTeams = new Set();
 let _expandStateInitialized = false;
+
+// The collapsible groups inside a team card — events, the Scrimmages group,
+// each scrimmage — keyed `${teamId}|event:<id>` and the like (see
+// groupKey). Seeded on first sight by the rule in store/teamListGroups.js
+// (the newest group and any with a live game start open); a coach's toggle
+// holds for the rest of the session, like _expandedTeams.
+let _groupStates = new Map();
 
 // Cached team objects from last populateCloudTeamsAndGames() (read by activeGamePolling.js)
 let _cloudTeamsCache = [];
@@ -545,17 +553,17 @@ function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
     };
     bottomRow.appendChild(rosterBtn);
 
-    // Scrimmage stats across every practice, once the team has any. Viewers
-    // get it too: the screen only reads.
+    // A shortcut to the Scrimmages group inside the card, once the team has
+    // any: opens the card and the group and scrolls there. The stats live
+    // on the group's own header, one tap further.
     if (scrimmages.length > 0) {
         const scrimBtn = document.createElement('button');
         scrimBtn.innerHTML = '<i class="fas fa-people-arrows"></i> Scrimmages';
         scrimBtn.classList.add('icon-button', 'text-icon-button', 'team-scrimmages-btn');
-        scrimBtn.title = 'Scrimmage stats, across all scrimmages';
+        scrimBtn.title = 'Show the scrimmages';
         scrimBtn.onclick = (e) => {
             e.stopPropagation();
-            setCurrentTeamRole(role);
-            openScrimmageStats(team, teamGames);
+            revealScrimmagesGroup(team.id);
         };
         bottomRow.appendChild(scrimBtn);
     }
@@ -590,19 +598,31 @@ function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
     });
     const standaloneGames = realGames.filter(g => !eventGameIds.has(g.game_id));
 
-    // Build interleaved list: events, scrimmages and standalone games sorted
-    // by most recent activity
+    // Build interleaved list: events, the Scrimmages group and standalone
+    // games sorted by most recent activity. Events and the Scrimmages group
+    // are collapsible; which start open is store/teamListGroups.js's call
+    // (the newest, and any with a coach in a game right now).
     const renderItems = [];
 
-    scrimmages.forEach(scrimmage => {
-        renderItems.push({ type: 'scrimmage', scrimmage, sortTs: scrimmage.startTs });
-    });
+    if (scrimmages.length > 0) {
+        renderItems.push({
+            type: 'scrimmages', scrimmages,
+            key: groupKey(team.id, 'scrimmages'),
+            sortTs: Math.max(...scrimmages.map(s => s.startTs || 0)),
+            active: scrimmages.some(s => s.games.some(isGameActive)),
+        });
+    }
 
     // Add events with their latest game timestamp
     teamEvents.forEach(ev => {
         const evGames = gamesByEventId[ev.id] || [];
         const latestTs = getMostRecentGameTimestamp(evGames);
-        renderItems.push({ type: 'event', event: ev, games: evGames, sortTs: latestTs || new Date(ev.createdAt || 0).getTime() });
+        renderItems.push({
+            type: 'event', event: ev, games: evGames,
+            key: groupKey(team.id, 'event', ev.id),
+            sortTs: latestTs || new Date(ev.createdAt || 0).getTime(),
+            active: evGames.some(isGameActive),
+        });
     });
 
     // Add standalone games
@@ -614,6 +634,8 @@ function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
     // Sort newest first
     renderItems.sort((a, b) => b.sortTs - a.sortTs);
 
+    _groupStates = seedGroupStates(_groupStates, renderItems.filter(item => item.key));
+
     if (renderItems.length === 0 && teamEvents.length === 0) {
         const noGamesMsg = document.createElement('div');
         noGamesMsg.className = 'no-games-message';
@@ -622,9 +644,9 @@ function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
     } else {
         renderItems.forEach(item => {
             if (item.type === 'event') {
-                gamesContainer.appendChild(renderEventContainer(item.event, item.games, team, role));
-            } else if (item.type === 'scrimmage') {
-                gamesContainer.appendChild(renderScrimmageContainer(item.scrimmage, team, role, teamGames));
+                gamesContainer.appendChild(renderEventContainer(item.event, item.games, team, role, item));
+            } else if (item.type === 'scrimmages') {
+                gamesContainer.appendChild(renderScrimmagesGroup(item.scrimmages, team, role, teamGames, item));
             } else {
                 const gamesList = document.createElement('ul');
                 gamesList.className = 'games-list';
@@ -1503,36 +1525,135 @@ function renderGameItem(game, team, role, parentEvent) {
     return gameItem;
 }
 
-/**
- * Render an event container with its games
- */
-function renderEventContainer(event, games, team, role) {
-    const container = document.createElement('div');
-    container.className = 'event-container';
-    if (event.status === 'closed') {
-        container.classList.add('event-closed');
-    }
+// =============================================================================
+// Collapsible groups: events, the Scrimmages group, each scrimmage
+// =============================================================================
 
-    // Event header — two rows: [name + W-L] on top, [roster | settings] below.
+/** The key a group's open/closed state is kept under (store/teamListGroups.js). */
+function groupKey(teamId, kind, id = '') {
+    return `${teamId}|${kind}${id ? `:${id}` : ''}`;
+}
+
+/**
+ * The frame every group in a team card shares: a header whose top row
+ * (name, record, chevron) toggles the group, a row of header buttons and a
+ * body that hide while it is collapsed. Events, the Scrimmages group and
+ * each scrimmage sub-card are all this frame with different contents, so
+ * the collapsing, the keyboard handling and the "which start open" rule are
+ * written once. The toggle flips classes in place rather than redrawing the
+ * list; the state map remembers the choice for the next redraw.
+ *
+ * @param {{key: string, cssClass?: string, icon?: string, active?: boolean,
+ *          closed?: boolean, title: string, titleTitle?: string,
+ *          record?: HTMLElement|null, buttons?: HTMLElement[]}} spec
+ * @returns {{container: HTMLElement, body: HTMLElement}}
+ */
+function buildGroupCard({ key, cssClass = '', icon = '', active = false, closed = false, title, titleTitle = '', record = null, buttons = [] }) {
+    const container = document.createElement('div');
+    container.className = `event-container ${cssClass}`.trim();
+    container.dataset.groupKey = key;
+    if (closed) container.classList.add('event-closed');
+    if (active) container.classList.add('group-active');
+
     const header = document.createElement('div');
     header.className = 'event-header';
 
     const headerTop = document.createElement('div');
     headerTop.className = 'event-header-top';
+    headerTop.setAttribute('role', 'button');
+    headerTop.setAttribute('tabindex', '0');
+
+    if (active) {
+        const dot = document.createElement('span');
+        dot.className = 'team-active-indicator';
+        dot.textContent = '🟢';
+        dot.title = 'A coach is in a game here right now';
+        headerTop.appendChild(dot);
+    }
 
     const nameSpan = document.createElement('span');
     nameSpan.className = 'event-name';
-    nameSpan.textContent = event.name;
-    if (event.status === 'closed') {
-        nameSpan.textContent += ' (closed)';
+    if (icon) {
+        const iconEl = document.createElement('i');
+        iconEl.className = `fas ${icon} group-icon`;
+        iconEl.setAttribute('aria-hidden', 'true');
+        nameSpan.appendChild(iconEl);
     }
+    nameSpan.appendChild(document.createTextNode(title));
+    if (titleTitle) nameSpan.title = titleTitle;
     headerTop.appendChild(nameSpan);
+
+    if (record) headerTop.appendChild(record);
+
+    const chevron = document.createElement('i');
+    chevron.className = 'fas fa-chevron-down group-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    headerTop.appendChild(chevron);
     header.appendChild(headerTop);
 
-    if (role === 'coach') {
+    if (buttons.length) {
         const headerBtns = document.createElement('div');
         headerBtns.className = 'event-header-btns';
+        buttons.forEach(btn => headerBtns.appendChild(btn));
+        header.appendChild(headerBtns);
+    }
+    container.appendChild(header);
 
+    const body = document.createElement('div');
+    body.className = 'group-body';
+    container.appendChild(body);
+
+    const apply = (open) => {
+        container.classList.toggle('collapsed', !open);
+        headerTop.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    apply(isGroupOpen(_groupStates, key));
+
+    const flip = () => {
+        const open = container.classList.contains('collapsed');
+        _groupStates = setGroupOpen(_groupStates, key, open);
+        apply(open);
+    };
+    headerTop.onclick = (e) => {
+        e.stopPropagation();
+        flip();
+    };
+    headerTop.onkeydown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            flip();
+        }
+    };
+
+    return { container, body };
+}
+
+/** A header button for a group card: an icon and a label that CSS may hide. */
+function groupHeaderButton({ icon, label, labelClass = 'ev-btn-label', title, cssClass = '', onClick }) {
+    const btn = document.createElement('button');
+    btn.innerHTML = `<i class="fas ${icon}"></i>` + (label ? `<span class="${labelClass}">${label}</span>` : '');
+    btn.classList.add('icon-button', 'event-header-btn');
+    if (cssClass) cssClass.split(' ').forEach(c => c && btn.classList.add(c));
+    btn.title = title;
+    btn.onclick = (e) => {
+        e.stopPropagation();
+        onClick();
+    };
+    return btn;
+}
+
+/**
+ * Render an event container with its games
+ * @param {object} event
+ * @param {Array} games - the event's game summaries
+ * @param {object} team
+ * @param {string} role - 'coach' | 'viewer'
+ * @param {{key: string, active: boolean}} item - from buildTeamSection
+ */
+function renderEventContainer(event, games, team, role, item) {
+    const buttons = [];
+    if (role === 'coach') {
         // Roster label collapses "Event roster + stats" → "Roster + stats" →
         // icon-only; the settings label drops out first. See @container rules
         // in css/teams.css.
@@ -1546,23 +1667,33 @@ function renderEventContainer(event, games, team, role) {
             e.stopPropagation();
             showEventRosterScreen(event, team);
         };
-        headerBtns.appendChild(rosterBtn);
+        buttons.push(rosterBtn);
 
-        const settingsBtn = document.createElement('button');
-        settingsBtn.innerHTML = '<i class="fas fa-cog"></i>' +
-            '<span class="ev-btn-label ev-settings-label">Event settings</span>';
-        settingsBtn.classList.add('icon-button', 'event-header-btn');
-        settingsBtn.title = 'Event Settings';
-        settingsBtn.onclick = (e) => {
-            e.stopPropagation();
-            showEventSettingsDialog(event, team);
-        };
-        headerBtns.appendChild(settingsBtn);
-
-        header.appendChild(headerBtns);
+        buttons.push(groupHeaderButton({
+            icon: 'fa-cog', label: 'Event settings', labelClass: 'ev-btn-label ev-settings-label',
+            title: 'Event Settings',
+            onClick: () => showEventSettingsDialog(event, team),
+        }));
     }
 
-    container.appendChild(header);
+    // W-L record
+    let record = null;
+    if (games.length > 0) {
+        const wins = games.filter(g => (g.scores?.team || 0) > (g.scores?.opponent || 0)).length;
+        const losses = games.filter(g => (g.scores?.opponent || 0) > (g.scores?.team || 0)).length;
+        record = document.createElement('span');
+        record.className = 'event-record';
+        record.textContent = `${wins}W-${losses}L`;
+    }
+
+    const { container, body } = buildGroupCard({
+        key: item.key,
+        active: item.active,
+        closed: event.status === 'closed',
+        title: event.status === 'closed' ? `${event.name} (closed)` : event.name,
+        record,
+        buttons,
+    });
 
     // Event games — bucket by phase if phases configured
     if (games.length > 0) {
@@ -1573,7 +1704,7 @@ function renderEventContainer(event, games, team, role) {
             games.forEach(game => {
                 gamesList.appendChild(renderGameItem(game, team, role, event));
             });
-            container.appendChild(gamesList);
+            body.appendChild(gamesList);
         } else {
             // Group into ordered phase buckets, then an "Unassigned" bucket
             const buckets = new Map();
@@ -1586,31 +1717,21 @@ function renderEventContainer(event, games, team, role) {
                     unassigned.push(g);
                 }
             });
-            buckets.forEach((bucketGames, phaseLabel) => {
+            const appendBucket = (label, bucketGames, extraClass = '') => {
                 if (bucketGames.length === 0) return;
                 const phaseHeader = document.createElement('div');
-                phaseHeader.className = 'event-phase-header';
-                phaseHeader.textContent = phaseLabel;
-                container.appendChild(phaseHeader);
+                phaseHeader.className = `event-phase-header ${extraClass}`.trim();
+                phaseHeader.textContent = label;
+                body.appendChild(phaseHeader);
                 const gamesList = document.createElement('ul');
                 gamesList.className = 'games-list event-games-list';
                 bucketGames.forEach(game => {
                     gamesList.appendChild(renderGameItem(game, team, role, event));
                 });
-                container.appendChild(gamesList);
-            });
-            if (unassigned.length > 0) {
-                const phaseHeader = document.createElement('div');
-                phaseHeader.className = 'event-phase-header event-phase-unassigned';
-                phaseHeader.textContent = 'Unassigned';
-                container.appendChild(phaseHeader);
-                const gamesList = document.createElement('ul');
-                gamesList.className = 'games-list event-games-list';
-                unassigned.forEach(game => {
-                    gamesList.appendChild(renderGameItem(game, team, role, event));
-                });
-                container.appendChild(gamesList);
-            }
+                body.appendChild(gamesList);
+            };
+            buckets.forEach((bucketGames, phaseLabel) => appendBucket(phaseLabel, bucketGames));
+            appendBucket('Unassigned', unassigned, 'event-phase-unassigned');
         }
     }
 
@@ -1623,17 +1744,7 @@ function renderEventContainer(event, games, team, role) {
             e.stopPropagation();
             startNewEventGame(event, team);
         };
-        container.appendChild(newGameBtn);
-    }
-
-    // W-L record
-    const wins = games.filter(g => (g.scores?.team || 0) > (g.scores?.opponent || 0)).length;
-    const losses = games.filter(g => (g.scores?.opponent || 0) > (g.scores?.team || 0)).length;
-    if (games.length > 0) {
-        const record = document.createElement('span');
-        record.className = 'event-record';
-        record.textContent = `${wins}W-${losses}L`;
-        header.querySelector('.event-header-top').appendChild(record);
+        body.appendChild(newGameBtn);
     }
 
     return container;
@@ -1677,93 +1788,210 @@ async function deleteScrimmageWithConfirm(scrimmage, team) {
 }
 
 /**
- * One scrimmage's card: the label and date with the score as the two halves
- * report it, then a row per squad with its Track / Review button. The card
- * shape mirrors an event's so the list reads as one thing.
+ * End both halves of a scrimmage from the card, after one confirmation.
+ * Each half is stamped on this device's copies first (so the card, and an
+ * offline list, show Review at once and a later sync of that copy carries
+ * the end) and then on the server by a metadata PATCH (store/sync.js
+ * endGameOnCloud) — never a full sync, since the coach pressing End tracks
+ * at most one half and holds a stale copy of the other. A coach still
+ * tracking a squad is returned to the team list by their next refresh.
+ */
+async function endScrimmageWithConfirm(scrimmage, team) {
+    const live = (scrimmage.games || []).filter(g => !g.game_end_timestamp);
+    if (!live.length) return;
+    const skipConfirm = typeof isTestTeam === 'function' && isTestTeam(team);
+    const label = scrimmageLabel(scrimmage);
+    if (!skipConfirm && !confirm(`End ${label}? Both squads' games will be ended, and a coach still tracking a squad is returned to the team list.`)) return;
+
+    const at = new Date().toISOString();
+    const failures = [];
+    for (const game of live) {
+        markLocalGameEnded(game.game_id, at);
+        try {
+            await endGameOnCloud(game.game_id, at);
+        } catch (err) {
+            console.error(`Could not end ${game.game_id}:`, err);
+            failures.push(err.message);
+        }
+    }
+    saveAllTeamsData({ syncCurrentGame: false });
+
+    // Redraw from the last fetch with the halves ended, rather than after
+    // the refetch: a queued PATCH may land after the refetch does.
+    if (_lastListData && Array.isArray(_lastListData.allGames)) {
+        const ids = new Set(live.map(g => g.game_id));
+        _lastListData.allGames.forEach(g => {
+            if (g && ids.has(g.game_id) && !g.game_end_timestamp) g.game_end_timestamp = at;
+        });
+        renderCloudTeamsList();
+    }
+    log(`🏁 Scrimmage ended: ${label} (${scrimmage.id})`);
+    if (failures.length) {
+        alert(`${label} is ended on this phone, but the server refused: ${failures.join('; ')}`);
+    }
+    populateCloudTeamsAndGames();
+}
+
+/** Stamp every local copy of a game as ended (the first end stands). */
+function markLocalGameEnded(gameId, at) {
+    teams.forEach(t => (t?.games || []).forEach(g => {
+        if (g && gameMatchesId(g, gameId) && !g.gameEndTimestamp) g.gameEndTimestamp = new Date(at);
+    }));
+}
+
+/**
+ * Open a team's Scrimmages group in place: expand the card and the group,
+ * and scroll it into view. The team header's Scrimmages button.
+ */
+function revealScrimmagesGroup(teamId) {
+    const key = groupKey(teamId, 'scrimmages');
+    _expandedTeams.add(teamId);
+    _groupStates = setGroupOpen(_groupStates, key, true);
+    renderCloudTeamsList();
+    const el = document.querySelector(`.event-container[data-group-key="${CSS.escape(key)}"]`);
+    if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+}
+
+/**
+ * The Scrimmages group: one collapsible card per team holding every
+ * scrimmage as a sub-card, with the all-scrimmages stats on its header —
+ * a special kind of event, in the list's terms. Its own sub-cards follow
+ * the same open-by-default rule among themselves (the newest, and any
+ * being tracked right now).
+ * @param {Array} scrimmages - from groupScrimmages, newest first
+ * @param {object} team - team as the API returns it
+ * @param {string} role - 'coach' | 'viewer'
+ * @param {Array} teamGames - the team's game summaries, for the stats screen
+ * @param {{key: string, active: boolean}} item - from buildTeamSection
+ */
+function renderScrimmagesGroup(scrimmages, team, role, teamGames, item) {
+    // Viewers get the stats too: the screen only reads.
+    const statsBtn = groupHeaderButton({
+        icon: 'fa-chart-bar', label: 'Scrimmage stats', cssClass: 'scrimmages-stats-btn',
+        title: 'Stats across every scrimmage',
+        onClick: () => {
+            setCurrentTeamRole(role);
+            openScrimmageStats(team, teamGames);
+        },
+    });
+
+    const { container, body } = buildGroupCard({
+        key: item.key,
+        cssClass: 'scrimmages-group',
+        icon: 'fa-people-arrows',
+        active: item.active,
+        title: `Scrimmages (${scrimmages.length})`,
+        titleTitle: 'Intrasquad scrimmages: practice games between two squads of this team',
+        buttons: [statsBtn],
+    });
+
+    const subs = scrimmages.map(scrimmage => ({
+        scrimmage,
+        key: groupKey(team.id, 'scrimmage', scrimmage.id),
+        sortTs: scrimmage.startTs || 0,
+        active: scrimmage.games.some(isGameActive),
+    }));
+    _groupStates = seedGroupStates(_groupStates, subs);
+    subs.forEach(sub => body.appendChild(renderScrimmageContainer(sub.scrimmage, team, role, teamGames, sub)));
+
+    return container;
+}
+
+/**
+ * One scrimmage's sub-card: the label and date with the score as the two
+ * halves report it on the toggling row; Stats, Squads, End Scrimmage and
+ * delete on the button row; then a row per squad with its Track / Review
+ * button.
  * @param {object} scrimmage - from groupScrimmages
  * @param {object} team - team as the API returns it
  * @param {string} role - 'coach' | 'viewer'
  * @param {Array} teamGames - the team's game summaries, for the Stats button
+ * @param {{key: string, active: boolean}} item - from renderScrimmagesGroup
  */
-function renderScrimmageContainer(scrimmage, team, role, teamGames) {
-    const container = document.createElement('div');
-    container.className = 'event-container scrimmage-container';
-    if (isScrimmageOver(scrimmage)) container.classList.add('scrimmage-over');
-
+function renderScrimmageContainer(scrimmage, team, role, teamGames, item) {
     const names = scrimmageSquadNames(scrimmage);
     const scores = scrimmageScores(scrimmage);
+    const over = isScrimmageOver(scrimmage);
 
-    const header = document.createElement('div');
-    header.className = 'event-header';
-
-    const headerTop = document.createElement('div');
-    headerTop.className = 'event-header-top';
-
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'event-name scrimmage-name';
+    // Inside the Scrimmages group the word is redundant, so an unlabelled
+    // scrimmage is just its date; the full label is kept for the dialogs.
     const dateStr = scrimmage.startTs ? formatShortDate(scrimmage.startTs) : '';
-    nameSpan.textContent = scrimmage.name
+    const title = scrimmage.name
         ? `${scrimmage.name}${dateStr ? ` · ${dateStr}` : ''}`
-        : scrimmageLabel(scrimmage);
-    nameSpan.title = 'Intrasquad scrimmage';
-    headerTop.appendChild(nameSpan);
+        : (dateStr || scrimmageLabel(scrimmage));
 
     // The score as best known (a half nobody has tracked yet is left out);
-    // when both halves are being recorded and disagree, say so rather than
-    // pick one (a coach missed a point somewhere).
+    // when both halves are being recorded and disagree, show each squad's
+    // own reading, flagged, rather than pick one (a coach missed a point
+    // somewhere) — the hint in the body says what that means.
     const record = document.createElement('span');
     record.className = 'event-record scrimmage-score';
     if (!scores.agree) {
-        record.textContent = `${names.X} ${scores.X.us}–${scores.X.them} · ${names.Y} ${scores.Y.us}–${scores.Y.them}`;
-        record.title = 'The two squads\' games disagree on the score';
         record.classList.add('scrimmage-score-mismatch');
+        record.innerHTML = '<i class="fas fa-exclamation-triangle" aria-hidden="true"></i> ';
+        record.appendChild(document.createTextNode(
+            `${names.X} ${scores.X.us}–${scores.X.them} · ${names.Y} ${scores.Y.us}–${scores.Y.them}`));
+        record.title = "The two squads' games disagree on the score: each coach records their own";
     } else {
         record.textContent = `${names.X} ${scores.score.us} – ${scores.score.them} ${names.Y}`;
     }
-    headerTop.appendChild(record);
-    header.appendChild(headerTop);
 
-    const headerBtns = document.createElement('div');
-    headerBtns.className = 'event-header-btns';
-
-    const statsBtn = document.createElement('button');
-    statsBtn.innerHTML = '<i class="fas fa-chart-bar"></i><span class="ev-btn-label">Stats</span>';
-    statsBtn.classList.add('icon-button', 'event-header-btn');
-    statsBtn.title = 'Stats for this scrimmage';
-    statsBtn.onclick = (e) => {
-        e.stopPropagation();
-        setCurrentTeamRole(role);
-        openScrimmageStats(team, teamGames, scrimmage.id);
-    };
-    headerBtns.appendChild(statsBtn);
+    const buttons = [groupHeaderButton({
+        icon: 'fa-chart-bar', label: 'Stats', title: 'Stats for this scrimmage',
+        onClick: () => {
+            setCurrentTeamRole(role);
+            openScrimmageStats(team, teamGames, scrimmage.id);
+        },
+    })];
 
     if (role === 'coach') {
         // Squads, their names and the label can change after creation — a
         // late arrival, a lopsided first half. Both halves are updated at
         // once, and coaches tracking either squad see it on their phones.
-        const editBtn = document.createElement('button');
-        editBtn.innerHTML = '<i class="fas fa-user-edit"></i><span class="ev-btn-label">Squads</span>';
-        editBtn.classList.add('icon-button', 'event-header-btn', 'scrimmage-edit-btn');
-        editBtn.title = 'Edit the squads, their names or the label';
-        editBtn.onclick = (e) => {
-            e.stopPropagation();
-            setCurrentTeamRole(role);
-            showEditSquadsDialog(team, scrimmage.id, { summaries: scrimmage.squads });
-        };
-        headerBtns.appendChild(editBtn);
+        buttons.push(groupHeaderButton({
+            icon: 'fa-user-edit', label: 'Squads', cssClass: 'scrimmage-edit-btn',
+            title: 'Edit the squads, their names or the label',
+            onClick: () => {
+                setCurrentTeamRole(role);
+                showEditSquadsDialog(team, scrimmage.id, { summaries: scrimmage.squads });
+            },
+        }));
 
-        const deleteBtn = document.createElement('button');
-        deleteBtn.innerHTML = '<i class="fas fa-trash icon-danger"></i>';
-        deleteBtn.classList.add('icon-button', 'event-header-btn');
-        deleteBtn.title = 'Delete scrimmage (both squads\' games)';
-        deleteBtn.onclick = (e) => {
-            e.stopPropagation();
-            deleteScrimmageWithConfirm(scrimmage, team);
-        };
-        headerBtns.appendChild(deleteBtn);
+        // End both halves at once. The label shortens to "End" on a narrow
+        // card (@container rule in css/teams.css). Gone once both have ended.
+        if (!over) {
+            const endBtn = document.createElement('button');
+            endBtn.innerHTML = '<i class="fas fa-flag-checkered"></i>' +
+                '<span class="ev-btn-label ev-end-full">End Scrimmage</span>' +
+                '<span class="ev-btn-label ev-end-short">End</span>';
+            endBtn.classList.add('icon-button', 'event-header-btn', 'scrimmage-end-btn');
+            endBtn.title = "End the scrimmage (both squads' games)";
+            endBtn.onclick = (e) => {
+                e.stopPropagation();
+                endScrimmageWithConfirm(scrimmage, team);
+            };
+            buttons.push(endBtn);
+        }
+
+        buttons.push(groupHeaderButton({
+            icon: 'fa-trash icon-danger', label: '', cssClass: 'scrimmage-delete-btn',
+            title: "Delete scrimmage (both squads' games)",
+            onClick: () => deleteScrimmageWithConfirm(scrimmage, team),
+        }));
     }
-    header.appendChild(headerBtns);
-    container.appendChild(header);
+
+    const { container, body } = buildGroupCard({
+        key: item.key,
+        cssClass: `scrimmage-container${over ? ' scrimmage-over' : ''}`,
+        active: item.active,
+        title,
+        titleTitle: 'Intrasquad scrimmage',
+        record,
+        buttons,
+    });
+    container.querySelector('.event-name').classList.add('scrimmage-name');
 
     const list = document.createElement('ul');
     list.className = 'games-list event-games-list';
@@ -1771,7 +1999,16 @@ function renderScrimmageContainer(scrimmage, team, role, teamGames) {
         const game = scrimmage.squads[squad];
         if (game) list.appendChild(renderSquadGameItem(game, names[squad], team, role));
     });
-    container.appendChild(list);
+    body.appendChild(list);
+
+    if (!scores.agree) {
+        const hint = document.createElement('p');
+        hint.className = 'text-hint scrimmage-score-hint';
+        hint.textContent = 'Each coach records their own squad\'s game, and the two disagree on the score: '
+            + `${names.X}'s game has it ${scores.X.us}–${scores.X.them}, ${names.Y}'s ${scores.Y.us}–${scores.Y.them}. `
+            + 'A point was missed on one side.';
+        body.appendChild(hint);
+    }
 
     return container;
 }
