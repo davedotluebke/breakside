@@ -137,13 +137,17 @@ function rebuildRoster() {
  * @returns {HTMLElement} the modal
  */
 function openDialog(mode, team) {
+    closeDialog();
     document.getElementById('newScrimmageModal')?.remove();
     document.getElementById('editSquadsModal')?.remove();
 
     const modal = document.createElement('div');
     modal.id = mode === 'edit' ? 'editSquadsModal' : 'newScrimmageModal';
-    modal.className = 'modal';
+    // scrimmage-modal: the overlay scrolls (top-aligned), not the page
+    // behind it — see css/teams.css and lockPageScroll below.
+    modal.className = 'modal scrimmage-modal';
     modal.style.display = 'flex';
+    lockPageScroll();
     modal.innerHTML = `
         <div class="modal-content event-dialog scrimmage-dialog">
             <div class="dialog-header prominent-dialog-header">
@@ -278,6 +282,31 @@ function closeDialog() {
     if (!state) return;
     state.modal.remove();
     state = null;
+    unlockPageScroll();
+}
+
+// The dialog is taller than a phone screen, so its overlay scrolls. The page
+// behind must not: on iOS a touch-drag that the overlay cannot consume
+// (nothing left to scroll, or the picker at its end) scrolls the team list
+// underneath instead, and `overflow: hidden` on the body is not enough to
+// stop it. Pinning the body in place is (the standard fix); the scroll
+// position is put back when the dialog closes.
+let lockedScrollY = null;
+
+function lockPageScroll() {
+    if (lockedScrollY !== null) return;
+    lockedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    document.body.style.top = `-${lockedScrollY}px`;
+    document.body.classList.add('scrimmage-dialog-open');
+}
+
+function unlockPageScroll() {
+    if (lockedScrollY === null) return;
+    const y = lockedScrollY;
+    lockedScrollY = null;
+    document.body.classList.remove('scrimmage-dialog-open');
+    document.body.style.top = '';
+    window.scrollTo(0, y);
 }
 
 /** True while `modal` is still the open dialog (not closed or replaced meanwhile). */

@@ -42,7 +42,7 @@ const advancedSettings = (function() {
     // Auto line-selection priority factors. This array's order IS the default
     // priority order (position above rest, both above O/D). Each is a soft key
     // the Auto greedy applies in the user-chosen order; fixed sub-tiebreakers
-    // (fewer points, longer bench streak, name) always run last. Keys are the
+    // (fewer points, longer bench streak, then random) always run last. Keys are the
     // stable ids stored in autoLine.priorityOrder; labels drive the reorder UI.
     // NB: Auto only ADDS players (it never benches anyone), so "Rest" means
     // "favor players who have sat out more", not "sit players".

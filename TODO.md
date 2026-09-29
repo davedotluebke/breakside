@@ -148,7 +148,12 @@ stay out of the event model: ARCHITECTURE.md § Team list groups. The same
 branch replaced the dialog's Shuffle with **Clear** / **Auto** (Auto fills
 the empty spots the way the Line tab's Auto does, position and O/D line in
 the Advanced Settings order, balanced across the squads, random ties) and
-added a "here today" box by each name for absentees.
+added a "here today" box by each name for absentees. The Line tab's Auto
+breaks its own full ties at random now too (it used to fall back to name
+order, so Wholesale then Auto always rebuilt the same line), through the
+shared `utils/shuffle.js`. The dialog's overlay is top-aligned and scrolls
+with the page pinned behind it: centred, a dialog taller than the phone put
+its header and close X above the reachable range.
 Follow-ups, none blocking:
 
 - [ ] **Field test the squad edits** at the next practice: change a squad

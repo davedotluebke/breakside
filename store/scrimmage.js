@@ -21,6 +21,7 @@
  * module is what tests/unit/scrimmage.test.mjs pins.
  */
 import { Gender, PlayerPosition, DefaultLine, Player, generateShortId } from './models.js';
+import { shuffled } from '../utils/shuffle.js';
 
 /** The two squads. Stable keys; the coach names them (see DEFAULT_SQUAD_NAMES). */
 const SQUADS = ['X', 'Y'];
@@ -358,10 +359,13 @@ function pruneLinesToSquad(pendingNextLine, snapshot, now = new Date()) {
 // Unlike the Line tab, which builds one line for a known side, a scrimmage
 // builds two lines that should mirror each other, so each factor is read as
 // balance ACROSS the squads: the squad picking prefers whoever it trails the
-// other squad in. Gender comes first, as the ratio does on the Line tab. And
-// where the Line tab breaks every remaining tie by name, here ties are
-// random — Clear then Auto is how a coach gets a fresh deal, so the same
-// roster must not come out the same way twice.
+// other squad in. Gender comes first, as the ratio does on the Line tab.
+// Ties are random, as on the Line tab (utils/shuffle.js): Clear then Auto is
+// how a coach gets a fresh deal, so the same roster must not come out the
+// same way twice. With no roles set this is exactly a uniform random
+// balanced split (checked against one over 20,000 deals); with genders set,
+// the two genders are dealt independently, so in an alphabetical list where
+// they interleave, neighbours land together about half the time.
 
 function genderGroup(player) {
     if (player.gender === Gender.FMP) return Gender.FMP;
@@ -381,15 +385,6 @@ function lineGroup(player) {
     if (player.defaultLine === DefaultLine.O) return DefaultLine.O;
     if (player.defaultLine === DefaultLine.D) return DefaultLine.D;
     return DefaultLine.CROSSOVER;
-}
-
-function shuffled(list, random) {
-    const out = list.slice();
-    for (let i = out.length - 1; i > 0; i--) {
-        const j = Math.floor(random() * (i + 1));
-        [out[i], out[j]] = [out[j], out[i]];
-    }
-    return out;
 }
 
 /** The Auto factors (Advanced Settings `autoLine.priorityOrder`) that apply before a game. */

@@ -20,6 +20,7 @@ import { DEFAULT_ROSTER_SORT, nextRosterSort, sortLineRoster } from '../utils/li
 import { clearNextLineSelections, getRunningScores } from '../ui/activePlayersDisplay.js';
 import { setPanelSubtitle, setPanelTitle, isGameScreenVisible } from '../ui/panelSystem.js';
 import { resolveEffectiveLine } from '../store/pendingLineLogic.js';
+import { shuffled } from '../utils/shuffle.js';
 import { getControllerState, showControllerToast, canEditPlayByPlay } from './controllerState.js';
 import { startNextPoint } from './pointManagement.js';
 import { WHOLESALE_ICON_SVG, noteLineCoachViewing } from './gameScreenPanels.js';
@@ -365,20 +366,26 @@ function getAutoLineSide(game) {
  *                     setting is on. Neutral when the side is unknown or nobody
  *                     is labeled.
  *   • Even PT       — least time played first (PT quintile; see buildAutoLineStats).
- * Then fixed sub-tiebreakers: fewer points played → longest bench streak → name.
+ * Then fixed sub-tiebreakers: fewer points played → longest bench streak → random.
  *
  * All factors are applied by a need-aware greedy pick (one player at a time), so
  * the position minimums shrink as players are added. Gender is enforced by
  * filling each gender's deficit from that gender's pool, then topping up.
+ * Whatever is still tied after all of that is decided at random: the roster
+ * is shuffled once up front (utils/shuffle.js) and the first of a tie wins,
+ * so clearing and tapping Auto again can give a different line — the same
+ * device as the scrimmage dealer (store/scrimmage.js autoFillSquads).
  * @param {string[]} alreadySelected - player names the coach has already picked
+ * @param {{random?: () => number}} [opts] - random is injectable for tests
  * @returns {string[]} The full line (alreadySelected + auto-filled additions)
  */
-function computeAutoLine(alreadySelected = []) {
+function computeAutoLine(alreadySelected = [], { random = Math.random } = {}) {
     const game = typeof currentGame === 'function' ? currentGame() : null;
-    const roster = typeof getActiveRoster === 'function'
+    const activeRoster = typeof getActiveRoster === 'function'
         ? getActiveRoster()
         : (currentTeam && currentTeam.teamRoster) || [];
-    if (!game || !roster || !roster.length) return alreadySelected.slice();
+    if (!game || !activeRoster || !activeRoster.length) return alreadySelected.slice();
+    const roster = shuffled(activeRoster, random);
 
     const expectedCount = parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
     const selectedSet = new Set(alreadySelected);
@@ -440,10 +447,12 @@ function computeAutoLine(alreadySelected = []) {
     };
 
     // Compare two candidates: apply the coach's factor order, then fixed
-    // sub-tiebreakers (fewer points → longer bench streak → name). When O/D is
-    // inactive (no side, or nobody labeled) its comparator is always 0, so the
-    // ordering collapses to the remaining factors — teams not using O/D lines
-    // are unaffected by where it sits.
+    // sub-tiebreakers (fewer points → longer bench streak). What is still tied
+    // is left tied (0): greedyFill keeps the first it met, and the roster was
+    // shuffled above, so that is a random pick. When O/D is inactive (no
+    // side, or nobody labeled) its comparator is always 0, so the ordering
+    // collapses to the remaining factors — teams not using O/D lines are
+    // unaffected by where it sits.
     const better = (a, b) => {
         for (let i = 0; i < priorityOrder.length; i++) {
             const cmp = factorCmp[priorityOrder[i]];
@@ -454,7 +463,7 @@ function computeAutoLine(alreadySelected = []) {
         const sa = stats[a.name] || {}, sb = stats[b.name] || {};
         if ((sa.pointsPlayed || 0) !== (sb.pointsPlayed || 0)) return (sa.pointsPlayed || 0) - (sb.pointsPlayed || 0);
         if ((sa.outStreak || 0) !== (sb.outStreak || 0)) return (sb.outStreak || 0) - (sa.outStreak || 0);
-        return a.name.localeCompare(b.name);
+        return 0;
     };
 
     // Greedy: pick the single best unselected candidate from `pool`, `count`

@@ -547,13 +547,34 @@
 }
 
 /* ── New Scrimmage dialog ── */
+/* The scrimmage dialog is taller than a phone screen, so its overlay must
+   scroll and the page behind it must not. The shared .modal centres its
+   content (align-items: center); a dialog taller than the screen then
+   overflows equally at both ends, and the top end — the close X with it —
+   sits above the overlay's scroll range where nothing can reach it. This
+   overlay is top-aligned instead and scrolls; overscroll-behavior stops a
+   scroll that reaches its end from chaining to the page (which is also
+   pinned while the dialog is open: body.scrimmage-dialog-open, set by
+   teams/scrimmageDialogs.js lockPageScroll). */
+.modal.scrimmage-modal {    /* two classes: outranks the .modal rules that load later */
+    align-items: flex-start;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
 .scrimmage-dialog {
     max-width: 520px;
-    /* Taller than the other dialogs: start near the top so a phone shows
-       the header, the picker and the Start buttons without scrolling the
-       overlay first. */
-    margin-top: 4vh;
-    margin-bottom: 4vh;
+    /* Start near the top so a phone shows the header, the picker and the
+       Start buttons without scrolling the overlay first. */
+    margin: 4vh auto;
+    flex-shrink: 0;     /* never squashed to fit: the overlay scrolls instead */
+}
+
+body.scrimmage-dialog-open {
+    position: fixed;
+    width: 100%;
+    overflow: hidden;
 }
 
 .scrimmage-squad-names {
@@ -611,6 +632,7 @@
     max-height: min(45vh, 420px);
     max-height: min(45svh, 420px);
     overflow-y: auto;
+    overscroll-behavior: contain;   /* the picker's end does not scroll the overlay or the page */
     border: 1px solid var(--border-light);
     border-radius: 6px;
     margin-bottom: 0.5rem;
