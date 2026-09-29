@@ -11,9 +11,16 @@
  */
 import { defineConfig } from '@playwright/test';
 import path from 'path';
-import { FRONTEND_PORT, BACKEND_PORT } from '../helpers/constants';
+import {
+  FRONTEND_PORT, BACKEND_PORT, PING_INTERVAL_SOLO_MS, PING_INTERVAL_MULTI_MS, STALE_TIMEOUT_S,
+} from '../helpers/constants';
 
 const ROOT = path.resolve(__dirname, '..', '..');
+
+// Same escape hatch as playwright.config.ts: a Chromium to launch instead of
+// Playwright's own download (Claude Code cloud sessions).
+const CHROMIUM = process.env.BREAKSIDE_E2E_CHROMIUM;
+const launchOptions = CHROMIUM ? { launchOptions: { executablePath: CHROMIUM } } : {};
 
 export default defineConfig({
   testDir: '.',
@@ -32,6 +39,7 @@ export default defineConfig({
     deviceScaleFactor: 2,
     screenshot: 'off',
     trace: 'off',
+    ...launchOptions,
   },
   projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
   webServer: [
@@ -51,8 +59,12 @@ export default defineConfig({
       env: {
         BREAKSIDE_AUTH_REQUIRED: 'false',
         BREAKSIDE_DATA_DIR: path.join(ROOT, 'tests', 'test-data-dir'),
-        BREAKSIDE_STALE_TIMEOUT: '5',
+        BREAKSIDE_STALE_TIMEOUT: String(STALE_TIMEOUT_S),
         BREAKSIDE_HANDOFF_EXPIRY: '10',
+        // As in playwright.config.ts: production's 10s solo ping would outlast
+        // the shrunken stale timeout and drop Active Coach mid-walk.
+        BREAKSIDE_PING_INTERVAL_SOLO: String(PING_INTERVAL_SOLO_MS),
+        BREAKSIDE_PING_INTERVAL_MULTI: String(PING_INTERVAL_MULTI_MS),
       },
     },
   ],
