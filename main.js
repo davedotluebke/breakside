@@ -106,6 +106,7 @@ import './utils/connections.js';
 import './utils/gameLogRenderer.js';
 import './utils/possessionSets.js';
 import './utils/tableSort.js';
+import './utils/lineRosterSort.js';
 import './utils/statsHelp.js';
 import './utils/statsLevel.js';
 import './utils/statsColumns.js';
